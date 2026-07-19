@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -18,6 +20,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IWorkflowSchedulerPoisonStore? _poisonStore;
     private readonly IRuntimeDomainRetryPolicy? _retryPolicy;
     private readonly IWorkflowEngineTracer _tracer;
+    private readonly RuntimeSchedulerWorkClaimOptions _claimOptions;
+    private readonly string _claimOwnerId = $"scheduler-drainer:{Guid.NewGuid():N}";
 
     /// <summary>
     /// Creates the drainer. RT-8: the seven telescoping constructors collapsed into this single primary constructor —
@@ -37,7 +41,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IRuntimeFaultCapturePolicy? faultCapturePolicy = null,
         IWorkflowSchedulerPoisonStore? poisonStore = null,
         IRuntimeDomainRetryPolicy? retryPolicy = null,
-        IWorkflowEngineTracer? tracer = null)
+        IWorkflowEngineTracer? tracer = null,
+        RuntimeSchedulerWorkClaimOptions? claimOptions = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
@@ -55,6 +60,9 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _poisonStore = poisonStore;
         _retryPolicy = retryPolicy;
         _tracer = tracer ?? NullWorkflowEngineTracer.Instance;
+        _claimOptions = claimOptions ?? new RuntimeSchedulerWorkClaimOptions();
+        if (_claimOptions.VisibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(claimOptions), "Scheduler work visibility timeout must be greater than zero.");
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
@@ -64,7 +72,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // MS-9: the drain-cycle span wraps the whole method. StartDrainCycle returns null when tracing is inactive, so
         // no allocation and no ambient Activity is introduced; when active, Activity.Current is set for the scope and
         // restored on dispose. This is trace context only — it is not service location and does not touch the fenced
-        // peek->pause->dequeue->dispatch sequence below (no new awaits are introduced inside the loop).
+        // claim->pause->dispatch->complete sequence below.
         using var activity = _tracer.StartDrainCycle(request);
 
         var startedAt = _timeProvider.GetUtcNow();
@@ -83,27 +91,25 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var nextWorkItem = await PeekAsync(request.WorkflowExecutionId, cancellationToken);
-            if (nextWorkItem is null)
+            var delivery = await AcquireNextAsync(request.WorkflowExecutionId, cancellationToken);
+            if (delivery is null)
                 break;
+            var nextWorkItem = delivery.Item;
 
             var pauseDecision = await EvaluatePauseAsync(nextWorkItem, cancellationToken);
             if (pauseDecision is { CanAdvance: false })
             {
+                await ReleaseAsync(delivery, cancellationToken);
                 results.Add(CreatePausedResult(nextWorkItem, pauseDecision));
                 break;
             }
 
-            // Redrive-safe drain (#412 item 3 / "Window C" closure): the peeked head is NOT destructively dequeued
-            // before dispatch. It is dispatched in place and only ack-deleted from the durable queue *after* its effect
-            // is durable — after a successful handler return, or (on fault) before the poison record is written and any
-            // RetryNow re-enqueue. A crash anywhere inside the handler therefore leaves the source item durably queued,
-            // so the resumption sweep's backlog discovery (ListPendingWorkflowExecutionIdsAsync) re-drives it and the
-            // handler re-runs idempotently (activity-execution status guards + deterministic follow-up work-item ids the
-            // idempotent queue absorbs). This replaces the previous load-first-then-delete dequeue, which stranded an
-            // activity when a crash fell between the fallback handler's two independent writes (save state, then enqueue
-            // the follow-up work item).
-            var result = await DispatchAsync(nextWorkItem, request.AmbientServices, cancellationToken);
+            // Redrive-safe drain (#412 item 3 / "Window C" closure): the FIFO head is claimed, not destructively
+            // dequeued, before dispatch. Claim-capable providers renew that exclusive visibility while the handler runs
+            // and remove the item only after its effect is durable. A stale claimant cannot complete successor-owned
+            // work. Legacy providers retain the original single-writer list/dispatch/dequeue path. In either path, a
+            // crash inside the handler leaves the source item available for deterministic, idempotent redelivery.
+            var result = await DispatchAsync(nextWorkItem, delivery.Claim, request.AmbientServices, cancellationToken);
             results.Add(result);
             remaining--;
 
@@ -145,10 +151,15 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         return state is not null && state.Status.IsTerminal();
     }
 
-    private async ValueTask<RuntimeSchedulerWorkItemResult> DispatchAsync(RuntimeSchedulerWorkItem workItem, IServiceProvider? ambientServices, CancellationToken cancellationToken)
+    private async ValueTask<RuntimeSchedulerWorkItemResult> DispatchAsync(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeSchedulerWorkClaim? claim,
+        IServiceProvider? ambientServices,
+        CancellationToken cancellationToken)
     {
         IWorkflowSchedulerWorkHandler? handler = null;
         var startedAt = _timeProvider.GetUtcNow();
+        var renewal = claim is null ? null : new ClaimRenewalState(claim);
 
         // MS-9: the dispatch span nests under the drain-cycle span via Activity.Current. The activity-execution span
         // (Invoke slot) and the checkpoint-commit span both nest under this one when the pipeline runs. Null when
@@ -165,15 +176,16 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // the built-in pass-through middleware registered the two paths are behavior-identical. RT-7: the drain's
             // ambient services flow explicitly into the pipeline dispatcher, which stages them on the dispatch workspace
             // for slot-invoked handlers to read — no AsyncLocal service location in the drain path.
-            if (_pipelineDispatcher is not null)
-                await _pipelineDispatcher.DispatchAsync(workItem, handler, ambientServices, cancellationToken);
-            else
-                await handler.HandleAsync(workItem, cancellationToken);
+            await DispatchWithClaimRenewalAsync(
+                renewal,
+                dispatchCancellationToken => _pipelineDispatcher is not null
+                    ? _pipelineDispatcher.DispatchAsync(workItem, handler, ambientServices, dispatchCancellationToken)
+                    : handler.HandleAsync(workItem, dispatchCancellationToken),
+                cancellationToken);
 
-            // Ack-delete: the handler's effect is now durable, so remove the source item from the durable queue. A crash
-            // before this point leaves the item queued for idempotent re-drive; a crash after it has nothing left to
-            // re-drive (the effect is committed). The TOCTOU tripwire guards the single-writer invariant.
-            await AckAsync(workItem, cancellationToken);
+            // The handler's effect is now durable. Complete the fenced claim, or consume the FIFO head for a legacy
+            // single-writer provider. A crash before this point leaves the item queued for idempotent re-drive.
+            await AckAsync(workItem, renewal?.Current, cancellationToken);
 
             activity?.SetTag(WorkflowEngineTelemetry.OutcomeTag, WorkflowEngineTelemetry.OutcomeCompleted);
 
@@ -188,6 +200,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
         catch (OperationCanceledException)
         {
+            throw;
+        }
+        catch (RuntimeSchedulerWorkClaimLostException)
+        {
+            // A successor owns (or may own) this work. Never acknowledge or poison it from the stale dispatch.
             throw;
         }
         catch (Exception exception)
@@ -210,7 +227,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // deterministically-poisoning handler would hot-loop (redeliver forever). Ack-on-fault makes poison delivery
             // bounded. (A process crash — as opposed to a handler fault — never reaches this line, so the item stays
             // queued for idempotent re-drive, which is exactly the redrive-safety this unit adds.)
-            await AckAsync(workItem, cancellationToken);
+            await AckAsync(workItem, renewal?.Current, cancellationToken);
 
             await HandleHandlerCrashAsync(workItem, handlerName, faultInfo, cancellationToken);
 
@@ -234,7 +251,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     // docs/runtime-durable-resumption.md) to re-drive and does NOT re-enqueue here, since immediate re-enqueue would
     // ignore the delay and hot-loop. Because the source item was ack-deleted first, RetryNow's re-enqueue is the *only*
     // requeue (the sweep's backlog discovery finds nothing to re-drive), so poison delivery stays bounded. This lives
-    // entirely in the fault path — it does not touch the peek/pause-gate/dispatch sequence.
+    // entirely in the fault path — it does not change claim/pause/dispatch ordering.
     private async ValueTask HandleHandlerCrashAsync(
         RuntimeSchedulerWorkItem workItem,
         string handlerName,
@@ -291,27 +308,49 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             nextRetryAt: nextRetryAt,
             metadata: decision is null ? null : new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["runtime.poison.retryMode"] = decision.Mode.ToString(),
-                ["runtime.poison.retryReason"] = decision.Reason
+                [RuntimeMetadataKeys.SchedulerPoisonRetryMode] = decision.Mode.ToString(),
+                [RuntimeMetadataKeys.SchedulerPoisonRetryReason] = decision.Reason
             }),
             cancellationToken);
     }
 
-    private async ValueTask<RuntimeSchedulerWorkItem?> PeekAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    private async ValueTask<SchedulerWorkDelivery?> AcquireNextAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
     {
+        if (_schedulerWorkQueue.SupportsClaimTransitions)
+        {
+            var claim = await _schedulerWorkQueue.ClaimAsync(
+                new RuntimeSchedulerWorkClaimRequest(
+                    workflowExecutionId,
+                    _claimOwnerId,
+                    _timeProvider.GetUtcNow(),
+                    _claimOptions.VisibilityTimeout),
+                cancellationToken);
+            return claim is null ? null : new SchedulerWorkDelivery(claim.Item, claim);
+        }
+
         var items = await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
-        return items.FirstOrDefault();
+        var item = items.FirstOrDefault();
+        return item is null ? null : new SchedulerWorkDelivery(item, null);
     }
 
-    // Ack-deletes the dispatched item from the durable queue by consuming the head via DequeueAsync, and enforces the
-    // single-writer TOCTOU tripwire (RT-2): the head consumed here MUST be the item that was just dispatched. Because
-    // dispatch no longer dequeues up-front, the head cannot have advanced under a single writer between peek and ack —
-    // the drain owns the execution's fencing lease for its whole duration. A mismatch (or an empty queue) means another
-    // writer interleaved and drained this execution concurrently, violating the invariant that all dispatch routes
-    // through the agent mailbox; fail fast. The InMemory/Groundwork queues expose no delete-by-id, so the ack is
-    // expressed as "consume the FIFO head", which is the same item peek returned under single-writer ownership.
-    private async ValueTask AckAsync(RuntimeSchedulerWorkItem dispatchedWorkItem, CancellationToken cancellationToken)
+    // Completes the current fenced claim when the provider supports claim transitions. For a legacy provider, consumes
+    // the FIFO head and enforces the single-writer TOCTOU tripwire (RT-2): the consumed head MUST be the item that was
+    // just dispatched. A mismatch (or empty queue) means another writer interleaved; fail fast.
+    private async ValueTask AckAsync(
+        RuntimeSchedulerWorkItem dispatchedWorkItem,
+        RuntimeSchedulerWorkClaim? claim,
+        CancellationToken cancellationToken)
     {
+        if (claim is not null)
+        {
+            var completion = await _schedulerWorkQueue.CompleteClaimAsync(claim, cancellationToken);
+            if (!completion.Succeeded)
+                throw NewClaimLost(claim, "complete", completion.Status);
+            return;
+        }
+
         var acked = await _schedulerWorkQueue.DequeueAsync(dispatchedWorkItem.WorkflowExecutionId, cancellationToken);
 
         if (acked is null || !StringComparer.Ordinal.Equals(acked.WorkItemId, dispatchedWorkItem.WorkItemId))
@@ -320,6 +359,111 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 $"dispatched work item '{dispatchedWorkItem.WorkItemId}' but ack-dequeued '{acked?.WorkItemId ?? "<none>"}'. A concurrent " +
                 "drainer interleaved between the pause-gate peek and the ack; all dispatch must route through the agent mailbox.");
     }
+
+    private async ValueTask ReleaseAsync(SchedulerWorkDelivery delivery, CancellationToken cancellationToken)
+    {
+        if (delivery.Claim is null)
+            return;
+
+        var release = await _schedulerWorkQueue.ReleaseClaimAsync(
+            delivery.Claim,
+            _timeProvider.GetUtcNow(),
+            cancellationToken);
+        if (!release.Succeeded)
+            throw NewClaimLost(delivery.Claim, "release", release.Status);
+    }
+
+    private async ValueTask DispatchWithClaimRenewalAsync(
+        ClaimRenewalState? renewal,
+        Func<CancellationToken, ValueTask> dispatch,
+        CancellationToken cancellationToken)
+    {
+        if (renewal is null)
+        {
+            await dispatch(cancellationToken);
+            return;
+        }
+
+        using var renewalStop = new CancellationTokenSource();
+        using var dispatchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var renewalTask = RenewClaimUntilStoppedAsync(renewal, renewalStop.Token, dispatchCancellation);
+        Exception? dispatchFailure = null;
+        Exception? renewalFailure = null;
+        try
+        {
+            await dispatch(dispatchCancellation.Token);
+        }
+        catch (Exception exception)
+        {
+            dispatchFailure = exception;
+        }
+        finally
+        {
+            await renewalStop.CancelAsync();
+            try
+            {
+                await renewalTask;
+            }
+            catch (OperationCanceledException) when (renewalStop.IsCancellationRequested)
+            {
+                // Normal: dispatch completed before the next renewal cadence.
+            }
+            catch (Exception exception)
+            {
+                renewalFailure = exception;
+            }
+        }
+
+        if (renewalFailure is not null)
+            throw renewalFailure;
+        if (dispatchFailure is not null)
+            ExceptionDispatchInfo.Capture(dispatchFailure).Throw();
+    }
+
+    private async Task RenewClaimUntilStoppedAsync(
+        ClaimRenewalState renewal,
+        CancellationToken stopToken,
+        CancellationTokenSource dispatchCancellation)
+    {
+        var cadence = TimeSpan.FromTicks(Math.Max(1, _claimOptions.VisibilityTimeout.Ticks / 3));
+        while (true)
+        {
+            await Task.Delay(cadence, _timeProvider, stopToken);
+            RuntimeSchedulerWorkClaimTransitionResult result;
+            try
+            {
+                result = await _schedulerWorkQueue.RenewClaimAsync(
+                    renewal.Current,
+                    _timeProvider.GetUtcNow(),
+                    _claimOptions.VisibilityTimeout,
+                    stopToken);
+            }
+            catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                await dispatchCancellation.CancelAsync();
+                throw NewClaimLost(renewal.Current, "renew", status: null, exception);
+            }
+
+            if (result.Status != RuntimeSchedulerWorkClaimTransitionStatus.Succeeded || result.Claim is null)
+            {
+                await dispatchCancellation.CancelAsync();
+                throw NewClaimLost(renewal.Current, "renew", result.Status);
+            }
+
+            renewal.Current = result.Claim;
+        }
+    }
+
+    private static RuntimeSchedulerWorkClaimLostException NewClaimLost(
+        RuntimeSchedulerWorkClaim claim,
+        string transition,
+        RuntimeSchedulerWorkClaimTransitionStatus? status,
+        Exception? innerException = null) =>
+        new(claim, transition, status, innerException);
 
     private async ValueTask<SchedulerPauseDecision?> EvaluatePauseAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
     {
@@ -369,4 +513,24 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException($"No workflow scheduler work handler accepted command kind '{workItem.CommandKind}'.");
     }
+
+    private sealed record SchedulerWorkDelivery(
+        RuntimeSchedulerWorkItem Item,
+        RuntimeSchedulerWorkClaim? Claim);
+
+    private sealed class ClaimRenewalState(RuntimeSchedulerWorkClaim current)
+    {
+        public RuntimeSchedulerWorkClaim Current { get; set; } = current;
+    }
+
+    private sealed class RuntimeSchedulerWorkClaimLostException(
+        RuntimeSchedulerWorkClaim claim,
+        string transition,
+        RuntimeSchedulerWorkClaimTransitionStatus? status,
+        Exception? innerException = null)
+        : InvalidOperationException(
+            $"Scheduler work claim for '{claim.Item.WorkItemId}' in workflow execution '{claim.Item.WorkflowExecutionId}' " +
+            $"was lost during '{transition}'" +
+            (status is null ? "." : $" with status '{status}'."),
+            innerException);
 }

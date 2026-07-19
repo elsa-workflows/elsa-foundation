@@ -33,7 +33,10 @@ public sealed class AddDefinitionCommandHandler(
         var version = versionFactory.Create(
             definition,
             initialVersion,
-            command.DescriptorType,
+            command.ProviderKey,
+            command.ProviderSchemaVersion,
+            command.ConsumerKey,
+            command.ConsumerSchemaVersion,
             command.DescriptorPayload,
             command.SourceKind,
             command.SourceId,

@@ -1,9 +1,10 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
-using Elsa.Expressions.Core.Contracts;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -13,13 +14,12 @@ using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
 
-public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
+public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
-    private readonly InMemoryRuntimeActivityOutputRegister _activityOutputRegister = new();
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryIncidentStateStore _incidentStateStore = new();
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
@@ -39,1067 +39,876 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_InvokesRunningActivityAndRecordsCompletedState()
+    public async Task HandleAsync_TypedNode_UsesActivationLeaseAndCommitsReturnedResultAtomically()
     {
-        var activity = new RecordingActivity();
-        var factory = new RecordingActivityFactory(activity);
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(factory);
-        var handler = NewHandler(provider);
+        var activator = new RecordingTypedActivator();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
 
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
-        Assert.Equal("hello", activity.ObservedText);
-        Assert.Equal("actexec-1", activity.Id);
-        Assert.Equal("node-start", activity.NodeId);
-        Assert.Equal("test", factory.LastDescriptorType);
-        Assert.Single(factory.LastInputs);
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.True(activator.Activity!.Disposed);
         var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
-        Assert.Null(state.SubStatus);
-        Assert.Equal(_now, state.CompletedAt);
-        Assert.Equal(RuntimeInvokeActivityCommandPayload.StartedActivityReason, state.Metadata["runtime.invokeReason"]);
-        Assert.Equal("invoke-work", state.Metadata["runtime.invokeSchedulerWorkItemId"]);
-        var completionPayload = await AssertCompletionWorkAsync();
-        Assert.Equal("actexec-1", completionPayload.ActivityExecutionId);
-        Assert.Equal("node-start", completionPayload.ExecutableNodeId);
-        Assert.Equal([ActivityOutcomes.Done], completionPayload.OutcomeNames);
-        Assert.Equal(RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason, completionPayload.Reason);
-    }
-
-    [Fact]
-    public async Task HandleAsync_PlainActivity_DoesNotReadWorkflowExecutionState()
-    {
-        // The common case: a plain activity that requests no control-leaf intent (no Finish/Correlate/SetName).
-        // Its execution-time carrier identity is projected from the tagged durable values it already re-lists, so the
-        // handler must not touch the workflow-execution-state store at all — the per-invocation read this unit removed.
-        var stateStore = new CountingWorkflowExecutionStateStore();
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(new RecordingActivityFactory(new RecordingActivity()), workflowExecutionStateStore: stateStore);
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        Assert.Equal(0, stateStore.FindCount);
+        Assert.Equal("hello", state!.InputSnapshot!.Values["text"].InlineValue!.Value.GetString());
+        Assert.Equal("Done", state.Completion?.OutcomeKey);
+        Assert.Equal(5, state.Completion?.Result.InlineValue!.Value.GetProperty("length").GetInt32());
+        Assert.NotNull(Assert.Single(state.Attempts!).EndedAt);
+        var inspection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        var outputSnapshot = Assert.Single(inspection!.ValueSnapshots, snapshot => snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput);
+        Assert.Equal("length", outputSnapshot.Name);
+        Assert.Equal("Int32", outputSnapshot.Type!.Id);
         await AssertCompletionWorkAsync();
     }
 
     [Fact]
-    public async Task HandleAsync_PopulatesCarrierIdentityFromDurableValues_WithoutReadingState()
+    public async Task HandleAsync_TypedNodeWithoutInspection_CommitsCompletionAndDownstreamIntentAtomically()
     {
-        // The carrier's correlation id / instance name are projected from the IdentityName-tagged durable values the
-        // invocation lists, so getCorrelationId() / getWorkflowInstanceName() are live at execution time without a
-        // workflow-execution-state read.
-        var stateStore = new CountingWorkflowExecutionStateStore();
-        var activity = new IdentityCapturingActivity();
-        await SeedIdentityDurableValuesAsync(correlationId: "order-123", instanceName: "Order 123");
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(new RecordingActivityFactory(activity), workflowExecutionStateStore: stateStore);
-        var handler = NewHandler(provider);
+        var activator = new RecordingTypedActivator();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: false);
 
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
-        Assert.Equal("order-123", activity.ObservedCorrelationId);
-        Assert.Equal("Order 123", activity.ObservedWorkflowName);
-        Assert.Equal(0, stateStore.FindCount);
-    }
-
-    [Fact]
-    public async Task HandleAsync_CorrelateAndSetNameLeaf_ProjectsIdentity_VisibleToConcurrentSiblingBranch()
-    {
-        // Fork-visibility regression (spec 083 review): a Correlate/SetName leaf loads the workflow-execution state
-        // exactly once (to fold the authoritative control-leaf change) AND projects the new identity into
-        // IdentityName-tagged durable values. Because every activity invocation re-lists durable values, a concurrent
-        // sibling branch that carries NO identity in its command metadata still observes the new correlation id /
-        // instance name — the cross-branch visibility the per-branch-lineage command-metadata channel dropped.
-        var stateStore = new CountingWorkflowExecutionStateStore();
-        await stateStore.SaveAsync(NewWorkflowExecutionState(correlationId: "order-1"));
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var setProvider = NewProvider(
-            new RecordingActivityFactory(new SetIdentityActivity("order-99", "Order 99")),
-            workflowExecutionStateStore: stateStore);
-        var setHandler = NewHandler(setProvider);
-
-        await setHandler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        // Authoritative queryable home is updated with exactly one state read.
-        Assert.Equal(1, stateStore.FindCount);
-        var savedState = await stateStore.FindAsync("wfexec-1");
-        Assert.Equal("order-99", savedState?.CorrelationId);
-        Assert.Equal("Order 99", savedState?.SystemMetadata[RuntimeMetadataKeys.InstanceName]);
-
-        // Identity is also projected as IdentityName-tagged durable values in the store, the additional channel the
-        // read side consumes.
-        var listed = await _durableValueStateStore.ListAsync("wfexec-1");
-        Assert.Equal("order-99", RuntimeIdentityStateProjection.ProjectCorrelationId(listed));
-        Assert.Equal("Order 99", RuntimeIdentityStateProjection.ProjectInstanceName(listed));
-
-        // A SECOND, independent invocation (fresh work item, different activity execution on node-other, plain
-        // activity, NO identity in its command metadata) observes the new identity purely via the durable-value
-        // projection — proving a concurrent sibling branch sees it.
-        var siblingActivity = new IdentityCapturingActivity();
-        await _activityStateStore.SaveAsync(NewRunningState(activityExecutionId: "actexec-2", executableNodeId: "node-other"));
-        await using var siblingProvider = NewProvider(
-            new RecordingActivityFactory(siblingActivity),
-            workflowExecutionStateStore: stateStore);
-        var siblingHandler = NewHandler(siblingProvider);
-
-        await siblingHandler.HandleAsync(NewInvokeWorkItem(
-            NewIdentity(), executableNodeId: "node-other", workItemId: "invoke-sibling", activityExecutionId: "actexec-2"));
-
-        Assert.Equal("order-99", siblingActivity.ObservedCorrelationId);
-        Assert.Equal("Order 99", siblingActivity.ObservedWorkflowName);
-    }
-
-    [Fact]
-    public async Task HandleAsync_ClearingCorrelationId_ProjectsNullForSubsequentInvocation()
-    {
-        // Clearing an assignment (SetCorrelationId(null)) writes a JSON-null identity durable value, so a subsequent
-        // invocation's projection yields null rather than the previously assigned value.
-        var stateStore = new CountingWorkflowExecutionStateStore();
-        await stateStore.SaveAsync(NewWorkflowExecutionState(correlationId: "order-1"));
-        await SeedIdentityDurableValuesAsync(correlationId: "order-1");
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var clearProvider = NewProvider(
-            new RecordingActivityFactory(new SetIdentityActivity(correlationId: null, instanceName: null)),
-            includeInspection: true,
-            workflowExecutionStateStore: stateStore);
-        var clearHandler = NewHandler(clearProvider);
-
-        await clearHandler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        // With inspection enabled the cleared identity rides the activity's checkpoint as a JSON-null durable-value
-        // change (never skipped, so the clear propagates) and is persisted to the store.
-        var clearCommit = Assert.Single(_checkpointWriter.ListCommits());
-        Assert.Contains(
-            clearCommit.Commit.StateChanges.DurableValues,
-            change => change.State!.Metadata.TryGetValue(RuntimeMetadataKeys.IdentityName, out var slot)
-                      && slot == RuntimeWorkflowStateSeed.IdentityCorrelationIdName);
-        Assert.Null(ProjectIdentityChange(clearCommit, RuntimeWorkflowStateSeed.IdentityCorrelationIdName));
-
-        var listed = await _durableValueStateStore.ListAsync("wfexec-1");
-        Assert.Null(RuntimeIdentityStateProjection.ProjectCorrelationId(listed));
-
-        // A later invocation observes the cleared (null) identity through the projection.
-        var observingActivity = new IdentityCapturingActivity();
-        await _activityStateStore.SaveAsync(NewRunningState(activityExecutionId: "actexec-2", executableNodeId: "node-other"));
-        await using var observeProvider = NewProvider(
-            new RecordingActivityFactory(observingActivity),
-            workflowExecutionStateStore: stateStore);
-        var observeHandler = NewHandler(observeProvider);
-
-        await observeHandler.HandleAsync(NewInvokeWorkItem(
-            NewIdentity(), executableNodeId: "node-other", workItemId: "invoke-observe", activityExecutionId: "actexec-2"));
-
-        Assert.Null(observingActivity.ObservedCorrelationId);
-    }
-
-    [Fact]
-    public async Task HandleAsync_CheckpointsCompletedStateInspectionAndPostCommitCompletionWork()
-    {
-        var activity = new RecordingActivity();
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(new RecordingActivityFactory(activity), includeInspection: true);
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var write = Assert.Single(_checkpointWriter.ListCommits());
-        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, write.Commit.Checkpoint.Name);
-        Assert.Equal(RuntimeMetadataKeys.CheckpointRequirementMandatory, write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointRequirement]);
-        Assert.Single(write.Commit.StateChanges.ActivityExecutions);
-        Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
-        Assert.Single(write.Commit.PostCommitIntents);
-
-        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(projection);
-        Assert.Equal(ActivityExecutionStatus.Completed, projection.Status);
-        Assert.Equal([ActivityOutcomes.Done], projection.OutcomeNames);
-        var inputSnapshot = Assert.Single(projection.ValueSnapshots);
-        Assert.Equal(ActivityExecutionInspectionValueSubject.ActivityInput, inputSnapshot.Subject);
-        Assert.Equal(RuntimePayloadCaptureMode.DiagnosticSnapshot, inputSnapshot.CaptureMode);
-        Assert.NotNull(inputSnapshot.Payload);
-        Assert.Equal("string", inputSnapshot.Payload.Value.GetProperty("kind").GetString());
-
-        await AssertCompletionWorkAsync();
-    }
-
-    [Fact]
-    public async Task HandleAsync_RecordsCompletedSkippedStateWhenCanExecuteReturnsFalse()
-    {
-        var activity = new RecordingActivity { ShouldExecute = false };
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(activity),
-            includeInspection: true,
-            payloadCapturePolicy: new CaptureAllRuntimePayloadCapturePolicy());
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        Assert.Null(activity.ObservedText);
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
-        Assert.Equal("Skipped", state.SubStatus);
-        Assert.Equal(bool.TrueString, state.Metadata["runtime.invokeSkipped"]);
-        var completionPayload = await AssertCompletionWorkAsync();
-        Assert.Empty(completionPayload.OutcomeNames);
-    }
-
-    [Fact]
-    public async Task HandleAsync_EnqueuesCompletionWorkWithActivityOutcomes()
-    {
-        var activity = new RecordingActivity { Outcomes = ["Approved", "Escalated"] };
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(activity),
-            includeInspection: true,
-            payloadCapturePolicy: new CaptureAllRuntimePayloadCapturePolicy());
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var completionPayload = await AssertCompletionWorkAsync();
-        Assert.Equal(["Approved", "Escalated"], completionPayload.OutcomeNames);
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Contains("Approved", state.Metadata[RuntimeMetadataKeys.CompletionOutcomeNames]);
-    }
-
-    [Fact]
-    public async Task HandleAsync_MaterializesInputFromActiveActivityOutputBinding()
-    {
-        _activityOutputRegister.Set(new ActiveActivityOutput(
-            key: new ActiveActivityOutputKey("wfexec-1", "actexec-fetch", "status"),
-            value: JsonSerializer.SerializeToElement("delivered"),
-            type: new RuntimeValueTypeDescriptor("primitive", "string", null),
-            recordedAt: _now));
-        var activity = new RecordingActivity();
-        await _executableStore.SaveAsync(NewExecutableWithInputBinding(ActivityOutputTextBinding("actexec-fetch", "status")));
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(activity),
-            includeInspection: true,
-            payloadCapturePolicy: new CaptureAllRuntimePayloadCapturePolicy());
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        Assert.Equal("delivered", activity.ObservedText);
-        await AssertCompletionWorkAsync();
-    }
-
-    [Fact]
-    public async Task HandleAsync_MaterializesInputFromDurableValueBinding()
-    {
-        await _durableValueStateStore.SaveAsync(new DurableValueState(
-            durableValueId: "durable-status",
-            workflowExecutionId: "wfexec-1",
-            valueId: "status",
-            type: new RuntimeValueTypeDescriptor("primitive", "string", null),
-            lifecycle: DurableValueLifecycle.Instance,
-            storage: DurableValueStorage.Inline,
-            inlineValue: JsonSerializer.SerializeToElement("stored"),
-            externalReference: null,
-            sourceActivityExecutionId: "actexec-fetch",
-            capturedAt: _now,
-            metadata: new Dictionary<string, string>()));
-        var activity = new RecordingActivity();
-        await _executableStore.SaveAsync(NewExecutableWithInputBinding(DurableTextBinding("status")));
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(activity),
-            includeInspection: true,
-            payloadCapturePolicy: new CaptureAllRuntimePayloadCapturePolicy());
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        Assert.Equal("stored", activity.ObservedText);
-        await AssertCompletionWorkAsync();
-    }
-
-    [Fact]
-    public async Task HandleAsync_PublishesActiveOutputsAndCapturesDeclaredDurableValuesWhenActivityCompletes()
-    {
-        var activity = new OutputProducingActivity("""{"id":"customer-1"}""");
-        var factory = new RecordingActivityFactory(activity);
-        await _executableStore.SaveAsync(NewExecutableWithOutputCapture());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(factory, includeInspection: true);
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        Assert.True(factory.LastOutputs.ContainsKey("customer"));
-        var outputKey = new ActiveActivityOutputKey("wfexec-1", "actexec-1", "customer");
-        Assert.True(_activityOutputRegister.TryGet(outputKey, out var activeOutput));
-        Assert.Equal("customer-1", activeOutput.Value.GetProperty("id").GetString());
-        Assert.Equal("node-start", activeOutput.Metadata["runtime.executableNodeId"]);
-        var durableValue = await _durableValueStateStore.FindAsync("wfexec-1", "durable-customer");
-        Assert.NotNull(durableValue);
-        Assert.Equal("customer", durableValue.ValueId);
-        Assert.Equal("actexec-1", durableValue.SourceActivityExecutionId);
-        Assert.Equal("customer-1", durableValue.InlineValue!.Value.GetProperty("id").GetString());
-        var write = Assert.Single(_checkpointWriter.ListCommits());
-        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, write.Commit.Checkpoint.Name);
-        var durableChange = Assert.Single(write.Commit.StateChanges.DurableValues);
-        Assert.Equal("durable-customer", durableChange.State!.DurableValueId);
-        await AssertCompletionWorkAsync();
-    }
-
-    [Fact]
-    public async Task HandleAsync_CapturesPolicyGovernedInputAndOutputInspectionSnapshots()
-    {
-        var activity = new OutputProducingActivity("""{"id":"customer-1"}""");
-        await _executableStore.SaveAsync(NewExecutableWithOutputCapture());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(activity),
-            includeInspection: true,
-            payloadCapturePolicy: new CaptureAllRuntimePayloadCapturePolicy());
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(projection);
-        Assert.Contains(projection.ValueSnapshots, snapshot =>
-            snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityInput &&
-            snapshot.Name == "Text" &&
-            snapshot.CaptureMode == RuntimePayloadCaptureMode.Payload &&
-            snapshot.Payload is { } payload &&
-            payload.ValueKind == JsonValueKind.String);
-        Assert.Contains(projection.ValueSnapshots, snapshot =>
-            snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput &&
-            snapshot.Name == "customer" &&
-            snapshot.CaptureMode == RuntimePayloadCaptureMode.Payload &&
-            snapshot.Payload is { } payload &&
-            payload.ValueKind == JsonValueKind.Object &&
-            payload.GetProperty("id").GetString() == "customer-1");
-    }
-
-    [Fact]
-    public async Task HandleAsync_EnqueuesCreateBookmarkWorkWhenActivityRequestsDurableBookmark()
-    {
-        var activity = new BookmarkRequestingActivity(
-            new ActivityBookmarkRequest(
-                bookmarkId: "bookmark-1",
-                resumeTargetId: "resume-target:delivery",
-                stimulusType: "delivery-status",
-                stimulusHash: "sha256:delivery-status:order-123",
-                payload: Json("""{"orderId":"order-123"}"""),
-                expiresAt: _now.AddMinutes(10),
-                metadata: new Dictionary<string, string> { ["customer"] = "northwind" }));
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(activity),
-            includeInspection: true,
-            payloadCapturePolicy: new CaptureAllRuntimePayloadCapturePolicy());
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
-        Assert.Null(state.CompletedAt);
-        var workItem = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        Assert.Equal(WorkflowExecutionCommandKind.CreateBookmark, workItem.CommandKind);
-        Assert.Equal("invoke-work:create-bookmark:bookmark-1", workItem.WorkItemId);
-        Assert.Equal("command-1:create-bookmark:bookmark-1", workItem.CommandId);
-        Assert.Equal("wfexec-1:invoke:actexec-1:create-bookmark:bookmark-1", workItem.IdempotencyKey);
-        Assert.Equal(31, workItem.Sequence);
-        Assert.Equal("northwind", workItem.CommandMetadata["customer"]);
-        Assert.Equal("bookmark-1", workItem.CommandMetadata["runtime.bookmarkId"]);
-        var payload = workItem.Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!;
-        Assert.Equal(NewIdentity(), payload.PinnedExecutable);
-        Assert.Equal("bookmark-1", payload.BookmarkId);
-        Assert.Equal("actexec-1", payload.ActivityExecutionId);
-        Assert.Equal("node-start", payload.ExecutableNodeId);
-        Assert.Equal("resume-target:delivery", payload.ResumeTargetId);
-        Assert.Equal("delivery-status", payload.StimulusType);
-        Assert.Equal("sha256:delivery-status:order-123", payload.StimulusHash);
-        Assert.Equal("order-123", payload.Payload!.Value.GetProperty("orderId").GetString());
-        Assert.Equal(_now.AddMinutes(10), payload.ExpiresAt);
-        Assert.Equal(RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason, payload.Reason);
-        Assert.Equal("northwind", payload.Metadata["customer"]);
-        var snapshot = Assert.Single(payload.ValueSnapshots);
-        Assert.Equal(ActivityExecutionInspectionValueSubject.ActivityInput, snapshot.Subject);
-        Assert.Equal(RuntimePayloadCaptureMode.Payload, snapshot.CaptureMode);
-    }
-
-    [Fact]
-    public async Task HandleAsync_DoesNotPublishOrCaptureOutputsWhenActivityRequestsDurableBookmark()
-    {
-        var activity = new OutputBookmarkRequestingActivity(
-            """{"id":"customer-1"}""",
-            new ActivityBookmarkRequest("bookmark-1", "resume-target:delivery", "event", "hash"));
-        await _executableStore.SaveAsync(NewExecutableWithOutputCapture());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(activity),
-            includeInspection: true,
-            payloadCapturePolicy: new CaptureAllRuntimePayloadCapturePolicy());
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        Assert.False(_activityOutputRegister.TryGet(new ActiveActivityOutputKey("wfexec-1", "actexec-1", "customer"), out _));
-        Assert.Null(await _durableValueStateStore.FindAsync("wfexec-1", "durable-customer"));
-        Assert.Empty(_checkpointWriter.ListCommits());
-        Assert.Equal(WorkflowExecutionCommandKind.CreateBookmark, Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).CommandKind);
-    }
-
-    [Fact]
-    public async Task HandleAsync_EnqueuesCreateBookmarkWorkInRequestOrder()
-    {
-        var activity = new BookmarkRequestingActivity(
-            new ActivityBookmarkRequest("bookmark-1", "resume-target:first", "event", "hash-1"),
-            new ActivityBookmarkRequest("bookmark-2", "resume-target:second", "event", "hash-2"));
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(new RecordingActivityFactory(activity));
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var workItems = (await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).ToArray();
-        Assert.Equal(2, workItems.Length);
-        Assert.Equal(["bookmark-1", "bookmark-2"], workItems.Select(workItem => workItem.Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!.BookmarkId));
-        Assert.Equal([31L, 32L], workItems.Select(workItem => workItem.Sequence!.Value));
-    }
-
-    [Fact]
-    public async Task HandleAsync_CheckpointsInputSnapshotsBeforePostCommitChildScheduling()
-    {
-        var activity = new ChildSchedulingActivity();
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(activity),
-            includeInspection: true,
-            payloadCapturePolicy: new CaptureAllRuntimePayloadCapturePolicy());
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var write = Assert.Single(_checkpointWriter.ListCommits());
-        Assert.Equal(RuntimeCheckpointNames.ActivityInspectionCaptured, write.Commit.Checkpoint.Name);
-        var inspectionChange = Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
-        Assert.Contains(inspectionChange.State.ValueSnapshots, snapshot =>
-            snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityInput &&
-            snapshot.CaptureMode == RuntimePayloadCaptureMode.Payload);
-        Assert.Single(write.Commit.PostCommitIntents);
-        var scheduleWork = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.ScheduleActivity);
-        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduleWork.CommandKind);
-    }
-
-    [Fact]
-    public async Task HandleAsync_FaultsActivityWhenDuplicateBookmarkRequestsAreRecorded()
-    {
-        var activity = new DuplicateBookmarkRequestActivity();
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(new RecordingActivityFactory(activity));
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
-        Assert.Equal("ActivityFaulted", state.SubStatus);
-        Assert.Contains("already registered", state.Metadata["runtime.faultMessage"]);
-        await AssertIncidentRecordedAsync("ActivityFaulted", message => Assert.Contains("already registered", message));
+        var commit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted).Commit;
+        var stateChange = Assert.Single(commit.StateChanges.ActivityExecutions);
+        Assert.Equal(ActivityExecutionStatus.Completed, stateChange.State.Status);
+        Assert.Empty(commit.StateChanges.ActivityExecutionInspections);
+        Assert.Single(commit.PostCommitIntents);
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+
+        var committer = provider.GetRequiredService<RuntimeCheckpointCommitter>();
+        var commitCount = _checkpointWriter.ListCommits().Count;
+        var replay = await committer.CommitAsync(commit);
+        Assert.Single(replay.PendingPostCommitWorkIds);
+        Assert.Equal(commitCount, _checkpointWriter.ListCommits().Count);
     }
 
     [Fact]
-    public async Task HandleAsync_RecordsFaultedStateWhenActivityThrows()
+    public async Task HandleAsync_SensitiveContractInputsAndOutputsAreExcludedBeforeDiagnosticCapture()
     {
-        var activity = new RecordingActivity { Exception = new InvalidOperationException("boom") };
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(activity),
-            includeInspection: true,
-            payloadCapturePolicy: new CaptureAllRuntimePayloadCapturePolicy());
-        var handler = NewHandler(provider);
+        var capturePolicy = new RecordingCapturePolicy();
+        var executable = NewTypedExecutable(isSensitive: true);
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewTypedRunningState(executable));
+        await using var provider = NewProvider(new RecordingTypedActivator(), includeInspection: true, capturePolicy);
 
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
-        Assert.Equal("ActivityFaulted", state.SubStatus);
-        Assert.Equal(_now, state.CompletedAt);
-        Assert.Equal(1, state.FaultCount);
-        Assert.Equal(1, state.AggregateFaultCount);
-        Assert.Equal(typeof(InvalidOperationException).FullName, state.Metadata["runtime.faultType"]);
-        Assert.Equal("boom", state.Metadata["runtime.faultMessage"]);
-        await AssertIncidentRecordedAsync("ActivityFaulted", message => Assert.Equal("boom", message));
-        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(projection);
-        Assert.Contains(projection.ValueSnapshots, snapshot => snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityInput);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-    }
-
-    [Fact]
-    public async Task HandleAsync_RecordsFaultedStateWhenInputMaterializationFails()
-    {
-        await _executableStore.SaveAsync(NewExecutableWithInputBinding(new RuntimeInputBinding(
-            inputName: "Text",
-            source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding("JavaScript", "workflow.input"))));
-        await _activityStateStore.SaveAsync(NewRunningState());
-        var factory = new RecordingActivityFactory(new RecordingActivity());
-        await using var provider = NewProvider(factory);
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        Assert.Equal(0, factory.CreateCalls);
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
-        Assert.Equal("InputMaterializationFailed", state.SubStatus);
-        Assert.Equal(_now, state.CompletedAt);
-        Assert.Equal(1, state.FaultCount);
-        Assert.Contains("typeName", state.Metadata["runtime.faultMessage"]);
-        await AssertIncidentRecordedAsync("InputMaterializationFailed", message => Assert.Contains("typeName", message));
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-    }
-
-    [Fact]
-    public async Task HandleAsync_RecordsInputMaterializationFaultInspection()
-    {
-        await _executableStore.SaveAsync(NewExecutableWithInputBinding(new RuntimeInputBinding(
-            inputName: "Text",
-            source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding("JavaScript", "workflow.input"))));
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(new RecordingActivityFactory(new RecordingActivity()), includeInspection: true);
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(projection);
-        Assert.Equal(ActivityExecutionStatus.Faulted, projection.Status);
-        Assert.Equal("InputMaterializationFailed", projection.SubStatus);
-        var incident = Assert.Single(projection.Incidents);
-        Assert.Equal("InputMaterializationFailed", incident.FailureType);
-        Assert.True(incident.IsBlocking);
-
-        var write = Assert.Single(_checkpointWriter.ListCommits());
-        Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
-        Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
-    }
-
-    [Fact]
-    public async Task HandleAsync_RecordsInputMaterializationInnerExceptionMetadata()
-    {
-        await _executableStore.SaveAsync(NewExecutableWithInputBinding(JavaScriptTextBinding("[1.2.3]")));
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
-            new RecordingActivityFactory(new RecordingActivity()),
-            includeInspection: true,
-            expressionEvaluator: new ThrowingExpressionEvaluator(new FormatException("Unexpected token '.'."))
-        );
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal("InputMaterializationFailed", state.SubStatus);
-        Assert.Contains("failed to evaluate", state.Metadata[RuntimeMetadataKeys.FaultMessage]);
-        Assert.Equal(typeof(FormatException).FullName, state.Metadata[RuntimeMetadataKeys.FaultInnerType]);
-        Assert.Equal("Unexpected token '.'.", state.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
-
-        var incident = await _incidentStateStore.FindAsync("wfexec-1", "incident:invoke-work:actexec-1:InputMaterializationFailed");
-        Assert.NotNull(incident);
-        Assert.Equal(state.Metadata[RuntimeMetadataKeys.FaultInnerType], incident.Metadata[RuntimeMetadataKeys.FaultInnerType]);
-        Assert.Equal(state.Metadata[RuntimeMetadataKeys.FaultInnerMessage], incident.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
-
-        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(projection);
-        Assert.Equal("Unexpected token '.'.", projection.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
-        Assert.Equal("Unexpected token '.'.", Assert.Single(projection.Incidents).Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
-    }
-
-    [Fact]
-    public async Task HandleAsync_PropagatesCompletionPersistenceFailureWithoutRecordingActivityFault()
-    {
-        var activity = new RecordingActivity();
-        var factory = new RecordingActivityFactory(activity);
-        var throwingStore = new ThrowingSaveActivityExecutionStateStore(
-            _activityStateStore,
-            ActivityExecutionStatus.Completed,
-            new InvalidOperationException("storage down"));
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(factory, throwingStore);
-        var handler = NewHandler(provider);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewInvokeWorkItem(NewIdentity())).AsTask());
-
-        Assert.Equal("storage down", exception.Message);
-        Assert.Equal([ActivityExecutionStatus.Completed], throwingStore.AttemptedSaveStatuses);
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-    }
-
-    [Fact]
-    public async Task HandleAsync_RecordsFaultedStateWhenActivityConstructionFails()
-    {
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        var factory = new ThrowingActivityFactory(new InvalidOperationException("missing constructor"));
-        await using var provider = NewProvider(factory);
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
-        Assert.Equal("ActivityConstructionFailed", state.SubStatus);
-        Assert.Equal(_now, state.CompletedAt);
-        Assert.Equal(1, state.FaultCount);
-        Assert.Equal(typeof(InvalidOperationException).FullName, state.Metadata["runtime.faultType"]);
-        Assert.Equal("missing constructor", state.Metadata["runtime.faultMessage"]);
-        await AssertIncidentRecordedAsync("ActivityConstructionFailed", message => Assert.Equal("missing constructor", message));
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-    }
-
-    [Fact]
-    public async Task HandleAsync_RecordsFaultedStateWhenArgumentBindingThrows()
-    {
-        // Models the #313/#316 binder InvalidOperationException: the argument binder runs inside
-        // activityFactory.Create, so a typed-binding failure must fault the activity with a blocking incident
-        // rather than escaping the fault boundary and stalling the run silently at Running (#317).
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        var factory = new ThrowingActivityFactory(new InvalidOperationException("cannot bind argument 'Value'"));
-        await using var provider = NewProvider(factory, includeInspection: true);
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
-        Assert.Equal("ActivityConstructionFailed", state.SubStatus);
-        await AssertIncidentRecordedAsync("ActivityConstructionFailed", message => Assert.Contains("cannot bind argument", message));
-
-        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(projection);
-        Assert.Equal(ActivityExecutionStatus.Faulted, projection.Status);
-        Assert.Equal("ActivityConstructionFailed", projection.SubStatus);
-        var incident = Assert.Single(projection.Incidents);
-        Assert.Equal("ActivityConstructionFailed", incident.FailureType);
-        Assert.True(incident.IsBlocking);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-    }
-
-    [Fact]
-    public async Task HandleAsync_ReenqueuesCompletionWorkForExistingCompletedState()
-    {
-        var activity = new RecordingActivity();
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState() with
+        Assert.Collection(
+            capturePolicy.Requests.OrderBy(request => request.Subject),
+            request =>
+            {
+                Assert.Equal(RuntimePayloadCaptureSubject.ActivityInput, request.Subject);
+                Assert.True(request.IsSensitive);
+            },
+            request =>
+            {
+                Assert.Equal(RuntimePayloadCaptureSubject.ActivityOutput, request.Subject);
+                Assert.True(request.IsSensitive);
+            });
+        var inspection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.All(inspection!.ValueSnapshots, snapshot =>
         {
-            Status = ActivityExecutionStatus.Completed,
-            CompletedAt = _now.AddMinutes(-1)
+            Assert.True(snapshot.IsSensitive);
+            Assert.Null(snapshot.Payload);
         });
-        var factory = new RecordingActivityFactory(activity);
-        await using var provider = NewProvider(factory);
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        Assert.Equal(0, factory.CreateCalls);
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
-        Assert.Equal(_now.AddMinutes(-1), state.CompletedAt);
-        var completionPayload = await AssertCompletionWorkAsync();
-        Assert.Equal("actexec-1", completionPayload.ActivityExecutionId);
     }
 
     [Fact]
-    public async Task HandleAsync_ReenqueuesCompletionWorkForExistingSkippedCompletedState()
+    public async Task HandleAsync_TypedNode_CommitsReturnedFaultAsFaultTransition()
     {
-        var activity = new RecordingActivity();
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState() with
+        var activator = new ReturningTypedActivator(ActivityTransition.Fault<TypedResult>(
+            new ActivityFault("payment.declined", "The payment was declined", isRetryable: false)));
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, state!.Status);
+        Assert.Equal("payment.declined", state.Fault!.Code);
+        Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, Assert.Single(state.Attempts!).TransitionKind);
+        Assert.True(activator.Activity!.Disposed);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TypedNode_CommitsReturnedCancellationAndSchedulesWorkflowCancellation()
+    {
+        var activator = new ReturningTypedActivator(ActivityTransition.Cancel<TypedResult>("Caller disconnected"));
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Cancelled, state!.Status);
+        Assert.Equal("Caller disconnected", state.Metadata[RuntimeMetadataKeys.CancellationReason]);
+        var commit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCancelled).Commit;
+        var cancelWork = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(WorkflowExecutionCommandKind.Cancel, cancelWork.CommandKind);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ReplayedTypedInvocation_UsesCommittedCompletionWithoutReactivation()
+    {
+        var activator = new RecordingTypedActivator();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = NewHandler(provider);
+        var workItem = NewInvokeWorkItem(NewIdentity());
+
+        await handler.HandleAsync(workItem);
+        var committed = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        var committedCheckpointCount = _checkpointWriter.ListCommits().Count;
+        await handler.HandleAsync(workItem);
+
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.Equal(committed, await _activityStateStore.FindAsync("wfexec-1", "actexec-1"));
+        Assert.Equal(committedCheckpointCount, _checkpointWriter.ListCommits().Count);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task HandleAsync_RedeliveredAfterWorkerCancellation_ClosesAbandonedAttemptAndClaimsFreshRetryBeforeActivation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var activator = new CancelThenCompleteActivator(_activityStateStore, cancellation);
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = NewHandler(provider);
+        var workItem = NewInvokeWorkItem(NewIdentity());
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => handler.HandleAsync(workItem, cancellation.Token).AsTask());
+
+        var interrupted = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        var interruptedAttempt = Assert.Single(interrupted!.Attempts!);
+        Assert.Null(interruptedAttempt.EndedAt);
+        Assert.Equal(interruptedAttempt.AttemptId, interrupted.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
+        Assert.Equal(
+            RuntimeCheckpointNames.ActivityAttemptClaimed,
+            Assert.Single(_checkpointWriter.ListCommits()).Commit.Checkpoint.Name);
+
+        await handler.HandleAsync(workItem);
+
+        Assert.Collection(
+            activator.Requests,
+            request => Assert.Equal("actexec-1:attempt:1", request.Attempt.AttemptId),
+            request =>
+            {
+                Assert.Equal("actexec-1:attempt:2", request.Attempt.AttemptId);
+                Assert.Equal(ActivityAttemptReason.Retry, request.Attempt.Reason);
+                Assert.Equal("sha256:bindings", request.Inputs.BindingFingerprint);
+                Assert.Equal("hello", request.Inputs.Values["text"].InlineValue!.Value.GetString());
+            });
+        Assert.Collection(
+            activator.StatesObservedBeforeActivation,
+            first =>
+            {
+                var attempt = Assert.Single(first.Attempts!);
+                Assert.Null(attempt.EndedAt);
+                Assert.Equal(attempt.AttemptId, first.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
+            },
+            second =>
+            {
+                var attempts = second.Attempts!.OrderBy(attempt => attempt.Ordinal).ToArray();
+                Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, attempts[0].TransitionKind);
+                Assert.NotNull(attempts[0].EndedAt);
+                Assert.Null(attempts[1].EndedAt);
+                Assert.Equal(attempts[1].AttemptId, second.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
+            });
+
+        var completed = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Collection(
+            completed!.Attempts!.OrderBy(attempt => attempt.Ordinal),
+            attempt => Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, attempt.TransitionKind),
+            attempt => Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Complete, attempt.TransitionKind));
+        Assert.Equal(
+            [
+                RuntimeCheckpointNames.ActivityAttemptClaimed,
+                RuntimeCheckpointNames.ActivityAttemptClaimed,
+                RuntimeCheckpointNames.ActivityCompleted
+            ],
+            _checkpointWriter.ListCommits().Select(write => write.Commit.Checkpoint.Name));
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnsolicitedOperationCancellation_FaultsDurablyWithoutReactivation()
+    {
+        var activity = new UnsolicitedCancellationActivity();
+        var activator = new FixedActivityActivator(activity);
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = NewHandler(provider);
+        var workItem = NewInvokeWorkItem(NewIdentity());
+
+        await handler.HandleAsync(workItem);
+        await handler.HandleAsync(workItem);
+
+        var faulted = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, faulted!.Status);
+        Assert.Equal("ActivityFaulted", faulted.SubStatus);
+        Assert.Single(faulted.IncidentIds);
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.True(activity.Disposed);
+        Assert.DoesNotContain(
+            _checkpointWriter.ListCommits(),
+            record => record.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ActivityDisposalFailure_ReleasesScopeAndFaultsWithoutDoubleExecution()
+    {
+        var activator = new ThrowingDisposeActivator();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = NewHandler(provider);
+        var workItem = NewInvokeWorkItem(NewIdentity());
+
+        await handler.HandleAsync(workItem);
+        await handler.HandleAsync(workItem);
+
+        var faulted = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, faulted!.Status);
+        Assert.Equal("ActivityDisposalFailed", faulted.SubStatus);
+        Assert.Single(faulted.IncidentIds);
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.Equal(1, activator.Activity.ExecuteCalls);
+        Assert.True(activator.Scope.Disposed);
+        Assert.DoesNotContain(
+            _checkpointWriter.ListCommits(),
+            record => record.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ScopeDisposalFailure_FaultsDurablyWithoutDoubleExecution()
+    {
+        var activator = new ThrowingScopeDisposeActivator();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = NewHandler(provider);
+        var workItem = NewInvokeWorkItem(NewIdentity());
+
+        await handler.HandleAsync(workItem);
+        await handler.HandleAsync(workItem);
+
+        var faulted = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, faulted!.Status);
+        Assert.Equal("ActivityDisposalFailed", faulted.SubStatus);
+        Assert.Single(faulted.IncidentIds);
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.Equal(1, activator.Activity.ExecuteCalls);
+        Assert.True(activator.Scope.DisposeAttempted);
+        Assert.DoesNotContain(
+            _checkpointWriter.ListCommits(),
+            record => record.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted);
+    }
+
+    [Fact]
+    public async Task HandleAsync_StructuralDeferDisposalFailure_DiscardsStagedStateAndFaultsOpenAttempt()
+    {
+        var activity = new ThrowingDisposeStatefulDeferringStructuralActivity();
+        var activator = new FixedActivityActivator(activity);
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = NewHandler(provider);
+        var workItem = NewInvokeWorkItem(NewIdentity());
+
+        await handler.HandleAsync(workItem);
+        await handler.HandleAsync(workItem);
+
+        var faulted = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, faulted!.Status);
+        Assert.Equal("ActivityDisposalFailed", faulted.SubStatus);
+        Assert.Null(faulted.PrivateState);
+        Assert.DoesNotContain(RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId, faulted.Metadata.Keys);
+        var attempt = Assert.Single(faulted.Attempts!);
+        Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, attempt.TransitionKind);
+        Assert.NotNull(attempt.EndedAt);
+        Assert.NotNull(attempt.IncidentId);
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.Equal(1, activity.ExecuteCalls);
+        Assert.DoesNotContain(
+            _checkpointWriter.ListCommits(),
+            record => record.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityInspectionCaptured);
+        Assert.Empty(_checkpointWriter.ListCommits().SelectMany(record => record.Commit.PostCommitIntents));
+    }
+
+    [Fact]
+    public async Task HandleAsync_InitialStructuralDeferWithoutChild_FaultsInsteadOfLeavingInvocationRunning()
+    {
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(new FixedActivityActivator(new EmptyDeferringStructuralActivity()), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, state!.Status);
+        Assert.Contains("cannot defer without scheduling", state.Fault!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HandleAsync_OrdinaryActivityReceivesAuthorContextWithoutSchedulingSeam()
+    {
+        var activity = new OrdinaryContextActivity();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(new FixedActivityActivator(activity), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Completed, state!.Status);
+        Assert.False(activity.ExposesRuntimeSchedulingSeam);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TerminalStructuralCompletion_DiscardsPrivateState()
+    {
+        var executable = NewStructuralExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewStructuralRunningState(executable));
+        await using var provider = NewProvider(new FixedActivityActivator(new CompletingWithStateStructuralActivity()), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Completed, state!.Status);
+        Assert.Null(state.PrivateState);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TerminalStructuralDecisionWithScheduledChild_FaultsAsProtocolViolation()
+    {
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(new FixedActivityActivator(new CompletingAndSchedulingStructuralActivity()), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, state!.Status);
+        Assert.Contains("terminal structural decision", state.Fault!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HandleAsync_RedeliveredAfterCommittedStructuralDefer_DoesNotReactivateOrDuplicateChildIntent()
+    {
+        var activator = new FixedActivityActivator(new ChildSchedulingDeferringStructuralActivity());
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = NewHandler(provider);
+        var workItem = NewInvokeWorkItem(NewIdentity());
+
+        await handler.HandleAsync(workItem);
+        var deferred = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        var checkpointCount = _checkpointWriter.ListCommits().Count;
+        var childIntentCount = _checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents).Count();
+
+        await handler.HandleAsync(workItem);
+
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.Equal(deferred, await _activityStateStore.FindAsync("wfexec-1", "actexec-1"));
+        Assert.Equal(checkpointCount, _checkpointWriter.ListCommits().Count);
+        Assert.Equal(1, childIntentCount);
+        Assert.Equal(childIntentCount, _checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents).Count());
+        var attempt = Assert.Single(deferred!.Attempts!);
+        Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend, attempt.TransitionKind);
+        Assert.Equal("invoke-work", deferred.Metadata[RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId]);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CheckpointParticipantEntryChangesCommitWithChildScheduling()
+    {
+        var activity = new CheckpointParticipantStructuralActivity();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(new FixedActivityActivator(activity), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.Equal("hello", Assert.IsType<JsonElement>(activity.EffectiveInputs["text"]).GetString());
+        var childSchedulingCommit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointReason] == "ChildActivityScheduling").Commit;
+        var change = Assert.Single(childSchedulingCommit.StateChanges.DurableValues);
+        Assert.Equal("checkpoint:entry", change.StateId);
+        Assert.NotNull(await _durableValueStateStore.FindAsync("wfexec-1", "checkpoint:entry"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_CheckpointParticipantEntryAndCompletionChangesCommitAtomically()
+    {
+        var activity = new CompletingCheckpointParticipantActivity();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(new FixedActivityActivator(activity), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var completionCommit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted).Commit;
+        Assert.Equal(
+            ["checkpoint:completion", "checkpoint:entry"],
+            completionCommit.StateChanges.DurableValues.Select(change => change.StateId).Order(StringComparer.Ordinal));
+        var completed = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(9, completed!.Completion!.Result.InlineValue!.Value.GetProperty("length").GetInt32());
+    }
+
+    [Fact]
+    public async Task HandleAsync_DelayedReplayAfterNewerStructuralActivation_DoesNotReactivateOrClaimAnotherAttempt()
+    {
+        var activator = new FixedActivityActivator(new ChildSchedulingDeferringStructuralActivity());
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = NewHandler(provider);
+        var oldWorkItem = NewInvokeWorkItem(NewIdentity());
+
+        await handler.HandleAsync(oldWorkItem);
+        var afterOldWork = await _activityStateStore.FindAsync("wfexec-1", "actexec-1")
+                           ?? throw new InvalidOperationException("Deferred activity state was not persisted.");
+        var metadata = afterOldWork.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId] = "invoke-work";
+        var afterNewerWork = afterOldWork with { Metadata = RuntimeModelMetadata.Snapshot(metadata) };
+        await _activityStateStore.SaveAsync(afterNewerWork);
+        var commitCount = _checkpointWriter.ListCommits().Count;
+
+        await handler.HandleAsync(oldWorkItem);
+
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.Equal(afterNewerWork, await _activityStateStore.FindAsync("wfexec-1", "actexec-1"));
+        Assert.Equal(commitCount, _checkpointWriter.ListCommits().Count);
+        Assert.Single(afterNewerWork.Attempts!);
+    }
+
+    [Fact]
+    public async Task ParentCallback_DelayedReplayAfterNewerCallback_DoesNotReactivateOrClaimAnotherAttempt()
+    {
+        var activator = new FixedActivityActivator(new DeferringChildCompletionActivity());
+        var executable = NewCallbackExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewCallbackParentState(executable));
+        await _activityStateStore.SaveAsync(NewCompletedCallbackChildState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new FixedTimeProvider(_now));
+        var newerWorkItem = NewParentCallbackWorkItem("callback-work-newer", "command-newer");
+        var oldWorkItem = NewParentCallbackWorkItem("callback-work-old", "command-old");
+
+        await handler.HandleAsync(newerWorkItem);
+        var afterNewerWork = await _activityStateStore.FindAsync("wfexec-1", "actexec-1")
+                             ?? throw new InvalidOperationException("Deferred parent state was not persisted.");
+        var completedChild = await _activityStateStore.FindAsync("wfexec-1", "actexec-child");
+        var commitCount = _checkpointWriter.ListCommits().Count;
+
+        await handler.HandleAsync(oldWorkItem);
+
+        Assert.Equal("callback-work-newer", completedChild!.Metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId]);
+        Assert.Equal(1, activator.ActivateCalls);
+        Assert.Equal(afterNewerWork, await _activityStateStore.FindAsync("wfexec-1", "actexec-1"));
+        Assert.Equal(commitCount, _checkpointWriter.ListCommits().Count);
+        Assert.Equal(2, afterNewerWork.Attempts!.Count);
+    }
+
+    [Fact]
+    public async Task ParentCallback_LongRunningContainerRetainsBoundedAttemptDiagnosticsAndMonotonicOrdinal()
+    {
+        var activator = new FixedActivityActivator(new DeferringChildCompletionActivity());
+        var executable = NewCallbackExecutable();
+        var parentState = NewCallbackParentState(executable) with
         {
-            Status = ActivityExecutionStatus.Completed,
-            SubStatus = "Skipped",
-            CompletedAt = _now.AddMinutes(-1)
-        });
-        var factory = new RecordingActivityFactory(activity);
-        await using var provider = NewProvider(factory);
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
-
-        Assert.Equal(0, factory.CreateCalls);
-        var completionPayload = await AssertCompletionWorkAsync();
-        Assert.Empty(completionPayload.OutcomeNames);
-    }
-
-    [Fact]
-    public async Task HandleAsync_RejectsPayloadNodeMismatchBeforeInvokingActivity()
-    {
-        var activity = new RecordingActivity();
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        var factory = new RecordingActivityFactory(activity);
-        await using var provider = NewProvider(factory);
-        var handler = NewHandler(provider);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewInvokeWorkItem(NewIdentity(), executableNodeId: "node-other")).AsTask());
-
-        Assert.Contains("belongs to executable node 'node-start'", exception.Message);
-        Assert.Equal(0, factory.CreateCalls);
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
-    }
-
-    [Fact]
-    public async Task HandleAsync_RejectsMissingPayloadBeforeInvokingActivity()
-    {
-        var factory = new RecordingActivityFactory(new RecordingActivity());
-        await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(factory);
-        var handler = NewHandler(provider);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewInvokeWorkItem(includePayload: false)).AsTask());
-
-        Assert.Contains("requires an invoke activity payload", exception.Message);
-        Assert.Equal(0, factory.CreateCalls);
-    }
-
-    [Fact]
-    public void CanHandle_AcceptsOnlyInvokeActivityWork()
-    {
-        using var provider = NewProvider(new RecordingActivityFactory(new RecordingActivity()));
-        var handler = NewHandler(provider);
-
-        Assert.True(handler.CanHandle(NewInvokeWorkItem(NewIdentity())));
-        Assert.False(handler.CanHandle(NewInvokeWorkItem(NewIdentity(), commandKind: WorkflowExecutionCommandKind.StartActivity)));
-    }
-
-    private WorkflowInvokeActivitySchedulerWorkHandler NewHandler(ServiceProvider provider) =>
-        new(
-            new RuntimeActivityInputMaterializer(),
+            Attempts = Enumerable.Range(1, 100)
+                .Select(ordinal => new ActivityAttempt(
+                    $"actexec-1:attempt:{ordinal}",
+                    "actexec-1",
+                    ordinal,
+                    ordinal == 1 ? ActivityAttemptReason.Initial : ActivityAttemptReason.Resume,
+                    _now.AddSeconds(ordinal),
+                    _now.AddSeconds(ordinal + 1),
+                    transitionKind: Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend))
+                .ToArray()
+        };
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(parentState);
+        await _activityStateStore.SaveAsync(NewCompletedCallbackChildState());
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
             provider.GetRequiredService<IServiceScopeFactory>(),
             new FixedTimeProvider(_now));
 
+        await handler.HandleAsync(NewParentCallbackWorkItem("callback-work-101", "command-101"));
+
+        var retained = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(32, retained!.Attempts!.Count);
+        Assert.Equal(1, retained.Attempts.Min(attempt => attempt.Ordinal));
+        Assert.Equal(101, retained.Attempts.Max(attempt => attempt.Ordinal));
+        Assert.Equal("101", retained.Metadata[RuntimeMetadataKeys.ActivityAttemptOrdinalHighWatermark]);
+        Assert.DoesNotContain("runtime.activityActivationCompletedWorkItemIds", retained.Metadata.Keys);
+    }
+
+    [Fact]
+    public async Task ParentCallback_WithoutInspection_CommitsCompletionAndDownstreamIntentAtomically()
+    {
+        var activator = new FixedActivityActivator(new CompletingChildCompletionActivity());
+        var executable = NewCallbackExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewCallbackParentState(executable));
+        await _activityStateStore.SaveAsync(NewCompletedCallbackChildState());
+        await using var provider = NewProvider(activator, includeInspection: false);
+        var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new FixedTimeProvider(_now));
+
+        await handler.HandleAsync(NewParentCallbackWorkItem("callback-work-newer", "command-newer"));
+
+        var commit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted).Commit;
+        var stateChange = Assert.Single(commit.StateChanges.ActivityExecutions);
+        Assert.Equal(ActivityExecutionStatus.Completed, stateChange.State.Status);
+        Assert.Empty(commit.StateChanges.ActivityExecutionInspections);
+        Assert.Single(commit.PostCommitIntents);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+
+        var committer = provider.GetRequiredService<RuntimeCheckpointCommitter>();
+        var commitCount = _checkpointWriter.ListCommits().Count;
+        var replay = await committer.CommitAsync(commit);
+        Assert.Single(replay.PendingPostCommitWorkIds);
+        Assert.Equal(commitCount, _checkpointWriter.ListCommits().Count);
+    }
+
+    [Fact]
+    public async Task ParentCallback_CheckpointParticipantCompletionChangesCommitWithParentCompletion()
+    {
+        var executable = NewCallbackExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewCallbackParentState(executable));
+        await _activityStateStore.SaveAsync(NewCompletedCallbackChildState());
+        await using var provider = NewProvider(
+            new FixedActivityActivator(new CompletionCheckpointParticipantActivity()),
+            includeInspection: true);
+        var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new FixedTimeProvider(_now));
+
+        await handler.HandleAsync(NewParentCallbackWorkItem("callback-work", "callback-command"));
+
+        var completionCommit = Assert.Single(
+            _checkpointWriter.ListCommits(),
+            write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted).Commit;
+        var change = Assert.Single(completionCommit.StateChanges.DurableValues);
+        Assert.Equal("checkpoint:completion", change.StateId);
+        Assert.NotNull(await _durableValueStateStore.FindAsync("wfexec-1", "checkpoint:completion"));
+    }
+
+    private WorkflowInvokeActivitySchedulerWorkHandler NewHandler(ServiceProvider provider) =>
+        new(provider.GetRequiredService<IServiceScopeFactory>(), new FixedTimeProvider(_now));
+
     private async Task<RuntimeCompleteActivityCommandPayload> AssertCompletionWorkAsync()
     {
-        var completionWork = await AssertCompletionSchedulerWorkAsync();
-        Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, completionWork.CommandKind);
-        Assert.Equal("invoke-work:complete:actexec-1", completionWork.WorkItemId);
-        Assert.Equal("command-1:complete:actexec-1", completionWork.CommandId);
-        Assert.Equal("wfexec-1:invoke:actexec-1:complete:actexec-1", completionWork.IdempotencyKey);
-        Assert.Equal(31, completionWork.Sequence);
-        Assert.NotNull(completionWork.Payload);
-        return completionWork.Payload.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
-    }
-
-    private async Task<RuntimeSchedulerWorkItem> AssertCompletionSchedulerWorkAsync()
-    {
         var intents = _checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents).ToArray();
-        if (intents.Length == 0)
-            return Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-
-        var intent = Assert.Single(intents);
-        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, intent.Kind);
-        Assert.NotNull(intent.Payload);
-        return intent.Payload.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
-    }
-
-    private RuntimeSchedulerWorkItem AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind commandKind)
-    {
-        var intent = Assert.Single(_checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents));
-        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, intent.Kind);
-        Assert.NotNull(intent.Payload);
-        var workItem = intent.Payload.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
-        Assert.Equal(commandKind, workItem.CommandKind);
-        return workItem;
-    }
-
-    private async Task AssertIncidentRecordedAsync(string failureType, Action<string> assertMessage)
-    {
-        var incidentId = $"incident:invoke-work:actexec-1:{failureType}";
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
-        Assert.NotNull(state);
-        Assert.Equal([incidentId], state.IncidentIds);
-        Assert.Equal(incidentId, state.Metadata["runtime.incidentId"]);
-
-        var incident = await _incidentStateStore.FindAsync("wfexec-1", incidentId);
-        Assert.NotNull(incident);
-        Assert.Equal("wfexec-1", incident.WorkflowExecutionId);
-        Assert.Equal("actexec-1", incident.ActivityExecutionId);
-        Assert.Equal("node-start", incident.ExecutableNodeId);
-        Assert.Equal(IncidentSeverity.Error, incident.Severity);
-        Assert.Equal(IncidentStatus.Blocking, incident.Status);
-        Assert.Equal(IncidentResolutionAction.WaitForIntervention, incident.ResolutionAction);
-        Assert.Equal(failureType, incident.FailureType);
-        Assert.Equal(_now, incident.CreatedAt);
-        Assert.Null(incident.ResolvedAt);
-        Assert.Equal("invoke-work", incident.Metadata["runtime.schedulerWorkItemId"]);
-        Assert.Equal("command-1", incident.Metadata["runtime.commandId"]);
-        Assert.Equal(failureType, incident.Metadata["runtime.faultSubStatus"]);
-        assertMessage(incident.Message);
-
-        var write = Assert.Single(_checkpointWriter.ListCommits());
-        Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
-        Assert.Equal(incidentId, write.Commit.Checkpoint.Metadata["runtime.incidentId"]);
-        Assert.Equal(["actexec-1"], write.Commit.Checkpoint.ActivityExecutionIds);
+        var work = intents.Length == 0
+            ? Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")))
+            : Assert.Single(intents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, work.CommandKind);
+        return work.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
     }
 
     private ServiceProvider NewProvider(
-        IActivityFactory factory,
-        IActivityExecutionStateStore? activityExecutionStateStore = null,
+        IActivityActivator activityActivator,
         bool includeInspection = false,
-        IRuntimePayloadCapturePolicy? payloadCapturePolicy = null,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
-        IExpressionEvaluator? expressionEvaluator = null)
+        IRuntimePayloadCapturePolicy? capturePolicy = null)
     {
         var services = new ServiceCollection();
-        services.AddScoped(_ => factory);
-        if (expressionEvaluator is not null)
-            services.AddSingleton(expressionEvaluator);
-        if (workflowExecutionStateStore is not null)
-            services.AddSingleton(workflowExecutionStateStore);
-        services.AddSingleton(_executableStore);
+        services.AddSingleton<IActivityActivator>(activityActivator);
+        services.AddSingleton<IWorkflowExecutionStateStore>(_ =>
+            CanonicalWorkflowStateTestData.EnsureRunning(new InMemoryWorkflowExecutionStateStore()));
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
-        services.AddSingleton(_activityStateStore);
-        services.AddSingleton<IActivityExecutionStateStore>(_ => activityExecutionStateStore ?? _activityStateStore);
-        services.AddSingleton(_schedulerWorkQueue);
+        services.AddSingleton<IActivityExecutionStateStore>(_ => _activityStateStore);
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
-        services.AddSingleton(_activityOutputRegister);
-        services.AddSingleton<IRuntimeActivityOutputRegister>(_ => _activityOutputRegister);
-        services.AddSingleton(_durableValueStateStore);
         services.AddSingleton<IDurableValueStateStore>(_ => _durableValueStateStore);
-        services.AddSingleton(_incidentStateStore);
         services.AddSingleton<IIncidentStateStore>(_ => _incidentStateStore);
         services.AddSingleton<IRuntimeCheckpointCommitStore>(_ => _checkpointWriter);
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
-        if (includeInspection)
-            services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
-        else
-            services.AddSingleton<IRuntimePostCommitIntentDispatcher, NoopRuntimePostCommitIntentDispatcher>();
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
+        services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
-        services.AddSingleton<ActivityFaultIncidentRecorder>();
+        services.AddSingleton(sp => new ActivityFaultIncidentRecorder(
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetService<IRuntimeActivityExecutionInspectionAccumulator>()));
+        services.AddSingleton<ActivityCompletionProjector>();
+        services.AddSingleton<IRuntimeDurableValueStorageDriver, JsonRuntimeDurableValueStorageDriver>();
+        services.AddSingleton<IRuntimeDurableValueStorageDriverRegistry, RuntimeDurableValueStorageDriverRegistry>();
+        services.AddSingleton<RuntimeOutputCaptureProjector>();
+        services.AddSingleton<ActivityInputHydrator>();
         services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         if (includeInspection)
         {
             services.AddSingleton<IActivityExecutionInspectionStore>(_ => _inspectionStore);
             services.AddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
-            if (payloadCapturePolicy is null)
-                services.AddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
-            else
-                services.AddSingleton<IRuntimePayloadCapturePolicy>(_ => payloadCapturePolicy);
+            services.AddSingleton<IRuntimePayloadCapturePolicy>(capturePolicy ?? new DefaultRuntimePayloadCapturePolicy());
         }
         return services.BuildServiceProvider();
     }
 
-    private RuntimeSchedulerWorkItem NewInvokeWorkItem(
-        WorkflowExecutableIdentity? pinnedExecutable = null,
-        WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.InvokeActivity,
-        string executableNodeId = "node-start",
-        JsonElement? payload = null,
-        bool includePayload = true,
-        IReadOnlyDictionary<string, string>? commandMetadata = null,
-        string workItemId = "invoke-work",
-        string activityExecutionId = "actexec-1")
-    {
-        var resolvedPayload = includePayload
-            ? payload ?? JsonSerializer.SerializeToElement(new RuntimeInvokeActivityCommandPayload(
-                pinnedExecutable ?? NewIdentity(),
-                executableNodeId,
-                activityExecutionId,
-                RuntimeInvokeActivityCommandPayload.StartedActivityReason))
-            : (JsonElement?)null;
-
-        return new RuntimeSchedulerWorkItem(
-            workItemId: workItemId,
-            workflowExecutionId: "wfexec-1",
-            commandId: "command-1",
-            commandKind: commandKind,
-            envelopeId: "envelope-1",
-            idempotencyKey: $"wfexec-1:invoke:{activityExecutionId}",
-            enqueuedAt: _now,
-            recordedAt: _now,
-            sequence: 30,
-            payload: resolvedPayload,
-            commandMetadata: commandMetadata ?? new Dictionary<string, string> { ["source"] = "test" },
-            envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
-    }
-
-    private static ActivityExecutionState NewRunningState(
-        string activityExecutionId = "actexec-1",
-        string executableNodeId = "node-start") =>
+    private RuntimeSchedulerWorkItem NewInvokeWorkItem(WorkflowExecutableIdentity? pinnedExecutable = null) =>
         new(
-            Execution: new ActivityExecution(
-                ActivityExecutionId: activityExecutionId,
-                WorkflowExecutionId: "wfexec-1",
-                ExecutableNodeId: executableNodeId,
-                AuthoredActivityId: $"authored-{executableNodeId}",
-                ActivityType: "test/activity",
-                ActivityTypeVersion: "1.0.0"),
-            Status: ActivityExecutionStatus.Running,
-            SubStatus: null,
-            ScheduledAt: DateTimeOffset.UtcNow.AddMinutes(-2),
-            StartedAt: DateTimeOffset.UtcNow.AddMinutes(-1),
-            CompletedAt: null,
-            SchedulingActivityExecutionId: null,
-            ParentActivityExecutionId: null,
-            BranchId: null,
-            IterationId: null,
-            CallStackDepth: null,
-            BookmarkIds: [],
-            IncidentIds: [],
-            FaultCount: 0,
-            AggregateFaultCount: 0,
-            Metadata: new Dictionary<string, string> { ["runtime.startReason"] = "test" });
+            "invoke-work",
+            "wfexec-1",
+            "command-1",
+            WorkflowExecutionCommandKind.InvokeActivity,
+            "envelope-1",
+            "wfexec-1:invoke:actexec-1",
+            _now,
+            _now,
+            30,
+            JsonSerializer.SerializeToElement(new RuntimeInvokeActivityCommandPayload(
+                pinnedExecutable ?? NewIdentity(), "node-start", "actexec-1", RuntimeInvokeActivityCommandPayload.StartedActivityReason)),
+            new Dictionary<string, string> { ["source"] = "test" },
+            new Dictionary<string, string> { ["transport"] = "in-process" });
 
-    private static WorkflowExecutable NewExecutable()
+    private RuntimeSchedulerWorkItem NewParentCallbackWorkItem(string workItemId, string commandId) =>
+        new(
+            workItemId,
+            "wfexec-1",
+            commandId,
+            WorkflowExecutionCommandKind.CompleteActivity,
+            "envelope-1",
+            $"wfexec-1:callback:{workItemId}",
+            _now,
+            _now,
+            31,
+            JsonSerializer.SerializeToElement(new RuntimeCompleteActivityCommandPayload(
+                NewIdentity(),
+                "node-parent",
+                "actexec-1",
+                parentActivityExecutionId: null,
+                branchId: null,
+                outcomeNames: [ActivityOutcomes.Done],
+                RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
+                SchedulerCompletionKind.ParentCompletionEvaluation,
+                completedChildActivityExecutionId: "actexec-child")),
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>());
+
+    private ActivityExecutionState NewTypedRunningState(WorkflowExecutable? executable = null)
     {
-        using var document = JsonDocument.Parse("""{"type":"test"}""");
-        var start = NewNode("node-start", document.RootElement, LiteralTextBinding());
-        var other = NewNode("node-other", document.RootElement);
-
-        return new(
-            identity: NewIdentity(),
-            rootActivity: WithChildren(start, [other]),
-            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
-            createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
-    }
-
-    private static WorkflowExecutable NewExecutableWithInputBinding(RuntimeInputBinding inputBinding)
-    {
-        using var document = JsonDocument.Parse("""{"type":"test"}""");
-        var start = NewNode("node-start", document.RootElement, inputBinding);
-
-        return new(
-            identity: NewIdentity(),
-            rootActivity: start,
-            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
-            createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
-    }
-
-    private static WorkflowExecutable NewExecutableWithOutputCapture()
-    {
-        using var document = JsonDocument.Parse("""{"type":"test"}""");
-        var start = NewNode(
-            "node-start",
-            document.RootElement,
-            LiteralTextBinding(),
-            new Dictionary<string, RuntimeOutputCapture>
+        executable ??= NewTypedExecutable();
+        var type = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
+        return NewRunningState(
+            executable,
+            new Dictionary<string, ValueEnvelope>
             {
-                ["customer"] = new(
-                    outputName: "customer",
-                    valueId: "customer",
-                    type: new RuntimeValueTypeDescriptor("reference", "crm.customer", null),
-                    lifecycle: DurableValueLifecycle.Instance,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true,
-                    metadata: new Dictionary<string, string> { ["source"] = "activity" })
+                ["text"] = ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement("hello"), ValueProtectionPolicy.InstanceInline)
             });
-
-        return new(
-            identity: NewIdentity(),
-            rootActivity: start,
-            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
-            createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
     }
 
-    private static ExecutableNode WithChildren(ExecutableNode root, IReadOnlyCollection<ExecutableNode> children) =>
-        new(
-            executableNodeId: root.ExecutableNodeId,
-            authoredActivityId: root.AuthoredActivityId,
-            activityType: root.ActivityType,
-            activityTypeVersion: root.ActivityTypeVersion,
-            descriptorType: root.DescriptorType,
-            descriptorPayload: root.DescriptorPayload,
-            inputBindings: root.InputBindings,
-            outputCaptures: root.OutputCaptures,
-            metadata: root.Metadata,
-            childSlots:
+    private ActivityExecutionState NewStructuralRunningState(WorkflowExecutable executable) =>
+        NewRunningState(executable, new Dictionary<string, ValueEnvelope>());
+
+    private ActivityExecutionState NewRunningState(
+        WorkflowExecutable executable,
+        IReadOnlyDictionary<string, ValueEnvelope> values)
+    {
+        var node = executable.RootActivity;
+        var contract = node.ActivityContract!;
+        var snapshot = new ActivityInputSnapshot(
+            "actexec-1",
+            contract.SchemaFingerprint,
+            "sha256:bindings",
+            values,
+            _now);
+        return new ActivityExecutionState(
+            new ActivityExecution("actexec-1", "wfexec-1", node.ExecutableNodeId, node.AuthoredActivityId, contract.ActivityTypeKey, contract.ContractVersion),
+            ActivityExecutionStatus.Running,
+            null,
+            _now,
+            _now,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            [],
+            [],
+            0,
+            0,
+            new Dictionary<string, string>())
+        {
+            ContractIdentity = new ActivityInvocationContractIdentity(contract.ActivityTypeKey, contract.ContractVersion, contract.SchemaFingerprint),
+            InputSnapshot = snapshot,
+            Attempts = [new ActivityAttempt("actexec-1:attempt:1", "actexec-1", 1, ActivityAttemptReason.Initial, _now)]
+        };
+    }
+
+    private ActivityExecutionState NewCallbackParentState(WorkflowExecutable executable)
+    {
+        var contract = executable.RootActivity.ActivityContract!;
+        return new ActivityExecutionState(
+            new ActivityExecution("actexec-1", "wfexec-1", "node-parent", "authored-node-parent", "test/callback-parent", "1.0.0"),
+            ActivityExecutionStatus.Running,
+            null,
+            _now,
+            _now,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            [],
+            [],
+            0,
+            0,
+            new Dictionary<string, string>())
+        {
+            ContractIdentity = new ActivityInvocationContractIdentity(contract.ActivityTypeKey, contract.ContractVersion, contract.SchemaFingerprint),
+            InputSnapshot = new ActivityInputSnapshot("actexec-1", contract.SchemaFingerprint, "sha256:callback-bindings", new Dictionary<string, ValueEnvelope>(), _now),
+            Attempts =
             [
-                new ExecutableChildSlot("children", children)
-            ]);
+                new ActivityAttempt(
+                    "actexec-1:attempt:1",
+                    "actexec-1",
+                    1,
+                    ActivityAttemptReason.Initial,
+                    _now,
+                    _now,
+                    transitionKind: Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend)
+            ]
+        };
+    }
 
-    private static ExecutableNode NewNode(
-        string nodeId,
-        JsonElement descriptorPayload,
-        RuntimeInputBinding? inputBinding = null,
-        IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null) =>
+    private ActivityExecutionState NewCompletedCallbackChildState() =>
         new(
-            executableNodeId: nodeId,
-            authoredActivityId: $"authored-{nodeId}",
-            activityType: "test/activity",
-            activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: descriptorPayload.Clone(),
-            inputBindings: inputBinding is null
-                ? new Dictionary<string, RuntimeInputBinding>()
-                : new Dictionary<string, RuntimeInputBinding> { ["Text"] = inputBinding },
-            outputCaptures: outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            new ActivityExecution("actexec-child", "wfexec-1", "node-child", "authored-node-child", "test/child", "1.0.0"),
+            ActivityExecutionStatus.Completed,
+            null,
+            _now,
+            _now,
+            _now,
+            "actexec-1",
+            "actexec-1",
+            null,
+            null,
+            null,
+            [],
+            [],
+            0,
+            0,
+            new Dictionary<string, string>());
 
-    private static RuntimeInputBinding LiteralTextBinding() =>
-        new(
-            inputName: "Text",
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement("hello"),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" });
+    private static WorkflowExecutable NewCallbackExecutable()
+    {
+        var descriptor = JsonSerializer.SerializeToElement(new { type = "callback-parent" });
+        var contract = new ActivityContract(
+            "test/callback-parent",
+            "1.0.0",
+            "test/callback-parent",
+            descriptor,
+            [],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement("test/callback-parent", "test/callback-parent"));
+        var child = new ExecutableNode(
+            "node-child",
+            "authored-node-child",
+            "test/child",
+            "1.0.0",
+            "test/child",
+            JsonSerializer.SerializeToElement(new { type = "child" }),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>());
+        var parent = new ExecutableNode(
+            "node-parent",
+            "authored-node-parent",
+            "test/callback-parent",
+            "1.0.0",
+            "test/callback-parent",
+            descriptor,
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>(),
+            [new ExecutableChildSlot("Test.Child", [child])],
+            activityContract: contract);
+        return new WorkflowExecutable(NewIdentity(), parent, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>());
+    }
 
-    private static RuntimeInputBinding JavaScriptTextBinding(string expression) =>
-        new(
-            inputName: "Text",
-            source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding("JavaScript", expression),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" });
+    private static WorkflowExecutable NewTypedExecutable(string literalText = "hello", bool isSensitive = false)
+    {
+        var descriptor = JsonSerializer.SerializeToElement(new { type = "typed" });
+        var contract = new ActivityContract(
+            "test/typed",
+            "1.0.0",
+            "typed",
+            descriptor,
+            [new ActivityInputContract("text", "Text", new Elsa.Primitives.Models.ValueTypeDescriptor("String"), true, false, null, ActivityValuePolicy.Default with { IsSensitive = isSensitive })],
+            new ActivityResultContract(
+                new Elsa.Primitives.Models.ValueTypeDescriptor("test/typed-result"),
+                true,
+                ActivityValuePolicy.Default,
+                [new ActivityResultProjectionContract("length", "length", new Elsa.Primitives.Models.ValueTypeDescriptor("Int32"), true, ActivityValuePolicy.Default with { IsSensitive = isSensitive })]),
+            ["Done"],
+            new ActivityActivationRequirement("typed", "test/typed"));
+        var type = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
+        var input = new RuntimeInputBinding(
+            "text", type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(literalText), ValueProtectionPolicy.InstanceInline));
+        var node = new ExecutableNode(
+            "node-start",
+            "authored-node-start",
+            "test/typed",
+            "1.0.0",
+            "typed",
+            descriptor,
+            new Dictionary<string, RuntimeInputBinding> { ["text"] = input },
+            new Dictionary<string, string>(),
+            activityContract: contract);
+        return new WorkflowExecutable(NewIdentity(), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>());
+    }
 
-    private static RuntimeInputBinding ActivityOutputTextBinding(string producerActivityExecutionId, string outputName) =>
-        new(
-            inputName: "Text",
-            source: RuntimeInputBindingSource.ActivityOutput,
-            activityOutput: new RuntimeActivityOutputReference(producerActivityExecutionId, "node-fetch", outputName),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" });
-
-    private static RuntimeInputBinding DurableTextBinding(string valueId) =>
-        new(
-            inputName: "Text",
-            source: RuntimeInputBindingSource.DurableValue,
-            durableValue: new RuntimeDurableValueReference(valueId),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" });
+    private static WorkflowExecutable NewStructuralExecutable()
+    {
+        var descriptor = JsonSerializer.SerializeToElement(new { type = "structural" });
+        var contract = new ActivityContract(
+            "test/structural",
+            "1.0.0",
+            "structural",
+            descriptor,
+            [],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement("structural", "test/structural"));
+        var node = new ExecutableNode(
+            "node-start",
+            "authored-node-start",
+            "test/structural",
+            "1.0.0",
+            "structural",
+            descriptor,
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>(),
+            activityContract: contract);
+        return new WorkflowExecutable(NewIdentity(), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>());
+    }
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
@@ -1110,251 +919,378 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         return document.RootElement.Clone();
     }
 
-    private sealed class RecordingActivityFactory(IActivity activity) : IActivityFactory
+    private sealed class RecordingTypedActivator : IActivityActivator
     {
-        public int CreateCalls { get; private set; }
-        public string? LastDescriptorType { get; private set; }
-        public IDictionary<string, InputArgument> LastInputs { get; private set; } = new Dictionary<string, InputArgument>();
-        public IDictionary<string, OutputArgument> LastOutputs { get; private set; } = new Dictionary<string, OutputArgument>();
+        public int ActivateCalls { get; private set; }
+        public TypedCompletingActivity? Activity { get; private set; }
+        public List<ActivityActivationRequest> Requests { get; } = [];
 
-        public ValueTask<IActivity> Create(
-            string descriptorType,
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
+        public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default)
+        {
+            ActivateCalls++;
+            Requests.Add(request);
+            Activity = new TypedCompletingActivity(request.Inputs.Values["text"].InlineValue!.Value.GetString()!);
+            return ValueTask.FromResult(new ActivityActivationLease(Activity));
+        }
+    }
+
+    private sealed class CancelThenCompleteActivator(
+        IActivityExecutionStateStore activityStateStore,
+        CancellationTokenSource cancellation) : IActivityActivator
+    {
+        public List<ActivityActivationRequest> Requests { get; } = [];
+        public List<ActivityExecutionState> StatesObservedBeforeActivation { get; } = [];
+
+        public async ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationRequest request,
             CancellationToken cancellationToken = default)
         {
-            CreateCalls++;
-            LastDescriptorType = descriptorType;
-            LastInputs = inputs ?? new Dictionary<string, InputArgument>();
-            LastOutputs = outputs ?? new Dictionary<string, OutputArgument>();
-            if (activity is RecordingActivity recordingActivity && LastInputs.TryGetValue("Text", out var text))
-                recordingActivity.Text = (InputArgument<string>)text;
-            if (activity is OutputProducingActivity outputProducingActivity && LastOutputs.TryGetValue("customer", out var customer))
-                outputProducingActivity.Customer = (OutputArgument<object?>)customer;
-
-            return ValueTask.FromResult(activity);
+            Requests.Add(request);
+            StatesObservedBeforeActivation.Add(
+                (await activityStateStore.FindAsync("wfexec-1", "actexec-1", cancellationToken))!);
+            IActivity activity = Requests.Count == 1
+                ? new CancellingTypedActivity(cancellation)
+                : new TypedCompletingActivity(request.Inputs.Values["text"].InlineValue!.Value.GetString()!);
+            return new ActivityActivationLease(activity);
         }
     }
 
-    private sealed class ThrowingActivityFactory(Exception exception) : IActivityFactory
+    private sealed class CancellingTypedActivity(CancellationTokenSource cancellation) : Activity<TypedResult>
     {
-        public ValueTask<IActivity> Create(
-            string descriptorType,
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context)
+        {
+            cancellation.Cancel();
+            context.CancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException("The cancelled activity should not continue.");
+        }
+    }
+
+    private sealed class TypedCompletingActivity(string text) : Activity<TypedResult>, IDisposable
+    {
+        public bool Disposed { get; private set; }
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(new TypedResult(text.Length)));
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class UnsolicitedCancellationActivity : Activity<TypedResult>, IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromException<ActivityTransition<TypedResult>>(
+                new OperationCanceledException("Activity-local timeout without host cancellation."));
+
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class ReturningTypedActivator(ActivityTransition<TypedResult> transition) : IActivityActivator
+    {
+        public ReturningTypedActivity? Activity { get; private set; }
+        public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default)
+        {
+            Activity = new ReturningTypedActivity(transition);
+            return ValueTask.FromResult(new ActivityActivationLease(Activity));
+        }
+    }
+
+    private sealed class ReturningTypedActivity(ActivityTransition<TypedResult> transition) : Activity<TypedResult>, IDisposable
+    {
+        public bool Disposed { get; private set; }
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context) => ValueTask.FromResult(transition);
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class FixedActivityActivator(IActivity activity) : IActivityActivator
+    {
+        public int ActivateCalls { get; private set; }
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default)
+        {
+            ActivateCalls++;
+            return ValueTask.FromResult(new ActivityActivationLease(activity));
+        }
+    }
+
+    private sealed class ThrowingDisposeActivator : IActivityActivator
+    {
+        public int ActivateCalls { get; private set; }
+        public ThrowingDisposeActivity Activity { get; } = new();
+        public RecordingAsyncDisposable Scope { get; } = new();
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            ActivateCalls++;
+            return ValueTask.FromResult(new ActivityActivationLease(Activity, Scope));
+        }
+    }
+
+    private sealed class ThrowingScopeDisposeActivator : IActivityActivator
+    {
+        public int ActivateCalls { get; private set; }
+        public CountingActivity Activity { get; } = new();
+        public ThrowingAsyncDisposable Scope { get; } = new();
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            ActivateCalls++;
+            return ValueTask.FromResult(new ActivityActivationLease(Activity, Scope));
+        }
+    }
+
+    private sealed class ThrowingDisposeActivity : Activity<TypedResult>, IDisposable
+    {
+        public int ExecuteCalls { get; private set; }
+
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context)
+        {
+            ExecuteCalls++;
+            return ValueTask.FromResult(ActivityTransition.Complete(new TypedResult(5)));
+        }
+
+        public void Dispose() => throw new InvalidOperationException("Activity disposal failed.");
+    }
+
+    private sealed class CountingActivity : Activity<TypedResult>
+    {
+        public int ExecuteCalls { get; private set; }
+
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context)
+        {
+            ExecuteCalls++;
+            return ValueTask.FromResult(ActivityTransition.Complete(new TypedResult(5)));
+        }
+    }
+
+    private sealed class RecordingAsyncDisposable : IAsyncDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingAsyncDisposable : IAsyncDisposable
+    {
+        public bool DisposeAttempted { get; private set; }
+
+        public ValueTask DisposeAsync()
+        {
+            DisposeAttempted = true;
+            return ValueTask.FromException(new InvalidOperationException("Scope disposal failed."));
+        }
+    }
+
+    private sealed class EmptyDeferringStructuralActivity : StructuralActivity, IRuntimeStructuralActivity
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    private sealed class ChildSchedulingDeferringStructuralActivity : StructuralActivity, IRuntimeStructuralActivity
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            context.ScheduleChildActivity("child-node");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+    }
+
+    private sealed class CheckpointParticipantStructuralActivity :
+        StructuralActivity,
+        IRuntimeStructuralActivity,
+        IRuntimeActivityCheckpointParticipant
+    {
+        public IReadOnlyDictionary<string, object?> EffectiveInputs { get; private set; } =
+            new Dictionary<string, object?>();
+
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            context.ScheduleChildActivity("child-node");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyDictionary<string, object?> effectiveInputs,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default)
+        {
+            EffectiveInputs = effectiveInputs;
+            return ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>(
+                [CheckpointChange("entry", context.WorkflowExecutionId, capturedAt)]);
+        }
+
+        public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyCollection<DurableValueState> persistedValues,
+            DateTimeOffset capturedAt,
             CancellationToken cancellationToken = default) =>
-            throw exception;
+            throw new InvalidOperationException("The deferred entry path must not prepare completion.");
     }
 
-    private sealed class ThrowingExpressionEvaluator(Exception exception) : IExpressionEvaluator
+    private sealed class CompletionCheckpointParticipantActivity :
+        StructuralActivity,
+        IRuntimeActivityChildCompletionHandler,
+        IRuntimeActivityCheckpointParticipant
     {
-        public ValueTask<T?> EvaluateAsync<T>(IExpression expression, IExpressionExecutionContext context, IExpressionEvaluatorOptions? options = default) =>
-            throw exception;
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
 
-        public ValueTask<object?> EvaluateAsync(IExpression expression, Type returnType, IExpressionExecutionContext context, IExpressionEvaluatorOptions? options = default) =>
-            throw exception;
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyDictionary<string, object?> effectiveInputs,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The parent callback path must not prepare entry.");
+
+        public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyCollection<DurableValueState> persistedValues,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
+                [CheckpointChange("completion", context.WorkflowExecutionId, capturedAt)],
+                ActivityTransition.Complete(ActivityUnit.Value)));
     }
 
-    private sealed class ThrowingSaveActivityExecutionStateStore(
-        IActivityExecutionStateStore inner,
-        ActivityExecutionStatus throwOnStatus,
-        Exception exception) : IActivityExecutionStateStore
+    private sealed class CompletingCheckpointParticipantActivity :
+        Activity<TypedResult>,
+        IRuntimeActivityCheckpointParticipant
     {
-        public List<ActivityExecutionStatus> AttemptedSaveStatuses { get; } = [];
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(new TypedResult(5)));
 
-        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyDictionary<string, object?> effectiveInputs,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>(
+                [CheckpointChange("entry", context.WorkflowExecutionId, capturedAt)]);
+
+        public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyCollection<DurableValueState> persistedValues,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default)
         {
-            AttemptedSaveStatuses.Add(state.Status);
-
-            if (state.Status == throwOnStatus)
-                throw exception;
-
-            return inner.SaveAsync(state, cancellationToken);
-        }
-
-        public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
-            inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
-
-        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            inner.ListAsync(workflowExecutionId, cancellationToken);
-        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default) =>
-            inner.ListByParentAsync(workflowExecutionId, parentActivityExecutionId, cancellationToken);
-    }
-
-    private class RecordingActivity : ActivityBase
-    {
-        public InputArgument<string> Text { get; set; } = null!;
-        public bool ShouldExecute { get; set; } = true;
-        public Exception? Exception { get; set; }
-        public string[]? Outcomes { get; set; }
-        public string? ObservedText { get; private set; }
-
-        protected override ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) =>
-            ValueTask.FromResult(ShouldExecute);
-
-        protected override void Execute(IActivityExecutionContext context)
-        {
-            if (Exception is not null)
-                throw Exception;
-
-            ObservedText = context.Get(Text);
-            if (Outcomes is not null)
-                context.SetOutcomes(Outcomes);
+            Assert.Contains(persistedValues, value => value.DurableValueId == "checkpoint:entry");
+            return ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
+                [CheckpointChange("completion", context.WorkflowExecutionId, capturedAt)],
+                ActivityTransition.Complete(new TypedResult(9))));
         }
     }
 
-    private sealed class IdentityCapturingActivity : RecordingActivity
+    private static RuntimeStateChange<DurableValueState> CheckpointChange(
+        string role,
+        string workflowExecutionId,
+        DateTimeOffset capturedAt)
     {
-        public string? ObservedCorrelationId { get; private set; }
-        public string? ObservedWorkflowName { get; private set; }
+        var id = $"checkpoint:{role}";
+        var state = new DurableValueState(
+            id,
+            workflowExecutionId,
+            id,
+            new RuntimeValueTypeDescriptor("object", WellKnownRuntimeDurableValueStorageDrivers.Json, null),
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            JsonSerializer.SerializeToElement(role),
+            externalReference: null,
+            sourceActivityExecutionId: "actexec-1",
+            capturedAt,
+            new Dictionary<string, string>());
+        return new RuntimeStateChange<DurableValueState>(
+            id,
+            RuntimeStateChangeOperation.Upsert,
+            state,
+            state.Metadata);
+    }
 
-        protected override void Execute(IActivityExecutionContext context)
+    private sealed class ThrowingDisposeStatefulDeferringStructuralActivity : StructuralActivity, IRuntimeStructuralActivity, IDisposable
+    {
+        public int ExecuteCalls { get; private set; }
+
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
         {
-            base.Execute(context);
-            var carrier = (IExecutionExpressionState)context;
-            ObservedCorrelationId = carrier.CorrelationId;
-            ObservedWorkflowName = carrier.WorkflowName;
+            ExecuteCalls++;
+            context.ScheduleChildActivity("child-node");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer.WithState(
+                ValueEnvelope.Inline(
+                    new ValueTypeDescriptor("test/structural-state"),
+                    JsonSerializer.SerializeToElement(new { step = 1 }),
+                    ValueProtectionPolicy.InstanceInline)));
+        }
+
+        public void Dispose() => throw new InvalidOperationException("Structural activity disposal failed.");
+    }
+
+    private sealed class DeferringChildCompletionActivity : StructuralActivity, IRuntimeActivityChildCompletionHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    private sealed class CompletingChildCompletionActivity : StructuralActivity, IRuntimeActivityChildCompletionHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
+
+    private sealed class CompletingAndSchedulingStructuralActivity : StructuralActivity, IRuntimeStructuralActivity
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            context.ScheduleChildActivity("child-node");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
     }
 
-    private sealed class SetIdentityActivity(string? correlationId, string? instanceName) : ActivityBase
+    private sealed class CompletingWithStateStructuralActivity : StructuralActivity, IRuntimeStructuralActivity
     {
-        protected override void Execute(IActivityExecutionContext context)
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete().WithState(
+                ValueEnvelope.Inline(
+                    new ValueTypeDescriptor("test/structural-state"),
+                    JsonSerializer.SerializeToElement(new { step = 1 }),
+                    ValueProtectionPolicy.InstanceInline)));
+    }
+
+    private sealed class OrdinaryContextActivity : Activity<TypedResult>
+    {
+        public bool ExposesRuntimeSchedulingSeam { get; private set; }
+
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context)
         {
-            var runtimeContext = (IRuntimeActivityExecutionContext)context;
-            runtimeContext.SetCorrelationId(correlationId);
-            runtimeContext.SetInstanceName(instanceName);
+            ExposesRuntimeSchedulingSeam = (object)context is IRuntimeActivityExecutionContext;
+            return ValueTask.FromResult(ActivityTransition.Complete(new TypedResult(0)));
         }
     }
 
-    private sealed class BookmarkRequestingActivity(params ActivityBookmarkRequest[] requests) : RecordingActivity
+    private sealed record TypedResult(int Length);
+
+    private sealed class RecordingCapturePolicy : IRuntimePayloadCapturePolicy
     {
-        protected override void Execute(IActivityExecutionContext context)
+        public List<RuntimePayloadCaptureRequest> Requests { get; } = [];
+
+        public RuntimePayloadCaptureDecision Decide(RuntimePayloadCaptureRequest request)
         {
-            base.Execute(context);
-
-            foreach (var request in requests)
-                context.CreateBookmark(request);
-        }
-    }
-
-    private class OutputProducingActivity(string customerJson) : RecordingActivity
-    {
-        public OutputArgument<object?> Customer { get; set; } = null!;
-
-        protected override void Execute(IActivityExecutionContext context)
-        {
-            base.Execute(context);
-            context.Set(Customer, Json(customerJson));
-        }
-    }
-
-    private sealed class OutputBookmarkRequestingActivity(string customerJson, params ActivityBookmarkRequest[] requests) : OutputProducingActivity(customerJson)
-    {
-        protected override void Execute(IActivityExecutionContext context)
-        {
-            base.Execute(context);
-
-            foreach (var request in requests)
-                context.CreateBookmark(request);
-        }
-    }
-
-    private sealed class ChildSchedulingActivity : RecordingActivity
-    {
-        protected override void Execute(IActivityExecutionContext context)
-        {
-            base.Execute(context);
-            ((IRuntimeActivityExecutionContext)context).ScheduleChildActivity("node-other");
-        }
-    }
-
-    private sealed class DuplicateBookmarkRequestActivity : ActivityBase
-    {
-        protected override void Execute(IActivityExecutionContext context)
-        {
-            context.CreateBookmark(new ActivityBookmarkRequest("bookmark-1", "resume-target:delivery", "event", "hash"));
-            context.CreateBookmark(new ActivityBookmarkRequest("bookmark-1", "resume-target:delivery", "event", "hash"));
+            Requests.Add(request);
+            return request.IsSensitive
+                ? new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.None, "Sensitive test payload excluded.")
+                : new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.Payload, "Test payload captured.");
         }
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
-    }
-
-    // Counts FindAsync calls so a test can assert the common activity invocation performs zero workflow-execution-state
-    // reads while the control-leaf (Correlate/SetName/Finish) path still loads the state exactly once.
-    private sealed class CountingWorkflowExecutionStateStore : IWorkflowExecutionStateStore
-    {
-        private readonly InMemoryWorkflowExecutionStateStore _inner = new();
-
-        public int FindCount { get; private set; }
-
-        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
-            _inner.SaveAsync(state, cancellationToken);
-
-        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
-        {
-            FindCount++;
-            return _inner.FindAsync(workflowExecutionId, cancellationToken);
-        }
-
-        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
-            _inner.ListAsync(cancellationToken);
-    }
-
-    // Seeds the IdentityName-tagged durable values a Correlate/SetName leaf would have projected, so a plain
-    // activity invocation observes them through the read-side projection without a workflow-execution-state read.
-    private async Task SeedIdentityDurableValuesAsync(string? correlationId = null, string? instanceName = null)
-    {
-        var changes = RuntimeWorkflowStateSeed.BuildIdentityChanges(
-            "wfexec-1",
-            correlationIdAssignmentRequested: correlationId is not null,
-            correlationId,
-            instanceNameAssignmentRequested: instanceName is not null,
-            instanceName,
-            _now);
-
-        foreach (var change in changes)
-            await _durableValueStateStore.SaveAsync(change.State!);
-    }
-
-    // Projects a named identity slot out of a checkpoint commit's IdentityName-tagged durable-value changes.
-    private static string? ProjectIdentityChange(RuntimeCheckpointCommitRecord commit, string identitySlotName)
-    {
-        var states = commit.Commit.StateChanges.DurableValues.Select(change => change.State!);
-        return identitySlotName == RuntimeWorkflowStateSeed.IdentityCorrelationIdName
-            ? RuntimeIdentityStateProjection.ProjectCorrelationId(states)
-            : RuntimeIdentityStateProjection.ProjectInstanceName(states);
-    }
-
-    private WorkflowExecutionState NewWorkflowExecutionState(string? correlationId = null, string? instanceName = null)
-    {
-        var systemMetadata = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (instanceName is not null)
-            systemMetadata[RuntimeMetadataKeys.InstanceName] = instanceName;
-
-        return new WorkflowExecutionState(
-            WorkflowExecutionId: "wfexec-1",
-            PinnedExecutable: NewIdentity(),
-            Status: WorkflowExecutionStatus.Running,
-            SubStatus: null,
-            CreatedAt: _now,
-            StartedAt: _now,
-            UpdatedAt: _now,
-            CompletedAt: null,
-            CorrelationId: correlationId,
-            ParentWorkflowExecutionId: null,
-            TenantId: null,
-            SystemMetadata: systemMetadata);
-    }
-
-    private sealed class CaptureAllRuntimePayloadCapturePolicy : IRuntimePayloadCapturePolicy
-    {
-        public RuntimePayloadCaptureDecision Decide(RuntimePayloadCaptureRequest request) =>
-            new(RuntimePayloadCaptureMode.Payload, "Test policy captures payloads.");
     }
 }

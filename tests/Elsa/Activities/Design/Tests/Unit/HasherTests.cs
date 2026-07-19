@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Services;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Xunit;
 
@@ -123,7 +124,10 @@ public sealed class HasherTests
             Version: version,
             DefinitionId: def.Id,
             ActivityTypeKey: def.ActivityTypeKey,
-            DescriptorType: typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey: "elsa.clr-activity",
+            ProviderSchemaVersion: "1",
+            ConsumerKey: WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion: "1",
             DescriptorPayload: JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Acme.Pkg.Foo")),
             SourceKind: sourceKind,
             SourceId: sourceId,
@@ -146,7 +150,8 @@ public sealed class HasherTests
 
     private sealed record FakeVersion(
         string Id, string Version, string DefinitionId, string ActivityTypeKey,
-        string DescriptorType, JsonElement DescriptorPayload, string SourceKind, string SourceId,
+        string ProviderKey, string ProviderSchemaVersion, string ConsumerKey, string ConsumerSchemaVersion,
+        JsonElement DescriptorPayload, string SourceKind, string SourceId,
         ActivityExecutionType ExecutionType, IEnumerable<InputDefinition> Inputs, IEnumerable<OutputDefinition> Outputs,
         IEnumerable<ActivityDesignFacet> DesignFacets, IActivityDefinition Definition,
         string Hash = ""

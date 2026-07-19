@@ -28,6 +28,17 @@ public sealed class CoalescingWorkflowExecutionStateStore(
 
     public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
         _inner.ListAsync(cancellationToken);
+
+    public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+        WorkflowExecutionStatePageQuery query,
+        CancellationToken cancellationToken = default) =>
+        _inner.QueryPageAsync(query, cancellationToken);
+
+    public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+        _inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+
+    public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        _inner.DeleteAsync(workflowExecutionId, cancellationToken);
 }
 
 /// <summary>Coalescing-aware overlay for <see cref="IActivityExecutionStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>

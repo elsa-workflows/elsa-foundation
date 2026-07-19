@@ -50,13 +50,24 @@ Descriptor duplicate validation uses the deterministic result identity: two cand
 
 **Alternatives considered**: Warning plus zero schedule (rejected: current silent-success class); persist an exhausted schedule (rejected: it can never fire); treat exhaustion as intentionally non-starting (rejected: conflates authored activation with invalid schedule materialization).
 
-## D7 — Preserve persisted shapes and republish for corrected classification
+## D7 — Preserve persisted shapes in Unit A and republish for corrected classification
 
-**Decision**: Do not change catalog rows, executable wire shapes, trigger-binding documents, or recurring-schedule documents. Existing executables remain readable; corrected classification and preflight behavior apply to newly published artifacts. Any implementation-discovered need for a durable shape change reopens this decision and requires explicit Groundwork versioning.
+**Decision at spec 090 delivery**: Do not change catalog rows, executable wire shapes, trigger-binding documents, or recurring-schedule documents in Unit A. The executable shape current at that delivery remained readable; corrected classification and preflight behavior applied to newly published artifacts. Any implementation-discovered need for a durable shape change reopened this decision and required explicit Groundwork versioning.
 
 **Rationale**: This is the smallest compatibility-preserving unit and follows the repository's content-addressed artifact and schema-evolution rules.
 
 **Alternatives considered**: Mutate catalog execution type (rejected by PR #621 evidence); retroactively rewrite executable artifacts (rejected: separate migration policy); persist preflight outcomes (rejected: Unit B concern).
+
+**Superseded persistence boundary**: Later persistence work intentionally made every Runtime Groundwork kind
+current-only before GA: minimum-readable equals current, only the current fixture is retained, and no Elsa
+upcaster is registered. `workflowExecutable`, `workflowExecutableSourceReference`, and
+`workflowExecutionState` are version 4 and reject versions 1 through 3 before deserialization. Executable v4
+includes the reusable-activity input contract and direct dependency snapshot; source-reference v4 includes
+tenant scope; workflow-execution v4 includes dispatch nesting depth. The safe upgrade operation
+is to atomically reset the complete Runtime and Publishing Groundwork persistence sets while preserving Design
+and Activities data, then
+republish workflows before serving traffic. This supersedes only D7's executable/source-reference/workflow-execution readability
+assumption; the catalog immutability and republish decisions remain in force.
 
 ## D8 — Semantic safety, not cross-store transactionality
 
@@ -68,6 +79,8 @@ Descriptor duplicate validation uses the deterministic result identity: two cand
 
 ## As-built confirmation
 
-D1–D8 were implemented without reopening a decision. Compatibility tests confirmed unchanged durable
-and executable shapes; provider/extractor compatibility confirmed the additive Runtime Core surface; and
-the full verification evidence is recorded in [quickstart.md](quickstart.md).
+D1–D8 were implemented without reopening a decision during spec 090. Compatibility tests confirmed the
+durable and executable shapes then in scope were unchanged; provider/extractor compatibility confirmed the
+additive Runtime Core surface; and the full verification evidence is recorded in
+[quickstart.md](quickstart.md). The later current-only pre-GA clean break documented under D7 is a
+separate persistence decision and is now the operative executable/source-reference/workflow-execution contract.

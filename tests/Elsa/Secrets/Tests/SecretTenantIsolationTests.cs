@@ -30,8 +30,8 @@ public sealed class SecretTenantIsolationTests
 
         Assert.Equal("alpha-value", (await repository.FindAsync("tenant-alpha", "payments.api"))!.LatestActiveVersion!.Payload.Value);
         Assert.Equal("beta-value", (await repository.FindAsync("tenant-beta", "payments.api"))!.LatestActiveVersion!.Payload.Value);
-        Assert.Equal("tenant-alpha", Assert.Single(await repository.ListAsync("tenant-alpha")).TenantId);
-        Assert.Equal("tenant-beta", Assert.Single(await repository.ListAsync("tenant-beta")).TenantId);
+        Assert.Equal("tenant-alpha", Assert.Single((await repository.ListPageAsync("tenant-alpha", new())).Items).TenantId);
+        Assert.Equal("tenant-beta", Assert.Single((await repository.ListPageAsync("tenant-beta", new())).Items).TenantId);
     }
 
     [Theory]
@@ -45,7 +45,7 @@ public sealed class SecretTenantIsolationTests
 
         await Assert.ThrowsAsync<ArgumentException>(async () => await repository.TryAddAsync(unscoped));
         await Assert.ThrowsAsync<ArgumentException>(async () => await repository.FindAsync("", "payments.api"));
-        await Assert.ThrowsAsync<ArgumentException>(async () => await repository.ListAsync(""));
+        await Assert.ThrowsAsync<ArgumentException>(async () => await repository.ListPageAsync("", new()));
     }
 
     private static Secret Secret(string tenantId, string name, string value) => new()

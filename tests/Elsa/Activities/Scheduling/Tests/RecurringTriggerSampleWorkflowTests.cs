@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Scheduling.Activities;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -123,7 +125,7 @@ public sealed class RecurringTriggerSampleWorkflowTests
         using var value = JsonDocument.Parse(JsonSerializer.Serialize(literal));
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
         {
-            [inputName] = new RuntimeInputBinding(inputName, RuntimeInputBindingSource.Literal, literalValue: value.RootElement.Clone())
+            [inputName] = LiteralBinding(inputName, value.RootElement)
         };
 
         return new ExecutableNode(
@@ -131,11 +133,20 @@ public sealed class RecurringTriggerSampleWorkflowTests
             authoredActivityId: "authored-node-trigger",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: bindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType });
+    }
+
+    private static RuntimeInputBinding LiteralBinding(string name, JsonElement value)
+    {
+        var type = new ValueTypeDescriptor("String");
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, value, ValueProtectionPolicy.InstanceInline));
     }
 
     private sealed class NoopInner : IWorkflowTriggerIndexer

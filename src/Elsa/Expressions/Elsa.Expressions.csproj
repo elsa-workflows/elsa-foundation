@@ -24,9 +24,9 @@
 
   <ItemGroup>
     <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->
-    <Compile Remove="Core/**/*;JavaScript/**/*;Liquid/**/*" />
-    <EmbeddedResource Remove="Core/**/*;JavaScript/**/*;Liquid/**/*" />
-    <None Remove="Core/**/*;JavaScript/**/*;Liquid/**/*" />
+    <Compile Remove="Api/**/*;Core/**/*;JavaScript/**/*;Liquid/**/*" />
+    <EmbeddedResource Remove="Api/**/*;Core/**/*;JavaScript/**/*;Liquid/**/*" />
+    <None Remove="Api/**/*;Core/**/*;JavaScript/**/*;Liquid/**/*" />
   </ItemGroup>
 
 </Project>

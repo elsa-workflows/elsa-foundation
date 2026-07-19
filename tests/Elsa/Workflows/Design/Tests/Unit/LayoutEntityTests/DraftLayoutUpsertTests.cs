@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.LayoutEntityTests;
 /// </summary>
 public sealed class DraftLayoutUpsertTests
 {
-    private static readonly WorkflowDefinitionState EmptyState = new([], null, [], [], null, null);
+    private static readonly WorkflowDefinitionState EmptyState = new([], null, [], [], null);
 
     [Fact]
     public async Task AddWorkflowDefinition_creates_an_empty_layout_row_at_origin()
@@ -35,6 +35,28 @@ public sealed class DraftLayoutUpsertTests
 
         Assert.NotNull(layout);
         Assert.Empty(layout!.Records);
+    }
+
+    [Fact]
+    public async Task AddWorkflowDefinition_persists_the_initial_layout_at_origin()
+    {
+        using var host = WorkflowsDesignTestHost.Create();
+        var records = new[] { new DesignMetadataRecord("node-1", 10, 20, 100, 80) };
+
+        using (var scope = host.Services.CreateScope())
+        {
+            var add = scope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>();
+            await add.Execute(
+                new WorkflowDefinition { Id = "def-1", Name = "def-1" },
+                new WorkflowDefinitionDraft { Id = "draft-1", WorkflowDefinitionId = "def-1", State = EmptyState },
+                records,
+                CancellationToken.None);
+        }
+
+        await using var ctx = host.CreateContext();
+        var layout = await ctx.WorkflowDefinitionDraftLayouts
+            .FirstAsync(item => item.WorkflowDefinitionDraftId == "draft-1");
+        Assert.Equal(records, layout.Records);
     }
 
     [Fact]

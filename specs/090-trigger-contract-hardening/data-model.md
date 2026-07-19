@@ -60,15 +60,32 @@ Timer/Cron registered candidates
                                                     then schedule replacement
 ```
 
-## Compatibility
+## Compatibility at spec 090 delivery
 
 - Catalog activity versions: unchanged.
 - Executable schema and behavioral hashing inputs: unchanged.
 - Trigger-binding and recurring-schedule schemas: unchanged.
-- Groundwork document versions and golden fixtures: unchanged unless implementation departs from this design.
+- Groundwork document versions and golden fixtures: unchanged by this work unit.
+
+These statements describe the spec 090 diff and its 2026-07-11 baseline. They are not a current promise to
+read every persisted executable or source-reference shape from that baseline.
+
+## Current Runtime persistence boundary
+
+- Before GA, every Runtime Groundwork kind uses its current version as minimum-readable, retains only its
+  current fixture, and registers no Elsa compatibility upcaster.
+- `workflowExecutable`, `workflowExecutableSourceReference`, and `workflowExecutionState` use version 4;
+  versions 1 through 3 are rejected before content deserialization.
+- Executable v4 persists the reusable-activity input contract and direct dependency snapshot; source-reference
+  v4 persists tenant scope; workflow-execution v4 persists dispatch nesting depth.
+- An installation carrying earlier persistence must atomically reset the complete Runtime and Publishing
+  Groundwork persistence sets while preserving Design and Activities data.
+- Workflows must be republished before traffic is served so retained executions, publication authority, and
+  serving projections cannot point at removed artifacts.
 
 ## As-built confirmation
 
-The delivered implementation uses these non-persisted outcome types and leaves every listed durable
-shape unchanged. Golden and Groundwork fixture verification is recorded in [quickstart.md](quickstart.md);
-no schema version, upcaster, or migration was added.
+The spec 090 implementation uses these non-persisted outcome types and left every listed durable shape
+unchanged in that work unit. Its golden and Groundwork fixture verification is recorded in
+[quickstart.md](quickstart.md); spec 090 added no schema version, upcaster, or migration. The later current-only
+pre-GA boundary above supersedes its Runtime persistence compatibility.

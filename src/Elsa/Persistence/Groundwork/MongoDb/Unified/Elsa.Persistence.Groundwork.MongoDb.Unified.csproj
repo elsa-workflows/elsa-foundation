@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Groundwork.MongoDb" />
+    <PackageReference Include="MongoDB.Driver" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Persistence.Groundwork.MongoDb.csproj" />
+    <ProjectReference Include="..\..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
+    <ProjectReference Include="..\..\ReferenceComposition\Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
+  </ItemGroup>
+
+</Project>

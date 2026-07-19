@@ -1,6 +1,6 @@
 using System.Text.Json;
+using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Testing;
-using Elsa.Persistence.Groundwork.Unified;
 using Elsa.Studio.Preferences.Core.Models;
 using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Xunit;
@@ -42,7 +42,7 @@ public sealed class GroundworkStudioPreferenceStoreTests
     public void UnifiedManifestIncludesStudioPreferences()
     {
         Assert.Contains(
-            GroundworkUnifiedManifest.Create().StorageUnits,
+            new GroundworkAllFeaturesDeploymentSchema().CreateManifest().StorageUnits,
             x => x.Identity.Value == StudioPreferencesStorageManifest.DocumentKind);
     }
 

@@ -78,6 +78,44 @@ public sealed class HashMismatchTests
     }
 
     [Fact]
+    public async Task SameVersionClrNullabilityMetadataEnrichment_SkipsLegacyPersistedRow()
+    {
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(
+            store,
+            Source(Model(inputs: [Input(isNullable: null)]))).Reconcile(CancellationToken.None);
+        var persisted = Assert.Single(store.Versions);
+        var legacyHash = persisted.Hash;
+
+        await InMemoryReconcilerHarness.BuildReconciler(
+            store,
+            Source(Model(inputs: [Input(isNullable: false)])),
+            DuplicateHandling.Throw).Reconcile(CancellationToken.None);
+
+        Assert.Same(persisted, Assert.Single(store.Versions));
+        Assert.Equal(legacyHash, persisted.Hash);
+        Assert.Null(Assert.Single(persisted.Inputs).IsNullable);
+    }
+
+    [Fact]
+    public async Task SameVersionClrNullabilityMetadataEnrichmentWithOtherContentChange_ThrowsHashMismatch()
+    {
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(
+            store,
+            Source(Model("first", inputs: [Input(isNullable: null)]))).Reconcile(CancellationToken.None);
+
+        await Assert.ThrowsAsync<ActivityVersionHashMismatchException>(
+            () => InMemoryReconcilerHarness.BuildReconciler(
+                store,
+                Source(Model("second", inputs: [Input(isNullable: false)]))).Reconcile(CancellationToken.None));
+
+        Assert.Single(store.Versions);
+    }
+
+    [Fact]
     public async Task SameCoreVersionDifferentBuildMetadataDefinitionLevelChange_ThrowsHashMismatch()
     {
         // Regression (issue #537): a definition-level content change (here Description) that arrives
@@ -135,7 +173,8 @@ public sealed class HashMismatchTests
     private static ActivityVersionReconciliationModel Model(
         string description = "same",
         string version = "1.0.0",
-        string descriptorAlias = "Object") =>
+        string descriptorAlias = "Object",
+        IReadOnlyCollection<InputDefinition>? inputs = null) =>
         new(
             Id: null,
             Version: version,
@@ -143,9 +182,24 @@ public sealed class HashMismatchTests
             DisplayName: null,
             Category: "Acme",
             Description: description,
-            DescriptorType: typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey: "elsa.clr-activity",
+            ProviderSchemaVersion: "1",
+            ConsumerKey: "elsa.clr-activity",
+            ConsumerSchemaVersion: "1",
             Descriptor: new ClrActivityDescriptor(descriptorAlias),
-            Inputs: [],
+            Inputs: inputs ?? [],
             Outputs: [],
             DesignFacets: []);
+
+    private static InputDefinition Input(bool? isNullable) =>
+        new(
+            "message",
+            "Message",
+            new TypeReference("String"),
+            StorageDriverType: null,
+            DisplayName: "Message",
+            Category: null)
+        {
+            IsNullable = isNullable
+        };
 }

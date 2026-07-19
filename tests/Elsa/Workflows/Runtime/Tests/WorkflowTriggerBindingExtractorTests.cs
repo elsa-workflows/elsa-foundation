@@ -269,6 +269,18 @@ public sealed class WorkflowTriggerBindingExtractorTests
         Assert.Equal("Event", binding.StimulusType);
         Assert.Equal("sha256:event:hello", binding.StimulusHash);
         Assert.Equal("order-7", binding.CorrelationScope);
+        Assert.Equal(TriggerCardinality.FanOut, binding.Cardinality);
+    }
+
+    [Fact]
+    public void Extract_CopiesExclusiveProviderCardinalityToTheDurableBinding()
+    {
+        var extractor = new WorkflowTriggerBindingExtractor(
+            [new FakeProvider("Elsa.HttpEndpoint", "HttpEndpoint", "sha256:http:get-orders", cardinality: TriggerCardinality.Exclusive)]);
+
+        var binding = Assert.Single(extractor.Extract(Executable(TriggerNode("node-http", "Elsa.HttpEndpoint"))));
+
+        Assert.Equal(TriggerCardinality.Exclusive, binding.Cardinality);
     }
 
     [Fact]
@@ -400,10 +412,8 @@ public sealed class WorkflowTriggerBindingExtractorTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = executionType },
             childSlots: childSlots);
     }
@@ -413,10 +423,12 @@ public sealed class WorkflowTriggerBindingExtractorTests
         string stimulusType,
         string stimulusHash,
         string? correlationScope = null,
-        string? providerId = null)
+        string? providerId = null,
+        TriggerCardinality cardinality = TriggerCardinality.FanOut)
         : IActivityTriggerStimulusProvider
     {
         public string ProviderId => providerId ?? GetType().FullName!;
+        public TriggerCardinality Cardinality => cardinality;
 
         public ActivityTriggerStimulusResult Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)

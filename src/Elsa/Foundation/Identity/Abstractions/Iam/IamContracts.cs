@@ -12,6 +12,13 @@ public interface IUserStore
     ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default);
 }
 
+public interface IRevisionAwareUserStore
+{
+    ValueTask<IamRevisionedRecord<UserRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(UserRecord user, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
 public interface IRoleStore
 {
     ValueTask<RoleRecord?> FindAsync(string tenantId, string roleId, CancellationToken cancellationToken = default);
@@ -19,6 +26,13 @@ public interface IRoleStore
     ValueTask<IReadOnlyList<RoleRecord>> ListAsync(string tenantId, CancellationToken cancellationToken = default);
 
     ValueTask SaveAsync(RoleRecord role, CancellationToken cancellationToken = default);
+}
+
+public interface IRevisionAwareRoleStore
+{
+    ValueTask<IamRevisionedRecord<RoleRecord>?> FindWithRevisionAsync(string tenantId, string roleId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(RoleRecord role, string? expectedRevision, CancellationToken cancellationToken = default);
 }
 
 public interface IApplicationStore
@@ -44,6 +58,13 @@ public interface IExternalIdentityStore
     ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default);
 }
 
+public interface IRevisionAwareExternalIdentityStore
+{
+    ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindBySubjectWithRevisionAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ExternalIdentityRecord externalIdentity, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
 public interface IClaimMappingStore
 {
     ValueTask<IReadOnlyList<ClaimMappingRule>> ListForProviderAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
@@ -51,11 +72,20 @@ public interface IClaimMappingStore
     ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default);
 }
 
+public interface IRevisionAwareClaimMappingStore
+{
+    ValueTask<IamRevisionedRecord<ClaimMappingRule>?> FindWithRevisionAsync(string tenantId, string provider, string ruleId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ClaimMappingRule rule, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
 public interface IProviderConfigurationStore
 {
     ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(string provider, CancellationToken cancellationToken = default);
 
     ValueTask<ProviderConfigurationRecord?> FindForTenantAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
+
+    ValueTask SaveAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken = default);
 
     async ValueTask<ProviderConfigurationRecord?> FindEffectiveAsync(string tenantId, string provider, bool allowGlobalFallback = false, CancellationToken cancellationToken = default)
     {
@@ -67,11 +97,27 @@ public interface IProviderConfigurationStore
     }
 }
 
+public interface IRevisionAwareProviderConfigurationStore
+{
+    ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindGlobalWithRevisionAsync(string provider, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindForTenantWithRevisionAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ProviderConfigurationRecord configuration, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
 public interface ITenantMembershipStore
 {
     ValueTask<TenantMembershipRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
 
     ValueTask SaveAsync(TenantMembershipRecord membership, CancellationToken cancellationToken = default);
+}
+
+public interface IRevisionAwareTenantMembershipStore
+{
+    ValueTask<IamRevisionedRecord<TenantMembershipRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(TenantMembershipRecord membership, string? expectedRevision, CancellationToken cancellationToken = default);
 }
 
 public interface IUserManager
@@ -126,6 +172,17 @@ public sealed record UserRecord(
     ResourceOwnership Ownership,
     IReadOnlySet<string> RoleIds,
     IReadOnlySet<string> DirectPermissions);
+
+public sealed record IamRevisionedRecord<TRecord>(TRecord Record, string Revision);
+
+public sealed record IamRevisionSaveResult(IamRevisionSaveStatus Status, string? Revision = null);
+
+public enum IamRevisionSaveStatus
+{
+    Saved,
+    Conflict,
+    NotFound
+}
 
 public sealed record RoleRecord(
     string Id,

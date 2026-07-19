@@ -1,113 +1,399 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
 /// <summary>
-/// Durable <see cref="IWorkflowSchedulerWorkQueue"/> for the Groundwork bridge, backed by the portable
-/// <see cref="IDocumentStore"/>. Each queued work item is one document, so queued work survives process
-/// restarts — closing the gap where a post-commit outbox item was delivered into a process-local queue
-/// and lost on crash.
+/// Durable <see cref="IWorkflowSchedulerWorkQueue"/> backed by provider-portable Groundwork documents.
+/// Enqueue is create-only by Elsa's scoped work-item identity; delivery uses renewable, expected-version
+/// claims so a stale consumer cannot acknowledge or remove work reclaimed by a successor.
 /// </summary>
-/// <remarks>
-/// <para>
-/// Semantics mirror the in-memory queue: enqueue is idempotent by <c>(WorkflowExecutionId, WorkItemId)</c>
-/// (an existing item wins and is returned), queues are isolated per workflow execution, and dequeue removes
-/// the item. Ordering is deterministic FIFO by <c>(RecordedAt, Sequence, WorkItemId)</c> — the in-memory
-/// queue's insertion order cannot be observed across restarts, and within one workflow execution producers
-/// are serialized by the agent mailbox, so recorded time (with sequence and ID tiebreakers) reproduces it.
-/// </para>
-/// <para>
-/// Dequeue reads the head document and then deletes it; a crash between those steps redelivers the item on
-/// the next drain. That is consistent with the queue's at-least-once delivery contract
-/// (<see cref="WorkflowExecutionCommandDeliveryMode.AtLeastOnce"/>) — consumers dedupe by idempotency key.
-/// </para>
-/// </remarks>
-public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind), IWorkflowSchedulerWorkQueue
+public sealed class GroundworkWorkflowSchedulerWorkQueue(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind, boundedStore), IWorkflowSchedulerWorkQueue
 {
+    private const int MaxTransitionAttempts = 16;
+
+    public bool SupportsClaimTransitions => true;
+
     public async ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var documentId = GroundworkCompositeDocumentId.From(workItem.WorkflowExecutionId, workItem.WorkItemId);
-        var existing = await LoadDocumentAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
-            documentId, envelope => envelope.Item, cancellationToken);
+        var documentId = PhysicalDocumentId(workItem.WorkflowExecutionId, workItem.WorkItemId);
+        var existing = await Store.LoadAsync(DocumentKind, documentId, cancellationToken);
         if (existing is not null)
-            return existing;
+        {
+            var existingItem = Deserialize(existing).Item;
+            EnsureLogicalIdentity(existingItem, workItem.WorkflowExecutionId, workItem.WorkItemId);
+            return existingItem;
+        }
 
-        var document = new WorkQueueEnvelope(
-            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
-            workItem.WorkflowExecutionId,
-            workItem);
-        await SaveDocumentAsync(documentId, document, cancellationToken);
+        var result = await SaveDocumentAsync(documentId, NewEnvelope(workItem), cancellationToken, expectedVersion: 0);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return workItem;
+        if (result.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
+            throw new InvalidOperationException($"Groundwork rejected scheduler work item '{workItem.WorkItemId}' with status '{result.Status}'.");
 
-        return workItem;
+        existing = await Store.LoadAsync(DocumentKind, documentId, cancellationToken)
+            ?? throw new InvalidOperationException($"Scheduler work item '{workItem.WorkItemId}' conflicted during creation but could not be reloaded.");
+        var item = Deserialize(existing).Item;
+        EnsureLogicalIdentity(item, workItem.WorkflowExecutionId, workItem.WorkItemId);
+        return item;
     }
 
-    public async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(
+        RuntimeSchedulerWorkQuery query,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var items = await ListOrderedAsync(query.WorkflowExecutionId, cancellationToken);
-
-        return query.Limit is { } limit
-            ? items.Take(limit).ToArray()
-            : items;
+        var result = await QueryOrderedAsync(query.WorkflowExecutionId, query.Limit, cancellationToken);
+        return result.Documents.Select(document => Deserialize(document).Item).ToArray();
     }
 
-    public async ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var items = await ListOrderedAsync(workflowExecutionId, cancellationToken);
-        var workItem = items.FirstOrDefault();
-        if (workItem is null)
-            return null;
+        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        {
+            var head = await FirstOrderedAsync(workflowExecutionId, cancellationToken);
+            if (head is null)
+                return null;
 
-        await DeleteDocumentAsync(GroundworkCompositeDocumentId.From(workItem.WorkflowExecutionId, workItem.WorkItemId), cancellationToken);
+            var envelope = Deserialize(head);
+            EnsureLogicalIdentity(envelope.Item, workflowExecutionId, envelope.Item.WorkItemId);
+            var result = await Store.DeleteAsync(
+                new DeleteDocumentRequest(DocumentKind, head.Id, head.Version),
+                cancellationToken);
+            if (result.Status == DocumentStoreWriteStatus.Deleted)
+                return envelope.Item;
+            if (result.Status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.NotFound)
+                continue;
 
-        return workItem;
+            throw new InvalidOperationException($"Groundwork rejected scheduler work dequeue for '{envelope.Item.WorkItemId}' with status '{result.Status}'.");
+        }
+
+        throw TransitionDidNotSettle("dequeue", workflowExecutionId);
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> DeleteAsync(
+        string workflowExecutionId,
+        string workItemId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var documentId = PhysicalDocumentId(workflowExecutionId, workItemId);
+
+        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        {
+            var existing = await Store.LoadAsync(DocumentKind, documentId, cancellationToken);
+            if (existing is null)
+                return false;
+            EnsureLogicalIdentity(Deserialize(existing).Item, workflowExecutionId, workItemId);
+
+            var result = await Store.DeleteAsync(
+                new DeleteDocumentRequest(DocumentKind, documentId, existing.Version),
+                cancellationToken);
+            if (result.Status == DocumentStoreWriteStatus.Deleted)
+                return true;
+            if (result.Status == DocumentStoreWriteStatus.NotFound)
+                return false;
+            if (result.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                continue;
+
+            throw new InvalidOperationException($"Groundwork rejected scheduler work deletion for '{workItemId}' with status '{result.Status}'.");
+        }
+
+        throw TransitionDidNotSettle("delete", workflowExecutionId, workItemId);
+    }
+
+    public async ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(
+        int limit,
+        CancellationToken cancellationToken = default)
     {
         if (limit <= 0)
             throw new ArgumentOutOfRangeException(nameof(limit), "Pending workflow execution listing limit must be greater than zero.");
         cancellationToken.ThrowIfCancellationRequested();
 
-        var items = await QueryDocumentsAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
-            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
-            envelope => envelope.Item,
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.ListPendingSchedulerWorkflowExecutionsQuery,
+                [
+                    DocumentQueryClause.Of(
+                        DocumentQueryComparison.StartsWith(
+                            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                            ""))
+                ],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField)],
+                take: limit),
             cancellationToken);
 
-        return items
-            .Select(item => item.WorkflowExecutionId)
+        return result.Documents
+            .Select(document => Deserialize(document).Item.WorkflowExecutionId)
             .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .Take(limit)
             .ToArray();
     }
 
-    private async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListOrderedAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    public async ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(
+        RuntimeSchedulerWorkClaimRequest request,
+        CancellationToken cancellationToken = default)
     {
-        var items = await QueryDocumentsAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
-            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, envelope => envelope.Item, cancellationToken);
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        return items
-            .OrderBy(item => item.RecordedAt)
-            .ThenBy(item => item.Sequence ?? long.MaxValue)
-            .ThenBy(item => item.WorkItemId, StringComparer.Ordinal)
-            .ToArray();
+        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        {
+            var head = await FirstOrderedAsync(request.WorkflowExecutionId, cancellationToken);
+            if (head is null)
+                return null;
+
+            var current = Deserialize(head);
+            EnsureLogicalIdentity(current.Item, request.WorkflowExecutionId, current.Item.WorkItemId);
+            if (current.VisibleAfter is { } visibleAfter && visibleAfter > request.Now)
+                return null;
+
+            var claimedAt = request.Now;
+            var updated = current with
+            {
+                ClaimOwnerId = request.OwnerId,
+                ClaimToken = checked(current.ClaimToken + 1),
+                ClaimedAt = claimedAt,
+                VisibleAfter = claimedAt.Add(request.VisibilityTimeout)
+            };
+            var result = await SaveDocumentAsync(head.Id, updated, cancellationToken, head.Version);
+            if (result.Status == DocumentStoreWriteStatus.Saved)
+                return NewClaim(updated, result.Document?.Version ?? checked(head.Version + 1));
+            if (result.Status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.NotFound)
+                continue;
+
+            throw new InvalidOperationException($"Groundwork rejected scheduler work claim for '{current.Item.WorkItemId}' with status '{result.Status}'.");
+        }
+
+        throw TransitionDidNotSettle("claim", request.WorkflowExecutionId);
     }
 
-    // The constant collection partition lets the system-wide pending-executions sweep use a keyword
-    // equality index instead of a provider-wide scan, mirroring the other list-capable bridges.
-    private sealed record WorkQueueEnvelope(string Collection, string WorkflowExecutionId, RuntimeSchedulerWorkItem Item);
+    public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        if (visibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "Scheduler work visibility timeout must be greater than zero.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var existing = await LoadClaimDocumentAsync(claim, cancellationToken);
+        if (existing is null)
+            return RuntimeSchedulerWorkClaimTransitionResult.AlreadyApplied;
+        if (!Matches(existing.Value.Document, existing.Value.Envelope, claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+
+        var updated = existing.Value.Envelope with { VisibleAfter = now.Add(visibilityTimeout) };
+        var result = await SaveDocumentAsync(existing.Value.Document.Id, updated, cancellationToken, claim.Revision);
+        return result.Status switch
+        {
+            DocumentStoreWriteStatus.Saved => RuntimeSchedulerWorkClaimTransitionResult.Applied(
+                NewClaim(updated, result.Document?.Version ?? checked(claim.Revision + 1))),
+            DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.NotFound =>
+                RuntimeSchedulerWorkClaimTransitionResult.Stale,
+            _ => throw new InvalidOperationException(
+                $"Groundwork rejected scheduler work claim renewal for '{claim.Item.WorkItemId}' with status '{result.Status}'.")
+        };
+    }
+
+    public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var existing = await LoadClaimDocumentAsync(claim, cancellationToken);
+        if (existing is null)
+            return RuntimeSchedulerWorkClaimTransitionResult.AlreadyApplied;
+        if (!Matches(existing.Value.Document, existing.Value.Envelope, claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+
+        var result = await Store.DeleteAsync(
+            new DeleteDocumentRequest(DocumentKind, existing.Value.Document.Id, claim.Revision),
+            cancellationToken);
+        return result.Status switch
+        {
+            DocumentStoreWriteStatus.Deleted => RuntimeSchedulerWorkClaimTransitionResult.Applied(),
+            DocumentStoreWriteStatus.NotFound => RuntimeSchedulerWorkClaimTransitionResult.AlreadyApplied,
+            DocumentStoreWriteStatus.ConcurrencyConflict => RuntimeSchedulerWorkClaimTransitionResult.Stale,
+            _ => throw new InvalidOperationException(
+                $"Groundwork rejected scheduler work claim completion for '{claim.Item.WorkItemId}' with status '{result.Status}'.")
+        };
+    }
+
+    public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseClaimAsync(
+        RuntimeSchedulerWorkClaim claim,
+        DateTimeOffset visibleAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var existing = await LoadClaimDocumentAsync(claim, cancellationToken);
+        if (existing is null)
+            return RuntimeSchedulerWorkClaimTransitionResult.AlreadyApplied;
+        if (!Matches(existing.Value.Document, existing.Value.Envelope, claim))
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+
+        var updated = existing.Value.Envelope with
+        {
+            ClaimOwnerId = null,
+            ClaimedAt = null,
+            VisibleAfter = visibleAt
+        };
+        var result = await SaveDocumentAsync(existing.Value.Document.Id, updated, cancellationToken, claim.Revision);
+        return result.Status switch
+        {
+            DocumentStoreWriteStatus.Saved => RuntimeSchedulerWorkClaimTransitionResult.Applied(),
+            DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.NotFound =>
+                RuntimeSchedulerWorkClaimTransitionResult.Stale,
+            _ => throw new InvalidOperationException(
+                $"Groundwork rejected scheduler work claim release for '{claim.Item.WorkItemId}' with status '{result.Status}'.")
+        };
+    }
+
+    private async ValueTask<(DocumentEnvelope Document, WorkQueueEnvelope Envelope)?> LoadClaimDocumentAsync(
+        RuntimeSchedulerWorkClaim claim,
+        CancellationToken cancellationToken)
+    {
+        var document = await Store.LoadAsync(
+            DocumentKind,
+            PhysicalDocumentId(claim.Item.WorkflowExecutionId, claim.Item.WorkItemId),
+            cancellationToken);
+        if (document is null)
+            return null;
+
+        var envelope = Deserialize(document);
+        EnsureLogicalIdentity(envelope.Item, claim.Item.WorkflowExecutionId, claim.Item.WorkItemId);
+        return (document, envelope);
+    }
+
+    private async ValueTask<DocumentEnvelope?> FirstOrderedAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var result = await QueryOrderedAsync(workflowExecutionId, limit: 1, cancellationToken);
+        return result.Documents.FirstOrDefault();
+    }
+
+    private async ValueTask<DocumentQueryResult> QueryOrderedAsync(
+        string workflowExecutionId,
+        int? limit,
+        CancellationToken cancellationToken)
+    {
+        var query = new DocumentQuery(
+            DocumentKind,
+            ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+            [
+                DocumentQueryClause.Of(
+                    DocumentQueryComparison.StartsWith(
+                        ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField,
+                        OrderPrefix(workflowExecutionId)))
+            ],
+            [new DocumentQueryOrder(ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField)],
+            take: limit);
+
+        return await BoundedStore.QueryAsync(query, cancellationToken);
+    }
+
+    private WorkQueueEnvelope Deserialize(DocumentEnvelope document) =>
+        Serializer.Deserialize<WorkQueueEnvelope>(document);
+
+    private static WorkQueueEnvelope NewEnvelope(RuntimeSchedulerWorkItem item) =>
+        new(
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+            item.WorkflowExecutionId,
+            item.ExecutionScopeId,
+            item.Attempt,
+            OrderKey(item),
+            null,
+            0,
+            null,
+            null,
+            item);
+
+    private static RuntimeSchedulerWorkClaim NewClaim(WorkQueueEnvelope envelope, long revision) =>
+        new(
+            envelope.Item,
+            envelope.ClaimOwnerId!,
+            envelope.ClaimToken,
+            revision,
+            envelope.ClaimedAt!.Value,
+            envelope.VisibleAfter!.Value);
+
+    private static bool Matches(
+        DocumentEnvelope document,
+        WorkQueueEnvelope envelope,
+        RuntimeSchedulerWorkClaim claim) =>
+        document.Version == claim.Revision &&
+        envelope.ClaimToken == claim.FencingToken &&
+        StringComparer.Ordinal.Equals(envelope.ClaimOwnerId, claim.OwnerId);
+
+    private static string PhysicalDocumentId(string workflowExecutionId, string workItemId) =>
+        GroundworkPhysicalDocumentId.FromLogicalId(GroundworkCompositeDocumentId.From(workflowExecutionId, workItemId));
+
+    private static string OrderKey(RuntimeSchedulerWorkItem item) =>
+        $"{OrderPrefix(item.WorkflowExecutionId)}{item.RecordedAt.UtcTicks:D19}.{item.Sequence ?? long.MaxValue:D20}.{StableHash(item.WorkItemId)}";
+
+    private static string OrderPrefix(string workflowExecutionId) => $"{StableHash(workflowExecutionId)}.";
+
+    private static string StableHash(string value) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    private static void EnsureLogicalIdentity(RuntimeSchedulerWorkItem item, string workflowExecutionId, string workItemId)
+    {
+        if (!StringComparer.Ordinal.Equals(item.WorkflowExecutionId, workflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(item.WorkItemId, workItemId))
+        {
+            throw new InvalidOperationException(
+                $"Groundwork physical document identity collision detected for scheduler work item '{workItemId}' in workflow execution '{workflowExecutionId}'.");
+        }
+    }
+
+    private static InvalidOperationException TransitionDidNotSettle(
+        string transition,
+        string workflowExecutionId,
+        string? workItemId = null) =>
+        new(
+            $"Scheduler work {transition} for workflow execution '{workflowExecutionId}'" +
+            (workItemId is null ? "" : $" and work item '{workItemId}'") +
+            $" did not settle after {MaxTransitionAttempts} compare-and-swap attempts.");
+
+    // The lifted order key is a provider-portable single-field index. Fixed hashes keep it under every
+    // provider's keyword-index bound; physical/logical identity verification fails closed on a collision.
+    private sealed record WorkQueueEnvelope(
+        string Collection,
+        string WorkflowExecutionId,
+        string? ExecutionScopeId,
+        ActivityExecutionAttemptLineage? Attempt,
+        string OrderKey,
+        string? ClaimOwnerId,
+        long ClaimToken,
+        DateTimeOffset? ClaimedAt,
+        DateTimeOffset? VisibleAfter,
+        RuntimeSchedulerWorkItem Item);
 }

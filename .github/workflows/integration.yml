@@ -5,19 +5,18 @@ name: Integration (nightly)
 # fast, container-free unit tests.
 #
 # This workflow is the INVERSE of ci.yml's filter: it runs ONLY the test projects
-# that reference Testcontainers -- today exactly the two Groundwork PostgreSql
-# projects, which spin up a throwaway PostgreSQL container via PostgresContainerFixture
-# (Docker required). The generate-filter step mirrors ci.yml's but KEEPS the container
-# projects instead of dropping them, so it is self-maintaining: any new Testcontainers
-# test project is picked up here automatically (and excluded from the PR gate).
+# that reference Testcontainers (Docker required). The generate-filter step mirrors
+# ci.yml's but KEEPS the container projects instead of dropping them, so it is
+# self-maintaining: any new Testcontainers test project is picked up here automatically
+# (and excluded from the PR gate).
 #
 # Why not on pull_request: containers are too slow/flaky to run on every PR -- that is
 # the explicit reason #544 excluded them from ci.yml. This runs nightly against main
 # plus on-demand via workflow_dispatch.
 #
 # GitHub-hosted ubuntu-latest runners ship with a working Docker daemon, so
-# Testcontainers works with no extra setup. The fixture pins postgres:16-alpine for
-# determinism.
+# Testcontainers works with no extra setup. Provider fixtures pin exact image tags
+# for determinism.
 #
 # This is informational/nightly, NOT a required PR check -- it is intentionally not
 # wired into branch protection. A failed run is visible in the Actions tab and via the
@@ -76,3 +75,70 @@ jobs:
 
       - name: Test (Testcontainers integration tests)
         run: dotnet test Elsa.Server.integration.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
+
+  # Feature 094 activation shells. Each lane is deliberately skipped and contains
+  # a failing sentinel so removing the condition before its owning tasks land cannot
+  # produce a false-green readiness signal.
+  groundwork-provider-matrix:
+    name: Groundwork provider matrix (scaffold)
+    if: ${{ false }}
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Activation sentinel
+        run: |
+          echo "::error::Provider-matrix scaffolding only; replace this sentinel when T086-T089 and T092 activate the lane."
+          exit 1
+
+  groundwork-failure-restart:
+    name: Groundwork failure & restart (scaffold)
+    if: ${{ false }}
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Activation sentinel
+        run: |
+          echo "::error::Failure/restart scaffolding only; replace this sentinel when T090 activates the lane."
+          exit 1
+
+  groundwork-schema-plan:
+    name: Groundwork schema plan (scaffold)
+    if: ${{ false }}
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Activation sentinel
+        run: |
+          echo "::error::Schema-plan scaffolding only; replace this sentinel when T020 and T030 activate the lane."
+          exit 1
+
+  groundwork-temporary-oracle:
+    name: Groundwork temporary EF oracle (scaffold)
+    if: ${{ false }}
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Activation sentinel
+        run: |
+          echo "::error::Temporary-oracle scaffolding only; replace this sentinel when T091 activates the lane."
+          exit 1
+
+  groundwork-readiness:
+    name: Groundwork readiness (scaffold)
+    if: ${{ false }}
+    needs:
+      - groundwork-provider-matrix
+      - groundwork-failure-restart
+      - groundwork-schema-plan
+      - groundwork-temporary-oracle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Activation sentinel
+        run: |
+          echo "::error::Readiness scaffolding only; replace this sentinel after T100 and activate it in T105."
+          exit 1

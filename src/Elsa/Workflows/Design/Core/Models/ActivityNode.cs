@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Design.Core.Models;
 
@@ -24,7 +27,66 @@ public sealed record ActivityNode(
     IEnumerable<ArgumentState> Inputs,
     IEnumerable<ArgumentState> Outputs,
     ActivityNodeStructure? Structure = null
-);
+)
+{
+    /// <summary>
+    /// Declares an engine-owned operation that is authored as a normal graph node but does not
+    /// reference an activity catalog version or activate a CLR activity at runtime.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AuthoredWorkflowIntrinsic? Intrinsic { get; init; }
+}
+
+/// <summary>
+/// Portable authored contract for an engine intrinsic. The value type is pinned at authoring time
+/// because no CLR activity input contract exists from which Publishing could infer it.
+/// </summary>
+public sealed record AuthoredWorkflowIntrinsic
+{
+    public AuthoredWorkflowIntrinsic(
+        AuthoredWorkflowIntrinsicKind kind,
+        TypeReference? valueType = null,
+        VariableReference? variable = null)
+    {
+        if (!Enum.IsDefined(kind))
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "Authored workflow intrinsic kind is not defined.");
+
+        var writesVariable = kind is AuthoredWorkflowIntrinsicKind.Set or
+            AuthoredWorkflowIntrinsicKind.Merge or
+            AuthoredWorkflowIntrinsicKind.Reduce;
+        if (writesVariable && variable is null)
+            throw new ArgumentException($"Authored workflow intrinsic '{kind}' requires a variable target.", nameof(variable));
+        if (!writesVariable && variable is not null)
+            throw new ArgumentException($"Authored workflow intrinsic '{kind}' cannot carry a variable target.", nameof(variable));
+        var carriesValue = kind is not AuthoredWorkflowIntrinsicKind.Control and
+            not AuthoredWorkflowIntrinsicKind.Finish;
+        if (carriesValue && valueType is null)
+            throw new ArgumentException($"Authored workflow intrinsic '{kind}' requires a portable value type.", nameof(valueType));
+        if (!carriesValue && valueType is not null)
+            throw new ArgumentException($"A {kind} intrinsic carries an outcome key rather than a workflow value type.", nameof(valueType));
+
+        Kind = kind;
+        ValueType = valueType;
+        Variable = variable;
+    }
+
+    public AuthoredWorkflowIntrinsicKind Kind { get; }
+    public TypeReference? ValueType { get; }
+    public VariableReference? Variable { get; }
+}
+
+public enum AuthoredWorkflowIntrinsicKind
+{
+    Set,
+    Merge,
+    Reduce,
+    Return,
+    Control,
+    SetCorrelationId,
+    SetInstanceName,
+    SetOutput,
+    Finish
+}
 
 /// <summary>
 /// Non-persisted traversal projection of activity-specific children. The slot name is part of

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -12,6 +13,54 @@ namespace Elsa.Workflows.Runtime.Scheduling.Tests;
 public sealed class RecurringTriggerScheduleIndexerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task PublicationScopedSchedulesReplaceAndRemoveOneAuthorityWithoutTouchingAnother()
+    {
+        var store = new InMemoryRecurringTriggerScheduleStore();
+        var indexer = CreateIndexer(
+            new FakeInner(),
+            store,
+            new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-shared", "PT5M"));
+        var executable = Executable("artifact-shared", TriggerNode("node-timer", "Elsa.Timer"));
+
+        await indexer.PreparePublicationAsync(executable, "publication-default-v1", "slot-default");
+        await indexer.PreparePublicationAsync(executable, "publication-blue", "slot-blue");
+
+        Assert.Empty(await store.ListDueAsync(Now.AddMinutes(10), 10));
+        var defaultSchedule = Assert.Single(await store.ListByPublicationAsync("publication-default-v1"));
+        var blueSchedule = Assert.Single(await store.ListByPublicationAsync("publication-blue"));
+        Assert.Equal("publication-default-v1", defaultSchedule.PublicationId);
+        Assert.Equal("slot-default", defaultSchedule.SlotId);
+        Assert.Equal("publication-blue", blueSchedule.PublicationId);
+        Assert.Equal("slot-blue", blueSchedule.SlotId);
+        Assert.NotEqual(defaultSchedule.ScheduleId, blueSchedule.ScheduleId);
+
+        await store.ActivatePublicationAsync("publication-default-v1", replacedPublicationId: null);
+        await store.ActivatePublicationAsync("publication-blue", replacedPublicationId: null);
+
+        Assert.Equal(
+            ["publication-blue", "publication-default-v1"],
+            (await store.ListDueAsync(Now.AddMinutes(10), 10))
+                .Select(schedule => schedule.PublicationId)
+                .Order(StringComparer.Ordinal));
+
+        await indexer.PreparePublicationAsync(executable, "publication-default-v2", "slot-default");
+        await store.ActivatePublicationAsync("publication-default-v2", replacedPublicationId: "publication-default-v1");
+
+        Assert.Equal(
+            ["publication-blue", "publication-default-v2"],
+            (await store.ListDueAsync(Now.AddMinutes(10), 10))
+                .Select(schedule => schedule.PublicationId)
+                .Order(StringComparer.Ordinal));
+
+        await store.DeleteByPublicationAsync("publication-default-v1");
+        await store.DeleteByPublicationAsync("publication-default-v2");
+
+        var survivingSchedule = Assert.Single(await store.ListDueAsync(Now.AddMinutes(10), 10));
+        Assert.Equal("publication-blue", survivingSchedule.PublicationId);
+        Assert.Equal("slot-blue", survivingSchedule.SlotId);
+    }
 
     [Fact]
     public async Task Index_MaterializesEverySchedule_BeforeInnerAndReplacementWrites()
@@ -302,10 +351,8 @@ public sealed class RecurringTriggerScheduleIndexerTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: metadata,
             childSlots: children.Length == 0 ? [] : [new ExecutableChildSlot("Body", children)]);
     }

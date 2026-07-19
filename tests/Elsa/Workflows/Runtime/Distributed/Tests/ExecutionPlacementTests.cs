@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Options;
 using Elsa.Workflows.Runtime.Distributed.Services;
@@ -120,12 +121,12 @@ public sealed class ExecutionPlacementTests
         await nodeA.TryClaimAsync("wfexec-a2");
         await nodeB.TryClaimAsync("wfexec-b1");
 
-        var owned = await nodeA.ListOwnedAsync();
+        var owned = await nodeA.ListOwnedAsync(10);
         Assert.Equal(new[] { "wfexec-a1", "wfexec-a2" }, owned.Select(l => l.WorkflowExecutionId).OrderBy(x => x));
 
         // Expired leases are not "owned".
         clock.Advance(TimeSpan.FromSeconds(31));
-        Assert.Empty(await nodeA.ListOwnedAsync());
+        Assert.Empty(await nodeA.ListOwnedAsync(10));
     }
 
     [Fact]
@@ -134,6 +135,47 @@ public sealed class ExecutionPlacementTests
         var store = new InMemoryExecutionPlacementStore();
         var options = new ExecutionPlacementOptions { NodeId = NodeA, LeaseDuration = TimeSpan.Zero };
         Assert.Throws<ArgumentOutOfRangeException>(() => new ExecutionPlacementService(store, new MutableTimeProvider(_now), options));
+    }
+
+    [Fact]
+    public void Constructor_RejectsOwnerIdentifiersOutsideThePortableBoundary()
+    {
+        var store = new InMemoryExecutionPlacementStore();
+        var options = new ExecutionPlacementOptions
+        {
+            NodeId = new string('x', DistributedRuntimeIdentityConstraints.MaximumLength + 1),
+            LeaseDuration = TimeSpan.FromSeconds(30)
+        };
+
+        Assert.Throws<ArgumentException>(() =>
+            new ExecutionPlacementService(store, new MutableTimeProvider(_now), options));
+    }
+
+    [Fact]
+    public void IdentityBoundary_RejectsMalformedUnicodeAndAcceptsTheMaximumLength()
+    {
+        var maximum = new string('x', DistributedRuntimeIdentityConstraints.MaximumLength);
+
+        Assert.Equal(
+            maximum,
+            DistributedRuntimeIdentityConstraints.Validate(maximum, "value"));
+        Assert.Throws<ArgumentException>(() =>
+            DistributedRuntimeIdentityConstraints.Validate("\ud800", "value"));
+        Assert.Throws<ArgumentException>(() =>
+            DistributedRuntimeIdentityConstraints.Validate(
+                maximum + "x",
+                "value"));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(501)]
+    public async Task ListOwned_RejectsLimitsOutsideTheDeclaredMaximum(int maxItems)
+    {
+        var service = NewService(new InMemoryExecutionPlacementStore(), NodeA, out _);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await service.ListOwnedAsync(maxItems));
     }
 
     private ExecutionPlacementService NewService(InMemoryExecutionPlacementStore store, string nodeId, out MutableTimeProvider clock)

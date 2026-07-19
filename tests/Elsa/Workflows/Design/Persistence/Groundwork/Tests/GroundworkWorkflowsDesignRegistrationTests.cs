@@ -51,6 +51,7 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkWorkflowDefinitionStore>(sp.GetRequiredService<IWorkflowDefinitionStore>());
         Assert.IsType<GroundworkWorkflowDefinitionVersionStore>(sp.GetRequiredService<IWorkflowDefinitionVersionStore>());
         Assert.IsType<GroundworkWorkflowDefinitionDraftStore>(sp.GetRequiredService<IWorkflowDefinitionDraftStore>());
+        Assert.IsType<GroundworkWorkflowDefinitionListProjectionStore>(sp.GetRequiredService<IWorkflowDefinitionListProjectionStore>());
         Assert.IsType<GroundworkWorkflowDefinitionVersionLayoutStore>(sp.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>());
         Assert.IsType<GroundworkAddWorkflowDefinitionCommand>(sp.GetRequiredService<IAddWorkflowDefinitionCommand>());
         Assert.IsType<GroundworkAddWorkflowDefinitionVersionCommand>(sp.GetRequiredService<IAddCommand<WorkflowDefinitionVersion>>());
@@ -63,6 +64,18 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkSubmitWorkflowDefinitionCommand>(sp.GetRequiredService<ISubmitWorkflowDefinitionCommand>());
         Assert.IsType<GroundworkCloneDraftFromVersionCommand>(sp.GetRequiredService<ICloneDraftFromVersionCommand>());
         Assert.IsType<WorkflowDefinitionLookup>(sp.GetRequiredService<IWorkflowDefinitionLookup>());
+    }
+
+    [Fact]
+    public void Registers_default_entity_factories()
+    {
+        using var provider = BuildProvider();
+        using var scope = provider.CreateScope();
+        var sp = scope.ServiceProvider;
+
+        Assert.IsType<WorkflowDefinitionFactory>(sp.GetRequiredService<IWorkflowDefinitionFactory>());
+        Assert.IsType<WorkflowDefinitionVersionFactory>(sp.GetRequiredService<IWorkflowDefinitionVersionFactory>());
+        Assert.IsType<WorkflowDefinitionDraftFactory>(sp.GetRequiredService<IWorkflowDefinitionDraftFactory>());
     }
 
     [Fact]

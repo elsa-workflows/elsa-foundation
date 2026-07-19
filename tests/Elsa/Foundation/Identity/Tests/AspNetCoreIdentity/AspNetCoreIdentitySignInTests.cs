@@ -1,6 +1,7 @@
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;

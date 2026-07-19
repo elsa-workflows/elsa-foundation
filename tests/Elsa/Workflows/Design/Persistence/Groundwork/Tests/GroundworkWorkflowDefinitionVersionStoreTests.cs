@@ -56,7 +56,7 @@ public class GroundworkWorkflowDefinitionVersionStoreTests
         return new Fixture(new GroundworkWorkflowDefinitionVersionStore(store, definitionStore, Payloads), store);
     }
 
-    private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null, null);
+    private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null);
 
     private static WorkflowDefinitionVersion Version(string id, string definitionId, string version) =>
         new(definitionId, version) { Id = id, State = EmptyState() };

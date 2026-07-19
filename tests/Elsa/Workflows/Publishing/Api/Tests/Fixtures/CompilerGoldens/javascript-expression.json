@@ -1,12 +1,17 @@
 {
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:0997049f3a8090d7612db82ec729dab645d3e5f944b3812a89f4f3a03ce2f7df",
-    "artifactId": "artifact-0997049f3a80",
+    "artifactHash": "sha256:297079a466ee153ad994354f52b7d364eb845cdd4e92455e6208f24438ffbd5e",
+    "artifactId": "artifact-297079a466ee",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
+  },
+  "inputContract": {
+    "inputs": [],
+    "version": 1
   },
   "resumeTargets": [],
   "rootActivity": {
@@ -14,17 +19,20 @@
     "activityTypeVersion": "1.0.0",
     "authoredActivityId": "write-js",
     "childSlots": [],
-    "descriptorPayload": {
-      "TypeAlias": "Object"
+    "descriptor": {
+      "consumerKey": "elsa.clr-activity",
+      "payload": {
+        "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
+      },
+      "schemaVersion": "1"
     },
-    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
     "executableNodeId": "write-js",
     "inputBindings": [
       {
         "expression": {
           "expression": "\u0022Hello \u0022 \u002B \u0022World\u0022",
           "language": "JavaScript",
-          "resultTypeId": "System.String, System.Private.CoreLib"
+          "resultTypeId": "String"
         },
         "inputName": "Text",
         "key": "Text",
@@ -33,10 +41,6 @@
           {
             "Key": "referenceKey",
             "Value": "Text"
-          },
-          {
-            "Key": "typeName",
-            "Value": "System.String, System.Private.CoreLib"
           }
         ],
         "source": "Expression"

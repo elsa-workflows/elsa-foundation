@@ -1,8 +1,10 @@
 using Elsa.Tasks.Core;
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Options;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -26,18 +28,45 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 public sealed class ExecutionPlacementPumpTask : IRecurringTask
 {
     private readonly IWorkflowExecutionActorProvider _actorProvider;
-    private readonly IExecutionPlacementService _placementService;
-    private readonly IExecutionCommandTransport _transport;
+    private readonly IPersistenceScopeRunner? _scopeRunner;
+    private readonly IExecutionPlacementService? _placementService;
+    private readonly IExecutionCommandTransport? _transport;
+    private readonly WorkflowExecutionPartition? _directPartition;
     private readonly IOptions<ExecutionPlacementOptions> _placementOptions;
     private readonly IOptions<ExecutionPlacementPumpOptions> _pumpOptions;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ExecutionPlacementPumpTask> _logger;
     private int _consecutiveSweepFailures;
 
+    [ActivatorUtilitiesConstructor]
+    public ExecutionPlacementPumpTask(
+        IWorkflowExecutionActorProvider actorProvider,
+        IPersistenceScopeRunner scopeRunner,
+        IOptions<ExecutionPlacementOptions> placementOptions,
+        IOptions<ExecutionPlacementPumpOptions> pumpOptions,
+        TimeProvider timeProvider,
+        ILogger<ExecutionPlacementPumpTask> logger)
+    {
+        ArgumentNullException.ThrowIfNull(actorProvider);
+        ArgumentNullException.ThrowIfNull(scopeRunner);
+        ArgumentNullException.ThrowIfNull(placementOptions);
+        ArgumentNullException.ThrowIfNull(pumpOptions);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        _actorProvider = actorProvider;
+        _scopeRunner = scopeRunner;
+        _placementOptions = placementOptions;
+        _pumpOptions = pumpOptions;
+        _timeProvider = timeProvider;
+        _logger = logger;
+    }
+
     public ExecutionPlacementPumpTask(
         IWorkflowExecutionActorProvider actorProvider,
         IExecutionPlacementService placementService,
         IExecutionCommandTransport transport,
+        WorkflowExecutionPartition partition,
         IOptions<ExecutionPlacementOptions> placementOptions,
         IOptions<ExecutionPlacementPumpOptions> pumpOptions,
         TimeProvider timeProvider,
@@ -46,6 +75,7 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         ArgumentNullException.ThrowIfNull(actorProvider);
         ArgumentNullException.ThrowIfNull(placementService);
         ArgumentNullException.ThrowIfNull(transport);
+        ArgumentNullException.ThrowIfNull(partition);
         ArgumentNullException.ThrowIfNull(placementOptions);
         ArgumentNullException.ThrowIfNull(pumpOptions);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -54,6 +84,7 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         _actorProvider = actorProvider;
         _placementService = placementService;
         _transport = transport;
+        _directPartition = partition;
         _placementOptions = placementOptions;
         _pumpOptions = pumpOptions;
         _timeProvider = timeProvider;
@@ -69,6 +100,28 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
     /// </summary>
     public async ValueTask<ExecutionPlacementSweepResult> SweepAsync(CancellationToken cancellationToken = default)
     {
+        if (_scopeRunner is null)
+            return await SweepAsync(_placementService!, _transport!, _directPartition!, cancellationToken);
+
+        var total = new ExecutionPlacementSweepResult(0, 0, 0, 0);
+        await _scopeRunner.RunAsync(async (persistenceScope, operationScope, operationCancellationToken) =>
+        {
+            var result = await SweepAsync(
+                operationScope.ServiceProvider.GetRequiredService<IExecutionPlacementService>(),
+                operationScope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>(),
+                new WorkflowExecutionPartition(persistenceScope.Value),
+                operationCancellationToken);
+            total = Add(total, result);
+        }, cancellationToken);
+        return total;
+    }
+
+    private async ValueTask<ExecutionPlacementSweepResult> SweepAsync(
+        IExecutionPlacementService placementService,
+        IExecutionCommandTransport transport,
+        WorkflowExecutionPartition expectedPartition,
+        CancellationToken cancellationToken)
+    {
         var pumpOptions = _pumpOptions.Value;
         var leaseDuration = _placementOptions.Value.LeaseDuration;
         var now = _timeProvider.GetUtcNow();
@@ -79,15 +132,18 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         var acked = 0;
 
         // 1. Renew placements this node holds so ownership does not lapse mid-drain.
-        foreach (var lease in await _placementService.ListOwnedAsync(cancellationToken))
+        foreach (var lease in await placementService.ListOwnedAsync(pumpOptions.MaxExecutionsPerSweep, cancellationToken))
         {
-            var renewal = await _placementService.TryClaimAsync(lease.WorkflowExecutionId, cancellationToken);
+            var renewal = await placementService.TryClaimAsync(lease.WorkflowExecutionId, cancellationToken);
             if (renewal.IsOwnedByClaimant)
                 renewed++;
         }
 
         // 2. Discover executions with visible transport backlog, claim any we can own, and drain them locally.
-        var pending = await _transport.ListPendingExecutionIdsAsync(now, cancellationToken);
+        var pending = await transport.ListPendingExecutionIdsAsync(
+            now,
+            pumpOptions.MaxExecutionsPerSweep,
+            cancellationToken);
         var executionsThisSweep = 0;
 
         foreach (var executionId in pending)
@@ -95,19 +151,25 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
             if (executionsThisSweep >= pumpOptions.MaxExecutionsPerSweep)
                 break;
 
-            var claim = await _placementService.TryClaimAsync(executionId, cancellationToken);
+            var claim = await placementService.TryClaimAsync(executionId, cancellationToken);
             if (!claim.IsOwnedByClaimant)
                 continue;
 
             claimed++;
             executionsThisSweep++;
 
-            var leased = await _transport.LeaseAsync(executionId, _placementService.NodeId, now, leaseDuration, pumpOptions.TransportLeaseBatchSize, cancellationToken);
+            var leased = await transport.LeaseAsync(executionId, placementService.NodeId, now, leaseDuration, pumpOptions.TransportLeaseBatchSize, cancellationToken);
 
             foreach (var item in leased)
             {
+                if (item.Envelope.Partition != expectedPartition)
+                {
+                    throw new InvalidOperationException(
+                        "A persisted command partition does not match the current persistence scope.");
+                }
+
                 dispatched++;
-                var result = await DispatchAsync(executionId, item.Envelope, cancellationToken);
+                var result = await DispatchAsync(executionId, item.Envelope, placementService, cancellationToken);
 
                 // Ack only on a delivered outcome. Deferred/Rejected leaves the item leased; when the lease expires it
                 // becomes visible again and is re-driven, preserving at-least-once delivery.
@@ -115,7 +177,7 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
                     or WorkflowExecutionCommandDispatchStatus.Duplicate
                     or WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted)
                 {
-                    if (await _transport.AckAsync(executionId, item.TransportItemId, _placementService.NodeId, _timeProvider.GetUtcNow(), cancellationToken))
+                    if (await transport.AckAsync(executionId, item.TransportItemId, placementService.NodeId, _timeProvider.GetUtcNow(), cancellationToken))
                         acked++;
                 }
             }
@@ -148,14 +210,19 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
 
     public ITaskSchedule GetSchedule() => new AdaptiveIntervalSchedule(() => CurrentSweepInterval, _logger);
 
-    private async ValueTask<WorkflowExecutionCommandDispatchResult> DispatchAsync(string executionId, WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken)
+    private async ValueTask<WorkflowExecutionCommandDispatchResult> DispatchAsync(
+        string executionId,
+        WorkflowExecutionCommandEnvelope envelope,
+        IExecutionPlacementService placementService,
+        CancellationToken cancellationToken)
     {
         var activation = new WorkflowExecutionActorActivationRequest(
             workflowExecutionId: executionId,
             reason: WorkflowExecutionActorActivationReason.Recovery,
             requestedAt: _timeProvider.GetUtcNow(),
-            requestedBy: _placementService.NodeId,
-            requiredCapabilities: WorkflowExecutionActorCapabilities.None);
+            requestedBy: placementService.NodeId,
+            requiredCapabilities: WorkflowExecutionActorCapabilities.None,
+            partition: envelope.Partition);
 
         var actor = await _actorProvider.GetAgentAsync(activation, cancellationToken);
         return await actor.EnqueueAsync(envelope, cancellationToken);
@@ -167,6 +234,14 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         var failures = Volatile.Read(ref _consecutiveSweepFailures);
         return failures <= 0 ? options.SweepInterval : ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, failures);
     }
+
+    private static ExecutionPlacementSweepResult Add(
+        ExecutionPlacementSweepResult left,
+        ExecutionPlacementSweepResult right) => new(
+        left.RenewedCount + right.RenewedCount,
+        left.ClaimedCount + right.ClaimedCount,
+        left.DispatchedCommandCount + right.DispatchedCommandCount,
+        left.AckedCount + right.AckedCount);
 
     // Geometric backoff (base * 2^(failures-1)) clamped to maxInterval, guarded against overflow.
     private static TimeSpan ComputeBackoff(TimeSpan baseInterval, TimeSpan maxInterval, int failures)

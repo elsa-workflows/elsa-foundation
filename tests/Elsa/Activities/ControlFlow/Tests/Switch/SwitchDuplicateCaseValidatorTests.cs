@@ -92,7 +92,7 @@ public sealed class SwitchDuplicateCaseValidatorTests : IDisposable
 
     private async Task<IReadOnlyList<ValidationError>> Validate(ActivityNode rootActivity)
     {
-        var state = new WorkflowDefinitionState([], rootActivity, [], [], null, null);
+        var state = new WorkflowDefinitionState([], rootActivity, [], [], null);
         return [.. await _validator.Validate(new StubDraft(state), CancellationToken.None)];
     }
 

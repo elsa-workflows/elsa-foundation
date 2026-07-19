@@ -6,7 +6,17 @@
 
 ## Summary
 
-The delivered implementation hardens the existing first-party trigger publication path without redesigning routing or persistence. The runtime evaluates every configured stimulus provider for each executable trigger node, requires exactly one claim, records a stable provider identity in a non-persisted preflight outcome, and preserves recognized-empty non-start behavior. The recurring scheduling decorator fully materializes Timer/Cron schedules before invoking the trigger indexer, so invalid or exhausted schedules fail before either binding or schedule replacement. Existing index/store contracts, durable document shapes, executable shapes, catalog identities, and publication response models remain unchanged.
+The delivered implementation hardened the existing first-party trigger publication path without redesigning routing or persistence. The runtime evaluates every configured stimulus provider for each executable trigger node, requires exactly one claim, records a stable provider identity in a non-persisted preflight outcome, and preserves recognized-empty non-start behavior. The recurring scheduling decorator fully materializes Timer/Cron schedules before invoking the trigger indexer, so invalid or exhausted schedules fail before either binding or schedule replacement. At spec 090 delivery, existing index/store contracts, durable document shapes, executable shapes, catalog identities, and publication response models remained unchanged.
+
+**Current persistence supersession:** Later persistence work established a current-only pre-GA boundary for
+every Runtime Groundwork kind: minimum-readable equals current, only the current fixture is retained, and no
+Elsa compatibility upcaster is registered. `workflowExecutable`, `workflowExecutableSourceReference`, and
+`workflowExecutionState` are version 4 and reject versions 1 through 3. Executable v4 includes the
+reusable-activity input contract and direct dependency snapshot; source-reference v4 includes tenant scope;
+workflow-execution v4 includes dispatch nesting depth. An installation carrying any older Runtime persistence
+must atomically reset the complete Runtime and Publishing Groundwork persistence
+sets while preserving Design and Activities data, then republish workflows before serving traffic. This does
+not change the historical result that spec 090 itself introduced no persisted-shape drift.
 
 ## Technical Context
 
@@ -16,7 +26,7 @@ The delivered implementation hardens the existing first-party trigger publicatio
 
 **Storage**: Existing `IWorkflowTriggerBindingStore` and `IRecurringTriggerScheduleStore` implementations (in-memory and Groundwork); no new document kind or persisted field
 
-**Testing**: xUnit 2.9, focused runtime/scheduling/activity/publishing tests, and unchanged Groundwork compatibility fixtures
+**Testing**: xUnit 2.9, focused runtime/scheduling/activity/publishing tests, and current-only Groundwork fixtures for every Runtime kind; executable/source-reference/workflow-execution verification uses only version-4 fixtures and rejection tests for versions 1 through 3
 
 **Target Platform**: Cross-platform .NET server/runtime hosts
 
@@ -39,10 +49,10 @@ The delivered implementation hardens the existing first-party trigger publicatio
 | Framework §2.21 / §2.23 test discipline | PASS | Existing extractor/indexer/scheduling/provider tests are preserved and expanded branch-by-branch; feature registration remains unchanged. |
 | Framework §4.2 Core compatibility | PASS | Existing extractor/indexer signatures and durable models remain. Stable provider identity is additive with a default compatibility path; any Core API addition is minor-compatible. |
 | Elsa §E2.2 Design/Runtime split | PASS | Preflight consumes `WorkflowExecutable` and runtime providers only. No Runtime → Design reference. |
-| Elsa §E2.6 executable-always-runs / artifact-only runtime | PASS | Existing executable shapes remain readable; corrected classification is produced on republish, and runtime execution reads only the artifact. |
+| Elsa §E2.6 executable-always-runs / artifact-only runtime | PASS | At spec 090 delivery, the then-current executable shape remained readable; corrected classification was produced on republish, and runtime execution read only the artifact. The later clean version-4 minimum-readable boundary for executable, source-reference, and workflow-execution documents supersedes that historical persistence promise. |
 | Elsa §E2.8 catalog hash immutability | PASS | Same-version catalog `ExecutionType` remains untouched; CLR trigger capability continues to be projected at compilation. This section is provisional, so PR #621 and compatibility tests remain supporting evidence. |
 | Elsa §E6 naming | PASS | Proposed names stay within the component budget and use established `Provider`, `Outcome`, `Validator`, and `Exception` roles. |
-| Groundwork schema evolution | PASS | `WorkflowTriggerBinding` and `RecurringTriggerSchedule` are unchanged. Implementation found no durable shape drift; schema versions, upcasters, and fixtures were not changed. |
+| Groundwork schema evolution | PASS | `WorkflowTriggerBinding` and `RecurringTriggerSchedule` were unchanged by spec 090. Its implementation found no durable shape drift and changed no schema versions, upcasters, or fixtures. The current-only pre-GA boundary for every Runtime kind was introduced later. |
 
 ### Post-design re-check
 
@@ -145,9 +155,12 @@ advance `env.base_version` from `4.0.0` to `4.1.0` for preview packages and publ
 
 ## As-built reconciliation
 
-The implementation follows this plan without a durable-model, executable-model, host-composition, or
+The implementation followed this plan without a durable-model, executable-model, host-composition, or
 public publication-response change. `WorkflowTriggerBindingExtractor.Evaluate` produces the complete
 non-persisted outcome; `Extract` remains the compatibility projection. The recurring decorator prepares
 all schedules before invoking the inner indexer, then preserves the existing binding-before-schedule
 replacement order after semantic validation succeeds. The canonical seam catalog was relocated to the
 Runtime composition root. Exact verification results are maintained in [quickstart.md](quickstart.md).
+Those results describe the spec 090 delivery baseline; they do not authorize loading executable,
+source-reference, or workflow-execution versions 1 through 3 under the current version-4 minimum-readable
+contract.

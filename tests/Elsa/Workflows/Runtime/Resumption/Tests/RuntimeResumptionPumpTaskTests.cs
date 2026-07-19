@@ -1,9 +1,11 @@
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Resumption.Options;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -128,6 +130,36 @@ public sealed class RuntimeResumptionPumpTaskTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_OutboxRecordingFailureLogsOnlySafeIdentities()
+    {
+        var service = new FakeResumptionService
+        {
+            Throw = new OutboxProcessingException(
+                "outbox-safe",
+                "intent-safe",
+                new InvalidOperationException("provider-secret"),
+                new InvalidOperationException("storage-secret"))
+        };
+        var logger = new RecordingLogger<RuntimeResumptionPumpTask>();
+        var pump = new RuntimeResumptionPumpTask(
+            service,
+            Microsoft.Extensions.Options.Options.Create(new RuntimeResumptionOptions()),
+            new MutableTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z")),
+            logger);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Null(entry.Exception);
+        Assert.Equal("RuntimePostCommitResultRecordingFailed", entry.EventId.Name);
+        var serialized = string.Join(" ", entry.Fields.Select(pair => $"{pair.Key}={pair.Value}"));
+        Assert.Contains("outbox-safe", serialized, StringComparison.Ordinal);
+        Assert.Contains("intent-safe", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("provider-secret", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("storage-secret", serialized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_IntervalBackoffIsCappedAtMax()
     {
         var service = new FakeResumptionService { Throw = new InvalidOperationException("nope") };
@@ -204,4 +236,28 @@ public sealed class RuntimeResumptionPumpTaskTests
         public override DateTimeOffset GetUtcNow() => _now;
         public void Advance(TimeSpan by) => _now = _now.Add(by);
     }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogEntry> Entries { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            var fields = state is IEnumerable<KeyValuePair<string, object?>> structured
+                ? structured.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
+                : new Dictionary<string, object?> { ["Message"] = formatter(state, exception) };
+            Entries.Add(new LogEntry(eventId, fields, exception));
+        }
+    }
+
+    private sealed record LogEntry(
+        EventId EventId,
+        IReadOnlyDictionary<string, object?> Fields,
+        Exception? Exception);
 }

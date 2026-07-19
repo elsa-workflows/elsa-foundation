@@ -22,6 +22,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </remarks>
 public interface IDurableTimerStore
 {
+    /// <summary>
+    /// Indicates whether this provider supplies provider-atomic due claims, renewal, release, and completion.
+    /// Legacy providers remain usable through the original list/delete contract.
+    /// </summary>
+    bool SupportsClaimTransitions => false;
+
     /// <summary>Upserts a timer (existing wins) and returns the stored timer.</summary>
     ValueTask<DurableTimer> SaveAsync(DurableTimer timer, CancellationToken cancellationToken = default);
 
@@ -31,6 +37,43 @@ public interface IDurableTimerStore
     /// <summary>Finds a single timer by its identity, or <c>null</c> if it does not exist.</summary>
     ValueTask<DurableTimer?> FindAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken = default);
 
+    /// <summary>Lists every timer owned by one workflow execution for provider-neutral scope cleanup.</summary>
+    ValueTask<IReadOnlyCollection<DurableTimer>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This durable timer store does not support workflow-scoped listing.");
+
     /// <summary>Deletes a timer by its identity. Deleting a missing timer is a no-op.</summary>
     ValueTask DeleteAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Atomically claims at most the requested number of visible due timers. Competing claimants cannot
+    /// receive the same current fencing token.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<RuntimeDurableTimerClaim>> ClaimDueAsync(
+        RuntimeDurableTimerClaimRequest request,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This durable timer store does not support claim transitions.");
+
+    /// <summary>Renews a timer claim only while its owner, fencing token, and provider revision are current.</summary>
+    ValueTask<RuntimeDurableTimerClaimTransitionResult> RenewClaimAsync(
+        RuntimeDurableTimerClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This durable timer store does not support claim transitions.");
+
+    /// <summary>Permanently removes a timer only while the presented claim is current.</summary>
+    ValueTask<RuntimeDurableTimerClaimTransitionResult> CompleteClaimAsync(
+        RuntimeDurableTimerClaim claim,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This durable timer store does not support claim transitions.");
+
+    /// <summary>
+    /// Releases a current claim without removing its timer. The timer remains hidden until
+    /// <paramref name="visibleAt"/>.
+    /// </summary>
+    ValueTask<RuntimeDurableTimerClaimTransitionResult> ReleaseClaimAsync(
+        RuntimeDurableTimerClaim claim,
+        DateTimeOffset visibleAt,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This durable timer store does not support claim transitions.");
 }

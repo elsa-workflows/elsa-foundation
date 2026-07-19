@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Scheduling.Activities;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -144,7 +146,7 @@ public sealed class TimerCronProviderTests
         else if (literal is not null)
         {
             using var value = JsonDocument.Parse(JsonSerializer.Serialize(literal));
-            bindings[inputName] = new RuntimeInputBinding(inputName, RuntimeInputBindingSource.Literal, literalValue: value.RootElement.Clone());
+            bindings[inputName] = LiteralBinding(inputName, value.RootElement);
         }
 
         return new ExecutableNode(
@@ -152,13 +154,27 @@ public sealed class TimerCronProviderTests
             authoredActivityId: "authored-node-1",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: bindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 
     private static RuntimeInputBinding ExpressionBinding(string name) =>
-        new(name, RuntimeInputBindingSource.Expression, expression: new RuntimeExpressionBinding("JavaScript", "input.value"));
+        new(
+            name,
+            new ValueTypeDescriptor("String"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("JavaScript", "input.value"));
+
+    private static RuntimeInputBinding LiteralBinding(string name, JsonElement value)
+    {
+        var type = new ValueTypeDescriptor("String");
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, value, ValueProtectionPolicy.InstanceInline));
+    }
 }

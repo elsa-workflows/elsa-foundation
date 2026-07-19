@@ -6,17 +6,17 @@ using CShells.DependencyInjection;
 using CShells.Management.Api;
 using Elsa.Api.FastEndpoints;
 using Elsa.Server;
-using Elsa.Activities.Composition.Design;
-using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Flowchart;
+using Elsa.Activities.Graph.Runtime;
 using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
+using Elsa.Api.Capabilities;
 using Elsa.Agent.Api;
 using Elsa.Agent.Core;
 using Elsa.Agent.GitHubCopilot;
@@ -28,6 +28,7 @@ using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite;
 using Elsa.Events;
 using Elsa.Expressions;
+using Elsa.Expressions.Api;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
@@ -46,22 +47,23 @@ using Elsa.Persistence.Groundwork.PostgreSql.Unified;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
+using Elsa.Tasks;
 using Elsa.Attention.Api;
 using Elsa.Modularity.Attention;
 using Elsa.Secrets.Attention;
 using Elsa.Studio.Preferences.Api;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Persistence.Groundwork;
-using Elsa.Tasks;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Runtime.Attention;
+using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Attention;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
@@ -78,6 +80,12 @@ builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange:
 // keys + a seeded well-known admin, while Production hardens to durable stores, a persistent signing key
 // (secret), and a configured initial admin (password supplied as a secret — never committed).
 builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
+// WebApplication.CreateBuilder adds environment variables before these shell files. Re-add the environment and
+// command-line providers after the shell layers so container environment variables override shells.json, while
+// explicit command-line arguments retain the highest precedence.
+builder.Configuration
+    .AddEnvironmentVariables()
+    .AddCommandLine(args);
 var configuration = builder.Configuration;
 
 // Console log streaming is a process-global, host-level diagnostic (not a shell feature): capture is a static tee on
@@ -167,13 +175,14 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(MediatorFeature).Assembly,
             typeof(EventsFeature).Assembly,
             typeof(ExpressionsFeature).Assembly,
+            typeof(ApiCapabilitiesFeature).Assembly,
+            typeof(ExpressionsApiFeature).Assembly,
 
             // JavaScript expression + activity feature assemblies. Listing them here makes their features
             // discoverable by the runtime feature catalog (so they surface as "available" in the modularity UI)
             // and enablable via shell configuration.
             typeof(Elsa.Expressions.JavaScript.JavaScriptFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Jint.JintFeature).Assembly,
-            typeof(Elsa.Expressions.JavaScript.Libraries.JavaScriptLibrariesFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature).Assembly,
             typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,
             typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
@@ -184,29 +193,26 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 
-            // Construction seam (Runtime side): the dispatch factory + registry, the CLR kind, and the
-            // Workflow kind. These populate the constructor registry the bridge dispatches through.
+            // Construction seam (Runtime side): the dispatch factory and stable CLR/graph consumers.
             typeof(ActivitiesRuntimeFeature).Assembly,
             typeof(ActivitiesPrimitivesFeature).Assembly,
             typeof(ActivitiesSequenceFeature).Assembly,
             typeof(ActivitiesFlowchartFeature).Assembly,
+            typeof(GraphActivitiesRuntimeFeature).Assembly,
             // HTTP endpoint authoring + serving. ActivitiesHttp mounts the inbound middleware and depends on
             // WorkflowsRuntimeHttp, whose route-table projection keeps published and waiting endpoints reachable.
             // Both assemblies are explicit because the dependency is feature-name based; it cannot make an assembly
             // absent from a clean host deployment discoverable.
             typeof(ActivitiesHttpFeature).Assembly,
             typeof(WorkflowsRuntimeHttpFeature).Assembly,
-            typeof(ActivitiesCompositionRuntimeFeature).Assembly,
-
             // Reconciliation (Design side): the universal pass + the CLR assembly scanner source, which
-            // populate the catalog with WriteLine + WorkflowDefinitionActivity as CLR rows at startup.
+            // publish source-owned CLR activity definitions through the stable provider/runtime seam.
             typeof(ActivitiesDesignReconciliationFeature).Assembly,
             typeof(ClrActivityReconciliationFeature).Assembly,
-            // Workflow kind (Design side): catalogs usable-as-activity workflow versions as WorkflowIdentity rows.
-            typeof(ActivitiesCompositionDesignFeature).Assembly,
 
             // The bridge: publishing endpoints that construct a live activity from a catalog row.
             typeof(WorkflowsPublishingApiFeature).Assembly,
+            typeof(PublishingGroundworkFeature).Assembly,
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
@@ -254,7 +260,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(ApiSecurityFeature).Assembly,
             typeof(AttentionApiFeature).Assembly,
-
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
             typeof(StudioPreferencesGroundworkPersistenceFeature).Assembly,
@@ -296,7 +301,6 @@ app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-serve
 app.MapElsaModuleManagementApi();
 if (extensionBuilderEnabled)
     app.MapElsaExtensionBuilderApi();
-app.MapElsaWorkflowManagementApi();
 app.MapShells();
 
 // Explicit auth middleware placed after MapShells: ShellMiddleware (added by MapShells) swaps

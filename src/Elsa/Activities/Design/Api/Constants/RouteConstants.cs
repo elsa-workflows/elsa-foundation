@@ -9,4 +9,6 @@ internal static class RouteConstants
     internal static string Definitions => GetRoute("definitions");
 
     internal static string Versions => GetRoute("versions");
+
+    internal static string Catalog => GetRoute("catalog");
 }

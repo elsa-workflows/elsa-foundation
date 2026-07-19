@@ -5,55 +5,230 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class BookmarkConsumptionCheckpointRequest
 {
-    public BookmarkConsumptionCheckpointRequest(
+    private BookmarkConsumptionCheckpointRequest(
+        BookmarkResumeCheckpointTransitionKind transitionKind,
         RuntimeSchedulerWorkItem resumeWorkItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
-        BookmarkState bookmark,
-        ActivityExecutionState completedActivityExecutionState,
-        RuntimeSchedulerWorkItem? completionWorkItem = null,
-        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null,
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null)
+        BookmarkState? resumeBookmark,
+        IReadOnlyCollection<BookmarkState>? additionalBookmarksToConsume,
+        ActivityExecutionState activityExecutionState,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> continuationWorkItems,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        string? commitDiscriminator)
     {
         ArgumentNullException.ThrowIfNull(resumeWorkItem);
         ArgumentNullException.ThrowIfNull(resumePayload);
-        ArgumentNullException.ThrowIfNull(bookmark);
-        ArgumentNullException.ThrowIfNull(completedActivityExecutionState);
+        ArgumentNullException.ThrowIfNull(activityExecutionState);
+        ArgumentNullException.ThrowIfNull(continuationWorkItems);
+        ArgumentNullException.ThrowIfNull(valueSnapshots);
+        ArgumentNullException.ThrowIfNull(durableValueChanges);
 
         if (resumeWorkItem.CommandKind != WorkflowExecutionCommandKind.ResumeBookmark)
             throw new ArgumentException("Bookmark consumption checkpoints require ResumeBookmark scheduler work.", nameof(resumeWorkItem));
 
-        if (completedActivityExecutionState.Status != ActivityExecutionStatus.Completed)
-            throw new ArgumentException("Bookmark consumption checkpoints require completed activity execution state.", nameof(completedActivityExecutionState));
+        var expectedStatus = transitionKind switch
+        {
+            BookmarkResumeCheckpointTransitionKind.InitialTriggerClaim or BookmarkResumeCheckpointTransitionKind.RedeliveryClaim => ActivityExecutionStatus.Running,
+            BookmarkResumeCheckpointTransitionKind.StaleBookmarkConsumption or BookmarkResumeCheckpointTransitionKind.ActivityCompletion => ActivityExecutionStatus.Completed,
+            BookmarkResumeCheckpointTransitionKind.ActivitySuspension => ActivityExecutionStatus.Suspended,
+            _ => throw new ArgumentOutOfRangeException(nameof(transitionKind), transitionKind, "Unknown bookmark resume checkpoint transition.")
+        };
+        if (activityExecutionState.Status != expectedStatus)
+            throw new ArgumentException($"Bookmark resume transition '{transitionKind}' requires activity status '{expectedStatus}'.", nameof(activityExecutionState));
 
-        ValidateBookmarkMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, bookmark, nameof(bookmark));
-        ValidateActivityStateMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, completedActivityExecutionState, nameof(completedActivityExecutionState));
-        if (completionWorkItem is not null)
-            ValidateCompletionWorkItem(resumeWorkItem.WorkflowExecutionId, completedActivityExecutionState.Execution.ActivityExecutionId, completionWorkItem, nameof(completionWorkItem));
+        var consumesBookmarks = transitionKind is BookmarkResumeCheckpointTransitionKind.InitialTriggerClaim or BookmarkResumeCheckpointTransitionKind.StaleBookmarkConsumption;
+        if (consumesBookmarks && resumeBookmark is null)
+            throw new ArgumentNullException(nameof(resumeBookmark), $"Bookmark resume transition '{transitionKind}' requires the selected bookmark.");
+        if (!consumesBookmarks && (resumeBookmark is not null || additionalBookmarksToConsume is { Count: > 0 }))
+            throw new ArgumentException($"Bookmark resume transition '{transitionKind}' cannot consume bookmarks.", nameof(additionalBookmarksToConsume));
+        if (resumeBookmark is not null)
+            ValidateBookmarkMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, resumeBookmark, nameof(resumeBookmark));
+        var bookmarksToConsume = resumeBookmark is null
+            ? []
+            : new[] { resumeBookmark }
+                .Concat(additionalBookmarksToConsume ?? [])
+                .DistinctBy(candidate => candidate.BookmarkId, StringComparer.Ordinal)
+                .ToArray();
+        foreach (var candidate in bookmarksToConsume)
+            ValidateOwnedBookmark(resumeWorkItem.WorkflowExecutionId, activityExecutionState, candidate, nameof(additionalBookmarksToConsume));
+        ValidateActivityStateMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, activityExecutionState, nameof(activityExecutionState));
 
+        var continuations = continuationWorkItems.ToArray();
+        if (transitionKind == BookmarkResumeCheckpointTransitionKind.ActivitySuspension)
+        {
+            if (continuations.Length == 0 || continuations.Any(item => item.CommandKind != WorkflowExecutionCommandKind.CreateBookmark))
+                throw new ArgumentException("Activity suspension requires at least one bookmark-creation continuation.", nameof(continuationWorkItems));
+        }
+        else if (transitionKind is BookmarkResumeCheckpointTransitionKind.ActivityCompletion or BookmarkResumeCheckpointTransitionKind.StaleBookmarkConsumption)
+        {
+            if (continuations.Length != 1)
+                throw new ArgumentException($"Bookmark resume transition '{transitionKind}' requires exactly one completion continuation.", nameof(continuationWorkItems));
+            ValidateCompletionWorkItem(resumeWorkItem.WorkflowExecutionId, activityExecutionState.Execution.ActivityExecutionId, continuations[0], nameof(continuationWorkItems));
+        }
+        else if (continuations.Length != 0)
+            throw new ArgumentException($"Bookmark resume transition '{transitionKind}' cannot schedule continuations.", nameof(continuationWorkItems));
+
+        var isClaim = transitionKind is BookmarkResumeCheckpointTransitionKind.InitialTriggerClaim or BookmarkResumeCheckpointTransitionKind.RedeliveryClaim;
+        if (isClaim)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(commitDiscriminator);
+            var claimedAttempt = activityExecutionState.Attempts?
+                .SingleOrDefault(attempt => attempt.EndedAt is null && StringComparer.Ordinal.Equals(attempt.AttemptId, commitDiscriminator));
+            if (claimedAttempt is null ||
+                !activityExecutionState.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaim, out var claimedAttemptId) ||
+                !StringComparer.Ordinal.Equals(claimedAttemptId, commitDiscriminator) ||
+                !activityExecutionState.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId, out var claimedWorkItemId) ||
+                !StringComparer.Ordinal.Equals(claimedWorkItemId, resumeWorkItem.WorkItemId))
+            {
+                throw new ArgumentException("An attempt-claim transition requires one matching open attempt and activation-claim metadata.", nameof(commitDiscriminator));
+            }
+        }
+        else if (commitDiscriminator is not null)
+            throw new ArgumentException($"Bookmark resume transition '{transitionKind}' cannot carry an attempt discriminator.", nameof(commitDiscriminator));
+
+        TransitionKind = transitionKind;
         ResumeWorkItem = resumeWorkItem;
         ResumePayload = resumePayload;
-        Bookmark = bookmark;
-        CompletedActivityExecutionState = completedActivityExecutionState;
-        CompletionWorkItem = completionWorkItem;
-        ValueSnapshots = valueSnapshots ?? [];
-        DurableValueChanges = durableValueChanges ?? [];
+        BookmarksToConsume = bookmarksToConsume;
+        CommitDiscriminator = commitDiscriminator;
+        ActivityExecutionState = activityExecutionState;
+        ContinuationWorkItems = continuations;
+        ValueSnapshots = valueSnapshots;
+        DurableValueChanges = durableValueChanges;
     }
 
+    public BookmarkResumeCheckpointTransitionKind TransitionKind { get; }
     public RuntimeSchedulerWorkItem ResumeWorkItem { get; }
     public RuntimeResumeBookmarkCommandPayload ResumePayload { get; }
-    public BookmarkState Bookmark { get; }
-    public ActivityExecutionState CompletedActivityExecutionState { get; }
-    public RuntimeSchedulerWorkItem? CompletionWorkItem { get; }
+    public IReadOnlyCollection<BookmarkState> BookmarksToConsume { get; }
+    public bool ConsumesBookmarks => BookmarksToConsume.Count > 0;
+    public string CheckpointName => TransitionKind switch
+    {
+        BookmarkResumeCheckpointTransitionKind.InitialTriggerClaim or BookmarkResumeCheckpointTransitionKind.RedeliveryClaim => RuntimeCheckpointNames.ActivityAttemptClaimed,
+        BookmarkResumeCheckpointTransitionKind.StaleBookmarkConsumption => RuntimeCheckpointNames.BookmarkConsumed,
+        BookmarkResumeCheckpointTransitionKind.ActivitySuspension => RuntimeCheckpointNames.ActivitySuspended,
+        BookmarkResumeCheckpointTransitionKind.ActivityCompletion => RuntimeCheckpointNames.ActivityCompleted,
+        _ => throw new ArgumentOutOfRangeException(nameof(TransitionKind), TransitionKind, "Unknown bookmark resume checkpoint transition.")
+    };
+    public string? CommitDiscriminator { get; }
+    public ActivityExecutionState ActivityExecutionState { get; }
+    public IReadOnlyCollection<RuntimeSchedulerWorkItem> ContinuationWorkItems { get; }
     public IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> ValueSnapshots { get; }
 
     /// <summary>
     /// Durable-value changes (e.g. the resume callback's workflow-scope variable write-back, #286/#310) to commit
-    /// atomically with the bookmark-consumed checkpoint. Mirrors how the invoke path folds
+    /// atomically with the selected resume transition checkpoint. Mirrors how the invoke path folds
     /// <c>RuntimeContainerScopeService.BuildWorkflowScopeWriteBackChanges</c> (engine package) output into its completion
     /// commit, so a variable a resume callback mutated is durably re-projected for downstream activities rather
     /// than being lost when the in-memory scope is discarded. Empty unless the resume callback mutated a variable.
     /// </summary>
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValueChanges { get; }
+
+    public static BookmarkConsumptionCheckpointRequest ForInitialTriggerClaim(
+        RuntimeSchedulerWorkItem resumeWorkItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        BookmarkState selectedBookmark,
+        ActivityExecutionState claimedState,
+        string attemptId,
+        IReadOnlyCollection<BookmarkState>? siblingBookmarks = null) =>
+        new(
+            BookmarkResumeCheckpointTransitionKind.InitialTriggerClaim,
+            resumeWorkItem,
+            resumePayload,
+            selectedBookmark,
+            siblingBookmarks,
+            claimedState,
+            [],
+            [],
+            [],
+            attemptId);
+
+    public static BookmarkConsumptionCheckpointRequest ForRedeliveryClaim(
+        RuntimeSchedulerWorkItem resumeWorkItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        ActivityExecutionState claimedState,
+        string attemptId) =>
+        new(
+            BookmarkResumeCheckpointTransitionKind.RedeliveryClaim,
+            resumeWorkItem,
+            resumePayload,
+            null,
+            null,
+            claimedState,
+            [],
+            [],
+            [],
+            attemptId);
+
+    public static BookmarkConsumptionCheckpointRequest ForStaleBookmarkConsumption(
+        RuntimeSchedulerWorkItem resumeWorkItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        BookmarkState bookmark,
+        ActivityExecutionState completedState,
+        RuntimeSchedulerWorkItem completionWorkItem) =>
+        new(
+            BookmarkResumeCheckpointTransitionKind.StaleBookmarkConsumption,
+            resumeWorkItem,
+            resumePayload,
+            bookmark,
+            null,
+            completedState,
+            [completionWorkItem],
+            [],
+            [],
+            null);
+
+    public static BookmarkConsumptionCheckpointRequest ForSuspension(
+        RuntimeSchedulerWorkItem resumeWorkItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        ActivityExecutionState suspendedState,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> bookmarkCreationWorkItems,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null) =>
+        new(
+            BookmarkResumeCheckpointTransitionKind.ActivitySuspension,
+            resumeWorkItem,
+            resumePayload,
+            null,
+            null,
+            suspendedState,
+            bookmarkCreationWorkItems,
+            valueSnapshots ?? [],
+            durableValueChanges ?? [],
+            null);
+
+    public static BookmarkConsumptionCheckpointRequest ForCompletion(
+        RuntimeSchedulerWorkItem resumeWorkItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        ActivityExecutionState completedState,
+        RuntimeSchedulerWorkItem completionWorkItem,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null) =>
+        new(
+            BookmarkResumeCheckpointTransitionKind.ActivityCompletion,
+            resumeWorkItem,
+            resumePayload,
+            null,
+            null,
+            completedState,
+            [completionWorkItem],
+            valueSnapshots ?? [],
+            durableValueChanges ?? [],
+            null);
+
+    private static void ValidateOwnedBookmark(
+        string workflowExecutionId,
+        ActivityExecutionState state,
+        BookmarkState bookmark,
+        string parameterName)
+    {
+        if (!StringComparer.Ordinal.Equals(bookmark.WorkflowExecutionId, workflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(bookmark.ActivityExecutionId, state.Execution.ActivityExecutionId) ||
+            !StringComparer.Ordinal.Equals(bookmark.ExecutableNodeId, state.Execution.ExecutableNodeId))
+            throw new ArgumentException("Every retired sibling bookmark must belong to the resumed activity execution.", parameterName);
+
+    }
 
     private static void ValidateBookmarkMatchesResumePayload(
         string workflowExecutionId,
@@ -121,11 +296,20 @@ public sealed class BookmarkConsumptionCheckpointRequest
     }
 }
 
+public enum BookmarkResumeCheckpointTransitionKind
+{
+    InitialTriggerClaim,
+    RedeliveryClaim,
+    StaleBookmarkConsumption,
+    ActivitySuspension,
+    ActivityCompletion
+}
+
 public sealed record BookmarkConsumptionCheckpointResult(
     string CommitId,
     string CheckpointId,
+    string CheckpointName,
     RuntimeCheckpointCommitResult CommitResult)
 {
-    public string CheckpointName => RuntimeCheckpointNames.BookmarkConsumed;
     public RuntimeCheckpointPersistenceDecision PersistenceDecision => CommitResult.PersistenceDecision;
 }

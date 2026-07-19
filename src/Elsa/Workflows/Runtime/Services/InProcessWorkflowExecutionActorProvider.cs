@@ -11,8 +11,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     public const string ProviderName = nameof(InProcessWorkflowExecutionActorProvider);
     public const int DefaultMaxProcessedIdempotencyKeysPerAgent = 4096;
 
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _lifecycleLocks = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, InProcessWorkflowExecutionActor> _agents = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<ActorKey, SemaphoreSlim> _lifecycleLocks = new();
+    private readonly ConcurrentDictionary<ActorKey, InProcessWorkflowExecutionActor> _agents = new();
     private readonly IWorkflowExecutionCommandExecutor _commandProcessor;
     private readonly int _maxProcessedIdempotencyKeysPerAgent;
     private long _activationCounter;
@@ -50,13 +50,19 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
         if (unsupportedCapabilities != WorkflowExecutionActorCapabilities.None)
             throw new NotSupportedException($"The in-process workflow execution agent provider does not support required capabilities: {unsupportedCapabilities}.");
 
-        var lifecycleLock = await AcquireLifecycleLockAsync(request.WorkflowExecutionId, cancellationToken);
+        var actorKey = ActorKey.From(request);
+        var lifecycleLock = await AcquireLifecycleLockAsync(actorKey, cancellationToken);
         try
         {
-            var agent = _agents.GetOrAdd(request.WorkflowExecutionId, workflowExecutionId =>
+            var agent = _agents.GetOrAdd(actorKey, key =>
             {
                 var activationId = Interlocked.Increment(ref _activationCounter);
-                return new InProcessWorkflowExecutionActor(workflowExecutionId, activationId, _commandProcessor, _maxProcessedIdempotencyKeysPerAgent);
+                return new InProcessWorkflowExecutionActor(
+                    key.WorkflowExecutionId,
+                    request.Partition,
+                    activationId,
+                    _commandProcessor,
+                    _maxProcessedIdempotencyKeysPerAgent);
             });
 
             return agent;
@@ -71,13 +77,14 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var lifecycleLock = await AcquireLifecycleLockAsync(request.WorkflowExecutionId, cancellationToken);
+        var actorKey = ActorKey.From(request);
+        var lifecycleLock = await AcquireLifecycleLockAsync(actorKey, cancellationToken);
         try
         {
-            if (_agents.TryGetValue(request.WorkflowExecutionId, out var agent))
+            if (_agents.TryGetValue(actorKey, out var agent))
             {
                 await agent.PassivateAsync(request, cancellationToken);
-                _agents.TryRemove(KeyValuePair.Create(request.WorkflowExecutionId, agent));
+                _agents.TryRemove(KeyValuePair.Create(actorKey, agent));
             }
 
             // Drop the per-execution lifecycle lock so the dictionary does not grow with every distinct workflow
@@ -91,7 +98,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             // ObjectDisposedException for any activation still parked on this instance (the classic
             // dispose-out-from-under-a-waiter race), so we rely on the release-and-retry chain in
             // AcquireLifecycleLockAsync rather than explicit disposal.
-            _lifecycleLocks.TryRemove(KeyValuePair.Create(request.WorkflowExecutionId, lifecycleLock));
+            _lifecycleLocks.TryRemove(KeyValuePair.Create(actorKey, lifecycleLock));
         }
         finally
         {
@@ -110,14 +117,14 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     // acquiring: only the instance that is still the registered (canonical) lock for the id is accepted; a stale
     // instance is released and the acquisition retried so every caller rendezvous on the single current lock. The
     // holder of the canonical lock is the only party that can remove it, so it cannot be pulled out mid-critical-section.
-    private async ValueTask<SemaphoreSlim> AcquireLifecycleLockAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    private async ValueTask<SemaphoreSlim> AcquireLifecycleLockAsync(ActorKey actorKey, CancellationToken cancellationToken)
     {
         while (true)
         {
-            var lifecycleLock = _lifecycleLocks.GetOrAdd(workflowExecutionId, _ => new SemaphoreSlim(1, 1));
+            var lifecycleLock = _lifecycleLocks.GetOrAdd(actorKey, _ => new SemaphoreSlim(1, 1));
             await lifecycleLock.WaitAsync(cancellationToken);
 
-            if (_lifecycleLocks.TryGetValue(workflowExecutionId, out var current) && ReferenceEquals(current, lifecycleLock))
+            if (_lifecycleLocks.TryGetValue(actorKey, out var current) && ReferenceEquals(current, lifecycleLock))
                 return lifecycleLock;
 
             // The instance we acquired was removed by a concurrent passivation (and possibly replaced). Release it —
@@ -133,15 +140,22 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
         private readonly Queue<string> _processedIdempotencyKeyOrder = new();
         private readonly IWorkflowExecutionCommandExecutor _commandProcessor;
         private readonly string _workflowExecutionId;
+        private readonly WorkflowExecutionPartition _partition;
         private readonly string _agentId;
         private readonly DateTimeOffset _activatedAt;
         private readonly object _statusLock = new();
         private readonly int _maxProcessedIdempotencyKeys;
         private WorkflowExecutionActorStatus _status = WorkflowExecutionActorStatus.Active;
 
-        public InProcessWorkflowExecutionActor(string workflowExecutionId, long activationId, IWorkflowExecutionCommandExecutor commandProcessor, int maxProcessedIdempotencyKeys)
+        public InProcessWorkflowExecutionActor(
+            string workflowExecutionId,
+            WorkflowExecutionPartition partition,
+            long activationId,
+            IWorkflowExecutionCommandExecutor commandProcessor,
+            int maxProcessedIdempotencyKeys)
         {
             _workflowExecutionId = workflowExecutionId;
+            _partition = partition;
             _agentId = $"inprocess:{workflowExecutionId}:{activationId}";
             _activatedAt = DateTimeOffset.UtcNow;
             _commandProcessor = commandProcessor;
@@ -183,6 +197,9 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             {
                 if (!string.Equals(envelope.WorkflowExecutionId, _workflowExecutionId, StringComparison.Ordinal))
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Rejected, "Envelope workflow execution ID does not match this agent.");
+
+                if (envelope.Partition != _partition)
+                    return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Rejected, "Envelope persistence scope does not match this agent.");
 
                 if (Status != WorkflowExecutionActorStatus.Active)
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Deferred, "In-process workflow execution agent is passivated.");
@@ -270,5 +287,14 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                 recordedAt: DateTimeOffset.UtcNow,
                 reason: reason,
                 metadata: metadata);
+    }
+
+    private readonly record struct ActorKey(string Partition, string WorkflowExecutionId)
+    {
+        public static ActorKey From(WorkflowExecutionActorActivationRequest request) =>
+            new(request.Partition.Value, request.WorkflowExecutionId);
+
+        public static ActorKey From(WorkflowExecutionActorPassivationRequest request) =>
+            new(request.Partition.Value, request.WorkflowExecutionId);
     }
 }

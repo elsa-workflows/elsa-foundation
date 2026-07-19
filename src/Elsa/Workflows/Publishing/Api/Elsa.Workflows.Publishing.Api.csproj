@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <!--
-    The bridge feature. It depends DOWN on two seams' .Core contracts and connects them:
+    The bridge feature. It depends DOWN on stable Design and Runtime contracts and connects them:
       - the Design seam:  Elsa.Activities.Design.Core / .Persistence.Core (read the catalog row)
-      - the Runtime seam: Elsa.Activities.Runtime.Core               (IActivityFactory construction)
+      - the Runtime seam: Elsa.Activities.Runtime.Core               (compile pinned activity contracts)
     It references NEITHER the Runtime impl (Elsa.Activities.Runtime) NOR any *.Api feature, which is
     exactly why §E2.2 (Runtime must not depend on Design) is preserved — the bridge is a third party.
   -->
@@ -20,9 +20,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\..\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
     <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />

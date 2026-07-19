@@ -13,9 +13,24 @@ public interface IExecutionLivenessStateStore
     ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Conditionally creates or replaces operational state. Revision <c>0</c> means create-only; a positive revision
+    /// means compare-and-swap against the current provider revision.
+    /// </summary>
+    ValueTask<ExecutionLivenessStateWriteResult> TrySaveAsync(
+        ExecutionLivenessState state,
+        long expectedRevision,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns operational state for the given workflow execution ID and operational state ID, or <see langword="null"/> if not found.
     /// </summary>
     ValueTask<ExecutionLivenessState?> FindAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns operational state together with its provider-neutral optimistic-concurrency revision.</summary>
+    ValueTask<VersionedExecutionLivenessState?> FindVersionedAsync(
+        string workflowExecutionId,
+        string operationalStateId,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns all operational states for the given workflow execution ID.

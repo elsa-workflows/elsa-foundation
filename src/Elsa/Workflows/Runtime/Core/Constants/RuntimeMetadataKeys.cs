@@ -8,13 +8,40 @@ public static class RuntimeMetadataKeys
     public const string CheckpointRequirement = "runtime.checkpointRequirement";
     public const string CheckpointRequirementMandatory = "Mandatory";
     public const string ActivityExecutionId = "runtime.activityExecutionId";
+    /// <summary>
+    /// Attempt identity durably claimed by an InvokeActivity delivery before CLR activation. If the same open
+    /// attempt is still claimed when the work item is redelivered, the runtime closes it and commits a fresh retry
+    /// attempt before constructing another CLR activity instance.
+    /// </summary>
+    public const string ActivityAttemptActivationClaim = "runtime.activityAttemptActivationClaim";
+    /// <summary>Scheduler work item that owns the active attempt claim, used to distinguish redelivery from a duplicate command.</summary>
+    public const string ActivityAttemptActivationClaimWorkItemId = "runtime.activityAttemptActivationClaimWorkItemId";
+    /// <summary>
+    /// Scheduler work item whose initial activity activation durably completed. An invocation has exactly one
+    /// initial activation, so this marker remains constant-size for the invocation lifetime.
+    /// </summary>
+    public const string ActivityActivationCompletedWorkItemId = "runtime.activityActivationCompletedWorkItemId";
+    /// <summary>
+    /// Scheduler work item that durably processed a completed child notification. Stored on the completed child,
+    /// which owns exactly one parent-completion notification, instead of in an append-only parent history.
+    /// </summary>
+    public const string ParentCompletionProcessedWorkItemId = "runtime.parentCompletionProcessedWorkItemId";
+    /// <summary>Highest activity-attempt ordinal allocated before bounded diagnostic-history compaction.</summary>
+    public const string ActivityAttemptOrdinalHighWatermark = "runtime.activityAttemptOrdinalHighWatermark";
     public const string BookmarkId = "runtime.bookmarkId";
     public const string CheckpointReason = "runtime.checkpointReason";
+    public const string CancellationReason = "runtime.cancellationReason";
     public const string ChildExecutableNodeId = "runtime.childExecutableNodeId";
     public const string ChildFaulted = "runtime.childFaulted";
+    public const string CausalActivityExecutionId = "runtime.causalActivityExecutionId";
+    public const string CausalExecutableNodeId = "runtime.causalExecutableNodeId";
+    public const string CausalIncidentId = "runtime.causalIncidentId";
+    public const string CausationKind = "runtime.causationKind";
     public const string CommandId = "runtime.commandId";
     public const string CommandKind = "runtime.commandKind";
     public const string CompletedChildActivityExecutionId = "runtime.completedChildActivityExecutionId";
+    public const string DispatchId = "runtime.dispatchId";
+    public const string ChildWorkflowExecutionId = "runtime.childWorkflowExecutionId";
     public const string CreateBookmarkSchedulerWorkItemId = "runtime.createBookmarkSchedulerWorkItemId";
     public const string ExecutableArtifactHash = "runtime.executableArtifactHash";
     public const string ExecutableArtifactId = "runtime.executableArtifactId";
@@ -32,6 +59,7 @@ public static class RuntimeMetadataKeys
     public const string InvokeSchedulerWorkItemId = "runtime.invokeSchedulerWorkItemId";
     public const string InvokeSkipped = "runtime.invokeSkipped";
     public const string OutputName = "runtime.outputName";
+    public const string StorageDriverKey = "runtime.storageDriverKey";
 
     /// <summary>
     /// Passive correlation identifier threaded through stimulus routing (W7). Stamped as metadata on bookmarks,
@@ -39,6 +67,7 @@ public static class RuntimeMetadataKeys
     /// engine owning a correlation subsystem. Absent when no correlation was supplied.
     /// </summary>
     public const string CorrelationId = "runtime.correlationId";
+    public const string WorkflowDispatchId = "runtime.workflowDispatchId";
 
     /// <summary>
     /// Operational-state metadata key carrying the highest execution-ownership fencing token ever issued for a
@@ -49,10 +78,9 @@ public static class RuntimeMetadataKeys
     public const string OwnershipFencingToken = "runtime.ownership.fencingToken";
 
     /// <summary>
-    /// System-metadata key on a workflow execution carrying the workflow instance name (#260). Set by the
-    /// <c>SetName</c> leaf control activity through <see cref="Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionContext.SetInstanceName"/>;
-    /// the engine folds it into the activity-completed checkpoint's workflow-execution state change, mirroring
-    /// how the correlation id is persisted. Absent when no name has been assigned.
+    /// System-metadata key on a workflow execution carrying the workflow instance name (#260). The compiled
+    /// <c>SetInstanceName</c> workflow intrinsic folds it into the intrinsic-completed checkpoint's
+    /// workflow-execution state change. Absent when no name has been assigned.
     /// </summary>
     public const string InstanceName = "runtime.instanceName";
 
@@ -69,7 +97,7 @@ public static class RuntimeMetadataKeys
 
     /// <summary>
     /// Metadata key on a durable value carrying a workflow variable value. Its presence marks the durable
-    /// value as a persisted workflow variable (rather than an activity output capture) and its value is the
+    /// value as a persisted workflow variable and its value is the
     /// variable name, mirroring how <see cref="OutputName"/> tags activity-output durable values. Read by
     /// <c>RuntimeInputBindingStateProjection.ProjectWorkflowVariables</c> (engine package)
     /// to rebuild the <c>variables.*</c> snapshot for input materialization.
@@ -99,8 +127,8 @@ public static class RuntimeMetadataKeys
     /// dedicated, spoof-proof channel — deliberately distinct from <see cref="InputName"/>: the trigger-node
     /// identity never shares the workflow-input namespace, so it cannot collide with an author-declared input
     /// and cannot be injected through the caller-facing inputs bag of the execute API. A mid-flow HttpEndpoint
-    /// reads it (via <see cref="Elsa.Workflows.Runtime.Core.Contracts.IExecutionExpressionState.TriggerNodeId"/>)
-    /// to tell whether it is the node that triggered this run and so should complete rather than suspend. Read by
+    /// receives it as typed invocation identity to tell whether it is the node that triggered this run and so
+    /// should complete rather than suspend. Read by
     /// <c>RuntimeInputBindingStateProjection.ProjectTriggerNodeId</c>. Absent for direct (non-stimulus) runs.
     /// </summary>
     public const string TriggerNodeId = "runtime.triggerNodeId";
@@ -109,10 +137,19 @@ public static class RuntimeMetadataKeys
     /// read projection (#254 Seam R1): <c>RuntimeWorkflowOutputStateProjection</c> (engine package)
     /// threads it as <c>IsSensitive</c> into the <c>IRuntimePayloadCapturePolicy</c> consult, so a sensitive-marked
     /// output surfaces on the read edge as an explicit redacted marker even under a payload-capturing policy.
-    /// Nothing writes this key yet — <c>SetWorkflowOutput</c> carries no sensitivity channel — it is the reserved
-    /// read-side contract for when a producer does.
+    /// The canonical <c>SetOutput</c> intrinsic carries sensitivity in its role-owned value envelope; this key
+    /// remains the compatibility read-side marker for older durable-value records.
     /// </summary>
     public const string IsSensitive = "runtime.isSensitive";
+
+    /// <summary>Compatibility metadata used when a role-owned envelope is projected from legacy durable-value state.</summary>
+    public const string RequiresEncryption = "runtime.requiresEncryption";
+
+    /// <summary>Compatibility metadata used when a role-owned envelope is projected from legacy durable-value state.</summary>
+    public const string RedactionMode = "runtime.redactionMode";
+
+    /// <summary>Compatibility metadata used when a role-owned envelope is projected from legacy durable-value state.</summary>
+    public const string RetentionPolicy = "runtime.retentionPolicy";
 
     public const string ParentActivityExecutionId = "runtime.parentActivityExecutionId";
 
@@ -153,12 +190,30 @@ public static class RuntimeMetadataKeys
     public const string ParentCompletionReason = "runtime.parentCompletionReason";
     public const string ParentCompletionSchedulerWorkItemId = "runtime.parentCompletionSchedulerWorkItemId";
     public const string PinnedArtifactId = "runtime.pinnedArtifactId";
+    public const string PinnedArtifactVersion = "runtime.pinnedArtifactVersion";
+    public const string PinnedArtifactHash = "runtime.pinnedArtifactHash";
+    public const string SourceReferenceId = "runtime.sourceReferenceId";
+    public const string BoundaryInputName = "runtime.boundaryInputName";
+    public const string BoundaryExecutionScopeId = "runtime.boundaryExecutionScopeId";
+    public const string BoundaryValueRole = "runtime.boundaryValueRole";
+    public const string BoundaryReferenceKey = "runtime.boundaryReferenceKey";
+    public const string RetrySourceActivityExecutionId = "runtime.retrySourceActivityExecutionId";
+    public const string RetryReason = "runtime.retryReason";
+    public const string ScopeCancellationReason = "runtime.scopeCancellationReason";
     public const string Reason = "runtime.reason";
     public const string ResumeReason = "runtime.resumeReason";
     public const string ResumeSchedulerWorkItemId = "runtime.resumeSchedulerWorkItemId";
     public const string ResumeTargetId = "runtime.resumeTargetId";
     public const string ScheduleReason = "runtime.scheduleReason";
     public const string SchedulerWorkItemId = "runtime.schedulerWorkItemId";
+    /// <summary>Retry mode the domain retry policy decided for a poisoned scheduler work item.</summary>
+    public const string SchedulerPoisonRetryMode = "runtime.poison.retryMode";
+    /// <summary>Reason the domain retry policy gave for its poison retry decision.</summary>
+    public const string SchedulerPoisonRetryReason = "runtime.poison.retryReason";
+    /// <summary>Handler whose dispatch fault poisoned the scheduler work item.</summary>
+    public const string SchedulerPoisonHandlerName = "runtime.poison.handlerName";
+    /// <summary>Number of dispatch failures recorded for the poisoned scheduler work item.</summary>
+    public const string SchedulerPoisonFailureCount = "runtime.poison.failureCount";
     public const string StartReason = "runtime.startReason";
     public const string StartSchedulerWorkItemId = "runtime.startSchedulerWorkItemId";
     public const string StimulusHash = "runtime.stimulusHash";

@@ -14,7 +14,7 @@ public sealed class ExecuteWorkflowRequestHandler(
     : IRequestHandler<ExecuteWorkflow, WorkflowExecutionStartDispatchView>
 {
     private const string RequestedBy = "runtime-api";
-    private static readonly RuntimeVariableScopeFactory ScopeFactory = new();
+    private static readonly RuntimeVariableDeclarationProjector VariableDeclarations = new();
 
     public async Task<WorkflowExecutionStartDispatchView> Handle(ExecuteWorkflow request, CancellationToken cancellationToken)
     {
@@ -25,7 +25,7 @@ public sealed class ExecuteWorkflowRequestHandler(
         var executable = await executableStore.FindAsync(request.ArtifactId, cancellationToken);
         var variables = executable is null
             ? EmptyVariables
-            : ScopeFactory.ProjectDeclaredVariableDefaultsByName(executable.RootActivity);
+            : VariableDeclarations.ProjectDeclaredVariableDefaultsByName(executable.RootActivity);
 
         // Caller-supplied workflow inputs (#286): threaded into the start dispatch so `input.*` expressions
         // resolve to them in production. Unlike variables (which carry authored defaults), inputs have no
@@ -33,7 +33,16 @@ public sealed class ExecuteWorkflowRequestHandler(
         var inputs = ToInputValues(request.Inputs);
 
         var result = await startDispatcher.DispatchAsync(
-            new WorkflowExecutionStartDispatchRequest(request.ArtifactId, RequestedBy, variables: variables, inputs: inputs),
+            new WorkflowExecutionStartDispatchRequest(
+                request.ArtifactId,
+                RequestedBy,
+                variables: variables,
+                inputs: inputs,
+                runKind: WorkflowRunKind.PublishedRun,
+                sourceSelection: request.SourceReferenceId is null
+                    ? null
+                    : new WorkflowExecutableSourceSelection(sourceReferenceId: request.SourceReferenceId),
+                provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference),
             cancellationToken: cancellationToken);
         return WorkflowExecutionStartDispatchView.From(result);
     }

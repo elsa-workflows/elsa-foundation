@@ -3,15 +3,15 @@ using Elsa.Workflows.Runtime.Distributed.Models;
 namespace Elsa.Workflows.Runtime.Distributed.Contracts;
 
 /// <summary>
-/// Durable, cluster-shared store of execution placement leases. This is the atomicity boundary for placement: a shared
-/// instance (one per cluster; in tests, one instance shared by both node containers) applies <see cref="TryClaimAsync"/>
-/// as a compare-and-swap so two nodes cannot both hold a live placement lease for the same execution. The per-node
-/// <see cref="IExecutionPlacementService"/> supplies policy (node id, lease duration) on top of this store.
+/// Durable, cluster-shared placement authority for execution leases. This is the atomicity boundary for placement:
+/// implementations coordinate through shared backing state or storage and apply <see cref="TryClaimAsync"/> as a
+/// compare-and-swap so two nodes cannot both hold a live placement lease for the same execution. The per-node
+/// <see cref="IExecutionPlacementService"/> supplies policy (node id, lease duration) on top of this contract.
 /// </summary>
 /// <remarks>
 /// Placement is routing, not correctness — see <see cref="ExecutionPlacementLease"/>. A default in-memory
-/// implementation ships for single-process and the two-node test harness; a durable (e.g. Groundwork) implementation is
-/// a named follow-up and drops in behind this contract without touching Runtime.Core.
+/// implementation ships for single-process composition and the two-node test harness. The opt-in Groundwork persistence
+/// feature supplies a durable implementation behind this contract without touching Runtime.Core.
 /// </remarks>
 public interface IExecutionPlacementStore
 {
@@ -31,6 +31,27 @@ public interface IExecutionPlacementStore
     /// </summary>
     ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default);
 
-    /// <summary>Lists all currently stored placement leases (used by a node's pump to discover the executions it owns).</summary>
-    ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Returns at most <see cref="ExecutionPlacementLeaseListRequest.Take"/> live leases held by one owner, ordered by
+    /// expiry and workflow execution id so renewal work remains deterministic and finite.
+    /// </summary>
+    ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(
+        ExecutionPlacementLeaseListRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class ExecutionPlacementLeaseListRequest
+{
+    public ExecutionPlacementLeaseListRequest(string ownerId, DateTimeOffset now, int take = 100)
+    {
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
+
+        OwnerId = ownerId;
+        Now = now;
+        Take = DistributedRuntimeQueryLimits.ValidateTake(take, nameof(take));
+    }
+
+    public string OwnerId { get; }
+    public DateTimeOffset Now { get; }
+    public int Take { get; }
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Api;
@@ -43,7 +44,7 @@ public sealed class GroundworkDurableResumptionCrashTests
     [Fact]
     public async Task WindowA_CrashBeforeOutboxDelivery_ResumptionConvergesToControlState()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var controlSnapshot = await RunControlAsync(manifest);
         Assert.NotEmpty(controlSnapshot);
 
@@ -87,7 +88,7 @@ public sealed class GroundworkDurableResumptionCrashTests
     [Fact]
     public async Task WindowB_CrashAfterOutboxDeliveryBeforeDrain_ResumptionConvergesToControlState()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var controlSnapshot = await RunControlAsync(manifest);
         Assert.NotEmpty(controlSnapshot);
 
@@ -127,10 +128,12 @@ public sealed class GroundworkDurableResumptionCrashTests
         }
     }
 
+    // Historical baseline identity retained for the architecture ratchet. "Dequeue" now means acquisition of a
+    // renewable claim; the test restarts after that abandoned claim expires and verifies fenced redelivery.
     [Fact]
     public async Task WindowC_CrashAfterDequeueBeforeCheckpoint_ResumptionConvergesToControlState()
     {
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var controlSnapshot = await RunControlAsync(manifest);
         Assert.NotEmpty(controlSnapshot);
 
@@ -143,6 +146,8 @@ public sealed class GroundworkDurableResumptionCrashTests
         // and this window was unrecoverable at item granularity.)
         await using (var crashed = BuildProvider(store, services =>
         {
+            UseFixedTime(services, Now);
+
             // Manual decoration (Scrutor's Decorate is not referenced here): capture the durable writer type registered
             // by AddGroundworkRuntimeStores and wrap it so the FIRST commit throws OperationCanceledException.
             var innerDescriptor = services.Single(descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
@@ -166,9 +171,10 @@ public sealed class GroundworkDurableResumptionCrashTests
             Assert.NotEqual(controlSnapshot, crashedSnapshot);
         }
 
-        // Generation 2: honest services over the surviving store. The sweep discovers the durable backlog and re-drives
-        // the handler idempotently to the terminal state, draining the queue.
-        await using (var recovered = BuildProvider(store))
+        // Generation 2: honest services over the surviving store after the abandoned claim's visibility timeout. The
+        // sweep discovers the durable backlog, reclaims it with a higher fencing token, and re-drives the handler
+        // idempotently to the terminal state.
+        await using (var recovered = BuildProvider(store, services => UseFixedTime(services, Now.AddMinutes(2))))
         {
             var sweep = ResolveResumptionService(recovered);
             await sweep.SweepAsync(new RuntimeResumptionSweepRequest());
@@ -199,6 +205,12 @@ public sealed class GroundworkDurableResumptionCrashTests
         services.AddGroundworkRuntimeStores();
         customize?.Invoke(services);
         return services.BuildServiceProvider();
+    }
+
+    private static void UseFixedTime(IServiceCollection services, DateTimeOffset now)
+    {
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(now));
     }
 
     private static async Task SeedAndStartAsync(ServiceProvider provider)
@@ -269,10 +281,8 @@ public sealed class GroundworkDurableResumptionCrashTests
             authoredActivityId: "authored-node-start",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
         return new(
@@ -301,6 +311,11 @@ public sealed class GroundworkDurableResumptionCrashTests
 
             return inner.CommitAsync(commit, decision, cancellationToken);
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     // Simulates a crash between checkpoint commit and post-commit outbox delivery: the outbox row is

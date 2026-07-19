@@ -9,6 +9,5 @@ public sealed record WorkflowDefinitionStateView(
     ActivityNode? RootActivity = null,
     IEnumerable<InputDefinition>? Inputs = null,
     IEnumerable<OutputDefinition>? Outputs = null,
-    WorkflowActivityOptions? WorkflowActivityOptions = null,
     WorkflowStrategyOptions? StrategyOptions = null
 );

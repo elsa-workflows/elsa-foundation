@@ -1,6 +1,5 @@
 ﻿using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Models;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript.Services;
 
@@ -10,8 +9,7 @@ internal class JavaScriptExpressionDescriptorProvider : IExpressionDescriptorPro
     {
         yield return new JavaScriptExpressionDescriptor()
         {
-            DisplayName = "JavaScript",
-            HandlerFactory = ActivatorUtilities.GetServiceOrCreateInstance<JavaScriptExpressionHandler>
+            DisplayName = "JavaScript"
         };
     }
 }

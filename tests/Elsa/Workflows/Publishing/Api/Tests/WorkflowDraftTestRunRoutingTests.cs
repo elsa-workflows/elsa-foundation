@@ -17,6 +17,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// over the parameterized <c>workflows/{versionId}/test-runs</c> route. Both endpoints are hosted
 /// through FastEndpoints (exactly as in production) so the test exercises the real route matcher.
 /// </summary>
+[Collection(nameof(WorkflowDraftTestRunRoutingTests))]
 public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
 {
     private const string DraftPath = "/publishing/workflows/drafts/test-runs";
@@ -31,7 +32,15 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton<IRequestSender>(_sender);
-        builder.Services.AddFastEndpoints(o => o.Assemblies = [typeof(StartWorkflowTestRun).Assembly]);
+        builder.Services.AddFastEndpoints(o =>
+        {
+            o.Assemblies = [typeof(StartWorkflowTestRun).Assembly];
+            // This narrowly scoped route-selection host needs only the two test-run endpoints. Keeping discovery
+            // explicit prevents unrelated management endpoints in the same feature assembly from pulling their
+            // production services into a matcher-only test.
+            o.Filter = type => type.Name is "Start" or "StartDraft" &&
+                               type.Namespace == "Elsa.Workflows.Publishing.Api.Endpoints.TestRuns";
+        });
 
         _app = builder.Build();
         // This test exercises route matching only; relax endpoint security the FastEndpoints way
@@ -132,4 +141,8 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
             return Task.FromResult((T)(object)view);
         }
     }
+
 }
+
+[CollectionDefinition(nameof(WorkflowDraftTestRunRoutingTests), DisableParallelization = true)]
+public sealed class WorkflowDraftTestRunRoutingTestCollection;

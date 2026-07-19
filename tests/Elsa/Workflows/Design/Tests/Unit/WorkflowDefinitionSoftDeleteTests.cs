@@ -153,6 +153,20 @@ public sealed class WorkflowDefinitionSoftDeleteTests
         }
     }
 
+    [Fact]
+    public async Task Permanent_delete_command_rejects_an_active_definition()
+    {
+        using var host = WorkflowsDesignTestHost.Create();
+        var definitionId = await Submit(host, "Keep active");
+        using var scope = host.Services.CreateScope();
+        var delete = scope.ServiceProvider.GetRequiredService<IDeleteWorkflowDefinitionPermanentlyCommand>();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => delete.Execute(definitionId));
+
+        await using var ctx = host.CreateContext();
+        Assert.True(await ctx.WorkflowDefinitions.AnyAsync(x => x.Id == definitionId));
+    }
+
     private static async Task<string> Submit(WorkflowsDesignTestHost host, string name)
     {
         using var scope = host.Services.CreateScope();
@@ -162,7 +176,6 @@ public sealed class WorkflowDefinitionSoftDeleteTests
             RootActivity: new ActivityNode("root", "activity-version-1", [], []),
             Inputs: [],
             Outputs: [],
-            WorkflowActivityOptions: null,
             StrategyOptions: null));
 
         return submitted.DefinitionId;

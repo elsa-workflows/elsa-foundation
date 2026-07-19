@@ -1,5 +1,7 @@
 # Feature Specification: Runtime Value Binding Contract
 
+> **Current status (2026-07-16): superseded by [spec 095](../095-value-flow-redesign/spec.md).** Active/latest output lookup, generic durable/reference bindings, and output registers were removed. Canonical inputs use role-owned literal, workflow-request, variable-read, causal activity-result, or portable-expression bindings.
+
 **Feature Branch**: `codex/runtime-value-binding-contract`
 **Created**: 2026-06-10
 **Input**: Slice 6 from `docs/reports/elsa-4-runtime-execution-action-plan.md`

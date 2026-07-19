@@ -24,11 +24,10 @@ public sealed class InMemoryWorkflowRunHealthDataSource(
         var totals = new MutableCounts();
         var running = 0;
 
-        foreach (var execution in executionSnapshot)
+        foreach (var execution in executionSnapshot.Where(execution =>
+                     StringComparer.Ordinal.Equals(execution.TenantId, query.TenantId) &&
+                     (query.IncludeTestRuns || execution.RunKind != WorkflowRunKind.TestRun)))
         {
-            if (!StringComparer.Ordinal.Equals(execution.TenantId, query.TenantId) ||
-                (!query.IncludeTestRuns && execution.Origin == WorkflowExecutionOrigin.TestRun))
-                continue;
             if (execution.Status == WorkflowExecutionStatus.Running)
                 running++;
             if (execution.StartedAt is not { } started || started < query.From || started >= query.To)
@@ -43,10 +42,9 @@ public sealed class InMemoryWorkflowRunHealthDataSource(
         }
 
         var incidentBearing = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var incident in incidentSnapshot)
+        foreach (var incident in incidentSnapshot.Where(incident => relevant.ContainsKey(incident.WorkflowExecutionId)))
         {
-            if (!relevant.TryGetValue(incident.WorkflowExecutionId, out var bucket))
-                continue;
+            var bucket = relevant[incident.WorkflowExecutionId];
             totals.IncidentCount++;
             bucket.Counts.IncidentCount++;
             if (!incidentBearing.Add(incident.WorkflowExecutionId))

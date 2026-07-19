@@ -1,9 +1,11 @@
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Dashboard.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.Scoping;
 using Groundwork.Documents.Scoping;
 using Groundwork.Sqlite.Documents;
 using Microsoft.Data.Sqlite;
@@ -16,17 +18,20 @@ public sealed class GroundworkWorkflowRunHealthDataSourceTests
     [Fact]
     public async Task SqliteAdapterPagesPastOneHundredExecutionsAndReturnsTheirIncidentsExactly()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-dashboard-{Guid.NewGuid():N}.db");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-dashboard-{Guid.NewGuid():N}.db");
         try
         {
             var store = await SqliteDocumentStoreFactory.CreateAsync(
                 $"Data Source={path}",
                 ElsaRuntimeStorageManifest.Create(),
                 new ProviderIdentity("groundwork-sqlite", "1.0.0"),
-                DocumentStoreAccess.Global);
-            var serializer = new GroundworkRuntimeDocumentSerializer(
-                new GroundworkRuntimeDocumentUpcasterRegistry([new WorkflowExecutionStateV1ToV2Upcaster()]));
-            var executionStore = new GroundworkWorkflowExecutionStateStore(store, serializer);
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-a")));
+            var serializer = new GroundworkRuntimeDocumentSerializer();
+            var executionStore = new GroundworkWorkflowExecutionStateStore(
+                store,
+                serializer,
+                new FixedAccessContextAccessor(
+                    PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
             var incidentStore = new GroundworkIncidentStateStore(store, serializer);
 
             for (var index = 0; index < 125; index++)
@@ -52,6 +57,12 @@ public sealed class GroundworkWorkflowRunHealthDataSourceTests
         {
             File.Delete(path);
         }
+    }
+
+    private sealed class FixedAccessContextAccessor(PersistenceAccessContext current)
+        : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; } = current;
     }
 
     private static WorkflowExecutionState Execution(int index)

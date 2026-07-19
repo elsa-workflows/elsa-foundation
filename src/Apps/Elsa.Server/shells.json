@@ -6,13 +6,14 @@
         "Features": {
           "ActivitiesControlFlow": {},
           "ActivitiesDesignApi": {},
-          "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignReconciliation": {},
           "ActivitiesFlowchart": {},
           "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
+          "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesSequence": {},
+          "ApiCapabilities": {},
           "ClrActivityReconciliation": {
             "Options": {
               "FolderPath": ""
@@ -24,6 +25,7 @@
           "DiagnosticsStructuredLogsPersistenceEFCoreSqlite": {},
           "Events": {},
           "Expressions": {},
+          "ExpressionsApi": {},
           "FastEndpoints": {
             "EndpointRoutePrefix": ""
           },
@@ -59,7 +61,7 @@
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
-          "GroundworkRuntimePersistenceSqlite": {},
+          "GroundworkUnifiedPersistenceSqlite": {},
           "Http": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
@@ -138,20 +140,20 @@
           "SampleNuplaneActivities": {},
           "Secrets": {},
           "SecretsApi": {},
-          "SecretsAttention": {},
           "SecretsGroundworkPersistence": {},
           "Serialization": {},
           "AttentionApi": {},
           "ModularityAttention": {},
           "StudioPreferences": {},
           "StudioPreferencesApi": {},
+          "StudioPreferencesGroundworkPersistence": {},
           "Tasks": {},
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
           "WorkflowsDashboard": {},
           "WorkflowsRuntimeAttention": {},
-          "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {},
           "WorkflowsRuntimeHttp": {},
           "WorkflowsRuntimeCheckpointPersistence": {

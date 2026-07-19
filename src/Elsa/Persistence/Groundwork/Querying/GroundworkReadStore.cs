@@ -1,7 +1,10 @@
 using System.Linq.Expressions;
 using System.Text.Json;
 using Elsa.Persistence.Core.Queries;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Entities;
+using Groundwork.Core.Queries;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Querying;
@@ -27,64 +30,113 @@ namespace Elsa.Persistence.Groundwork.Querying;
 public class GroundworkReadStore<TEntity> where TEntity : Entity
 {
     private readonly IDocumentStore _store;
+    private readonly IBoundedDocumentStore? _boundedStore;
     private readonly string _documentKind;
-    private readonly string _collectionIndexName;
+    private readonly string _collectionQueryIdentity;
+    private readonly string _collectionFieldPath;
     private readonly string _collectionValue;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly IGroundworkStoreSessionFactory? _sessions;
 
     /// <param name="store">The provider-neutral document store the host wired to a concrete provider.</param>
     /// <param name="documentKind">The manifest document-kind backing <typeparamref name="TEntity"/>.</param>
-    /// <param name="collectionIndexName">The by-collection keyword index used to enumerate every document of the kind.</param>
+    /// <param name="collectionQueryIdentity">The admitted bounded route used to enumerate every document of the kind.</param>
+    /// <param name="collectionFieldPath">The constant-partition field constrained by the bounded route.</param>
     /// <param name="collectionValue">The constant partition value stamped on every document of the kind.</param>
     /// <param name="jsonOptions">Serialization settings whose camelCase output matches the declared index field names.</param>
     public GroundworkReadStore(
         IDocumentStore store,
         string documentKind,
-        string collectionIndexName,
+        string collectionQueryIdentity,
+        string collectionFieldPath,
         string collectionValue,
-        JsonSerializerOptions jsonOptions)
+        JsonSerializerOptions jsonOptions,
+        IBoundedDocumentStore? boundedStore = null,
+        IGroundworkStoreSessionFactory? sessions = null)
     {
         _store = store;
+        _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
         _documentKind = documentKind;
-        _collectionIndexName = collectionIndexName;
+        _collectionQueryIdentity = collectionQueryIdentity;
+        _collectionFieldPath = collectionFieldPath;
         _collectionValue = collectionValue;
         _jsonOptions = jsonOptions;
+        _sessions = sessions;
     }
 
     /// <summary>Executes <paramref name="query"/> and returns every matching entity.</summary>
     public async Task<IReadOnlyList<TEntity>> QueryAsync(Query<TEntity> query, CancellationToken cancellationToken = default)
     {
-        var candidates = await LoadAllAsync(cancellationToken);
-        return InMemoryQueryEvaluator.Apply(candidates, query).ToList();
+        ArgumentNullException.ThrowIfNull(query);
+        return await WithCandidatesAsync(
+            query,
+            candidates => InMemoryQueryEvaluator.Apply(candidates, query).ToList(),
+            cancellationToken);
     }
 
     /// <summary>Executes <paramref name="query"/> and returns the first matching entity, or <c>null</c>.</summary>
     public async Task<TEntity?> FirstOrDefaultAsync(Query<TEntity> query, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(query);
         // Fast path: a pure "by id" lookup maps to the document id, so a single point read avoids
-        // enumerating the collection.
-        if (TryGetIdEquality(query, out var id))
+        // enumerating the collection. Across-scope access must use an admitted bounded query because
+        // a point read has no explicit target partition.
+        if (!query.TenantAgnostic && TryGetIdEquality(query, out var id))
         {
             var envelope = await _store.LoadAsync(_documentKind, id, cancellationToken);
             return envelope is null ? null : Deserialize(envelope);
         }
 
-        var candidates = await LoadAllAsync(cancellationToken);
-        return InMemoryQueryEvaluator.Apply(candidates, query).FirstOrDefault();
+        return await WithCandidatesAsync(
+            query,
+            candidates => InMemoryQueryEvaluator.Apply(candidates, query).FirstOrDefault(),
+            cancellationToken);
     }
 
     /// <summary>Determines whether any entity matches <paramref name="query"/>.</summary>
     public async Task<bool> AnyAsync(Query<TEntity> query, CancellationToken cancellationToken = default)
         => await FirstOrDefaultAsync(query, cancellationToken) is not null;
 
-    private async Task<IReadOnlyList<TEntity>> LoadAllAsync(CancellationToken cancellationToken)
+    private async Task<TResult> WithCandidatesAsync<TResult>(
+        Query<TEntity> query,
+        Func<IReadOnlyList<TEntity>, TResult> evaluate,
+        CancellationToken cancellationToken)
     {
-        var envelopes = await _store.QueryAsync(
-            new DocumentStoreQuery(_documentKind, _collectionIndexName, _collectionValue),
+        if (!query.TenantAgnostic)
+            return evaluate(await LoadAllAsync(BoundedStore(), cancellationToken));
+
+        var sessions = _sessions ?? throw new InvalidOperationException(
+            $"Tenant-agnostic queries for '{_documentKind}' require an authorized Groundwork session factory.");
+        return await sessions.ExecutePrivilegedAcrossScopesAsync(
+            async (session, token) =>
+            {
+                if (session.Access.Kind != DocumentStoreAccessKind.PrivilegedAcrossScopes)
+                {
+                    throw new InvalidOperationException(
+                        "Tenant-agnostic persistence queries require explicit privileged across-scope access.");
+                }
+
+                return evaluate(await LoadAllAsync(session.BoundedDocumentStore, token));
+            },
             cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<TEntity>> LoadAllAsync(
+        IBoundedDocumentStore boundedStore,
+        CancellationToken cancellationToken)
+    {
+        var envelopes = (await boundedStore.QueryAsync(
+            new DocumentQuery(
+                _documentKind,
+                _collectionQueryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(_collectionFieldPath, _collectionValue))]),
+            cancellationToken)).Documents;
 
         return envelopes.Select(Deserialize).ToList();
     }
+
+    private IBoundedDocumentStore BoundedStore() => _boundedStore ?? throw new InvalidOperationException(
+        $"Queries for '{_documentKind}' require an admitted bounded document-store runtime.");
 
     private TEntity Deserialize(DocumentEnvelope envelope)
     {

@@ -1,0 +1,18 @@
+{
+  "application": {
+    "allowedGrantTypes": [
+      "client_credentials"
+    ],
+    "clientId": "client-1",
+    "displayName": "Workflow Client",
+    "id": "app-1",
+    "ownership": "Foundation",
+    "scopes": [
+      "workflows:run"
+    ],
+    "tenantId": "tenant-1",
+    "type": "Confidential"
+  },
+  "applicationId": "app-1",
+  "tenantId": "tenant-1"
+}

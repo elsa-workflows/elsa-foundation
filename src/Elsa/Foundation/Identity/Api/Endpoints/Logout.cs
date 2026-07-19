@@ -15,6 +15,7 @@ namespace Elsa.Foundation.Identity.Api.Endpoints;
 /// </summary>
 internal sealed class Logout(
     IAuthenticationProviderResolver providers,
+    IEnumerable<IAuthenticationSessionInvalidator> sessionInvalidators,
     IAuthenticationSchemeProvider schemeProvider,
     IAuthenticationHandlerProvider handlerProvider) : ElsaEndpoint<ProviderRouteRequest>
 {
@@ -30,6 +31,16 @@ internal sealed class Logout(
         // Identity provider clears its cookie scheme), falling back to the provider id itself.
         var descriptor = await providers.FindAsync(req.Provider, allowGlobalFallback: true, cancellationToken: ct);
         var schemeName = descriptor?.Challenge?.Scheme ?? req.Provider;
+
+        // A provider may own server-side state that survives deletion of the client cookie. Invalidate that
+        // state first so a failure is truthful: the endpoint must not return 204 or clear the browser copy
+        // while a replayable server session remains valid. Providers without such state register no handler.
+        var sessionInvalidator = descriptor is null
+            ? null
+            : sessionInvalidators.SingleOrDefault(candidate =>
+                string.Equals(candidate.ProviderId, descriptor.Id, StringComparison.OrdinalIgnoreCase));
+        if (sessionInvalidator is not null)
+            await sessionInvalidator.InvalidateAsync(new AuthenticationSessionInvalidationContext(User), ct);
 
         // Only sign out when the scheme is actually registered AND its handler can sign out. OpenIddict's
         // provider declares no challenge scheme, so schemeName falls back to an unregistered id — calling

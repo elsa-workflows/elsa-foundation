@@ -29,6 +29,35 @@ public sealed class StimulusRouterTests
     }
 
     [Fact]
+    public async Task Route_StartOnly_ClassifiesPublishedTriggerStartsAsPublishedRuns()
+    {
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly));
+
+        Assert.Equal(WorkflowRunKind.PublishedRun, Assert.Single(startDispatcher.Requests).RunKind);
+    }
+
+    [Fact]
+    public async Task Route_StartOnly_SelectsThePublicationOwnedByTheMatchedBinding()
+    {
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a", "publication-7", "slot-production"));
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly));
+
+        var selection = Assert.Single(startDispatcher.Requests).SourceSelection;
+        Assert.Equal("publication-7", selection!.PublicationId);
+        Assert.Equal("slot-production", selection.SlotId);
+        Assert.Null(selection.SourceReferenceId);
+    }
+
+    [Fact]
     public async Task Route_ResumeOnly_FansInToEveryWaitingInstanceAcrossExecutions()
     {
         // Bookmarks are seeded directly into the store (not produced by running published workflows) as a
@@ -268,10 +297,12 @@ public sealed class StimulusRouterTests
     {
         public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default) =>
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("The router must reuse the supplied match set, not query the store.");
         public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
+            WorkflowTriggerBindingTypePageQuery query,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private StimulusRouter Router(
@@ -301,7 +332,11 @@ public sealed class StimulusRouterTests
         WorkflowExecutionCommandDispatchOptions? dispatchOptions = null) =>
         new(StimulusType, StimulusHash, input: input, mode: mode, correlationId: correlationId, idempotencyKey: idempotencyKey, dispatchOptions: dispatchOptions);
 
-    private WorkflowTriggerBinding Binding(string artifactId, string nodeId) =>
+    private WorkflowTriggerBinding Binding(
+        string artifactId,
+        string nodeId,
+        string? publicationId = null,
+        string? slotId = null) =>
         new(
             TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, nodeId, StimulusHash),
             ArtifactId: artifactId,
@@ -313,7 +348,9 @@ public sealed class StimulusRouterTests
             StimulusHash: StimulusHash,
             CorrelationScope: null,
             Metadata: new Dictionary<string, string>(),
-            CreatedAt: _now);
+            CreatedAt: _now,
+            PublicationId: publicationId,
+            SlotId: slotId);
 
     private BookmarkState Bookmark(string bookmarkId, string executionId, string? correlationId = null)
     {
@@ -418,10 +455,8 @@ public sealed class StimulusRouterTests
                 authoredActivityId: "authored-node-wait",
                 activityType: "Elsa.Event",
                 activityTypeVersion: "1.0.0",
-                descriptorType: "test",
-                descriptorPayload: document.RootElement.Clone(),
+                descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>());
         }
     }

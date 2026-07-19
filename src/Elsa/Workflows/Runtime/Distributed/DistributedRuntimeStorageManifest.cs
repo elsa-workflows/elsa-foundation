@@ -2,9 +2,9 @@ namespace Elsa.Workflows.Runtime.Distributed;
 
 /// <summary>
 /// Wire-safe persisted-kind identifiers owned by the distributed runtime leaf. These string values are the frozen v1
-/// document-kind discriminators for the cross-node command transport (and future placement) documents. A durable
-/// (Groundwork) implementation of <see cref="Contracts.IExecutionCommandTransport"/> is a named follow-up; when it
-/// lands it MUST reuse this discriminator and the committed <c>Fixtures/v1</c> golden fixture wire shape unchanged.
+/// document-kind discriminators for cross-node command transport and placement documents. The opt-in Groundwork
+/// persistence feature consumes these identifiers and MUST preserve the committed <c>Fixtures/v1</c> golden fixture
+/// wire shapes unchanged.
 /// </summary>
 /// <remarks>
 /// The names follow the constitution S=E6 rules: camelCase, no protected-term collisions, stable across the W14 type
@@ -13,6 +13,13 @@ namespace Elsa.Workflows.Runtime.Distributed;
 /// </remarks>
 public static class DistributedRuntimeStorageManifest
 {
+    /// <summary>
+    /// Durable per-execution command stream coordination document. The Groundwork transport uses this head with
+    /// provider-level compare-and-swap to allocate strictly increasing per-execution command sequences without
+    /// scanning the command backlog.
+    /// </summary>
+    public const string ExecutionCommandStreamHeadDocumentKind = "executionCommandStreamHead";
+
     /// <summary>
     /// Durable cross-node command inbox. Each queued command for a workflow execution is one document so the inbox
     /// survives node death and a survivor can re-lease and re-drive it on failover.

@@ -1,5 +1,9 @@
+using System.Security.Claims;
+using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -24,6 +28,7 @@ using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.Http;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Registration;
@@ -37,24 +42,17 @@ namespace Elsa.Activities.Design.Tests.Registration;
 public sealed class FeatureRegistrationTests
 {
     [Fact]
-    public void ActivitiesRuntimeFeature_RegistersFactoryAndRegistries()
+    public void ActivitiesRuntimeFeature_RegistersCanonicalMaterializationAndTypeDiscovery()
     {
         var services = MinimalServices();
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        Assert.NotNull(provider.GetService<IActivityConstructorRegistry>());
-
-        using var scope = provider.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetService<IActivityFactory>());
-
-        // The constructor registry is populated via the Registry + StartUp Task + Domain Event
-        // pattern (framework §2.6.1): the startup task publishes the init event; the single
-        // aggregating handler adds every contributed IActivityConstructor.
+        Assert.Contains(services, d => d.ServiceType == typeof(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityInputMaterializer)
+            && d.ImplementationType == typeof(Elsa.Workflows.Runtime.Core.Services.RuntimeActivityInputMaterializer));
+        Assert.Contains(services, d => d.ServiceType == typeof(Elsa.Activities.Runtime.Services.ActivityInputHydrator));
         Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask)
-            && d.ImplementationType == typeof(Elsa.Activities.Runtime.Tasks.ActivityConstructorsStartupTask));
-        Assert.Contains(services, d => d.ServiceType == typeof(IEventHandler)
-            && d.ImplementationType == typeof(Elsa.Activities.Runtime.Handlers.RegisterActivityConstructors));
+            && d.ImplementationType == typeof(Elsa.Activities.Runtime.Tasks.RegisterActivityTypesStartupTask));
     }
 
     [Fact]
@@ -96,6 +94,53 @@ public sealed class FeatureRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.NotNull(provider.GetService<IActivityAvailabilityEvaluator>());
+    }
+
+    [Fact]
+    public void ActivitiesDesignApiFeature_Registers_Request_Scoped_Tenant_And_Permission_Authorization()
+    {
+        var services = MinimalServices();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        accessor.HttpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim("elsa.identity.tenant_id", "tenant-a"),
+                new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.AuthorPermission),
+                new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission)
+            ], "test"))
+        };
+
+        using var scope = provider.CreateScope();
+        var authoring = scope.ServiceProvider.GetRequiredService<IActivityAuthoringContext>();
+        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyAuthorizationContext>();
+
+        Assert.Same(authoring, dependencies);
+        Assert.True(authoring.CanAuthorProvider("elsa.activity-graph"));
+        Assert.True(authoring.CanReadProviderPayload("elsa.activity-graph"));
+        Assert.True(dependencies.CanRead(new("ActivityVersion", "definition", TenantId: "tenant-a")));
+        Assert.False(dependencies.CanRead(new("ActivityVersion", "definition", TenantId: "tenant-b")));
+        Assert.NotEmpty(dependencies.AuthorizationProfile);
+    }
+
+    [Fact]
+    public void ActivitiesDesignApiFeature_Provides_A_Process_Stable_Development_Cursor_Key_When_Host_Omits_One()
+    {
+        var services = MinimalServices();
+
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var codec = provider.GetRequiredService<IActivityDependencyCursorCodec>();
+        var state = new ActivityDependencyCursorState("tenant", "profile", "version", "Outbound", false, ["Versions"], "watermark", 1);
+
+        var decoded = codec.Decode(codec.Encode(state));
+        Assert.Equal(state.TenantScope, decoded.TenantScope);
+        Assert.Equal(state.RootVersionId, decoded.RootVersionId);
+        Assert.Equal(state.Include, decoded.Include);
+        Assert.Equal(state.Position, decoded.Position);
     }
 
     [Fact]

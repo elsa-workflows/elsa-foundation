@@ -38,13 +38,12 @@ namespace Elsa.Activities.Http.Middleware;
 /// <para>
 /// <b>Sync (spec 089 sub-unit E, E-D5).</b> When the resolved <see cref="MergedHttpEndpointOptions.ResponseMode"/>
 /// is <see cref="ResponseMode.Sync"/> the middleware lets the workflow author the live response in the same
-/// exchange. It populates the request scope's <see cref="SyncHttpResponseSink"/> with the live
-/// <see cref="HttpContext"/> and dispatches with <see cref="WorkflowExecutionCommandDispatchOptions.AmbientServices"/>
-/// = <c>context.RequestServices</c>, so a <see cref="WriteHttpResponse"/> draining inline on the in-process actor
-/// resolves that same sink and writes the response (E-D2). The in-process drain runs on the caller's async flow, so
-/// after <c>RouteAsync</c> returns the write has already happened: if <c>sink.ResponseWritten</c> (or the response
-/// otherwise started) the middleware returns without touching the response (the workflow owns it). Otherwise it
-/// degrades to the same <c>202</c> writer as async mode — ONE degrade path covering suspend-before-response, a run
+/// exchange. The in-process drain runs to quiescence on the caller's async flow. A <see cref="WriteHttpResponse"/>
+/// reached during that drain commits one typed <see cref="HttpResponseInstruction"/> result; after
+/// <c>RouteAsync</c> returns, <see cref="HttpResponseInstructionDelivery"/> reads and delivers that committed
+/// result through the request-owned <see cref="HttpResponse"/>. The activity therefore never receives a live
+/// request service or <see cref="HttpContext"/>, preserving its isolated per-attempt activation scope. When no
+/// instruction was committed, the middleware degrades to the same <c>202</c> writer as async mode — ONE degrade path covering suspend-before-response, a run
 /// that authored no <see cref="WriteHttpResponse"/>, and a non-local (<see cref="BookmarkResumeDispatchStatus"/>
 /// deferred) dispatch whose ambient services never crossed the transport — with no locality inspection. The 404
 /// branch (zero starts AND zero dispatched resumes) still runs FIRST, before the sink is consulted. Sink resolution
@@ -145,7 +144,10 @@ public sealed class HttpEndpointMiddleware(
 
         // Fetch the trigger claimants once (also the source of the endpoint options when present). The ambiguity
         // guard below shares this fetch rather than re-querying, and the router reuses it on the start path.
-        var claimants = await triggerBindingStore.ListByStimulusAsync(HttpEndpointStimulus.StimulusType, stimulusHash, context.RequestAborted);
+        var claimants = await triggerBindingStore.ListAllByStimulusAsync(
+            HttpEndpointStimulus.StimulusType,
+            stimulusHash,
+            context.RequestAborted);
 
         // Endpoint options ride the claimant binding's non-identity metadata (spec 089 C, FR-012..FR-014). Sibling
         // claimants of one definition share options; on an ambiguous route (rejected below) any claimant's
@@ -213,17 +215,16 @@ public sealed class HttpEndpointMiddleware(
 
         var input = JsonSerializer.SerializeToElement(requestModel);
 
-        // Sync mode (E-D5): let the workflow author the live response in this exchange. Populate the request scope's
-        // sink with the live HttpContext and dispatch with the request services as ambient services, so a
-        // WriteHttpResponse draining inline resolves this same sink and writes the response (E-D2). Resolving the
-        // sink is null-safe: an absent registration (or a non-sync request) leaves it null and the path degrades to
-        // async behaviour. Async mode carries no sink and no ambient services — bit-identical to the pre-E baseline.
+        // Sync mode (E-D5): drain inline, then deliver any committed typed response instruction in this request.
+        // The sink remains a compatibility marker for an already-started custom response; canonical
+        // WriteHttpResponse does not consume it or any other request-affine service.
         var sync = endpointOptions.ResponseMode == ResponseMode.Sync;
         var responseSink = sync ? context.RequestServices?.GetService<SyncHttpResponseSink>() : null;
         responseSink?.Populate(context);
 
         // Reuse the claimant set already fetched for the ambiguity guard + options: the router's start path would
-        // otherwise issue an identical ListByStimulusAsync(type, hash) for the same request (spec 089 efficiency #7).
+        // otherwise issue an identical bounded ListAllByStimulusAsync traversal for the same request
+        // (spec 089 efficiency #7).
         // StartAndResume (spec 089 D): start new instances from matching triggers AND resume waiting instances
         // suspended on this mid-flow endpoint. The router's snapshot-before-start guard prevents an instance
         // started by THIS request from also resuming itself.
@@ -234,7 +235,11 @@ public sealed class HttpEndpointMiddleware(
             mode: StimulusRoutingMode.StartAndResume,
             requestedBy: RequestedBy,
             matchedTriggerBindings: claimants,
-            dispatchOptions: sync ? new WorkflowExecutionCommandDispatchOptions(context.RequestServices) : null);
+            dispatchOptions: sync ? new WorkflowExecutionCommandDispatchOptions(context.RequestServices) : null,
+            payloadType: new Elsa.Primitives.Models.ValueTypeDescriptor(
+                Elsa.Primitives.Models.TypeAliasConvention.CanonicalAlias(typeof(HttpRequestModel)),
+                schemaVersion: 1),
+            providerId: HttpEndpoint.ActivityType);
 
         // Per-endpoint RequestTimeout bounds dispatch (which drains inline on the in-process actor, so it can
         // genuinely take time); faults map to statuses via the endpoint fault handler seam (FR-013/FR-014).
@@ -267,9 +272,8 @@ public sealed class HttpEndpointMiddleware(
             return;
         }
 
-        // Sync mode: the in-process drain ran on this async flow, so any live write already happened. If the
-        // workflow authored the response (sink marked, or the response otherwise started) return without touching
-        // it; otherwise fall through to the shared 202 degrade path (E-D5).
+        // A legacy/custom live writer may already have started the response; preserve it before looking for the
+        // canonical committed instruction.
         if (responseSink?.ResponseWritten == true || context.Response.HasStarted)
             return;
 
@@ -283,6 +287,19 @@ public sealed class HttpEndpointMiddleware(
             .Where(resume => resume.Status == BookmarkResumeDispatchStatus.Dispatched)
             .Select(resume => resume.WorkflowExecutionId)
             .ToArray();
+
+        // Canonical sync delivery happens after the inline drain: WriteHttpResponse returned one typed instruction,
+        // the activity checkpoint committed it, and this request-owned adapter now delivers that durable result.
+        // The HttpContext never enters the activity activation or its isolated per-attempt DI scope.
+        if (sync && context.RequestServices?.GetService<HttpResponseInstructionDelivery>() is { } delivery)
+        {
+            var dispatchedIds = startedIds.Concat(resumedIds).ToArray();
+            if (await delivery.TryDeliverAsync(context.Response, dispatchedIds, context.RequestAborted))
+            {
+                responseSink?.MarkResponseWritten();
+                return;
+            }
+        }
 
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         context.Response.ContentType = "application/json";

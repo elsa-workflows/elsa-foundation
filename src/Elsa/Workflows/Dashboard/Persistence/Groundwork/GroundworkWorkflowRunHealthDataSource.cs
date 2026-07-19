@@ -84,7 +84,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
             FROM groundwork_documents e
             WHERE e.document_kind = @executionKind
               AND {Json(e: true, "tenantId")} = @tenantId
-              AND {JsonInt("origin")} {(query.IncludeTestRuns ? ">= 0" : "<> 1")}
+              AND {JsonInt("runKind")} {(query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}")}
               AND {JsonInt("status")} = {(int)WorkflowExecutionStatus.Running};
             """;
         AddCommonParameters(command, query);
@@ -102,7 +102,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
             FROM groundwork_documents e
             WHERE e.document_kind = @executionKind
               AND {Json(e: true, "tenantId")} = @tenantId
-              AND {JsonInt("origin")} {(query.IncludeTestRuns ? ">= 0" : "<> 1")}
+              AND {JsonInt("runKind")} {(query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}")}
               AND {JsonInt("status")} = {(int)WorkflowExecutionStatus.Faulted}
               AND {Instant(Json(e: true, "startedAt"))} >= {Instant("@from")}
               AND {Instant(Json(e: true, "startedAt"))} < {Instant("@to")}
@@ -122,7 +122,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
     {
         var cases = string.Join(Environment.NewLine, request.Buckets.Select(bucket =>
             $"WHEN e.started_at >= {Instant($"@b{bucket.Index}From")} AND e.started_at < {Instant($"@b{bucket.Index}To")} THEN {bucket.Index}"));
-        var testFilter = request.Query.IncludeTestRuns ? ">= 0" : "<> 1";
+        var testFilter = request.Query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}";
         return $"""
             WITH executions AS (
                 SELECT {Json(e: true, "workflowExecutionId")} AS execution_id,
@@ -131,7 +131,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
                 FROM groundwork_documents e
                 WHERE e.document_kind = @executionKind
                   AND {Json(e: true, "tenantId")} = @tenantId
-                  AND {JsonInt("origin")} {testFilter}
+                  AND {JsonInt("runKind")} {testFilter}
                   AND {Json(e: true, "startedAt")} IS NOT NULL
                   AND {Instant(Json(e: true, "startedAt"))} >= {Instant("@from")}
                   AND {Instant(Json(e: true, "startedAt"))} < {Instant("@to")}

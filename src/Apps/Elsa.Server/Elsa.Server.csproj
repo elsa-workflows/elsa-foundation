@@ -40,6 +40,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\Elsa\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
@@ -49,26 +50,26 @@
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\EFCore\Sqlite\Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Http\Elsa.Activities.Http.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
-		<ProjectReference Include="..\..\Elsa\Activities\Composition\Design\Elsa.Activities.Composition.Design.csproj" />
-		<ProjectReference Include="..\..\Elsa\Activities\Composition\Runtime\Elsa.Activities.Composition.Runtime.csproj" />
+		<ProjectReference Include="..\..\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
-		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Libraries\Elsa.Expressions.JavaScript.Libraries.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
+		<ProjectReference Include="..\..\Elsa\Expressions\Api\Elsa.Expressions.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Http\Elsa.Http.csproj" />
 		<ProjectReference Include="..\..\Elsa\Http\JavaScript\Elsa.Http.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
@@ -78,6 +79,7 @@
 		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Persistence\Groundwork\Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Attention\Elsa.Workflows.Runtime.Attention.csproj" />
 		<ProjectReference Include="..\..\Elsa\Caching\Core\Elsa.Caching.Core.csproj" />
@@ -87,10 +89,8 @@
 		<ProjectReference Include="..\..\Elsa\Diagnostics\OpenTelemetry\Persistence\EFCore\Sqlite\Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\StructuredLogs\Persistence\EFCore\Sqlite\Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj" />
-		<ProjectReference Include="..\..\Elsa\Expressions\Core\Elsa.Expressions.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\Elsa.Expressions.csproj" />
 		<ProjectReference Include="..\..\Elsa\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
-		<ProjectReference Include="..\..\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Mediator\Elsa.Mediator.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Attention\Elsa.Modularity.Attention.csproj" />
@@ -103,7 +103,6 @@
 		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\PostgreSql\Unified\Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
-		<ProjectReference Include="..\..\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
 		<ProjectReference Include="..\..\Elsa\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
@@ -116,8 +115,6 @@
 		<ProjectReference Include="..\..\Elsa\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
 		<ProjectReference Include="..\..\Elsa\Tasks\Elsa.Tasks.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\EFCore\Sqlite\Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
@@ -136,6 +133,7 @@
 			artifacts. Scheduling is host policy — the runtime resolves the GC service regardless.
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

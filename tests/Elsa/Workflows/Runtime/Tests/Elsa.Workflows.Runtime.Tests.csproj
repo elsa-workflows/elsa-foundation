@@ -16,8 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
   </ItemGroup>
 
 </Project>

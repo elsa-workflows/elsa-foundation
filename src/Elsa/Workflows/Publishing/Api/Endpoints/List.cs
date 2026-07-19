@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Constants;
 using Elsa.Workflows.Publishing.Api.Models;
@@ -14,6 +15,6 @@ internal sealed class List(IRequestSender requestSender, ILogger<List> logger)
     public override void Configure()
     {
         Get(RouteConstants.Activities);
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowPublishingRead);
     }
 }

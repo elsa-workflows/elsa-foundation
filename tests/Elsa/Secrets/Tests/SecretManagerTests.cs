@@ -329,6 +329,25 @@ public sealed class SecretManagerDeterministicClockTests : IDisposable
         Assert.Equal(CreatedNow, originalVersion.CreatedAt);
     }
 
+    [Fact]
+    public async Task ListAsync_ActiveOnlyCapturesTheInjectedClockOnce()
+    {
+        await _manager.CreateAsync(TenantId, new CreateSecretRequest
+        {
+            Name = "payments.api",
+            TypeName = SecretTypeNames.Text,
+            StoreName = SecretStoreNames.Encrypted,
+            ExpiresAt = CreatedNow.AddHours(1),
+            Value = "value"
+        });
+
+        Assert.Single((await _manager.ListAsync(TenantId, new SecretQuery { ActiveOnly = true })).Items);
+
+        _timeProvider.Set(CreatedNow.AddHours(1));
+
+        Assert.Empty((await _manager.ListAsync(TenantId, new SecretQuery { ActiveOnly = true })).Items);
+    }
+
     public void Dispose() => _provider.Dispose();
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

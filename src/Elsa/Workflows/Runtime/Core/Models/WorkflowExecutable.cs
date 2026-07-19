@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using Elsa.Activities.Runtime.Core.Models;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -16,6 +18,72 @@ public sealed class WorkflowExecutable
         IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
         DateTimeOffset createdAt,
         IReadOnlyDictionary<string, string> compatibilityMetadata)
+        : this(
+            identity,
+            rootActivity,
+            resumeTargets,
+            createdAt,
+            compatibilityMetadata,
+            inputContract: null,
+            dependencies: null,
+            runtimeRequirements: null,
+            storageDriverRequirements: null)
+    {
+    }
+
+    public WorkflowExecutable(
+        WorkflowExecutableIdentity identity,
+        ExecutableNode rootActivity,
+        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
+        DateTimeOffset createdAt,
+        IReadOnlyDictionary<string, string> compatibilityMetadata,
+        IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements = null,
+        IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements = null)
+        : this(
+            identity,
+            rootActivity,
+            resumeTargets,
+            createdAt,
+            compatibilityMetadata,
+            inputContract: null,
+            dependencies: null,
+            runtimeRequirements,
+            storageDriverRequirements)
+    {
+    }
+
+    public WorkflowExecutable(
+        WorkflowExecutableIdentity identity,
+        ExecutableNode rootActivity,
+        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
+        DateTimeOffset createdAt,
+        IReadOnlyDictionary<string, string> compatibilityMetadata,
+        WorkflowExecutableInputContract? inputContract,
+        IReadOnlyCollection<WorkflowExecutableDependency>? dependencies)
+        : this(
+            identity,
+            rootActivity,
+            resumeTargets,
+            createdAt,
+            compatibilityMetadata,
+            inputContract,
+            dependencies,
+            runtimeRequirements: null,
+            storageDriverRequirements: null)
+    {
+    }
+
+    [JsonConstructor]
+    public WorkflowExecutable(
+        WorkflowExecutableIdentity identity,
+        ExecutableNode rootActivity,
+        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
+        DateTimeOffset createdAt,
+        IReadOnlyDictionary<string, string> compatibilityMetadata,
+        WorkflowExecutableInputContract? inputContract,
+        IReadOnlyCollection<WorkflowExecutableDependency>? dependencies,
+        IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements,
+        IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(rootActivity);
@@ -29,8 +97,24 @@ public sealed class WorkflowExecutable
         Nodes = Array.AsReadOnly(nodeSnapshot);
         NodesById = new ReadOnlyDictionary<string, ExecutableNode>(nodeSnapshot.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal));
         ResumeTargets = new ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>(resumeTargets.ToDictionary(target => target.Key, target => target.Value, StringComparer.Ordinal));
+        InputContract = inputContract;
+        Dependencies = SnapshotDependencies(dependencies, NodesById);
         CreatedAt = createdAt;
         CompatibilityMetadata = new ReadOnlyDictionary<string, string>(compatibilityMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        RuntimeRequirements = Array.AsReadOnly((runtimeRequirements ?? [])
+            .Concat(nodeSnapshot.Select(node => new RuntimeRequirement(
+                node.Descriptor.ConsumerKey,
+                node.Descriptor.SchemaVersion)))
+            .Distinct()
+            .OrderBy(item => item.ConsumerKey, StringComparer.Ordinal)
+            .ThenBy(item => item.SchemaVersion, StringComparer.Ordinal)
+            .ToArray());
+        StorageDriverRequirements = Array.AsReadOnly((storageDriverRequirements ?? [])
+            .Concat(nodeSnapshot.SelectMany(node => node.OutputCaptures.Values)
+                .Select(capture => new RuntimeStorageDriverRequirement(capture.StorageDriverKey)))
+            .Distinct()
+            .OrderBy(item => item.DriverKey, StringComparer.Ordinal)
+            .ToArray());
     }
 
     public WorkflowExecutableIdentity Identity { get; }
@@ -38,8 +122,12 @@ public sealed class WorkflowExecutable
     public IReadOnlyCollection<ExecutableNode> Nodes { get; }
     public IReadOnlyDictionary<string, ExecutableNode> NodesById { get; }
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets { get; }
+    public WorkflowExecutableInputContract? InputContract { get; }
+    public IReadOnlyCollection<WorkflowExecutableDependency> Dependencies { get; }
     public DateTimeOffset CreatedAt { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
+    public IReadOnlyCollection<RuntimeRequirement> RuntimeRequirements { get; }
+    public IReadOnlyCollection<RuntimeStorageDriverRequirement> StorageDriverRequirements { get; }
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode rootActivity)
     {
@@ -54,5 +142,36 @@ public sealed class WorkflowExecutable
             foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities))
                 stack.Push(child);
         }
+    }
+
+    private static IReadOnlyCollection<WorkflowExecutableDependency> SnapshotDependencies(
+        IReadOnlyCollection<WorkflowExecutableDependency>? dependencies,
+        IReadOnlyDictionary<string, ExecutableNode> nodesById)
+    {
+        if (dependencies is null || dependencies.Count == 0)
+            return Array.AsReadOnly(Array.Empty<WorkflowExecutableDependency>());
+
+        var snapshot = dependencies
+            .Select(dependency => dependency ?? throw new ArgumentException("Executable dependencies cannot contain null entries.", nameof(dependencies)))
+            .OrderBy(dependency => dependency.ArtifactId, StringComparer.Ordinal)
+            .ToArray();
+        var duplicateArtifactId = snapshot
+            .GroupBy(dependency => dependency.ArtifactId, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1)
+            ?.Key;
+
+        if (duplicateArtifactId is not null)
+            throw new ArgumentException($"The direct executable dependency '{duplicateArtifactId}' is duplicated.", nameof(dependencies));
+
+        foreach (var dependency in snapshot)
+        {
+            foreach (var nodeId in dependency.DispatchNodeIds)
+            {
+                if (!nodesById.ContainsKey(nodeId))
+                    throw new ArgumentException($"Executable dependency '{dependency.ArtifactId}' binds unknown dispatch node '{nodeId}'.", nameof(dependencies));
+            }
+        }
+
+        return Array.AsReadOnly(snapshot);
     }
 }

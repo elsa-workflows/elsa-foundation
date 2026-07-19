@@ -44,20 +44,27 @@ A workflow author can use a trigger-capable activity in a non-start role without
 
 ---
 
-### User Story 3 - Republish Existing Definitions Safely (Priority: P3)
+### User Story 3 - Republish Existing Definitions Safely After Persistence Reset (Priority: P3)
 
-An operator upgrading an existing installation can start the application and republish existing workflows without same-version activity-catalog hash conflicts or unreadable published artifacts. Corrected trigger classification is applied through compilation and republishing rather than by mutating immutable catalog content.
+An operator upgrading an existing installation atomically resets the complete Runtime and Publishing
+Groundwork persistence sets while preserving Design and Activities data, then republishes workflows
+before serving traffic and without same-version activity-catalog hash conflicts. Corrected trigger
+classification is applied through compilation and republishing rather than by mutating immutable catalog
+content.
 
 **Why this priority**: PR #621 demonstrated that changing persisted same-version activity metadata can block upgrades. Compatibility is a release gate for any trigger-contract change.
 
-**Independent Test**: Seed legacy catalog rows, executable artifacts, and trigger-binding documents from supported historical shapes; start the relevant services, read existing artifacts, and republish workflows while verifying catalog hashes remain stable and newly published artifacts use the approved trigger contract.
+**Independent Test**: Seed legacy catalog rows and supported trigger-binding documents, atomically reset
+the complete Runtime and Publishing persistence sets without removing Design or Activities data, then
+republish before serving traffic while verifying catalog hashes remain stable and newly published artifacts
+use the approved trigger contract.
 
 **Acceptance Scenarios**:
 
 1. **Given** an existing CLR activity catalog row whose stored execution type predates compile-time trigger projection, **When** the catalog reconciles, **Then** its same-version identity and content hash remain unchanged.
-2. **Given** a supported existing executable artifact, **When** it is loaded after the upgrade, **Then** it remains readable without requiring Design data at runtime.
+2. **Given** executable, source-reference, or workflow-execution documents at schema versions 1 through 3, **When** the operator prepares the upgrade, **Then** the complete Runtime and Publishing Groundwork persistence sets are reset atomically while Design and Activities data are retained, because those versions are rejected rather than loaded through a compatibility shim.
 3. **Given** an existing definition is republished, **When** compilation projects current trigger intent, **Then** the resulting artifact receives the correct behavioral identity without mutating the existing activity version.
-4. **Given** the persisted trigger-binding shape changes as part of the approved design, **When** historical documents are loaded, **Then** they are upgraded explicitly and remain readable.
+4. **Given** the persisted trigger-binding shape changes before GA, **When** an older document is encountered, **Then** it is rejected under the current-only Runtime policy and the complete Runtime and Publishing reset applies.
 
 ### Edge Cases
 
@@ -68,7 +75,7 @@ An operator upgrading an existing installation can start the application and rep
 - A recurring trigger binding is valid but its required schedule projection cannot be calculated.
 - A failed preflight occurs while prior bindings and schedules already exist for the artifact.
 - A workflow contains a mix of valid start triggers, intentional non-start nodes, and one invalid trigger.
-- An old executable remains readable but only republishing can apply corrected trigger classification.
+- Traffic is accidentally admitted after the Runtime/Publishing reset but before workflows have been republished.
 
 ## Requirements *(mandatory)*
 
@@ -88,8 +95,8 @@ An operator upgrading an existing installation can start the application and rep
 - **FR-012**: A Cron start trigger with no future occurrence MUST fail publication clearly rather than publish with no runnable schedule.
 - **FR-013**: Existing provider-specific uniqueness rules MUST remain provider-owned; the generic trigger contract MUST NOT impose global uniqueness on stimulus identities.
 - **FR-014**: Existing same-version activity catalog content MUST NOT be mutated to correct runtime trigger classification.
-- **FR-015**: Existing supported executable artifacts MUST remain readable; corrected classification MUST take effect through newly compiled publication artifacts unless a separately approved artifact migration exists.
-- **FR-016**: Any changed durable trigger-binding shape MUST use explicit schema evolution and retain historical compatibility evidence.
+- **FR-015**: Before GA, every Runtime Groundwork document kind MUST use its current schema version as its minimum-readable version, retain only its current fixture, and register no Elsa compatibility upcaster. `workflowExecutable`, `workflowExecutableSourceReference`, and `workflowExecutionState` use version 4 and reject versions 1 through 3. The executable v4 baseline MUST include the reusable-activity input contract and direct dependency snapshot, the source-reference v4 baseline MUST include tenant scope, and the workflow-execution v4 baseline MUST include dispatch nesting depth. An upgrade carrying any older Runtime persistence MUST atomically reset the complete Runtime and Publishing Groundwork persistence sets while preserving Design and Activities data, then republish workflows before traffic is served. Corrected classification takes effect through newly compiled publication artifacts.
+- **FR-016**: Any changed durable trigger-binding shape MUST use explicit schema evolution. Before GA, that means a current-only fixture and reset boundary; after a released shape exists, a compatible in-place or rolling upgrade MAY add Groundwork `IDocumentJsonUpcaster` contributions and retained historical fixtures.
 - **FR-017**: Publication-wide transactionality, executable/source-reference persistence ordering, diagnostics APIs, persisted publication-status records, startup health checks, shell dependency changes, connected-host expansion, Studio changes, multi-node route invalidation, and stimulus-router or actor redesign MUST remain outside this work unit.
 
 ### Key Entities
@@ -108,7 +115,7 @@ An operator upgrading an existing installation can start the application and rep
 - **SC-002**: In every invalid-publication acceptance case, 100% of previously stored trigger bindings and recurring schedules remain unchanged.
 - **SC-003**: Every successfully published first-party start trigger produces the complete expected set of usable bindings and required provider-owned projections; zero classified start triggers succeed with an unintentionally empty registration set.
 - **SC-004**: Every preflight result identifies exactly one provider for each recognized node, including intentionally non-starting nodes.
-- **SC-005**: All committed historical catalog, executable, and trigger-binding compatibility fixtures remain readable, and same-version catalog reconciliation produces zero hash conflicts.
+- **SC-005**: Supported historical catalog fixtures remain readable, every Runtime Groundwork kind freezes only its current fixture and rejects older generations, executable/source-reference/workflow-execution suites freeze their version-4 baselines and reject versions 1 through 3, and same-version catalog reconciliation produces zero hash conflicts.
 - **SC-006**: Runtime package-boundary verification confirms that trigger publication and execution require no Design-domain dependency.
 
 ## Assumptions
@@ -118,11 +125,17 @@ An operator upgrading an existing installation can start the application and rep
 - Trigger-binding replacement remains scoped by artifact and retains its current provider-specific fan-out semantics.
 - The recurring schedule is a required publication projection for Timer and Cron start triggers.
 - Detailed publication diagnostics and shell-provider availability are separately owned by Units B and C.
-- Existing databases may contain legacy activity catalog rows and executable artifacts; compatibility is proven without mutating their same-version authored content.
+- Existing databases may contain legacy activity catalog rows and trigger/schedule projections; their
+  supported compatibility paths do not mutate same-version authored content. Before GA, every Runtime
+  Groundwork kind deliberately excludes older generations; executable, source-reference, and workflow-execution
+  versions 1 through 3 are explicitly rejected. Because retained executions and publication authority may point
+  at those artifacts, the safe upgrade operation resets all Runtime and Publishing persistence atomically,
+  preserves Design and Activities data, and republishes before traffic.
 
 ## Delivery evidence
 
-All three user stories are implemented. The focused, compatibility, architecture, build, and full-suite
-evidence is recorded in [quickstart.md](quickstart.md). The canonical runtime seam documentation is
-[the Runtime extension-point catalog](../../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md). No durable
-schema or executable-shape migration was required.
+All three user stories were implemented. The focused, compatibility, architecture, build, and full-suite
+evidence from that delivery is recorded in [quickstart.md](quickstart.md). The canonical runtime seam
+documentation is [the Runtime extension-point catalog](../../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md).
+Spec 090 itself required no durable schema or executable-shape migration; the later current-only pre-GA
+clean break above supersedes its Runtime persistence compatibility.

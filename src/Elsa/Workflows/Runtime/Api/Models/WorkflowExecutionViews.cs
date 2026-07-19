@@ -1,7 +1,15 @@
+using System.Collections.ObjectModel;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Api.Models;
+
+public sealed record WorkflowInstanceListView(
+    IReadOnlyCollection<WorkflowInstanceSummaryView> Items,
+    string? NextCursor,
+    bool HasNext,
+    int Count,
+    int TotalCount);
 
 public sealed record WorkflowInstanceSummaryView(
     string WorkflowExecutionId,
@@ -11,6 +19,7 @@ public sealed record WorkflowInstanceSummaryView(
     string ArtifactVersion,
     string ArtifactHash,
     string Status,
+    string RunKind,
     string? SubStatus,
     DateTimeOffset CreatedAt,
     DateTimeOffset? StartedAt,
@@ -20,30 +29,44 @@ public sealed record WorkflowInstanceSummaryView(
     string? ParentWorkflowExecutionId,
     string? TenantId,
     int ActivityCount,
-    int IncidentCount)
+    int IncidentCount,
+    string? SourceReferenceId = null,
+    string? PublicationId = null,
+    string? SlotId = null,
+    string? SourceKind = null,
+    string? SourceId = null,
+    string? SourceVersion = null)
 {
     public static WorkflowInstanceSummaryView From(
         WorkflowExecutionState state,
         int activityCount = 0,
-        int incidentCount = 0) =>
+        int incidentCount = 0,
+        bool canInspectSensitiveValues = false) =>
         new(
             state.WorkflowExecutionId,
             state.PinnedExecutable.ArtifactId,
-            state.PinnedExecutable.DefinitionId,
-            state.PinnedExecutable.DefinitionVersionId,
-            state.PinnedExecutable.ArtifactVersion,
+            state.PinnedSource?.DefinitionId ?? state.PinnedExecutable.DefinitionId,
+            state.PinnedSource?.DefinitionVersionId ?? state.PinnedExecutable.DefinitionVersionId,
+            state.PinnedSource?.ArtifactVersion ?? state.PinnedExecutable.ArtifactVersion,
             state.PinnedExecutable.ArtifactHash,
             state.Status.ToString(),
+            state.RunKind.ToString(),
             state.SubStatus,
             state.CreatedAt,
             state.StartedAt,
             state.UpdatedAt,
             state.CompletedAt,
-            state.CorrelationId,
+            canInspectSensitiveValues ? state.CorrelationId : null,
             state.ParentWorkflowExecutionId,
             state.TenantId,
             activityCount,
-            incidentCount);
+            incidentCount,
+            state.PinnedSource?.SourceReferenceId,
+            state.PinnedSource?.PublicationId,
+            state.PinnedSource?.SlotId,
+            state.PinnedSource?.SourceKind,
+            state.PinnedSource?.SourceId,
+            state.PinnedSource?.SourceVersion);
 }
 
 public sealed record WorkflowInstanceDetailsView(
@@ -68,6 +91,9 @@ public sealed record WorkflowOutputView(
 {
     public static WorkflowOutputView From(WorkflowOutputProjection projection) =>
         new(projection.Value, projection.IsRedacted, projection.RedactionReason, projection.CapturedAt);
+
+    public static WorkflowOutputView Redacted(DateTimeOffset capturedAt) =>
+        new(null, true, "Caller is not authorized to inspect sensitive values.", capturedAt);
 }
 
 public sealed record ActivityExecutionInspectionView(
@@ -91,9 +117,14 @@ public sealed record ActivityExecutionInspectionView(
     IReadOnlyCollection<ActivityExecutionBookmarkSummaryView> Bookmarks,
     IReadOnlyCollection<ActivityExecutionIncidentSummaryView> Incidents,
     IReadOnlyCollection<ActivityExecutionInspectionValueSnapshotView> ValueSnapshots,
+    ActivityExecutionAttemptView? Attempt,
+    ActivityExecutionBoundaryView? Boundary,
     IReadOnlyDictionary<string, string> Metadata)
 {
-    public static ActivityExecutionInspectionView From(ActivityExecutionInspectionProjection projection) =>
+    public static ActivityExecutionInspectionView From(
+        ActivityExecutionInspectionProjection projection,
+        ActivityExecutionBoundary? boundary = null,
+        bool canInspectSensitiveValues = false) =>
         new(
             projection.ActivityExecutionId,
             projection.WorkflowExecutionId,
@@ -110,12 +141,76 @@ public sealed record ActivityExecutionInspectionView(
             projection.FirstCheckpointId,
             projection.LastCheckpointId,
             projection.LastCommittedAt,
-            ActivitySchedulingProvenanceView.From(projection.Provenance),
+            ActivitySchedulingProvenanceView.From(projection.Provenance, canInspectSensitiveValues),
             projection.OutcomeNames,
-            projection.Bookmarks.Select(ActivityExecutionBookmarkSummaryView.From).ToArray(),
-            projection.Incidents.Select(ActivityExecutionIncidentSummaryView.From).ToArray(),
-            projection.ValueSnapshots.Select(ActivityExecutionInspectionValueSnapshotView.From).ToArray(),
-            projection.Metadata);
+            projection.Bookmarks.Select(x => ActivityExecutionBookmarkSummaryView.From(x, canInspectSensitiveValues)).ToArray(),
+            projection.Incidents.Select(x => ActivityExecutionIncidentSummaryView.From(x, canInspectSensitiveValues)).ToArray(),
+            projection.ValueSnapshots.Select(x => ActivityExecutionInspectionValueSnapshotView.From(x, canInspectSensitiveValues)).ToArray(),
+            ActivityExecutionAttemptView.From(projection.Attempt ?? projection.Provenance.Attempt),
+            ActivityExecutionBoundaryView.From(boundary),
+            ActivityExecutionInspectionDisclosure.Metadata(projection.Metadata, canInspectSensitiveValues));
+}
+
+public sealed record ActivityExecutionAttemptView(
+    int AttemptNumber,
+    string FirstAttemptActivityExecutionId,
+    string? PreviousAttemptActivityExecutionId)
+{
+    public static ActivityExecutionAttemptView? From(ActivityExecutionAttemptLineage? attempt) =>
+        attempt is null ? null : new(attempt.AttemptNumber, attempt.FirstAttemptActivityExecutionId, attempt.PreviousAttemptActivityExecutionId);
+}
+
+public sealed record ActivityExecutionBoundaryView(
+    string Kind,
+    string DefinitionId,
+    string DefinitionVersionId,
+    string Version,
+    string TemplateHash,
+    IReadOnlyList<ActivityInvocationOriginSegmentView> InvocationOrigin,
+    string ExecutionScopeId,
+    bool HasChildren,
+    int DirectChildCount,
+    long CommittedDescendantCount,
+    ActivityExecutionHierarchyAggregateView Aggregate,
+    bool LayoutAvailable)
+{
+    public static ActivityExecutionBoundaryView? From(ActivityExecutionBoundary? boundary) => boundary is null ? null : new(
+        boundary.Kind,
+        boundary.DefinitionId,
+        boundary.DefinitionVersionId,
+        boundary.Version,
+        boundary.TemplateHash,
+        boundary.InvocationOrigin.Segments.Select(ActivityInvocationOriginSegmentView.From).ToArray(),
+        boundary.ExecutionScopeId,
+        boundary.HasChildren,
+        boundary.DirectChildCount,
+        boundary.CommittedDescendantCount,
+        ActivityExecutionHierarchyAggregateView.From(boundary.Aggregate),
+        boundary.LayoutAvailable);
+}
+
+public sealed record ActivityInvocationOriginSegmentView(string Kind, string Id)
+{
+    public static ActivityInvocationOriginSegmentView From(ActivityInvocationOriginSegment segment) =>
+        new(segment.Kind.ToString(), segment.Id);
+}
+
+public sealed record ActivityExecutionHierarchyAggregateView(
+    string Status,
+    long Total,
+    long Scheduled,
+    long Running,
+    long Suspended,
+    long Completed,
+    long Faulted,
+    long Cancelled,
+    long BlockingIncidentCount,
+    long RetryCount,
+    long LastExecutionSequence)
+{
+    public static ActivityExecutionHierarchyAggregateView From(ActivityExecutionHierarchyAggregate value) => new(
+        value.Status.ToString(), value.Total, value.Scheduled, value.Running, value.Suspended, value.Completed,
+        value.Faulted, value.Cancelled, value.BlockingIncidentCount, value.RetryCount, value.LastExecutionSequence);
 }
 
 public sealed record ActivitySchedulingProvenanceView(
@@ -129,7 +224,9 @@ public sealed record ActivitySchedulingProvenanceView(
     string? SchedulingCause,
     IReadOnlyDictionary<string, string> Metadata)
 {
-    public static ActivitySchedulingProvenanceView From(ActivitySchedulingProvenance provenance) =>
+    public static ActivitySchedulingProvenanceView From(
+        ActivitySchedulingProvenance provenance,
+        bool canInspectSensitiveValues = false) =>
         new(
             provenance.ParentActivityExecutionId,
             provenance.SchedulingActivityExecutionId,
@@ -139,7 +236,7 @@ public sealed record ActivitySchedulingProvenanceView(
             provenance.ExecutionPathId,
             provenance.ExecutionScopeId,
             provenance.SchedulingCause,
-            provenance.Metadata);
+            ActivityExecutionInspectionDisclosure.Metadata(provenance.Metadata, canInspectSensitiveValues));
 }
 
 public sealed record ActivityExecutionBookmarkSummaryView(
@@ -152,7 +249,7 @@ public sealed record ActivityExecutionBookmarkSummaryView(
     IReadOnlyDictionary<string, string> Metadata,
     object? Payload)
 {
-    public static ActivityExecutionBookmarkSummaryView From(ActivityExecutionBookmarkSummary summary) =>
+    public static ActivityExecutionBookmarkSummaryView From(ActivityExecutionBookmarkSummary summary, bool canInspectSensitiveValues = false) =>
         new(
             summary.BookmarkId,
             summary.ResumeTargetId,
@@ -160,8 +257,8 @@ public sealed record ActivityExecutionBookmarkSummaryView(
             summary.StimulusHash,
             summary.CreatedAt,
             summary.ExpiresAt,
-            summary.Metadata,
-            summary.Payload);
+            ActivityExecutionInspectionDisclosure.Metadata(summary.Metadata, canInspectSensitiveValues),
+            canInspectSensitiveValues ? summary.Payload : null);
 }
 
 public sealed record ActivityExecutionIncidentSummaryView(
@@ -176,18 +273,20 @@ public sealed record ActivityExecutionIncidentSummaryView(
     bool IsBlocking,
     IReadOnlyDictionary<string, string> Metadata)
 {
-    public static ActivityExecutionIncidentSummaryView From(ActivityExecutionIncidentSummary summary) =>
+    public static ActivityExecutionIncidentSummaryView From(
+        ActivityExecutionIncidentSummary summary,
+        bool canInspectSensitiveValues = false) =>
         new(
             summary.IncidentId,
             summary.Severity.ToString(),
             summary.Status.ToString(),
             summary.ResolutionAction.ToString(),
             summary.FailureType,
-            summary.Message,
+            canInspectSensitiveValues ? summary.Message : "Incident details are redacted.",
             summary.CreatedAt,
             summary.ResolvedAt,
             summary.IsBlocking,
-            summary.Metadata);
+            ActivityExecutionInspectionDisclosure.Metadata(summary.Metadata, canInspectSensitiveValues));
 }
 
 public sealed record ActivityExecutionInspectionValueSnapshotView(
@@ -201,21 +300,33 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
     object? Snapshot,
     string CaptureReason,
     bool IsSensitive,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    string? InputKey = null,
+    string? EvaluationId = null,
+    string? EvaluationPhase = null,
+    long? EvaluationSequence = null,
+    string? AccessState = null,
+    RuntimeInputEvaluationFailure? Failure = null)
 {
-    public static ActivityExecutionInspectionValueSnapshotView From(ActivityExecutionInspectionValueSnapshot snapshot) =>
+    public static ActivityExecutionInspectionValueSnapshotView From(ActivityExecutionInspectionValueSnapshot snapshot, bool canInspectSensitiveValues = false) =>
         new(
             snapshot.Name,
             snapshot.Subject.ToString(),
             snapshot.CaptureMode.ToString(),
-            SnapshotState(snapshot),
+            canInspectSensitiveValues ? SnapshotState(snapshot) : "redacted",
             snapshot.Type,
             snapshot.CapturedAt,
-            snapshot.CaptureMode == RuntimePayloadCaptureMode.Payload ? snapshot.Payload : null,
-            snapshot.CaptureMode == RuntimePayloadCaptureMode.DiagnosticSnapshot ? snapshot.Payload : null,
+            canInspectSensitiveValues && snapshot.CaptureMode == RuntimePayloadCaptureMode.Payload ? snapshot.Payload : null,
+            canInspectSensitiveValues && snapshot.CaptureMode == RuntimePayloadCaptureMode.DiagnosticSnapshot ? snapshot.Payload : null,
             snapshot.CaptureReason,
             snapshot.IsSensitive,
-            snapshot.Metadata);
+            ActivityExecutionInspectionDisclosure.Metadata(snapshot.Metadata, canInspectSensitiveValues),
+            snapshot.InputKey,
+            snapshot.EvaluationId,
+            snapshot.Phase,
+            snapshot.Sequence,
+            canInspectSensitiveValues ? "allowed" : "redacted",
+            canInspectSensitiveValues ? snapshot.Failure : null);
 
     private static string SnapshotState(ActivityExecutionInspectionValueSnapshot snapshot) =>
         snapshot.CaptureMode switch
@@ -267,12 +378,12 @@ public sealed record ActivityExecutionInspectionSummaryView(
             projection.FirstCheckpointId,
             projection.LastCheckpointId,
             projection.LastCommittedAt,
-            ActivitySchedulingProvenanceView.From(projection.Provenance),
+            ActivitySchedulingProvenanceView.From(projection.Provenance, canInspectSensitiveValues: false),
             projection.OutcomeNames,
             projection.BookmarkCount,
             projection.IncidentCount,
             projection.ValueSnapshotCount,
-            projection.Metadata);
+            ActivityExecutionInspectionDisclosure.EmptyMetadata);
 }
 
 public sealed record ActivityExecutionStateView(
@@ -320,7 +431,7 @@ public sealed record ActivityExecutionStateView(
             state.IncidentIds,
             state.FaultCount,
             state.AggregateFaultCount,
-            state.Metadata);
+            ActivityExecutionInspectionDisclosure.EmptyMetadata);
 }
 
 public sealed record IncidentStateView(
@@ -338,7 +449,7 @@ public sealed record IncidentStateView(
     bool IsBlocking,
     IReadOnlyDictionary<string, string> Metadata)
 {
-    public static IncidentStateView From(IncidentState state) =>
+    public static IncidentStateView From(IncidentState state, bool canInspectSensitiveValues = false) =>
         new(
             state.IncidentId,
             state.WorkflowExecutionId,
@@ -348,11 +459,22 @@ public sealed record IncidentStateView(
             state.Status.ToString(),
             state.ResolutionAction.ToString(),
             state.FailureType,
-            state.Message,
+            canInspectSensitiveValues ? state.Message : "Incident details are redacted.",
             state.CreatedAt,
             state.ResolvedAt,
             state.IsBlocking,
-            state.Metadata);
+            ActivityExecutionInspectionDisclosure.Metadata(state.Metadata, canInspectSensitiveValues));
+}
+
+internal static class ActivityExecutionInspectionDisclosure
+{
+    public static IReadOnlyDictionary<string, string> EmptyMetadata { get; } =
+        new ReadOnlyDictionary<string, string>(new Dictionary<string, string>(StringComparer.Ordinal));
+
+    public static IReadOnlyDictionary<string, string> Metadata(
+        IReadOnlyDictionary<string, string> metadata,
+        bool canInspectSensitiveValues) =>
+        canInspectSensitiveValues ? metadata : EmptyMetadata;
 }
 
 public sealed record WorkflowExecutionStartDispatchView(
@@ -364,17 +486,23 @@ public sealed record WorkflowExecutionStartDispatchView(
     string EnvelopeId,
     string AgentId,
     string AgentProviderName,
-    string? Reason)
+    string? Reason,
+    string? SourceReferenceId = null,
+    string? PublicationId = null,
+    string? SlotId = null)
 {
     public static WorkflowExecutionStartDispatchView From(WorkflowExecutionStartDispatchResult result) =>
         new(
             result.WorkflowExecutionId,
             result.PinnedExecutable.ArtifactId,
-            result.PinnedExecutable.ArtifactVersion,
+            result.PinnedSource?.ArtifactVersion ?? result.PinnedExecutable.ArtifactVersion,
             result.PinnedExecutable.ArtifactHash,
             result.CommandDispatch.Status.ToString(),
             result.CommandDispatch.EnvelopeId,
             result.Agent.AgentId,
             result.Agent.ProviderName,
-            result.CommandDispatch.Reason);
+            result.CommandDispatch.Reason,
+            result.PinnedSource?.SourceReferenceId,
+            result.PinnedSource?.PublicationId,
+            result.PinnedSource?.SlotId);
 }

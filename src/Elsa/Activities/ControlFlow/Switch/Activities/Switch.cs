@@ -4,8 +4,10 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Switch.Exceptions;
 using Elsa.Activities.Switch.Internal;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Switch.Activities;
 
@@ -23,6 +25,8 @@ namespace Elsa.Activities.Switch.Activities;
 /// equals any declared case.
 /// </remarks>
 [ActivityStructure("elsa.switch.structure", "1.0.0")]
+[ActivityOutcome(ActivityOutcomes.Default)]
+[ActivityOutcome(ActivityOutcomes.Break)]
 [ActivityChildSlot(
     "Switch.Case",
     "cases",
@@ -33,7 +37,7 @@ namespace Elsa.Activities.Switch.Activities;
     LabelProperty = "match",
     SlotNameTemplate = "Switch.Case[{match}]")]
 [ActivityChildSlot("Switch.Default", "default", "Default", ActivityChildSlotCardinalities.Single)]
-public sealed class Switch : ActivityBase, IActivityChildCompletionHandler
+public sealed class Switch : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string DefaultSlotName = "Switch.Default";
     public const string CaseSlotPrefix = "Switch.Case[";
@@ -45,19 +49,17 @@ public sealed class Switch : ActivityBase, IActivityChildCompletionHandler
     public static string CaseSlotName(string match) => $"{CaseSlotPrefix}{match}{CaseSlotSuffix}";
 
     /// <summary>The value matched against each case's declared match value to select the branch to run.</summary>
-    public InputArgument<string> Value { get; set; } = null!;
+    [ActivityInput(Key = nameof(Value))]
+    public string? Value { get; set; }
 
-    protected override void Execute(IActivityExecutionContext context)
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var runtimeContext = RequireRuntimeContext(context);
-        var value = context.Get(Value);
         var navigator = SwitchNavigator.From(runtimeContext.ExecutableNode);
-        var branch = navigator.Select(value);
+        var branch = navigator.Select(Value);
 
         if (branch is null)
         {
-            runtimeContext.CompleteCompositeActivity([navigator.OutcomeForValue(value)]);
-            return;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(navigator.OutcomeForValue(Value)));
         }
 
         runtimeContext.ScheduleChildActivity(
@@ -68,9 +70,11 @@ public sealed class Switch : ActivityBase, IActivityChildCompletionHandler
                 ["switch.parentActivityExecutionId"] = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
                 ["switch.targetNodeId"] = branch.ExecutableNodeId
             });
+
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
-    public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -86,12 +90,10 @@ public sealed class Switch : ActivityBase, IActivityChildCompletionHandler
         // (separate) Break activity module.
         if (context.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Break]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(ActivityOutcomes.Break));
         }
 
-        runtimeContext.CompleteCompositeActivity([outcome]);
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(outcome));
     }
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)

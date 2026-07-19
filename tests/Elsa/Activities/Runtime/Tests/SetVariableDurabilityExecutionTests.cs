@@ -1,248 +1,429 @@
 using System.Text.Json;
-using Elsa.Activities.Primitives.Activities;
-using Elsa.Activities.Runtime.Core.Abstractions;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Testing;
-using Elsa.Events;
-using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using Elsa.Expressions.JavaScript;
-using Elsa.Expressions.JavaScript.Core.Contracts;
-using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Primitives.Models;
-using Elsa.Serialization.SystemText;
-using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.JavaScript.PreProcessors;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
 namespace Elsa.Activities.Runtime.Tests;
 
-/// <summary>
-/// Headline durability proof for <c>SetVariable</c> (#260) over the Seam-C keystone write-back (#286): a
-/// <c>SetVariable</c> leaf mutates a <b>workflow-scope</b> variable, and a later sibling reads it through a real
-/// JavaScript <c>variables.*</c> input expression and observes the value <c>SetVariable</c> wrote — proving the
-/// mutation is persisted as a durable value and re-projected into materialization, not lost between activities.
-///
-/// The workflow declares <c>greeting</c> defaulting to <c>"unset"</c> on the Sequence root (its variables are
-/// the workflow scope, the same shape Sequence/Flowchart emit). <c>SetVariable</c> sets it to <c>"set-value"</c>;
-/// the downstream probe binds its input to JS <c>variables.greeting</c> and records what it resolves. Reading
-/// <c>"set-value"</c> (not the <c>"unset"</c> default) proves the write-back carried the mutation forward.
-/// </summary>
 public sealed class SetVariableDurabilityExecutionTests
 {
-    private const string StringTypeName = "System.String";
+    private static readonly DateTimeOffset Now = new(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);
+    private static readonly ValueTypeDescriptor StringType = new("String");
+
+    [Theory]
+    [InlineData(WorkflowIntrinsicKind.Set)]
+    [InlineData(WorkflowIntrinsicKind.Merge)]
+    [InlineData(WorkflowIntrinsicKind.Reduce)]
+    public async Task Variable_write_intrinsic_commits_frame_change_before_continuation_and_recovery_does_not_reapply_it(
+        WorkflowIntrinsicKind intrinsicKind)
+    {
+        await using var harness = await CreateHarnessAsync(NewVariableWriteNode(intrinsicKind));
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.IntrinsicCompleted, commit.Checkpoint.Name);
+        Assert.Equal(intrinsicKind.ToString(), commit.Metadata[RuntimeMetadataKeys.CheckpointReason]);
+        Assert.NotNull(commit.StateChanges.WorkflowExecution);
+        var committedActivity = Assert.Single(commit.StateChanges.ActivityExecutions).State;
+        Assert.Equal(ActivityExecutionStatus.Completed, committedActivity.Status);
+        Assert.Empty(committedActivity.Attempts!);
+        Assert.Null(committedActivity.InputSnapshot);
+        var completionIntent = Assert.Single(commit.PostCommitIntents);
+        var completionWorkItem = completionIntent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>();
+        Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, completionWorkItem!.CommandKind);
+
+        var persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
+        Assert.Equal(1, persistedWorkflow!.RootVariableFrame!.Revision);
+        Assert.Equal("updated", persistedWorkflow.RootVariableFrame.Values["greeting"].InlineValue!.Value.GetString());
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        Assert.Single(harness.CommitStore.ListCommits());
+        persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
+        Assert.Equal(1, persistedWorkflow!.RootVariableFrame!.Revision);
+    }
 
     [Fact]
-    public async Task SetVariable_MutationIsReadByDownstreamInputExpression_ThroughTheKeystoneWriteBack()
+    public async Task Set_intrinsic_evaluates_only_declared_portable_expression_parameters()
     {
-        var probe = new VariableReadProbe();
-        await using var harness = NewHarness(probe, "actexec-sequence", "actexec-set", "actexec-read");
+        var evaluator = new RecordingPortableEvaluator();
+        await using var harness = await CreateHarnessAsync(
+            NewPortableExpressionVariableWriteNode(),
+            portableExpressionEvaluator: evaluator);
 
-        var run = await harness.RunAsync(NewExecutable());
+        await harness.Handler.HandleAsync(harness.WorkItem);
 
-        run.AssertWorkflowCompleted();
-        // The downstream activity's `variables.greeting` input resolves to the value SetVariable wrote, not the
-        // authored default — the keystone write-back persisted the mutation and re-projected it.
-        Assert.Equal("set-value", probe.LastValue);
+        var persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
+        Assert.Equal("initial:updated", persistedWorkflow!.RootVariableFrame!.Values["greeting"].InlineValue!.Value.GetString());
+        Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, evaluator.Request!.Capabilities.Profile);
+        Assert.Equal(["current", "suffix"], evaluator.Request.ParameterValues.Keys);
+        Assert.Equal("initial", evaluator.Request.ParameterValues["current"].GetString());
+        Assert.Equal("updated", evaluator.Request.ParameterValues["suffix"].GetString());
     }
 
-    private static WorkflowExecutionHarness NewHarness(VariableReadProbe probe, params string[] activityExecutionIds)
+    [Theory]
+    [InlineData(WorkflowIntrinsicKind.Return, "Done", "returned")]
+    [InlineData(WorkflowIntrinsicKind.Control, "Approved", null)]
+    public async Task Result_and_control_intrinsics_commit_before_their_selected_continuation(
+        WorkflowIntrinsicKind intrinsicKind,
+        string expectedOutcome,
+        string? expectedResult)
     {
-        var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
-            .WithConstructor<SequenceConstructor>()
-            .WithConstructor(new SetVariableConstructor())
-            .WithConstructor(new VariableReadProbeConstructor(probe))
-            .ConfigureServices(services =>
+        await using var harness = await CreateHarnessAsync(NewTerminalNode(intrinsicKind));
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        var completed = Assert.Single(commit.StateChanges.ActivityExecutions).State;
+        Assert.Equal(ActivityExecutionStatus.Completed, completed.Status);
+        Assert.Equal(expectedOutcome, completed.Completion!.OutcomeKey);
+        if (expectedResult is null)
+            Assert.Equal("Elsa.Activities.Runtime.Core.Models.ActivityUnit", completed.Completion.Result.Type.Alias);
+        else
+            Assert.Equal(expectedResult, completed.Completion.Result.InlineValue!.Value.GetString());
+
+        var workflow = await harness.WorkflowStore.FindAsync("wfexec-1");
+        Assert.Equal(0, workflow!.RootVariableFrame!.Revision);
+        var intent = Assert.Single(commit.PostCommitIntents);
+        var workItem = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>();
+        var payload = workItem!.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>();
+        Assert.Equal([expectedOutcome], payload!.OutcomeNames);
+    }
+
+    [Theory]
+    [InlineData(WorkflowIntrinsicKind.SetCorrelationId, "order-42")]
+    [InlineData(WorkflowIntrinsicKind.SetInstanceName, "Order 42")]
+    public async Task Identity_intrinsic_commits_authoritative_state_and_cross_branch_projection_before_continuation(
+        WorkflowIntrinsicKind intrinsicKind,
+        string assignedValue)
+    {
+        await using var harness = await CreateHarnessAsync(NewEffectNode(intrinsicKind, assignedValue));
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.IntrinsicCompleted, commit.Checkpoint.Name);
+        Assert.Single(commit.PostCommitIntents);
+        var workflow = await harness.WorkflowStore.FindAsync("wfexec-1");
+        if (intrinsicKind == WorkflowIntrinsicKind.SetCorrelationId)
+            Assert.Equal(assignedValue, workflow!.CorrelationId);
+        else
+            Assert.Equal(assignedValue, workflow!.SystemMetadata[RuntimeMetadataKeys.InstanceName]);
+        var identity = Assert.Single(commit.StateChanges.DurableValues).State;
+        Assert.Equal(assignedValue, identity.InlineValue!.Value.GetString());
+        Assert.Equal(
+            intrinsicKind == WorkflowIntrinsicKind.SetCorrelationId
+                ? RuntimeWorkflowStateSeed.IdentityCorrelationIdName
+                : RuntimeWorkflowStateSeed.IdentityInstanceNameName,
+            identity.Metadata[RuntimeMetadataKeys.IdentityName]);
+    }
+
+    [Fact]
+    public async Task Set_output_intrinsic_commits_typed_named_value_before_continuation()
+    {
+        await using var harness = await CreateHarnessAsync(NewEffectNode(WorkflowIntrinsicKind.SetOutput, "accepted"));
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        var output = Assert.Single(commit.StateChanges.DurableValues).State;
+        Assert.Equal("output:result", output.ValueId);
+        Assert.Equal("result", output.Metadata[RuntimeMetadataKeys.OutputName]);
+        Assert.Equal("accepted", output.InlineValue!.Value.GetString());
+        Assert.Equal("String", output.Type.Id);
+        Assert.Single(commit.PostCommitIntents);
+    }
+
+    [Fact]
+    public async Task Finish_intrinsic_commits_terminal_workflow_checkpoint_and_schedules_no_continuation()
+    {
+        await using var harness = await CreateHarnessAsync(NewEffectNode(WorkflowIntrinsicKind.Finish, "Aborted"));
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, commit.Checkpoint.Name);
+        Assert.Empty(commit.PostCommitIntents);
+        Assert.Equal(WorkflowExecutionStatus.Completed, commit.StateChanges.WorkflowExecution!.State.Status);
+        Assert.Equal(Now, commit.StateChanges.WorkflowExecution.State.CompletedAt);
+        var completed = Assert.Single(commit.StateChanges.ActivityExecutions).State;
+        Assert.Equal("Aborted", completed.Completion!.OutcomeKey);
+    }
+
+    private static ExecutableNode NewVariableWriteNode(WorkflowIntrinsicKind intrinsicKind)
+    {
+        using var descriptor = JsonDocument.Parse("{}" );
+        return new ExecutableNode(
+            "node-set",
+            "authored-set",
+            $"elsa.intrinsic.{intrinsicKind.ToString().ToLowerInvariant()}",
+            "1.0.0",
+            "intrinsic",
+            descriptor.RootElement,
+            new Dictionary<string, RuntimeInputBinding>
             {
-                services.AddLogging();
-                services.AddMemoryCache();
-                services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
-                new EventsFeature().ConfigureServices(services);
-                new SerializationFeature().ConfigureServices(services);
-                new ExpressionsFeature().ConfigureServices(services);
-                new JavaScriptFeature().ConfigureServices(services);
-                new JintFeature().ConfigureServices(services);
-                // Surfaces variables/inputs/outputs to the engine at materialization time (self-contained).
-                services.AddScoped<IScriptPreProcessor, MaterializationAccessorsPreProcessor>();
-            })
-            .Build(activityExecutionIds);
-
-        RunStartupTasks(harness.Services);
-        return harness;
-    }
-
-    private static void RunStartupTasks(IServiceProvider provider)
-    {
-        using var scope = provider.CreateScope();
-        foreach (var task in scope.ServiceProvider.GetServices<IStartupTask>())
-            task.ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
-    }
-
-    private static WorkflowExecutable NewExecutable()
-    {
-        var setNode = new ExecutableNode(
-            executableNodeId: "node-set",
-            authoredActivityId: "authored-set",
-            activityType: typeof(SetVariable).FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: SetVariableDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SetVariableDescriptor()),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>
-            {
-                ["Variable"] = StringLiteral("Variable", "greeting"),
-                ["Value"] = ObjectLiteral("Value", "set-value")
+                ["value"] = new(
+                    "value",
+                    StringType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: Envelope("updated"))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            intrinsicKind: intrinsicKind,
+            intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
+    }
 
-        var readNode = new ExecutableNode(
-            executableNodeId: "node-read",
-            authoredActivityId: "authored-read",
-            activityType: "test/variable-read-probe",
-            activityTypeVersion: "1.0.0",
-            descriptorType: VariableReadProbeDescriptor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new VariableReadProbeDescriptor()),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>
+    private static ExecutableNode NewPortableExpressionVariableWriteNode()
+    {
+        using var descriptor = JsonDocument.Parse("{}");
+        var expression = new RuntimeExpressionBinding(
+            "TestPortable",
+            "args.current + ':' + args.suffix",
+            new RuntimeValueTypeDescriptor("alias", "String", null),
+            parameters: new Dictionary<string, ExpressionParameterBinding>
             {
-                // Real JS expression over the workflow-scope variable: resolves the current projected value.
-                ["Value"] = new(
-                    inputName: "Value",
-                    source: RuntimeInputBindingSource.Expression,
-                    expression: new RuntimeExpressionBinding("JavaScript", "variables.greeting", new RuntimeValueTypeDescriptor("clr", StringTypeName, null)),
-                    metadata: new Dictionary<string, string>
-                    {
-                        [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = StringTypeName,
-                        ["referenceKey"] = "Value"
-                    })
+                ["current"] = new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, "greeting"),
+                ["suffix"] = new LiteralExpressionParameterBinding(JsonSerializer.SerializeToElement("updated"))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            options: JsonSerializer.SerializeToElement(new { }),
+            capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1);
+        return new ExecutableNode(
+            "node-set-expression",
+            "authored-set-expression",
+            "elsa.intrinsic.set",
+            "1.0.0",
+            "intrinsic",
+            descriptor.RootElement,
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Value] = new(
+                    WorkflowIntrinsicInputKeys.Value,
+                    StringType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Expression,
+                    expression: expression)
+            },
+            new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
+    }
 
-        var children = new[] { setNode, readNode };
-        var structurePayload = new
+    private static ExecutableNode NewTerminalNode(WorkflowIntrinsicKind intrinsicKind)
+    {
+        using var descriptor = JsonDocument.Parse("{}");
+        var control = intrinsicKind == WorkflowIntrinsicKind.Control;
+        var inputKey = control ? WorkflowIntrinsicInputKeys.Outcome : WorkflowIntrinsicInputKeys.Value;
+        var value = control ? "Approved" : "returned";
+        return new ExecutableNode(
+            $"node-{intrinsicKind.ToString().ToLowerInvariant()}",
+            $"authored-{intrinsicKind.ToString().ToLowerInvariant()}",
+            $"elsa.intrinsic.{intrinsicKind.ToString().ToLowerInvariant()}",
+            "1.0.0",
+            "intrinsic",
+            descriptor.RootElement,
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                [inputKey] = new(
+                    inputKey,
+                    StringType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: Envelope(value))
+            },
+            new Dictionary<string, string>(),
+            intrinsicKind: intrinsicKind);
+    }
+
+    private static ExecutableNode NewEffectNode(WorkflowIntrinsicKind intrinsicKind, string value)
+    {
+        using var descriptor = JsonDocument.Parse("{}");
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        if (intrinsicKind == WorkflowIntrinsicKind.Finish)
+            bindings[WorkflowIntrinsicInputKeys.Outcome] = LiteralBinding(WorkflowIntrinsicInputKeys.Outcome, value);
+        else
         {
-            activities = children.Select(child => child.ExecutableNodeId).ToArray(),
-            variables = new[]
-            {
-                new VariableDefinition(
-                    ReferenceKey: "var-greeting",
-                    Name: "greeting",
-                    Type: new TypeReference("String"),
-                    StorageDriverType: null,
-                    Default: new ArgumentValue("unset", "Literal"))
-            }
+            if (intrinsicKind == WorkflowIntrinsicKind.SetOutput)
+                bindings[WorkflowIntrinsicInputKeys.Name] = LiteralBinding(WorkflowIntrinsicInputKeys.Name, "result");
+            bindings[WorkflowIntrinsicInputKeys.Value] = LiteralBinding(WorkflowIntrinsicInputKeys.Value, value);
+        }
+
+        return new ExecutableNode(
+            $"node-{intrinsicKind.ToString().ToLowerInvariant()}",
+            $"authored-{intrinsicKind.ToString().ToLowerInvariant()}",
+            $"elsa.intrinsic.{intrinsicKind.ToString().ToLowerInvariant()}",
+            "1.0.0",
+            "intrinsic",
+            descriptor.RootElement,
+            bindings,
+            new Dictionary<string, string>(),
+            intrinsicKind: intrinsicKind);
+    }
+
+    private static RuntimeInputBinding LiteralBinding(string inputName, string value) => new(
+        inputName,
+        StringType,
+        ValueProtectionPolicy.InstanceInline,
+        RuntimeInputBindingSource.Literal,
+        literal: Envelope(value));
+
+    private static async Task<Harness> CreateHarnessAsync(
+        ExecutableNode node,
+        IPortableExpressionEvaluator? portableExpressionEvaluator = null)
+    {
+        var identity = new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+        var executable = new WorkflowExecutable(identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>());
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var activityStore = new InMemoryActivityExecutionStateStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var inspectionStore = new InMemoryActivityExecutionInspectionStore();
+        await executableStore.SaveAsync(executable);
+        await workflowStore.SaveAsync(NewWorkflowState(identity));
+        await activityStore.SaveAsync(NewScheduledState(node));
+
+        var commitStore = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: workflowStore,
+            activityExecutionStateStore: activityStore,
+            activityExecutionInspectionWriter: inspectionStore,
+            rootWriteLeaseManager: PassThroughRootWriteLeaseManager.Instance);
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore);
+        var executor = new WorkflowIntrinsicExecutor(
+            workflowStore,
+            activityStore,
+            new RuntimeInputBindingResolver(),
+            new InMemoryDurableValueStateStore(),
+            new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
+            new FixedTimeProvider(Now),
+            portableExpressionEvaluator: portableExpressionEvaluator);
+        var services = new ServiceCollection();
+        services.AddScoped(_ => executor);
+        var serviceProvider = services.BuildServiceProvider();
+        var handler = new WorkflowStartActivitySchedulerWorkHandler(
+            executableStore,
+            activityStore,
+            queue,
+            committer,
+            new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
+            new FixedTimeProvider(Now),
+            serviceProvider.GetRequiredService<IServiceScopeFactory>());
+        return new Harness(
+            handler,
+            NewStartWorkItem(identity, node),
+            commitStore,
+            workflowStore,
+            serviceProvider);
+    }
+
+    private static WorkflowExecutionState NewWorkflowState(WorkflowExecutableIdentity identity) =>
+        new(
+            "wfexec-1",
+            identity,
+            WorkflowExecutionStatus.Running,
+            null,
+            Now.AddMinutes(-1),
+            Now.AddMinutes(-1),
+            Now.AddMinutes(-1),
+            null,
+            null,
+            null,
+            null,
+            new Dictionary<string, string>())
+        {
+            RootVariableFrame = new VariableFrameFactory().CreateRoot(
+                "wfexec-1",
+                VariableReference.WorkflowScopeId,
+                new Dictionary<string, ValueEnvelope> { ["greeting"] = Envelope("initial") })
         };
 
-        var root = new ExecutableNode(
-            executableNodeId: "node-sequence",
-            authoredActivityId: "authored-sequence",
-            activityType: typeof(SequenceActivity).FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: SequenceConstructor.SequenceDescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
-            structure: new ExecutableActivityStructure(
-                SequenceActivity.StructureKind,
-                SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(structurePayload, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
-
-        return WorkflowExecutionHarness.NewExecutable(root);
-    }
-
-    private static RuntimeInputBinding StringLiteral(string inputName, string value) =>
-        Literal(inputName, JsonSerializer.SerializeToElement(value), StringTypeName);
-
-    private static RuntimeInputBinding ObjectLiteral(string inputName, object? value) =>
-        Literal(inputName, JsonSerializer.SerializeToElement(value), "System.Object");
-
-    private static RuntimeInputBinding Literal(string inputName, JsonElement value, string typeName) =>
+    private static ActivityExecutionState NewScheduledState(ExecutableNode node) =>
         new(
-            inputName: inputName,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: value,
-            metadata: new Dictionary<string, string>
-            {
-                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName,
-                ["referenceKey"] = inputName
-            });
+            Execution: new ActivityExecution("actexec-set", "wfexec-1", node.ExecutableNodeId, node.AuthoredActivityId, node.ActivityType, "1.0.0"),
+            Status: ActivityExecutionStatus.Scheduled,
+            SubStatus: null,
+            ScheduledAt: Now.AddSeconds(-1),
+            StartedAt: null,
+            CompletedAt: null,
+            SchedulingActivityExecutionId: null,
+            ParentActivityExecutionId: null,
+            BranchId: null,
+            IterationId: null,
+            CallStackDepth: null,
+            BookmarkIds: [],
+            IncidentIds: [],
+            FaultCount: 0,
+            AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string>())
+        {
+            Attempts = []
+        };
 
-    private sealed record SetVariableDescriptor
+    private static RuntimeSchedulerWorkItem NewStartWorkItem(WorkflowExecutableIdentity identity, ExecutableNode node) =>
+        new(
+            "start-set",
+            "wfexec-1",
+            "command-set",
+            WorkflowExecutionCommandKind.StartActivity,
+            "envelope-1",
+            "wfexec-1:start:actexec-set",
+            Now,
+            Now,
+            1,
+            JsonSerializer.SerializeToElement(new RuntimeStartActivityCommandPayload(
+                identity,
+                node.ExecutableNodeId,
+                "actexec-set",
+                RuntimeStartActivityCommandPayload.ScheduledActivityReason)),
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>());
+
+    private static ValueEnvelope Envelope(string value) =>
+        ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
-        public static string DescriptorTypeKey => typeof(SetVariableDescriptor).FullName!;
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
-    private sealed class SetVariableConstructor : IActivityConstructor<SetVariableDescriptor>
+    private sealed class RecordingPortableEvaluator : IPortableExpressionEvaluator
     {
-        public string DescriptorType => SetVariableDescriptor.DescriptorTypeKey;
+        public ExpressionEvaluationRequest? Request { get; private set; }
 
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            Construct(new SetVariableDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(SetVariableDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken)
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
         {
-            var activity = new SetVariable();
-            if (inputs is not null && inputs.TryGetValue("Variable", out var variableInput))
-                activity.Variable = (InputArgument<string>)variableInput;
-            if (inputs is not null && inputs.TryGetValue("Value", out var valueInput))
-                activity.Value = (InputArgument<object>)valueInput;
-            return new(activity);
+            Request = request;
+            var value = $"{request.ParameterValues["current"].GetString()}:{request.ParameterValues["suffix"].GetString()}";
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement(value));
         }
     }
 
-    private sealed record VariableReadProbeDescriptor
+    private sealed record Harness(
+        WorkflowStartActivitySchedulerWorkHandler Handler,
+        RuntimeSchedulerWorkItem WorkItem,
+        InMemoryRuntimeCheckpointCommitStore CommitStore,
+        InMemoryWorkflowExecutionStateStore WorkflowStore,
+        ServiceProvider ServiceProvider) : IAsyncDisposable
     {
-        public static string DescriptorTypeKey => typeof(VariableReadProbeDescriptor).FullName!;
+        public ValueTask DisposeAsync() => ServiceProvider.DisposeAsync();
     }
 
-    private sealed class VariableReadProbe
+    private sealed class PassThroughRootWriteLeaseManager : IWorkflowExecutableRootWriteLeaseManager
     {
-        public string? LastValue { get; private set; }
-        public void Record(string? value) => LastValue = value;
-    }
+        public static PassThroughRootWriteLeaseManager Instance { get; } = new();
 
-    private sealed class VariableReadProbeConstructor(VariableReadProbe probe) : IActivityConstructor<VariableReadProbeDescriptor>
-    {
-        public string DescriptorType => VariableReadProbeDescriptor.DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            Construct(new VariableReadProbeDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(VariableReadProbeDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken)
-        {
-            if (inputs is null || !inputs.TryGetValue("Value", out var argument))
-                throw new InvalidOperationException("VariableReadProbe expected a materialized 'Value' input argument.");
-
-            return new(new VariableReadProbeActivity(probe, (InputArgument<string>)argument));
-        }
-    }
-
-    private sealed class VariableReadProbeActivity(VariableReadProbe probe, InputArgument<string> value) : CodeActivity("test/variable-read-probe")
-    {
-        protected override void Execute(IActivityExecutionContext context) => probe.Record(context.Get(value));
-    }
-
-    private sealed record SequenceDescriptor;
-
-    private sealed class SequenceConstructor : IActivityConstructor<SequenceDescriptor>
-    {
-        public static string SequenceDescriptorTypeKey => typeof(SequenceDescriptor).FullName!;
-        public string DescriptorType => SequenceDescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new SequenceActivity());
-
-        public ValueTask<IActivity> Construct(SequenceDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
-            new(new SequenceActivity());
+        public async ValueTask ExecuteAsync(
+            string artifactId,
+            string leaseId,
+            Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default) =>
+            await write(cancellationToken);
     }
 }

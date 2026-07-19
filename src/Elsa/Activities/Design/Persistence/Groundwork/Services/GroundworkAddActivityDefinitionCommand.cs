@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Serialization.Core;
 using Groundwork.Documents.Store;
@@ -15,24 +16,32 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 /// plain web options; the rich version (authored projection collections) delegates to the host
 /// <see cref="IPayloadSerializer"/>, matching the version read store.
 /// </summary>
-public sealed class GroundworkAddActivityDefinitionCommand(IDocumentStore store, IPayloadSerializer payloadSerializer)
+public sealed class GroundworkAddActivityDefinitionCommand(
+    IDocumentStore store,
+    IPayloadSerializer payloadSerializer,
+    IPersistenceAccessContextAccessor accessContextAccessor)
     : IAddActivityDefinitionCommand
 {
     public async Task Execute(ActivityDefinition definition, ActivityDefinitionVersion version, CancellationToken cancellation)
     {
-        var definitionSave = GroundworkDocumentWriter.ToSaveRequest(
+        accessContextAccessor.Current.EnsureTenantScope(definition.TenantId);
+        accessContextAccessor.Current.EnsureTenantScope(version.TenantId);
+
+        var definitionSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
             ActivitiesDesignStorageManifest.SchemaVersion,
             definition,
-            GroundworkActivitiesDesignJson.Options);
+            GroundworkActivitiesDesignJson.Options,
+            accessContextAccessor.Current);
 
-        var versionSave = GroundworkDocumentWriter.ToSaveRequest(
+        var versionSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
             ActivitiesDesignStorageManifest.SchemaVersion,
             version,
-            GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer));
+            GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer),
+            accessContextAccessor.Current);
 
         await store.SaveAllAsync(
             DocumentCommitScope.Of(

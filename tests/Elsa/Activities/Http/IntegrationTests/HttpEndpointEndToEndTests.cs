@@ -47,8 +47,8 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
 
         // The started run's durable state reflects the LIVE request, not the authored-route fallback: the
         // fallback would carry method "*" (no SupportedMethods authored) and no body/header/query.
-        var captured = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
-        var model = captured.Deserialize<HttpRequestModel>()!;
+        var captured = await _fixture.ReadResultProjectionAsync(workflowExecutionId, "Request");
+        var model = HttpEndpointHostFixture.DeserializeRequest(captured);
 
         Assert.Equal("POST", model.Method);
         Assert.Equal(Path, model.Path);
@@ -87,8 +87,8 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
 
-        var captured = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
-        var model = captured.Deserialize<HttpRequestModel>()!;
+        var captured = await _fixture.ReadResultProjectionAsync(workflowExecutionId, "Request");
+        var model = HttpEndpointHostFixture.DeserializeRequest(captured);
         Assert.Equal("GET", model.Method);
         Assert.Equal("42", Assert.Contains("id", model.RouteData!));
     }
@@ -172,12 +172,12 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
         var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
 
         // The Result carries the raw body; ParsedContent is no longer persisted on it (spec 089 efficiency #9).
-        var capturedResult = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
-        var model = capturedResult.Deserialize<HttpRequestModel>()!;
+        var capturedResult = await _fixture.ReadResultProjectionAsync(workflowExecutionId, "Request");
+        var model = HttpEndpointHostFixture.DeserializeRequest(capturedResult);
         Assert.Equal("""{"orderId":7,"customer":"acme"}""", model.Body);
 
         // The activity derived ParsedContent from Body via the deterministic parser seam, onto its own output.
-        var capturedParsed = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, HttpEndpointHostFixture.ParsedContentOutputName);
+        var capturedParsed = await _fixture.ReadResultProjectionAsync(workflowExecutionId, HttpEndpointHostFixture.ParsedContentProjectionKey);
         Assert.Equal(JsonValueKind.Object, capturedParsed.ValueKind);
         Assert.Equal(7, capturedParsed.GetProperty("orderId").GetInt32());
         Assert.Equal("acme", capturedParsed.GetProperty("customer").GetString());
@@ -196,7 +196,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
 
-        var capturedParsed = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, HttpEndpointHostFixture.ParsedContentOutputName);
+        var capturedParsed = await _fixture.ReadResultProjectionAsync(workflowExecutionId, HttpEndpointHostFixture.ParsedContentProjectionKey);
         Assert.Equal(JsonValueKind.Null, capturedParsed.ValueKind);
     }
 

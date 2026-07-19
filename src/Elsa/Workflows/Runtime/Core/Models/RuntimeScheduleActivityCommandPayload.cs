@@ -18,7 +18,8 @@ public sealed class RuntimeScheduleActivityCommandPayload
         string reason,
         string? schedulingActivityExecutionId = null,
         string? parentActivityExecutionId = null,
-        ActivitySchedulingProvenance? schedulingProvenance = null)
+        ActivitySchedulingProvenance? schedulingProvenance = null,
+        LoopIterationScopeRequest? iterationFrame = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
@@ -38,6 +39,7 @@ public sealed class RuntimeScheduleActivityCommandPayload
         SchedulingActivityExecutionId = schedulingActivityExecutionId;
         ParentActivityExecutionId = parentActivityExecutionId;
         SchedulingProvenance = schedulingProvenance ?? ActivitySchedulingProvenance.Empty;
+        IterationFrame = iterationFrame;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -47,4 +49,5 @@ public sealed class RuntimeScheduleActivityCommandPayload
     public string? SchedulingActivityExecutionId { get; }
     public string? ParentActivityExecutionId { get; }
     public ActivitySchedulingProvenance SchedulingProvenance { get; }
+    public LoopIterationScopeRequest? IterationFrame { get; }
 }

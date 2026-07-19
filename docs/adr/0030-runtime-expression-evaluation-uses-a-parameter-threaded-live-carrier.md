@@ -1,6 +1,10 @@
 # Runtime Expression Evaluation Uses A Parameter-Threaded Live Carrier
 
-Status: accepted
+Status: superseded by [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) and [spec 095](../../specs/095-value-flow-redesign/spec.md) (2026-07-16)
+
+The live/materialization carrier mechanism described below was removed. Portable expressions now receive only
+declared immutable parameters; workflow state reads compile to role-owned bindings and mutations occur only
+through explicit engine intrinsics. The remainder is retained as historical decision context.
 
 Runtime expression evaluation will obtain its workflow state — identity, inputs, variables, and activity outputs — from a **carrier passed as the `IExpressionExecutionContext` parameter**, never from a DI-registered live context. Two carriers exist along the same parameter-threading seam: the **materialization-time** carrier `IMaterializationExpressionState` (already built and working) for expressions evaluated when activity inputs materialize, and a **new execution-time live carrier** for expressions evaluated mid-activity against post-seed state. The five currently-dead `IWorkflowExecutionContext` JavaScript pre/post-processors are **re-pointed onto the live carrier**, not revived through dependency injection. This decision settles the expression-context edge of the Runtime Execution Seam (the "edge A" left open by the [source reconciliation](../reports/runtime-expression-context-source-reconciliation.md)); it is independent of, and composes with, [ADR 0029](0029-runtime-execution-flows-through-the-pipelines.md).
 

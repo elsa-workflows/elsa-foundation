@@ -1,18 +1,10 @@
-using System.Text.Json;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
-using Elsa.Persistence.Groundwork.Serialization;
-using Elsa.Workflows.Dashboard;
-using Elsa.Workflows.Dashboard.Persistence.Groundwork;
-using Elsa.Serialization.Core;
-using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.PostgreSql.Unified;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using global::Groundwork.Documents.Store;
-using global::Groundwork.PostgreSql.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Xunit;
@@ -28,24 +20,27 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.Tests;
 [Collection(PostgresContainerCollection.Name)]
 public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(PostgresContainerFixture fixture)
 {
+    private readonly DateTimeOffset _timestamp = new(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+
     [SkippableFact]
     public async Task Composed_feature_wires_a_postgresql_document_store()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
 
         var connectionString = await fixture.CreateIsolatedDatabaseAsync();
-        var services = new ServiceCollection();
-        new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
+        var services = CreateServices(connectionString);
 
-        await using var provider = services.BuildServiceProvider();
-        // Drive the startup initializer, as a host would, so the holder is populated and IDocumentStore resolves.
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        // Drive the startup initializer, as a host would, so the session source is published before stores resolve.
+        await provider.ApplyPostgreSqlGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
 
-        Assert.IsType<PostgreSqlDocumentStore>(provider.GetRequiredService<IDocumentStore>());
-        Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
-        Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
-        Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
-        Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
+        await using var scope = provider.CreateAsyncScope();
+        Assert.IsType<GroundworkScopedDocumentStore>(scope.ServiceProvider.GetRequiredService<IDocumentStore>());
+        Assert.IsType<GroundworkBookmarkStateStore>(scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
+        Assert.IsType<GroundworkRuntimeCheckpointWriter>(scope.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>());
+        Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
     }
 
     [SkippableFact]
@@ -59,87 +54,99 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
         // First host process: compose the feature exactly as a host would, then persist through a resolved seam.
         await using (var provider = await BuildComposedProviderAsync(connectionString))
         {
-            var bookmarks = provider.GetRequiredService<IBookmarkStateStore>();
+            await using var scope = provider.CreateAsyncScope();
+            var bookmarks = scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>();
             await bookmarks.SaveAsync(Bookmark("wf-1", "bm-1"));
         }
 
         // Second host process: a fresh container over the same database. State read back was genuinely durable.
         await using (var provider = await BuildComposedProviderAsync(connectionString))
         {
-            var bookmarks = provider.GetRequiredService<IBookmarkStateStore>();
+            await using var scope = provider.CreateAsyncScope();
+            var bookmarks = scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>();
             Assert.NotNull(await bookmarks.FindAsync("wf-1", "bm-1"));
         }
     }
 
     [SkippableFact]
-    public async Task Dashboard_adapter_pages_exactly_through_postgresql()
+    public async Task PostgreSql_executes_every_workflow_history_filter_and_keyset_page()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
 
         var connectionString = await fixture.CreateIsolatedDatabaseAsync();
         await using var provider = await BuildComposedProviderAsync(connectionString);
-        var executionStore = provider.GetRequiredService<IWorkflowExecutionStateStore>();
-        for (var index = 0; index < 125; index++)
-            await executionStore.SaveAsync(Execution(index));
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
+        await WorkflowExecutionHistoryProviderConformance.VerifyAllFiltersAsync(store, _timestamp);
 
-        var source = new GroundworkWorkflowRunHealthDataSource(
-            () => new NpgsqlConnection(connectionString),
-            GroundworkRunHealthDialect.PostgreSql);
-        var snapshot = await new WorkflowRunHealthService(source).QueryAsync(new(
-            DateTimeOffset.UnixEpoch,
-            DateTimeOffset.UnixEpoch.AddDays(1),
-            "Etc/UTC",
-            WorkflowRunHealthBucketSize.Day,
-            "tenant-a"));
-
-        Assert.Equal(125, snapshot.StartedCount);
+        var first = await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 3));
+        var second = await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 3, Cursor: first.NextCursor));
+        Assert.Equal(3, first.Items.Count);
+        Assert.Equal(3, second.Items.Count);
+        Assert.Empty(first.Items.Select(x => x.WorkflowExecutionId).Intersect(second.Items.Select(x => x.WorkflowExecutionId)));
     }
 
     [SkippableFact]
-    public async Task Dashboard_portfolio_aggregates_exactly_through_postgresql()
+    public async Task PostgreSql_startup_does_not_rewrite_current_history_or_create_legacy_indexes()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+
         var connectionString = await fixture.CreateIsolatedDatabaseAsync();
-        await using var provider = await BuildUnifiedProviderAsync(connectionString);
-        var store = provider.GetRequiredService<IDocumentStore>();
-        for (var index = 0; index < 105; index++)
-            await SaveDefinitionAsync(store, PortfolioDefinition(index));
-        for (var index = 0; index < 30; index++)
-            await SaveDraftAsync(store, PortfolioDraft(index));
-        var references = provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
-        for (var index = 0; index < 50; index++)
-            await references.SaveAsync(PortfolioReference(index));
-        var source = new GroundworkWorkflowPortfolioDataSource(
-            () => new NpgsqlConnection(connectionString),
-            GroundworkRunHealthDialect.PostgreSql,
-            new FakePayloadSerializer());
+        await using (var provider = await BuildComposedProviderAsync(connectionString))
+        {
+            await using var scope = provider.CreateAsyncScope();
+            var contentJson = await File.ReadAllTextAsync(
+                Path.Combine(AppContext.BaseDirectory, "Fixtures", "v4", "workflowExecutionState.json"));
+            var result = await scope.ServiceProvider.GetRequiredService<IDocumentStore>().SaveAsync(new SaveDocumentRequest(
+                "workflowExecutionState",
+                "wf-1",
+                "4",
+                contentJson));
+            Assert.Equal(DocumentStoreWriteStatus.Saved, result.Status);
+        }
 
-        var counts = await source.QueryBaseCountsAsync("tenant-a", DateTimeOffset.UtcNow);
-        var draftCount = 0;
-        await foreach (var _ in source.StreamCurrentDraftsAsync("tenant-a"))
-            draftCount++;
+        await using var restartedProvider = await BuildComposedProviderAsync(connectionString);
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT schema_version, document FROM workflow_execution_states WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
+            await using var reader = await command.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("4", reader.GetString(0));
+            Assert.Contains("\"historySortTicks\"", reader.GetString(1), StringComparison.Ordinal);
+        }
 
-        Assert.Equal(new WorkflowPortfolioBaseCounts(105, 50, 30), counts);
-        Assert.Equal(30, draftCount);
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname LIKE '%history%order%';";
+            Assert.Equal(1L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        }
+
+        await using var restartedScope = restartedProvider.CreateAsyncScope();
+        var page = await restartedScope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>()
+            .QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10));
+        Assert.Equal("wf-1", Assert.Single(page.Items).WorkflowExecutionId);
     }
 
     private static async Task<ServiceProvider> BuildComposedProviderAsync(string connectionString)
     {
-        var services = new ServiceCollection();
-        new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
-        var provider = services.BuildServiceProvider();
+        var provider = CreateServices(connectionString)
+            .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await provider.ApplyPostgreSqlGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
 
-    private static async Task<ServiceProvider> BuildUnifiedProviderAsync(string connectionString)
+    private static ServiceCollection CreateServices(string connectionString)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IPayloadSerializer, FakePayloadSerializer>();
-        new PostgreSqlGroundworkUnifiedPersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
-        var provider = services.BuildServiceProvider();
-        await provider.InitializeGroundworkStoreAsync();
-        return provider;
+        services.AddLogging();
+        services.AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
+        services.AddWorkflowRuntime();
+        new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }
+            .ConfigureServices(services);
+        return services;
     }
 
     private static BookmarkState Bookmark(string workflowExecutionId, string bookmarkId) => new(
@@ -155,67 +162,12 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
         CreatedAt: DateTimeOffset.UnixEpoch,
         ExpiresAt: null);
 
-    private static WorkflowExecutionState Execution(int index)
+    private sealed class TenantAccessContextAccessor : IPersistenceAccessContextAccessor
     {
-        var startedAt = DateTimeOffset.UnixEpoch.AddMinutes(index);
-        return new(
-            $"dashboard-run-{index}",
-            new WorkflowExecutableIdentity($"artifact-{index}", "definition", $"version-{index}", "1", "hash"),
-            WorkflowExecutionStatus.Completed,
-            null,
-            startedAt,
-            startedAt,
-            startedAt.AddMinutes(1),
-            startedAt.AddMinutes(1),
-            null,
-            null,
-            "tenant-a",
-            new Dictionary<string, string>());
+        public static TenantAccessContextAccessor Instance { get; } = new();
+
+        public PersistenceAccessContext Current { get; } =
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-1"));
     }
 
-    private static WorkflowDefinition PortfolioDefinition(int index) => new()
-    {
-        Id = $"portfolio-definition-{index}", TenantId = "tenant-a", Name = $"Definition {index}",
-        CreatedAt = DateTimeOffset.UnixEpoch, LastModifiedAt = DateTimeOffset.UnixEpoch
-    };
-
-    private static WorkflowDefinitionDraft PortfolioDraft(int index) => new()
-    {
-        Id = $"portfolio-draft-{index}", WorkflowDefinitionId = $"portfolio-definition-{index}", TenantId = "tenant-a",
-        State = WorkflowDefinitionState.Empty, CreatedAt = DateTimeOffset.UnixEpoch, LastModifiedAt = DateTimeOffset.UnixEpoch
-    };
-
-    private static WorkflowExecutableSourceReference PortfolioReference(int index) => new(
-        $"portfolio-reference-{index}", $"portfolio-artifact-{index}", "WorkflowDefinitionVersion", $"version-{index}", "1",
-        $"portfolio-definition-{index}", $"version-{index}", "1", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
-        WorkflowExecutableReferenceScope.Published);
-
-    private static async Task SaveDefinitionAsync(IDocumentStore store, WorkflowDefinition definition) => await store.SaveAsync(new(
-        WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, definition.Id, WorkflowsDesignStorageManifest.SchemaVersion,
-        JsonSerializer.Serialize(new DefinitionDocument(WorkflowsDesignStorageManifest.WorkflowDefinitionCollection, definition), GroundworkDesignJson.Options)));
-
-    private static async Task SaveDraftAsync(IDocumentStore store, WorkflowDefinitionDraft draft)
-    {
-        var serializer = new FakePayloadSerializer();
-        await store.SaveAsync(new(
-            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, draft.Id, WorkflowsDesignStorageManifest.SchemaVersion,
-            JsonSerializer.Serialize(new DraftDocument(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection, draft, []),
-                GroundworkDesignDocumentSerialization.Create(serializer))));
-    }
-
-    private sealed record DefinitionDocument(string Collection, WorkflowDefinition Entity);
-    private sealed record DraftDocument(string Collection, WorkflowDefinitionDraft Entity, IReadOnlyCollection<DesignMetadataRecord> Layout);
-
-    private sealed class FakePayloadSerializer : IPayloadSerializer
-    {
-        private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
-        public string Serialize(object payload) => JsonSerializer.Serialize(payload, Options);
-        public JsonElement SerializeToElement(object payload) => JsonSerializer.SerializeToElement(payload, Options);
-        public object Deserialize(string serializedData) => JsonSerializer.Deserialize<object>(serializedData, Options)!;
-        public object Deserialize(string serializedData, Type type) => JsonSerializer.Deserialize(serializedData, type, Options)!;
-        public object Deserialize(JsonElement serializedData) => serializedData.Deserialize<object>(Options)!;
-        public T Deserialize<T>(string serializedData) => JsonSerializer.Deserialize<T>(serializedData, Options)!;
-        public T Deserialize<T>(JsonElement serializedData) => serializedData.Deserialize<T>(Options)!;
-        public JsonSerializerOptions GetOptions() => Options;
-    }
 }

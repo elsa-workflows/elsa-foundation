@@ -13,17 +13,31 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
+    <ProjectReference Include="..\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Nested provider project folders live under the same domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Composition/**/*" />
+    <EmbeddedResource Remove="Composition/**/*" />
+    <None Remove="Composition/**/*" />
+    <Compile Remove="MongoDb/**/*" />
+    <EmbeddedResource Remove="MongoDb/**/*" />
+    <None Remove="MongoDb/**/*" />
     <Compile Remove="Sqlite/**/*" />
     <EmbeddedResource Remove="Sqlite/**/*" />
     <None Remove="Sqlite/**/*" />
+    <Compile Remove="SqlServer/**/*" />
+    <EmbeddedResource Remove="SqlServer/**/*" />
+    <None Remove="SqlServer/**/*" />
     <Compile Remove="Querying/**/*" />
     <EmbeddedResource Remove="Querying/**/*" />
     <None Remove="Querying/**/*" />
+    <Compile Remove="ReferenceComposition/**/*" />
+    <EmbeddedResource Remove="ReferenceComposition/**/*" />
+    <None Remove="ReferenceComposition/**/*" />
     <Compile Remove="Unified/**/*" />
     <EmbeddedResource Remove="Unified/**/*" />
     <None Remove="Unified/**/*" />

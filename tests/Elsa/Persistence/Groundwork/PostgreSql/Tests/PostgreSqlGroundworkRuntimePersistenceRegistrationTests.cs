@@ -1,5 +1,7 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using global::Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,17 +33,23 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
     {
         var services = ConfiguredServices();
 
-        // IDocumentStore resolves from the shared holder, which is populated once at startup by the initializer
-        // (registered as both a hosted service and a shell initializer). The handle is owned by the holder, not
-        // registered in DI, so the wiring is asserted through the holder + initializer instead.
+        // IDocumentStore is scoped and opens immutable access-bound provider sessions from the static source
+        // published at startup by the initializer (registered as both hosted and shell initializer).
         Assert.Single(services, d => d.ServiceType == typeof(IDocumentStore));
-        Assert.Single(services, d => d.ServiceType == typeof(GroundworkDocumentStoreHolder));
+        Assert.Single(services, d => d.ServiceType == typeof(IBoundedDocumentStore));
+        Assert.Single(services, d => d.ServiceType == typeof(GroundworkStoreSessionSource));
         Assert.Single(services, d => d.ServiceType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
         Assert.Contains(services, d => d.ServiceType == typeof(IHostedService));
         Assert.Contains(services, d => d.ServiceType == typeof(IShellInitializer));
         Assert.Contains(services, d =>
             d.ServiceType == typeof(ShellInitializerRegistration)
-            && d.ImplementationInstance is ShellInitializerRegistration { Phase: LifecyclePhase.Prepare });
+            && d.ImplementationInstance is ShellInitializerRegistration
+            {
+                InitializerType: var initializerType,
+                Phase: LifecyclePhase.Prepare,
+                RegistrationIndex: -1
+            }
+            && initializerType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
     }
 
     [Fact]
@@ -73,6 +81,45 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         // The feature still wires a document store; the default connection string is used internally.
         Assert.Single(services, d => d.ServiceType == typeof(IDocumentStore));
         Assert.False(string.IsNullOrWhiteSpace(PostgreSqlGroundworkRuntimePersistenceShellFeature.DefaultConnectionString));
+    }
+
+    [Fact]
+    public void Provider_registration_is_idempotent()
+    {
+        var services = new ServiceCollection();
+        var feature = new PostgreSqlGroundworkRuntimePersistenceShellFeature
+        {
+            ConnectionString = "Host=localhost;Database=elsa;Username=postgres;Password=secret"
+        };
+
+        feature.ConfigureServices(services);
+        feature.ConfigureServices(services);
+
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkStoreSessionSource));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBoundedDocumentStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IShellInitializer));
+    }
+
+    [Fact]
+    public async Task Runtime_initialization_suppresses_connection_details()
+    {
+        const string secret = "postgresql-admission-secret";
+        var connectionString = $"Host=localhost;Port={secret};Database=elsa;Username=postgres;Password={secret}";
+        var services = new ServiceCollection();
+        services.AddLogging();
+        new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }
+            .ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => provider.InitializeGroundworkStoreAsync());
+
+        Assert.Contains("connection details were suppressed", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(connectionString, exception.ToString(), StringComparison.Ordinal);
+        Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
     }
 
     private static void AssertBridge<TContract, TImplementation>(ServiceCollection services)

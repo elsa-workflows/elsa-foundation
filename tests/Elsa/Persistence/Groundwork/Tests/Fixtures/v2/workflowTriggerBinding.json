@@ -1,0 +1,19 @@
+{
+  "artifactHash": "hash-artifact-1",
+  "artifactId": "artifact-1",
+  "artifactVersion": "1",
+  "cardinality": 1,
+  "correlationScope": "order-42",
+  "createdAt": "1970-01-01T00:00:00\u002B00:00",
+  "definitionId": "definition-1",
+  "executableNodeId": "node-trigger",
+  "isActive": true,
+  "metadata": {
+    "tag": "v1"
+  },
+  "publicationId": "publication-1",
+  "slotId": "slot-default",
+  "stimulusHash": "hash-order-approved",
+  "stimulusType": "Event",
+  "triggerBindingId": "tb1-F1A4501309C62562C062C714EE9EBCD7078E009BE833171585CDA681B7214443"
+}

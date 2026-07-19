@@ -9,8 +9,8 @@ public sealed class HttpTypeDeclarationContributor(IJavaScriptTypeDeclarationFac
     public ValueTask Contribute(IJavaScriptDeclarationsContributionContext context, CancellationToken cancellationToken)
     {
         HttpTypeDescriptors
-            .GetDescriptors()
-            .Select(d => typeDeclarationFactory.Create(d.GetDescriptorType()))
+            .GetTypes()
+            .Select(typeDeclarationFactory.Create)
             .ToList()
             .ForEach(context.AddType);
 

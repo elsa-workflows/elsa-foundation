@@ -11,6 +11,11 @@ public sealed class DeleteWorkflowDefinitionPermanently(IDbContextFactory<Workfl
     {
         await using var dbContext = await contextFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var definition = await dbContext.WorkflowDefinitions
+            .SingleOrDefaultAsync(x => x.Id == definitionId, cancellationToken)
+            ?? throw new ArgumentException($"Workflow definition '{definitionId}' was not found.");
+        if (definition.DeletedAt is null)
+            throw new InvalidOperationException("A workflow definition must be soft-deleted before permanent deletion.");
 
         var draftIds = await dbContext.WorkflowDefinitionDrafts
             .Where(x => x.WorkflowDefinitionId == definitionId)

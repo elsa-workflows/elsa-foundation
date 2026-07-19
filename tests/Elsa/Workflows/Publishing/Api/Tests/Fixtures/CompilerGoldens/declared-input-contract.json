@@ -1,0 +1,79 @@
+{
+  "compatibilityMetadata": [],
+  "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "dependencies": [],
+  "identity": {
+    "artifactHash": "sha256:7ab0ab658156faf1aa0f70fa144f88cb0a5951b33b01ab5d1e90fb3452e3601b",
+    "artifactId": "artifact-7ab0ab658156",
+    "artifactVersion": "1.0.0",
+    "definitionId": "definition-1",
+    "definitionVersionId": "version-1"
+  },
+  "inputContract": {
+    "inputs": [
+      {
+        "defaultValue": {
+          "a": 1,
+          "b": 2
+        },
+        "isRequired": true,
+        "name": "alpha",
+        "type": {
+          "alias": "Object",
+          "collectionKind": "Single"
+        }
+      },
+      {
+        "defaultValue": null,
+        "isRequired": false,
+        "name": "zeta",
+        "type": {
+          "alias": "String",
+          "collectionKind": "Single"
+        }
+      }
+    ],
+    "version": 1
+  },
+  "resumeTargets": [],
+  "rootActivity": {
+    "activityType": "Test.WriteLine",
+    "activityTypeVersion": "1.0.0",
+    "authoredActivityId": "write-inputs",
+    "childSlots": [],
+    "descriptor": {
+      "consumerKey": "elsa.clr-activity",
+      "payload": {
+        "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
+      },
+      "schemaVersion": "1"
+    },
+    "executableNodeId": "write-inputs",
+    "inputBindings": [
+      {
+        "expression": null,
+        "inputName": "Text",
+        "key": "Text",
+        "literalValue": "Hello World!",
+        "metadata": [
+          {
+            "Key": "referenceKey",
+            "Value": "Text"
+          }
+        ],
+        "source": "Literal"
+      }
+    ],
+    "metadata": [
+      {
+        "Key": "authoredNodeId",
+        "Value": "write-inputs"
+      },
+      {
+        "Key": "executionType",
+        "Value": "Action"
+      }
+    ],
+    "structure": null
+  }
+}

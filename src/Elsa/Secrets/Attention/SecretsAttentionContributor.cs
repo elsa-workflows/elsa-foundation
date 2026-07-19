@@ -40,7 +40,13 @@ public sealed class SecretsAttentionContributor(
             return Unavailable("SECRETS_ATTENTION_CONFIGURATION_INVALID", "The soon-expiring horizon must be a whole number of days from 0 through 3650.");
 
         context.Budget.ConsumeDownstreamCall();
-        var secrets = await repository.ListAsync(context.Query.TenantId, cancellationToken);
+        var page = await repository.ListPageAsync(
+            context.Query.TenantId,
+            new SecretRepositoryListRequest(take: SecretRepositoryListRequest.MaximumTake),
+            cancellationToken);
+        var secrets = page.Items;
+        if (page.TotalCount > secrets.Count)
+            return Unavailable("SECRETS_ATTENTION_RESULT_SET_TOO_LARGE", "The bounded secret query could not evaluate the complete tenant result set.");
         if (secrets.Any(secret => !string.Equals(secret.TenantId, context.Query.TenantId, StringComparison.Ordinal)))
             return Unavailable("SECRETS_ATTENTION_TENANT_SCOPE_INVALID", "The secret provider returned data outside the requested tenant scope.");
 
@@ -73,12 +79,12 @@ public sealed class SecretsAttentionContributor(
         var expiresAt = currentVersion?.ExpiresAt;
         if (secret.Status == SecretStatus.Expired || currentVersion?.Status == SecretStatus.Expired || expiresAt <= now)
         {
-            var occurredAt = ClampToObservation(expiresAt ?? secret.UpdatedAt ?? currentVersion?.CreatedAt ?? secret.CreatedAt, now);
+            var occurredAt = ClampToObservation(expiresAt ?? secret.UpdatedAt ?? secret.CreatedAt, now);
             return new(secret, currentVersion, SecretConditionKind.Expired, AttentionSeverity.Critical, occurredAt, now);
         }
 
         if (secret.Status == SecretStatus.Active && currentVersion?.Status == SecretStatus.Active &&
-            expiresAt is not null && expiresAt > now && expiresAt <= now + horizon)
+            expiresAt > now && expiresAt <= now + horizon)
         {
             var occurredAt = ClampToObservation(LaterOf(expiresAt.Value - horizon, secret.CreatedAt), now);
             return new(secret, currentVersion, SecretConditionKind.SoonExpiring, AttentionSeverity.Warning, occurredAt, now);

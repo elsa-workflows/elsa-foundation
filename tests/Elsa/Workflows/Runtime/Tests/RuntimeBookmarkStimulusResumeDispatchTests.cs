@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
@@ -118,6 +119,85 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         Assert.Equal(
             "wfexec-1:bookmark-resume:bookmark-1:delivery-status:sha256:delivery-status:order-123:adapter-delivery-1",
             Assert.Single(agentProvider.Agent.Envelopes).IdempotencyKey);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_PropagatesPersistedWorkflowPartition()
+    {
+        var store = new InMemoryBookmarkStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
+        var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
+        var partition = new WorkflowExecutionPartition("partition-eu");
+        await store.SaveAsync(NewBookmark("bookmark-1"));
+        await workflowStateStore.SaveAsync(NewWorkflowExecution() with { Partition = partition });
+        await executableStore.SaveAsync(NewExecutable());
+
+        await dispatcher.DispatchAsync(NewDispatchRequest());
+
+        Assert.Equal(partition, Assert.Single(agentProvider.Activations).Partition);
+        Assert.Equal(partition, Assert.Single(agentProvider.Agent.Envelopes).Partition);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TypedDeliveryCarriesProviderTypeAndStableDeduplicationMetadata()
+    {
+        var store = new InMemoryBookmarkStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
+        var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
+        await store.SaveAsync(NewBookmark("bookmark-1"));
+        await workflowStateStore.SaveAsync(NewWorkflowExecution());
+        await executableStore.SaveAsync(NewExecutable());
+        var payloadType = new ValueTypeDescriptor("test/delivery-status", schemaVersion: 2);
+
+        var result = await dispatcher.DispatchAsync(new BookmarkResumeDispatchRequest(
+            workflowExecutionId: "wfexec-1",
+            stimulusType: "delivery-status",
+            stimulusHash: "sha256:delivery-status:order-123",
+            input: Json("""{"orderId":"order-123"}"""),
+            idempotencyKey: "provider-delivery-42",
+            requestedBy: "adapter",
+            payloadType: payloadType,
+            providerId: "provider.delivery-status"));
+
+        Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, result.Status);
+        var envelope = Assert.Single(agentProvider.Agent.Envelopes);
+        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var delivery = Assert.IsType<RuntimeTypedTriggerDeliveryMetadata>(payload.TriggerDelivery);
+        Assert.Equal("command-1", delivery.DeliveryId);
+        Assert.Equal(payloadType, delivery.PayloadType);
+        Assert.Equal("provider.delivery-status", delivery.ProviderId);
+        Assert.Equal(_now, delivery.ReceivedAt);
+        Assert.Equal(envelope.IdempotencyKey, delivery.DeduplicationKey);
+        Assert.Equal(WorkflowExecutionActorActivationReason.ResumeBookmark, Assert.Single(agentProvider.Activations).Reason);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TypedMetadataCannotBypassExistingBookmarkProviderRecognition()
+    {
+        var store = new InMemoryBookmarkStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
+        var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
+        await store.SaveAsync(NewBookmark("bookmark-1"));
+        await workflowStateStore.SaveAsync(NewWorkflowExecution());
+        await executableStore.SaveAsync(NewExecutable());
+
+        var result = await dispatcher.DispatchAsync(new BookmarkResumeDispatchRequest(
+            workflowExecutionId: "wfexec-1",
+            stimulusType: "unrecognized-provider-type",
+            stimulusHash: "sha256:delivery-status:order-123",
+            input: Json("""{"orderId":"order-123"}"""),
+            payloadType: new ValueTypeDescriptor("test/delivery-status"),
+            providerId: "provider.delivery-status"));
+
+        Assert.Equal(BookmarkResumeDispatchStatus.NotFound, result.Status);
+        Assert.Empty(agentProvider.Activations);
+        Assert.Empty(agentProvider.Agent.Envelopes);
     }
 
     [Fact]
@@ -311,10 +391,8 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 

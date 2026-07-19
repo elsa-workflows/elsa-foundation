@@ -1,12 +1,17 @@
 {
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:1e11aa72a1eeeed9fe1f263134242bdf8fe717b4056ba29cfebe9053adb65873",
-    "artifactId": "artifact-1e11aa72a1ee",
+    "artifactHash": "sha256:c947434b2b826224beb8e48abc51ee3e498464c93a8cec0943972f49a2370553",
+    "artifactId": "artifact-c947434b2b82",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
+  },
+  "inputContract": {
+    "inputs": [],
+    "version": 1
   },
   "resumeTargets": [],
   "rootActivity": {
@@ -14,18 +19,17 @@
     "activityTypeVersion": "1.0.0",
     "authoredActivityId": "write-var",
     "childSlots": [],
-    "descriptorPayload": {
-      "TypeAlias": "Object"
+    "descriptor": {
+      "consumerKey": "elsa.clr-activity",
+      "payload": {
+        "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
+      },
+      "schemaVersion": "1"
     },
-    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
     "executableNodeId": "write-var",
     "inputBindings": [
       {
-        "expression": {
-          "expression": "{\u0022referenceKey\u0022:\u0022var-counter\u0022,\u0022declaringScopeId\u0022:\u0022node-sequence\u0022}",
-          "language": "Variable",
-          "resultTypeId": "System.String, System.Private.CoreLib"
-        },
+        "expression": null,
         "inputName": "Text",
         "key": "Text",
         "literalValue": null,
@@ -33,13 +37,9 @@
           {
             "Key": "referenceKey",
             "Value": "Text"
-          },
-          {
-            "Key": "typeName",
-            "Value": "System.String, System.Private.CoreLib"
           }
         ],
-        "source": "Expression"
+        "source": "VariableRead"
       }
     ],
     "metadata": [

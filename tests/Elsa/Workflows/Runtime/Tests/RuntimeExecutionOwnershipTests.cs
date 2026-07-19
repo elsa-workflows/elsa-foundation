@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -25,6 +26,29 @@ public sealed class RuntimeExecutionOwnershipTests
     }
 
     [Fact]
+    public async Task ConcurrentIndependentServices_IssueUniqueStrictlyIncreasingFencingTokens()
+    {
+        var store = new InMemoryExecutionLivenessStateStore();
+        var clock = new FixedTimeProvider(_now);
+        var first = new RuntimeExecutionOwnershipService(
+            store,
+            clock,
+            new RuntimeExecutionOwnershipOptions { OwnerId = "owner-a", LeaseDuration = TimeSpan.FromMinutes(1) });
+        var second = new RuntimeExecutionOwnershipService(
+            store,
+            clock,
+            new RuntimeExecutionOwnershipOptions { OwnerId = "owner-b", LeaseDuration = TimeSpan.FromMinutes(1) });
+
+        var leases = await Task.WhenAll(
+            Enumerable.Range(0, 64)
+                .Select(index => (index & 1) == 0 ? first.AcquireAsync(WorkflowExecutionId).AsTask() : second.AcquireAsync(WorkflowExecutionId).AsTask()));
+
+        Assert.Equal(Enumerable.Range(1, 64).Select(x => (long)x), leases.Select(x => x.FencingToken).Order());
+        var current = (await store.FindAsync(WorkflowExecutionId, $"ownership:{WorkflowExecutionId}"))!.ExecutionLease!;
+        Assert.Equal(64, current.FencingToken);
+    }
+
+    [Fact]
     public async Task AcquireAsync_AfterRelease_NeverReusesAToken()
     {
         var ownership = NewOwnership(out _, out _);
@@ -35,6 +59,40 @@ public sealed class RuntimeExecutionOwnershipTests
 
         Assert.True(second.FencingToken > first.FencingToken, "Release must preserve the counter so tokens are never reused.");
         Assert.Equal(2, second.FencingToken);
+    }
+
+    [Fact]
+    public async Task AcquireAsync_RejectsCounterThatDoesNotMatchTheActiveLease()
+    {
+        var store = new InMemoryExecutionLivenessStateStore();
+        await store.SaveAsync(new ExecutionLivenessState(
+            operationalStateId: $"ownership:{WorkflowExecutionId}",
+            workflowExecutionId: WorkflowExecutionId,
+            executionLease: new RuntimeExecutionLease(
+                leaseId: "lease-corrupt",
+                workflowExecutionId: WorkflowExecutionId,
+                ownerId: "owner-corrupt",
+                acquiredAt: _now,
+                expiresAt: _now.AddMinutes(1),
+                fencingToken: 2),
+            heartbeat: null,
+            drain: null,
+            interruptedExecution: null,
+            metadata: new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.OwnershipFencingToken] = "1"
+            }));
+        var ownership = new RuntimeExecutionOwnershipService(
+            store,
+            new FixedTimeProvider(_now),
+            new RuntimeExecutionOwnershipOptions { OwnerId = "owner-under-test", LeaseDuration = TimeSpan.FromMinutes(1) });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ownership.AcquireAsync(WorkflowExecutionId).AsTask());
+
+        Assert.Contains("does not match its active lease", exception.Message, StringComparison.Ordinal);
+        var unchanged = await store.FindAsync(WorkflowExecutionId, $"ownership:{WorkflowExecutionId}");
+        Assert.Equal(2, unchanged!.ExecutionLease!.FencingToken);
     }
 
     [Fact]
@@ -67,6 +125,48 @@ public sealed class RuntimeExecutionOwnershipTests
     }
 
     [Fact]
+    public async Task EnsureCurrentAsync_RejectsReleasedLease_BeforeReAcquire()
+    {
+        var ownership = NewOwnership(out _, out _);
+
+        var released = await ownership.AcquireAsync(WorkflowExecutionId);
+        await ownership.ReleaseAsync(released);
+
+        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
+            () => ownership.EnsureCurrentAsync(WorkflowExecutionId, released.FencingToken).AsTask());
+    }
+
+    [Fact]
+    public async Task StaleHeartbeat_DoesNotReplaceSuccessorLease()
+    {
+        var ownership = NewOwnership(out var store, out _);
+        var stale = await ownership.AcquireAsync(WorkflowExecutionId);
+        var current = await ownership.AcquireAsync(WorkflowExecutionId);
+
+        var result = await ownership.HeartbeatAsync(stale);
+
+        Assert.Equal(RuntimeExecutionOwnershipTransitionStatus.Stale, result.Status);
+        var state = await store.FindAsync(WorkflowExecutionId, $"ownership:{WorkflowExecutionId}");
+        Assert.Equal(current.LeaseId, state!.ExecutionLease!.LeaseId);
+        Assert.Equal(current.FencingToken, state.ExecutionLease.FencingToken);
+    }
+
+    [Fact]
+    public async Task StaleRelease_DoesNotClearSuccessorLease()
+    {
+        var ownership = NewOwnership(out var store, out _);
+        var stale = await ownership.AcquireAsync(WorkflowExecutionId);
+        var current = await ownership.AcquireAsync(WorkflowExecutionId);
+
+        var result = await ownership.ReleaseAsync(stale);
+
+        Assert.Equal(RuntimeExecutionOwnershipTransitionStatus.Stale, result.Status);
+        var state = await store.FindAsync(WorkflowExecutionId, $"ownership:{WorkflowExecutionId}");
+        Assert.Equal(current.LeaseId, state!.ExecutionLease!.LeaseId);
+        Assert.Equal(current.FencingToken, state.ExecutionLease.FencingToken);
+    }
+
+    [Fact]
     public async Task EnsureCurrentAsync_IsNoOp_WhenOwnershipNeverEstablished()
     {
         var ownership = NewOwnership(out _, out _);
@@ -76,16 +176,39 @@ public sealed class RuntimeExecutionOwnershipTests
     }
 
     [Fact]
+    public async Task EnsureCurrentAsync_RejectsExpiredLeaseBeforeTakeover()
+    {
+        var store = new InMemoryExecutionLivenessStateStore();
+        var clock = new MutableTimeProvider(_now);
+        var ownership = new RuntimeExecutionOwnershipService(
+            store,
+            clock,
+            new RuntimeExecutionOwnershipOptions
+            {
+                OwnerId = "owner-under-test",
+                LeaseDuration = TimeSpan.FromMinutes(1)
+            });
+        var lease = await ownership.AcquireAsync(WorkflowExecutionId);
+        clock.Now = lease.ExpiresAt;
+
+        var exception = await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
+            () => ownership.EnsureCurrentAsync(WorkflowExecutionId, lease.FencingToken).AsTask());
+
+        Assert.Equal(RuntimeFencingRejectionReason.ExpiredLease, exception.Reason);
+    }
+
+    [Fact]
     public async Task Committer_FencesStaleWriter_AndAdmitsCurrentWriter()
     {
-        var ownership = NewOwnership(out _, out _);
+        var ownership = NewOwnership(out var livenessStore, out _);
         var accessor = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
-        var commitStore = new InMemoryRuntimeCheckpointCommitStore();
+        var commitStore = new InMemoryRuntimeCheckpointCommitStore(
+            operationalStateStore: livenessStore,
+            timeProvider: new FixedTimeProvider(_now));
         var committer = new RuntimeCheckpointCommitter(
             new ImmediateRuntimeCheckpointPersistencePolicy(),
             commitStore,
-            accessor,
-            ownership);
+            accessor);
 
         // Two racing writers: A acquires first, then B supersedes it.
         var staleWriter = await ownership.AcquireAsync(WorkflowExecutionId);
@@ -120,8 +243,7 @@ public sealed class RuntimeExecutionOwnershipTests
         var committer = new RuntimeCheckpointCommitter(
             new ImmediateRuntimeCheckpointPersistencePolicy(),
             commitStore,
-            accessor,
-            ownership);
+            accessor);
 
         // No active scope pushed: the fencing check is skipped entirely.
         var result = await committer.CommitAsync(NewCommit("commit-unscoped"));
@@ -208,5 +330,11 @@ public sealed class RuntimeExecutionOwnershipTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+        public override DateTimeOffset GetUtcNow() => Now;
     }
 }

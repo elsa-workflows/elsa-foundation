@@ -88,6 +88,41 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_OrdinarySchedulerStateWithEmptyTriggerRegistrationsStillCreatesBookmark()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        var schedulerCreatedState = NewRunningState() with { TriggerRegistrations = [] };
+        await _activityStateStore.SaveAsync(schedulerCreatedState);
+        var handler = NewHandler();
+
+        await handler.HandleAsync(NewCreateBookmarkWorkItem());
+
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Suspended, state!.Status);
+        Assert.Equal(["bookmark-1"], state.BookmarkIds);
+        Assert.Single(_checkpointWriter.ListCommits());
+    }
+
+    [Fact]
+    public async Task HandleAsync_ResolvesTemplateLocalTargetToCanonicalPlacedTarget()
+    {
+        const string canonicalId = "resume-placed-instance-1";
+        await _executableStore.SaveAsync(NewExecutable(
+            canonicalResumeTargetId: canonicalId,
+            localResumeTargetId: "resume-target:delivery"));
+        await _activityStateStore.SaveAsync(NewRunningState());
+
+        await NewHandler().HandleAsync(NewCreateBookmarkWorkItem());
+
+        var bookmark = await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1");
+        Assert.NotNull(bookmark);
+        Assert.Equal(canonicalId, bookmark.ResumeTargetId);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(canonicalId, state!.Metadata[RuntimeMetadataKeys.ResumeTargetId]);
+    }
+
+    [Fact]
     public async Task HandleAsync_KeepsBookmarkIdsDuplicateFreeOnReplay()
     {
         await _executableStore.SaveAsync(NewExecutable());
@@ -145,6 +180,42 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Recovered, state.Status);
+        Assert.Empty(state.BookmarkIds);
+        Assert.Empty(_checkpointWriter.ListCommits());
+    }
+
+    [Fact]
+    public async Task HandleAsync_DelayedTypedSiblingCreationCannotResurrectRetiredRegistration()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        var privateStateType = new Elsa.Primitives.Models.ValueTypeDescriptor("test/approval-state", schemaVersion: 1);
+        var claimedState = NewRunningState() with
+        {
+            PrivateState = new ActivityPrivateState(
+                "actexec-1",
+                1,
+                ValueEnvelope.Inline(
+                    privateStateType,
+                    JsonSerializer.SerializeToElement(new { RequestId = "request-42" }),
+                    ValueProtectionPolicy.InstanceInline),
+                "actexec-1:attempt:1",
+                _now.AddMinutes(-1)),
+            TriggerRegistrations = [],
+            BookmarkIds = []
+        };
+        await _activityStateStore.SaveAsync(claimedState);
+        var handler = NewHandler();
+
+        // This creation was queued for a sibling registration before another trigger atomically claimed the
+        // invocation and retired all registrations. Dispatching it late must not recreate the sibling bookmark
+        // or overwrite the claimed Running state with a stale Suspended projection.
+        await handler.HandleAsync(NewCreateBookmarkWorkItem());
+
+        Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
+        Assert.Empty(state.TriggerRegistrations!);
         Assert.Empty(state.BookmarkIds);
         Assert.Empty(_checkpointWriter.ListCommits());
     }
@@ -220,6 +291,23 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_CancellationAfterCommit_DoesNotSuppressCreatedNotification()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        using var cancellation = new CancellationTokenSource();
+        var observer = new CancellationAwareBookmarkLifecycleObserver();
+        var commitStore = new CancelAfterCommitStore(_checkpointWriter, cancellation);
+        var handler = NewHandler(new BookmarkLifecycleNotifier([observer]), commitStore);
+
+        await handler.HandleAsync(NewCreateBookmarkWorkItem(), cancellation.Token);
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.Equal("bookmark-1", Assert.Single(observer.Created).BookmarkId);
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
     public async Task HandleAsync_ThrowingObserver_DoesNotFaultTheRun()
     {
         // The observer fires on the run path: a throw is caught and logged, the run still succeeds.
@@ -265,6 +353,32 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task CheckpointSlot_CancellationAfterCommit_DoesNotSuppressCreatedNotification()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        using var cancellation = new CancellationTokenSource();
+        var observer = new CancellationAwareBookmarkLifecycleObserver();
+        var notifier = new BookmarkLifecycleNotifier([observer]);
+        var handler = NewHandler(notifier);
+        var context = new ActivityRuntimePipelineContext(NewCreateBookmarkWorkItem());
+        context.Workspace.CancellationToken = cancellation.Token;
+        await handler.HandleAsync(context.WorkItem, context);
+
+        var middleware = new RuntimeActivityCheckpointMiddleware(
+            new RuntimeCheckpointCommitter(
+                new ImmediateRuntimeCheckpointPersistencePolicy(),
+                new CancelAfterCommitStore(_checkpointWriter, cancellation)),
+            notifier);
+
+        await middleware.InvokeAsync(context, _ => ValueTask.CompletedTask);
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.Equal("bookmark-1", Assert.Single(observer.Created).BookmarkId);
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
     public async Task CheckpointSlot_IgnoresNonBookmarkCreatedCommits()
     {
         // The Checkpoint slot only notifies for bookmark-created checkpoints — a staged commit of any other name is
@@ -303,13 +417,15 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
-    private WorkflowCreateBookmarkSchedulerWorkHandler NewHandler(BookmarkLifecycleNotifier? notifier = null) =>
+    private WorkflowCreateBookmarkSchedulerWorkHandler NewHandler(
+        BookmarkLifecycleNotifier? notifier = null,
+        IRuntimeCheckpointCommitStore? checkpointCommitStore = null) =>
         new(
             _executableStore,
             _activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                _checkpointWriter),
+                checkpointCommitStore ?? _checkpointWriter),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(_now),
             notifier);
@@ -386,17 +502,20 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
 
     private static WorkflowExecutable NewExecutable(
         bool includeResumeTarget = true,
-        WorkflowExecutableIdentity? identity = null)
+        WorkflowExecutableIdentity? identity = null,
+        string canonicalResumeTargetId = "resume-target:delivery",
+        string? localResumeTargetId = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var resumeTargets = includeResumeTarget
             ? new Dictionary<string, WorkflowExecutableResumeTarget>
             {
-                ["resume-target:delivery"] = new(
-                    ResumeTargetId: "resume-target:delivery",
+                [canonicalResumeTargetId] = new(
+                    ResumeTargetId: canonicalResumeTargetId,
                     ExecutableNodeId: "node-wait",
                     HandlerKey: "test-handler",
-                    Metadata: new Dictionary<string, string>())
+                    Metadata: new Dictionary<string, string>(),
+                    LocalResumeTargetId: localResumeTargetId)
             }
             : new Dictionary<string, WorkflowExecutableResumeTarget>();
 
@@ -417,7 +536,6 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             descriptorType: "test",
             descriptorPayload: descriptorPayload.Clone(),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private static WorkflowExecutableIdentity NewIdentity() =>
@@ -432,5 +550,35 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class CancelAfterCommitStore(
+        IRuntimeCheckpointCommitStore inner,
+        CancellationTokenSource cancellation) : IRuntimeCheckpointCommitStore
+    {
+        public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await inner.CommitAsync(commit, decision, cancellationToken);
+            cancellation.Cancel();
+            return result;
+        }
+    }
+
+    private sealed class CancellationAwareBookmarkLifecycleObserver : IBookmarkLifecycleObserver
+    {
+        public List<BookmarkState> Created { get; } = [];
+
+        public ValueTask OnBookmarkCreatedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Created.Add(bookmark);
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask OnBookmarkConsumedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
     }
 }

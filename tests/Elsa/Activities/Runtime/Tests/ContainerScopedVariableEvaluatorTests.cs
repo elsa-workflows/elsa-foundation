@@ -1,216 +1,154 @@
-using Elsa.Expressions.Core.Constants;
-using Elsa.Expressions.Core.Contracts;
+using System.Text.Json;
 using Elsa.Expressions.Core.Models;
-using Elsa.Expressions.Models;
-using Elsa.Expressions.Options;
-using Elsa.Expressions.Services;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Resolvers;
+using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Runtime read path for container-scoped variables (#207). A descendant activity resolves a
-/// structured <see cref="VariableReference"/> to a variable declared by a visible ancestor
-/// container scope, with nearest-scope shadowing — proven at the expression-evaluation seam.
+/// Canonical variable reads address immutable values by declaration key and concrete lexical frame;
+/// they expose no ambient name lookup or mutation surface.
 /// </summary>
 public sealed class ContainerScopedVariableEvaluatorTests
 {
-    private const string SequenceScopeId = "seq-1";
-
-    private static ExpressionEvaluator Evaluator() =>
-        new(
-            new ExpressionDescriptorRegistry([new DefaultExpressionDescriptorProvider()]),
-            new ServiceCollection().BuildServiceProvider(),
-            Options.Create(ExpressionEvaluatorOptions.Empty));
+    private const string WorkflowScopeId = VariableReference.WorkflowScopeId;
+    private const string OuterScopeId = "outer";
+    private const string InnerScopeId = "inner";
+    private static readonly ValueTypeDescriptor Int32Type = new("Int32");
+    private static readonly ValueTypeDescriptor StringType = new("String");
 
     [Fact]
-    public async Task Descendant_resolves_container_scoped_variable_by_structured_reference()
+    public void Descendant_resolves_container_variable_by_declaration_and_scope_identity()
     {
-        var scope = ContainerScope(("var-counter", "Counter", 7));
-        var context = new ScopedExpressionContext(scope);
+        var frames = Frames();
 
-        var result = await Evaluator().EvaluateAsync<int>(
-            new TestExpression(WellKnownExpressionDescriptorTypes.Variable, new VariableReference("var-counter", SequenceScopeId)),
-            context);
+        var result = Resolve(frames.Visible, "var-inner", InnerScopeId, Int32Type);
 
-        Assert.Equal(7, result);
+        Assert.Equal(2, result.Envelope!.InlineValue!.Value.GetInt32());
+        Assert.Equal(InnerScopeId, frames.Inner.ScopeId);
+        Assert.Equal(frames.Outer.FrameId, frames.Inner.ParentFrameId);
     }
 
     [Fact]
-    public async Task Workflow_scoped_reference_resolves_through_outer_scope_from_within_container()
+    public void Workflow_variable_remains_visible_from_nested_container_frames()
     {
-        var scope = ContainerScope(("var-counter", "Counter", 7));
-        var context = new ScopedExpressionContext(scope);
+        var frames = Frames();
 
-        var result = await Evaluator().EvaluateAsync<string>(
-            new TestExpression(WellKnownExpressionDescriptorTypes.Variable, new VariableReference("var-greeting", VariableReference.WorkflowScopeId)),
-            context);
+        var result = Resolve(frames.Visible, "var-greeting", WorkflowScopeId, StringType);
 
-        Assert.Equal("hello", result);
+        Assert.Equal("hello", result.Envelope!.InlineValue!.Value.GetString());
     }
 
     [Fact]
-    public async Task Reference_to_invisible_scope_resolves_to_null()
+    public void Nested_frames_resolve_each_declaration_explicitly_without_name_shadowing()
     {
-        var scope = ContainerScope(("var-counter", "Counter", 7));
-        var context = new ScopedExpressionContext(scope);
+        var frames = Frames();
 
-        var result = await Evaluator().EvaluateAsync<int?>(
-            new TestExpression(WellKnownExpressionDescriptorTypes.Variable, new VariableReference("var-counter", "some-other-container")),
-            context);
+        var inner = Resolve(frames.Visible, "var-inner", InnerScopeId, Int32Type);
+        var outer = Resolve(frames.Visible, "var-outer", OuterScopeId, Int32Type);
 
-        Assert.Null(result);
+        Assert.Equal(2, inner.Envelope!.InlineValue!.Value.GetInt32());
+        Assert.Equal(1, outer.Envelope!.InlineValue!.Value.GetInt32());
     }
 
     [Fact]
-    public async Task Nested_scopes_resolve_each_declaration_explicitly_by_structured_reference()
+    public void Reference_to_sibling_scope_is_rejected_as_unavailable()
     {
-        var workflowScope = new VariableScope(VariableReference.WorkflowScopeId, ByKey(("var-greeting", "Greeting", "hello")));
-        var outerScope = new VariableScope("outer", ByKey(("var-outer", "OuterCount", 1)), workflowScope);
-        var innerScope = new VariableScope("inner", ByKey(("var-inner", "InnerCount", 2)), outerScope);
-        var context = new ScopedExpressionContext(innerScope);
+        var frames = Frames();
 
-        var inner = await Evaluator().EvaluateAsync<int>(
-            new TestExpression(WellKnownExpressionDescriptorTypes.Variable, new VariableReference("var-inner", "inner")), context);
-        var outer = await Evaluator().EvaluateAsync<int>(
-            new TestExpression(WellKnownExpressionDescriptorTypes.Variable, new VariableReference("var-outer", "outer")), context);
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Resolve(frames.Visible, "var-inner", "sibling", Int32Type));
 
-        Assert.Equal(2, inner);
-        Assert.Equal(1, outer);
+        Assert.Contains("sibling", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("unavailable", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Bare_name_lookup_resolves_nearest_scope_allowing_intentional_shadowing()
+    public void Closed_frame_is_not_part_of_a_later_visible_frame_snapshot()
     {
-        // Outer and inner containers both declare a variable named "Counter" in their own scope.
-        // Nearest-scope (inner) wins for bare-name resolution; the outer one is shadowed.
-        var outerScope = new VariableScope("outer", ByKey(("var-outer", "Counter", 1)));
-        var innerScope = new VariableScope("inner", ByKey(("var-inner", "Counter", 2)), outerScope);
+        var frames = Frames();
+        var closedInner = frames.Inner.Close(frames.Inner.Revision);
+        var afterCompletion = new RuntimeVisibleVariableFrames([frames.Root, frames.Outer]);
 
-        var nearest = innerScope.ResolveByName("Counter");
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Resolve(afterCompletion, "var-inner", InnerScopeId, Int32Type));
 
-        Assert.NotNull(nearest);
-        Assert.Equal(2, nearest!.DefaultValue);
-        Assert.True(innerScope.TryResolve(new VariableReference("var-inner", "inner"), out var resolvedInner));
-        Assert.Same(nearest, resolvedInner);
+        Assert.Equal(VariableFrameStatus.Closed, closedInner.Status);
+        Assert.Contains("unavailable", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Descendant_assignment_to_visible_container_variable_is_observed_by_a_later_read()
+    public void Explicit_frame_update_is_visible_only_through_the_new_immutable_snapshot()
     {
-        var scope = ContainerScope(("var-counter", "Counter", 0));
-        var context = new ScopedExpressionContext(scope);
-        var reference = new VariableReference("var-counter", SequenceScopeId);
+        var frames = Frames();
+        var updatedInner = frames.Inner.Set("var-inner", Envelope(Int32Type, 42), frames.Inner.Revision);
+        var updatedVisible = new RuntimeVisibleVariableFrames([frames.Root, frames.Outer, updatedInner]);
 
-        Assert.True(context.TrySetScopedVariableValue(reference, 42));
+        var before = Resolve(frames.Visible, "var-inner", InnerScopeId, Int32Type);
+        var after = Resolve(updatedVisible, "var-inner", InnerScopeId, Int32Type);
 
-        var result = await Evaluator().EvaluateAsync<int>(
-            new TestExpression(WellKnownExpressionDescriptorTypes.Variable, reference), context);
-        Assert.Equal(42, result);
+        Assert.Equal(2, before.Envelope!.InlineValue!.Value.GetInt32());
+        Assert.Equal(42, after.Envelope!.InlineValue!.Value.GetInt32());
+        Assert.Equal(0, frames.Inner.Revision);
+        Assert.Equal(1, updatedInner.Revision);
     }
 
-    [Fact]
-    public void Assignment_to_an_invisible_scope_is_rejected_by_the_runtime_guard()
+    private static RuntimeResolvedInput Resolve(
+        RuntimeVisibleVariableFrames frames,
+        string variableKey,
+        string scopeId,
+        ValueTypeDescriptor type) =>
+        new RuntimeInputBindingResolver().Resolve(
+            new RuntimeInputBinding(
+                "value",
+                type,
+                ValueProtectionPolicy.InstanceInline,
+                RuntimeInputBindingSource.VariableRead,
+                variable: new RuntimeVariableReference(variableKey, scopeId)),
+            new RuntimeInputBindingResolutionContext(
+                "workflow-1",
+                "activity-1",
+                variableEnvelopes: frames.Values));
+
+    private static FrameSet Frames()
     {
-        var scope = ContainerScope(("var-counter", "Counter", 0));
-        var context = new ScopedExpressionContext(scope);
-
-        var assigned = context.TrySetScopedVariableValue(new VariableReference("var-counter", "sibling-container"), 99);
-
-        Assert.False(assigned);
+        var factory = new VariableFrameFactory();
+        var root = factory.CreateRoot(
+            "workflow-1",
+            WorkflowScopeId,
+            Values(("var-greeting", StringType, "hello")));
+        var outer = factory.CreateContainer(
+            OuterScopeId,
+            "outer-activation",
+            root,
+            Values(("var-outer", Int32Type, 1)));
+        var inner = factory.CreateContainer(
+            InnerScopeId,
+            "inner-activation",
+            outer,
+            Values(("var-inner", Int32Type, 2)));
+        return new FrameSet(root, outer, inner, new RuntimeVisibleVariableFrames([root, outer, inner]));
     }
 
-    [Fact]
-    public void Sibling_branches_in_one_container_execution_share_assigned_values()
-    {
-        // Two sibling branch activities resolve the same container scope instance, so an assignment
-        // made by one branch is observed by the other (the container owns the shared running state).
-        var container = ContainerScope(("var-shared", "Shared", "initial"));
-        var branchA = new ScopedExpressionContext(container);
-        var branchB = new ScopedExpressionContext(container);
-        var reference = new VariableReference("var-shared", SequenceScopeId);
-
-        Assert.True(branchA.TrySetScopedVariableValue(reference, "from-branch-a"));
-
-        Assert.True(branchB.TryGetScopedVariableValue(reference, out var observed));
-        Assert.Equal("from-branch-a", observed);
-    }
-
-    private static VariableScope ContainerScope(params (string ReferenceKey, string Name, object? Value)[] containerVariables)
-    {
-        var workflowScope = new VariableScope(VariableReference.WorkflowScopeId, ByKey(("var-greeting", "Greeting", "hello")));
-        return new VariableScope(SequenceScopeId, ByKey(containerVariables), workflowScope);
-    }
-
-    private static IReadOnlyDictionary<string, IVariable> ByKey(params (string ReferenceKey, string Name, object? Value)[] variables) =>
-        variables.ToDictionary(
-            v => v.ReferenceKey,
-            v => (IVariable)new Variable(v.Name, v.Value),
+    private static IReadOnlyDictionary<string, ValueEnvelope> Values(
+        params (string Key, ValueTypeDescriptor Type, object Value)[] values) =>
+        values.ToDictionary(
+            item => item.Key,
+            item => Envelope(item.Type, item.Value),
             StringComparer.Ordinal);
 
-    private sealed class ScopedExpressionContext(VariableScope scope) : IExpressionExecutionContext, IScopedVariableProvider
-    {
-        public IMemoryRegister Memory { get; } = new ScopedMemoryRegister();
-        public IExpressionExecutionContext? ParentContext { get; set; }
-        public CancellationToken CancellationToken => CancellationToken.None;
+    private static ValueEnvelope Envelope(ValueTypeDescriptor type, object value) =>
+        ValueEnvelope.Inline(
+            type,
+            JsonSerializer.SerializeToElement(value, value.GetType()),
+            ValueProtectionPolicy.InstanceInline);
 
-        public bool TryGetScopedVariableValue(VariableReference reference, out object? value) =>
-            scope.TryGetValue(reference, out value);
-
-        public bool TrySetScopedVariableValue(VariableReference reference, object? value) =>
-            scope.TrySetValue(reference, value);
-
-        public IReadOnlyCollection<IVariable> GetVisibleVariables() => scope.EnumerateVisibleVariables();
-
-        public bool TryGetVariableValueByName(string name, out object? value) => scope.TryGetValueByName(name, out value);
-
-        public bool TrySetVariableValueByName(string name, object? value) => scope.TrySetValueByName(name, value);
-
-        public bool IsContainedWithinCompositeActivity() => false;
-        public bool TryGetActivityInput(string key, out object? value) { value = null; return false; }
-        public bool TryGetWorkflowInput(string key, out object? value) { value = null; return false; }
-        public object? GetVariableValueOrDefault(string variableName) => GetVariable(variableName)?.Get(this);
-        public string GetCorrelationId() => string.Empty;
-        public string GetWorkflowDefinitionId() => string.Empty;
-        public string GetWorkflowDefinitionVersionId() => string.Empty;
-        public int GetWorkflowDefinitionVersion() => 0;
-        public string GetWorkflowInstanceId() => string.Empty;
-        public object? GetRequiredService(Type type) => throw new InvalidOperationException($"No service registered for '{type}'.");
-        public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => Memory.Declare(blockReference);
-        public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) => Memory.TryGetBlock(blockReference.Id, out block);
-        public T? Get<T>(IMemoryBlockReference blockReference) => (T?)GetBlock(blockReference).Value;
-
-        public void Set(IMemoryBlockReference blockReference, object? value, Action<IMemoryBlock>? configure = null)
-        {
-            var block = Memory.Declare(blockReference);
-            block.Value = value;
-            configure?.Invoke(block);
-        }
-
-        // Workflow-scope lookups (no structured scope) walk the chain by name as a convenience.
-        public IVariable? GetVariable(string name, bool localScopeOnly = false) => scope.ResolveByName(name);
-
-        public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null)
-        {
-            var variable = new Variable<T>(name, value!);
-            Set(variable, value, configure);
-            return variable;
-        }
-
-        public IEnumerable<IVariable> EnumerateVariablesInScope() => [];
-    }
-
-    private sealed class ScopedMemoryRegister : IMemoryRegister
-    {
-        public IDictionary<string, IMemoryBlock> Blocks { get; } = new Dictionary<string, IMemoryBlock>(StringComparer.Ordinal);
-    }
-
-    private sealed class TestExpression(string type, object? value) : IExpression
-    {
-        public string Type { get; set; } = type;
-        public object? Value { get; set; } = value;
-        public TValue GetValue<TValue>() => (TValue)Value!;
-    }
+    private sealed record FrameSet(
+        VariableFrameState Root,
+        VariableFrameState Outer,
+        VariableFrameState Inner,
+        RuntimeVisibleVariableFrames Visible);
 }

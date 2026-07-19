@@ -1,5 +1,7 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Models;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -30,6 +32,33 @@ public sealed class ExecuteEndpointTests
             () => HandleAsync(endpoint, new ExecuteWorkflow("artifact-1")));
 
         Assert.Equal(StatusCodes.Status400BadRequest, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task BlankSourceReferenceSelector_maps_to_400()
+    {
+        var endpoint = CreateEndpoint(new ThrowingRequestSender(
+            new ArgumentException("Source reference ID cannot be blank when provided.", "sourceReferenceId")));
+
+        var exception = await Assert.ThrowsAsync<ValidationFailureException>(
+            () => HandleAsync(endpoint, new ExecuteWorkflow("artifact-1", SourceReferenceId: " ")));
+
+        Assert.Equal(StatusCodes.Status400BadRequest, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task UnknownSourceReferenceSelector_maps_to_409()
+    {
+        var endpoint = CreateEndpoint(new ThrowingRequestSender(
+            new WorkflowExecutableReferenceRejectedException(
+                "artifact-1",
+                WorkflowExecutableReferenceScope.Published,
+                WorkflowExecutableReferenceRejectionReason.SelectionNotFound)));
+
+        var exception = await Assert.ThrowsAsync<ValidationFailureException>(
+            () => HandleAsync(endpoint, new ExecuteWorkflow("artifact-1", SourceReferenceId: "missing-ref")));
+
+        Assert.Equal(StatusCodes.Status409Conflict, exception.StatusCode);
     }
 
     [Fact]

@@ -8,6 +8,9 @@ namespace Elsa.Workflows.Runtime.Distributed.Options;
 /// </summary>
 public sealed class ExecutionPlacementPumpOptions
 {
+    private int _maxExecutionsPerSweep = 100;
+    private int _transportLeaseBatchSize = 100;
+
     /// <summary>Baseline interval between placement sweeps while the node is healthy.</summary>
     public TimeSpan SweepInterval { get; set; } = TimeSpan.FromSeconds(10);
 
@@ -15,8 +18,20 @@ public sealed class ExecutionPlacementPumpOptions
     public TimeSpan MaxBackoffInterval { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>Hard cap on executions claimed and re-driven per sweep, bounding dispatch bursts.</summary>
-    public int MaxExecutionsPerSweep { get; set; } = 100;
+    public int MaxExecutionsPerSweep
+    {
+        get => _maxExecutionsPerSweep;
+        set => _maxExecutionsPerSweep = Contracts.DistributedRuntimeQueryLimits.ValidateTake(
+            value,
+            nameof(MaxExecutionsPerSweep));
+    }
 
     /// <summary>Maximum transport items leased per owned execution per sweep.</summary>
-    public int TransportLeaseBatchSize { get; set; } = 100;
+    public int TransportLeaseBatchSize
+    {
+        get => _transportLeaseBatchSize;
+        set => _transportLeaseBatchSize = Contracts.DistributedRuntimeQueryLimits.ValidateTake(
+            value,
+            nameof(TransportLeaseBatchSize));
+    }
 }

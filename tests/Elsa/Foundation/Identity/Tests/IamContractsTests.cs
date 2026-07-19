@@ -47,5 +47,15 @@ public sealed class IamContractsTests
 
         public ValueTask<ProviderConfigurationRecord?> FindForTenantAsync(string tenantId, string provider, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(Tenant.GetValueOrDefault($"{tenantId}:{provider}"));
+
+        public ValueTask SaveAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken = default)
+        {
+            if (configuration.TenantId is null)
+                Global[configuration.Provider] = configuration;
+            else
+                Tenant[$"{configuration.TenantId}:{configuration.Provider}"] = configuration;
+
+            return ValueTask.CompletedTask;
+        }
     }
 }

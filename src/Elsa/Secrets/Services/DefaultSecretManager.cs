@@ -78,50 +78,35 @@ public sealed class DefaultSecretManager(
     public async ValueTask<Page<SecretMetadata>> ListAsync(string tenantId, SecretQuery query, CancellationToken cancellationToken = default)
     {
         ValidateTenantId(tenantId);
-        var secrets = await repository.ListAsync(tenantId, cancellationToken);
-        var filtered = secrets.Where(x => lifecyclePolicy.EvaluatePublicVisibility(x).Allowed);
-
-        if (!string.IsNullOrWhiteSpace(query.Search))
-        {
-            var search = query.Search.Trim();
-            filtered = filtered.Where(x => x.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || x.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.TypeName))
-            filtered = filtered.Where(x => string.Equals(x.TypeName, query.TypeName, StringComparison.OrdinalIgnoreCase));
-
-        if (query.TypeNames.Count > 0)
-            filtered = filtered.Where(x => query.TypeNames.Contains(x.TypeName, StringComparer.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(query.StoreName))
-            filtered = filtered.Where(x => string.Equals(x.StoreName, query.StoreName, StringComparison.OrdinalIgnoreCase));
-
-        if (query.StoreNames.Count > 0)
-            filtered = filtered.Where(x => query.StoreNames.Contains(x.StoreName, StringComparer.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(query.Scope))
-            filtered = filtered.Where(x => string.Equals(x.Scope, query.Scope, StringComparison.OrdinalIgnoreCase));
-
-        if (query.Status is not null)
-            filtered = filtered.Where(x => x.Status == query.Status);
-
-        if (query.ActiveOnly)
-            filtered = filtered.Where(x => x.Status == SecretStatus.Active && x.LatestActiveVersion is not null);
-
-        var ordered = filtered.OrderBy(x => x.Name).ToArray();
-        var totalCount = ordered.Length;
         var pageSize = Math.Clamp(query.PageSize ?? 50, 1, 250);
         var page = Math.Max(query.Page ?? 0, 0);
-        var items = ordered.Skip(page * pageSize).Take(pageSize).Select(mapper.Map).ToArray();
+        var skip = (int)Math.Min((long)page * pageSize, int.MaxValue);
+        var result = await repository.ListPageAsync(
+            tenantId,
+            new SecretRepositoryListRequest(
+                query.Search,
+                query.TypeName,
+                query.TypeNames.ToArray(),
+                query.StoreName,
+                query.StoreNames.ToArray(),
+                query.Scope,
+                query.Status,
+                excludedStatus: SecretStatus.Deleted,
+                activeOnly: query.ActiveOnly,
+                now: timeProvider.GetUtcNow(),
+                skip: skip,
+                take: pageSize),
+            cancellationToken);
+        var items = result.Items.Select(mapper.Map).ToArray();
 
-        return Page.Of<SecretMetadata>(items, totalCount);
+        return Page.Of<SecretMetadata>(items, result.TotalCount);
     }
 
     public ValueTask<SecretMetadata> UpdateAsync(string tenantId, string name, UpdateSecretMetadataRequest request, CancellationToken cancellationToken = default)
         => AuditFailureAsync(tenantId, "update", name, async () =>
         {
-            ValidateTenantId(tenantId);
-            var secret = await GetExistingSecretAsync(tenantId, name, cancellationToken);
+            var loaded = await GetExistingSecretWithRevisionAsync(tenantId, name, cancellationToken);
+            var secret = loaded.Secret;
 
             if (request.DisplayName is not null)
                 secret.DisplayName = request.DisplayName.Trim();
@@ -130,7 +115,7 @@ public sealed class DefaultSecretManager(
                 secret.Description = request.Description;
 
             secret.UpdatedAt = timeProvider.GetUtcNow();
-            await repository.SaveAsync(secret, cancellationToken);
+            await SaveExistingSecretAsync(secret, loaded.Revision, cancellationToken);
             await RecordAsync(tenantId, "update", secret.Name, "succeeded", null, cancellationToken);
             return mapper.Map(secret);
         }, cancellationToken);
@@ -138,8 +123,8 @@ public sealed class DefaultSecretManager(
     public ValueTask<SecretMetadata> RotateAsync(string tenantId, string name, RotateSecretRequest request, CancellationToken cancellationToken = default)
         => AuditFailureAsync(tenantId, "rotate", name, async () =>
         {
-            ValidateTenantId(tenantId);
-            var secret = await GetExistingSecretAsync(tenantId, name, cancellationToken);
+            var loaded = await GetExistingSecretWithRevisionAsync(tenantId, name, cancellationToken);
+            var secret = loaded.Secret;
             var store = storeRegistry.Get(secret.StoreName);
             var typeProvider = typeRegistry.Get(secret.TypeName);
             EnsureStoreIsSupported(typeProvider, store.Descriptor.Name);
@@ -165,7 +150,7 @@ public sealed class DefaultSecretManager(
             secret.Status = SecretStatus.Active;
             secret.UpdatedAt = now;
 
-            await repository.SaveAsync(secret, cancellationToken);
+            await SaveExistingSecretAsync(secret, loaded.Revision, cancellationToken);
             await RecordAsync(tenantId, "rotate", secret.Name, "succeeded", null, cancellationToken);
             return mapper.Map(secret);
         }, cancellationToken);
@@ -173,19 +158,17 @@ public sealed class DefaultSecretManager(
     public ValueTask<SecretMetadata?> RevokeAsync(string tenantId, string name, CancellationToken cancellationToken = default)
         => AuditFailureAsync(tenantId, "revoke", name, async () =>
         {
-            ValidateTenantId(tenantId);
-            var normalizedName = nameValidator.Normalize(name);
-            var secret = await repository.FindAsync(tenantId, normalizedName, cancellationToken);
-
-            if (!IsPublicOperationAllowed(secret))
+            var loaded = await TryGetExistingSecretWithRevisionAsync(tenantId, name, cancellationToken);
+            if (loaded is null)
                 return (SecretMetadata?)null;
 
+            var secret = loaded.Secret;
             secret.Status = SecretStatus.Revoked;
             foreach (var activeVersion in secret.Versions.Where(x => x.Status == SecretStatus.Active))
                 activeVersion.Status = SecretStatus.Revoked;
 
             secret.UpdatedAt = timeProvider.GetUtcNow();
-            await repository.SaveAsync(secret, cancellationToken);
+            await SaveExistingSecretAsync(secret, loaded.Revision, cancellationToken);
             await RecordAsync(tenantId, "revoke", secret.Name, "succeeded", null, cancellationToken);
             return mapper.Map(secret);
         }, cancellationToken);
@@ -193,19 +176,17 @@ public sealed class DefaultSecretManager(
     public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default)
         => AuditFailureAsync(tenantId, "delete", name, async () =>
         {
-            ValidateTenantId(tenantId);
-            var normalizedName = nameValidator.Normalize(name);
-            var secret = await repository.FindAsync(tenantId, normalizedName, cancellationToken);
-
-            if (!IsPublicOperationAllowed(secret))
+            var loaded = await TryGetExistingSecretWithRevisionAsync(tenantId, name, cancellationToken);
+            if (loaded is null)
                 return false;
 
+            var secret = loaded.Secret;
             var store = storeRegistry.Get(secret.StoreName);
             await store.DeleteAsync(new SecretDeleteContext(secret), cancellationToken);
 
             secret.Status = SecretStatus.Deleted;
             secret.UpdatedAt = timeProvider.GetUtcNow();
-            await repository.SaveAsync(secret, cancellationToken);
+            await SaveExistingSecretAsync(secret, loaded.Revision, cancellationToken);
             await RecordAsync(tenantId, "delete", secret.Name, "succeeded", null, cancellationToken);
             return true;
         }, cancellationToken);
@@ -241,6 +222,46 @@ public sealed class DefaultSecretManager(
         return secret;
     }
 
+    private async ValueTask<SecretRevisionedRecord> GetExistingSecretWithRevisionAsync(string tenantId, string name, CancellationToken cancellationToken)
+    {
+        var loaded = await TryGetExistingSecretWithRevisionAsync(tenantId, name, cancellationToken);
+        if (loaded is null)
+            throw new InvalidOperationException("Secret not found.");
+
+        return loaded;
+    }
+
+    private async ValueTask<SecretRevisionedRecord?> TryGetExistingSecretWithRevisionAsync(string tenantId, string name, CancellationToken cancellationToken)
+    {
+        var normalizedName = nameValidator.Normalize(name);
+        if (repository is IRevisionAwareSecretRepository revisionAware)
+        {
+            var loaded = await revisionAware.FindWithRevisionAsync(tenantId, normalizedName, cancellationToken);
+            return IsPublicOperationAllowed(loaded?.Secret) ? loaded : null;
+        }
+
+        var secret = await repository.FindAsync(tenantId, normalizedName, cancellationToken);
+        return IsPublicOperationAllowed(secret) ? new SecretRevisionedRecord(secret, "") : null;
+    }
+
+    private async ValueTask SaveExistingSecretAsync(Secret secret, string? revision, CancellationToken cancellationToken)
+    {
+        if (repository is not IRevisionAwareSecretRepository revisionAware)
+        {
+            await repository.SaveAsync(secret, cancellationToken);
+            return;
+        }
+
+        var result = await revisionAware.SaveWithRevisionAsync(secret, revision, cancellationToken);
+        if (result.Status is SecretRevisionSaveStatus.Saved)
+            return;
+
+        throw new InvalidOperationException(
+            result.Status is SecretRevisionSaveStatus.NotFound
+                ? "Secret not found."
+                : "Secret changed concurrently.");
+    }
+
     private bool IsPubliclyVisible([NotNullWhen(true)] Secret? secret)
         => secret is not null && lifecyclePolicy.EvaluatePublicVisibility(secret).Allowed;
 
@@ -262,7 +283,7 @@ public sealed class DefaultSecretManager(
     }
 
     private ValueTask RecordAsync(string tenantId, string operation, string secretName, string outcome, string? reason, CancellationToken cancellationToken)
-        => auditSink.RecordAsync(new SecretOperationAuditRecord(operation, secretName, outcome, timeProvider.GetUtcNow(), tenantId, Reason: reason), cancellationToken);
+        => auditSink.RecordAsync(new SecretOperationAuditRecord(operation, secretName, outcome, timeProvider.GetUtcNow(), TenantId: tenantId, Reason: reason), cancellationToken);
 
     // Wraps a mutating operation so that a thrown exception is recorded as a failed audit event
     // before being rethrown. Only the exception type name is recorded as the reason so no secret

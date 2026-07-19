@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Groundwork.Unified;
+using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Dashboard.Persistence.Groundwork;
@@ -11,6 +11,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.Scoping;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
@@ -31,14 +32,14 @@ public sealed class WorkflowPortfolioProviderTests
         try
         {
             var store = await SqliteDocumentStoreFactory.CreateAsync(
-                $"Data Source={path}", GroundworkUnifiedManifest.Create(),
-                new ProviderIdentity("groundwork-sqlite", "1.0.0"), DocumentStoreAccess.Global);
+                $"Data Source={path}", new GroundworkAllFeaturesDeploymentSchema().CreateManifest(),
+                new ProviderIdentity("groundwork-sqlite", "1.0.0"),
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-a")));
             foreach (var definition in Enumerable.Range(0, 105).Select(index => Definition(index)))
                 await SaveDefinitionAsync(store, definition);
             foreach (var draft in Enumerable.Range(0, 30).Select(index => Draft(index)))
                 await SaveDraftAsync(store, draft);
-            var serializer = new GroundworkRuntimeDocumentSerializer(
-                new GroundworkRuntimeDocumentUpcasterRegistry([new WorkflowExecutionStateV1ToV2Upcaster()]));
+            var serializer = new GroundworkRuntimeDocumentSerializer();
             var referenceStore = new GroundworkWorkflowExecutableSourceReferenceStore(store, serializer);
             for (var index = 0; index < 50; index++)
                 await referenceStore.SaveAsync(Reference(index));

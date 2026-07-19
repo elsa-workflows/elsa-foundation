@@ -1,8 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Documents.Serialization;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -28,7 +28,27 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Fact]
     public void Serialize_Throws_For_An_Unknown_Kind()
     {
-        Assert.Throws<ArgumentException>(() => Serializer.Serialize("not-a-real-kind", Bookmark()));
+        var exception = Assert.Throws<DocumentSchemaVersionException>(() =>
+            Serializer.Serialize("not-a-real-kind", Bookmark()));
+
+        Assert.Equal(DocumentSchemaVersionFailure.UnknownDocumentKind, exception.Failure);
+        Assert.Equal("not-a-real-kind", exception.DocumentKind);
+    }
+
+    [Theory]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind)]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)]
+    public void Version_4_Runtime_Kinds_Use_A_Clean_Baseline(string kind)
+    {
+        Assert.Equal(4, ElsaRuntimeDocumentVersions.CurrentFor(kind));
+        Assert.Equal(4, ElsaRuntimeDocumentVersions.MinimumReadableFor(kind));
+    }
+
+    [Fact]
+    public void WorkflowExecutable_Uses_The_V5_To_V6_Compatibility_Window()
+    {
+        Assert.Equal(6, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        Assert.Equal(5, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
     }
 
     // --- Read path: current version round-trips ---
@@ -46,17 +66,6 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.Equal(state.StimulusType, deserialized.StimulusType);
     }
 
-    [Fact]
-    public void Deserialize_Accepts_The_Legacy_Stamp_As_Version_1()
-    {
-        var (_, contentJson) = Serializer.Serialize(Kind, Bookmark());
-
-        // Every document written before per-kind versioning carries the manifest-wide "1.0.0" stamp.
-        var deserialized = Serializer.Deserialize<BookmarkState>(Envelope(ElsaRuntimeDocumentVersions.LegacySchemaVersion, contentJson));
-
-        Assert.Equal("bm-1", deserialized.BookmarkId);
-    }
-
     // --- Read path: version enforcement fails loudly ---
 
     [Fact]
@@ -64,12 +73,42 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     {
         var (_, contentJson) = Serializer.Serialize(Kind, Bookmark());
 
-        var exception = Assert.Throws<GroundworkRuntimeDocumentVersionException>(
+        var exception = Assert.Throws<DocumentSchemaVersionException>(
             () => Serializer.Deserialize<BookmarkState>(Envelope("2", contentJson)));
 
-        Assert.Contains(Kind, exception.Message);
-        Assert.Contains("2", exception.Message);
-        Assert.Contains("1", exception.Message);
+        Assert.Equal(DocumentSchemaVersionFailure.Future, exception.Failure);
+        Assert.Equal(Kind, exception.DocumentKind);
+        Assert.Equal(2, exception.ParsedVersion);
+        Assert.Equal(1, exception.CurrentVersion);
+    }
+
+    public static TheoryData<string, string> UnsupportedHistoricalVersions()
+    {
+        var data = new TheoryData<string, string>();
+        foreach (var documentKind in ElsaRuntimeDocumentVersions.All.Keys)
+        {
+            var minimumReadableVersion = ElsaRuntimeDocumentVersions.MinimumReadableFor(documentKind);
+            if (minimumReadableVersion == 1)
+                continue;
+
+            for (var version = 1; version < minimumReadableVersion; version++)
+                data.Add(documentKind, ElsaRuntimeDocumentVersions.Stamp(version));
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(UnsupportedHistoricalVersions))]
+    public void Deserialize_Rejects_Versions_Below_A_Kinds_Minimum_Readable_Boundary(string documentKind, string schemaVersion)
+    {
+        var exception = Assert.Throws<DocumentSchemaVersionException>(
+            () => Serializer.Deserialize<JsonObject>(Envelope(documentKind, schemaVersion, "not-json")));
+
+        Assert.Equal(DocumentSchemaVersionFailure.TooOld, exception.Failure);
+        Assert.Equal(documentKind, exception.DocumentKind);
+        Assert.Equal(ElsaRuntimeDocumentVersions.MinimumReadableFor(documentKind), exception.MinimumReadableVersion);
+        Assert.Null(exception.InnerException);
     }
 
     [Theory]
@@ -78,113 +117,120 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [InlineData("0")]
     [InlineData("-1")]
     [InlineData("1.0")]
+    [InlineData("1.0.0")]
     public void Deserialize_Throws_On_An_Unparsable_Version(string schemaVersion)
     {
         var (_, contentJson) = Serializer.Serialize(Kind, Bookmark());
 
-        Assert.Throws<GroundworkRuntimeDocumentVersionException>(
+        var exception = Assert.Throws<DocumentSchemaVersionException>(
             () => Serializer.Deserialize<BookmarkState>(Envelope(schemaVersion, contentJson)));
+
+        Assert.Equal(DocumentSchemaVersionFailure.MalformedStamp, exception.Failure);
+        Assert.Equal(schemaVersion, exception.SchemaVersion);
     }
 
     [Fact]
-    public void IsCurrentVersion_Is_True_For_The_Current_And_Legacy_Stamps_And_False_For_Others()
+    public void IsCurrentVersion_Is_True_For_The_Current_Stamp_And_False_For_Other_Recognized_Versions()
     {
         var (_, contentJson) = Serializer.Serialize(Kind, Bookmark());
 
         Assert.True(Serializer.IsCurrentVersion(Envelope("1", contentJson)));
-        Assert.True(Serializer.IsCurrentVersion(Envelope(ElsaRuntimeDocumentVersions.LegacySchemaVersion, contentJson)));
+        Assert.False(Serializer.IsCurrentVersion(Envelope(
+            ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+            "1",
+            contentJson)));
         Assert.False(Serializer.IsCurrentVersion(Envelope("2", contentJson)));
     }
 
-    // --- Upcaster registry: chained upcast across historical versions ---
-
     [Fact]
-    public void Registry_Applies_A_v1_To_v3_Chain_In_Order()
+    public void WorkflowExecutableV5ToV6Upcaster_preserves_legacy_unknown_and_explicit_nullability()
     {
-        var registry = Registry(
-        [
-            new RenameFieldUpcaster("test-thing", fromVersion: 1, "a", "b"),
-            new RenameFieldUpcaster("test-thing", fromVersion: 2, "b", "c")
-        ]);
+        var content = JsonNode.Parse("""
+            {
+              "executable": {
+                "rootActivity": {
+                  "activityContract": {
+                    "inputs": {
+                      "legacy": { "isRequired": false },
+                      "explicit": { "isRequired": true, "isNullable": false }
+                    }
+                  }
+                }
+              }
+            }
+            """)!.AsObject();
 
-        var content = new JsonObject { ["a"] = "value" };
-        var upcasted = registry.Upcast("test-thing", fromVersion: 1, toVersion: 3, content);
-
-        Assert.False(upcasted.ContainsKey("a"));
-        Assert.False(upcasted.ContainsKey("b"));
-        Assert.Equal("value", upcasted["c"]!.GetValue<string>());
-    }
-
-    [Fact]
-    public void Registry_Leaves_Content_Untouched_When_From_Equals_To()
-    {
-        var registry = Registry();
-
-        var content = new JsonObject { ["a"] = "value" };
-        var result = registry.Upcast("test-thing", fromVersion: 2, toVersion: 2, content);
-
-        Assert.Equal("value", result["a"]!.GetValue<string>());
-    }
-
-    // --- Upcaster registry: eager validation at construction, not first use ---
-
-    [Fact]
-    public void Registry_Construction_Throws_On_A_Duplicate_FromVersion()
-    {
-        var exception = Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
-            Registry(
-            [
-                new RenameFieldUpcaster("test-thing", fromVersion: 1, "a", "b"),
-                new RenameFieldUpcaster("test-thing", fromVersion: 1, "a", "c")
-            ]));
-
-        Assert.Contains("test-thing", exception.Message);
-    }
-
-    [Fact]
-    public void Registry_Construction_Throws_On_A_Chain_Gap()
-    {
-        // Steps at 1 and 3 with no step at 2: the gap must fail at construction, not on first read.
-        var exception = Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
-            Registry(
-            [
-                new RenameFieldUpcaster("test-thing", fromVersion: 1, "a", "b"),
-                new RenameFieldUpcaster("test-thing", fromVersion: 3, "c", "d")
-            ]));
-
-        Assert.Contains("gap", exception.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void Registry_Construction_Throws_On_A_Step_At_Or_Beyond_A_Known_Kinds_Current_Version()
-    {
-        // Bookmark state remains at version 1, so any upcaster for it signals a missing version bump.
-        Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
-            Registry(
-            [
-                new RenameFieldUpcaster(Kind, fromVersion: 1, "a", "b")
-            ]));
-    }
-
-    [Fact]
-    public void Registry_Construction_Throws_On_A_Non_Positive_FromVersion()
-    {
-        Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
-            Registry(
-            [
-                new RenameFieldUpcaster("test-thing", fromVersion: 0, "a", "b")
-            ]));
-    }
-
-    [Fact]
-    public void Registry_With_No_Upcasters_Constructs_And_Passes_Content_Through()
-    {
-        var registry = Registry();
-
-        var content = new JsonObject { ["a"] = "value" };
-        var result = registry.Upcast("test-thing", fromVersion: 1, toVersion: 1, content);
+        var result = new WorkflowExecutableDocumentV5ToV6Upcaster().Upcast(content);
+        var inputs = Assert.IsType<JsonObject>(result["executable"]!["rootActivity"]!["activityContract"]!["inputs"]);
 
         Assert.Same(content, result);
+        Assert.False(inputs["legacy"]!.AsObject().ContainsKey("isNullable"));
+        Assert.False(inputs["explicit"]!["isNullable"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void ExecutableActivityTemplateV1ToV2Upcaster_rewrites_nested_descriptors_recursively()
+    {
+        var content = JsonNode.Parse("""
+            {
+              "template": {
+                "root": {
+                  "descriptor": {
+                    "consumerKey": "root-consumer",
+                    "schemaVersion": "1",
+                    "payload": { "kind": "root" }
+                  },
+                  "childSlots": [
+                    {
+                      "activities": [
+                        {
+                          "descriptor": {
+                            "consumerKey": "child-consumer",
+                            "schemaVersion": "2",
+                            "payload": { "kind": "child" }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+            """)!.AsObject();
+
+        var result = new ExecutableActivityTemplateDocumentV1ToV2Upcaster().Upcast(content);
+        var root = Assert.IsType<JsonObject>(result["template"]!["root"]);
+        var child = Assert.IsType<JsonObject>(root["childSlots"]![0]!["activities"]![0]);
+
+        Assert.Null(root["descriptor"]);
+        Assert.Equal("root-consumer", root["descriptorType"]!.GetValue<string>());
+        Assert.Equal("1", root["descriptorSchemaVersion"]!.GetValue<string>());
+        Assert.Equal("root", root["descriptorPayload"]!["kind"]!.GetValue<string>());
+        Assert.Null(child["descriptor"]);
+        Assert.Equal("child-consumer", child["descriptorType"]!.GetValue<string>());
+        Assert.Equal("2", child["descriptorSchemaVersion"]!.GetValue<string>());
+        Assert.Equal("child", child["descriptorPayload"]!["kind"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Frozen_v5_codec_rejects_a_v6_workflow_executable_before_deserialization()
+    {
+        const string kind = ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind;
+        var codec = new VersionedJsonDocumentCodec(
+            [new DocumentSchemaVersionPolicy(kind, 5, 5)],
+            [],
+            new DocumentSchemaVersionFormat(
+                (documentKind, schemaVersion) => ElsaRuntimeDocumentVersions.Parse(documentKind, schemaVersion),
+                (_, version) => ElsaRuntimeDocumentVersions.Stamp(version)));
+
+        var exception = Assert.Throws<DocumentSchemaVersionException>(
+            () => codec.Deserialize<JsonObject>(Envelope(kind, "6", "not-json")));
+
+        Assert.Equal(DocumentSchemaVersionFailure.Future, exception.Failure);
+        Assert.Equal(kind, exception.DocumentKind);
+        Assert.Equal(6, exception.ParsedVersion);
+        Assert.Equal(5, exception.CurrentVersion);
+        Assert.Null(exception.InnerException);
     }
 
     private static BookmarkState Bookmark() => new(
@@ -200,29 +246,9 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         CreatedAt: DateTimeOffset.UnixEpoch,
         ExpiresAt: null);
 
-    private static GroundworkRuntimeDocumentUpcasterRegistry Registry(params IGroundworkRuntimeDocumentUpcaster[] upcasters) =>
-        new([new WorkflowExecutionStateV1ToV2Upcaster(), .. upcasters]);
-
     private static DocumentEnvelope Envelope(string schemaVersion, string contentJson) =>
-        new(Kind, "bm-1", schemaVersion, 1, contentJson, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);
+        Envelope(Kind, schemaVersion, contentJson);
 
-    // Synthetic upcaster: renames a top-level field, standing in for a real schema change so the
-    // registry's chaining and validation can be exercised without a production version bump.
-    private sealed class RenameFieldUpcaster(string documentKind, int fromVersion, string oldName, string newName)
-        : IGroundworkRuntimeDocumentUpcaster
-    {
-        public string DocumentKind { get; } = documentKind;
-        public int FromVersion { get; } = fromVersion;
-
-        public JsonObject Upcast(JsonObject content)
-        {
-            if (content.TryGetPropertyValue(oldName, out var value))
-            {
-                content.Remove(oldName);
-                content[newName] = value?.DeepClone();
-            }
-
-            return content;
-        }
-    }
+    private static DocumentEnvelope Envelope(string documentKind, string schemaVersion, string contentJson) =>
+        new(documentKind, "document-1", schemaVersion, 1, contentJson, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);
 }

@@ -6,11 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Persistence.Groundwork.Sqlite.Unified;
 
 /// <summary>
-/// Opt-in host feature that backs <b>every</b> Elsa persistence lane — workflow runtime, workflows-design and
-/// activities-design — with a single Groundwork SQLite document store. Composing this one feature is all a host
-/// does to select the provider for the whole product; runtime, design and domain code never reference Groundwork
-/// or SQLite. It supersedes composing the per-lane features individually when the host wants one database to back
-/// everything.
+/// Opt-in host feature that backs the six provider-level Elsa persistence families with one Groundwork
+/// SQLite target: workflow runtime, secrets, distributed runtime, workflows design, activities design,
+/// and workflows publishing. Identity remains an explicit host selection.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
@@ -19,10 +17,15 @@ namespace Elsa.Persistence.Groundwork.Sqlite.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistenceSqlite",
     DisplayName = "Groundwork SQLite Unified Persistence",
-    Description = "Backs the workflow runtime, workflows-design and activities-design persistence seams with a single Groundwork SQLite document store. Durable storage keeps runtime checkpoints, post-commit outbox items and queued scheduler work across a crash; compose alongside Workflows Runtime Resumption so a background pump re-drives that work after a restart.",
+    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork SQLite target; Identity remains an explicit host selection. Apply schema through Groundwork.Tool before host startup; compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public sealed class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
+    private readonly ShellFeatureContext _context;
+
+    public SqliteGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context) =>
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+
     public const string DefaultConnectionString = "Data Source=elsa-groundwork.db";
 
     [ManifestSetting(
@@ -32,9 +35,15 @@ public sealed class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeatu
         Secret = true)]
     public string? ConnectionString { get; set; }
 
+    [ManifestSetting(
+        DisplayName = "Auto-apply schema on startup",
+        Description = "When enabled, safe pending schema operations are applied automatically at startup instead of requiring Groundwork.Tool. Destructive operations are never auto-applied.",
+        Category = "Persistence")]
+    public bool AutoApplySchemaOnStartup { get; set; } = true;
+
     public void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
-        services.AddGroundworkSqliteUnifiedPersistence(connectionString);
+        services.AddGroundworkSqliteUnifiedPersistence(connectionString, _context, AutoApplySchemaOnStartup);
     }
 }

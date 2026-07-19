@@ -92,6 +92,10 @@ coverage preserved direct-run and mid-flow suspension behavior without creating 
 
 ### US3 compatibility evidence (2026-07-11)
 
+This section records the spec 090 delivery baseline. It is historical evidence that Unit A introduced no
+persisted-shape drift; it is not a current promise that every executable or source-reference version from
+that date remains readable.
+
 - RED/sensitivity before compatibility assertions were finalized: all four legacy CLR catalog rows produced
   executable `Trigger` metadata against a temporary `Action` sentinel, and both catalog-hash pins rejected
   placeholder values. No production or planning files had been edited.
@@ -108,7 +112,8 @@ coverage preserved direct-run and mid-flow suspension behavior without creating 
 - Executable compiler goldens: 10 passed, 0 failed, 0 skipped.
 - Groundwork runtime document fixtures: 34 passed, 0 failed, 0 skipped with `GROUNDWORK_FIXTURE_REGEN` unset.
 - No executable, trigger-binding, recurring-schedule, golden-fixture, or Groundwork schema-version drift was
-  detected. T032 therefore requires no migration; `ElsaRuntimeDocumentVersions` was not changed.
+  caused by spec 090. T032 therefore required no migration in that work unit, and
+  `ElsaRuntimeDocumentVersions` was not changed by it.
 - A provider and extractor compiled against pre-change commit `317caf8c` loaded against the current Runtime Core
   assembly and dispatched both additive default interface members. The compiler and publish-handler entry-point
   files are unchanged from that baseline. Runtime Core is MINOR-compatible; CI injects package versions through
@@ -126,6 +131,26 @@ coverage preserved direct-run and mid-flow suspension behavior without creating 
   the fixture now uses the executable's real root-node id, and its focused observer suite passes 8/8 without
   weakening the US1 executable-identity invariant.
 
+### Current persistence supersession (2026-07-16)
+
+Later persistence work made every Runtime Groundwork kind current-only before GA: minimum-readable equals
+current, only the current fixture is retained, and no Elsa upcaster is registered. `workflowExecutable`,
+`workflowExecutableSourceReference`, and `workflowExecutionState` are version 4 and reject versions 1 through 3
+before content deserialization. Executable v4 includes the reusable-activity input contract and direct
+dependency snapshot; source-reference v4 includes tenant scope; workflow-execution v4 includes dispatch nesting
+depth.
+The safe upgrade procedure is:
+
+1. stop traffic;
+2. atomically reset the complete Runtime and Publishing Groundwork persistence sets while preserving Design
+   and Activities data;
+3. deploy the build; and
+4. republish workflows before serving traffic.
+
+The same reset applies when any other Runtime kind carries a non-current generation. Resetting only selected
+documents is unsafe because workflow executions, continuation state, publication authority, and serving
+projections form a dependent persistence set around the same artifacts.
+
 ### Finalization gate (2026-07-11)
 
 - `dotnet build Elsa.Server.slnx`: succeeded with 0 warnings and 0 errors.
@@ -136,9 +161,9 @@ coverage preserved direct-run and mid-flow suspension behavior without creating 
 
 ### Final scope audit
 
-The complete diff from the approved planning baseline was inspected. It adds only trigger preflight/runtime
+The complete spec 090 diff from the approved planning baseline was inspected. It added only trigger preflight/runtime
 contracts and models, first-party provider identities, recurring pre-materialization, tests, compatibility
-evidence, and documentation/maps. It adds no diagnostics API or persisted publication status, CShells or
+evidence, and documentation/maps. It added no diagnostics API or persisted publication status, CShells or
 startup-health behavior, Studio work, route-table invalidation behavior, stimulus-router/actor redesign,
 durable schema change, or publication-wide transactionality. The sole route-table test-file change corrects
 a stale fixture to reference its executable's real root-node id; it does not alter invalidation behavior.
@@ -194,7 +219,9 @@ Expected:
 - invalid publications preserve seeded trigger/schedule registrations;
 - legacy catalog rows compile with correct trigger projection;
 - same-version reconciliation hashes remain stable;
-- existing executable shapes remain readable.
+- the executable shape current at spec 090 delivery remained readable in that baseline; current executable,
+  source-reference, and workflow-execution versions 1 through 3 are instead rejected under the superseding
+  version-4 boundary above.
 
 ## 5. Boundary and full-suite gate
 
@@ -204,9 +231,12 @@ dotnet build Elsa.Server.slnx
 dotnet test Elsa.Server.slnx
 ```
 
-Expected: no Runtime → Design dependency, no build warnings or errors, and no regression from the recorded
-test baseline. The known architecture baseline failures remain documented above. If implementation changes a
+Expected for the spec 090 delivery: no Runtime → Design dependency, no build warnings or errors, and no
+regression from the recorded test baseline. The known architecture baseline failures remain documented above.
+If implementation changes a
 Groundwork-persisted record despite the plan, stop and amend the spec/plan/tasks for explicit migration
-approval before changing schema versions, upcasters, or fixtures.
+approval before changing schema versions or fixtures. After a released shape exists, a compatible in-place or
+rolling upgrade may also require Groundwork `IDocumentJsonUpcaster` contributions and retained historical
+fixtures.
 
 Also verify the Runtime Core public API change is classified as MINOR-compatible, the canonical extension-point catalog resides at `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`, and the repository root `EXTENSION_POINTS.md` links to it.

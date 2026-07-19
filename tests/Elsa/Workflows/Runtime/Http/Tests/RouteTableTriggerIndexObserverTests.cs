@@ -100,6 +100,24 @@ public sealed class RouteTableTriggerIndexObserverTests
     }
 
     [Fact]
+    public async Task AuthorityTransition_RefreshesEvenWhenArtifactIsKnownNonHttp()
+    {
+        await NotifyWithAsync("a1", Bindings.Other("a1", "n1", stimulusType: "Event"));
+        Assert.Equal(1, _routeTable.RefreshCount);
+
+        // Model a stale derived route while the durable authoritative set contains no HTTP binding. An ordinary
+        // repeat snapshot is skippable, but an authority transition must always rebuild from the serving store.
+        await _routeTable.Add("retired-route");
+        await _observer.OnTriggersIndexedAsync(new WorkflowTriggerIndexSnapshot("a1", [])
+        {
+            RequiresProjectionRefresh = true
+        });
+
+        Assert.Equal(2, _routeTable.RefreshCount);
+        Assert.Empty(_routeTable.RouteTemplates);
+    }
+
+    [Fact]
     public async Task HttpPublish_RefreshesTheRouteTable()
     {
         await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET"));

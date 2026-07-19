@@ -245,6 +245,50 @@ public sealed class RuntimeCancellationContractTests
         Assert.Empty(commit.StateChanges.PostCommitOutbox);
     }
 
+    [Fact]
+    public async Task Cancel_ComposesDispatchCancellationAtomically()
+    {
+        const string activityExecutionId = "actexec-dispatch";
+        var identity = new WorkflowDispatchIdentity(WorkflowExecutionId, activityExecutionId);
+        var enricher = new DispatchCancellationEnricher(identity, activityExecutionId, _now);
+        var harness = new Harness(
+            _now,
+            enrichers: [enricher],
+            intentHandlerContributions:
+            [
+                new RuntimePostCommitIntentHandlerContribution(
+                    DispatchCancellationEnricher.IntentKind,
+                    typeof(NoopPostCommitIntentHandler),
+                    RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)))
+            ]);
+        await harness.SeedWorkflow(WorkflowExecutionStatus.Running);
+        await harness.SeedActivity(ActivityExecutionStatus.Suspended, activityExecutionId);
+        var admitted = await harness.SeedAdmittedWaitDispatch(activityExecutionId);
+
+        await harness.Handler().HandleAsync(harness.CancelWorkItem());
+
+        var persisted = Assert.IsType<WorkflowDispatchRecord>(await harness.FindDispatch(identity.DispatchId));
+        Assert.Equal(WorkflowDispatchStatus.Started, persisted.Status);
+        Assert.True(WorkflowDispatchLifecycle.IsCancellationRequested(persisted));
+
+        var commitRecord = Assert.Single(harness.CommitStore.ListCommits());
+        var commit = commitRecord.Commit;
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, commit.StateChanges.WorkflowExecution!.State.Status);
+        var request = Assert.Single(commit.StateChanges.WorkflowDispatchCancellations);
+        Assert.Equal(admitted.DispatchId, request.DispatchId);
+        Assert.Equal(admitted.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId);
+        Assert.Equal(_now, request.RequestedAt);
+
+        var intent = Assert.Single(commit.PostCommitIntents);
+        Assert.Equal(identity.ChildCancelIntentId, intent.IntentId);
+        Assert.Equal(DispatchCancellationEnricher.IntentKind, intent.Kind);
+        var outbox = Assert.Single(commit.StateChanges.PostCommitOutbox).State;
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, outbox.Status);
+        Assert.Equal(intent.IntentId, outbox.Intent.IntentId);
+        Assert.Equal([outbox.OutboxItemId], commitRecord.PendingPostCommitWorkIds);
+        Assert.NotNull(await harness.CommitStore.FindAsync(outbox.OutboxItemId));
+    }
+
     // ── terminal-state guard (#412 item 5): a Cancel must never clobber an already-terminal workflow ─
 
     [Fact]
@@ -323,17 +367,35 @@ public sealed class RuntimeCancellationContractTests
         private readonly InMemoryWorkflowExecutionStateStore _workflowStore = new();
         private readonly InMemoryActivityExecutionStateStore _activityStore = new();
         private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
+        private readonly InMemoryExecutionLivenessStateStore _livenessStore = new();
+        private readonly InMemoryWorkflowDispatchStore _dispatchStore;
         private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
+        private readonly IReadOnlyCollection<IRuntimeCheckpointCommitEnricher> _enrichers;
+        private readonly IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> _intentHandlerContributions;
         private IRuntimeExecutionOwnershipContextAccessor? _ownershipAccessor;
-        private IRuntimeExecutionOwnershipService? _ownershipService;
 
-        public Harness(DateTimeOffset now, IRuntimeCheckpointPersistencePolicy? persistencePolicy = null)
+        public Harness(
+            DateTimeOffset now,
+            IRuntimeCheckpointPersistencePolicy? persistencePolicy = null,
+            IReadOnlyCollection<IRuntimeCheckpointCommitEnricher>? enrichers = null,
+            IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution>? intentHandlerContributions = null)
         {
             _now = now;
             _timeProvider = new FixedTimeProvider(now);
             _persistencePolicy = persistencePolicy ?? new ImmediateRuntimeCheckpointPersistencePolicy();
+            _enrichers = enrichers ?? [];
+            _intentHandlerContributions = intentHandlerContributions ?? [];
+            var checkpointState = new InMemoryRuntimeCheckpointStoreState();
+            _dispatchStore = new InMemoryWorkflowDispatchStore(checkpointState);
             CommitStore = new InMemoryRuntimeCheckpointCommitStore(
-                _workflowStore, _activityStore, null, null, null, null, null, _inspectionStore);
+                _workflowStore,
+                _activityStore,
+                operationalStateStore: _livenessStore,
+                activityExecutionInspectionWriter: _inspectionStore,
+                rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
+                state: checkpointState,
+                workflowDispatchStore: _dispatchStore,
+                timeProvider: _timeProvider);
         }
 
         public InMemoryRuntimeCheckpointCommitStore CommitStore { get; }
@@ -345,9 +407,8 @@ public sealed class RuntimeCancellationContractTests
                 OwnerId = "owner-under-test",
                 LeaseDuration = TimeSpan.FromMinutes(1)
             };
-            var ownership = new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore(), _timeProvider, options);
+            var ownership = new RuntimeExecutionOwnershipService(_livenessStore, _timeProvider, options);
             var accessor = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
-            _ownershipService = ownership;
             _ownershipAccessor = accessor;
             return (ownership, accessor);
         }
@@ -356,7 +417,13 @@ public sealed class RuntimeCancellationContractTests
             new(
                 _workflowStore,
                 _activityStore,
-                new RuntimeCheckpointCommitter(_persistencePolicy, CommitStore, _ownershipAccessor, _ownershipService),
+                new RuntimeCheckpointCommitter(
+                    _persistencePolicy,
+                    CommitStore,
+                    _ownershipAccessor,
+                    tracer: null,
+                    _enrichers,
+                    _intentHandlerContributions),
                 new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
                 _timeProvider);
 
@@ -415,6 +482,48 @@ public sealed class RuntimeCancellationContractTests
         public ValueTask<ActivityExecutionState?> FindActivity(string activityExecutionId) =>
             _activityStore.FindAsync(WorkflowExecutionId, activityExecutionId);
 
+        public ValueTask<WorkflowDispatchRecord?> FindDispatch(string dispatchId) =>
+            _dispatchStore.FindAsync(dispatchId);
+
+        public async Task<WorkflowDispatchRecord> SeedAdmittedWaitDispatch(string activityExecutionId)
+        {
+            var identity = new WorkflowDispatchIdentity(WorkflowExecutionId, activityExecutionId);
+            var metadata = new Dictionary<string, string>();
+            WorkflowDispatchLifecycle.SetEffectiveCancellationPolicy(
+                metadata,
+                WorkflowDispatchMode.WaitForCompletion,
+                cancelChildOnParentCancellation: true);
+            var pending = new WorkflowDispatchRecord(
+                identity.DispatchId,
+                WorkflowExecutionId,
+                activityExecutionId,
+                identity.ChildWorkflowExecutionId,
+                new WorkflowExecutableIdentity("artifact-child", "definition-child", "version-child", "1.0.0", "sha256:child"),
+                new WorkflowExecutableSourceProvenance(
+                    "source-child",
+                    "WorkflowDefinitionVersion",
+                    "version-child",
+                    "1.0.0",
+                    "definition-child",
+                    "version-child",
+                    "1.0.0",
+                    "publication-child",
+                    "slot-child"),
+                WorkflowDispatchMode.WaitForCompletion,
+                WorkflowDispatchStatus.Pending,
+                correlationId: null,
+                tenantId: null,
+                new WorkflowExecutionPartition("partition-1"),
+                WorkflowRunKind.PublishedRun,
+                new WorkflowExecutionAuthoritySnapshot(WorkflowExecutionId, "initiator-1"),
+                inputDescriptors: [],
+                _now,
+                _now,
+                metadata);
+            await _dispatchStore.SaveAsync(pending);
+            return (await _dispatchStore.TryAdmitAsync(identity.DispatchId, _now)).Record;
+        }
+
         public RuntimeSchedulerWorkItem CancelWorkItem() =>
             new(
                 workItemId: "cancel-work",
@@ -437,5 +546,50 @@ public sealed class RuntimeCancellationContractTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class DispatchCancellationEnricher(
+        WorkflowDispatchIdentity identity,
+        string parentActivityExecutionId,
+        DateTimeOffset requestedAt) : IRuntimeCheckpointCommitEnricher
+    {
+        public const string IntentKind = "Elsa.Tests.CancelChild";
+
+        public ValueTask<RuntimeCheckpointCommit> EnrichAsync(
+            RuntimeCheckpointCommit commit,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (commit.StateChanges.WorkflowExecution?.State.Status != WorkflowExecutionStatus.Cancelled)
+                return ValueTask.FromResult(commit);
+
+            var request = new WorkflowDispatchCancellationRequest(
+                identity.DispatchId,
+                commit.WorkflowExecutionId,
+                parentActivityExecutionId,
+                identity.ChildWorkflowExecutionId,
+                requestedAt);
+            var intent = new RuntimePostCommitIntent(
+                identity.ChildCancelIntentId,
+                commit.WorkflowExecutionId,
+                IntentKind,
+                requestedAt,
+                parentActivityExecutionId,
+                identity.ChildCancelIdempotencyKey,
+                payload: null);
+            return ValueTask.FromResult(commit with
+            {
+                StateChanges = commit.StateChanges.WithWorkflowDispatchCancellations([request]),
+                PostCommitIntents = [intent]
+            });
+        }
+    }
+
+    private sealed class NoopPostCommitIntentHandler : IRuntimePostCommitIntentHandler
+    {
+        public ValueTask HandleAsync(
+            RuntimePostCommitIntent intent,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
     }
 }

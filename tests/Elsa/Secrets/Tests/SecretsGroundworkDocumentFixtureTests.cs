@@ -10,14 +10,14 @@ using Xunit;
 namespace Elsa.Secrets.Tests;
 
 /// <summary>
-/// Golden-fixture drift and backward-compatibility tests for the persisted secret document kind (the
-/// W18 follow-up gate the Secrets domain was missing; Identity's MS-1 fixtures are the precedent).
+/// Golden-fixture drift and current-read tests for the persisted secret document kind (the W18
+/// follow-up gate the Secrets domain was missing; Identity's MS-1 fixtures are the precedent).
 /// The drift test freezes the serialized shape of the <c>secret</c> document kind against the committed
 /// <c>Fixtures/v2/secret.json</c> fixture and fails when the shape changes without a version bump. The
-/// compatibility test proves the v1 fixture remains invisible until an explicit tenant backfill assigns
-/// it. The fixture secret is fully deterministic (fixed id and timestamps)
-/// and carries both payload wire variants — a metadata-only encrypted-store shape with a literal fake
-/// protected value (never real protector output, which is nonce-randomized) and a plain value shape.
+/// read test proves that current committed shape loads through the real repository path. The fixture
+/// secret is fully deterministic (fixed id and timestamps) and carries both payload wire variants — a
+/// metadata-only encrypted-store shape with a literal fake protected value (never real protector
+/// output, which is nonce-randomized) and a plain value shape.
 /// </summary>
 public sealed class SecretsGroundworkDocumentFixtureTests
 {
@@ -38,35 +38,29 @@ public sealed class SecretsGroundworkDocumentFixtureTests
             return;
         }
 
-        var expected = ReadCurrentFixture();
+        var expected = ReadCommittedFixture();
         AssertJsonSemanticallyEqual(expected, contentJson);
     }
 
     [Fact]
-    public async Task Legacy_fixture_requires_explicit_tenant_backfill_before_it_is_visible()
+    public async Task Committed_Fixture_Loads_Through_The_Repository_Under_The_Legacy_Stamp()
     {
         if (Regenerate)
             return;
 
-        var fixtureContent = ReadLegacyFixture();
+        var fixtureContent = ReadCommittedFixture();
 
         var docStore = NewDocumentStore();
         await docStore.SaveAsync(new SaveDocumentRequest(
             SecretsStorageManifest.SecretDocumentKind,
-            "payments.api",
-            "1.0.0",
+            "8:tenant-1payments.api",
+            SecretsStorageManifest.SchemaVersion,
             fixtureContent));
 
-        var repository = new GroundworkSecretRepository(docStore);
-        Assert.Null(await repository.FindAsync("tenant-1", "payments.api"));
+        var secret = await new GroundworkSecretRepository(docStore).FindAsync("tenant-1", "payments.api");
 
-        var migrated = await new LegacySecretTenantBackfill(docStore).BackfillAsync("tenant-1");
-        var secret = await repository.FindAsync("tenant-1", "payments.api");
-
-        Assert.Equal(1, migrated);
         Assert.NotNull(secret);
-        Assert.Equal("tenant-1", secret!.TenantId);
-        Assert.Equal("payments.api", secret.Name);
+        Assert.Equal("payments.api", secret!.Name);
         Assert.Equal(SecretStatus.Active, secret.Status);
         Assert.Equal(2, secret.Versions.Count);
 
@@ -151,9 +145,8 @@ public sealed class SecretsGroundworkDocumentFixtureTests
             "The serialized shape of the 'secret' document kind no longer matches its committed golden " +
             "fixture (Fixtures/v2/secret.json).\n\n" +
             "A persisted secret shape changed. To evolve it you must, in the same change:\n" +
-            "  1. bump SecretsStorageManifest.SchemaVersion (and add an upcaster if you must read the old shape),\n" +
-            "  2. regenerate the golden fixture (run with GROUNDWORK_FIXTURE_REGEN=1), and\n" +
-            "  3. keep old fixtures/readers so historical documents still load.\n\n" +
+            "  1. bump SecretsStorageManifest.SchemaVersion, and\n" +
+            "  2. regenerate the golden fixture (run with GROUNDWORK_FIXTURE_REGEN=1).\n\n" +
             $"Expected (committed fixture, canonical):\n{Canonicalize(expected)}\n\n" +
             $"Actual (written by the repository today, canonical):\n{Canonicalize(actual)}");
     }
@@ -182,9 +175,9 @@ public sealed class SecretsGroundworkDocumentFixtureTests
 
     // --- Fixture file access (source-tree relative via CallerFilePath, so no output copy is required) ---
 
-    private static string ReadCurrentFixture()
+    private static string ReadCommittedFixture()
     {
-        var path = CurrentFixturePath();
+        var path = FixturePath();
         Assert.True(
             File.Exists(path),
             $"Missing committed golden fixture for kind '{SecretsStorageManifest.SecretDocumentKind}' at '{path}'. " +
@@ -194,16 +187,16 @@ public sealed class SecretsGroundworkDocumentFixtureTests
 
     private static void WriteFixtureToSource(string contentJson)
     {
-        var path = CurrentFixturePath();
+        var path = FixturePath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, Canonicalize(JsonNode.Parse(contentJson)));
     }
 
-    private static string ReadLegacyFixture() =>
-        File.ReadAllText(Path.Combine(SourceDirectory(), "Fixtures", "v1", SecretsStorageManifest.SecretDocumentKind + ".json"));
-
-    private static string CurrentFixturePath() =>
-        Path.Combine(SourceDirectory(), "Fixtures", "v2", SecretsStorageManifest.SecretDocumentKind + ".json");
+    private static string FixturePath()
+    {
+        var fileName = Path.GetFileName(SecretsStorageManifest.SecretDocumentKind + ".json");
+        return Path.Combine(SourceDirectory(), "Fixtures", "v2", fileName);
+    }
 
     private static string SourceDirectory([CallerFilePath] string? callerFilePath = null) =>
         Path.GetDirectoryName(callerFilePath)!;

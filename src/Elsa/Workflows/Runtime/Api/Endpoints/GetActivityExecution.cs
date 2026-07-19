@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Constants;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -13,7 +14,7 @@ public sealed class GetActivityExecutionEndpoint(IRequestSender requestSender, I
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("instances/{workflowExecutionId}/activity-executions/{activityExecutionId}"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowRuntimeRead);
     }
 
     public override async Task HandleAsync(GetActivityExecution req, CancellationToken ct)
@@ -23,24 +24,24 @@ public sealed class GetActivityExecutionEndpoint(IRequestSender requestSender, I
             var result = await requestSender.Send(req, ct);
             if (result.ActivityExecution is null)
             {
-                await Send.NotFoundAsync(ct);
+                await ActivityExecutionProblemDetails.NotFoundAsync(HttpContext, ct);
                 return;
             }
 
             await Send.OkAsync(result.ActivityExecution, ct);
         }
-        catch (ArgumentException e)
+        catch (ArgumentException exception)
         {
-            ThrowError(e, 400);
+            await ActivityExecutionProblemDetails.InvalidRequestAsync(HttpContext, exception.Message, ct);
         }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch (Exception e)
+        catch (Exception exception)
         {
-            logger.LogError(e, "Unexpected error occurred when handling request '{type}'", typeof(GetActivityExecution));
-            ThrowError("Unexpected error occurred", 500);
+            logger.LogError(exception, "Unexpected error occurred when handling request '{type}'", typeof(GetActivityExecution));
+            await ActivityExecutionProblemDetails.UnexpectedAsync(HttpContext, ct);
         }
     }
 }

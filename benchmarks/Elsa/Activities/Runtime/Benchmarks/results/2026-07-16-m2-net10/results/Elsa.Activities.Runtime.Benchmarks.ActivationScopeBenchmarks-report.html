@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Elsa.Activities.Runtime.Benchmarks.ActivationScopeBenchmarks-20260716-113438</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.15.8, macOS Tahoe 26.5.2 (25F84) [Darwin 25.5.0]
+Apple M2, 1 CPU, 8 logical and 8 physical cores
+.NET SDK 10.0.300
+  [Host]     : .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+  Job-NLWYXA : .NET 10.0.8 (10.0.8, 10.0.826.23019), Arm64 RyuJIT armv8.0-a
+</code></pre>
+<pre><code>IterationCount=12  LaunchCount=1  RunStrategy=Throughput
+WarmupCount=3
+</code></pre>
+
+<table>
+<thead><tr><th>Method               </th><th>Strategy</th><th>Mean   </th><th>Error  </th><th>StdDev </th><th>StdErr</th><th>Median </th><th>Min    </th><th>Q1     </th><th>Q3     </th><th>Max    </th><th>P95    </th><th>Op/s</th><th>Ratio</th><th>RatioSD</th><th>Gen0</th><th>Gen1</th><th>Allocated</th><th>Alloc Ratio</th>
+</tr>
+</thead><tbody><tr><td>NoOp</td><td>BurstOnly</td><td>130.195 &mu;s</td><td>26.2589 &mu;s</td><td>17.3686 &mu;s</td><td>5.4924 &mu;s</td><td>131.348 &mu;s</td><td>96.199 &mu;s</td><td>124.571 &mu;s</td><td>137.287 &mu;s</td><td>160.224 &mu;s</td><td>153.623 &mu;s</td><td>7,680.76</td><td>1.02</td><td>0.19</td><td>8.7891</td><td>0.2441</td><td>74768 B</td><td>1.00</td>
+</tr><tr><td>TransientDependency</td><td>BurstOnly</td><td>93.450 &mu;s</td><td>26.6110 &mu;s</td><td>20.7761 &mu;s</td><td>5.9976 &mu;s</td><td>88.584 &mu;s</td><td>66.176 &mu;s</td><td>79.274 &mu;s</td><td>107.133 &mu;s</td><td>130.635 &mu;s</td><td>127.725 &mu;s</td><td>10,700.97</td><td>0.73</td><td>0.19</td><td>5.6152</td><td>-</td><td>48048 B</td><td>0.64</td>
+</tr><tr><td>ScopedDisposableTransitive</td><td>BurstOnly</td><td>238.021 &mu;s</td><td>83.9793 &mu;s</td><td>65.5655 &mu;s</td><td>18.9271 &mu;s</td><td>219.800 &mu;s</td><td>132.828 &mu;s</td><td>206.351 &mu;s</td><td>282.098 &mu;s</td><td>367.906 &mu;s</td><td>342.444 &mu;s</td><td>4,201.31</td><td>1.86</td><td>0.56</td><td>10.4980</td><td>0.7324</td><td>88296 B</td><td>1.18</td>
+</tr><tr><td>IntrinsicHeavy</td><td>BurstOnly</td><td>3.174 &mu;s</td><td>2.2214 &mu;s</td><td>1.7343 &mu;s</td><td>0.5007 &mu;s</td><td>2.068 &mu;s</td><td>1.808 &mu;s</td><td>1.854 &mu;s</td><td>4.534 &mu;s</td><td>6.205 &mu;s</td><td>6.178 &mu;s</td><td>315,052.48</td><td>0.02</td><td>0.01</td><td>0.1183</td><td>-</td><td>1000 B</td><td>0.01</td>
+</tr><tr><td>MixedIntrinsicAndActivities</td><td>BurstOnly</td><td>10.400 &mu;s</td><td>0.5458 &mu;s</td><td>0.3946 &mu;s</td><td>0.1190 &mu;s</td><td>10.283 &mu;s</td><td>9.919 &mu;s</td><td>10.139 &mu;s</td><td>10.523 &mu;s</td><td>11.233 &mu;s</td><td>11.074 &mu;s</td><td>96,153.88</td><td>0.08</td><td>0.01</td><td>2.5787</td><td>0.0305</td><td>21624 B</td><td>0.29</td>
+</tr><tr><td>IoBound</td><td>BurstOnly</td><td>5,280.061 &mu;s</td><td>166.4304 &mu;s</td><td>129.9379 &mu;s</td><td>37.5098 &mu;s</td><td>5,264.844 &mu;s</td><td>5,087.460 &mu;s</td><td>5,191.063 &mu;s</td><td>5,363.036 &mu;s</td><td>5,525.237 &mu;s</td><td>5,481.522 &mu;s</td><td>189.39</td><td>41.27</td><td>5.81</td><td>-</td><td>-</td><td>9968 B</td><td>0.13</td>
+</tr><tr><td>Retry</td><td>BurstOnly</td><td>3.338 &mu;s</td><td>0.5301 &mu;s</td><td>0.4138 &mu;s</td><td>0.1195 &mu;s</td><td>3.360 &mu;s</td><td>2.623 &mu;s</td><td>3.160 &mu;s</td><td>3.612 &mu;s</td><td>4.029 &mu;s</td><td>3.844 &mu;s</td><td>299,583.54</td><td>0.03</td><td>0.00</td><td>0.6485</td><td>0.0038</td><td>5448 B</td><td>0.07</td>
+</tr><tr><td>ResumeInFreshBurst</td><td>BurstOnly</td><td>11.217 &mu;s</td><td>4.0952 &mu;s</td><td>3.1973 &mu;s</td><td>0.9230 &mu;s</td><td>11.917 &mu;s</td><td>4.717 &mu;s</td><td>8.963 &mu;s</td><td>13.581 &mu;s</td><td>15.611 &mu;s</td><td>15.160 &mu;s</td><td>89,150.45</td><td>0.09</td><td>0.03</td><td>0.8354</td><td>0.0076</td><td>7008 B</td><td>0.09</td>
+</tr><tr><td>ConcurrentDrain</td><td>BurstOnly</td><td>571.834 &mu;s</td><td>460.8322 &mu;s</td><td>333.2118 &mu;s</td><td>100.4672 &mu;s</td><td>415.681 &mu;s</td><td>276.891 &mu;s</td><td>352.426 &mu;s</td><td>713.048 &mu;s</td><td>1,334.858 &mu;s</td><td>1,133.462 &mu;s</td><td>1,748.76</td><td>4.47</td><td>2.59</td><td>9.7656</td><td>-</td><td>89256 B</td><td>1.19</td>
+</tr><tr><td>NoOp</td><td>PerAttempt</td><td>225.674 &mu;s</td><td>122.9316 &mu;s</td><td>88.8876 &mu;s</td><td>26.8006 &mu;s</td><td>177.855 &mu;s</td><td>160.051 &mu;s</td><td>166.069 &mu;s</td><td>258.121 &mu;s</td><td>444.324 &mu;s</td><td>375.708 &mu;s</td><td>4,431.18</td><td>1.11</td><td>0.53</td><td>8.7891</td><td>-</td><td>80144 B</td><td>1.00</td>
+</tr><tr><td>TransientDependency</td><td>PerAttempt</td><td>60.684 &mu;s</td><td>39.6601 &mu;s</td><td>30.9640 &mu;s</td><td>8.9385 &mu;s</td><td>43.973 &mu;s</td><td>36.092 &mu;s</td><td>37.690 &mu;s</td><td>71.604 &mu;s</td><td>121.517 &mu;s</td><td>119.053 &mu;s</td><td>16,478.68</td><td>0.30</td><td>0.17</td><td>6.3477</td><td>0.1221</td><td>53424 B</td><td>0.67</td>
+</tr><tr><td>ScopedDisposableTransitive</td><td>PerAttempt</td><td>228.774 &mu;s</td><td>148.7245 &mu;s</td><td>116.1143 &mu;s</td><td>33.5193 &mu;s</td><td>167.975 &mu;s</td><td>144.953 &mu;s</td><td>147.703 &mu;s</td><td>297.335 &mu;s</td><td>505.673 &mu;s</td><td>426.352 &mu;s</td><td>4,371.13</td><td>1.12</td><td>0.64</td><td>12.4512</td><td>0.9766</td><td>104584 B</td><td>1.30</td>
+</tr><tr><td>IntrinsicHeavy</td><td>PerAttempt</td><td>3.501 &mu;s</td><td>1.4118 &mu;s</td><td>1.0208 &mu;s</td><td>0.3078 &mu;s</td><td>2.953 &mu;s</td><td>2.602 &mu;s</td><td>2.811 &mu;s</td><td>4.150 &mu;s</td><td>5.495 &mu;s</td><td>5.171 &mu;s</td><td>285,592.58</td><td>0.02</td><td>0.01</td><td>0.1183</td><td>-</td><td>1000 B</td><td>0.01</td>
+</tr><tr><td>MixedIntrinsicAndActivities</td><td>PerAttempt</td><td>53.401 &mu;s</td><td>35.0075 &mu;s</td><td>27.3315 &mu;s</td><td>7.8899 &mu;s</td><td>47.118 &mu;s</td><td>19.911 &mu;s</td><td>34.740 &mu;s</td><td>74.115 &mu;s</td><td>113.077 &mu;s</td><td>94.594 &mu;s</td><td>18,726.20</td><td>0.26</td><td>0.15</td><td>2.8992</td><td>0.0305</td><td>24312 B</td><td>0.30</td>
+</tr><tr><td>IoBound</td><td>PerAttempt</td><td>20,852.924 &mu;s</td><td>2,351.1756 &mu;s</td><td>1,700.0540 &mu;s</td><td>512.5856 &mu;s</td><td>20,627.717 &mu;s</td><td>18,094.098 &mu;s</td><td>20,140.716 &mu;s</td><td>21,503.748 &mu;s</td><td>23,677.604 &mu;s</td><td>23,621.499 &mu;s</td><td>47.95</td><td>102.39</td><td>29.09</td><td>-</td><td>-</td><td>10582 B</td><td>0.13</td>
+</tr><tr><td>Retry</td><td>PerAttempt</td><td>52.015 &mu;s</td><td>41.9861 &mu;s</td><td>30.3587 &mu;s</td><td>9.1535 &mu;s</td><td>51.792 &mu;s</td><td>8.106 &mu;s</td><td>34.989 &mu;s</td><td>64.734 &mu;s</td><td>102.645 &mu;s</td><td>99.024 &mu;s</td><td>19,225.34</td><td>0.26</td><td>0.16</td><td>0.4883</td><td>-</td><td>5784 B</td><td>0.07</td>
+</tr><tr><td>ResumeInFreshBurst</td><td>PerAttempt</td><td>30.857 &mu;s</td><td>11.3224 &mu;s</td><td>7.4891 &mu;s</td><td>2.3682 &mu;s</td><td>28.432 &mu;s</td><td>25.323 &mu;s</td><td>27.718 &mu;s</td><td>30.116 &mu;s</td><td>50.936 &mu;s</td><td>43.398 &mu;s</td><td>32,407.22</td><td>0.15</td><td>0.05</td><td>0.7324</td><td>-</td><td>7344 B</td><td>0.09</td>
+</tr><tr><td>ConcurrentDrain</td><td>PerAttempt</td><td>790.970 &mu;s</td><td>434.8156 &mu;s</td><td>314.4002 &mu;s</td><td>94.7952 &mu;s</td><td>711.186 &mu;s</td><td>427.866 &mu;s</td><td>545.542 &mu;s</td><td>1,051.937 &mu;s</td><td>1,232.982 &mu;s</td><td>1,232.076 &mu;s</td><td>1,264.27</td><td>3.88</td><td>1.86</td><td>11.7188</td><td>-</td><td>105192 B</td><td>1.31</td>
+</tr><tr><td>NoOp</td><td>Conditional</td><td>648.901 &mu;s</td><td>378.6663 &mu;s</td><td>295.6378 &mu;s</td><td>85.3433 &mu;s</td><td>590.307 &mu;s</td><td>282.222 &mu;s</td><td>426.660 &mu;s</td><td>831.829 &mu;s</td><td>1,310.698 &mu;s</td><td>1,084.492 &mu;s</td><td>1,541.07</td><td>1.21</td><td>0.79</td><td>8.7891</td><td>-</td><td>75800 B</td><td>1.00</td>
+</tr><tr><td>TransientDependency</td><td>Conditional</td><td>274.883 &mu;s</td><td>188.3458 &mu;s</td><td>147.0480 &mu;s</td><td>42.4491 &mu;s</td><td>262.520 &mu;s</td><td>108.161 &mu;s</td><td>148.334 &mu;s</td><td>363.240 &mu;s</td><td>575.933 &mu;s</td><td>493.631 &mu;s</td><td>3,637.91</td><td>0.51</td><td>0.37</td><td>5.8594</td><td>-</td><td>53432 B</td><td>0.70</td>
+</tr><tr><td>ScopedDisposableTransitive</td><td>Conditional</td><td>943.318 &mu;s</td><td>251.2030 &mu;s</td><td>196.1228 &mu;s</td><td>56.6158 &mu;s</td><td>891.163 &mu;s</td><td>683.129 &mu;s</td><td>791.841 &mu;s</td><td>1,127.873 &mu;s</td><td>1,268.638 &mu;s</td><td>1,233.845 &mu;s</td><td>1,060.09</td><td>1.76</td><td>0.88</td><td>11.7188</td><td>-</td><td>104592 B</td><td>1.38</td>
+</tr><tr><td>IntrinsicHeavy</td><td>Conditional</td><td>12.564 &mu;s</td><td>5.4576 &mu;s</td><td>4.2609 &mu;s</td><td>1.2300 &mu;s</td><td>11.425 &mu;s</td><td>6.496 &mu;s</td><td>8.721 &mu;s</td><td>16.066 &mu;s</td><td>19.048 &mu;s</td><td>18.534 &mu;s</td><td>79,593.62</td><td>0.02</td><td>0.01</td><td>0.1068</td><td>-</td><td>1000 B</td><td>0.01</td>
+</tr><tr><td>MixedIntrinsicAndActivities</td><td>Conditional</td><td>62.725 &mu;s</td><td>39.0735 &mu;s</td><td>30.5060 &mu;s</td><td>8.8063 &mu;s</td><td>55.923 &mu;s</td><td>29.517 &mu;s</td><td>40.383 &mu;s</td><td>75.034 &mu;s</td><td>122.290 &mu;s</td><td>116.168 &mu;s</td><td>15,942.50</td><td>0.12</td><td>0.08</td><td>2.5635</td><td>-</td><td>22144 B</td><td>0.29</td>
+</tr><tr><td>IoBound</td><td>Conditional</td><td>7,920.969 &mu;s</td><td>2,011.3284 &mu;s</td><td>1,570.3129 &mu;s</td><td>453.3103 &mu;s</td><td>7,570.914 &mu;s</td><td>6,045.132 &mu;s</td><td>6,748.488 &mu;s</td><td>8,693.716 &mu;s</td><td>10,845.542 &mu;s</td><td>10,435.199 &mu;s</td><td>126.25</td><td>14.79</td><td>7.31</td><td>-</td><td>-</td><td>10646 B</td><td>0.14</td>
+</tr><tr><td>Retry</td><td>Conditional</td><td>5.993 &mu;s</td><td>1.6870 &mu;s</td><td>1.2198 &mu;s</td><td>0.3678 &mu;s</td><td>5.639 &mu;s</td><td>4.513 &mu;s</td><td>5.327 &mu;s</td><td>6.213 &mu;s</td><td>8.419 &mu;s</td><td>8.212 &mu;s</td><td>166,854.99</td><td>0.01</td><td>0.01</td><td>0.6866</td><td>-</td><td>5792 B</td><td>0.08</td>
+</tr><tr><td>ResumeInFreshBurst</td><td>Conditional</td><td>9.240 &mu;s</td><td>1.8671 &mu;s</td><td>1.3500 &mu;s</td><td>0.4070 &mu;s</td><td>9.049 &mu;s</td><td>7.145 &mu;s</td><td>8.374 &mu;s</td><td>9.933 &mu;s</td><td>12.164 &mu;s</td><td>11.265 &mu;s</td><td>108,226.46</td><td>0.02</td><td>0.01</td><td>0.8698</td><td>-</td><td>7360 B</td><td>0.10</td>
+</tr><tr><td>ConcurrentDrain</td><td>Conditional</td><td>299.721 &mu;s</td><td>144.1662 &mu;s</td><td>104.2416 &mu;s</td><td>31.4300 &mu;s</td><td>268.739 &mu;s</td><td>191.103 &mu;s</td><td>229.942 &mu;s</td><td>324.711 &mu;s</td><td>514.094 &mu;s</td><td>489.205 &mu;s</td><td>3,336.43</td><td>0.56</td><td>0.32</td><td>11.7188</td><td>-</td><td>105208 B</td><td>1.39</td>
+</tr></tbody></table>
+</body>
+</html>

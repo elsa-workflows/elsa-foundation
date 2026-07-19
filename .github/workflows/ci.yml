@@ -34,6 +34,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -51,8 +53,7 @@ jobs:
         # Run the fast unit tests only. Any test project that references
         # Testcontainers spins up Docker containers, so exclude those by reference --
         # this is self-maintaining (new Testcontainers projects are auto-excluded) and
-        # provably starts no containers. Today that excludes exactly the two Groundwork
-        # PostgreSql projects; every other test project is kept.
+        # provably starts no containers. Every other test project is kept.
         run: |
           keep=()
           while IFS= read -r p; do
@@ -72,3 +73,39 @@ jobs:
 
       - name: Test (fast unit tests, no containers)
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
+
+  # Feature 094 container-free ratchets. The whole architecture project runs so a
+  # renamed or newly added gate cannot silently fall out of a brittle test filter.
+  groundwork-fast:
+    name: Groundwork fast gates
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GROUNDWORK_LEDGER_BASE_REF: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # The EF surface ratchet inspects project.assets.json for every repository project, not only
+      # the architecture test dependency graph. Restore the full solution so the gate fails closed
+      # on real missing assets instead of a deliberately partial restore.
+      - name: Restore repository graph for architecture ratchets
+        run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
+
+      - name: Validate Groundwork ledger, continuity, dependency, and EF ratchets
+        run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603

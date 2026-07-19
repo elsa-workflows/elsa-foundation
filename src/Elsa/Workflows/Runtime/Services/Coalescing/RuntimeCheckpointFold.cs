@@ -27,6 +27,9 @@ public static class RuntimeCheckpointFold
         var durableValues = new MergeBuffer<DurableValueState>();
         var incidents = new MergeBuffer<IncidentState>();
         var operational = new MergeBuffer<ExecutionLivenessState>();
+        var workflowDispatches = new MergeBuffer<WorkflowDispatchRecord>();
+        var workflowDispatchCancellations = new List<WorkflowDispatchCancellationRequest>();
+        var activityScopeCleanups = new List<ActivityScopeCleanupRequest>();
 
         foreach (var changeSet in changeSets)
         {
@@ -42,6 +45,9 @@ public static class RuntimeCheckpointFold
             durableValues.AddRange(changeSet.DurableValues);
             incidents.AddRange(changeSet.Incidents);
             operational.AddRange(changeSet.Operational);
+            workflowDispatches.AddRange(changeSet.WorkflowDispatches);
+            workflowDispatchCancellations.AddRange(changeSet.WorkflowDispatchCancellations);
+            activityScopeCleanups.AddRange(changeSet.ActivityScopeCleanups);
         }
 
         return new RuntimeCheckpointStateChangeSet(
@@ -52,7 +58,11 @@ public static class RuntimeCheckpointFold
             durableValues.ToArray(),
             incidents.ToArray(),
             operational.ToArray(),
-            inspections.ToArray());
+            workflowDispatches: workflowDispatches.ToArray(),
+            activityExecutionInspections: inspections.ToArray(),
+            postCommitOutbox: null,
+            activityScopeCleanups: activityScopeCleanups,
+            workflowDispatchCancellations: workflowDispatchCancellations);
     }
 
     private sealed class MergeBuffer<TState>

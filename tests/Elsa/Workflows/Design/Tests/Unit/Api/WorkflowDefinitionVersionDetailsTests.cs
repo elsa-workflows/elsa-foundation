@@ -22,7 +22,7 @@ public sealed class WorkflowDefinitionVersionDetailsTests
             Name = "Order Fulfillment",
             Description = "Routes orders through fulfillment."
         },
-        State = new WorkflowDefinitionState([], null, [], [], null, null)
+        State = new WorkflowDefinitionState([], null, [], [], null)
     };
 
     [Fact]

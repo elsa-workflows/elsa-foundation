@@ -79,6 +79,35 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
     }
 
     [Fact]
+    public async Task RefreshAsync_ProjectsOnlyTheAuthoritativePublication_AcrossActivationAndCompensation()
+    {
+        var bindings = new Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore();
+        var routeTable = new FakeRouteTable();
+        var synchronizer = Synchronizers.Build(bindings, routeTable);
+        var oldBinding = PublicationBinding("publication-old", "artifact-old", "foo");
+        var candidateBinding = PublicationBinding("publication-new", "artifact-new", "bar");
+
+        await bindings.PreparePublicationAsync("publication-old", [oldBinding]);
+        await bindings.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
+        await synchronizer.RefreshAsync();
+        Assert.Equal(new[] { "foo" }, routeTable.RouteTemplates);
+
+        // Preparation is deliberately invisible until authority changes.
+        await bindings.PreparePublicationAsync("publication-new", [candidateBinding]);
+        await synchronizer.RefreshAsync();
+        Assert.Equal(new[] { "foo" }, routeTable.RouteTemplates);
+
+        // Activation retires the old projection; compensation performs the inverse authority transition.
+        await bindings.ActivatePublicationAsync("publication-new", "publication-old");
+        await synchronizer.RefreshAsync();
+        Assert.Equal(new[] { "bar" }, routeTable.RouteTemplates);
+
+        await bindings.ActivatePublicationAsync("publication-old", "publication-new");
+        await synchronizer.RefreshAsync();
+        Assert.Equal(new[] { "foo" }, routeTable.RouteTemplates);
+    }
+
+    [Fact]
     public async Task RefreshAsync_PropagatesResolverFailure_AndReleasesTheLock()
     {
         // The resolver throws on the FIRST resolve, then succeeds. The synchronizer must propagate the first failure
@@ -106,6 +135,25 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
         services.AddSingleton(routeTable ?? new FakeRouteTable());
         var provider = services.BuildServiceProvider();
         return new HttpEndpointRouteTableSynchronizer(provider.GetRequiredService<IServiceScopeFactory>());
+    }
+
+    private static Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding PublicationBinding(
+        string publicationId,
+        string artifactId,
+        string template)
+    {
+        var binding = Bindings.HttpEndpoint(artifactId, "node-http", template, "GET");
+        return binding with
+        {
+            TriggerBindingId = Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding.BuildId(
+                publicationId,
+                artifactId,
+                binding.ExecutableNodeId,
+                binding.StimulusHash),
+            PublicationId = publicationId,
+            SlotId = "slot-default",
+            IsActive = false
+        };
     }
 
     /// <summary>A resolver whose <see cref="ResolveRoutesAsync"/> runs a supplied action, then returns no routes.</summary>

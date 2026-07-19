@@ -51,6 +51,7 @@ public abstract class EFCoreWorkflowsPersistenceFeatureBase : EFCorePersistenceS
             services.AddScoped<IWorkflowDefinitionStore, EFCoreWorkflowDefinitionStore>();
             services.AddScoped<IWorkflowDefinitionVersionStore, EFCoreWorkflowDefinitionVersionStore>();
             services.AddScoped<IWorkflowDefinitionDraftStore, EFCoreWorkflowDefinitionDraftStore>();
+            services.AddScoped<IWorkflowDefinitionListProjectionStore, EFCoreWorkflowDefinitionListProjectionStore>();
             services.AddScoped<IWorkflowDefinitionVersionLayoutStore, EFCoreWorkflowDefinitionVersionLayoutStore>();
             services.AddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>();
         }

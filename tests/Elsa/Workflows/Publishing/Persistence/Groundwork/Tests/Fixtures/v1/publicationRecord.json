@@ -1,0 +1,18 @@
+{
+  "slotId": "publication-slot:12:definition-1:7:default",
+  "publication": {
+    "publicationId": "publication-1",
+    "slotId": "publication-slot:12:definition-1:7:default",
+    "workflowDefinitionId": "definition-1",
+    "workflowDefinitionVersionId": "version-1",
+    "artifactId": "artifact-1",
+    "sourceReferenceId": "reference-1",
+    "expectedSlotRevision": 0,
+    "status": 2,
+    "createdAt": "2026-07-13T12:00:00+00:00",
+    "activatedAt": "2026-07-13T12:00:00+00:00",
+    "retiredAt": null,
+    "failure": null,
+    "slotName": "default"
+  }
+}

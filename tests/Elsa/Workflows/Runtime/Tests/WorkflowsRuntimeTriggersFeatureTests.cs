@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -23,6 +24,13 @@ public sealed class WorkflowsRuntimeTriggersFeatureTests
         AssertRegistered<IStimulusStartDeduplicator>(services);
         AssertRegistered<IStimulusRouter>(services);
 
+        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IWorkflowTriggerIndexer)).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IBookmarkStimulusIndex)).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IGlobalBookmarkStimulusLookup)).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IStimulusRouter)).Lifetime);
+        Assert.Equal(ServiceLifetime.Singleton, Assert.Single(services, x => x.ServiceType == typeof(IWorkflowTriggerBindingExtractor)).Lifetime);
+        Assert.Equal(ServiceLifetime.Singleton, Assert.Single(services, x => x.ServiceType == typeof(IStimulusStartDeduplicator)).Lifetime);
+
         // The cross-execution index is bridged onto the bookmark state store via a factory, so assert by service type.
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
@@ -34,14 +42,25 @@ public sealed class WorkflowsRuntimeTriggersFeatureTests
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new WorkflowsRuntimeTriggersFeature().ConfigureServices(services);
+        services.RemoveAll<IBookmarkStateStore>();
+        services.AddScoped<IBookmarkStateStore, InMemoryBookmarkStateStore>();
 
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var firstScope = provider.CreateScope();
+        using var secondScope = provider.CreateScope();
 
-        Assert.NotNull(provider.GetRequiredService<IStimulusRouter>());
+        var firstRouter = firstScope.ServiceProvider.GetRequiredService<IStimulusRouter>();
+        Assert.NotSame(firstRouter, secondScope.ServiceProvider.GetRequiredService<IStimulusRouter>());
         // The bridged index must resolve to the same store the runtime owns.
         Assert.Same(
-            provider.GetRequiredService<IBookmarkStateStore>(),
-            provider.GetRequiredService<IBookmarkStimulusIndex>());
+            firstScope.ServiceProvider.GetRequiredService<IBookmarkStateStore>(),
+            firstScope.ServiceProvider.GetRequiredService<IBookmarkStimulusIndex>());
+        Assert.NotSame(
+            firstScope.ServiceProvider.GetRequiredService<IBookmarkStimulusIndex>(),
+            secondScope.ServiceProvider.GetRequiredService<IBookmarkStimulusIndex>());
+        Assert.NotSame(
+            firstScope.ServiceProvider.GetRequiredService<IGlobalBookmarkStimulusLookup>(),
+            secondScope.ServiceProvider.GetRequiredService<IGlobalBookmarkStimulusLookup>());
     }
 
     [Fact]

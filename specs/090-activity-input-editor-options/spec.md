@@ -1,5 +1,7 @@
 # Feature Specification: Activity Input Editor Options
 
+> **Current status (2026-07-16): retained and reconciled with [spec 095](../095-value-flow-redesign/spec.md).** Editor metadata is discovered from plain `[ActivityInput]` CLR properties and affects authoring only; it does not create runtime argument wrappers or value addresses.
+
 **Feature Branch**: `codex/090-activity-input-editor-options`
 
 **Created**: 2026-07-11

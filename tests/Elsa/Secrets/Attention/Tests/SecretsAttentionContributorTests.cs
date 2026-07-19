@@ -187,11 +187,15 @@ public sealed class SecretsAttentionContributorTests
         public int CallCount { get; private set; }
         public string? TenantId { get; private set; }
 
-        public ValueTask<IReadOnlyCollection<Secret>> ListAsync(string tenantId, CancellationToken cancellationToken = default)
+        public ValueTask<SecretRepositoryPage> ListPageAsync(
+            string tenantId,
+            SecretRepositoryListRequest request,
+            CancellationToken cancellationToken = default)
         {
             CallCount++;
             TenantId = tenantId;
-            return ValueTask.FromResult(secrets);
+            var items = secrets.Skip(request.Skip).Take(request.Take).ToArray();
+            return ValueTask.FromResult(new SecretRepositoryPage(items, secrets.Count));
         }
 
         public ValueTask<Secret?> FindAsync(string tenantId, string normalizedName, CancellationToken cancellationToken = default) => throw new NotSupportedException();

@@ -19,5 +19,8 @@ public enum CollectionKind
     List,
 
     /// <summary>A generic set (default equality); closes to <c>HashSet&lt;T&gt;</c>.</summary>
-    HashSet
+    HashSet,
+
+    /// <summary>A string-keyed dictionary; closes to <c>Dictionary&lt;string,T&gt;</c>.</summary>
+    Dictionary
 }

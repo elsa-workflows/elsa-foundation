@@ -1,0 +1,662 @@
+{
+  "artifactSchemaVersion": 1,
+  "sourceAuthority": "#644",
+  "testedCandidate": {
+    "commitSha": "211ab4816b41c153d795c93fc3f72c872ecb4875",
+    "treeSha": "35b19f8b4f37dc4e80dffae8046aa7fb59b306e1",
+    "groundworkPackageFamilyVersion": "0.0.1-preview.60",
+    "groundworkToolVersion": "0.0.1-preview.60",
+    "identityManifestVersion": "1.0.4",
+    "groundworkProviderAssemblyVersion": "0.0.1-preview.60"
+  },
+  "provider": {
+    "key": "sqlserver",
+    "identity": "groundwork-sqlserver",
+    "topology": "real-sqlserver-container",
+    "capabilities": [
+      "ExternalProcessRestart",
+      "IndependentClients",
+      "MultiDocumentTransactions",
+      "PersistentStorage"
+    ],
+    "diagnosticsSha256": "7b16f29d7f3994a3cd1ee810b7a0e08fa087a858cfc17c74bb761247bda9b97e",
+    "compoundKeyBudgetSha256": "f7ad6b0b5850f225ab7981a9929d178f8ed19e42755baf4ed017e91bec624ca3"
+  },
+  "acceptance": {
+    "objectiveCount": 25,
+    "objectiveIds": [
+      "atomicity.injected-failure-does-not-leave-partial-state",
+      "cancellation.pre-cancelled-load-is-cancelled",
+      "concurrency.duplicate-normalized-user-name-has-one-winner",
+      "concurrency.external-login-owner-has-one-winner",
+      "delete.user-delete-removes-relationships-after-success",
+      "failure-window.lost-acknowledgement-reconciles-committed-result",
+      "framework-capability.role-claim-store",
+      "framework-capability.role-store",
+      "framework-capability.user-authentication-token-store",
+      "framework-capability.user-authenticator-key-store",
+      "framework-capability.user-claim-store",
+      "framework-capability.user-email-store",
+      "framework-capability.user-lockout-store",
+      "framework-capability.user-login-store",
+      "framework-capability.user-password-store",
+      "framework-capability.user-phone-number-store",
+      "framework-capability.user-role-store",
+      "framework-capability.user-security-stamp-store",
+      "framework-capability.user-store",
+      "framework-capability.user-two-factor-recovery-code-store",
+      "framework-capability.user-two-factor-store",
+      "lifecycle.close-reopen-preserves-authority",
+      "lifecycle.expired-mutation-receipt-is-cleaned",
+      "lifecycle.process-restart-preserves-authority",
+      "tenancy.cross-scope-read-is-not-disclosed"
+    ],
+    "objectiveResultDigest": "e4b9f360288bffc56c09050d21e9f431119a907fc0d118e40ed3ff018ede9583",
+    "advertisedCapabilityCount": 15,
+    "advertisedCapabilityIds": [
+      "role-claim-store",
+      "role-store",
+      "user-authentication-token-store",
+      "user-authenticator-key-store",
+      "user-claim-store",
+      "user-email-store",
+      "user-lockout-store",
+      "user-login-store",
+      "user-password-store",
+      "user-phone-number-store",
+      "user-role-store",
+      "user-security-stamp-store",
+      "user-store",
+      "user-two-factor-recovery-code-store",
+      "user-two-factor-store"
+    ],
+    "externalProcessesConfirmed": true,
+    "processLaunchFingerprint": "0e1761a3045d7909415d2298dbd4e50ff25a64601354a4808561cfdd916adda4"
+  },
+  "nativeRoutes": {
+    "routeCount": 10,
+    "physicalTableCount": 6,
+    "cardinalityPerPhysicalTable": 100000,
+    "routes": [
+      {
+        "queryIdentity": "find-role-by-normalized-name",
+        "documentKind": "identityRole",
+        "physicalName": "identity_roles",
+        "physicalCardinality": 100000,
+        "finiteLimit": 1,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-role-by-normalized-name",
+        "indexName": "identity-role-by-normalized-name",
+        "planClassification": "index-seek",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "eeafe536650da2d49eab2a11df436327b93484ed573a2918a48f1ab126aaa946",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-role-by-normalized-name"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedRoleNameKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "916a5263607545d6c83afd0b62beecb2769177170b156f9ad403991ab4470675"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-role-by-normalized-name"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedRoleNameKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "82c5ac19af560cafa5558f0b53eb2fd341680dcd525a488a8444c3fee410350e"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "find-user-by-normalized-email",
+        "documentKind": "identityUser",
+        "physicalName": "identity_users",
+        "physicalCardinality": 100000,
+        "finiteLimit": 2,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-by-normalized-email",
+        "indexName": "identity-user-by-normalized-email",
+        "planClassification": "index-seek",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "1e4c562109a6d74881cce1ca9afc0887c135f4e82f75b4b6d865cd6dcd4c4859",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-by-normalized-email"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedEmailKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "8a6b007fc92618700c95deb320b0ecb2d884c3cd3cdb1d8f10e70d539600474f"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-by-normalized-email"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedEmailKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "44a59097ed953313550a29ad50ebee0a6a387b1df247e3c083f39e37e1f5655b"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "find-user-by-normalized-name",
+        "documentKind": "identityUser",
+        "physicalName": "identity_users",
+        "physicalCardinality": 100000,
+        "finiteLimit": 1,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-by-normalized-name",
+        "indexName": "identity-user-by-normalized-name",
+        "planClassification": "index-seek",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "b4bcd345d0dac8c47ea8841354dc49f04e4277d127696e25289610d69541fd50",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-by-normalized-name"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedUserNameKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "b58e8a63b1ab00ab3ab0103560a3e4e7975a1ab0793232ea54adde4bc6191a94"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-by-normalized-name"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "normalizedUserNameKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "935daf01b1c097ed3d6c8a58052d997ea05b4f3a169099612f5f220ddbfd8f7b"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "find-users-by-claim",
+        "documentKind": "identityUserClaim",
+        "physicalName": "identity_user_claims",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-claim-by-claim",
+        "indexName": "identity-user-claim-by-claim",
+        "planClassification": "index-seek",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "bdc3d50a97b42f0b0f52ebce9d7c65c797f422af5217a45a19fe7d243e4735e4",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-claim-by-claim"
+            ],
+            "predicateFieldIdentifiers": [
+              "claimKey",
+              "document_kind",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "16833e5c4fd6d0dcc018a9f07699262d870ce639b8bb0b04a44df3f8dc8d5d5a"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-claim-by-claim"
+            ],
+            "predicateFieldIdentifiers": [
+              "claimKey",
+              "document_kind",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "893411c4ceaa4326223c6486e8c299875bbadff5e4556c86262e4bb7c1afebf5"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-role-claims",
+        "documentKind": "identityRoleClaim",
+        "physicalName": "identity_role_claims",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-role-claim-by-role",
+        "indexName": "identity-role-claim-by-role",
+        "planClassification": "index-seek",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "0d5d88a90ba1e5acc8c323af2ff18d085cac1904f26d8ea6deeea90e40f529e3",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-role-claim-by-role"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "roleLookupKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "31c6cec879d5dcaa1f358a7c4dc4d6b9229a18482b5aaae2cb4eba5d1ea05c8d"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-role-claim-by-role"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "roleLookupKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "1ef67406c283bc3bc00e72cdb7fbd6f7eeaff842f3896ea09cb4417df1a9dc00"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-role-users",
+        "documentKind": "identityUserRole",
+        "physicalName": "identity_user_roles",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-role-by-role",
+        "indexName": "identity-user-role-by-role",
+        "planClassification": "index-seek",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "9ea8ebe09597a3955dac9c31239a8358ae2185de3a20d263fd5217db4fb4d76d",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-role-by-role"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "roleLookupKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "630da78b766e23f5a4da7d5221661e6fda2624967de751c2eb0f0f319b2a50dd"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-role-by-role"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "roleLookupKey",
+              "storage_scope"
+            ],
+            "nativePlanSha256": "81e44d2bef9cb940a1f4e6265c482ccc6f7e218277a7ad726a01747ded43dae0"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-roles-by-tenant",
+        "documentKind": "identityRole",
+        "physicalName": "identity_roles",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-role-by-tenant",
+        "indexName": "identity-role-by-tenant",
+        "planClassification": "index-seek",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "c42f73f15303e68667f05c819b2bb0ed730b2852ad5344be7e5ea41b19fe3d02",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-role-by-tenant"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "tenantId"
+            ],
+            "nativePlanSha256": "461abda3392724cf80ea2cb88ee4c1e4e2fc7c2823d4311e2cd52ed60af74657"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-role-by-tenant"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "tenantId"
+            ],
+            "nativePlanSha256": "d719dcd20f2dfc91bff199a116cb21cbdb5636b7dc3ab270ced3242e650689be"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-user-claims",
+        "documentKind": "identityUserClaim",
+        "physicalName": "identity_user_claims",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-claim-by-user",
+        "indexName": "identity-user-claim-by-user",
+        "planClassification": "index-seek",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "1be95d05ffc43a6760236f9ab2f9535b596b41147b505d0a47e3ed990b5b1120",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-claim-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "1172c1c7c943c517077bfe9789bee9ea87c071bc397ea1ea9a90aa8adc35acc5"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-claim-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "dc412f269740469db80e4851a7d2d75cb8cd63a06cfbcbb3e763aaf3fb790e13"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-user-logins",
+        "documentKind": "identityExternalLogin",
+        "physicalName": "identity_external_logins",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-login-by-user",
+        "indexName": "identity-login-by-user",
+        "planClassification": "index-seek",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "84b158507efd10c47442ca2b38ba085812dd4eba964888609803015d6c716186",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-login-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "ab43ad347bd6e5041f8fc4b2be64b84c62fa98e991543f328ec5d46369fe2476"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-login-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "f9f12f334193e90603cef332600fd7552589d6a2bb28dd240d25ba911bd39e51"
+          }
+        ]
+      },
+      {
+        "queryIdentity": "list-user-roles",
+        "documentKind": "identityUserRole",
+        "physicalName": "identity_user_roles",
+        "physicalCardinality": 100000,
+        "finiteLimit": 512,
+        "materializedCandidateCount": 1,
+        "indexLogicalName": "identity-user-role-by-user",
+        "indexName": "identity-user-role-by-user",
+        "planClassification": "index-seek",
+        "storageScopePredicate": true,
+        "routePredicate": true,
+        "evidenceSha256": "aeff6385b9f59c617a7439b42632d2d3ad87dafd3541dec9c95a86c660d8b251",
+        "commands": [
+          {
+            "ordinal": 0,
+            "kind": "Count",
+            "identity": "count",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-role-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "43e3fb9f2dad81c95b0c1cb72ce29ba74caa7ba5d66b7c9f8c2552763f7b8808"
+          },
+          {
+            "ordinal": 1,
+            "kind": "Page",
+            "identity": "page",
+            "nativePlanFormat": "sqlserver-statistics-xml",
+            "planClassification": "index-seek",
+            "indexNames": [
+              "identity-user-role-by-user"
+            ],
+            "predicateFieldIdentifiers": [
+              "document_kind",
+              "storage_scope",
+              "userLookupKey"
+            ],
+            "nativePlanSha256": "9370e80ade54165e9735370fa404eb799c27e1ede682b85841107c4b35b3c92b"
+          }
+        ]
+      }
+    ]
+  },
+  "schema": {
+    "compositionFingerprint": "a0f61931fb15fd78225d594dbbff28127c2305bc7641fc3413f9f5fb2c76807d",
+    "targetFingerprint": "548d2215a7b44c0545ee85786ffca269325d2dfbf3d6ef8cab142604d77cce83",
+    "pendingState": {
+      "fingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonicalItemCount": 0
+    },
+    "appliedState": {
+      "fingerprint": "cb0567bbbd610e0df2d103b9f221d9c71f317859f9aca0c316f79beeef31b859",
+      "canonicalItemCount": 1188
+    },
+    "toolReceipts": [
+      {
+        "operation": "validate-offline",
+        "exitCode": 0,
+        "inspectionMode": "offline",
+        "outcome": "ready",
+        "targetMutated": false,
+        "beforeFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "afterFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stateUnchanged": true
+      },
+      {
+        "operation": "validate-pending",
+        "exitCode": 0,
+        "inspectionMode": "live",
+        "outcome": "ready",
+        "targetMutated": false,
+        "beforeFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "afterFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stateUnchanged": true
+      },
+      {
+        "operation": "plan-pending",
+        "exitCode": 2,
+        "outcome": "pending",
+        "targetMutated": false,
+        "beforeFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "afterFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stateUnchanged": true
+      },
+      {
+        "operation": "status-pending",
+        "exitCode": 2,
+        "outcome": "pending",
+        "targetMutated": false,
+        "beforeFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "afterFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stateUnchanged": true
+      },
+      {
+        "operation": "apply-safe",
+        "exitCode": 0,
+        "outcome": "applied",
+        "targetMutated": true,
+        "beforeFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "afterFingerprint": "cb0567bbbd610e0df2d103b9f221d9c71f317859f9aca0c316f79beeef31b859",
+        "stateUnchanged": false
+      },
+      {
+        "operation": "validate-ready",
+        "exitCode": 0,
+        "inspectionMode": "live",
+        "outcome": "ready",
+        "targetMutated": false,
+        "beforeFingerprint": "cb0567bbbd610e0df2d103b9f221d9c71f317859f9aca0c316f79beeef31b859",
+        "afterFingerprint": "cb0567bbbd610e0df2d103b9f221d9c71f317859f9aca0c316f79beeef31b859",
+        "stateUnchanged": true
+      },
+      {
+        "operation": "status-ready",
+        "exitCode": 0,
+        "outcome": "ready",
+        "targetMutated": false,
+        "beforeFingerprint": "cb0567bbbd610e0df2d103b9f221d9c71f317859f9aca0c316f79beeef31b859",
+        "afterFingerprint": "cb0567bbbd610e0df2d103b9f221d9c71f317859f9aca0c316f79beeef31b859",
+        "stateUnchanged": true
+      }
+    ],
+    "pendingAdmission": {
+      "isReady": false,
+      "pendingOperationCount": 370,
+      "targetFingerprint": "548d2215a7b44c0545ee85786ffca269325d2dfbf3d6ef8cab142604d77cce83"
+    },
+    "readyAdmission": {
+      "isReady": true,
+      "pendingOperationCount": 0,
+      "targetFingerprint": "548d2215a7b44c0545ee85786ffca269325d2dfbf3d6ef8cab142604d77cce83",
+      "appliedTargetFingerprint": "548d2215a7b44c0545ee85786ffca269325d2dfbf3d6ef8cab142604d77cce83"
+    }
+  },
+  "workload": {
+    "version": "1.1.0",
+    "workloadId": "iam-normalized-lookup-update",
+    "scenarioId": "identity-authority-baseline",
+    "inputFingerprint": "5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9",
+    "resultDigest": "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc",
+    "nativeRouteReferenceCount": 5
+  }
+}

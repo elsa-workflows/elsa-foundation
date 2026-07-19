@@ -108,6 +108,18 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         }
 
         var metadata = CreateMetadata(request, bookmark, workflowExecution.PinnedExecutable);
+        var partition = workflowExecution.Partition
+            ?? new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
+        var commandId = _idGenerator.NewWorkflowExecutionCommandId();
+        var idempotencyKey = CreateIdempotencyKey(request, bookmark);
+        var triggerDelivery = request.PayloadType is null
+            ? null
+            : new RuntimeTypedTriggerDeliveryMetadata(
+                deliveryId: commandId,
+                payloadType: request.PayloadType,
+                providerId: request.ProviderId!,
+                receivedAt: now,
+                deduplicationKey: idempotencyKey);
         var payload = JsonSerializer.SerializeToElement(new RuntimeResumeBookmarkCommandPayload(
             pinnedExecutable: workflowExecution.PinnedExecutable,
             bookmarkId: bookmark.BookmarkId,
@@ -117,9 +129,10 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             stimulusType: request.StimulusType,
             stimulusHash: request.StimulusHash,
             input: request.Input,
-            reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason));
+            reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason,
+            triggerDelivery: triggerDelivery));
         var command = new WorkflowExecutionCommand(
-            CommandId: _idGenerator.NewWorkflowExecutionCommandId(),
+            CommandId: commandId,
             WorkflowExecutionId: request.WorkflowExecutionId,
             Kind: WorkflowExecutionCommandKind.ResumeBookmark,
             EnqueuedAt: now,
@@ -129,17 +142,19 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             envelopeId: _idGenerator.NewWorkflowExecutionCommandEnvelopeId(),
             workflowExecutionId: request.WorkflowExecutionId,
             command: command,
-            idempotencyKey: CreateIdempotencyKey(request, bookmark),
+            idempotencyKey: idempotencyKey,
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: now,
-            metadata: metadata);
+            metadata: metadata,
+            partition: partition);
         var activationRequest = new WorkflowExecutionActorActivationRequest(
             workflowExecutionId: request.WorkflowExecutionId,
             reason: WorkflowExecutionActorActivationReason.ResumeBookmark,
             requestedAt: now,
             requestedBy: request.RequestedBy,
             requiredCapabilities: WorkflowExecutionActorCapabilities.None,
-            metadata: metadata);
+            metadata: metadata,
+            partition: partition);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
         var commandDispatch = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);

@@ -1,5 +1,4 @@
-using Elsa.Activities.Runtime.Core.Abstractions;
-using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Activities.Primitives.Activities;
@@ -11,24 +10,23 @@ namespace Elsa.Activities.Primitives.Activities;
 /// <c>IStandardOutStreamProvider</c> indirection). A null/empty collection writes nothing.
 /// </summary>
 /// <remarks>
-/// Ported from elsa-core's <c>WriteLines</c> activity and adapted to this repo's model: the input is an
-/// <see cref="InputArgument{T}"/> (not elsa-core's <c>Input&lt;T&gt;</c>) and it derives from
-/// <see cref="CodeActivity"/>. Resolved by the existing <c>ClrActivityConstructor</c> like
-/// <see cref="WriteLine"/>.
+/// The runtime hydrates <see cref="Lines"/> from the invocation's committed input snapshot before
+/// execution. The activity owns no argument wrapper or value address.
 /// </remarks>
-public sealed class WriteLines : CodeActivity
+public sealed class WriteLines : Activity<ActivityUnit>
 {
     /// <summary>The lines to write. Each element is written on its own line in order.</summary>
-    public InputArgument<ICollection<string>>? Lines { get; set; }
+    [ActivityInput(Key = nameof(Lines))]
+    public List<string>? Lines { get; set; }
 
-    protected override void Execute(IActivityExecutionContext context)
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
     {
-        var lines = context.Get(Lines);
+        if (Lines is not null)
+        {
+            foreach (var line in Lines)
+                Console.WriteLine(line);
+        }
 
-        if (lines is null)
-            return;
-
-        foreach (var line in lines)
-            Console.WriteLine(line);
+        return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
     }
 }

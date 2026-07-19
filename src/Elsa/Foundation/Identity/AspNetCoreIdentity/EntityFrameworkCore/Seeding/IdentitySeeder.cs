@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -115,31 +116,49 @@ public sealed class IdentitySeeder(
         CancellationToken cancellationToken)
     {
         var existing = await userManager.FindByNameAsync(Seed.UserName);
-        if (existing is not null)
-            return;
-
-        var user = new AspNetCoreIdentityUser
+        if (existing is null)
         {
-            Id = Guid.NewGuid().ToString("n"),
-            UserName = Seed.UserName,
-            Email = Seed.Email,
-            TenantId = tenantId,
-            DisplayName = "Administrator"
-        };
+            existing = new AspNetCoreIdentityUser
+            {
+                Id = Guid.NewGuid().ToString("n"),
+                UserName = Seed.UserName,
+                Email = Seed.Email,
+                TenantId = tenantId,
+                DisplayName = "Administrator"
+            };
 
-        var result = await userManager.CreateAsync(user, Seed.Password);
-        if (!result.Succeeded)
-        {
-            // Fail fast: a deployment that boots with an administrator role but no administrator account
-            // cannot be signed into (e.g. a configured password that violates the Identity password policy).
-            // Surface it at startup rather than silently continuing.
-            var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-            throw new InvalidOperationException($"Failed to seed the '{Seed.UserName}' administrator account: {errors}");
+            var result = await userManager.CreateAsync(existing, Seed.Password);
+            if (!result.Succeeded)
+            {
+                // Fail fast: a deployment that boots with an administrator role but no administrator account
+                // cannot be signed into (e.g. a configured password that violates the Identity password policy).
+                // Surface it at startup rather than silently continuing.
+                var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+                throw new InvalidOperationException($"Failed to seed the '{Seed.UserName}' administrator account: {errors}");
+            }
         }
 
-        // Attach the admin role via the Elsa store adapter (writes the user-role join row).
-        var record = await userStore.FindAsync(tenantId, user.Id, cancellationToken);
-        if (record is not null)
+        // Ensure the user record exists in the active IUserStore with the admin role attached. The
+        // UserManager writes to the ASP.NET Identity EF tables, but the IUserStore may be backed by a
+        // different persistence layer (e.g. Groundwork) that doesn't share those tables.
+        var record = await userStore.FindAsync(tenantId, existing.Id, cancellationToken);
+        if (record is null)
+        {
+            record = new UserRecord(
+                existing.Id,
+                tenantId,
+                existing.UserName ?? existing.Id,
+                existing.Email,
+                existing.DisplayName,
+                UserStatus.Active,
+                ResourceOwnership.Foundation,
+                new HashSet<string> { roleId },
+                new HashSet<string>());
+            await userStore.SaveAsync(record, cancellationToken);
+        }
+        else if (!record.RoleIds.Contains(roleId))
+        {
             await userStore.SaveAsync(record with { RoleIds = new HashSet<string>(record.RoleIds) { roleId } }, cancellationToken);
+        }
     }
 }

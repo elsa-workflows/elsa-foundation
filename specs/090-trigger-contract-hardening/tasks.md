@@ -8,6 +8,17 @@
 
 **Organization**: Tasks are grouped by user story and ordered so the P1 semantic-safety slice can land independently before non-start and compatibility follow-ups.
 
+**Current persistence supersession**: The completed tasks below record spec 090's 2026-07-11 delivery
+baseline, when that unit caused no executable persistence drift. The current pre-GA Groundwork contract later
+made every Runtime kind current-only: minimum-readable equals current, only the current fixture is retained,
+and no Elsa upcaster is registered. `workflowExecutable`, `workflowExecutableSourceReference`, and
+`workflowExecutionState` are version 4 and reject versions 1 through 3. Executable v4 includes the
+reusable-activity input contract and direct dependency snapshot; source-reference v4 includes tenant scope;
+workflow-execution v4 includes dispatch nesting depth. Upgrading earlier
+persistence requires atomically resetting the complete Runtime and Publishing persistence sets while
+preserving Design and Activities data, then republishing before traffic. Historical task evidence below must
+not be read as a current compatibility promise for those versions.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel because it changes different files and has no dependency on unfinished tasks in the same phase.
@@ -91,24 +102,24 @@
 
 ## Phase 5: User Story 3 - Republish Existing Definitions Safely (Priority: P3)
 
-**Goal**: Prove catalog, executable, and durable trigger state compatibility while corrected behavior applies on republish.
+**Goal at spec 090 delivery**: Prove catalog, then-current executable, and durable trigger state compatibility while corrected behavior applies on republish.
 
-**Independent Test**: Load supported historical catalog/executable/binding shapes and republish representative first-party workflows without same-version hash conflicts or runtime Design reads.
+**Independent Test at spec 090 delivery**: Load the catalog, executable, and binding shapes supported at that time and republish representative first-party workflows without same-version hash conflicts or runtime Design reads.
 
 ### Tests for User Story 3
 
 - [X] T027 [P] [US3] Expand legacy CLR trigger compilation/republication coverage across the approved first-party classification contract in `tests/Elsa/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`
 - [X] T028 [P] [US3] Add publish-path compatibility and seeded-prior-binding preservation cases in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishWorkflowTriggerIndexingTests.cs`
 - [X] T029 [P] [US3] Pin same-version CLR catalog Action/hash compatibility for trigger annotations in `tests/Elsa/Activities/Design/Tests/Unit/ClrAssemblyScannerTests.cs`
-- [X] T030 [P] [US3] Confirm executable and trigger-binding serialized shapes remain unchanged using existing goldens in `tests/Elsa/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerGoldenTests.cs` and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs`
+- [X] T030 [P] [US3] Confirm spec 090 leaves executable and trigger-binding serialized shapes unchanged against the goldens current at delivery in `tests/Elsa/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerGoldenTests.cs` and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs`
 
 ### Implementation for User Story 3
 
 - [X] T031 [US3] Verify the additive default interface members are source/binary compatible with existing provider/extractor implementors, record the Runtime Core MINOR classification and required release-version action under the repository's packaging mechanism, and confirm publishing/compiler entry-point signatures remain unchanged in `specs/090-trigger-contract-hardening/plan.md`, `src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj`, `src/Elsa/Workflows/Runtime/Core/Contracts/IActivityTriggerStimulusProvider.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerBindingExtractor.cs`
-- [X] T032 [US3] If T030 detects any durable shape drift, STOP implementation and amend `specs/090-trigger-contract-hardening/spec.md`, `specs/090-trigger-contract-hardening/plan.md`, and `specs/090-trigger-contract-hardening/tasks.md` for explicit migration approval before touching `src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs`; otherwise record that no migration was needed in `specs/090-trigger-contract-hardening/quickstart.md`
+- [X] T032 [US3] If T030 detects any durable shape drift caused by spec 090, STOP implementation and amend `specs/090-trigger-contract-hardening/spec.md`, `specs/090-trigger-contract-hardening/plan.md`, and `specs/090-trigger-contract-hardening/tasks.md` for explicit migration approval before touching `src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs`; otherwise record that spec 090 needed no migration in `specs/090-trigger-contract-hardening/quickstart.md`
 - [X] T033 [US3] Run the compatibility and boundary commands from sections 4–5 of `specs/090-trigger-contract-hardening/quickstart.md`
 
-**Checkpoint**: Historical shapes remain readable, catalog hashes remain stable, and republish produces the hardened contract without runtime Design dependencies.
+**Checkpoint at spec 090 delivery**: The shapes supported at that time remained readable, catalog hashes remained stable, and republish produced the hardened contract without runtime Design dependencies. Current executable/source-reference/workflow-execution versions 1 through 3 are outside that compatibility statement.
 
 ---
 
@@ -132,7 +143,7 @@
 - **Phase 2**: Depends on baseline capture; blocks all stories.
 - **US1 (Phase 3)**: Depends on Phase 2 and is the MVP.
 - **US2 (Phase 4)**: Depends on the US1 preflight evaluator but is independently verified through recognized-empty behavior.
-- **US3 (Phase 5)**: Depends on the final US1/US2 contract shape so compatibility fixtures pin the delivered model.
+- **US3 (Phase 5)**: Depends on the final US1/US2 contract shape so the compatibility fixtures current at spec 090 delivery pin that delivered model.
 - **Phase 6**: Depends on the stories selected for delivery; for full Unit A completion, all three stories are required.
 
 ### User Story Dependencies
@@ -145,7 +156,7 @@ US1 exact-one + fail-before-mutation (MVP)
         |
         +----------> US2 intentional non-start
         |
-        +----------> US3 compatibility proof (after contract stabilizes)
+        +----------> US3 delivery-time compatibility proof (after contract stabilizes)
                          |
                          v
                 docs/maps/full verification
@@ -189,7 +200,7 @@ Integrator: T008 + T014 + T020 — indexer all-or-nothing validation and focused
 
 1. US1 closes silent invalid/exhausted publication and is independently reviewable.
 2. US2 proves the hardening does not regress intentional non-start behavior.
-3. US3 pins upgrade compatibility once the contract is stable.
+3. US3 pins the compatibility supported at spec 090 delivery once the contract is stable.
 4. Documentation/maps/full suite close the work unit without broadening it.
 
 ## Notes

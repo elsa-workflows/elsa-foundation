@@ -1,3 +1,6 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 using Groundwork.Documents.Store;
@@ -19,6 +22,8 @@ public sealed class GroundworkDistributedRegistrationTests
     public void Feature_SwapsBothStoreContractsToTheGroundworkBridges(bool distributedFeatureFirst)
     {
         var services = new ServiceCollection();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IWorkflowExecutionCommandExecutor>(NoopWorkflowExecutionCommandExecutor.Instance);
         services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create()));
 
         var distributedFeature = new WorkflowsRuntimeDistributedFeature();
@@ -35,9 +40,22 @@ public sealed class GroundworkDistributedRegistrationTests
             distributedFeature.ConfigureServices(services);
         }
 
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+        using var scope = provider.CreateScope();
 
-        Assert.IsType<GroundworkExecutionPlacementStore>(provider.GetRequiredService<IExecutionPlacementStore>());
-        Assert.IsType<GroundworkExecutionCommandTransport>(provider.GetRequiredService<IExecutionCommandTransport>());
+        Assert.IsType<GroundworkExecutionPlacementStore>(scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>());
+        Assert.IsType<GroundworkExecutionCommandTransport>(scope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>());
+        var distributionEvidence = scope.ServiceProvider
+            .GetServices<IWorkflowDispatchDurabilityEvidence>()
+            .Where(evidence => evidence.Component is
+                WorkflowDispatchDurabilityComponents.Distribution or
+                WorkflowDispatchDurabilityComponents.DistributionPersistence)
+            .ToDictionary(evidence => evidence.Component, evidence => evidence.Level, StringComparer.Ordinal);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.ProcessLocal, distributionEvidence[WorkflowDispatchDurabilityComponents.Distribution]);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, distributionEvidence[WorkflowDispatchDurabilityComponents.DistributionPersistence]);
     }
 }

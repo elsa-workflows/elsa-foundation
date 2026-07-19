@@ -1,7 +1,5 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using Elsa.Expressions.Liquid.Services;
-using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 
 namespace Elsa.Expressions.Liquid.Models;
@@ -17,8 +15,6 @@ public sealed class LiquidExpressionDescriptor : IExpressionDescriptor
     /// Gets the name of the expression type.
     /// </summary>
     public const string TypeName = "Liquid";
-
-    public Func<IServiceProvider, IExpressionHandler> HandlerFactory => ActivatorUtilities.GetServiceOrCreateInstance<LiquidExpressionHandler>;
 
     public string DisplayName => TypeName;
 

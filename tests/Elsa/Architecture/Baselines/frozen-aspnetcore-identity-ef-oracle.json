@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "root": "src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore",
+  "treeSha256": "f9dfeb17c994f17af07203b55498642da79a50ff0161cef252f28bec3a0ad17c",
+  "files": [
+    {
+      "path": "ApplicationIdentityDbContext.cs",
+      "sha256": "6393a2e13d338451dad10bd5a019e5f69b59777ed6560fd2357f718a1c99ff81"
+    },
+    {
+      "path": "AspNetCoreIdentityEntityFrameworkCoreFeature.cs",
+      "sha256": "9cb9fe503be60b6ce06592d8c6de3de581a96020352aeed06672d3c03b9e89ca"
+    },
+    {
+      "path": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj",
+      "sha256": "056dc980e226d2975ddd081ea26fc543d94d4c0ccea632157079d9c8bd2014e4"
+    },
+    {
+      "path": "Entities/TenantMembershipEntity.cs",
+      "sha256": "a82d46c3235b8224e11a1efb5ffcbce43ae1452a419fff18c357c7797c35e2cd"
+    },
+    {
+      "path": "Extensions/AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtensions.cs",
+      "sha256": "50a9405260aa7dc543c6ad48ac4b658bbbe8834bb6a3ac254e38d3637b45e4c5"
+    },
+    {
+      "path": "IdentityStoreClaimTypes.cs",
+      "sha256": "1b08ae39d73363172dc07773a2e0ee198a5b31fa3aa8157fc01483a78a9ca619"
+    },
+    {
+      "path": "Seeding/IdentitySeeder.cs",
+      "sha256": "4fc8621d3005050cfdf2a24e3207d80850983f442974cedd84741defc94e460c"
+    },
+    {
+      "path": "Sqlite/ApplicationIdentityDbContextFactory.cs",
+      "sha256": "f1510c5d33ea138aeebc6b9e8b09326b257e37ff3a496249d9d4c816d3775682"
+    },
+    {
+      "path": "Sqlite/Migrations/20260704200424_Initial.Designer.cs",
+      "sha256": "e8e1ef544a3fa9fd5369b39492e0530e4b79f58d962845cbb8ffa327e6b17107"
+    },
+    {
+      "path": "Sqlite/Migrations/20260704200424_Initial.cs",
+      "sha256": "360fc8749a5712b99b80ff73c1b124d498e068b0837c7a19e58a1900884b22ab"
+    },
+    {
+      "path": "Sqlite/Migrations/ApplicationIdentityDbContextModelSnapshot.cs",
+      "sha256": "01b7d610a60795940f78ccb086b47af0b6bc0fe3842c6157b8f9bb96e8a4d762"
+    },
+    {
+      "path": "Stores/EfCoreExternalIdentityStore.cs",
+      "sha256": "501d7b67b67a5197fe0a49b3695f67937c45f6f0034f57c37127292930f267b1"
+    },
+    {
+      "path": "Stores/EfCoreRoleStore.cs",
+      "sha256": "19ac234b6a2c3ca9ed33cc421d1a9ad994cf7c565efcdf42c6525ae962ca63ce"
+    },
+    {
+      "path": "Stores/EfCoreTenantMembershipStore.cs",
+      "sha256": "d3f354b786b7f605c6733464c3c8be67b60bc971149432789f8c0d95fac6152d"
+    },
+    {
+      "path": "Stores/EfCoreUserStore.cs",
+      "sha256": "129d3814be31b31dc7cd83990ee4f51ffa8f70148f8f294d7b2be63765b63794"
+    }
+  ]
+}

@@ -1,8 +1,11 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Api.Requests;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -70,6 +73,28 @@ public sealed class RuntimeStartCommandSchedulingTests
     }
 
     [Fact]
+    public async Task DelayedStart_RecordsDirectCheckpointFollowUpAfterTheSourceQueueItem()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await store.SaveAsync(executable);
+        var handler = NewHandler(store, queue);
+        var delayedRecordedAt = _now.AddMinutes(2);
+
+        await handler.HandleAsync(NewStartWorkItem(executable.Identity, recordedAt: delayedRecordedAt));
+
+        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(_now, checkpointWork.EnqueuedAt);
+        Assert.Equal(delayedRecordedAt, checkpointWork.RecordedAt);
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var rootWork = Assert.Single(checkpointPayload.PostCommitIntents).Payload!.Value
+            .Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(_now, rootWork.EnqueuedAt);
+        Assert.Equal(delayedRecordedAt, rootWork.RecordedAt);
+    }
+
+    [Fact]
     public async Task HandleAsync_RejectsPinnedExecutableMismatchBeforeScheduling()
     {
         var store = new InMemoryWorkflowExecutableStore();
@@ -111,7 +136,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var executable = NewExecutable(["node-start"], ["node-start"]);
         await store.SaveAsync(executable);
         var startHandler = NewHandler(store, queue);
-        var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue);
+        var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue, store);
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [startHandler, checkpointHandler, new NoopWorkflowSchedulerWorkHandler()],
@@ -148,6 +173,93 @@ public sealed class RuntimeStartCommandSchedulingTests
     }
 
     [Fact]
+    public async Task DrainAsync_PersistsRunKindFromStartCommandAsWorkflowState()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await store.SaveAsync(executable);
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [
+                NewHandler(store, queue),
+                NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue, store),
+                new NoopWorkflowSchedulerWorkHandler()
+            ],
+            new FixedTimeProvider(_now));
+        var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
+            executable.Identity,
+            "artifact-1",
+            runKind: WorkflowRunKind.BackgroundWeaverRun));
+        await queue.EnqueueAsync(NewStartWorkItem(executable.Identity, payload: payload));
+
+        await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
+
+        var write = Assert.Single(checkpointWriter.ListCommits());
+        Assert.Equal(WorkflowRunKind.BackgroundWeaverRun, write.Commit.StateChanges.WorkflowExecution!.State.RunKind);
+    }
+
+    [Fact]
+    public async Task DrainAsync_PersistsSelectedSourceProvenanceIntoListAndDetailReadModels()
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var activityStore = new InMemoryActivityExecutionStateStore();
+        var inspectionStore = new InMemoryActivityExecutionInspectionStore();
+        var incidentStore = new InMemoryIncidentStateStore();
+        var durableValueStore = new InMemoryDurableValueStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: workflowStore,
+            activityExecutionStateStore: activityStore,
+            durableValueStateStore: durableValueStore,
+            incidentStateStore: incidentStore,
+            activityExecutionInspectionWriter: inspectionStore,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await executableStore.SaveAsync(executable);
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [
+                NewHandler(executableStore, queue),
+                NewCheckpointHandler(activityStore, checkpointWriter, queue, executableStore),
+                new NoopWorkflowSchedulerWorkHandler()
+            ],
+            new FixedTimeProvider(_now));
+        var provenance = new WorkflowExecutableSourceProvenance(
+            "reference-2", "WorkflowDefinitionVersion", "version-2", "2.0.0",
+            "definition-1", "version-2", "2.0.0", "publication-2", "slot-production");
+        var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
+            executable.Identity,
+            "artifact-1",
+            runKind: WorkflowRunKind.PublishedRun,
+            pinnedSource: provenance));
+        await queue.EnqueueAsync(NewStartWorkItem(executable.Identity, payload: payload));
+
+        await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
+
+        var authorization = new AllowAllActivityExecutionInspectionAuthorizationContext();
+        var list = await new ListWorkflowInstancesRequestHandler(workflowStore, activityStore, incidentStore, authorization)
+            .Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+        var detail = await new GetWorkflowInstanceRequestHandler(
+                workflowStore,
+                inspectionStore,
+                incidentStore,
+                durableValueStore,
+                new DefaultRuntimePayloadCapturePolicy(),
+                authorization)
+            .Handle(new GetWorkflowInstance("wfexec-1"), CancellationToken.None);
+        var summary = Assert.Single(list.Items);
+        Assert.Equal("version-2", summary.DefinitionVersionId);
+        Assert.Equal("2.0.0", summary.ArtifactVersion);
+        Assert.Equal("reference-2", summary.SourceReferenceId);
+        Assert.Equal("publication-2", summary.PublicationId);
+        Assert.Equal("slot-production", summary.SlotId);
+        Assert.Equal(summary, detail.Instance!.Instance);
+    }
+
+    [Fact]
     public async Task DrainAsync_SeedsSuppliedVariablesAndInputsAsDurableRuntimeState()
     {
         var store = new InMemoryWorkflowExecutableStore();
@@ -165,7 +277,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var executable = NewExecutable(["node-start"], ["node-start"]);
         await store.SaveAsync(executable);
         var startHandler = NewHandler(store, queue);
-        var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue);
+        var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue, store);
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [startHandler, checkpointHandler, new NoopWorkflowSchedulerWorkHandler()],
@@ -206,7 +318,8 @@ public sealed class RuntimeStartCommandSchedulingTests
         var checkpointHandler = NewCheckpointHandler(
             new InMemoryActivityExecutionStateStore(),
             new ThrowingCheckpointWriter(),
-            dispatchQueue);
+            dispatchQueue,
+            store);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => checkpointHandler.HandleAsync(checkpointWork).AsTask());
 
@@ -273,6 +386,12 @@ public sealed class RuntimeStartCommandSchedulingTests
             new ArgumentException("boom", "pinnedExecutable")));
         Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
             new ArgumentException("boom", "requestedArtifactId")));
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "parentWorkflowExecutionId")));
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "correlationId")));
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "tenantId")));
     }
 
     [Fact]
@@ -304,7 +423,8 @@ public sealed class RuntimeStartCommandSchedulingTests
         WorkflowExecutableIdentity? pinnedExecutable = null,
         WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.Start,
         JsonElement? payload = null,
-        bool includePayload = true)
+        bool includePayload = true,
+        DateTimeOffset? recordedAt = null)
     {
         var resolvedPayload = includePayload
             ? payload ?? JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
@@ -320,7 +440,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             envelopeId: "envelope-1",
             idempotencyKey: "wfexec-1:start:artifact-1",
             enqueuedAt: _now,
-            recordedAt: _now,
+            recordedAt: recordedAt ?? _now,
             sequence: 10,
             payload: resolvedPayload,
             commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
@@ -335,14 +455,16 @@ public sealed class RuntimeStartCommandSchedulingTests
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
         IActivityExecutionStateStore activityStateStore,
         IRuntimeCheckpointCommitStore checkpointWriter,
-        IWorkflowSchedulerWorkQueue queue) =>
+        IWorkflowSchedulerWorkQueue queue,
+        IWorkflowExecutableStore executableStore) =>
         new(
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter),
             inspectionAccumulator: null,
-            timeProvider: new FixedTimeProvider(_now));
+            timeProvider: new FixedTimeProvider(_now),
+            workflowExecutableStore: executableStore);
 
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> startNodeIds) =>
         new(
@@ -364,10 +486,8 @@ public sealed class RuntimeStartCommandSchedulingTests
             authoredActivityId: root.AuthoredActivityId,
             activityType: root.ActivityType,
             activityTypeVersion: root.ActivityTypeVersion,
-            descriptorType: root.DescriptorType,
-            descriptorPayload: root.DescriptorPayload,
+            descriptor: root.Descriptor,
             inputBindings: root.InputBindings,
-            outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
             childSlots:
             [
@@ -386,10 +506,8 @@ public sealed class RuntimeStartCommandSchedulingTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 

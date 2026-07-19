@@ -28,7 +28,7 @@ public sealed class AddVersionCommandHandlerTests
     private readonly RecordingAddCommand _addCommand = new();
 
     private static AddVersion Command(string version) =>
-        new("def-1", version, "Descriptor", default, null, null, null, null);
+        new("def-1", version, "test.provider", "1", "test.consumer", "1", default, null, null, null, null);
 
     private AddVersionCommandHandler CreateHandler(StubVersionStore versionStore) =>
         new(new StubVersionFactory(), _addCommand, versionStore, _definitionStore);
@@ -93,7 +93,10 @@ public sealed class AddVersionCommandHandlerTests
             var entity = new ActivityDefinitionVersion(version, "def-1")
             {
                 Id = versionId,
-                DescriptorType = "Descriptor",
+                ProviderKey = "test.provider",
+                ProviderSchemaVersion = "1",
+                ConsumerKey = "test.consumer",
+                ConsumerSchemaVersion = "1",
                 Definition = new ActivityDefinition { Id = "def-1", ActivityTypeKey = "type-def-1", Category = "General" },
             };
             return Task.FromResult(entity);
@@ -134,7 +137,10 @@ public sealed class AddVersionCommandHandlerTests
         public IActivityDefinitionVersion Create(
             IActivityDefinition definition,
             string version,
-            string descriptorType,
+            string providerKey,
+            string providerSchemaVersion,
+            string consumerKey,
+            string consumerSchemaVersion,
             JsonElement descriptorPayload,
             string sourceKind,
             string sourceId,
@@ -143,14 +149,17 @@ public sealed class AddVersionCommandHandlerTests
             IEnumerable<ActivityDesignFacet> designFacets,
             ActivityExecutionType executionType = ActivityExecutionType.Action,
             string? id = null) =>
-            new FakeVersion(id ?? $"v-{version}", version, definition, descriptorType, descriptorPayload, sourceKind, sourceId, executionType);
+            new FakeVersion(id ?? $"v-{version}", version, definition, providerKey, providerSchemaVersion, consumerKey, consumerSchemaVersion, descriptorPayload, sourceKind, sourceId, executionType);
     }
 
     private sealed class FakeVersion(
         string id,
         string version,
         IActivityDefinition definition,
-        string descriptorType,
+        string providerKey,
+        string providerSchemaVersion,
+        string consumerKey,
+        string consumerSchemaVersion,
         JsonElement descriptorPayload,
         string sourceKind,
         string sourceId,
@@ -159,7 +168,10 @@ public sealed class AddVersionCommandHandlerTests
         public string Id => id;
         public string Version => version;
         public string DefinitionId => definition.Id;
-        public string DescriptorType => descriptorType;
+        public string ProviderKey => providerKey;
+        public string ProviderSchemaVersion => providerSchemaVersion;
+        public string ConsumerKey => consumerKey;
+        public string ConsumerSchemaVersion => consumerSchemaVersion;
         public JsonElement DescriptorPayload => descriptorPayload;
         public string SourceKind => sourceKind;
         public string SourceId => sourceId;

@@ -16,7 +16,6 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// </summary>
 public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershipService
 {
-    private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly IExecutionLivenessStateStore _operationalStateStore;
     private readonly TimeProvider _timeProvider;
     private readonly RuntimeExecutionOwnershipOptions _options;
@@ -48,11 +47,12 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        await _writeGate.WaitAsync(cancellationToken);
-        try
+        while (true)
         {
-            var existing = await FindOwnershipStateAsync(workflowExecutionId, cancellationToken);
-            var nextToken = ReadHighestIssuedToken(existing) + 1;
+            cancellationToken.ThrowIfCancellationRequested();
+            var loaded = await FindVersionedOwnershipStateAsync(workflowExecutionId, cancellationToken);
+            var existing = loaded?.State;
+            var nextToken = checked(ReadHighestIssuedToken(existing) + 1);
             var now = _timeProvider.GetUtcNow();
 
             var lease = new RuntimeExecutionLease(
@@ -64,25 +64,38 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
                 fencingToken: nextToken);
 
             var heartbeat = NewHeartbeat(workflowExecutionId, lease, now);
-            await SaveOwnershipStateAsync(workflowExecutionId, lease, heartbeat, nextToken, cancellationToken);
-            return lease;
-        }
-        finally
-        {
-            _writeGate.Release();
+            var state = NewOwnershipState(workflowExecutionId, existing, lease, heartbeat, nextToken);
+            var result = await _operationalStateStore.TrySaveAsync(state, loaded?.Revision ?? 0, cancellationToken);
+            if (result.Succeeded)
+                return lease;
+            if (result.Status is not ExecutionLivenessStateWriteStatus.RevisionConflict and
+                not ExecutionLivenessStateWriteStatus.NotFound)
+            {
+                throw new InvalidOperationException($"Unsupported ownership acquisition write outcome '{result.Status}'.");
+            }
         }
     }
 
-    public async ValueTask HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(
+        RuntimeExecutionLease lease,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
 
-        await _writeGate.WaitAsync(cancellationToken);
-        try
+        while (true)
         {
-            var existing = await FindOwnershipStateAsync(lease.WorkflowExecutionId, cancellationToken);
-            var highestToken = Math.Max(ReadHighestIssuedToken(existing), lease.FencingToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var loaded = await FindVersionedOwnershipStateAsync(lease.WorkflowExecutionId, cancellationToken);
+            if (loaded is null)
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.NotFound, null);
+
+            var existing = loaded.State;
+            var highestToken = ReadHighestIssuedToken(existing);
             var now = _timeProvider.GetUtcNow();
+            if (!Matches(existing.ExecutionLease, lease))
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.Stale, highestToken);
+            if (existing.ExecutionLease!.IsExpired(now))
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.Expired, highestToken);
 
             var refreshedLease = new RuntimeExecutionLease(
                 leaseId: lease.LeaseId,
@@ -93,31 +106,57 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
                 fencingToken: lease.FencingToken);
 
             var heartbeat = NewHeartbeat(lease.WorkflowExecutionId, refreshedLease, now);
-            await SaveOwnershipStateAsync(lease.WorkflowExecutionId, refreshedLease, heartbeat, highestToken, cancellationToken);
-        }
-        finally
-        {
-            _writeGate.Release();
+            var state = NewOwnershipState(lease.WorkflowExecutionId, existing, refreshedLease, heartbeat, highestToken);
+            var result = await _operationalStateStore.TrySaveAsync(state, loaded.Revision, cancellationToken);
+            if (result.Succeeded)
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.Applied, highestToken);
+            if (result.Status is not ExecutionLivenessStateWriteStatus.RevisionConflict and
+                not ExecutionLivenessStateWriteStatus.NotFound)
+            {
+                throw new InvalidOperationException($"Unsupported ownership heartbeat write outcome '{result.Status}'.");
+            }
         }
     }
 
-    public async ValueTask ReleaseAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeExecutionOwnershipTransitionResult> ReleaseAsync(
+        RuntimeExecutionLease lease,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
 
-        await _writeGate.WaitAsync(cancellationToken);
-        try
+        while (true)
         {
-            var existing = await FindOwnershipStateAsync(lease.WorkflowExecutionId, cancellationToken);
-            var highestToken = Math.Max(ReadHighestIssuedToken(existing), lease.FencingToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var loaded = await FindVersionedOwnershipStateAsync(lease.WorkflowExecutionId, cancellationToken);
+            if (loaded is null)
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.NotFound, null);
+
+            var existing = loaded.State;
+            var highestToken = ReadHighestIssuedToken(existing);
+            if (existing.ExecutionLease is null)
+            {
+                return Transition(
+                    highestToken == lease.FencingToken
+                        ? RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied
+                        : RuntimeExecutionOwnershipTransitionStatus.Stale,
+                    highestToken);
+            }
+            if (!Matches(existing.ExecutionLease, lease))
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.Stale, highestToken);
+            if (existing.ExecutionLease.IsExpired(_timeProvider.GetUtcNow()))
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.Expired, highestToken);
 
             // Clear the live lease/heartbeat so a completed execution is not mistaken for an interrupted one, but keep
             // the fencing-token counter so the next acquisition never reuses a token.
-            await SaveOwnershipStateAsync(lease.WorkflowExecutionId, executionLease: null, heartbeat: null, highestToken, cancellationToken);
-        }
-        finally
-        {
-            _writeGate.Release();
+            var state = NewOwnershipState(lease.WorkflowExecutionId, existing, executionLease: null, heartbeat: null, highestToken);
+            var result = await _operationalStateStore.TrySaveAsync(state, loaded.Revision, cancellationToken);
+            if (result.Succeeded)
+                return Transition(RuntimeExecutionOwnershipTransitionStatus.Applied, highestToken);
+            if (result.Status is not ExecutionLivenessStateWriteStatus.RevisionConflict and
+                not ExecutionLivenessStateWriteStatus.NotFound)
+            {
+                throw new InvalidOperationException($"Unsupported ownership release write outcome '{result.Status}'.");
+            }
         }
     }
 
@@ -125,14 +164,30 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        var existing = await FindOwnershipStateAsync(workflowExecutionId, cancellationToken);
+        var existing = (await FindVersionedOwnershipStateAsync(workflowExecutionId, cancellationToken))?.State;
         var highestToken = ReadHighestIssuedToken(existing);
 
         // No ownership has ever been established for this execution — nothing to fence against.
         if (highestToken == 0)
             return;
 
-        if (fencingToken != highestToken)
+        if (existing!.ExecutionLease is null)
+        {
+            throw new RuntimeStaleFencingTokenException(
+                workflowExecutionId,
+                fencingToken,
+                highestToken,
+                RuntimeFencingRejectionReason.NoActiveLease);
+        }
+        if (existing.ExecutionLease.IsExpired(_timeProvider.GetUtcNow()))
+        {
+            throw new RuntimeStaleFencingTokenException(
+                workflowExecutionId,
+                fencingToken,
+                highestToken,
+                RuntimeFencingRejectionReason.ExpiredLease);
+        }
+        if (fencingToken != highestToken || existing.ExecutionLease.FencingToken != fencingToken)
             throw new RuntimeStaleFencingTokenException(workflowExecutionId, fencingToken, highestToken);
     }
 
@@ -144,42 +199,61 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
             leaseId: lease.LeaseId,
             recordedAt: now);
 
-    private async ValueTask SaveOwnershipStateAsync(
+    private static ExecutionLivenessState NewOwnershipState(
         string workflowExecutionId,
+        ExecutionLivenessState? existing,
         RuntimeExecutionLease? executionLease,
         RuntimeHeartbeat? heartbeat,
-        long highestIssuedToken,
-        CancellationToken cancellationToken)
+        long highestIssuedToken)
     {
-        var state = new ExecutionLivenessState(
+        var metadata = new Dictionary<string, string>(existing?.Metadata ?? new Dictionary<string, string>(), StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.OwnershipFencingToken] = highestIssuedToken.ToString(CultureInfo.InvariantCulture)
+        };
+
+        return new ExecutionLivenessState(
             operationalStateId: OwnershipStateId(workflowExecutionId),
             workflowExecutionId: workflowExecutionId,
             executionLease: executionLease,
             heartbeat: heartbeat,
-            drain: null,
-            interruptedExecution: null,
-            metadata: new Dictionary<string, string>
-            {
-                [RuntimeMetadataKeys.OwnershipFencingToken] = highestIssuedToken.ToString(CultureInfo.InvariantCulture)
-            });
-
-        await _operationalStateStore.SaveAsync(state, cancellationToken);
+            drain: existing?.Drain,
+            interruptedExecution: existing?.InterruptedExecution,
+            pendingPostCommitIntentIds: existing?.PendingPostCommitIntentIds,
+            metadata: metadata);
     }
 
-    private ValueTask<ExecutionLivenessState?> FindOwnershipStateAsync(string workflowExecutionId, CancellationToken cancellationToken) =>
-        _operationalStateStore.FindAsync(workflowExecutionId, OwnershipStateId(workflowExecutionId), cancellationToken);
+    private ValueTask<VersionedExecutionLivenessState?> FindVersionedOwnershipStateAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken) =>
+        _operationalStateStore.FindVersionedAsync(workflowExecutionId, OwnershipStateId(workflowExecutionId), cancellationToken);
 
     private static long ReadHighestIssuedToken(ExecutionLivenessState? state)
     {
         if (state is null)
             return 0;
 
-        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.OwnershipFencingToken, out var raw) &&
-            long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var token))
+        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.OwnershipFencingToken, out var raw))
+        {
+            if (!long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var token) || token < 0)
+                throw new InvalidOperationException("Execution ownership state contains an invalid fencing-token counter.");
+            if (state.ExecutionLease is { } lease && lease.FencingToken != token)
+                throw new InvalidOperationException("Execution ownership state contains a fencing-token counter that does not match its active lease.");
             return token;
+        }
 
         return state.ExecutionLease?.FencingToken ?? 0;
     }
+
+    private static bool Matches(RuntimeExecutionLease? current, RuntimeExecutionLease presented) =>
+        current is not null &&
+        StringComparer.Ordinal.Equals(current.WorkflowExecutionId, presented.WorkflowExecutionId) &&
+        StringComparer.Ordinal.Equals(current.LeaseId, presented.LeaseId) &&
+        StringComparer.Ordinal.Equals(current.OwnerId, presented.OwnerId) &&
+        current.FencingToken == presented.FencingToken;
+
+    private static RuntimeExecutionOwnershipTransitionResult Transition(
+        RuntimeExecutionOwnershipTransitionStatus status,
+        long? currentFencingToken) => new(status, currentFencingToken);
 
     private static string OwnershipStateId(string workflowExecutionId) => $"ownership:{workflowExecutionId}";
 }

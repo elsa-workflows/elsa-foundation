@@ -11,8 +11,9 @@ activity abstractions and the `[Version]` attribute it reads).
 
 - **`ClrActivityReconciliationSource`** — `IActivityReconciliationSource` with `SourceKind => "CLR"`.
   Its `Read` drives the scanner and emits one `ActivityVersionReconciliationModel` per activity, each
-  carrying `DescriptorType = typeof(ClrActivityDescriptor).FullName` and a `ClrActivityDescriptor`
-  wrapping the activity's stable alias (`TypeAliasConvention.CanonicalAlias(type)`).
+  carrying stable provider/consumer identity `elsa.clr-activity`, schema `1`, and a
+  `ClrActivityDescriptor` payload wrapping the activity's stable alias
+  (`TypeAliasConvention.CanonicalAlias(type)`).
 - **`ClrAssemblyScanner`** — reflection-only scanner (R5) built on `MetadataLoadContext` +
   `PathAssemblyResolver`. Discovers `IActivity` implementations by metadata, never loads author code
   into the execution context, and never pollutes the default `AssemblyLoadContext`. Resilient
@@ -39,9 +40,15 @@ The runtime carries no author-supplied UI metadata, so the scanner reads only st
 the two values derived from assembly/type identity:
 
 - the CLR type **full name** → `ActivityTypeKey` (excludes assembly identity, FR-022);
-- public `InputArgument<T>` / `OutputArgument<T>` properties → `InputDefinition` / `OutputDefinition`
-  (`ReferenceKey` = `Name` = the property name; value `Type` from the generic argument);
-- the `[Required]` attribute on an argument property → `IsRequired`;
+- public plain CLR properties annotated with `[ActivityInput]` → `InputDefinition` (the attribute's
+  `Key`, or the property name when omitted, becomes `ReferenceKey`; the property type becomes the
+  input type);
+- public properties annotated with `[Output]` on the `TResult` contract declared through
+  `IActivityResult<TResult>` (including `Activity<TResult>` and stateful activity bases) →
+  `OutputDefinition` (the attribute's `Key`, or the property name when omitted, becomes
+  `ReferenceKey`);
+- the `[Required]` attribute on an input property → `IsRequired`; output requiredness comes from
+  `[Output(IsRequired = ...)]`;
 - the resolved semver (above);
 - the resolved category, derived from the declaring assembly's name (above).
 
@@ -60,6 +67,12 @@ shell.AddFeature(new ClrActivityReconciliationFeature
     Options = { FolderPath = "/path/to/activity/plugins" }
 });
 ```
+
+When the Publishing bridge is composed, one source-owned version is committed atomically as catalog
+version, provider-source authority, immutable executable template, publication, layout, and source
+reference. Reconciliation never reclassifies CLR-discovered content as Design-owned authoring. Repeating
+an identical scan is a no-op; if a matching catalog version predates publication, the same bridge heals
+the missing publication artifacts without changing the version identity.
 
 ## Options
 

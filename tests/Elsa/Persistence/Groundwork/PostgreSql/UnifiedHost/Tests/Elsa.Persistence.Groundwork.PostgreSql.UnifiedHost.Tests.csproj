@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\PostgreSql\Unified\Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Secrets\Core\Elsa.Secrets.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />

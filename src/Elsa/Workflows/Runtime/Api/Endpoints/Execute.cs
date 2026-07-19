@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Constants;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -22,8 +23,8 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
 
     public override void Configure()
     {
-        Post(RouteConstants.GetRoute("{artifactId}/execute"));
-        ConfigurePermissions();
+        Post(RouteConstants.GetRoute("executables/{artifactId}/execute"));
+        ConfigurePermissions(PermissionNames.WorkflowRuntimeExecute);
     }
 
     public override async Task HandleAsync(ExecuteWorkflow req, CancellationToken ct)

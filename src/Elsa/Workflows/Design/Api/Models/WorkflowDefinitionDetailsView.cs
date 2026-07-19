@@ -4,6 +4,6 @@ namespace Elsa.Workflows.Design.Api.Models;
 
 public sealed record WorkflowDefinitionDetailsView(
     WorkflowDefinitionView Definition,
-    WorkflowDefinitionStateView? Draft,
+    WorkflowDraftView? Draft,
     IEnumerable<WorkflowDefinitionVersionSummary> Versions
 );

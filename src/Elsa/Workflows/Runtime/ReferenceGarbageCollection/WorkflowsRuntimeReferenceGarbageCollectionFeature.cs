@@ -1,11 +1,16 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 
@@ -39,15 +44,27 @@ public sealed class WorkflowsRuntimeReferenceGarbageCollectionFeature : IShellFe
     [ManifestSetting(DisplayName = "Max backoff interval (minutes)", Description = "Upper bound the sweep interval widens to under sustained failure.", Category = "Runtime", DefaultValue = "30")]
     public double MaxBackoffIntervalMinutes { get; set; } = 30;
 
+    [ManifestSetting(DisplayName = "Artifact creation grace (minutes)", Description = "Minimum artifact age before physical garbage collection may consider it.", Category = "Runtime", DefaultValue = "5")]
+    public double ArtifactCreationGracePeriodMinutes { get; set; } = 5;
+
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddPersistenceCore();
         services.Configure<WorkflowExecutableReferenceGarbageCollectionOptions>(options =>
         {
             options.SweepInterval = TimeSpan.FromMinutes(SweepIntervalMinutes);
             options.MaxBackoffInterval = TimeSpan.FromMinutes(MaxBackoffIntervalMinutes);
+            options.ArtifactCreationGracePeriod = TimeSpan.FromMinutes(ArtifactCreationGracePeriodMinutes);
+        });
+        services.Configure<WorkflowExecutableGarbageCollectionOptions>(options =>
+        {
+            options.ArtifactCreationGracePeriod = TimeSpan.FromMinutes(ArtifactCreationGracePeriodMinutes);
         });
 
-        services.TryAddSingleton<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
-        services.AddSingleton<IRecurringTask, WorkflowExecutableReferenceGarbageCollectionPumpTask>();
+        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
+        services.AddSingleton<IRecurringTask>(sp => new WorkflowExecutableReferenceGarbageCollectionPumpTask(
+            sp.GetRequiredService<IPersistenceScopeRunner>(),
+            sp.GetRequiredService<IOptions<WorkflowExecutableReferenceGarbageCollectionOptions>>(),
+            sp.GetRequiredService<ILogger<WorkflowExecutableReferenceGarbageCollectionPumpTask>>()));
     }
 }

@@ -1,7 +1,5 @@
 ﻿using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.JavaScript;
@@ -13,13 +11,15 @@ namespace Elsa.Workflows.Runtime.JavaScript;
 [ShellFeature(
     name: "JavaScriptActivities",
     DisplayName = "JavaScript activities",
-    Description = "Provides runtime support for JavaScript-backed workflow activities."
+    Description = "Provides runtime support for JavaScript-backed workflow activities.",
+    DependsOn = new object[] { "JavaScriptJintEngine" }
 )]
 public class JavaScriptActivitiesFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services
-            .AddScoped<IActivityCompletionHandler, ActivityCompletionHandler>();
+        // JavaScriptJintEngine supplies the isolated evaluator used by the endpoint. Workflow
+        // authoring uses the canonical typed activity from Elsa.Activities.Scripting instead of
+        // maintaining a second activity and a fake runtime execution context in this package.
     }
 }

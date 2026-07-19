@@ -1,0 +1,91 @@
+{
+  "collection": "workflowExecutable",
+  "deletionGuard": null,
+  "executable": {
+    "compatibilityMetadata": {},
+    "createdAt": "1970-01-01T00:00:00\u002B00:00",
+    "identity": {
+      "artifactHash": "hash-artifact-1",
+      "artifactId": "artifact-1",
+      "artifactVersion": "1",
+      "definitionId": "definition-1",
+      "definitionVersionId": "version-1"
+    },
+    "resumeTargets": {},
+    "rootActivity": {
+      "activityContract": {
+        "activation": {
+          "capability": "test/activity",
+          "descriptorKind": "test"
+        },
+        "activityTypeKey": "test/activity",
+        "contractVersion": "1.0.0",
+        "descriptorKind": "test",
+        "descriptorPayload": {},
+        "inputs": {
+          "message": {
+            "defaultValue": null,
+            "editorMetadata": {},
+            "hasDefault": false,
+            "isRequired": false,
+            "key": "message",
+            "name": "Message",
+            "policy": {
+              "isPersistable": true,
+              "isSensitive": false,
+              "lifecycle": 0,
+              "redactionMode": null,
+              "requiresEncryption": false,
+              "retentionPolicy": null,
+              "storage": 0,
+              "storageProfile": null
+            },
+            "type": {
+              "alias": "String",
+              "collectionKind": 0,
+              "schema": null,
+              "schemaVersion": null
+            }
+          }
+        },
+        "outcomes": [
+          "Done"
+        ],
+        "result": {
+          "isRequired": false,
+          "policy": {
+            "isPersistable": true,
+            "isSensitive": false,
+            "lifecycle": 0,
+            "redactionMode": null,
+            "requiresEncryption": false,
+            "retentionPolicy": null,
+            "storage": 0,
+            "storageProfile": null
+          },
+          "projections": {},
+          "type": {
+            "alias": "Unit",
+            "collectionKind": 0,
+            "schema": null,
+            "schemaVersion": null
+          }
+        },
+        "schemaFingerprint": "sha256:d5e16c02a4ea7eb05c9869468b94d3edbb5c37718a03c55204e18bd1b3f567c8"
+      },
+      "activityType": "test/activity",
+      "activityTypeVersion": "1.0.0",
+      "authoredActivityId": "authored-root",
+      "childSlots": [],
+      "descriptorPayload": {},
+      "descriptorType": "test",
+      "executableNodeId": "root",
+      "inputBindings": {},
+      "intrinsicKind": null,
+      "intrinsicVariable": null,
+      "metadata": {},
+      "structure": null
+    }
+  },
+  "rootWriteLeases": {}
+}

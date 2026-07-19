@@ -21,14 +21,16 @@ public sealed class GroundworkWorkflowDefinitionVersionLayoutStore : IWorkflowDe
 
     private readonly GroundworkReadStore<WorkflowDefinitionVersionLayout> _reads;
 
-    public GroundworkWorkflowDefinitionVersionLayoutStore(IDocumentStore store)
+    public GroundworkWorkflowDefinitionVersionLayoutStore(IDocumentStore store, IBoundedDocumentStore? boundedStore = null)
     {
         _reads = new GroundworkReadStore<WorkflowDefinitionVersionLayout>(
             store,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
-            WorkflowsDesignStorageManifest.ByCollectionIndex,
+            WorkflowsDesignStorageManifest.ListAllQuery,
+            WorkflowsDesignStorageManifest.CollectionField,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection,
-            Options);
+            Options,
+            boundedStore);
     }
 
     public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default)

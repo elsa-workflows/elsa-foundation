@@ -13,7 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../../../../src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/Unified/Elsa.Persistence.Groundwork.Unified.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
     <ProjectReference Include="../../../../../Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 </Project>

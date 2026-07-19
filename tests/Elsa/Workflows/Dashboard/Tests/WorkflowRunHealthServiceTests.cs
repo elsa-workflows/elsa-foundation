@@ -21,7 +21,7 @@ public sealed class WorkflowRunHealthServiceTests
             .Concat([
                 Execution("running-old", WorkflowExecutionStatus.Running, Now.AddDays(-2)),
                 Execution("other-tenant", WorkflowExecutionStatus.Faulted, Now.AddHours(1), tenantId: "tenant-b"),
-                Execution("test-run", WorkflowExecutionStatus.Faulted, Now.AddHours(1), origin: WorkflowExecutionOrigin.TestRun),
+                Execution("test-run", WorkflowExecutionStatus.Faulted, Now.AddHours(1), runKind: WorkflowRunKind.TestRun),
                 Execution("at-exclusive-to", WorkflowExecutionStatus.Faulted, Now.AddDays(1))
             ])
             .ToArray();
@@ -56,7 +56,7 @@ public sealed class WorkflowRunHealthServiceTests
     {
         var service = Service([
             Execution("published", WorkflowExecutionStatus.Completed, Now),
-            Execution("test", WorkflowExecutionStatus.Faulted, Now, origin: WorkflowExecutionOrigin.TestRun)
+            Execution("test", WorkflowExecutionStatus.Faulted, Now, runKind: WorkflowRunKind.TestRun)
         ]);
 
         var excluded = await service.QueryAsync(Query(Now, Now.AddHours(1)));
@@ -151,7 +151,7 @@ public sealed class WorkflowRunHealthServiceTests
         DateTimeOffset startedAt,
         string definitionId = "definition",
         string tenantId = "tenant-a",
-        WorkflowExecutionOrigin origin = WorkflowExecutionOrigin.Published) =>
+        WorkflowRunKind runKind = WorkflowRunKind.PublishedRun) =>
         new(
             id,
             new WorkflowExecutableIdentity($"artifact-{id}", definitionId, $"version-{id}", "1", "hash"),
@@ -164,8 +164,10 @@ public sealed class WorkflowRunHealthServiceTests
             null,
             null,
             tenantId,
-            new Dictionary<string, string>(),
-            origin);
+            new Dictionary<string, string>())
+        {
+            RunKind = runKind
+        };
 
     private static IncidentState Incident(string id, string executionId) =>
         new(id, executionId, null, null, IncidentSeverity.Error, IncidentStatus.Open,

@@ -5,6 +5,6 @@
   <ItemGroup>
     <ProjectReference Include="../../../../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../../../../src/Elsa/Persistence/Groundwork/Sqlite/Elsa.Persistence.Groundwork.Sqlite.csproj" />
-    <ProjectReference Include="../../../../../src/Elsa/Persistence/Groundwork/Unified/Elsa.Persistence.Groundwork.Unified.csproj" />
+    <ProjectReference Include="../../../../../src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
   </ItemGroup>
 </Project>

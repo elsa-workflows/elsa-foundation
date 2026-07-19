@@ -1,8 +1,11 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -66,9 +69,271 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
 
         var processed = Assert.Single(result.Items);
-        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, processed.RequestedDeliveryResultStatus);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, processed.RequestedDeliveryResultStatus);
         Assert.Equal(1, result.FailedCount);
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddSeconds(11), limit: 10)));
+    }
+
+    [Fact]
+    public async Task Processor_PermanentDeliveryFailureBypassesRemainingRetriesWithSafeStatusAndLogs()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var dispatcher = new RecordingDispatcher(
+            failOnIntentId: "intent-1",
+            failure: new RuntimePostCommitDeliveryException(
+                PostCommitFailureKind.Permanent,
+                "child-start-delivery-failed",
+                "The child workflow could not be started.",
+                new InvalidOperationException("provider-secret stack-secret")));
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            dispatcher,
+            new FixedTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            logger);
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-1",
+            "intent-1",
+            "wfexec-1",
+            retryPolicy: new RuntimePostCommitRetryPolicy(4, TimeSpan.FromSeconds(10)),
+            kind: "Elsa.Activities.DispatchWorkflow.StartChild"));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        var processed = Assert.Single(result.Items);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, processed.RequestedDeliveryResultStatus);
+        Assert.Equal("The child workflow could not be started.", processed.FailureMessage);
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), 10)));
+        Assert.Collection(
+            logger.Entries,
+            attempt =>
+            {
+                Assert.Equal("RuntimePostCommitDeliveryAttemptFailed", attempt.EventId.Name);
+                AssertPayloadSafe(attempt);
+            },
+            final =>
+            {
+                Assert.Equal("RuntimePostCommitDeliveryFailedFinal", final.EventId.Name);
+                Assert.Equal("child-start-delivery-failed", final.Fields["FailureCode"]);
+                Assert.Equal(1, final.Fields["DeliveryAttemptCount"]);
+                Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, final.Fields["EffectiveStatus"]);
+                AssertPayloadSafe(final);
+            });
+    }
+
+    [Fact]
+    public async Task Processor_TransientDeliveryFailureLogsAttemptAndPositiveRetryScheduleSafely()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var dispatcher = new RecordingDispatcher(
+            failOnIntentId: "intent-1",
+            failure: new RuntimePostCommitDeliveryException(
+                PostCommitFailureKind.Transient,
+                "child-start-delivery-failed",
+                "The child workflow could not be started.",
+                new InvalidOperationException("provider-secret stack-secret")));
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            dispatcher,
+            new FixedTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            logger);
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-1",
+            "intent-1",
+            "wfexec-1",
+            retryPolicy: new RuntimePostCommitRetryPolicy(4, TimeSpan.FromSeconds(10)),
+            kind: "Elsa.Activities.DispatchWorkflow.StartChild"));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        var processed = Assert.Single(result.Items);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, processed.RequestedDeliveryResultStatus);
+        Assert.Equal("The child workflow could not be started.", processed.FailureMessage);
+        var retry = Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddSeconds(10), 10)));
+        Assert.Equal(1, retry.DeliveryAttemptCount);
+        Assert.Equal(_now.AddSeconds(10), retry.AvailableAt);
+        Assert.Collection(
+            logger.Entries,
+            attempt =>
+            {
+                Assert.Equal("RuntimePostCommitDeliveryAttemptFailed", attempt.EventId.Name);
+                AssertPayloadSafe(attempt);
+            },
+            scheduled =>
+            {
+                Assert.Equal("RuntimePostCommitRetryScheduled", scheduled.EventId.Name);
+                Assert.Equal(_now.AddSeconds(10), scheduled.Fields["NextAvailableAt"]);
+                AssertPayloadSafe(scheduled);
+            });
+    }
+
+    [Fact]
+    public async Task Processor_ReclaimsExpiredAttemptAndItsHigherFenceRejectsTheStaleWriter()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var dispatcher = new RecordingDispatcher();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
+        var staleClaim = Assert.Single(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "crashed-worker",
+            _now,
+            TimeSpan.FromMinutes(1),
+            10)));
+        var processor = NewProcessor(store, dispatcher, _now.AddMinutes(1).AddSeconds(1));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, Assert.Single(result.Items).RequestedDeliveryResultStatus);
+        Assert.Equal(["intent-1"], dispatcher.Intents.Select(intent => intent.IntentId));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.RecordDeliveryResultAsync(
+            staleClaim,
+            new RuntimePostCommitOutboxDeliveryResult(
+                "outbox-1",
+                RuntimePostCommitOutboxStatus.FailedRetryable,
+                _now.AddMinutes(1).AddSeconds(2),
+                "stale failure")).AsTask());
+    }
+
+    [Fact]
+    public async Task Processor_LogsPayloadSafeStructuredWarningForRecordedUnboundedRetry()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var dispatcher = new RecordingDispatcher(
+            failOnIntentId: "intent-resume",
+            failure: new InvalidOperationException("exception-secret stack-secret"));
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            dispatcher,
+            new FixedTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            logger);
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-resume",
+            "intent-resume",
+            "wfexec-1",
+            retryPolicy: RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(15)),
+            kind: "Elsa.Activities.DispatchWorkflow.ResumeParent",
+            metadata: new Dictionary<string, string> { ["runtime.dispatchId"] = "dispatch-safe" }));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        const string safeFailureMessage = "Runtime post-commit intent delivery deferred pending acknowledgement.";
+        var processed = Assert.Single(result.Items);
+        Assert.Equal(safeFailureMessage, processed.FailureMessage);
+        var persisted = Assert.Single(await store.GetDeliverableAsync(
+            new RuntimePostCommitOutboxQuery(_now.AddSeconds(15), 10)));
+        Assert.Equal(safeFailureMessage, persisted.LastFailureMessage);
+        Assert.DoesNotContain("exception-secret", persisted.LastFailureMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("stack-secret", persisted.LastFailureMessage, StringComparison.OrdinalIgnoreCase);
+
+        var warning = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        Assert.Null(warning.Exception);
+        Assert.Equal("outbox-resume", warning.Fields["OutboxItemId"]);
+        Assert.Equal("intent-resume", warning.Fields["IntentId"]);
+        Assert.Equal("Elsa.Activities.DispatchWorkflow.ResumeParent", warning.Fields["IntentKind"]);
+        Assert.Equal("dispatch-safe", warning.Fields["DispatchId"]);
+        Assert.Equal(1, warning.Fields["DeliveryAttemptCount"]);
+        Assert.Equal(_now.AddSeconds(15), warning.Fields["NextAvailableAt"]);
+        var serializedWarning = string.Join(" ", warning.Fields.Select(pair => $"{pair.Key}={pair.Value}"));
+        Assert.DoesNotContain("signal", serializedWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sent", serializedWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("exception-secret", serializedWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("stack-secret", serializedWarning, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Processor_UnsupportedKindUsesExistingPolicySelectedFinalFailurePath()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var services = new ServiceCollection();
+        services.AddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            scope.ServiceProvider.GetRequiredService<IRuntimePostCommitIntentDispatcher>(),
+            new FixedTimeProvider(_now));
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-unsupported",
+            "intent-unsupported",
+            "wfexec-1",
+            retryPolicy: RuntimePostCommitRetryPolicy.None,
+            kind: "Unsupported.Intent"));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
+
+        var processed = Assert.Single(result.Items);
+        Assert.Equal(1, result.FailedCount);
+        Assert.NotEqual(RuntimePostCommitOutboxStatus.Delivered, processed.RequestedDeliveryResultStatus);
+        Assert.Contains("Unsupported.Intent", processed.FailureMessage);
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), limit: 10)));
+    }
+
+    [Fact]
+    public async Task Processor_AtomicallyProjectsDispatchFailedWhenChildStartFailureBecomesFinal()
+    {
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        var dispatchStore = new InMemoryWorkflowDispatchStore(state);
+        var store = new InMemoryRuntimeCheckpointCommitStore(state: state, workflowDispatchStore: dispatchStore);
+        var dispatch = NewDispatchRecord();
+        var identity = new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId);
+        await dispatchStore.SaveAsync(dispatch);
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-dispatch",
+            identity.StartIntentId,
+            "wfexec-1",
+            retryPolicy: RuntimePostCommitRetryPolicy.None,
+            kind: WorkflowDispatchLifecycle.StartChildIntentKind,
+            metadata: new Dictionary<string, string> { ["runtime.dispatchId"] = dispatch.DispatchId }));
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            new RecordingDispatcher(identity.StartIntentId, new InvalidOperationException("start rejected")),
+            new FixedTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            dispatchStore);
+
+        await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        Assert.Equal(WorkflowDispatchStatus.DispatchFailed, (await dispatchStore.FindAsync(dispatch.DispatchId))!.Status);
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), 10)));
+    }
+
+    [Fact]
+    public async Task Processor_UnsupportedKindWithDispatchMetadata_UsesSafeOutboxFailureWithoutMutatingDispatch()
+    {
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        var dispatchStore = new InMemoryWorkflowDispatchStore(state);
+        var store = new InMemoryRuntimeCheckpointCommitStore(state: state, workflowDispatchStore: dispatchStore);
+        var dispatch = NewDispatchRecord();
+        var identity = new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId);
+        await dispatchStore.SaveAsync(dispatch);
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-unsupported-dispatch",
+            identity.StartIntentId,
+            dispatch.ParentWorkflowExecutionId,
+            retryPolicy: RuntimePostCommitRetryPolicy.None,
+            kind: "Unsupported.DispatchIntent",
+            metadata: new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchId] = dispatch.DispatchId }));
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            new RecordingDispatcher(identity.StartIntentId, new InvalidOperationException("unsupported failure")),
+            new FixedTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            dispatchStore);
+
+        await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await dispatchStore.FindAsync(dispatch.DispatchId))!.Status);
+        var persisted = await store.FindAsync("outbox-unsupported-dispatch");
+        Assert.NotNull(persisted);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, persisted.Status);
     }
 
     [Fact]
@@ -199,28 +464,61 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         string workflowExecutionId,
         DateTimeOffset? availableAt = null,
         RuntimePostCommitRetryPolicy? retryPolicy = null,
-        string kind = "DispatchSignal") =>
+        string kind = "DispatchSignal",
+        IReadOnlyDictionary<string, string>? metadata = null) =>
         new(
             outboxItemId: outboxItemId,
-            intent: NewIntent(intentId, workflowExecutionId, kind),
+            intent: NewIntent(intentId, workflowExecutionId, kind, metadata),
             status: RuntimePostCommitOutboxStatus.Pending,
             recordedAt: _now,
             availableAt: availableAt ?? _now,
             retryPolicy: retryPolicy ?? new RuntimePostCommitRetryPolicy(3, TimeSpan.FromSeconds(10)));
 
-    private RuntimePostCommitIntent NewIntent(string intentId, string workflowExecutionId, string kind)
+    private RuntimePostCommitIntent NewIntent(
+        string intentId,
+        string workflowExecutionId,
+        string kind,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         using var document = JsonDocument.Parse("""{"signal":"sent"}""");
 
+        var isWorkflowDispatch = metadata?.ContainsKey("runtime.dispatchId") == true;
+        var dispatchIdentity = isWorkflowDispatch
+            ? new WorkflowDispatchIdentity(workflowExecutionId, "actexec-1")
+            : null;
         return new RuntimePostCommitIntent(
             intentId: intentId,
             workflowExecutionId: workflowExecutionId,
             kind: kind,
             recordedAt: _now,
             activityExecutionId: "actexec-1",
-            idempotencyKey: $"checkpoint-1:{intentId}",
+            idempotencyKey: dispatchIdentity?.StartIdempotencyKey ?? $"checkpoint-1:{intentId}",
             payload: document.RootElement.Clone(),
-            metadata: new Dictionary<string, string>());
+            metadata: metadata ?? new Dictionary<string, string>());
+    }
+
+    private WorkflowDispatchRecord NewDispatchRecord()
+    {
+        var identity = new WorkflowDispatchIdentity("wfexec-1", "actexec-1");
+        return new WorkflowDispatchRecord(
+            identity.DispatchId,
+            "wfexec-1",
+            "actexec-1",
+            identity.ChildWorkflowExecutionId,
+            new WorkflowExecutableIdentity("artifact-child", "definition-child", "version-child", "1.0.0", "sha256:child"),
+            new WorkflowExecutableSourceProvenance(
+                "source-child", "WorkflowDefinitionVersion", "version-child", "1.0.0",
+                "definition-child", "version-child", "1.0.0", "publication-child", "slot-child"),
+            WorkflowDispatchMode.FireAndForget,
+            WorkflowDispatchStatus.Pending,
+            null,
+            null,
+            new WorkflowExecutionPartition("partition-1"),
+            WorkflowRunKind.PublishedRun,
+            new WorkflowExecutionAuthoritySnapshot("wfexec-1", "initiator-1"),
+            [],
+            _now,
+            _now);
     }
 
     private sealed class RecordingDispatcher(
@@ -256,5 +554,51 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => NoopDisposable.Instance;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            var fields = state is IEnumerable<KeyValuePair<string, object?>> structured
+                ? structured.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
+                : new Dictionary<string, object?> { ["Message"] = formatter(state, exception) };
+            Entries.Add(new LogEntry(logLevel, eventId, fields, exception));
+        }
+    }
+
+    private static void AssertPayloadSafe(LogEntry entry)
+    {
+        Assert.Null(entry.Exception);
+        var serialized = string.Join(" ", entry.Fields.Select(pair => $"{pair.Key}={pair.Value}"));
+        Assert.DoesNotContain("provider-secret", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("stack-secret", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("signal", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sent", serialized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed record LogEntry(
+        LogLevel Level,
+        EventId EventId,
+        IReadOnlyDictionary<string, object?> Fields,
+        Exception? Exception);
+
+    private sealed class NoopDisposable : IDisposable
+    {
+        public static NoopDisposable Instance { get; } = new();
+        public void Dispose()
+        {
+        }
     }
 }

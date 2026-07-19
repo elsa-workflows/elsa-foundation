@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Http;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
@@ -11,6 +12,8 @@ using Elsa.Expressions;
 using Elsa.Http.Core;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Sqlite;
+using Elsa.Primitives.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks.Core;
@@ -68,8 +71,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>The status code the out-of-base-path sentinel terminal middleware returns (proves pass-through).</summary>
     public const int SentinelStatusCode = StatusCodes.Status418ImATeapot;
 
-    /// <summary>The durable value id the published workflow captures the <see cref="HttpEndpoint.ParsedContent"/> output under.</summary>
-    public const string ParsedContentOutputName = "EndpointParsedContent";
+    /// <summary>The durable value id the published workflow captures the <see cref="HttpEndpointResult.ParsedContent"/> projection under.</summary>
+    public const string ParsedContentProjectionKey = "ParsedContent";
+    private const string ResultFixtureKeyMetadata = "fixture.result-key";
 
     private readonly IHost _host;
     private readonly string? _databaseDirectory;
@@ -84,7 +88,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     public IServiceProvider Services => _host.Services;
 
-    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null);
+    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null, null);
 
     /// <summary>
     /// Starts the production HTTP runtime against an isolated Groundwork SQLite database and applies the requested
@@ -97,13 +101,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-performance-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
         var databasePath = Path.Join(databaseDirectory, "runtime.db");
+        var connectionString = $"Data Source={databasePath}";
 
         return StartAsync(
             services =>
             {
                 new SqliteGroundworkRuntimePersistenceShellFeature
                 {
-                    ConnectionString = $"Data Source={databasePath}"
+                    ConnectionString = connectionString
                 }.ConfigureServices(services);
 
                 new WorkflowsRuntimeCheckpointPersistenceFeature
@@ -112,12 +117,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     MaxSegmentCheckpoints = maxSegmentCheckpoints
                 }.PostConfigureServices(services);
             },
-            databaseDirectory);
+            databaseDirectory,
+            connectionString);
     }
 
     private static async Task<HttpEndpointHostFixture> StartAsync(
         Action<IServiceCollection>? configurePersistence,
-        string? databaseDirectory)
+        string? databaseDirectory,
+        string? groundworkSqliteConnectionString)
     {
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -216,6 +223,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             })
             .Build();
 
+        if (groundworkSqliteConnectionString is not null)
+            await host.Services.ApplySqliteGroundworkSchemaAsync(groundworkSqliteConnectionString);
         await host.StartAsync();
 
         RunStartupTasks(host.Services);
@@ -253,8 +262,83 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         // Store the executable (start dispatch resolves it by artifact id) and index its trigger binding so the
         // stimulus router can match an inbound request to it — the two things the publish flow does. IndexAsync
         // also fires the route-table index observer, so the published template lands in the live route table.
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
+    }
+
+    /// <summary>
+    /// Prepares, but does not expose, a publication-scoped HTTP trigger. This is the serving-projection phase used
+    /// by publication slots: the executable is durable and its binding exists, but the binding remains inactive
+    /// until <see cref="ActivatePublishedHttpTriggerAsync"/> switches authority.
+    /// </summary>
+    public async Task PreparePublishedHttpTriggerAsync(
+        string publicationId,
+        string slotId,
+        string artifactId,
+        string path,
+        string resultValueId,
+        params string[] methods)
+    {
+        var executable = NewHttpEndpointExecutable(artifactId, path, resultValueId, methods);
+        await SaveExecutableAsync(executable);
+        await Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
+            new WorkflowExecutableSourceReference(
+                $"reference:{publicationId}",
+                artifactId,
+                "WorkflowDefinitionVersion",
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                executable.Identity.DefinitionId,
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                WorkflowExecutableReferenceScope.Published,
+                PublicationId: publicationId,
+                SlotId: slotId));
+        await Services.GetRequiredService<IWorkflowTriggerIndexer>()
+            .PreparePublicationAsync(executable, publicationId, slotId);
+    }
+
+    /// <summary>
+    /// Switches publication-scoped trigger authority and notifies the real Runtime HTTP observer. The observer
+    /// resolves the complete active binding set and atomically replaces the live route table.
+    /// </summary>
+    public async Task ActivatePublishedHttpTriggerAsync(
+        string publicationId,
+        string? replacedPublicationId,
+        string artifactId)
+    {
+        var store = Services.GetRequiredService<IWorkflowTriggerBindingStore>();
+        await store.ActivatePublicationAsync(publicationId, replacedPublicationId);
+        var bindings = await store.ListByPublicationAsync(publicationId);
+        await NotifyPublicationAuthorityChangedAsync(artifactId, bindings);
+    }
+
+    /// <summary>Removes a prepared projection so a subsequent activation exercises the real missing-candidate failure.</summary>
+    public async Task RemovePreparedPublishedHttpTriggerAsync(string publicationId) =>
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().DeleteByPublicationAsync(publicationId);
+
+    /// <summary>
+    /// Retires an artifact-scoped start projection while retaining its executable and any waiting bookmarks. Used
+    /// to prove that an already-started execution remains pinned to and resumable from the old artifact.
+    /// </summary>
+    public async Task RetireArtifactTriggerAsync(string artifactId)
+    {
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().DeleteByArtifactAsync(artifactId);
+        await NotifyPublicationAuthorityChangedAsync(artifactId, []);
+    }
+
+    private async Task NotifyPublicationAuthorityChangedAsync(
+        string artifactId,
+        IReadOnlyCollection<WorkflowTriggerBinding> bindings)
+    {
+        var snapshot = new WorkflowTriggerIndexSnapshot(artifactId, bindings)
+        {
+            RequiresProjectionRefresh = true
+        };
+        foreach (var observer in Services.GetServices<IWorkflowTriggerIndexObserver>())
+            await observer.OnTriggersIndexedAsync(snapshot);
     }
 
     /// <summary>
@@ -262,8 +346,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <paramref name="path"/>/<paramref name="method"/> with <see cref="HttpEndpoint.CanStartWorkflow"/> = false
     /// (spec 089 D). Because the node can never start a workflow it is NOT a trigger node and is not indexed — the
     /// run is started directly via <see cref="StartWorkflowDirectlyAsync"/>, the endpoint suspends on a bookmark,
-    /// and a matching request resumes it. The node captures <c>Result</c> into the durable value store under
-    /// <paramref name="resultValueId"/> so the resumed run's observed request can be read back.
+    /// and a matching request resumes it. The fixture gives the node a stable test-only result key so its immutable
+    /// committed result can be selected without introducing a second output store.
     /// </summary>
     public async Task PublishResumableHttpEndpointWorkflowAsync(string artifactId, string path, string method, string resultValueId)
     {
@@ -279,7 +363,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
         // start is the only way in — exactly the spec 089 D US4 independent test's shape.
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
     }
 
     /// <summary>
@@ -287,8 +371,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// endpoint on <paramref name="startPath"/> (indexed, starts the run) followed by a mid-flow endpoint on
     /// <paramref name="callbackPath"/> (<see cref="HttpEndpoint.CanStartWorkflow"/> = false, suspends). An HTTP
     /// request to the start template runs the first endpoint and suspends on the second; a request to the callback
-    /// template resumes it. Both endpoints capture their <c>Result</c> under distinct durable value ids so both
-    /// observed requests can be read back.
+    /// template resumes it. Both endpoints receive distinct test-only result keys so both immutable committed
+    /// results can be selected without reintroducing output-capture state.
     /// </summary>
     public async Task PublishSequencedHttpEndpointsWorkflowAsync(
         string artifactId,
@@ -314,21 +398,21 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         // endpoint runs first (its node id becomes the run's trigger identity → start path completes), then the
         // Sequence schedules the callback endpoint, which is mid-flow (foreign trigger identity → suspends). The
         // Sequence root itself is not a trigger — only its start child is.
+        var sequenceDescriptorPayload = ClrConstruction.Payload(serializer, typeof(SequenceActivity));
         var sequenceNode = new ExecutableNode(
             executableNodeId: "node-sequence",
             authoredActivityId: "authored-sequence",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(SequenceActivity)),
+            descriptor: ClrRuntimeDescriptor(sequenceDescriptorPayload),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, [startNode, callbackNode])],
             structure: new ExecutableActivityStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { activities = new[] { startNode.ExecutableNodeId, callbackNode.ExecutableNodeId } })));
+                JsonSerializer.SerializeToElement(new { activities = new[] { startNode.ExecutableNodeId, callbackNode.ExecutableNodeId } })),
+            activityContract: UnitActivityContract(typeof(SequenceActivity), sequenceDescriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
 
         var resumeTargets = NewHttpEndpointResumeTargets(callbackNode.ExecutableNodeId);
 
@@ -339,7 +423,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
     }
@@ -455,7 +539,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
         // start is the only way in — the mid-flow route goes live off the bookmark-lifecycle notification.
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
     }
 
     /// <summary>
@@ -483,7 +567,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
     }
@@ -492,88 +576,122 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     private ExecutableNode NewSequenceNode(string nodeId, params ExecutableNode[] children)
     {
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
+        var descriptorPayload = ClrConstruction.Payload(serializer, typeof(SequenceActivity));
 
         return new ExecutableNode(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(SequenceActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(SequenceActivity)),
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
             structure: new ExecutableActivityStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })));
+                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })),
+            activityContract: UnitActivityContract(typeof(SequenceActivity), descriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
     }
 
     /// <summary>Builds a <see cref="WriteHttpResponse"/> node authoring the given status/body/content-type and an optional header.</summary>
     private ExecutableNode NewWriteHttpResponseNode(string nodeId, int statusCode, string body, string contentType, (string Name, string Value)? header)
     {
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
+        var descriptorPayload = ClrConstruction.Payload(serializer, typeof(WriteHttpResponse));
 
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {
-            [nameof(WriteHttpResponse.StatusCode)] = LiteralBinding(nameof(WriteHttpResponse.StatusCode), statusCode, "System.Int32"),
-            [nameof(WriteHttpResponse.Body)] = LiteralBinding(nameof(WriteHttpResponse.Body), body, "System.String"),
-            [nameof(WriteHttpResponse.ContentType)] = LiteralBinding(nameof(WriteHttpResponse.ContentType), contentType, "System.String")
+            [nameof(WriteHttpResponse.StatusCode)] = TypedLiteralBinding(nameof(WriteHttpResponse.StatusCode), statusCode, typeof(int)),
+            [nameof(WriteHttpResponse.Body)] = TypedLiteralBinding(nameof(WriteHttpResponse.Body), body, typeof(string)),
+            [nameof(WriteHttpResponse.ContentType)] = TypedLiteralBinding(nameof(WriteHttpResponse.ContentType), contentType, typeof(string)),
+            [nameof(WriteHttpResponse.Headers)] = TypedLiteralBinding(nameof(WriteHttpResponse.Headers), null, typeof(IDictionary<string, string[]>))
         };
 
         if (header is { } h)
-            inputBindings[nameof(WriteHttpResponse.Headers)] = LiteralBinding(
+            inputBindings[nameof(WriteHttpResponse.Headers)] = TypedLiteralBinding(
                 nameof(WriteHttpResponse.Headers),
                 new Dictionary<string, string[]> { [h.Name] = [h.Value] },
-                "System.Collections.Generic.IDictionary`2[[System.String],[System.String[]]]");
+                typeof(IDictionary<string, string[]>));
+
+        var activityType = TypeAliasConvention.CanonicalAlias(typeof(WriteHttpResponse));
+        var inputContracts = new[]
+        {
+            WriteResponseInputContract(nameof(WriteHttpResponse.StatusCode), typeof(int)),
+            WriteResponseInputContract(nameof(WriteHttpResponse.Body), typeof(string)),
+            WriteResponseInputContract(nameof(WriteHttpResponse.ContentType), typeof(string)),
+            WriteResponseInputContract(nameof(WriteHttpResponse.Headers), typeof(IDictionary<string, string[]>))
+        };
+        var contract = new ActivityContract(
+            activityType,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            descriptorPayload,
+            inputContracts,
+            new ActivityResultContract(
+                RuntimeValueType(typeof(HttpResponseInstruction)),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, activityType));
 
         return new ExecutableNode(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
-            activityType: typeof(WriteHttpResponse).FullName!,
+            activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(WriteHttpResponse)),
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: contract);
     }
 
     /// <summary>Builds a <see cref="StallingActivity"/> node that stalls the inline drain for <paramref name="duration"/> (scenario 5.3 timeout).</summary>
     private ExecutableNode NewStallingNode(string nodeId, TimeSpan duration)
     {
+        const string durationKey = "duration";
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
+        var descriptorPayload = ClrConstruction.Payload(serializer, typeof(StallingActivity));
+        ActivityInputContract[] inputs =
+        [
+            new(
+                durationKey,
+                nameof(StallingActivity.Duration),
+                RuntimeValueType(typeof(TimeSpan)),
+                isRequired: false,
+                hasDefault: true,
+                JsonSerializer.SerializeToElement(TimeSpan.FromMinutes(1)),
+                ActivityValuePolicy.Default)
+        ];
 
         return new ExecutableNode(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(StallingActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(StallingActivity)),
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                [nameof(StallingActivity.Duration)] = LiteralBinding(nameof(StallingActivity.Duration), duration.ToString("c"), "System.TimeSpan")
+                [durationKey] = TypedLiteralBinding(durationKey, duration, typeof(TimeSpan))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: UnitActivityContract(typeof(StallingActivity), descriptorPayload, inputs, [ActivityOutcomes.Done]));
     }
 
     /// <summary>
-    /// Reads the single durable <see cref="HttpResponseInstruction"/> artifact <see cref="WriteHttpResponse"/> records
-    /// under the well-known workflow-output name (keyed on the runtime output-name metadata, mirroring the activity's
-    /// own execution tests) — the durable proof the artifact was recorded regardless of sync/async delivery.
+    /// Reads the single durable <see cref="HttpResponseInstruction"/> completion result returned by
+    /// <see cref="WriteHttpResponse"/> — the durable proof that the instruction was committed regardless of
+    /// sync/async delivery.
     /// </summary>
     public async Task<JsonElement> ReadHttpResponseArtifactAsync(string workflowExecutionId)
     {
-        var durableValues = await Services.GetRequiredService<IDurableValueStateStore>().ListAsync(workflowExecutionId);
-        var artifact = Assert.Single(
-            durableValues,
-            value => value.Metadata.TryGetValue(RuntimeMetadataKeys.OutputName, out var name)
-                && name == HttpResponseInstruction.OutputName);
-        Assert.NotNull(artifact.InlineValue);
-        return artifact.InlineValue!.Value;
+        var activityStates = await Services.GetRequiredService<IActivityExecutionStateStore>().ListAsync(workflowExecutionId);
+        var completion = Assert.Single(
+            activityStates,
+            state => state.Completion?.Result.Type.Alias == TypeAliasConvention.CanonicalAlias(typeof(HttpResponseInstruction)));
+        Assert.NotNull(completion.Completion?.Result.InlineValue);
+        return completion.Completion!.Result.InlineValue!.Value;
     }
 
     /// <summary>
@@ -624,11 +742,86 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync() =>
         Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
 
+    /// <summary>
+    /// Waits for an asynchronously converging run and its committed result projection after the request that started it has
+    /// already timed out. The timeout response can win the race with the durable checkpoint becoming query-visible.
+    /// </summary>
+    public async Task<(WorkflowExecutionState Execution, JsonElement ResultProjection)>
+        WaitForSingleWorkflowExecutionWithResultProjectionAsync(
+            string projectionKey,
+            string resultFixtureKey,
+            TimeSpan timeout)
+    {
+        var executionStore = Services.GetRequiredService<IWorkflowExecutionStateStore>();
+        var deadline = DateTimeOffset.UtcNow + timeout;
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var executions = await executionStore.ListAsync();
+            if (executions.Count == 1)
+            {
+                var execution = executions.Single();
+                try
+                {
+                    var projection = await ReadResultProjectionAsync(
+                        execution.WorkflowExecutionId,
+                        projectionKey,
+                        resultFixtureKey);
+                    return (execution, projection);
+                }
+                catch (InvalidOperationException)
+                {
+                    // The workflow row can become visible before its activity completion checkpoint.
+                }
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(25));
+        }
+
+        var finalExecution = await SingleWorkflowExecutionAsync();
+        return (finalExecution, await ReadResultProjectionAsync(
+            finalExecution.WorkflowExecutionId,
+            projectionKey,
+            resultFixtureKey));
+    }
+
+    /// <summary>Reads one persisted execution by id.</summary>
+    public async Task<WorkflowExecutionState> WorkflowExecutionAsync(string workflowExecutionId) =>
+        await Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workflowExecutionId)
+        ?? throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' was not found.");
+
+    private async Task SaveExecutableAsync(WorkflowExecutable executable)
+    {
+        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
+            new WorkflowExecutableSourceReference(
+                $"fixture-reference:{executable.Identity.ArtifactId}",
+                executable.Identity.ArtifactId,
+                "WorkflowDefinitionVersion",
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                executable.Identity.DefinitionId,
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                WorkflowExecutableReferenceScope.Published));
+    }
+
     /// <summary>Counts physical Groundwork checkpoint commit markers in this fixture's isolated database.</summary>
     public async Task<int> CountPhysicalCheckpointCommitsAsync()
     {
-        var result = await Services.GetRequiredService<IDocumentStore>()
-            .QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
+        var result = await Services.GetRequiredService<IBoundedDocumentStore>()
+            .QueryAsync(
+                new DocumentQuery(
+                    ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+                    ElsaRuntimeStorageManifest.ListCheckpointCommitsQuery,
+                    [
+                        DocumentQueryClause.Of(
+                            DocumentQueryComparison.Equal(
+                                ElsaRuntimeStorageManifest.CollectionField,
+                                ElsaRuntimeStorageManifest.CheckpointCommitCollection))
+                    ]));
         return checked((int)result.TotalCount);
     }
 
@@ -636,14 +829,43 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ListTriggerBindingsAsync(string artifactId) =>
         await Services.GetRequiredService<IWorkflowTriggerBindingStore>().ListByArtifactAsync(artifactId);
 
-    /// <summary>Reads the single durable value captured under the durable value id <paramref name="valueId"/> for a run.</summary>
-    public async Task<JsonElement> ReadCapturedOutputAsync(string workflowExecutionId, string valueId)
+    /// <summary>
+    /// Reads a named projection from the latest activity completion whose pinned contract declares it.
+    /// The projection is selected directly from the immutable committed result; there is no second output store.
+    /// </summary>
+    public async Task<JsonElement> ReadResultProjectionAsync(
+        string workflowExecutionId,
+        string projectionKey,
+        string? resultFixtureKey = null)
     {
-        var durableValues = await Services.GetRequiredService<IDurableValueStateStore>().ListAsync(workflowExecutionId);
-        var captured = Assert.Single(durableValues, value => value.ValueId == valueId);
-        Assert.NotNull(captured.InlineValue);
-        return captured.InlineValue!.Value;
+        var workflowState = await WorkflowExecutionAsync(workflowExecutionId);
+        var executable = await Services.GetRequiredService<IWorkflowExecutableStore>()
+            .FindAsync(workflowState.PinnedExecutable.ArtifactId)
+            ?? throw new InvalidOperationException($"Executable '{workflowState.PinnedExecutable.ArtifactId}' was not found.");
+        var nodesById = executable.Nodes.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
+        var activityState = (await Services.GetRequiredService<IActivityExecutionStateStore>().ListAsync(workflowExecutionId))
+            .Where(state => state.Completion is not null)
+            .Where(state => resultFixtureKey is null ||
+                            nodesById[state.Execution.ExecutableNodeId].Metadata.GetValueOrDefault(ResultFixtureKeyMetadata) == resultFixtureKey)
+            .OrderByDescending(state => state.Completion!.CompletedAt)
+            .First(state => nodesById[state.Execution.ExecutableNodeId].ActivityContract?.Result.Projections.ContainsKey(projectionKey) == true);
+        var projection = nodesById[activityState.Execution.ExecutableNodeId].ActivityContract!.Result.Projections[projectionKey];
+        var current = activityState.Completion!.Result.InlineValue
+            ?? throw new InvalidOperationException($"Activity '{activityState.InvocationId}' has no inline committed result.");
+
+        foreach (var segment in projection.Path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(segment, out var selected))
+                throw new InvalidOperationException($"Committed result projection path '{projection.Path}' was not found.");
+            current = selected;
+        }
+
+        return current.Clone();
     }
+
+    public static HttpRequestModel DeserializeRequest(JsonElement value) =>
+        value.Deserialize<HttpRequestModel>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        ?? throw new InvalidOperationException("Captured HTTP request resolved to null.");
 
     public async ValueTask DisposeAsync()
     {
@@ -698,82 +920,32 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {
-            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), path, "System.String")
+            [nameof(HttpEndpoint.Path)] = TypedLiteralBinding(nameof(HttpEndpoint.Path), path, typeof(string)),
+            [nameof(HttpEndpoint.SupportedMethods)] = TypedLiteralBinding(nameof(HttpEndpoint.SupportedMethods), methods, typeof(ICollection<string>)),
+            [nameof(HttpEndpoint.CanStartWorkflow)] = TypedLiteralBinding(nameof(HttpEndpoint.CanStartWorkflow), canStartWorkflow ?? false, typeof(bool)),
+            [nameof(HttpEndpoint.Authorize)] = TypedLiteralBinding(nameof(HttpEndpoint.Authorize), authorize ?? false, typeof(bool)),
+            [nameof(HttpEndpoint.Policy)] = TypedLiteralBinding(nameof(HttpEndpoint.Policy), policy, typeof(string)),
+            [nameof(HttpEndpoint.RequestTimeout)] = TypedLiteralBinding(nameof(HttpEndpoint.RequestTimeout), requestTimeout, typeof(TimeSpan)),
+            [nameof(HttpEndpoint.RequestSizeLimit)] = TypedLiteralBinding(nameof(HttpEndpoint.RequestSizeLimit), requestSizeLimit, typeof(long)),
+            [nameof(HttpEndpoint.ResponseMode)] = TypedLiteralBinding(nameof(HttpEndpoint.ResponseMode), responseMode ?? ResponseMode.Async, typeof(ResponseMode))
         };
-
-        // SupportedMethods is routing-significant (spec 089 B). Authored as a literal string array; unauthored
-        // would default to GET, so a POST endpoint must author ["POST"] or the request 404s under the GET default.
-        if (methods.Length > 0)
-            inputBindings[nameof(HttpEndpoint.SupportedMethods)] =
-                LiteralBinding(nameof(HttpEndpoint.SupportedMethods), methods, "System.Collections.Generic.ICollection`1[[System.String]]");
-
-        // D-D1: author the CanStartWorkflow literal when supplied (false = the node never starts a workflow, is not
-        // indexed, and always suspends).
-        if (canStartWorkflow is { } canStart)
-            inputBindings[nameof(HttpEndpoint.CanStartWorkflow)] =
-                LiteralBinding(nameof(HttpEndpoint.CanStartWorkflow), canStart, "System.Boolean");
-
-        // Spec 089 C endpoint-option literals (mirrors how SupportedMethods is authored). The trigger provider
-        // reads these at publish time and stamps them on the binding metadata the middleware enforces.
-        if (authorize is { } authorizeValue)
-            inputBindings[nameof(HttpEndpoint.Authorize)] =
-                LiteralBinding(nameof(HttpEndpoint.Authorize), authorizeValue, "System.Boolean");
-        if (policy is not null)
-            inputBindings[nameof(HttpEndpoint.Policy)] =
-                LiteralBinding(nameof(HttpEndpoint.Policy), policy, "System.String");
-        if (requestSizeLimit is { } sizeLimit)
-            inputBindings[nameof(HttpEndpoint.RequestSizeLimit)] =
-                LiteralBinding(nameof(HttpEndpoint.RequestSizeLimit), sizeLimit, "System.Int64");
-
-        // Spec 089 E: the per-endpoint RequestTimeout literal (scenario 5.3 arms a short timeout so a stalling run
-        // trips 408). Authored as an ISO-8601 duration string, exactly the shape the trigger provider decodes.
-        if (requestTimeout is { } timeout)
-            inputBindings[nameof(HttpEndpoint.RequestTimeout)] =
-                LiteralBinding(nameof(HttpEndpoint.RequestTimeout), timeout.ToString("c"), "System.TimeSpan");
-
-        // Spec 089 E (E-D1): the ResponseMode literal. Authored as the underlying numeric value with the enum's CLR
-        // type name so it materializes at execution time (the activity's InputArgument<ResponseMode>) AND is decoded
-        // by the trigger provider's ReadLiteralEnum (which accepts a defined numeric) at publish/index time — one
-        // authoring shape serving both the start-trigger binding metadata and the mid-flow bookmark metadata.
-        if (responseMode is { } mode)
-            inputBindings[nameof(HttpEndpoint.ResponseMode)] =
-                LiteralBinding(nameof(HttpEndpoint.ResponseMode), (int)mode, typeof(ResponseMode).FullName!);
 
         var metadata = isTriggerNode
             ? new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType }
             : new Dictionary<string, string>();
+        metadata[ResultFixtureKeyMetadata] = resultOutputName;
 
+        var descriptorPayload = ClrConstruction.Payload(serializer, typeof(HttpEndpoint));
+        var contract = HttpEndpointContract(descriptorPayload);
         return new ExecutableNode(
             executableNodeId: nodeId ?? "node-http-endpoint",
             authoredActivityId: $"authored-{nodeId ?? "node-http-endpoint"}",
             activityType: HttpEndpoint.ActivityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(serializer, typeof(HttpEndpoint)),
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>
-            {
-                // Promote the endpoint's Result output (the live HttpRequestModel) into a durable, readable value.
-                // The capture dictionary is keyed by the activity's output name; the durable value id carries the
-                // caller-chosen id used to read the capture back.
-                [nameof(HttpEndpoint.Result)] = new RuntimeOutputCapture(
-                    outputName: nameof(HttpEndpoint.Result),
-                    valueId: resultOutputName,
-                    type: new RuntimeValueTypeDescriptor("clr", typeof(object).FullName, null),
-                    lifecycle: DurableValueLifecycle.Instance,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true),
-                // Also promote the ParsedContent output — since spec 089 efficiency #9 the parsed body is derived at
-                // the activity from Body (not persisted on the wire model), so tests read it from this output.
-                [nameof(HttpEndpoint.ParsedContent)] = new RuntimeOutputCapture(
-                    outputName: nameof(HttpEndpoint.ParsedContent),
-                    valueId: ParsedContentOutputName,
-                    type: new RuntimeValueTypeDescriptor("clr", typeof(object).FullName, null),
-                    lifecycle: DurableValueLifecycle.Instance,
-                    storage: DurableValueStorage.Inline,
-                    captureOnSuccessfulCompletion: true)
-            },
-            metadata: metadata);
+            metadata: metadata,
+            activityContract: contract);
     }
 
     /// <summary>The stable resume-target map the publish compiler emits for an HttpEndpoint node (mirrors Delay).</summary>
@@ -783,22 +955,107 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             [HttpEndpoint.ResumeTargetId] = new(
                 ResumeTargetId: HttpEndpoint.ResumeTargetId,
                 ExecutableNodeId: nodeId,
-                HandlerKey: "OnRequestReceived",
+                HandlerKey: "ResumeAsync",
                 Metadata: new Dictionary<string, string>())
         };
 
     private static WorkflowExecutableIdentity NewIdentity(string artifactId) =>
         new(artifactId, $"definition-{artifactId}", $"version-{artifactId}", "1.0.0", $"sha256:{artifactId}");
 
-    private static RuntimeInputBinding LiteralBinding(string inputName, object value, string typeName) =>
+    private static ActivityContract HttpEndpointContract(JsonElement descriptorPayload) =>
         new(
-            inputName: inputName,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value),
-            metadata: new Dictionary<string, string>
+            HttpEndpoint.ActivityType,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            descriptorPayload,
+            new[]
             {
-                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName
-            });
+                HttpEndpointInputContract(nameof(HttpEndpoint.Path), typeof(string), isRequired: true),
+                HttpEndpointInputContract(nameof(HttpEndpoint.SupportedMethods), typeof(ICollection<string>)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.CanStartWorkflow), typeof(bool)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.Authorize), typeof(bool)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.Policy), typeof(string)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.RequestTimeout), typeof(TimeSpan)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.RequestSizeLimit), typeof(long)),
+                HttpEndpointInputContract(nameof(HttpEndpoint.ResponseMode), typeof(ResponseMode))
+            },
+            new ActivityResultContract(
+                RuntimeValueType(typeof(HttpEndpointResult)),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                new[]
+                {
+                    HttpEndpointProjection("Request", "request", typeof(HttpRequestModel), isRequired: true),
+                    HttpEndpointProjection("RouteData", "routeData", typeof(IReadOnlyDictionary<string, string>), isRequired: true),
+                    HttpEndpointProjection("ParsedContent", "parsedContent", typeof(JsonElement), isRequired: false)
+                }),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, TypeAliasConvention.CanonicalAlias(typeof(HttpEndpoint))));
+
+    private static ActivityInputContract HttpEndpointInputContract(string key, Type type, bool isRequired = false) =>
+        new(key, key, RuntimeValueType(type), isRequired, hasDefault: false, defaultValue: null, ActivityValuePolicy.Default);
+
+    private static ActivityResultProjectionContract HttpEndpointProjection(string key, string path, Type type, bool isRequired) =>
+        new(key, path, RuntimeValueType(type), isRequired, ActivityValuePolicy.Default);
+
+    private static ActivityContract UnitActivityContract(
+        Type activityType,
+        JsonElement descriptorPayload,
+        IReadOnlyCollection<ActivityInputContract> inputs,
+        IReadOnlyCollection<string> outcomes)
+    {
+        var activityTypeAlias = TypeAliasConvention.CanonicalAlias(activityType);
+        return new ActivityContract(
+            activityTypeAlias,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            descriptorPayload,
+            inputs,
+            new ActivityResultContract(
+                RuntimeValueType(typeof(ActivityUnit)),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                []),
+            outcomes,
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, activityTypeAlias));
+    }
+
+    private static RuntimeInputBinding TypedLiteralBinding(string inputKey, object? value, Type type)
+    {
+        var valueType = RuntimeValueType(type);
+        return new RuntimeInputBinding(
+            inputKey,
+            valueType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: value is null
+                ? ValueEnvelope.Null(valueType, ValueProtectionPolicy.InstanceInline)
+                : ValueEnvelope.Inline(
+                    valueType,
+                    JsonSerializer.SerializeToElement(value, type),
+                    ValueProtectionPolicy.InstanceInline));
+    }
+
+    private static RuntimeActivityDescriptor ClrRuntimeDescriptor(JsonElement payload) =>
+        new(
+            WellKnownRuntimeActivityConsumers.ClrActivity,
+            RuntimeActivityDescriptor.InitialSchemaVersion,
+            payload);
+
+    private static ActivityInputContract WriteResponseInputContract(string key, Type type) =>
+        new(
+            key,
+            key,
+            RuntimeValueType(type),
+            isRequired: false,
+            hasDefault: false,
+            defaultValue: null,
+            ActivityValuePolicy.Default);
+
+    private static ValueTypeDescriptor RuntimeValueType(Type type) =>
+        TypeReferenceFactory.FromClrType(type, TypeAliasConvention.CanonicalAlias) is { } reference
+            ? new ValueTypeDescriptor(reference.Alias, reference.CollectionKind)
+            : throw new InvalidOperationException($"Could not describe '{type}'.");
 
     private static void RunStartupTasks(IServiceProvider provider)
     {

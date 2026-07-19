@@ -45,6 +45,9 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         services.DecorateWithCoalescing<IRuntimeCheckpointCommitStore, CoalescingRuntimeCheckpointCommitStore>();
         services.DecorateWithCoalescing<IWorkflowSchedulerWorkQueue, CoalescingWorkflowSchedulerWorkQueue>();
         services.DecorateWithCoalescing<IRuntimePostCommitOutboxStore, CoalescingRuntimePostCommitOutboxStore>();
+        services.RemoveAll<IPostCommitOutboxLookupStore>();
+        services.AddScoped<IPostCommitOutboxLookupStore>(serviceProvider =>
+            (IPostCommitOutboxLookupStore)serviceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         services.DecorateWithCoalescing<IWorkflowExecutionStateStore, CoalescingWorkflowExecutionStateStore>();
         services.DecorateWithCoalescing<IActivityExecutionStateStore, CoalescingActivityExecutionStateStore>();
         services.DecorateWithCoalescing<IDurableValueStateStore, CoalescingDurableValueStateStore>();

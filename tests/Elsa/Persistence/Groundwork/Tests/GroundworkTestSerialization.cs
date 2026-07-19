@@ -5,16 +5,11 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// <summary>
 /// Shared serializer instances for store tests. Stores now depend on
 /// <see cref="IGroundworkRuntimeDocumentSerializer"/>; tests that construct a store directly pass
-/// <see cref="Serializer"/>, which is the production default wired to an empty upcaster registry
-/// (no historical versions exist yet, so no upcasters are needed).
+/// <see cref="Serializer"/>, which is the production default including the workflow-executable
+/// v5-to-v6 compatibility window.
 /// </summary>
 internal static class GroundworkTestSerialization
 {
-    /// <summary>The default upcaster registry with no contributed upcasters.</summary>
-    public static readonly IGroundworkRuntimeDocumentUpcasterRegistry UpcasterRegistry =
-        new GroundworkRuntimeDocumentUpcasterRegistry([new WorkflowExecutionStateV1ToV2Upcaster()]);
-
-    /// <summary>The production default serializer, wired to an empty upcaster registry.</summary>
-    public static readonly IGroundworkRuntimeDocumentSerializer Serializer =
-        new GroundworkRuntimeDocumentSerializer(UpcasterRegistry);
+    /// <summary>The production default serializer with the declared per-kind compatibility policy.</summary>
+    public static readonly IGroundworkRuntimeDocumentSerializer Serializer = new GroundworkRuntimeDocumentSerializer();
 }

@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Reflection;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -41,6 +43,32 @@ public sealed class RuntimeContractTests
     }
 
     [Fact]
+    public void WorkflowExecutionState_DeserializesLegacyHistoryWithoutClassificationOrSourceProvenance()
+    {
+        var state = new WorkflowExecutionState(
+            WorkflowExecutionId: "wfexec-legacy",
+            PinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            Status: WorkflowExecutionStatus.Completed,
+            SubStatus: null,
+            CreatedAt: DateTimeOffset.UnixEpoch,
+            StartedAt: DateTimeOffset.UnixEpoch,
+            UpdatedAt: DateTimeOffset.UnixEpoch,
+            CompletedAt: DateTimeOffset.UnixEpoch,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
+        var legacyJson = JsonSerializer.SerializeToNode(state)!.AsObject();
+        Assert.True(legacyJson.Remove(nameof(WorkflowExecutionState.RunKind)));
+        Assert.True(legacyJson.Remove(nameof(WorkflowExecutionState.PinnedSource)));
+
+        var restored = legacyJson.Deserialize<WorkflowExecutionState>()!;
+
+        Assert.Equal(WorkflowRunKind.Unknown, restored.RunKind);
+        Assert.Null(restored.PinnedSource);
+    }
+
+    [Fact]
     public void ExecutableNode_SeparatesRuntimeNodeIdentityFromAuthoredActivityIdentity()
     {
         var node = new ExecutableNode(
@@ -48,16 +76,16 @@ public sealed class RuntimeContractTests
             authoredActivityId: "activity-authored-1",
             activityType: "Elsa.SendEmail",
             activityTypeVersion: "1.0.0",
-            descriptorType: "Elsa.Activities.SendEmailDescriptor",
-            descriptorPayload: Json("{}"),
+            descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SendEmailDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("{}")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["to"] = new(
-                    inputName: "to",
-                    source: RuntimeInputBindingSource.DurableValue,
-                    durableValue: new RuntimeDurableValueReference("customerEmail"))
+                    inputKey: "to",
+                    targetType: new ValueTypeDescriptor("String"),
+                    effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                    source: RuntimeInputBindingSource.WorkflowRequest,
+                    workflowRequest: new RuntimeWorkflowRequestReference("customerEmail"))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
         Assert.Equal("node-runtime-1", node.ExecutableNodeId);

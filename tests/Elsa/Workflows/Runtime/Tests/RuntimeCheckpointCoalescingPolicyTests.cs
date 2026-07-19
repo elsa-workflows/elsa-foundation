@@ -18,6 +18,7 @@ public sealed class RuntimeCheckpointCoalescingPolicyTests
     [InlineData(RuntimeCheckpointNames.IncidentRecorded)]
     [InlineData(RuntimeCheckpointNames.ActivitySuspended)]
     [InlineData(RuntimeCheckpointNames.ActivityCancelled)]
+    [InlineData(RuntimeCheckpointNames.ActivityAttemptClaimed)]
     [InlineData(RuntimeCheckpointNames.BookmarkCreated)]
     public async Task MandatoryBoundaryCheckpoints_FlushImmediately(string checkpointName)
     {

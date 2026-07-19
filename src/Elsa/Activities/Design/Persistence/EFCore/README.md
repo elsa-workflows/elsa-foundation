@@ -8,7 +8,7 @@ Provider-agnostic EF Core persistence layer for the activity catalog. Inherits t
 - **EF Core configurations** for each entity (composite unique indexes, foreign keys, max-length conventions).
 - **`IAddActivityDefinitionCommand`** → `AddActivityDefinitionCommand` (transactional parent+version insert).
 - **`IActivityDefinitionLookup`** → `ActivityDefinitionLookup` — the picker query (Model X: catalog membership only; no removal filter).
-- **`ActivityDefinitionVersionSavingHandler`** — a typed `IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor (framework §2.6.1, action-named handler). Serialises `Inputs`/`Outputs`/`DesignFacets` and writes the opaque descriptor payload from the `DescriptorPayload` `JsonElement` into `DescriptorPayloadSource`. `DescriptorType` is set by the producer (reconciler / design API), never derived here — the design domain has no `Kind`. The single `ApplyEntitySavingHandlers` aggregator (registered once by the EF Core base feature) dispatches it when `OnEntitySaving` fires.
+- **`ActivityDefinitionVersionSavingHandler`** — a typed `IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor (framework §2.6.1, action-named handler). Serialises `Inputs`/`Outputs`/`DesignFacets` and writes the opaque descriptor payload from the `DescriptorPayload` `JsonElement` into `DescriptorPayloadSource`. Stable provider/consumer identities belong to the producer. The single `ApplyEntitySavingHandlers` aggregator (registered once by the EF Core base feature) dispatches it when `OnEntitySaving` fires.
 - **`ActivityDefinitionVersionLoadingHandler`** — a typed `IEntityLoadingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor. Deserialises `*Source` columns and parses `DescriptorPayloadSource` into a `JsonElement` (`DescriptorPayload`). It resolves **no** descriptor CLR type — there is no kind→type registry — so it needs no descriptor-type dependency (Elsa §E2.2). Dispatched by the single `ApplyEntityLoadingHandlers` aggregator on `OnEntityLoading`.
 
 ## Cross-domain contributions
@@ -29,12 +29,16 @@ See [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/E
 | Entity | Notes |
 |---|---|
 | `ActivityDefinition` | Identity layer. Immutable: `ActivityTypeKey`, `SourceKind`, `SourceId`, `ReconciledAt`, `ReconciledBy`. Unique composite index `(SourceKind, SourceId, ActivityTypeKey)`. |
-| `ActivityDefinitionVersion` | Append-only. Immutable: `Version`, `DefinitionId`, `DescriptorType`, `DescriptorPayloadSource`, `ExecutionType`, `Inputs/Outputs/DesignFacetsSource`, `SourceKind`, `SourceId`, `Hash`. `DescriptorPayload` (`JsonElement`) is `[NotMapped]` — hydrated by the loading handler by parsing `DescriptorPayloadSource`. |
+| `ActivityDefinitionVersion` | Append-only. Current domain identity is `ProviderKey`/`ProviderSchemaVersion` plus `ConsumerKey`/`ConsumerSchemaVersion`, with opaque `DescriptorPayload`, I/O/facets, source identity, and hash. The legacy EF adapter maps only the historical `DescriptorType` column for old database compatibility; it is not a current dispatch contract. `DescriptorPayload` (`JsonElement`) is `[NotMapped]` and hydrated from `DescriptorPayloadSource`. |
 
 ## Persistence invariants
 
 - `Entity.RowNumber` and `Entity.CreatedAt` are write-once on every entity; enforced centrally via `ApplyBaseEntityImmutability` in `ElsaDbContextBase`.
-- Domain-specific write-once properties (e.g. `ActivityTypeKey`, `DescriptorType`, `DescriptorPayloadSource`) are declared via `PropertySaveBehavior.Throw` in each entity's `IEntityTypeConfiguration<T>`.
+- Domain-specific write-once properties (e.g. `ActivityTypeKey` and `DescriptorPayloadSource`) are declared via `PropertySaveBehavior.Throw` in each entity's `IEntityTypeConfiguration<T>`.
+
+This adapter intentionally receives no new migration in the Elsa 4 clean-break slice. Its obsolete
+`DescriptorType` property/column exists only so the old EF model can still compile against existing
+schemas; current contracts, reconciliation, publishing, and runtime dispatch must not read it.
 - `TenantId` index registered centrally via `ApplyTenantIdIndex` on every `TenantEntity` descendant.
 
 ## Owned exception surface

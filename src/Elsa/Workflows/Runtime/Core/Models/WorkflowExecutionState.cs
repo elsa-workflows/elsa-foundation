@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -15,17 +17,60 @@ public sealed record WorkflowExecutionState(
     string? CorrelationId,
     string? ParentWorkflowExecutionId,
     string? TenantId,
-    IReadOnlyDictionary<string, string> SystemMetadata,
-    WorkflowExecutionOrigin Origin = WorkflowExecutionOrigin.Published);
-
-/// <summary>
-/// Identifies the user-facing origin of an execution. This is durable query data rather than an inference from
-/// transient source references, allowing operational projections to exclude test runs exactly.
-/// </summary>
-public enum WorkflowExecutionOrigin
+    IReadOnlyDictionary<string, string> SystemMetadata)
 {
-    Published,
-    TestRun
+    private int _dispatchNestingDepth;
+
+    /// <summary>
+    /// The durable classification pinned when this execution starts. States written before run-kind tracking
+    /// deserialize to <see cref="WorkflowRunKind.Unknown"/> and remain distinguishable as legacy history.
+    /// </summary>
+    public WorkflowRunKind RunKind { get; init; } = WorkflowRunKind.Unknown;
+
+    /// <summary>
+    /// Immutable source attribution selected when this execution started. Null only for legacy state.
+    /// </summary>
+    public WorkflowExecutableSourceProvenance? PinnedSource { get; init; }
+
+    /// <summary>Partition selected when the execution was dispatched. Null only for legacy state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutionPartition? Partition { get; init; }
+
+    /// <summary>Immutable runtime-owned authority and root-initiator attribution. Null only for legacy state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutionAuthoritySnapshot? Authority { get; init; }
+
+    /// <summary>
+    /// Number of cross-workflow dispatch edges from the root execution. Root and legacy states default to zero.
+    /// </summary>
+    public int DispatchNestingDepth
+    {
+        get => _dispatchNestingDepth;
+        init
+        {
+            if (value < 0)
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Dispatch nesting depth cannot be negative.");
+            _dispatchNestingDepth = value;
+        }
+    }
+
+    /// <summary>Authoritative finite test-run scope. Null for non-test and legacy execution state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestScope? TestScope { get; init; }
+
+    /// <summary>
+    /// The workflow activation's lexical variable frame. Null only for legacy states that predate
+    /// role-owned variable frames.
+    /// </summary>
+    public VariableFrameState? RootVariableFrame { get; init; }
+}
+
+public enum WorkflowRunKind
+{
+    Unknown = 0,
+    TestRun = 1,
+    PublishedRun = 2,
+    BackgroundWeaverRun = 3
 }
 
 public enum WorkflowExecutionStatus

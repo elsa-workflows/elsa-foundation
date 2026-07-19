@@ -132,7 +132,9 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             sequence: activityCompletedWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: activityCompletedWorkItem.CommandMetadata,
-            envelopeMetadata: activityCompletedWorkItem.EnvelopeMetadata);
+            envelopeMetadata: activityCompletedWorkItem.EnvelopeMetadata,
+            executionScopeId: parentState.ExecutionScopeId ?? parentState.Provenance.ExecutionScopeId,
+            attempt: parentState.Attempt ?? parentState.Provenance.Attempt);
 
         await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
@@ -165,7 +167,9 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             sequence: continuationSchedulingWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: continuationSchedulingWorkItem.CommandMetadata,
-            envelopeMetadata: continuationSchedulingWorkItem.EnvelopeMetadata);
+            envelopeMetadata: continuationSchedulingWorkItem.EnvelopeMetadata,
+            executionScopeId: continuationSchedulingWorkItem.ExecutionScopeId,
+            attempt: continuationSchedulingWorkItem.Attempt);
 
         await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
@@ -223,7 +227,9 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             sequence: sourceWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: sourceWorkItem.CommandMetadata,
-            envelopeMetadata: sourceWorkItem.EnvelopeMetadata);
+            envelopeMetadata: sourceWorkItem.EnvelopeMetadata,
+            executionScopeId: sourceWorkItem.ExecutionScopeId,
+            attempt: sourceWorkItem.Attempt);
 
         await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }

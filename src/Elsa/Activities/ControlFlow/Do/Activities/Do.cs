@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -57,7 +58,7 @@ namespace Elsa.Activities.Do.Activities;
 /// </remarks>
 [ActivityStructure("elsa.do.structure", "1.0.0")]
 [ActivityChildSlot("Do.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
-public sealed class Do : ActivityBase, IActivityChildCompletionHandler
+public sealed class Do : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string BodySlotName = "Do.Body";
     public const string StructureKind = "elsa.do.structure";
@@ -67,26 +68,25 @@ public sealed class Do : ActivityBase, IActivityChildCompletionHandler
     public const string BreakOutcome = ActivityOutcomes.Break;
 
     /// <summary>The boolean condition evaluated after each pass; the body repeats while it holds.</summary>
-    public InputArgument<bool> Condition { get; set; } = null!;
+    [ActivityInput(Key = nameof(Condition))]
+    public bool Condition { get; set; }
 
-    protected override void Execute(IActivityExecutionContext context)
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var runtimeContext = RequireRuntimeContext(context);
-
         // Post-test loop: schedule the body unconditionally before the first condition check, so it runs
         // at least once even when the condition is false on entry.
         var navigator = DoNavigator.From(runtimeContext.ExecutableNode);
 
         if (navigator.Body is not { } body)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         ScheduleBody(runtimeContext, body, completedChildActivityExecutionId: null);
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
-    public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -101,23 +101,19 @@ public sealed class Do : ActivityBase, IActivityChildCompletionHandler
         // A body Break outcome ends the loop early without re-checking the condition.
         if (context.OutcomeNames.Contains(BreakOutcome, StringComparer.Ordinal))
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         // The runtime re-materializes this composite's inputs for every child-completion evaluation, so
         // this read reflects any state the body mutated this pass: the condition is re-evaluated after the
         // just-completed pass and the body repeats while it holds.
-        var condition = context.ParentContext.Get(Condition);
-
-        if (!condition || navigator.Body is not { } body)
+        if (!Condition || navigator.Body is not { } body)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         ScheduleBody(runtimeContext, body, context.CompletedChildActivityExecutionId);
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
     private static void ScheduleBody(

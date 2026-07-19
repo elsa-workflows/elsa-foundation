@@ -1,5 +1,7 @@
 # Feature Specification: Descriptor-Type-Driven Activity Construction
 
+> **Current status (2026-07-16): superseded in its runtime construction mechanism by [spec 095](../095-value-flow-redesign/spec.md).** Descriptor opacity and the Runtime/Design boundary remain, but constructor/factory registries and argument bags were removed in favor of transient `IActivityActivator` leases and immutable input snapshots.
+
 **Feature Branch**: `006-activity-construction-seam` *(spec authored on `main`; no feature branch cut — consistent with units 001–005)*
 **Created**: 2026-06-05
 **Status**: Draft
