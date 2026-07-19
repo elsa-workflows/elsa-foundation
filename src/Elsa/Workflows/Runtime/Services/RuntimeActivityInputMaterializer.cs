@@ -202,7 +202,17 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             (binding.ConversionPlan is null || !SameType(source.Type, binding.ConversionPlan.SourceType)))
             throw new InvalidOperationException($"VF-ACT-004: Literal input '{input.Key}' on executable node '{node.ExecutableNodeId}' does not match its declared portable type.");
         if (source.Policy.Lifecycle == DurableValueLifecycle.None)
-            throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' has a transient source at a durable invocation boundary.");
+        {
+            if (binding.EffectivePolicy.Lifecycle != DurableValueLifecycle.None || input.Policy.IsPersistable)
+                throw new InvalidOperationException(
+                    $"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' has source representation '{ValueRepresentation.TransientResource}' " +
+                    $"but destination storage policy '{binding.EffectivePolicy.Storage}' requires a durable invocation boundary. " +
+                    "Use an execution-local non-persistable input binding for live resources, or model an explicit DurableReference/resource-handle.");
+
+            return binding.ConversionPlan is null
+                ? source.Retype(binding.TargetType)
+                : ApplyConversionPlan(binding, source);
+        }
         var effectivePolicy = ValuePolicyCombiner.Combine(
             binding.EffectivePolicy,
             source.Policy,
@@ -374,7 +384,18 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     private static void ValidateEffectivePolicy(ActivityInputContract input, RuntimeInputBinding binding, string nodeId)
     {
         var policy = binding.EffectivePolicy;
-        if (!input.Policy.IsPersistable || policy.Lifecycle == DurableValueLifecycle.None)
+        if (!input.Policy.IsPersistable)
+        {
+            if (policy.Lifecycle != DurableValueLifecycle.None)
+            {
+                throw new InvalidOperationException(
+                    $"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' is non-persistable but binding destination storage policy '{policy.Storage}' is durable.");
+            }
+
+            return;
+        }
+
+        if (policy.Lifecycle == DurableValueLifecycle.None)
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' is not persistable at the durable ActivityStarted boundary.");
 
         if (!policy.Satisfies(ValuePolicyCombiner.ToProtectionPolicy(input.Policy)))

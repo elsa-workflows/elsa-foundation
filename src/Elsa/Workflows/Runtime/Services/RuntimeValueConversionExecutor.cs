@@ -24,15 +24,15 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         ArgumentNullException.ThrowIfNull(plan);
 
         ValidatePlan(plan);
-        ValidateRepresentation(plan);
         if (!ValueConversionCompatibility.SameType(source.Type, plan.SourceType))
             throw Reject(plan, $"runtime source contract '{source.Type.Alias} ({source.Type.CollectionKind})' does not match the pinned source contract");
 
-        if (source.ExternalReference is not null && plan.Operation is not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility)
-            throw Reject(plan, "external-reference conversion is not available in this runtime slice");
-
         if (source.Presence != ValuePresence.Present)
             return new ValueEnvelope(plan.TargetType, source.Presence, null, null, source.Policy);
+
+        ValidateRepresentation(plan);
+        if (source.ExternalReference is not null && plan.Operation is not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility)
+            throw Reject(plan, "external-reference conversion is not available in this runtime slice");
 
         if (source.ExternalReference is not null)
             return ValueEnvelope.External(plan.TargetType, source.ExternalReference, source.Policy);

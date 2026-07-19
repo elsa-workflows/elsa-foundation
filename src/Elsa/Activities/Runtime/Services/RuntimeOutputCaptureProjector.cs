@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -61,6 +62,7 @@ public sealed class RuntimeOutputCaptureProjector
                 throw new InvalidOperationException($"Activity completion did not produce declared output projection '{capture.OutputName}'.");
             if (projected.Presence == ValuePresence.Absent)
                 continue;
+            ValidateDurableCaptureBoundary(capture, projected);
 
             var value = capture.ConversionPlan is null
                 ? StringComparer.Ordinal.Equals(projectionContract.Path, "$")
@@ -101,6 +103,22 @@ public sealed class RuntimeOutputCaptureProjector
         }
 
         return changes;
+    }
+
+    private static void ValidateDurableCaptureBoundary(RuntimeOutputCapture capture, ValueEnvelope projected)
+    {
+        if (projected.Presence != ValuePresence.Present)
+            return;
+
+        var sourceRepresentation = capture.ConversionPlan?.SourceRepresentation ??
+                                   ValueRepresentationDefaults.Infer(projected.Type);
+        if (sourceRepresentation != ValueRepresentation.TransientResource && projected.TransientResource is null)
+            return;
+
+        throw new InvalidOperationException(
+            $"VF-ACT-005: Output capture '{capture.OutputName}' cannot persist source representation '{ValueRepresentation.TransientResource}' " +
+            $"into destination storage policy '{capture.Storage}' using driver '{capture.StorageDriverKey}'. " +
+            "Use an execution-local activity-result binding for live resources, or model an explicit DurableReference/resource-handle output before persisting.");
     }
 
     private static void AddReservedTargetMetadata(

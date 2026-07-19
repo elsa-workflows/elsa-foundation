@@ -79,10 +79,19 @@ public sealed class RuntimeOutputCaptureCompiler(
 
             storageDrivers.GetRequired(definition.StorageDriverKey);
             var sourceType = new ValueTypeDescriptor(definition.Type.Alias, definition.Type.CollectionKind);
+            var sourceRepresentation = definition.SourceRepresentation ?? ValueRepresentationDefaults.Infer(sourceType);
+            if (sourceRepresentation == ValueRepresentation.TransientResource)
+            {
+                throw new ArgumentException(
+                    $"VF-ACT-005: Activity node '{nodeId}' output '{definition.ReferenceKey}' has source representation '{ValueRepresentation.TransientResource}' " +
+                    $"and cannot be captured into durable workflow variable destination storage policy '{DurableValueStorage.Custom}' using driver '{definition.StorageDriverKey}'. " +
+                    "Use an execution-local activity-result binding for live resources, or model an explicit DurableReference/resource-handle output before persisting.");
+            }
+
             var targetType = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
             var conversionPlan = resolvedConversionPlanResolver.Resolve(
                 sourceType,
-                definition.SourceRepresentation ?? ValueRepresentationDefaults.Infer(sourceType),
+                sourceRepresentation,
                 targetType);
             var type = new RuntimeValueTypeDescriptor(
                 variable.Type.Alias,
