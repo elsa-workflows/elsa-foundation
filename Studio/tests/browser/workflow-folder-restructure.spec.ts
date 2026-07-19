@@ -10,7 +10,6 @@ test("keyboard users can rename, restructure, and empty-delete folders in a narr
   const platform = page.getByRole("treeitem", { name: /Platform/ });
   await platform.focus();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("treeitem", { name: /Operations/ })).toBeVisible();
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("treeitem", { name: /Operations/ })).toBeFocused();
   await page.keyboard.press("Enter");
@@ -49,8 +48,10 @@ test("keyboard users can rename, restructure, and empty-delete folders in a narr
   const archive = page.getByRole("treeitem", { name: /Archive/ });
   await archive.focus();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("treeitem", { name: /Empty folder/ })).toBeVisible();
-  await page.getByRole("treeitem", { name: /Empty folder/ }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("treeitem", { name: /Renamed operations/ })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("treeitem", { name: /Empty folder/ })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByText("No active workflow definitions")).toBeVisible();
   const remove = page.getByRole("button", { name: "Delete", exact: true });
@@ -134,8 +135,7 @@ test("renaming a continuation-page folder retains its selected and expanded tree
   await expect(page.getByRole("treeitem", { name: "Load more folders" })).toHaveCount(0);
   const archive = page.getByRole("treeitem", { name: /Archive/ });
   await expect(archive).toBeVisible();
-  await archive.focus();
-  await page.keyboard.press("ArrowRight");
+  await page.getByRole("button", { name: "Expand Archive" }).click();
   await expect(page.getByRole("treeitem", { name: /Empty folder/ })).toBeVisible();
   await archive.focus();
   await page.keyboard.press("Enter");

@@ -3248,6 +3248,52 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("hands keyboard focus to an asynchronously loaded child only while focus remains on its expanded parent", async () => {
+    const folderA = workflowFolder("folder-a", "Folder A");
+    const folderB = workflowFolder("folder-b", "Folder B");
+    const childA = workflowFolder("child-a", "Child A", folderA.id);
+    const childB = workflowFolder("child-b", "Child B", folderB.id);
+    let resolveChildrenA: ((value: Response) => void) | undefined;
+    let resolveChildrenB: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes(`parentId=${folderA.id}`)) return new Promise<Response>(resolve => { resolveChildrenA = resolve; });
+      if (url.includes(`parentId=${folderB.id}`)) return new Promise<Response>(resolve => { resolveChildrenB = resolve; });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folderA, folderB], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, folderA.name);
+    const itemA = container.querySelector<HTMLElement>(`[data-folder-id="${folderA.id}"]`);
+    itemA?.focus();
+    itemA?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    itemA?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await vi.waitFor(() => expect(resolveChildrenA).toBeTypeOf("function"));
+    expect(document.activeElement).toBe(itemA);
+    resolveChildrenA?.(response({ items: [childA], nextContinuationToken: null }));
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe(childA.id));
+
+    const itemB = container.querySelector<HTMLElement>(`[data-folder-id="${folderB.id}"]`);
+    itemB?.focus();
+    itemB?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    itemB?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await vi.waitFor(() => expect(resolveChildrenB).toBeTypeOf("function"));
+    const all = container.querySelector<HTMLElement>("[data-selection='all']");
+    all?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    all?.focus();
+    resolveChildrenB?.(response({ items: [childB], nextContinuationToken: null }));
+    await waitForText(container, childB.name);
+    expect(document.activeElement).toBe(all);
+    await unmount();
+  });
+
   it("keeps breadcrumb projection on the latest selected opaque folder when details resolve out of order", async () => {
     const folderA = { id: "folder-a", parentId: null, name: "Folder A", normalizedName: "folder a", createdAt: "", lastModifiedAt: "" };
     const folderB = { id: "folder-b", parentId: null, name: "Folder B", normalizedName: "folder b", createdAt: "", lastModifiedAt: "" };

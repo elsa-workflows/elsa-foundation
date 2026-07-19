@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Folder, FolderPen, FolderPlus, Menu, Move, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, listWorkflowFolders, workflowFoldersPath } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
@@ -41,6 +41,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const [mutationDialog, setMutationDialog] = useState<"rename" | "move" | null>(null);
   const [localRefreshKey, setLocalRefreshKey] = useState(0);
   const [status, setStatus] = useState("");
+  const [pendingChildFocusId, setPendingChildFocusId] = useState<string | null>(null);
+  const keyboardExpansionIntents = useRef(new Set<string>());
   const inFlightGenerations = useRef<Record<string, number>>({});
   const loadedPageCounts = useRef<Record<string, number>>({});
   const nextLoadGeneration = useRef(0);
@@ -258,7 +260,10 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     loadFailures,
     selection,
     focusedKey,
+    pendingChildFocusId,
+    keyboardExpansionIntents,
     onFocusedKeyChange: setFocusedKey,
+    onPendingChildFocusChange: setPendingChildFocusId,
     onToggle: toggle,
     onSelect: select,
     onLoadMore: async (parentId?: string) => {
@@ -325,26 +330,61 @@ interface FolderTreeProps {
   loadFailures: Record<string, string>;
   selection: WorkflowFolderSelection;
   focusedKey: string;
+  pendingChildFocusId: string | null;
+  keyboardExpansionIntents: MutableRefObject<Set<string>>;
   onFocusedKeyChange(key: string): void;
+  onPendingChildFocusChange(folderId: string | null): void;
   onToggle(folder: WorkflowFolder): void;
   onSelect(selection: WorkflowFolderSelection): void;
   onLoadMore(parentId?: string): Promise<void>;
   onRetry(parentId?: string): Promise<void>;
 }
 
+function firstDirectFolderChild(parent: HTMLElement) {
+  const group = [...parent.children].find(element => element.getAttribute("role") === "group");
+  return [...(group?.children ?? [])].find(element =>
+    element.getAttribute("role") === "treeitem" && element.getAttribute("data-kind") !== "status"
+  ) as HTMLElement | undefined;
+}
+
 function FolderTree(props: FolderTreeProps) {
   const {
     roots, children, continuations, expanded, loadingKeys, loadFailures, selection, focusedKey,
-    onFocusedKeyChange, onToggle, onSelect, onLoadMore, onRetry
+    pendingChildFocusId, keyboardExpansionIntents, onFocusedKeyChange, onPendingChildFocusChange,
+    onToggle, onSelect, onLoadMore, onRetry
   } = props;
   const active = selectedFolderId(selection);
   const treeId = useId().replaceAll(":", "");
+  const treeRef = useRef<HTMLDivElement>(null);
 
   const focusItem = (item: HTMLElement | null | undefined) => {
     if (!item) return;
     onFocusedKeyChange(item.dataset.treeKey ?? "all");
     item.focus();
   };
+
+  useEffect(() => {
+    if (!pendingChildFocusId) return;
+    const parent = [...(treeRef.current?.querySelectorAll<HTMLElement>("[data-folder-id]") ?? [])]
+      .find(item => item.dataset.folderId === pendingChildFocusId);
+    if (!parent || document.activeElement !== parent) {
+      keyboardExpansionIntents.current.delete(pendingChildFocusId);
+      onPendingChildFocusChange(null);
+      return;
+    }
+    const firstChild = firstDirectFolderChild(parent);
+    if (firstChild) {
+      keyboardExpansionIntents.current.delete(pendingChildFocusId);
+      onPendingChildFocusChange(null);
+      onFocusedKeyChange(firstChild.dataset.treeKey ?? "all");
+      firstChild.focus();
+      return;
+    }
+    if (loadFailures[pendingChildFocusId] || (pendingChildFocusId in children && !loadingKeys.has(pendingChildFocusId))) {
+      keyboardExpansionIntents.current.delete(pendingChildFocusId);
+      onPendingChildFocusChange(null);
+    }
+  }, [children, keyboardExpansionIntents, loadFailures, loadingKeys, onFocusedKeyChange, onPendingChildFocusChange, pendingChildFocusId]);
 
   const activate = (item: HTMLElement) => {
     const kind = item.dataset.kind;
@@ -368,12 +408,27 @@ function FolderTree(props: FolderTreeProps) {
     if (!folder) return;
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      if (!expanded.has(folder.id)) void onToggle(folder);
-      else focusItem(current.querySelector<HTMLElement>(':scope > [role="group"] [role="treeitem"]:not([data-kind="status"])'));
+      if (!expanded.has(folder.id)) {
+        if (keyboardExpansionIntents.current.has(folder.id)) onPendingChildFocusChange(folder.id);
+        else {
+          keyboardExpansionIntents.current.add(folder.id);
+          void onToggle(folder);
+        }
+      } else {
+        const firstChild = firstDirectFolderChild(current);
+        if (firstChild) {
+          keyboardExpansionIntents.current.delete(folder.id);
+          focusItem(firstChild);
+        } else {
+          onPendingChildFocusChange(folder.id);
+        }
+      }
       return;
     }
     if (event.key === "ArrowLeft") {
       event.preventDefault();
+      keyboardExpansionIntents.current.delete(folder.id);
+      if (pendingChildFocusId === folder.id) onPendingChildFocusChange(null);
       if (expanded.has(folder.id)) void onToggle(folder);
       else focusItem(current.parentElement?.closest<HTMLElement>('[role="treeitem"]') ?? undefined);
     }
@@ -465,6 +520,8 @@ function FolderTree(props: FolderTreeProps) {
                 aria-controls={groupId}
                 onClick={event => {
                   event.stopPropagation();
+                  keyboardExpansionIntents.current.delete(folder.id);
+                  if (pendingChildFocusId === folder.id) onPendingChildFocusChange(null);
                   event.currentTarget.closest<HTMLElement>('[role="treeitem"]')?.focus();
                   void onToggle(folder);
                 }}
@@ -491,7 +548,18 @@ function FolderTree(props: FolderTreeProps) {
   };
 
   return (
-    <div role="tree" aria-label="Workflow folders" aria-busy={loadingKeys.has(rootKey)} className="wf-folder-tree" onKeyDown={onKeyDown}>
+    <div
+      ref={treeRef}
+      role="tree"
+      aria-label="Workflow folders"
+      aria-busy={loadingKeys.has(rootKey)}
+      className="wf-folder-tree"
+      onKeyDown={onKeyDown}
+      onPointerDown={() => {
+        keyboardExpansionIntents.current.clear();
+        onPendingChildFocusChange(null);
+      }}
+    >
       {selectionRow("All workflows", "all")}
       {selectionRow("Unfiled", "unfiled")}
       {folderRows(roots, 0)}
