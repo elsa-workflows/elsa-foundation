@@ -4,6 +4,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
@@ -12,7 +13,8 @@ public sealed class UnpublishPublicationSlotRequestHandler(
     IPublicationRecordStore publicationStore,
     IPublicationProjectionPreparer projectionPreparer,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
-    TimeProvider timeProvider) : IRequestHandler<UnpublishPublicationSlot, PublicationSlot>
+    TimeProvider timeProvider,
+    ILogger<UnpublishPublicationSlotRequestHandler>? logger = null) : IRequestHandler<UnpublishPublicationSlot, PublicationSlot>
 {
     public async Task<PublicationSlot> Handle(UnpublishPublicationSlot request, CancellationToken cancellationToken)
     {
@@ -71,7 +73,15 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         if (!await publicationStore.TryTransitionAsync(retired, PublicationStatus.Active, cancellationToken))
             throw new InvalidOperationException($"Publication '{publicationId}' could not be retired.");
         if (publication.SourceReferenceId is { } sourceReferenceId)
+        {
+            logger?.LogInformation(
+                "Unpublish: retiring source reference {SourceReferenceId} of workflow definition {DefinitionId} because publication {PublicationId} was unpublished from slot {SlotName}",
+                sourceReferenceId,
+                publication.WorkflowDefinitionId,
+                publicationId,
+                request.SlotName);
             await sourceReferenceStore.RetireAsync(sourceReferenceId, now, "publication-unpublished", cancellationToken);
+        }
         return transition.Slot;
     }
 }
@@ -83,7 +93,8 @@ public sealed class RestorePublicationSlotRequestHandler(
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
-    TimeProvider timeProvider) : IRequestHandler<RestorePublicationSlot, PublicationSlot>
+    TimeProvider timeProvider,
+    ILogger<RestorePublicationSlotRequestHandler>? logger = null) : IRequestHandler<RestorePublicationSlot, PublicationSlot>
 {
     public async Task<PublicationSlot> Handle(RestorePublicationSlot request, CancellationToken cancellationToken)
     {
@@ -146,6 +157,11 @@ public sealed class RestorePublicationSlotRequestHandler(
                 }
                 catch
                 {
+                    logger?.LogWarning(
+                        "Restore: retiring source reference {SourceReferenceId} of workflow definition {DefinitionId} because activation of publication {PublicationId} failed",
+                        reference.SourceReferenceId,
+                        candidate.WorkflowDefinitionId,
+                        publicationId);
                     await sourceReferenceStore.RetireAsync(
                         reference.SourceReferenceId,
                         timeProvider.GetUtcNow(),
