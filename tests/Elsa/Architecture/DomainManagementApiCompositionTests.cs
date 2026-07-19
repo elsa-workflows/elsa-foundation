@@ -185,12 +185,22 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Equal(HttpStatusCode.NotFound, missingParent.StatusCode);
 
         var folderDefinitions = await host.Client.GetFromJsonAsync<WorkflowDefinitionPageView>(
-            "/design/workflows/definitions/page?folderId=folder-1");
-        Assert.Equal("folder-1", Assert.Single(folderDefinitions!.Items).FolderId);
+            "/design/workflows/definitions/page?folderId=folder-1&pageSize=13&search=orders&state=all");
+        var folderDefinition = Assert.Single(folderDefinitions!.Items);
+        Assert.Equal("folder-1", folderDefinition.FolderId);
+        Assert.Equal(
+            [("folder-1", "Orders")],
+            folderDefinition.FolderBreadcrumb!.Select(folder => (folder.Id, folder.Name)));
 
         var unfiledDefinitions = await host.Client.GetFromJsonAsync<WorkflowDefinitionPageView>(
             "/design/workflows/definitions/page?unfiled=true");
-        Assert.Null(Assert.Single(unfiledDefinitions!.Items).FolderId);
+        var unfiledDefinition = Assert.Single(unfiledDefinitions!.Items);
+        Assert.Null(unfiledDefinition.FolderId);
+        Assert.Empty(unfiledDefinition.FolderBreadcrumb!);
+
+        using var unknownFolderDefinitions = await host.Client.GetAsync(
+            "/design/workflows/definitions/page?folderId=missing");
+        Assert.Equal(HttpStatusCode.NotFound, unknownFolderDefinitions.StatusCode);
 
         using var mutuallyExclusiveSelectors = await host.Client.GetAsync(
             "/design/workflows/definitions/page?folderId=folder-1&unfiled=true");
@@ -206,6 +216,12 @@ public sealed class DomainManagementApiCompositionTests
         var persistedDefinition = await host.Client.GetFromJsonAsync<WorkflowDefinitionDetailsView>(
             $"/design/workflows/definitions/{createdDefinition.Definition.Id}");
         Assert.Equal("folder-1", persistedDefinition!.Definition.FolderId);
+        using var persistedDefinitionJson = await host.Client.GetAsync(
+            $"/design/workflows/definitions/{createdDefinition.Definition.Id}");
+        Assert.DoesNotContain(
+            "\"folderBreadcrumb\"",
+            await persistedDefinitionJson.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
 
         using var unexpected = await host.Client.PostAsJsonAsync("/design/workflows/folders", new { name = "Unexpected" });
         Assert.Equal(HttpStatusCode.InternalServerError, unexpected.StatusCode);
@@ -465,6 +481,12 @@ public sealed class DomainManagementApiCompositionTests
 
             if (query.FolderId is not null || query.Unfiled == true)
             {
+                if (query.FolderId is not null)
+                {
+                    Assert.Equal(13, query.PageSize);
+                    Assert.Equal("orders", query.SearchTerm);
+                    Assert.Equal(WorkflowDefinitionPageState.All, query.State);
+                }
                 var definition = new WorkflowDefinition
                 {
                     Id = query.Unfiled == true ? "unfiled-definition" : "folder-definition",

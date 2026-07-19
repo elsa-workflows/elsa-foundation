@@ -93,6 +93,7 @@ public class ManagementApiContractTests
         "VariableTypeDescriptor",
         "WorkflowDefinitionDetails",
         "WorkflowDefinitionPage",
+        "WorkflowDefinitionPageItem",
         "WorkflowDefinitionState",
         "WorkflowDefinitionSummary",
         "WorkflowDefinitionVersion",
@@ -102,6 +103,7 @@ public class ManagementApiContractTests
         "WorkflowExecutableSummary",
         "WorkflowExecutionDispatch",
         "WorkflowFolder",
+        "WorkflowFolderBreadcrumbItem",
         "WorkflowFolderDetails",
         "WorkflowFolderPage",
         "WorkflowInstanceDetails",
@@ -160,6 +162,37 @@ public class ManagementApiContractTests
         Assert.Equal(
             ["204", "400", "401", "403", "404", "409"],
             GetMapping(moveResponses, "responses").Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
+    }
+
+    [Fact]
+    public async Task Workflow_definition_page_contract_exposes_non_null_folder_breadcrumbs_and_unknown_folder_errors()
+    {
+        var document = await LoadDocumentAsync();
+        var paths = GetMapping(document, "paths");
+        var pageResponses = GetMapping(
+            GetMapping(GetMapping(paths, "/design/workflows/definitions/page"), "get"),
+            "responses");
+        Assert.Equal(
+            ["200", "400", "401", "403", "404"],
+            pageResponses.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
+
+        var schemas = GetMapping(GetMapping(document, "components"), "schemas");
+        var summary = GetMapping(schemas, "WorkflowDefinitionSummary");
+        Assert.DoesNotContain(new YamlScalarNode("folderBreadcrumb"), GetSequence(summary, "required").Children);
+        Assert.DoesNotContain(new YamlScalarNode("folderBreadcrumb"), GetMapping(summary, "properties").Children.Keys);
+        var page = GetMapping(schemas, "WorkflowDefinitionPage");
+        var pageItemSchema = GetMapping(GetMapping(GetMapping(page, "properties"), "items"), "items");
+        Assert.Equal(
+            "#/components/schemas/WorkflowDefinitionPageItem",
+            GetScalar(pageItemSchema, "$ref"));
+        var pageItem = GetMapping(schemas, "WorkflowDefinitionPageItem");
+        var pageItemOverlay = Assert.IsType<YamlMappingNode>(GetSequence(pageItem, "allOf").Children[1]);
+        Assert.Contains(new YamlScalarNode("folderBreadcrumb"), GetSequence(pageItemOverlay, "required").Children);
+        var breadcrumb = GetMapping(GetMapping(pageItemOverlay, "properties"), "folderBreadcrumb");
+        Assert.Equal("array", GetScalar(breadcrumb, "type"));
+        Assert.Equal(
+            "#/components/schemas/WorkflowFolderBreadcrumbItem",
+            GetScalar(GetMapping(breadcrumb, "items"), "$ref"));
     }
 
     private static async Task<ContractInventory> LoadContractAsync()

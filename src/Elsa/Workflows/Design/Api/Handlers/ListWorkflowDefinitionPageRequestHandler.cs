@@ -1,6 +1,8 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,8 +31,40 @@ public sealed class ListWorkflowDefinitionPageRequestHandler(
             request.FolderId,
             request.Unfiled);
         query.Validate();
+        var folderStore = serviceProvider.GetService<IWorkflowFolderStore>();
+        var folderDetailsById = new Dictionary<string, WorkflowFolderDetails>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(query.FolderId))
+        {
+            if (folderStore?.IsAvailable != true)
+                throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), query.FolderId);
+            var requestedFolder = await folderStore.FindManyWithAncestorsAsync([query.FolderId], cancellationToken);
+            if (!requestedFolder.TryGetValue(query.FolderId, out var details))
+                throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), query.FolderId);
+            folderDetailsById.Add(query.FolderId, details);
+        }
         var page = await pageStore.QueryPageAsync(query, cancellationToken);
-        var items = await WorkflowDefinitionViewMapper.CreateAsync(page.Items, projectionStore, cancellationToken);
+        var missingFolderIds = page.Items
+            .Select(definition => definition.FolderId)
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .Where(folderId => !folderDetailsById.ContainsKey(folderId))
+            .ToArray();
+        if (missingFolderIds.Length > 0)
+        {
+            if (folderStore?.IsAvailable != true)
+            {
+                throw new InvalidOperationException(
+                    "The workflow-definition page contains filed definitions but workflow-folder browsing is unavailable.");
+            }
+            var resolved = await folderStore.FindManyWithAncestorsAsync(missingFolderIds, cancellationToken);
+            foreach (var (folderId, details) in resolved)
+                folderDetailsById.Add(folderId, details);
+        }
+        var items = await WorkflowDefinitionViewMapper.CreatePageAsync(
+            page.Items,
+            projectionStore,
+            folderDetailsById,
+            cancellationToken);
 
         return new WorkflowDefinitionPageView(items, page.NextContinuationToken);
     }

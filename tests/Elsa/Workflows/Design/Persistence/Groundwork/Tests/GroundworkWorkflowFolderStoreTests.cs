@@ -2,6 +2,7 @@ using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Documents.Store;
 using Xunit;
@@ -65,6 +66,44 @@ public sealed class GroundworkWorkflowFolderStoreTests
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             folders.CreateAsync(Folder("child", "Child", new string('p', WorkflowFolderNames.MaximumIdentifierLength + 1))));
         Assert.Empty(store.Snapshot(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind));
+    }
+
+    [Fact]
+    public async Task Batch_details_load_each_requested_folder_and_shared_ancestor_once()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        IWorkflowFolderStore folders = new GroundworkWorkflowFolderStore(
+            store,
+            GroundworkTestAccess.AccessContext("tenant-a"),
+            new Clock());
+        await folders.CreateAsync(Folder("root", "Root"));
+        await folders.CreateAsync(Folder("a", "A", "root"));
+        await folders.CreateAsync(Folder("b", "B", "root"));
+        var readsBeforeBatch = store.LoadCount;
+
+        var details = await folders.FindManyWithAncestorsAsync(["a", "a", "b"]);
+
+        Assert.Equal(["root"], details["a"].Ancestors.Select(folder => folder.Id));
+        Assert.Equal(["root"], details["b"].Ancestors.Select(folder => folder.Id));
+        Assert.Equal(3, store.LoadCount - readsBeforeBatch);
+    }
+
+    [Fact]
+    public async Task Folder_details_hide_documents_from_a_foreign_ambient_tenant()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var tenantAFolders = new GroundworkWorkflowFolderStore(
+            store,
+            GroundworkTestAccess.AccessContext("tenant-a"),
+            new Clock());
+        await tenantAFolders.CreateAsync(Folder("folder", "Folder"));
+        IWorkflowFolderStore tenantBFolders = new GroundworkWorkflowFolderStore(
+            store,
+            GroundworkTestAccess.AccessContext("tenant-b"),
+            new Clock());
+
+        Assert.Null(await tenantBFolders.FindWithAncestorsAsync("folder"));
+        Assert.Empty(await tenantBFolders.FindManyWithAncestorsAsync(["folder"]));
     }
 
     private static WorkflowFolder Folder(string id, string name, string? parentId = null)

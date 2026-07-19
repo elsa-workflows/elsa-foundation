@@ -122,6 +122,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /design/workflows/definitions/move:
     post:
@@ -1179,6 +1181,15 @@ components:
         latestVersion: { type: [string, 'null'] }
         versionCount: { type: integer, minimum: 0 }
         folderId: { type: [string, 'null'], maxLength: 64 }
+    WorkflowDefinitionPageItem:
+      allOf:
+        - $ref: '#/components/schemas/WorkflowDefinitionSummary'
+        - type: object
+          required: [folderBreadcrumb]
+          properties:
+            folderBreadcrumb:
+              type: array
+              items: { $ref: '#/components/schemas/WorkflowFolderBreadcrumbItem' }
     WorkflowDefinitionPage:
       type: object
       required: [items]
@@ -1186,7 +1197,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/WorkflowDefinitionSummary'
+            $ref: '#/components/schemas/WorkflowDefinitionPageItem'
         nextContinuationToken: { type: [string, 'null'] }
     WorkflowDefinitionDetails:
       allOf:
@@ -1633,6 +1644,12 @@ components:
         normalizedName: { type: string, maxLength: 128 }
         createdAt: { type: string, format: date-time }
         lastModifiedAt: { type: string, format: date-time }
+    WorkflowFolderBreadcrumbItem:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 128 }
     WorkflowFolderPage:
       type: object
       required: [items]

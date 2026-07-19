@@ -1,11 +1,38 @@
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
 internal static class WorkflowDefinitionViewMapper
 {
+    public static async Task<WorkflowDefinitionView[]> CreatePageAsync(
+        IReadOnlyCollection<WorkflowDefinition> definitions,
+        IWorkflowDefinitionListProjectionStore projectionStore,
+        IReadOnlyDictionary<string, WorkflowFolderDetails> folderDetailsById,
+        CancellationToken cancellationToken)
+    {
+        var views = await CreateAsync(definitions, projectionStore, cancellationToken);
+        return views.Select(view =>
+        {
+            if (view.FolderId is null)
+                return view with { FolderBreadcrumb = [] };
+            if (!folderDetailsById.TryGetValue(view.FolderId, out var details))
+            {
+                throw new InvalidOperationException(
+                    $"Workflow definition '{view.Id}' references unavailable workflow folder '{view.FolderId}'.");
+            }
+            return view with
+            {
+                FolderBreadcrumb = details.Ancestors
+                    .Append(details.Folder)
+                    .Select(folder => new WorkflowFolderBreadcrumbItemView(folder.Id, folder.Name))
+                    .ToArray()
+            };
+        }).ToArray();
+    }
+
     public static async Task<WorkflowDefinitionView[]> CreateAsync(
         IReadOnlyCollection<WorkflowDefinition> definitions,
         IWorkflowDefinitionListProjectionStore projectionStore,
