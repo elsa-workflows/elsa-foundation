@@ -2875,6 +2875,109 @@ describe("workflows module", () => {
 
     await unmount();
   });
+  it("keeps the flat paged inventory and never probes folders when the capability is absent", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    expect(container.querySelector("[role='tree']")).toBeNull();
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
+    await unmount();
+  });
+
+  it("browses paged folder children through the capability root and appends the next child page", async () => {
+    const rootFolder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const firstChild = { id: "folder-child-1", parentId: "folder-root", name: "Support", normalizedName: "support", createdAt: "", lastModifiedAt: "" };
+    const secondChild = { id: "folder-child-2", parentId: "folder-root", name: "Billing", normalizedName: "billing", createdAt: "", lastModifiedAt: "" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-root")) return response({ folder: rootFolder, ancestors: [] });
+      if (url.includes("/folders?pageSize=100&parentId=folder-root&continuationToken=next-child")) return response({ items: [secondChild], nextContinuationToken: null });
+      if (url.includes("/folders?pageSize=100&parentId=folder-root")) return response({ items: [firstChild], nextContinuationToken: "next-child" });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [rootFolder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition({ name: url.includes("folderId=folder-root") ? "Operations workflow" : url.includes("unfiled=true") ? "Unfiled workflow" : "All workflow" })], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Operations");
+    expect(container.querySelector("[role='tree']")).not.toBeNull();
+    await click(buttonByLabel(container, "Expand Operations"));
+    await waitForText(container, "Support");
+    const rootTreeItem = container.querySelector<HTMLElement>(".wf-folder-tree-item[data-folder-id='folder-root']");
+    rootTreeItem?.focus();
+    rootTreeItem?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    await vi.waitFor(() => expect(container.textContent).not.toContain("Support"));
+    rootTreeItem?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await waitForText(container, "Support");
+    rootTreeItem?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(document.activeElement?.getAttribute("data-folder-id")).toBe("folder-child-1");
+    (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    expect(document.activeElement?.textContent).toContain("All workflows");
+    await click(buttonByText(container, "Load more folders"));
+    await waitForText(container, "Billing");
+    expect(container.textContent).toContain("Support");
+
+    await click(buttonByText(container, "Unfiled"));
+    await waitForText(container, "Unfiled workflow");
+    await click(container.querySelector<HTMLButtonElement>(".wf-folder-tree-item .wf-folder-tree-row"));
+    await waitForText(container, "Operations workflow");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/design/workflows/definition-pages?state=active&pageSize=10&folderId=folder-root");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/design/workflows/definition-pages?state=active&pageSize=10&unfiled=true");
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Operations");
+    await click(container.querySelector<HTMLButtonElement>(".wf-folder-breadcrumb button"));
+    await waitForText(container, "All workflow");
+    await click(buttonByText(container, "Folders"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-folder-drawer [role='tree']")).not.toBeNull());
+    expect(container.querySelector(".wf-folder-drawer button[aria-label='Create folder']")).not.toBeNull();
+    await click(container.querySelector(".wf-folder-drawer button[aria-label='Close folder picker']"));
+    expect(container.querySelector(".wf-folder-drawer")).toBeNull();
+    await unmount();
+  });
+
+  it("creates a folder and places a created workflow in the selected persisted folder", async () => {
+    const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    let definitionPost: unknown;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/folders")) return response({ folder: { ...folder, id: "folder-created", name: "Created" } });
+      if (init?.method === "POST" && url.endsWith("/definitions")) { definitionPost = JSON.parse(String(init.body)); return response({ definition: definition({ id: "new-definition" }), draft: null, versions: [] }); }
+      if (url.includes("/folders/folder-root")) return response({ folder, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" }, { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", api => { api.dialogs.prompt = vi.fn(async () => "Created"); }, false, capabilities);
+
+    await waitForText(container, "Operations");
+    await click(buttonByText(container, "Operations"));
+    await click(buttonByLabel(container, "Create folder"));
+    await vi.waitFor(() => expect(api.dialogs.prompt).toHaveBeenCalled());
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/folders") && (init as RequestInit)?.method === "POST")).toBe(true));
+    await click(buttonByText(container, "Create"));
+    await waitForText(container, "Create Workflow");
+    await fill(inputByLabel(container, "Display name"), "Placed workflow");
+    await click(buttonByText(dialog(container), "Create"));
+    await vi.waitFor(() => expect(definitionPost).toMatchObject({ name: "Placed workflow", folderId: "folder-root" }));
+    expect(api.dialogs.prompt).toHaveBeenCalled();
+    await unmount();
+  });
 });
 
 function testApi(): ElsaStudioModuleApi {
