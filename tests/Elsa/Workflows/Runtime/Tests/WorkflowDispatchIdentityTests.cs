@@ -48,6 +48,13 @@ public sealed class WorkflowDispatchIdentityTests
         Assert.True(compactedBoth.Length <= RuntimePostCommitOutboxIdentity.MaximumLength);
         Assert.Equal(compactedBoth, RuntimePostCommitOutboxIdentity.Create(longCommitId, longIntentId));
         Assert.NotEqual(compactedBoth, RuntimePostCommitOutboxIdentity.Create(longCommitId, $"{longIntentId}x"));
+
+        var reservedSeparator = compactedBoth.LastIndexOf(':');
+        Assert.NotEqual(
+            compactedBoth,
+            RuntimePostCommitOutboxIdentity.Create(
+                compactedBoth[..reservedSeparator],
+                compactedBoth[(reservedSeparator + 1)..]));
     }
 
     [Fact]

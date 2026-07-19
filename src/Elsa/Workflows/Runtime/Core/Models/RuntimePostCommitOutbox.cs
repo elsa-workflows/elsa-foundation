@@ -21,7 +21,8 @@ public static class RuntimePostCommitOutboxIdentity
         ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
 
         var candidate = $"{commitId}:{intentId}";
-        if (candidate.Length <= MaximumLength)
+        if (candidate.Length <= MaximumLength &&
+            !candidate.StartsWith(DigestPrefix, StringComparison.Ordinal))
             return candidate;
 
         candidate = $"{DigestPrefix}{Digest(commitId)}:{intentId}";
