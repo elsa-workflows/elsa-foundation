@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:expected-version-save",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-claim-mapping",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+  "executionPath": "provider-driver/mongodb/iam-claim-mapping/1bb827c7c0312cbb",
+  "clients": 2,
+  "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
+  "outcome": "pass",
+  "concurrencySemantic": "expected-version-save",
+  "evidence": "evidence/mongodb/iam-claim-mapping/1bb827c7c0312cbb.json"
+}

@@ -33,7 +33,7 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         return await _inner.EnqueueAsync(workItem, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
 

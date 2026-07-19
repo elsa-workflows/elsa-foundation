@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "iam-provider-configuration-scope-and-privilege",
+  "coverageEntryId": "iam-provider-configuration-tenant",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+  "executionPath": "provider-driver/mongodb/iam-provider-configuration-tenant/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "a35baa6c3136ea6ba45c61658cd9252e39b28651ed2bf2cc69b4881392159897",
+  "outcome": "pass",
+  "evidence": "evidence/mongodb/iam-provider-configuration-tenant/0e7ae6dd54aaea28.json"
+}

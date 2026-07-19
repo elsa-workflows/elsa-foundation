@@ -24,7 +24,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 /// <para>
 /// <b>Lease/ack.</b> Delivery is at-least-once with ack-based visibility leases, exactly like the in-memory
 /// transport: leasing stamps the item behind <c>ExpectedVersion</c> CAS (a concurrent leaser wins at the storage
-/// layer and the loser skips), and only the live lease holder may ack — an ack CAS-deletes and is refused when the
+/// layer and the loser skips), and only the live lease holder presenting the matching claim token may ack — an ack CAS-deletes and is refused when the
 /// lease expired and another node re-leased. The persisted <see cref="ExecutionCommandTransportItem"/> is the frozen
 /// v1 <c>executionCommandTransport</c> golden fixture shape; the wrapping document lifts the collection,
 /// workflow-comparison key, visibility, and sequence fields required by the declared physical routes.
@@ -66,12 +66,11 @@ public sealed class GroundworkExecutionCommandTransport(
                     StreamHeadKind,
                     streamHeadId,
                     DistributedGroundworkStorageManifest.SchemaVersion,
-                    DistributedGroundworkDocuments.Serialize(new StreamHeadDocument(StreamHeadKind, workflowExecutionId, sequence)),
+                    DistributedGroundworkDocuments.Serialize(StreamHeadDocument.Create(StreamHeadKind, workflowExecutionId, sequence)),
                     ExpectedVersion: streamHeadExpectedVersion),
                 cancellationToken);
             if (headSave.Status != DocumentStoreWriteStatus.Saved)
             {
-                await unitOfWork.RollbackAsync(cancellationToken);
                 if (IsSequenceContention(headSave.Status))
                     continue;
 
@@ -89,7 +88,6 @@ public sealed class GroundworkExecutionCommandTransport(
                 cancellationToken);
             if (itemSave.Status != DocumentStoreWriteStatus.Saved)
             {
-                await unitOfWork.RollbackAsync(cancellationToken);
                 throw new InvalidOperationException(
                     $"Creating command transport item '{transportItemId}' after stream-head allocation failed with status '{itemSave.Status}'.");
             }
@@ -155,11 +153,13 @@ public sealed class GroundworkExecutionCommandTransport(
         return leased;
     }
 
-    public async ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, DateTimeOffset now, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         ArgumentException.ThrowIfNullOrWhiteSpace(transportItemId);
         DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
+        if (leaseToken <= 0)
+            throw new ArgumentOutOfRangeException(nameof(leaseToken), "Lease token must be positive.");
         cancellationToken.ThrowIfCancellationRequested();
 
         var envelope = await store.LoadAsync(Kind, transportItemId, cancellationToken);
@@ -172,7 +172,9 @@ public sealed class GroundworkExecutionCommandTransport(
 
         // Only the node that currently holds a live lease may ack. If the lease expired and another node re-leased
         // it, the superseded node's ack is refused so the survivor stays responsible for the command.
-        if (!string.Equals(item.LeasedByOwnerId, ownerId, StringComparison.Ordinal) || item.IsVisible(now))
+        if (!string.Equals(item.LeasedByOwnerId, ownerId, StringComparison.Ordinal) ||
+            item.LeaseToken != leaseToken ||
+            item.IsVisible(now))
             return false;
 
         // CAS-delete on the loaded envelope version: if the item moved (re-leased by a survivor) between our read
@@ -273,7 +275,18 @@ public sealed class GroundworkExecutionCommandTransport(
     private static string ComposeStreamHeadId(string workflowExecutionId) =>
         $"transport-head:{workflowExecutionId.Replace("%", "%25").Replace(":", "%3A")}";
 
-    private sealed record StreamHeadDocument(string Collection, string WorkflowExecutionId, long LastSequence);
+    private sealed record StreamHeadDocument(
+        string Collection,
+        string WorkflowExecutionId,
+        string WorkflowExecutionIdKey,
+        long LastSequence)
+    {
+        public static StreamHeadDocument Create(string collection, string workflowExecutionId, long lastSequence) => new(
+            collection,
+            workflowExecutionId,
+            OrdinalKey(workflowExecutionId),
+            lastSequence);
+    }
 
     // The lifted collection, workflow comparison key, visibility, and sequence fields serve the declared physical
     // routes; the nested item remains the frozen v1 executionCommandTransport wire shape.
@@ -282,6 +295,8 @@ public sealed class GroundworkExecutionCommandTransport(
         string WorkflowExecutionId,
         string WorkflowExecutionIdKey,
         DateTimeOffset VisibleAt,
+        string LeaseOwnerId,
+        long LeaseToken,
         long Sequence,
         ExecutionCommandTransportItem Item)
     {
@@ -290,6 +305,8 @@ public sealed class GroundworkExecutionCommandTransport(
             item.WorkflowExecutionId,
             OrdinalKey(item.WorkflowExecutionId),
             item.LeaseExpiresAt ?? DateTimeOffset.MinValue,
+            item.LeasedByOwnerId ?? string.Empty,
+            item.LeaseToken ?? 0,
             item.Sequence,
             item);
     }

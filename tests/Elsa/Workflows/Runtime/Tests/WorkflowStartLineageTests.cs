@@ -259,7 +259,7 @@ public sealed class WorkflowStartLineageTests
             testScope: testScope);
 
         await startHandler.HandleAsync(NewStartWorkItem(payload));
-        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("child-1")));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("child-1")));
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
         Assert.Equal(7, checkpointPayload.DispatchNestingDepth);
         Assert.Equal(WorkflowRunKind.TestRun, checkpointPayload.RunKind);

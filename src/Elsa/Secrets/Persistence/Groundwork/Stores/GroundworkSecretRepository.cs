@@ -141,7 +141,9 @@ public sealed class GroundworkSecretRepository(
                 null)));
         }
 
-        if (request.ExcludedStatus is not null)
+        if (request.ExcludedStatus is not null &&
+            !request.ActiveOnly &&
+            request.Status is null)
         {
             clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.NotEqual(
                 SecretsStorageManifest.StatusField,
@@ -150,9 +152,11 @@ public sealed class GroundworkSecretRepository(
 
         return new DocumentQuery(
             SecretsStorageManifest.SecretDocumentKind,
-            request.Search is null
-                ? SecretsStorageManifest.ListFilteredQuery
-                : SecretsStorageManifest.SearchFilteredQuery,
+            request.Search is not null
+                ? SecretsStorageManifest.SearchFilteredQuery
+                : request.ActiveOnly || request.Status is not null
+                    ? SecretsStorageManifest.ListFilteredQuery
+                    : SecretsStorageManifest.ListUnfilteredQuery,
             clauses,
             [new DocumentQueryOrder(SecretsStorageManifest.NormalizedNameField)],
             skip: request.Skip,

@@ -35,8 +35,8 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
 
     public ValueTask<IReadOnlyCollection<DurableTimer>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
     {
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Due-timer listing limit must be greater than zero.");
+        if (limit is <= 0 or > RuntimeStorePageRequest.MaximumLimit)
+            throw new ArgumentOutOfRangeException(nameof(limit), $"Due-timer listing limit must be between 1 and {RuntimeStorePageRequest.MaximumLimit}.");
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
@@ -66,18 +66,33 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         }
     }
 
-    public ValueTask<IReadOnlyCollection<DurableTimer>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyCollection<DurableTimer>> ListAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllAsync(this, workflowExecutionId, cancellationToken);
+
+    public ValueTask<RuntimeStorePage<DurableTimer>> ListPageAsync(
+        DurableTimerPageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
-            return new ValueTask<IReadOnlyCollection<DurableTimer>>(_timers.Values
+            var timers = _timers.Values
                 .Select(state => state.Timer)
-                .Where(timer => StringComparer.Ordinal.Equals(timer.WorkflowExecutionId, workflowExecutionId))
+                .Where(timer => StringComparer.Ordinal.Equals(timer.WorkflowExecutionId, query.WorkflowExecutionId))
                 .OrderBy(timer => timer.TimerId, StringComparer.Ordinal)
-                .ToArray());
+                .ToArray();
+            var offset = ParseOffset(query.ContinuationToken);
+            var items = timers.Skip(offset).Take(query.Limit).ToArray();
+            var nextOffset = checked(offset + items.Length);
+            return new ValueTask<RuntimeStorePage<DurableTimer>>(
+                new RuntimeStorePage<DurableTimer>(
+                    query,
+                    items,
+                    nextOffset < timers.Length ? nextOffset.ToString() : null));
         }
     }
 
@@ -222,6 +237,15 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
 
     private static TimerKey KeyOf(RuntimeDurableTimerClaim claim) =>
         new(claim.Timer.WorkflowExecutionId, claim.Timer.TimerId);
+
+    private static int ParseOffset(string? continuationToken)
+    {
+        if (continuationToken is null)
+            return 0;
+        if (!int.TryParse(continuationToken, out var offset) || offset < 0)
+            throw new ArgumentException("The durable-timer page continuation is invalid.", nameof(continuationToken));
+        return offset;
+    }
 
     private static RuntimeDurableTimerClaim NewClaim(TimerState state) =>
         new(

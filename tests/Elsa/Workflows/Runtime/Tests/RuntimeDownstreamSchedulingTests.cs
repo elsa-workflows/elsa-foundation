@@ -33,7 +33,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             outcomeNames: ["Done"],
             completionKind: SchedulerCompletionKind.ContinuationScheduling));
 
-        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
@@ -75,7 +75,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             third => Assert.Equal("work-1:continuation:actexec-source:checkpoint:WorkflowCompleted:actexec-source", third.WorkItemId));
         var write = Assert.Single(checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, write.Commit.Checkpoint.Name);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             outcomeNames: ["Other"],
             completionKind: SchedulerCompletionKind.ContinuationScheduling));
 
-        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
         Assert.Empty(checkpointPayload.PostCommitIntents);
@@ -112,7 +112,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             outcomeNames: [],
             completionKind: SchedulerCompletionKind.ContinuationScheduling));
 
-        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
         Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, checkpointPayload.CheckpointName);
         Assert.Empty(checkpointPayload.PostCommitIntents);
@@ -132,7 +132,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             outcomeNames: ["Done"],
             completionKind: SchedulerCompletionKind.ContinuationScheduling));
 
-        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
         Assert.Empty(checkpointPayload.PostCommitIntents);
@@ -322,7 +322,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         await handler.HandleAsync(NewCheckpointWorkItem([NewSchedulerIntent(downstreamWork)]));
 
         Assert.Single(checkpointWriter.ListCommits());
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
         var queued = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(downstreamWork.WorkItemId, queued.WorkItemId);
@@ -343,7 +343,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             handler.HandleAsync(NewCheckpointWorkItem([NewSchedulerIntent(NewScheduleWorkItem())])).AsTask());
 
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -388,7 +388,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             .DispatchAsync(NewSchedulerIntent(expected));
 
         var actual = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-            .ListAsync(new RuntimeSchedulerWorkQuery(expected.WorkflowExecutionId)));
+            .ListAllAsync(new RuntimeSchedulerWorkQuery(expected.WorkflowExecutionId)));
         Assert.Equal(expected.WorkItemId, actual.WorkItemId);
         Assert.Equal(expected.WorkflowExecutionId, actual.WorkflowExecutionId);
         Assert.Equal(expected.CommandId, actual.CommandId);

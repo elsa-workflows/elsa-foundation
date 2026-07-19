@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:list-owned-or-current-bounded",
+  "sourceScenarioId": "distributed-bounded-route-equivalence",
+  "coverageEntryId": "distributed-execution-placement",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+  "executionPath": "provider-driver/postgresql/distributed-execution-placement/8c0c25e23488bc42",
+  "clients": 1,
+  "resultHash": "fd8fd18024360a016cccba61f70801cf114c7c53798cda2896288eabb76a2100",
+  "outcome": "pass",
+  "queryShape": "list-owned-or-current-bounded",
+  "nativeQueryIdentity": "list-owned-live-placements",
+  "documentKind": "executionPlacement",
+  "nativeEvidence": "evidence/postgresql/distributed-execution-placement/8c0c25e23488bc42.plan.txt",
+  "evidence": "evidence/postgresql/distributed-execution-placement/8c0c25e23488bc42.json"
+}

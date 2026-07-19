@@ -1,5 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -37,7 +39,7 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         }
     }
 
-    public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default)
+    public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
@@ -45,13 +47,25 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         lock (_syncRoot)
         {
             if (!_queuesByWorkflowExecutionId.TryGetValue(query.WorkflowExecutionId, out var queue))
-                return new ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>>(Array.Empty<RuntimeSchedulerWorkItem>());
+                return ValueTask.FromResult(
+                    new RuntimeStorePage<RuntimeSchedulerWorkItem>(query, []));
 
-            var items = query.Limit is { } limit
-                ? queue.Take(limit).ToArray()
-                : queue.ToArray();
+            var ordered = queue
+                .OrderBy(item => item.RecordedAt)
+                .ThenBy(item => item.Sequence ?? long.MaxValue)
+                .ThenBy(item => StableHash(item.WorkItemId), StringComparer.Ordinal)
+                .ToArray();
+            var offset = DecodeContinuation(query, ordered.Length);
+            var items = ordered
+                .Skip(offset)
+                .Take(query.Limit)
+                .ToArray();
+            var nextContinuation = offset + items.Length < ordered.Length
+                ? EncodeContinuation(query.WorkflowExecutionId, offset + items.Length)
+                : null;
 
-            return new ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>>(items);
+            return ValueTask.FromResult(
+                new RuntimeStorePage<RuntimeSchedulerWorkItem>(query, items, nextContinuation));
         }
     }
 
@@ -103,8 +117,7 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
 
     public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default)
     {
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Pending workflow execution listing limit must be greater than zero.");
+        RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
@@ -117,6 +130,38 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
             return new ValueTask<IReadOnlyCollection<string>>(executionIds);
         }
     }
+
+    private static int DecodeContinuation(RuntimeSchedulerWorkQuery query, int itemCount)
+    {
+        if (query.ContinuationToken is null)
+            return 0;
+
+        try
+        {
+            var value = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(query.ContinuationToken));
+            var parts = value.Split('\n');
+            if (parts.Length != 2 ||
+                !StringComparer.Ordinal.Equals(parts[0], query.WorkflowExecutionId) ||
+                !int.TryParse(parts[1], out var offset) ||
+                offset < 0 ||
+                offset > itemCount)
+            {
+                throw new ArgumentException("The scheduler work continuation token does not belong to this query.", nameof(query));
+            }
+
+            return offset;
+        }
+        catch (FormatException exception)
+        {
+            throw new ArgumentException("The scheduler work continuation token is invalid.", nameof(query), exception);
+        }
+    }
+
+    private static string EncodeContinuation(string workflowExecutionId, int offset) =>
+        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{workflowExecutionId}\n{offset}"));
+
+    private static string StableHash(string value) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
     public ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(
         RuntimeSchedulerWorkClaimRequest request,

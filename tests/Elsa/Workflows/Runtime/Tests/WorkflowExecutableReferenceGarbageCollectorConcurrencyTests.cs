@@ -318,17 +318,15 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
         public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) =>
             _inner.FindAsync(sourceReferenceId, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(
-            string artifactId,
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(
+            WorkflowExecutableSourceReferenceArtifactPageQuery query,
             CancellationToken cancellationToken = default) =>
-            _inner.ListByArtifactAsync(artifactId, cancellationToken);
+            _inner.ListByArtifactPageAsync(query, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(
-            WorkflowExecutableReferenceScope? scope = null,
-            bool liveOnly = false,
-            DateTimeOffset? now = null,
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
+            WorkflowExecutableSourceReferencePageQuery query,
             CancellationToken cancellationToken = default) =>
-            _inner.ListAsync(scope, liveOnly, now, cancellationToken);
+            _inner.ListPageAsync(query, cancellationToken);
 
         public ValueTask<bool> RetireAsync(
             string sourceReferenceId,
@@ -338,20 +336,21 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
             _inner.RetireAsync(sourceReferenceId, deletedAt, reason, cancellationToken);
 
         public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(
+            WorkflowExecutableSourceReferenceCleanupBatch batch,
             DateTimeOffset now,
             CancellationToken cancellationToken = default) =>
-            _inner.DeleteExpiredOrRetiredAsync(now, cancellationToken);
+            _inner.DeleteExpiredOrRetiredAsync(batch, now, cancellationToken);
 
         public async ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
-            IEnumerable<string> artifactIds,
+            WorkflowExecutableArtifactCandidateBatch candidates,
             DateTimeOffset now,
             CancellationToken cancellationToken = default)
         {
-            var candidates = await _inner.ListUnreferencedArtifactIdsAsync(artifactIds, now, cancellationToken);
+            var unreferenced = await _inner.ListUnreferencedArtifactIdsAsync(candidates, now, cancellationToken);
             var queryNumber = Interlocked.Increment(ref _queryCount);
             if (AfterQuery is not null)
                 await AfterQuery(queryNumber);
-            return candidates;
+            return unreferenced;
         }
     }
 }

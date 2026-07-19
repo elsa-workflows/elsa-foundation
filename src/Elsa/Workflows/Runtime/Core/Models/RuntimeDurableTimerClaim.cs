@@ -12,8 +12,7 @@ public sealed class RuntimeDurableTimerClaimRequest
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         if (visibilityTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "Durable timer visibility timeout must be greater than zero.");
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Durable timer claim limit must be greater than zero.");
+        RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
 
         OwnerId = ownerId;
         Now = now;

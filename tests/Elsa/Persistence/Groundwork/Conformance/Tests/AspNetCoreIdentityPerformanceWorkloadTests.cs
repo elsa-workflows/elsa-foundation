@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Testing;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -65,7 +66,9 @@ public sealed class AspNetCoreIdentityPerformanceWorkloadTests
             "workloads",
             "iam-secrets.json");
         using var json = JsonDocument.Parse(File.ReadAllText(path));
-        var workload = Assert.Single(json.RootElement.GetProperty("workloads").EnumerateArray());
+        var workload = json.RootElement.GetProperty("workloads")
+            .EnumerateArray()
+            .Single(candidate => candidate.GetProperty("id").GetString() == WorkloadId);
         var input = workload.GetProperty("input");
         var definition = AspNetCoreIdentityObservableScenario.InputDefinition;
 
@@ -215,7 +218,21 @@ public sealed class AspNetCoreIdentityPerformanceWorkloadTests
                 identity,
                 "sqlite-query-plan",
                 "SEARCH ix_identity_test_documents_normalized_key",
-                ["normalized_key", "storage_scope"]),
+                ["normalized_key", "storage_scope"],
+                providerAppliedMaximumRows: 1,
+                providerAppliedOrder: kind == PhysicalDocumentQueryCommandKind.Page
+                    ?
+                    [
+                        new PhysicalDocumentQueryCommandOrder(
+                            "normalized_key",
+                            PhysicalSortDirection.Ascending,
+                            isIdentityTieBreak: false),
+                        new PhysicalDocumentQueryCommandOrder(
+                            "id",
+                            PhysicalSortDirection.Ascending,
+                            isIdentityTieBreak: true)
+                    ]
+                    : null),
             "index-search",
             ["ix_identity_test_documents_normalized_key"]);
 

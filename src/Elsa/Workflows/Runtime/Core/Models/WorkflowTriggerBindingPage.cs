@@ -5,24 +5,18 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public abstract record WorkflowTriggerBindingPageRequest
 {
-    public const int DefaultLimit = 100;
-    public const int MaximumLimit = 500;
-    public const int MaximumContinuationTokenLength = 16 * 1024;
+    public const int DefaultLimit = RuntimeStorePageRequest.DefaultLimit;
+    public const int MaximumLimit = RuntimeStorePageRequest.MaximumLimit;
+    public const int MaximumContinuationTokenLength = RuntimeStorePageRequest.MaximumContinuationTokenLength;
 
     protected WorkflowTriggerBindingPageRequest(
         int limit = DefaultLimit,
         string? continuationToken = null)
     {
-        if (limit is <= 0 or > MaximumLimit)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(limit),
-                limit,
-                $"Trigger-binding page limit must be between 1 and {MaximumLimit}.");
-        }
-
-        Limit = limit;
-        ContinuationToken = ValidateContinuationToken(continuationToken, nameof(continuationToken));
+        Limit = RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
+        ContinuationToken = RuntimeStorePageRequest.ValidateContinuationToken(
+            continuationToken,
+            nameof(continuationToken));
     }
 
     public int Limit { get; }
@@ -33,20 +27,7 @@ public abstract record WorkflowTriggerBindingPageRequest
     public string? ContinuationToken { get; }
 
     internal static string? ValidateContinuationToken(string? continuationToken, string parameterName)
-    {
-        if (continuationToken is null)
-            return null;
-        if (string.IsNullOrWhiteSpace(continuationToken))
-            throw new ArgumentException("A trigger-binding continuation token cannot be blank.", parameterName);
-        if (continuationToken.Length > MaximumContinuationTokenLength)
-        {
-            throw new ArgumentException(
-                $"A trigger-binding continuation token cannot exceed {MaximumContinuationTokenLength} characters.",
-                parameterName);
-        }
-
-        return continuationToken;
-    }
+        => RuntimeStorePageRequest.ValidateContinuationToken(continuationToken, parameterName);
 }
 
 /// <summary>
@@ -90,7 +71,43 @@ public sealed record WorkflowTriggerBindingTypePageQuery : WorkflowTriggerBindin
 }
 
 /// <summary>
-/// One bounded, deterministically ordered page of active trigger bindings. A continuation resumes
+/// One finite publication-scoped lookup over prepared or active workflow trigger bindings.
+/// </summary>
+public sealed record WorkflowTriggerBindingPublicationPageQuery : WorkflowTriggerBindingPageRequest
+{
+    public WorkflowTriggerBindingPublicationPageQuery(
+        string publicationId,
+        int limit = DefaultLimit,
+        string? continuationToken = null)
+        : base(limit, continuationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        PublicationId = publicationId;
+    }
+
+    public string PublicationId { get; }
+}
+
+/// <summary>
+/// One finite artifact-scoped lookup over workflow trigger bindings.
+/// </summary>
+public sealed record WorkflowTriggerBindingArtifactPageQuery : WorkflowTriggerBindingPageRequest
+{
+    public WorkflowTriggerBindingArtifactPageQuery(
+        string artifactId,
+        int limit = DefaultLimit,
+        string? continuationToken = null)
+        : base(limit, continuationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+        ArtifactId = artifactId;
+    }
+
+    public string ArtifactId { get; }
+}
+
+/// <summary>
+/// One bounded, deterministically ordered page of workflow trigger bindings. A continuation resumes
 /// the provider's live view after the last returned item; it does not promise a cross-request snapshot.
 /// </summary>
 public sealed record WorkflowTriggerBindingPage

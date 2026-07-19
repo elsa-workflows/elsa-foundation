@@ -854,7 +854,9 @@ public sealed class DispatchWorkflowDesignTests
         public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<WorkflowExecutable?>(executable);
 
-        public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default) =>
+        public ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(
+            RuntimeStorePageRequest request,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 

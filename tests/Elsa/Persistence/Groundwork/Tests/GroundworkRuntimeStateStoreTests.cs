@@ -68,9 +68,11 @@ public sealed class GroundworkRuntimeStateStoreTests
 
         Assert.Null(await store.FindAsync("wf-1", "missing"));
 
-        var forWf1 = await store.ListAsync("wf-1");
+        var forWf1 = await store.ListAllAsync("wf-1");
         Assert.Equal(new[] { "ae-1", "ae-2" }, forWf1.Select(x => x.Execution.ActivityExecutionId).OrderBy(x => x));
-        Assert.Single(await store.ListAsync("wf-2"));
+        Assert.Single(await store.ListAllAsync("wf-2"));
+        Assert.Equal(2, await store.CountAsync("wf-1"));
+        Assert.Equal(1, await store.CountAsync("wf-2"));
     }
 
     [Fact]
@@ -119,8 +121,8 @@ public sealed class GroundworkRuntimeStateStoreTests
         await store.SaveAsync(ChildState("wf-1", "ae-orphan", parentActivityExecutionId: null));
         await store.SaveAsync(ChildState("wf-2", "ae-a3", "parent-a"));
 
-        var byParent = await store.ListByParentAsync("wf-1", "parent-a");
-        var expected = (await store.ListAsync("wf-1"))
+        var byParent = await store.ListAllByParentAsync("wf-1", "parent-a");
+        var expected = (await store.ListAllAsync("wf-1"))
             .Where(s => s.ParentActivityExecutionId == "parent-a");
 
         Assert.Equal(
@@ -132,7 +134,37 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.DoesNotContain(byParent, s => s.Execution.ActivityExecutionId == "ae-a3");
 
         // A parent with no children returns empty, not the whole workflow.
-        Assert.Empty(await store.ListByParentAsync("wf-1", "parent-missing"));
+        Assert.Empty(await store.ListAllByParentAsync("wf-1", "parent-missing"));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ActivityExecutionState_Pages_Are_Finite_Ordered_And_Scope_Bound(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IActivityExecutionStateStore store = new GroundworkActivityExecutionStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
+        await store.SaveAsync(ChildState("wf-1", "ae-c", "parent-a"));
+        await store.SaveAsync(ChildState("wf-1", "ae-a", "parent-a"));
+        await store.SaveAsync(ChildState("wf-1", "ae-b", "parent-a"));
+        await store.SaveAsync(ChildState("wf-2", "ae-d", "parent-a"));
+
+        var first = await store.ListByParentPageAsync(
+            new ActivityExecutionStateParentPageQuery("wf-1", "parent-a", limit: 2));
+        var second = await store.ListByParentPageAsync(
+            new ActivityExecutionStateParentPageQuery(
+                "wf-1",
+                "parent-a",
+                limit: 2,
+                continuationToken: first.NextContinuationToken));
+
+        Assert.Equal(["ae-a", "ae-b"], first.Items.Select(x => x.Execution.ActivityExecutionId));
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Equal(["ae-c"], second.Items.Select(x => x.Execution.ActivityExecutionId));
+        Assert.Null(second.NextContinuationToken);
     }
 
     [Theory]
@@ -179,11 +211,11 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Equal("value-dv-1", found!.ValueId);
         Assert.Equal(42, found.InlineValue!.Value.GetInt32());
 
-        Assert.Equal(2, (await store.ListAsync("wf-1")).Count);
+        Assert.Equal(2, (await store.ListAllDurableValueStatesAsync("wf-1")).Count);
         Assert.True(await store.DeleteAsync("wf-1", "dv-1"));
         Assert.False(await store.DeleteAsync("wf-1", "dv-1"));
         Assert.Null(await store.FindAsync("wf-1", "dv-1"));
-        Assert.Single(await store.ListAsync("wf-1"));
+        Assert.Single(await store.ListAllDurableValueStatesAsync("wf-1"));
     }
 
     [Fact]
@@ -319,6 +351,42 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Null(await store.FindAsync("wf-1", "missing"));
     }
 
+    [Fact]
+    public async Task OperationalState_PagesUseDeclaredOrderedRoutes()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new EmptyRecordingBoundedDocumentStore();
+        IExecutionLivenessStateStore store = new GroundworkExecutionLivenessStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            queries);
+
+        await store.ListPageAsync(new ExecutionLivenessStatePageQuery("wf-1", limit: 17, continuationToken: "next"));
+        await store.ListAllPageAsync(new RuntimeStorePageRequest(limit: 13, continuationToken: "all-next"));
+
+        Assert.Collection(
+            queries.Queries,
+            query =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.PageExecutionLivenessStatesByWorkflowExecutionQuery, query.QueryIdentity);
+                Assert.Equal(17, query.Take);
+                Assert.Equal("next", query.Continuation);
+                Assert.Equal(ElsaRuntimeStorageManifest.ExecutionLivenessOperationalStateIdField, Assert.Single(query.Order).Path);
+            },
+            query =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.PageExecutionLivenessStatesQuery, query.QueryIdentity);
+                Assert.Equal(13, query.Take);
+                Assert.Equal("all-next", query.Continuation);
+                Assert.Equal(
+                    [
+                        ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                        ElsaRuntimeStorageManifest.ExecutionLivenessOperationalStateIdField
+                    ],
+                    query.Order.Select(order => order.Path));
+            });
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -423,6 +491,7 @@ public sealed class GroundworkRuntimeStateStoreTests
         await store.SaveAsync(Incident("wf-1", "inc-1", IncidentStatus.Blocking)); // upsert promotes inc-1
 
         Assert.Equal(2, (await store.ListAsync("wf-1")).Count);
+        Assert.Equal(2, await store.CountAsync("wf-1"));
         var blocking = await store.ListBlockingAsync("wf-1");
         Assert.Equal(new[] { "inc-1", "inc-2" }, blocking.Select(x => x.IncidentId).OrderBy(x => x));
     }

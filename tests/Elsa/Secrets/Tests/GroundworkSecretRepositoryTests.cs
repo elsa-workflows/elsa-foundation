@@ -16,7 +16,7 @@ public sealed class GroundworkSecretRepositoryTests
     private static readonly DateTimeOffset Now = new(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task ListUsesTheDeclaredBoundedQueryIdentityAndPath()
+    public async Task UnfilteredListUsesTheDeclaredBoundedQueryIdentityAndPath()
     {
         var documents = new InMemoryDocumentStore(SecretsStorageManifest.Create());
         var queries = new RecordingBoundedDocumentStore();
@@ -26,7 +26,7 @@ public sealed class GroundworkSecretRepositoryTests
 
         var query = Assert.Single(queries.Observed);
         Assert.Equal(SecretsStorageManifest.SecretDocumentKind, query.DocumentKind);
-        Assert.Equal(SecretsStorageManifest.ListFilteredQuery, query.QueryIdentity);
+        Assert.Equal(SecretsStorageManifest.ListUnfilteredQuery, query.QueryIdentity);
         Assert.Equal(10, query.Skip);
         Assert.Equal(25, query.Take);
         Assert.Collection(
@@ -37,6 +37,23 @@ public sealed class GroundworkSecretRepositoryTests
         Assert.Equal(SecretsStorageManifest.StatusField, comparison.Path);
         Assert.Equal(QueryComparisonOperator.NotEqual, comparison.Operator);
         Assert.Null(Assert.Single(comparison.Values));
+    }
+
+    [Fact]
+    public async Task StatusFilteredListUsesTheScaleBearingRoute()
+    {
+        var documents = new InMemoryDocumentStore(SecretsStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
+        var repository = new GroundworkSecretRepository(documents, queries);
+
+        await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest(status: SecretStatus.Active, take: 25));
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(SecretsStorageManifest.ListFilteredQuery, query.QueryIdentity);
+        var comparison = Assert.Single(query.Clauses[1].Comparisons);
+        Assert.Equal(SecretsStorageManifest.StatusField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+        Assert.Equal("active", Assert.Single(comparison.Values));
     }
 
     [Fact]
@@ -85,6 +102,46 @@ public sealed class GroundworkSecretRepositoryTests
 
         Assert.Equal(0, documents.LoadCount);
         Assert.Equal("v1", (await repository.FindAsync(TenantId, "payments.api"))!.LatestActiveVersion!.Payload.Value);
+    }
+
+    [Fact]
+    public async Task Create_only_identity_does_not_allow_a_tenant_scope_to_bypass_an_existing_name()
+    {
+        var repository = new GroundworkSecretRepository(new InMemoryDocumentStore(SecretsStorageManifest.Create()));
+        var first = Secret("payments.api", "tenant-a");
+        first.Scope = "tenant-a";
+        var second = Secret("payments.api", "tenant-b");
+        second.Scope = "tenant-b";
+
+        Assert.True(await repository.TryAddAsync(first));
+        Assert.False(await repository.TryAddAsync(second));
+
+        var secret = await repository.FindAsync(TenantId, "payments.api");
+        Assert.Equal("tenant-a", secret!.Scope);
+        Assert.Equal("tenant-a", secret.LatestActiveVersion!.Payload.Value);
+    }
+
+    [Fact]
+    public async Task Revision_and_list_behavior_survive_a_repository_reopen_over_the_same_document_store()
+    {
+        var documents = new InMemoryDocumentStore(SecretsStorageManifest.Create());
+        var firstRepository = new GroundworkSecretRepository(documents);
+        var revisionAware = Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(firstRepository);
+        var secret = Secret("payments.api", "v1");
+
+        var created = await revisionAware.SaveWithRevisionAsync(secret, expectedRevision: null);
+        var current = await revisionAware.FindWithRevisionAsync(TenantId, secret.Name);
+        Assert.NotNull(current);
+        Assert.Equal(SecretRevisionSaveStatus.Saved, created.Status);
+
+        var reopenedRepository = new GroundworkSecretRepository(documents);
+        var reopenedRevisionAware = Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(reopenedRepository);
+        current!.Secret.DisplayName = "Reopened secret";
+        var saved = await reopenedRevisionAware.SaveWithRevisionAsync(current.Secret, current.Revision);
+
+        Assert.Equal(SecretRevisionSaveStatus.Saved, saved.Status);
+        Assert.Equal("Reopened secret", (await reopenedRepository.FindAsync(TenantId, secret.Name))!.DisplayName);
+        Assert.Equal(secret.Name, Assert.Single((await reopenedRepository.ListPageAsync(TenantId, new SecretRepositoryListRequest())).Items).Name);
     }
 
     [Fact]
@@ -185,22 +242,45 @@ public sealed class GroundworkSecretRepositoryTests
             storage.BoundedQueries,
             candidate => candidate.Identity == SecretsStorageManifest.ListFilteredQuery);
         Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, query.ExecutionClass);
+        Assert.Equal(SecretsStorageManifest.SecretFilteredListIndex, query.IndexIdentity);
         Assert.Equal(QueryPagingSupport.Offset, query.PagingSupport);
         Assert.True(query.SupportsDisjunction);
         Assert.True(query.SupportsTotalCount);
-        Assert.Equal(
-            SecretsStorageManifest.TenantIdField,
-            Assert.Single(query.PredicateFields).Path);
         Assert.Contains(
-            query.ResidualPredicateFields,
+            query.PredicateFields,
+            field =>
+                field.Path == SecretsStorageManifest.TenantIdField &&
+                field.Operations.SetEquals([PortableQueryOperation.Equal]));
+        Assert.Contains(
+            query.PredicateFields,
             field =>
                 field.Path == SecretsStorageManifest.StatusField &&
-                field.IsRequired &&
-                field.Operations.Contains(PortableQueryOperation.NotEqual));
+                field.Operations.SetEquals([PortableQueryOperation.Equal]));
+        var filteredPhysicalIndex = Assert.Single(
+            policy.Definition.Indexes,
+            index => index.LogicalName == SecretsStorageManifest.SecretFilteredListIndex);
+        Assert.Collection(
+            filteredPhysicalIndex.Columns,
+            scope => Assert.Equal(new DocumentEnvelopeDefinition().StorageScopeColumn, scope.ColumnLogicalName),
+            tenant => Assert.Equal(SecretsStorageManifest.TenantIdField, tenant.ColumnLogicalName),
+            status => Assert.Equal(SecretsStorageManifest.StatusField, status.ColumnLogicalName),
+            name => Assert.Equal(SecretsStorageManifest.NormalizedNameField, name.ColumnLogicalName));
         Assert.Equal(
             SecretNameConstraints.MaximumLength,
             policy.Definition.ProjectedColumns.Single(column =>
                 column.Path == SecretsStorageManifest.NormalizedNameField).Length);
+
+        var unfiltered = Assert.Single(
+            storage.BoundedQueries,
+            candidate => candidate.Identity == SecretsStorageManifest.ListUnfilteredQuery);
+        Assert.Equal(BoundedQueryExecutionClass.Ordinary, unfiltered.ExecutionClass);
+        Assert.Equal(SecretsStorageManifest.SecretByNameIndex, unfiltered.IndexIdentity);
+        Assert.Contains(
+            unfiltered.ResidualPredicateFields,
+            field =>
+                field.Path == SecretsStorageManifest.StatusField &&
+                field.IsRequired &&
+                field.Operations.Contains(PortableQueryOperation.NotEqual));
 
         var search = Assert.Single(
             storage.BoundedQueries,

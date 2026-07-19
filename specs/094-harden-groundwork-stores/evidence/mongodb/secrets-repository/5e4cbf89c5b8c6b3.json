@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:list-by-scope-bounded",
+  "sourceScenarioId": "secret-bounded-list-equivalence",
+  "coverageEntryId": "secrets-repository",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "7c722d7affd7df503deab8acaea328044547f61013066bfee7b8f15dc8a84b91",
+  "executionPath": "provider-driver/mongodb/secrets-repository/5e4cbf89c5b8c6b3",
+  "clients": 1,
+  "resultHash": "431d17322fb0725388591d89aeb57d9f700c56b064e1c9e5b35dfd637c20ec40",
+  "outcome": "pass",
+  "queryShape": "list-by-scope-bounded",
+  "nativeQueryIdentity": "list-filtered",
+  "documentKind": "secret",
+  "nativeEvidence": "evidence/mongodb/secrets-repository/5e4cbf89c5b8c6b3.plan.txt",
+  "evidence": "evidence/mongodb/secrets-repository/5e4cbf89c5b8c6b3.json"
+}

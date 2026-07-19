@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
@@ -18,6 +19,7 @@ public sealed class GroundworkExecutableActivityTemplateStore(
     : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind, boundedStore),
         IExecutableActivityTemplateStore
 {
+
     private readonly SemaphoreSlim _saveGate = new(1, 1);
 
     public async ValueTask SaveAsync(ExecutableActivityTemplate template, CancellationToken cancellationToken = default)
@@ -82,14 +84,19 @@ public sealed class GroundworkExecutableActivityTemplateStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(templateHash);
 
-        var matches = await QueryDocumentsAsync<TemplateDocument, ExecutableActivityTemplate>(
-            ElsaRuntimeStorageManifest.FindExecutableActivityTemplateByHashQuery,
-            ElsaRuntimeStorageManifest.TemplateHashField,
-            templateHash,
-            document => document.Template,
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.FindExecutableActivityTemplateByHashQuery,
+                [Equal(ElsaRuntimeStorageManifest.TemplateHashField, templateHash)],
+                take: 2),
             cancellationToken);
+        var matches = result.Documents
+            .Select(Serializer.Deserialize<TemplateDocument>)
+            .Select(document => document.Template)
+            .ToArray();
 
-        return matches.Count switch
+        return matches.Length switch
         {
             0 => null,
             1 => matches[0],
@@ -98,13 +105,28 @@ public sealed class GroundworkExecutableActivityTemplateStore(
         };
     }
 
-    public async ValueTask<IReadOnlyCollection<ExecutableActivityTemplate>> ListAsync(CancellationToken cancellationToken = default) =>
-        (await QueryDocumentsAsync<TemplateDocument, ExecutableActivityTemplate>(
-            ElsaRuntimeStorageManifest.ListExecutableActivityTemplatesQuery,
-            ElsaRuntimeStorageManifest.CollectionField,
-            ElsaRuntimeStorageManifest.ExecutableActivityTemplateCollection,
-            document => document.Template,
-            cancellationToken)).ToArray();
+    public async ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(
+        RuntimeStorePageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageExecutableActivityTemplatesQuery,
+                [Equal(ElsaRuntimeStorageManifest.CollectionField, ElsaRuntimeStorageManifest.ExecutableActivityTemplateCollection)],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.ExecutableActivityTemplateIdField)],
+                take: request.Limit,
+                continuation: request.ContinuationToken),
+            cancellationToken);
+        return new RuntimeStorePage<ExecutableActivityTemplate>(
+            request,
+            result.Documents
+                .Select(Serializer.Deserialize<TemplateDocument>)
+                .Select(document => document.Template)
+                .ToArray(),
+            result.NextContinuation);
+    }
 
     public async ValueTask<bool> DeleteAsync(string templateId, CancellationToken cancellationToken = default)
     {
@@ -233,6 +255,9 @@ public sealed class GroundworkExecutableActivityTemplateStore(
 
     private static string TemplateHashClaimId(string templateHash) =>
         $"templateHash:{templateHash.Length}:{templateHash}";
+
+    private static DocumentQueryClause Equal(string fieldPath, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
 
     private sealed record TemplateDocument(
         string Collection,

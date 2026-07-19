@@ -23,24 +23,66 @@ public sealed class InMemoryActivityExecutionStateStore : InMemoryKeyedStateStor
         return new(Find(new ActivityExecutionStateKey(workflowExecutionId, activityExecutionId)));
     }
 
-    public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return new(Snapshot(key => key.WorkflowExecutionId == workflowExecutionId));
+        return new((long)SnapshotValues(state =>
+            StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId)).Count);
     }
 
-    public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default)
+    public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(
+        ActivityExecutionStatePageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(parentActivityExecutionId);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return new(SnapshotValues(state =>
-            StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId) &&
-            StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, parentActivityExecutionId)));
+        return new(Page(
+            query,
+            $"activity-state:workflow:{query.WorkflowExecutionId}",
+            SnapshotValues(state =>
+                StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, query.WorkflowExecutionId))));
+    }
+
+    public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(
+        ActivityExecutionStateParentPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return new(Page(
+            query,
+            $"activity-state:parent:{query.WorkflowExecutionId}:{query.ParentActivityExecutionId}",
+            SnapshotValues(state =>
+                StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, query.WorkflowExecutionId) &&
+                StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, query.ParentActivityExecutionId))));
     }
 
     public readonly record struct ActivityExecutionStateKey(string WorkflowExecutionId, string ActivityExecutionId);
+
+    private static RuntimeStorePage<ActivityExecutionState> Page(
+        RuntimeStorePageRequest request,
+        string queryBinding,
+        IEnumerable<ActivityExecutionState> states)
+    {
+        var continuationId = InMemoryRuntimeStoreContinuation.Decode(
+            request.ContinuationToken,
+            queryBinding,
+            nameof(request));
+        var remaining = states
+            .OrderBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
+            .Where(state =>
+                continuationId is null ||
+                StringComparer.Ordinal.Compare(state.Execution.ActivityExecutionId, continuationId) > 0)
+            .Take(request.Limit + 1)
+            .ToArray();
+        var items = remaining.Take(request.Limit).ToArray();
+        var nextContinuationToken = remaining.Length > items.Length
+            ? InMemoryRuntimeStoreContinuation.Encode(queryBinding, items[^1].Execution.ActivityExecutionId)
+            : null;
+        return new RuntimeStorePage<ActivityExecutionState>(request, items, nextContinuationToken);
+    }
 }

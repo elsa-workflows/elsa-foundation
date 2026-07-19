@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "runtime-scheduler-state-roundtrip",
+  "coverageEntryId": "runtime-scheduler-state",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "a6363bd015ef9c16085387f5e9cf424d84f76ca58cd315912d6a088771d6468a",
+  "executionPath": "provider-driver/mongodb/runtime-scheduler-state/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
+  "outcome": "pass",
+  "evidence": "evidence/mongodb/runtime-scheduler-state/0e7ae6dd54aaea28.json"
+}

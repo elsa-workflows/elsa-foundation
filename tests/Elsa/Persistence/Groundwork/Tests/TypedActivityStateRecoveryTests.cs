@@ -58,7 +58,7 @@ public sealed class TypedActivityStateRecoveryTests
             await DeliverOutboxAsync(worker);
             var createBookmark = Assert.Single(
                 await worker.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-                    .ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)),
+                    .ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)),
                 item => item.CommandKind == WorkflowExecutionCommandKind.CreateBookmark);
             await Handler<WorkflowCreateBookmarkSchedulerWorkHandler>(worker).HandleAsync(createBookmark);
 

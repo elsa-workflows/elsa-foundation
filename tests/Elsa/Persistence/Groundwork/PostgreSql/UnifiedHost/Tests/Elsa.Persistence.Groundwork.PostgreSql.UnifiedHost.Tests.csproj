@@ -31,4 +31,8 @@
     <ProjectReference Include="..\..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\..\UnifiedHost\Tests\UnifiedGroundworkHostContract.cs" Link="UnifiedGroundworkHostContract.cs" />
+  </ItemGroup>
+
 </Project>

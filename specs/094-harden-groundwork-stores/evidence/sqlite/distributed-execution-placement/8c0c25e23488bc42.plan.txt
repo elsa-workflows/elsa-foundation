@@ -1,0 +1,14 @@
+provider=sqlite
+document-kind=executionPlacement
+route=list-owned-live-placements
+physical-name=execution_placements
+physical-cardinality=100000
+plan-classification=index-search
+index=execution_placement_placement_by_owner_expiry_8a1ea6b68159
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=16
+materialized-candidate-count=16
+command-count=2
+command-0=Count|count|sqlite-query-plan|index-search|execution_placement_placement_by_owner_expiry_8a1ea6b68159|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope|1||a63f1448f121a07b8883da8272a4f7ba52bd84aa80f1691a1bb86a162cfe3b84
+command-1=Page|page|sqlite-query-plan|index-search|execution_placement_placement_by_owner_expiry_8a1ea6b68159|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope|16|ownerIdLookupKey:Ascending:false,expiresAt:Ascending:false,workflowExecutionIdKey:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|545ff33657c14720ac9a5e9b75053664b5d41577966e546b1dd2255e1284452e

@@ -77,7 +77,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         ValidatePublicationSchedules(publicationId, schedules);
 
         var projectionStateEnvelope = await LoadProjectionStateEnvelopeAsync(publicationId, cancellationToken);
-        var existing = await ListByPublicationAsync(publicationId, cancellationToken);
+        var existing = await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
         var prepared = schedules.Select(schedule => schedule with { IsActive = false }).ToArray();
         if (projectionStateEnvelope is not null)
         {
@@ -98,18 +98,56 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
             projectionStateExpectedVersion: 0);
     }
 
-    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
-        string publicationId,
+    public async ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(
+        RecurringTriggerSchedulePublicationPageQuery query,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        return await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
-            ElsaRuntimeStorageManifest.ListRecurringTriggerSchedulesByPublicationQuery,
-            ElsaRuntimeStorageManifest.RecurringTriggerSchedulePublicationIdField,
-            publicationId,
-            envelope => envelope.Schedule,
+        ArgumentNullException.ThrowIfNull(query);
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageRecurringTriggerSchedulesByPublicationQuery,
+                [Equal(ElsaRuntimeStorageManifest.RecurringTriggerSchedulePublicationIdField, query.PublicationId)],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
             cancellationToken);
+
+        return new RuntimeStorePage<RecurringTriggerSchedule>(
+            query,
+            result.Documents
+                .Select(envelope => Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(envelope).Schedule)
+                .ToArray(),
+            result.NextContinuation);
     }
+
+    public async ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(
+        RecurringTriggerScheduleArtifactPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageRecurringTriggerSchedulesByArtifactQuery,
+                [Equal(ElsaRuntimeStorageManifest.ArtifactIdField, query.ArtifactId)],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
+            cancellationToken);
+
+        return new RuntimeStorePage<RecurringTriggerSchedule>(
+            query,
+            result.Documents
+                .Select(envelope => Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(envelope).Schedule)
+                .ToArray(),
+            result.NextContinuation);
+    }
+
+    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
+        string publicationId,
+        CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
 
     public async ValueTask ActivatePublicationAsync(
         string publicationId,
@@ -146,10 +184,10 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
             replacedState,
             hasDistinctReplacement);
 
-        var candidate = await ListByPublicationAsync(publicationId, cancellationToken);
+        var candidate = await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
         var replaced = !hasDistinctReplacement
             ? []
-            : await ListByPublicationAsync(replacedPublicationId!, cancellationToken);
+            : await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, replacedPublicationId!, cancellationToken);
         var updates = candidate.Select(schedule => schedule with { IsActive = true })
             .Concat(replaced.Select(schedule => schedule with { IsActive = false }))
             .ToArray();
@@ -167,7 +205,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
     public async ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        var existing = await ListByPublicationAsync(publicationId, cancellationToken);
+        var existing = await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
         await CommitAtomicallyAsync(
             existing.Select(schedule => schedule.ScheduleId),
             [],
@@ -178,8 +216,8 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
 
     public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
     {
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Due-schedule listing limit must be greater than zero.");
+        if (limit is <= 0 or > RuntimeStorePageRequest.MaximumLimit)
+            throw new ArgumentOutOfRangeException(nameof(limit), $"Due-schedule listing limit must be between 1 and {RuntimeStorePageRequest.MaximumLimit}.");
         cancellationToken.ThrowIfCancellationRequested();
 
         var result = await BoundedStore.QueryAsync(
@@ -237,12 +275,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var owned = await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
-            ElsaRuntimeStorageManifest.ListByArtifactQuery,
-            ElsaRuntimeStorageManifest.ArtifactIdField,
-            artifactId,
-            envelope => envelope.Schedule,
-            cancellationToken);
+        var owned = await RuntimeOperationalStorePagingExtensions.ListAllByArtifactAsync(this, artifactId, cancellationToken);
 
         foreach (var schedule in owned)
             await DeleteDocumentAsync(schedule.ScheduleId, cancellationToken);
@@ -264,6 +297,9 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
         schedule.ArtifactId,
         schedule);
+
+    private static DocumentQueryClause Equal(string path, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(path, value));
 
     // The constant collection partition lets the due-schedule sweep use a keyword equality index instead of a
     // provider-wide scan; ArtifactId is lifted to the top level so the by-artifact replace path can query it

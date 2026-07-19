@@ -106,6 +106,9 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
             sp.GetRequiredService<IPersistenceAccessContextAccessor>()));
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, ProcessLocalDistributionEvidence>());
+        // The in-memory defaults remain usable for local routing, but they do not claim a provider-admitted
+        // checkpoint fence. A durable persistence leaf replaces this evidence after its selected path is admitted.
+        services.TryAddSingleton<IWorkflowExecutionLeaseFencingCapability>(ProcessLocalLeaseFencingCapability.Instance);
 
         // Compose the in-process provider as the local-drain engine, then replace the single active actor provider
         // registration with the distributed one (S=2.6 single active provider). Keeping the in-process provider as a
@@ -114,7 +117,8 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         services.TryAddSingleton(sp => new DistributedWorkflowExecutionActorProvider(
             sp.GetRequiredService<InProcessWorkflowExecutionActorProvider>(),
             sp.GetRequiredService<IPersistenceOperationScopeFactory>(),
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<IWorkflowExecutionLeaseFencingCapability>()));
         services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionActorProvider>(sp => sp.GetRequiredService<DistributedWorkflowExecutionActorProvider>()));
 
         services.AddSingleton<IRecurringTask>(sp => new ExecutionPlacementPumpTask(
@@ -130,5 +134,12 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
     {
         public string Component => WorkflowDispatchDurabilityComponents.Distribution;
         public WorkflowDispatchDurabilityLevel Level => WorkflowDispatchDurabilityLevel.ProcessLocal;
+    }
+
+    private sealed class ProcessLocalLeaseFencingCapability : IWorkflowExecutionLeaseFencingCapability
+    {
+        public static readonly ProcessLocalLeaseFencingCapability Instance = new();
+
+        public bool IsAvailable => false;
     }
 }

@@ -398,7 +398,7 @@ internal sealed record AspNetCoreIdentityProviderEvidence(
                     route.Request.DocumentKind,
                     route.Request.PhysicalName,
                     route.PhysicalCardinality,
-                    route.FiniteLimit,
+                    route.FiniteLimit!.Value,
                     route.MaterializedCandidateCount,
                     contract.IndexLogicalName,
                     route.IndexName,

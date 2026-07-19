@@ -63,6 +63,46 @@ ESCAPE`) plus `LIMIT/OFFSET` pagination. The neutral querying layer
 ([`Querying/`](Querying/GroundworkReadStore.cs)) and the store bridges therefore need no PostgreSQL-specific
 workarounds — no equality-only restriction applies to this provider's published surface.
 
+## Persisted kinds, scope, and bounded routes
+
+`ElsaRuntimeStorageManifest` version `1.0.0` owns the runtime kinds. Every runtime unit is
+`TenancyPolicy.Scoped`; a caller acquires `DocumentStoreAccess.Scoped(StorageScope)` through the access context,
+not by supplying a scope field in JSON. The kinds are `bookmarkState`, `workflowExecutable`,
+`executableActivityTemplate`, `executableActivityTemplateHashClaim`, `workflowExecutableSourceReference`,
+`activityExecutionState`, `activityExecutionInspection`, `activityExecutionHierarchy`,
+`workflowExecutionState`, `workflowTestScope`, `durableValueState`, `schedulerState`, `operationalState`,
+`controlPlaneState`, `incidentState`, `checkpointCommit`, `postCommitOutbox`, `workflowDispatch`,
+`schedulerWorkItem`, `schedulerPoison`, `durableTimer`, `workflowTriggerBinding`,
+`publicationProjectionState`, and `recurringTriggerSchedule`.
+
+The following are current exact physical bounded-route identities, not descriptive aliases. A host must admit
+the selected manifest before any of these routes can execute; unsupported routes fail readiness rather than
+falling back to a scan.
+
+| Family | Exact route identities used by the current store seams |
+|---|---|
+| Bookmarks and trigger lookup | `list-by-stimulus-and-type`, `list-by-stimulus-type`, `page-live-by-scope` |
+| Recovery scanner | `list-recovery-detected`, `list-recovery-detected-by-lease-owner`, `list-recovery-detected-by-heartbeat-owner`, `list-recovery-detected-ownerless`, `list-recovery-by-lease-expiry`, `list-recovery-by-lease-expiry-and-owner`, `list-recovery-by-lease-acquisition`, `list-recovery-by-lease-acquisition-and-owner`, `list-recovery-by-heartbeat`, `list-recovery-by-heartbeat-and-owner` |
+| Scheduler queue | `list-by-workflow-execution`, `list-pending-scheduler-workflow-executions` |
+| Post-commit outbox | `list-deliverable`, `list-deliverable-by-workflow`, `list-deliverable-by-intent-kind`, `list-deliverable-by-workflow-and-intent-kind`, `list-claimable`, `list-claimable-by-workflow`, `list-claimable-by-intent-kind`, `list-claimable-by-workflow-and-intent-kind`, `list-immediate`, `list-immediate-by-workflow`, `list-immediate-by-intent-kind`, `list-immediate-by-workflow-and-intent-kind`, `list-expired-claims`, `list-expired-claims-by-workflow`, `list-expired-claims-by-intent-kind`, `list-expired-claims-by-workflow-and-intent-kind` |
+| Timers and schedules | `list-due`, `page-by-publication` |
+
+`runtime-checkpoint-commit` is an admitted atomic operation path, not a `BoundedQueryDeclaration` identity.
+Its checkpoint bundle therefore has no invented “native route” label: its evidence is the selected physical
+path's `AtomicCommit` capability and `multi-document-transactions` topology.
+
+## Capability admission and distributed fencing
+
+`GroundworkProviderCapabilityAdmission` publishes one immutable capability snapshot only after the selected
+provider has completed physical schema admission. Claims are evaluated against the exact active feature, storage
+unit, route, capability, and topology—not package references, configuration intent, or an unselected provider.
+The Groundwork distributed leaf consumes this snapshot through
+`IWorkflowExecutionLeaseFencingCapability`: it reports `true` only when the admitted
+`runtime-checkpoint-commit` path has `AtomicCommit` and the observed
+`multi-document-transactions` topology. The process-local distributed default always reports `false`.
+See the [distributed Groundwork catalog](../../Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md)
+for the durable placement/transport replacement seam.
+
 ## Override — replacement contracts
 
 Exactly one implementation is active per runtime host. Logic-bearing runtime stores are scoped so request

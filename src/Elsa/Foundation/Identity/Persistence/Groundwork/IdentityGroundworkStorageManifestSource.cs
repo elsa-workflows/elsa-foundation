@@ -40,6 +40,7 @@ public sealed class IdentityGroundworkStorageManifestSource : IGroundworkStorage
                 AtomicRoute(IdentityStorageManifest.IdentityCredentialDocumentKind, "identity-credential"),
                 AtomicRoute(IdentityStorageManifest.IdentityClaimMappingDocumentKind, "identity-claim-mapping"),
                 AtomicRoute(IdentityStorageManifest.IdentityProviderConfigurationDocumentKind, "identity-provider-configuration"),
+                AtomicRoute(IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind, "identity-global-provider-configuration"),
                 AtomicRoute(IdentityStorageManifest.UserClaimDocumentKind, "identity-user-claim"),
                 AtomicRoute(IdentityStorageManifest.RoleClaimDocumentKind, "identity-role-claim"),
                 AtomicRoute(IdentityStorageManifest.ExternalLoginDocumentKind, "identity-external-login"),

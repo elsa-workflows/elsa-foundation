@@ -19,6 +19,10 @@ Every workload supplies:
 - restart/failure preconditions where relevant;
 - provisional acceptance gate or a reviewed workload-specific replacement.
 
+`requiredNativeRoutes` names exact `BoundedQueryDeclaration.Identity` values from the current physical manifest;
+it is not a copy of the coverage ledger's provider-neutral `queryShapes`. A workload may leave that list empty
+when its public operation is composed solely of writes, point reads, or other paths without a bounded-query plan.
+
 Timing is invalid until the correctness digest and provider conformance scenario pass.
 
 ## Required workloads
@@ -57,9 +61,9 @@ equality, and all timing.
 Groundwork PR #88 supplies the generic version-aware codec contract consumed by the current package family.
 Groundwork PR #95 extends the certified provider-neutral keyset continuation introduced in `preview.62` with
 residual predicates over bounded physical routes. Groundwork PR #96 adds the portable substring search keys
-consumed by `preview.63`; Groundwork PR #97 adds provider-native latest-per-key execution; and Groundwork PR #101
-admits sort-only index fields as residual predicates, consumed by
-`preview.67`. Elsa-specific per-kind version policies, legacy-stamp parsing, JSON
+consumed by `preview.63`; Groundwork PR #97 adds provider-native latest-per-key execution; Groundwork PR #101
+admits sort-only index fields as residual predicates; and Groundwork PR #108 adds bounded linked hydration,
+all consumed by `preview.72`. Elsa-specific per-kind version policies, legacy-stamp parsing, JSON
 options, and concrete upcasters remain behind Elsa's provider marker and provider packages so
 core modules remain Groundwork-free. Any codec or manifest change invalidates prior composition fingerprints and
 requires fresh exact-head provider evidence before the workload can feed #646.

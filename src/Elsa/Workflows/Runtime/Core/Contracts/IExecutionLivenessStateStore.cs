@@ -32,13 +32,28 @@ public interface IExecutionLivenessStateStore
         string operationalStateId,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Returns all operational states for the given workflow execution ID.
-    /// </summary>
-    ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
+    /// <summary>Returns one finite, ordered page for a workflow execution.</summary>
+    ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListPageAsync(
+        ExecutionLivenessStatePageQuery query,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeStorePage<ExecutionLivenessState>>(
+            new NotSupportedException("This execution-liveness store does not support bounded pages."));
+
+    /// <summary>Returns one finite, ordered page across the current storage scope.</summary>
+    ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListAllPageAsync(
+        RuntimeStorePageRequest query,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeStorePage<ExecutionLivenessState>>(
+            new NotSupportedException("This execution-liveness store does not support bounded pages."));
 
     /// <summary>
-    /// Returns all operational states visible to this store.
+    /// Legacy complete traversal. New production reads must use <see cref="ListPageAsync"/>; commands that need
+    /// every record use <see cref="RuntimeOperationalStorePagingExtensions.ListAllAsync(IExecutionLivenessStateStore,string,CancellationToken)"/> explicitly.
     /// </summary>
-    ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAllAsync(CancellationToken cancellationToken = default);
+    async ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllAsync(this, workflowExecutionId, cancellationToken);
+
+    /// <summary>Legacy complete traversal; new production reads must use <see cref="ListAllPageAsync"/>.</summary>
+    async ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAllAsync(CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllAsync(this, cancellationToken);
 }

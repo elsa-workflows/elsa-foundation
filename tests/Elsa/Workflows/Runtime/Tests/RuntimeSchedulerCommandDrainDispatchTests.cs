@@ -89,7 +89,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.Equal(
             new[] { WorkflowExecutionCommandKind.RunSchedulerWork, WorkflowExecutionCommandKind.ScheduleActivity },
             observed.Items.Select(item => item.CommandKind).ToArray());
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         await processor.ProcessAsync(NewEnvelope(1));
 
         Assert.Empty(drainer.Requests);
-        Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.Equal(
             new[] { WorkflowExecutionCommandKind.RunSchedulerWork, WorkflowExecutionCommandKind.ScheduleActivity },
             observed.Items.Select(item => item.CommandKind).ToArray());
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -263,7 +263,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var observed = Assert.Single(observer.ObservedResults);
         Assert.Equal(RuntimeSchedulerDrainStopReason.Paused, observed.StopReason);
         Assert.True(observed.StoppedOnPause);
-        var queuedItem = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var queuedItem = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(followUpWorkItem.WorkItemId, queuedItem.WorkItemId);
     }
 
@@ -360,7 +360,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         var result = await agent.EnqueueAsync(NewEnvelope(1));
-        var queuedItems = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var queuedItems = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
         Assert.Empty(queuedItems);
@@ -405,8 +405,8 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
-        var queuedItems = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
-        var activityStates = await activityStateStore.ListAsync("wfexec-1");
+        var queuedItems = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var activityStates = await activityStateStore.ListAllAsync("wfexec-1");
         var pending = await outboxStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), limit: 10, workflowExecutionId: "wfexec-1"));
         var drainResult = Assert.Single(observer.ObservedResults);
         var rootState = Assert.Single(activityStates);
@@ -557,7 +557,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
-            var items = await queue.ListAsync(new RuntimeSchedulerWorkQuery(request.WorkflowExecutionId), cancellationToken);
+            var items = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery(request.WorkflowExecutionId), cancellationToken);
             QueueSnapshots.Add(items);
             return new RuntimeSchedulerDrainResult(
                 workflowExecutionId: request.WorkflowExecutionId,

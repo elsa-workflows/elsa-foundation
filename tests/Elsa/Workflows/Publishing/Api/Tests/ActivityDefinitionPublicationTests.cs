@@ -999,6 +999,8 @@ public sealed class ActivityDefinitionPublicationTests
     {
         public ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default) => ValueTask.FromResult(templateId == template.TemplateId ? template : null);
         public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) => ValueTask.FromResult(templateHash == template.TemplateHash ? template : null);
+        public ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(request, new[] { template }, candidate => candidate.TemplateId, "activity-template"));
     }
 
     private sealed class EmptyPublicationStore : IActivityDefinitionVersionPublicationStore
@@ -1011,6 +1013,8 @@ public sealed class ActivityDefinitionPublicationTests
     {
         public ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default) => ValueTask.FromResult<ExecutableActivityTemplate?>(null);
         public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) => ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+        public ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(request, Array.Empty<ExecutableActivityTemplate>(), template => template.TemplateId, "activity-template"));
     }
 
     private sealed class AcceptAdmissionPolicy : IActivityTemplateAdmissionPolicy

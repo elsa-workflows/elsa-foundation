@@ -44,7 +44,7 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
         var command = Deserialize(workItem);
-        var allStates = await activityExecutionStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+        var allStates = await activityExecutionStateStore.ListAllAsync(workItem.WorkflowExecutionId, cancellationToken);
         var byId = allStates.ToDictionary(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal);
         if (!byId.TryGetValue(command.ActivityExecutionId, out var outer))
             throw new InvalidOperationException($"Scope cancellation references missing activity execution '{command.ActivityExecutionId}'.");

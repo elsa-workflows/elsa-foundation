@@ -33,13 +33,11 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 
 ## Active Objectives
 
-1. Merge the decision-only ADR and targeted constitution review before implementation slices begin.
-2. Resolve the unblocked vocabulary/API, session/concurrency, Identity/OpenIddict, and diagnostics-storage tickets in the decision map.
-3. Keep generic version-aware codec mechanics in Groundwork and Elsa-specific codec policies/upcasters behind Elsa provider markers; coordinate the boundary through Groundwork PR #88 and the decision map.
-4. Keep the cross-linked Groundwork and Elsa parent PRDs synchronized; publish implementation slice issues only after their material decision-map dependencies are resolved.
-5. Consume versioned Groundwork releases that satisfy the physical-storage, query, migration/CLI, session, diagnostic-stream, tenancy, and provider-conformance gates.
-6. Migrate each Elsa store family vertically, using EF only as a temporary parity and performance oracle.
-7. Remove EF Core only after every mandatory correctness, provider, and performance exit gate passes.
+1. Finish Spec 094 current-head provider evidence publication and consume linked diagnostics evidence without advancing incomplete rows.
+2. Consume #646 accepted-shape verdicts for every ALL32 performance lane and remediate every Redesign or Blocked result.
+3. Complete the production-shaped four-provider host matrix, operational documentation, and generated-map refresh.
+4. Merge diagnostics PR #660 and close any remaining Groundwork implementation gaps, including the post-delivery vocabulary/API review in Groundwork #63.
+5. Complete #647 only after every correctness, provider, performance, reference-host, and transitive-dependency gate passes.
 
 ## Linked Surfaces
 
@@ -59,11 +57,12 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 ## Current Roadmap Notes
 
 - Use this task as a lightweight control room; assign one bounded decision-map ticket or implementation issue to each fresh worker.
+- Groundwork vocabulary/API #28, pooled-session #27/#34, physical-table #31, tenancy #32, schema-diff #44, query-planner #45, provider-parity #47/#48, migration-CLI #49, and bounded-bulk #51 slices are closed upstream. Groundwork #63 is the deliberately retained post-delivery public-API review, and #50 remains the physical-form performance lane.
 - The Identity/OpenIddict inventory is resolved. Its upstream prerequisites are compound/typed/multi-value indexes, range and bounded bulk operations, storage-boundary tenancy, and four-provider UoW/OCC conformance; the OpenIddict generic-query boundary remains an explicit implementation capability decision rather than permission for client evaluation.
 - Groundwork work lands in its own repository and is consumed here through versioned releases; do not coordinate the repositories through one long-lived cross-repository branch.
 - Stop adding EF migrations. Existing EF implementations remain only until the corresponding Groundwork family passes parity and benchmark gates.
-- ASP.NET Core Identity #644 has an implemented and remediated Groundwork candidate through spec 095. The provider-neutral contracts remain Groundwork-free, and the v1.1 `iam-normalized-lookup-update` contract now has accepted exact-candidate evidence against Groundwork `0.0.1-preview.60` and Identity storage manifest v1.0.4 for SQLite, SQL Server, PostgreSQL, and a MongoDB replica set. The checked-in EF artifact is a non-executed contract baseline; #646 owns real same-provider EF execution, equality, and timing. Earlier `preview.55`-`preview.59` artifacts remain historical provenance, and the accepted Groundwork correctness evidence does not complete OpenIddict replacement, host switching, or #647 EF-family deletion.
-- Groundwork PR #88 owns the generic version-aware codec contract consumed by the Identity candidate. Elsa owns marker-gated per-kind version policies, legacy-stamp parsing, JSON options, and concrete upcasters in its provider packages; no such policy belongs in Groundwork or an Elsa core module.
+- ASP.NET Core Identity #644 is closed. Its `preview.60` artifacts are immutable historical provenance; the active Spec 094 branch consumes Groundwork `0.0.1-preview.72`, so only freshly published exact-head evidence can advance the current ledger. The checked-in EF artifact remains a non-executed contract baseline; #646 owns real same-provider EF execution, equality, timing, and physical-shape verdicts. Identity completion does not by itself complete OpenIddict, diagnostics #660, host switching, or #647 EF-family deletion.
+- Groundwork PR #88 owns the generic version-aware codec contract, and the current package family is `0.0.1-preview.72`. Elsa owns marker-gated per-kind version policies, legacy-stamp parsing, JSON options, and concrete upcasters in its provider packages; no such policy belongs in Groundwork or an Elsa core module.
 - Diagnostics domain behavior remains owned by Diagnostics Observability Readiness; this bucket owns replacing its EF persistence implementation.
 - Structured Logs multi-writer replay hardening is implemented by [spec 091](../../specs/091-structured-logs-replay-cursors/spec.md): Core remains Groundwork-neutral, while the first-party adapter consumes Groundwork preview.33 diagnostic records. The temporary EF adapter received no migration or schema expansion.
 - Runtime hot paths remain subject to Runtime Execution Seam correctness and performance gates.

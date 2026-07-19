@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://elsa-workflows.dev/schemas/groundwork-performance-workload-v1.json",
+  "title": "Groundwork performance workload handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "workloads"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "workloads": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/workload" }
+    }
+  },
+  "$defs": {
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "prefixItems": [
+        { "const": "sqlite" },
+        { "const": "sqlserver" },
+        { "const": "postgresql" },
+        { "const": "mongodb" }
+      ],
+      "items": false
+    },
+    "providerPrerequisites": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "properties": {
+        "sqlite": { "type": "string", "minLength": 1 },
+        "sqlserver": { "type": "string", "minLength": 1 },
+        "postgresql": { "type": "string", "minLength": 1 },
+        "mongodb": { "type": "string", "minLength": 1 }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": ["seed", "fingerprintSha256"],
+      "properties": {
+        "seed": { "type": "string", "minLength": 1 },
+        "fingerprintSha256": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": true
+    },
+    "correctness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resultDigestSha256", "invariants", "timingGate"],
+      "properties": {
+        "resultDigestSha256": { "$ref": "#/$defs/sha256" },
+        "invariants": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "timingGate": { "type": "string", "minLength": 1 }
+      }
+    },
+    "efContractBaseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baselineIdentity", "executionStatus", "executionOwner", "purpose"],
+      "properties": {
+        "baselineIdentity": { "type": "string", "minLength": 1 },
+        "executionStatus": { "const": "not-executed" },
+        "executionOwner": { "const": "#646" },
+        "purpose": { "type": "string", "minLength": 1 }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "scenarioId",
+        "owner",
+        "handoffTarget",
+        "publicOperation",
+        "coverageRows",
+        "input",
+        "operationSequence",
+        "requiredProviders",
+        "requiredNativeRoutes",
+        "requiredProviderEvidence",
+        "correctness",
+        "efContractBaseline",
+        "physicalFormsFor646",
+        "artifactRetention"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+        },
+        "scenarioId": { "$ref": "#/$defs/slug" },
+        "owner": { "type": "string", "pattern": "^#[0-9]+$" },
+        "handoffTarget": { "const": "#646" },
+        "publicOperation": { "type": "string", "minLength": 1 },
+        "coverageRows": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/slug" }
+        },
+        "input": { "$ref": "#/$defs/input" },
+        "operationSequence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/slug" }
+        },
+        "requiredProviders": { "$ref": "#/$defs/providers" },
+        "requiredNativeRoutes": {
+          "$comment": "Exact current BoundedQueryDeclaration.Identity values. Empty is valid for write/point-read-only workloads.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/slug" }
+        },
+        "requiredProviderEvidence": { "$ref": "#/$defs/providerPrerequisites" },
+        "correctness": { "$ref": "#/$defs/correctness" },
+        "efContractBaseline": { "$ref": "#/$defs/efContractBaseline" },
+        "physicalFormsFor646": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "artifactRetention": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

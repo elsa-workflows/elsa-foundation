@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-tenant-membership",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+  "executionPath": "provider-driver/mongodb/iam-tenant-membership/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
+  "outcome": "pass",
+  "evidence": "evidence/mongodb/iam-tenant-membership/0e7ae6dd54aaea28.json"
+}

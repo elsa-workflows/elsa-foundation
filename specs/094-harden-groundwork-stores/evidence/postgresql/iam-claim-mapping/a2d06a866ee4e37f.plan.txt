@@ -1,0 +1,14 @@
+provider=postgresql
+document-kind=identityClaimMapping
+route=list-claim-mappings-by-provider
+physical-name=identity_claim_mappings
+physical-cardinality=100000
+plan-classification=indexed
+index=identity_claim_mapping_u001fidentity_claim_mapping_1ba62101d180
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=512
+materialized-candidate-count=512
+command-count=2
+command-0=Count|count|postgresql-json|index-scan|identity_claim_mapping_u001fidentity_claim_mapping_1ba62101d180|document_kind,providerLookupKey,storage_scope|1||e558d0be17cd8f9a9b9cebf4eb967b7f3155d12797a154c83e55b12bc95b8cd0
+command-1=Page|page|postgresql-json|index-scan|identity_claim_mapping_u001fidentity_claim_mapping_1ba62101d180|document_kind,providerLookupKey,storage_scope|512|storage_scope:Ascending:true,id_comparison_key:Ascending:true|dd553d47f04d968eb79a1300e99ecacb9056c2ab10811cf327acbd6d60a1f2d2

@@ -70,7 +70,7 @@ public sealed class RuntimeSchedulerDrainTests
 
         Assert.Equal(1, queue.RenewalAttempts);
         Assert.Equal(1, result.DrainedCount);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Contains("was lost during 'renew'", exception.Message);
         Assert.True(handler.CancellationObserved);
         Assert.Collection(
-            await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")),
+            await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")),
             item => Assert.Equal("work-1", item.WorkItemId));
         Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
     }
@@ -134,7 +134,7 @@ public sealed class RuntimeSchedulerDrainTests
         await queue.EnqueueAsync(NewWorkItem(3));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.Equal(2, result.DrainedCount);
         Assert.Equal(["work-1", "work-2"], handler.WorkItemIds);
@@ -152,7 +152,7 @@ public sealed class RuntimeSchedulerDrainTests
         await queue.EnqueueAsync(NewWorkItem(3));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.True(result.StoppedOnFault);
         Assert.Equal(2, result.DrainedCount);
@@ -215,7 +215,7 @@ public sealed class RuntimeSchedulerDrainTests
         // up-front dequeue had already deleted it) and the execution is discoverable for redrive.
         var pendingExecutions = await innerQueue.ListPendingWorkflowExecutionIdsAsync(10);
         Assert.Contains("wfexec-1", pendingExecutions);
-        var queuedAfterCrash = await innerQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var queuedAfterCrash = await innerQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
         Assert.Collection(queuedAfterCrash, item => Assert.Equal(scheduleItem.WorkItemId, item.WorkItemId));
 
         // Phase 2 — redrive with an honest queue over the SAME durable stores. The handler re-runs idempotently.
@@ -239,7 +239,7 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.NotNull(converged);
         Assert.Equal(ActivityExecutionStatus.Scheduled, converged!.Status);
 
-        var queuedAfterRedrive = await innerQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var queuedAfterRedrive = await innerQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
         var followUp = Assert.Single(queuedAfterRedrive);
         Assert.Equal(WorkflowExecutionCommandKind.StartActivity, followUp.CommandKind);
         Assert.Equal($"{scheduleItem.WorkItemId}:start:actexec-1", followUp.WorkItemId);
@@ -255,7 +255,7 @@ public sealed class RuntimeSchedulerDrainTests
         await queue.EnqueueAsync(NewStartActivityWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.Equal(0, result.DrainedCount);
         Assert.False(result.StoppedOnFault);
@@ -291,7 +291,7 @@ public sealed class RuntimeSchedulerDrainTests
         await queue.EnqueueAsync(NewInvokeActivityWorkItem(3));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.Equal(0, result.DrainedCount);
         Assert.False(result.StoppedOnFault);
@@ -327,7 +327,7 @@ public sealed class RuntimeSchedulerDrainTests
         await queue.EnqueueAsync(NewInvokeActivityWorkItem(3));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.Equal(1, result.DrainedCount);
         Assert.True(result.StoppedOnTerminalStatus);
@@ -371,7 +371,7 @@ public sealed class RuntimeSchedulerDrainTests
                     releasedBy: "operator")
             ]));
         var resumedResult = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.True(pausedResult.StoppedOnPause);
         Assert.False(resumedResult.StoppedOnPause);
@@ -394,7 +394,7 @@ public sealed class RuntimeSchedulerDrainTests
         await queue.EnqueueAsync(NewGeneratedEventWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.True(result.StoppedOnPause);
         Assert.Equal(0, result.DrainedCount);
@@ -690,7 +690,7 @@ public sealed class RuntimeSchedulerDrainTests
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: "actexec-parent"))));
 
-        var parentWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var parentWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, parentWork.CommandKind);
         Assert.Equal("work-1:parent:actexec-parent:child:actexec-1", parentWork.WorkItemId);
         Assert.Equal(2, parentWork.Sequence);
@@ -717,7 +717,7 @@ public sealed class RuntimeSchedulerDrainTests
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: null))));
 
-        var continuationWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var continuationWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, continuationWork.CommandKind);
         Assert.Equal("work-1:continuation:actexec-1", continuationWork.WorkItemId);
         Assert.Equal(2, continuationWork.Sequence);
@@ -750,7 +750,7 @@ public sealed class RuntimeSchedulerDrainTests
                 completionKind: SchedulerCompletionKind.ParentCompletionEvaluation,
                 completedChildActivityExecutionId: "actexec-1"))));
 
-        var continuationWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var continuationWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, continuationWork.CommandKind);
         Assert.Equal("work-1:continuation:actexec-parent", continuationWork.WorkItemId);
         Assert.Equal(2, continuationWork.Sequence);
@@ -791,7 +791,7 @@ public sealed class RuntimeSchedulerDrainTests
                 completedChildActivityExecutionId: "actexec-1"))));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.Equal(1, result.DrainedCount);
         Assert.Empty(remaining);
@@ -823,7 +823,7 @@ public sealed class RuntimeSchedulerDrainTests
                 outcomeNames: ["ParentDone"],
                 completionKind: SchedulerCompletionKind.ContinuationScheduling))));
 
-        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
         Assert.Equal("work-1:checkpoint:WorkflowCompleted:actexec-parent", checkpointWork.WorkItemId);
         Assert.Equal(2, checkpointWork.Sequence);
@@ -1315,7 +1315,7 @@ public sealed class RuntimeSchedulerDrainTests
             CancellationToken cancellationToken = default) =>
             inner.EnqueueAsync(workItem, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(
             RuntimeSchedulerWorkQuery query,
             CancellationToken cancellationToken = default) =>
             inner.ListAsync(query, cancellationToken);
@@ -1445,7 +1445,7 @@ public sealed class RuntimeSchedulerDrainTests
             return inner.EnqueueAsync(workItem, cancellationToken);
         }
 
-        public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
             inner.ListAsync(query, cancellationToken);
 
         public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
@@ -1460,8 +1460,8 @@ public sealed class RuntimeSchedulerDrainTests
         public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
-            new(new[] { peeked });
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
+            new(new RuntimeStorePage<RuntimeSchedulerWorkItem>(query, [peeked]));
 
         public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             new(dequeued);

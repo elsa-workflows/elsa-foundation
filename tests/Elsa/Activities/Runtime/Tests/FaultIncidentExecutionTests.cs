@@ -34,7 +34,7 @@ public sealed class FaultIncidentExecutionTests
         // The agent must accept and drain without fault control flow propagating to the caller.
         await ExecuteAsync(provider, executable);
 
-        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         var faultState = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-fault");
         Assert.Equal(ActivityExecutionStatus.Faulted, faultState.Status);
         Assert.Equal("ActivityReturnedFault", faultState.SubStatus);
@@ -88,7 +88,7 @@ public sealed class FaultIncidentExecutionTests
         var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
-        Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     private WorkflowExecutable NewExecutable(string? message)

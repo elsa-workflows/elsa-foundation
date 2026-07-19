@@ -238,8 +238,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an input snapshot materializer.");
         var durableValueStateStore = _durableValueStateStore
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a durable value state store.");
-        var durableValues = await durableValueStateStore.ListAsync(state.Execution.WorkflowExecutionId, cancellationToken);
-        var runtimeView = await _activityExecutionStateStore.ListAsync(state.Execution.WorkflowExecutionId, cancellationToken);
+        var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
+        var runtimeView = await _activityExecutionStateStore.ListAllAsync(state.Execution.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
         var workflowExecutionStateStore = _workflowExecutionStateStore
             ?? serviceProvider.GetService<IWorkflowExecutionStateStore>()

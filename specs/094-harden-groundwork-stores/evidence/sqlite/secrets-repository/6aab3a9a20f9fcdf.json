@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:create-only-try-add",
+  "sourceScenarioId": "secret-concurrent-create-only",
+  "coverageEntryId": "secrets-repository",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "cc09d70dd91060e819b1fcd647989411ccd08ebe25ab3458326a354f3301873e",
+  "executionPath": "provider-driver/sqlite/secrets-repository/6aab3a9a20f9fcdf",
+  "clients": 2,
+  "resultHash": "c77369cef77aa4d608f57f4e42483e901761f588cdbcbeb7ff5b33d7a3993927",
+  "outcome": "pass",
+  "concurrencySemantic": "create-only-try-add",
+  "evidence": "evidence/sqlite/secrets-repository/6aab3a9a20f9fcdf.json"
+}

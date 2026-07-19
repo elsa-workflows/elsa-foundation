@@ -21,7 +21,7 @@ public sealed class WorkflowDefinitionOptionsProvider(
         CancellationToken cancellationToken = default)
     {
         var definitions = await definitionStore.ListAsync(new WorkflowDefinitionFilter(), cancellationToken);
-        var references = await sourceReferenceStore.ListAsync(
+        var references = await sourceReferenceStore.ListAllAsync(
             WorkflowExecutableReferenceScope.Published,
             liveOnly: true,
             now: timeProvider.GetUtcNow(),

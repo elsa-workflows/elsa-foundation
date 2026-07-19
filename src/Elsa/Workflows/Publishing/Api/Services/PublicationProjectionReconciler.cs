@@ -43,7 +43,10 @@ public sealed class PublicationProjectionReconciler(
             // A host can compose the recurring store without composing any recurring providers. Ensure that even an
             // empty recurring projection is explicitly prepared, while preserving schedules produced by the
             // recurring indexer when providers are present.
-            var schedules = await recurringScheduleStore.ListByPublicationAsync(candidate.PublicationId, cancellationToken);
+            var schedules = await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(
+                recurringScheduleStore,
+                candidate.PublicationId,
+                cancellationToken);
             await DeliverAsync(
                 candidate.PublicationId,
                 PublicationProjectionKinds.RecurringSchedules,
@@ -247,7 +250,7 @@ public sealed class PublicationProjectionReconciler(
         if (_triggerObservers.Count == 0)
             return;
 
-        var bindings = await triggerBindingStore.ListByPublicationAsync(publication.PublicationId, cancellationToken);
+        var bindings = await triggerBindingStore.ListAllByPublicationAsync(publication.PublicationId, cancellationToken);
         var artifactId = bindings.FirstOrDefault()?.ArtifactId ?? publication.ArtifactId;
         // Authority can change while the artifact's extracted bindings remain identical (or empty), so consumers
         // must not apply the ordinary repeated-non-HTTP indexing skip to this notification.

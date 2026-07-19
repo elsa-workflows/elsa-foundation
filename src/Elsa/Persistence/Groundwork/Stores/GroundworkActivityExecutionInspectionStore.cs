@@ -70,35 +70,44 @@ public sealed class GroundworkActivityExecutionInspectionStore(
     }
 
     /// <exception cref="GroundworkActivityExecutionInspectionStoreException">Thrown when the Groundwork document store or JSON projection mapping fails.</exception>
-    public async ValueTask<IReadOnlyCollection<ActivityExecutionInspectionSummaryProjection>> ListSummariesAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<ActivityExecutionInspectionSummaryPage> ListSummariesPageAsync(
+        ActivityExecutionInspectionSummaryPageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(query);
 
         try
         {
-            var envelopes = (await BoundedStore.QueryAsync(
+            var result = await BoundedStore.QueryAsync(
                 new DocumentQuery(
                     DocumentKind,
-                    ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+                    ElsaRuntimeStorageManifest.PageActivityExecutionInspectionSummariesQuery,
                     [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                         ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
-                        workflowExecutionId))]),
-                cancellationToken)).Documents;
+                        query.WorkflowExecutionId))],
+                    [
+                        new DocumentQueryOrder(
+                            ElsaRuntimeStorageManifest.ActivityExecutionInspectionSummaryExecutionSequenceField),
+                        new DocumentQueryOrder(
+                            ElsaRuntimeStorageManifest.ActivityExecutionInspectionSummaryScheduledAtField),
+                        new DocumentQueryOrder(
+                            ElsaRuntimeStorageManifest.ActivityExecutionInspectionSummaryActivityExecutionIdField)
+                    ],
+                    take: query.Limit,
+                    continuation: query.ContinuationToken),
+                cancellationToken);
 
-            return Order(envelopes.Select(MapSummary));
+            return new ActivityExecutionInspectionSummaryPage(
+                query,
+                result.Documents.Select(MapSummary).ToArray(),
+                result.TotalCount,
+                result.NextContinuation);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            throw new GroundworkActivityExecutionInspectionStoreException($"Failed to list activity execution inspection summaries for workflow execution '{workflowExecutionId}'.", e);
+            throw new GroundworkActivityExecutionInspectionStoreException($"Failed to list activity execution inspection summaries for workflow execution '{query.WorkflowExecutionId}'.", e);
         }
     }
-
-    private static IReadOnlyCollection<ActivityExecutionInspectionSummaryProjection> Order(IEnumerable<ActivityExecutionInspectionSummaryProjection> projections) =>
-        projections
-            .OrderBy(projection => projection.ExecutionSequence)
-            .ThenBy(projection => projection.ScheduledAt)
-            .ThenBy(projection => projection.ActivityExecutionId, StringComparer.Ordinal)
-            .ToArray();
 
     private ActivityExecutionInspectionSummaryProjection MapSummary(DocumentEnvelope envelope)
     {

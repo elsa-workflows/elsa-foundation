@@ -121,19 +121,40 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         }));
     }
 
-    public ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllAsync(this, workflowExecutionId, cancellationToken);
+
+    public ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListPageAsync(
+        ExecutionLivenessStatePageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return new(Snapshot(key => key.WorkflowExecutionId == workflowExecutionId));
+        var states = Snapshot(key => key.WorkflowExecutionId == query.WorkflowExecutionId)
+            .OrderBy(state => state.OperationalStateId, StringComparer.Ordinal)
+            .ToArray();
+        return new(CreatePage(query, states));
     }
 
-    public ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAllAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAllAsync(
+        CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllAsync(this, cancellationToken);
+
+    public ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListAllPageAsync(
+        RuntimeStorePageRequest query,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return new(SnapshotAll());
+        var states = SnapshotAll()
+            .OrderBy(state => state.WorkflowExecutionId, StringComparer.Ordinal)
+            .ThenBy(state => state.OperationalStateId, StringComparer.Ordinal)
+            .ToArray();
+        return new(CreatePage(query, states));
     }
 
     public readonly record struct ExecutionLivenessStateKey(string WorkflowExecutionId, string OperationalStateId);
@@ -160,4 +181,23 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         StringComparer.Ordinal.Equals(
             state.OperationalStateId,
             GetOwnershipStateId(state.WorkflowExecutionId));
+
+    private static RuntimeStorePage<ExecutionLivenessState> CreatePage(
+        RuntimeStorePageRequest query,
+        IReadOnlyList<ExecutionLivenessState> states)
+    {
+        var offset = ParseOffset(query.ContinuationToken);
+        var items = states.Skip(offset).Take(query.Limit).ToArray();
+        var nextOffset = checked(offset + items.Length);
+        return new(query, items, nextOffset < states.Count ? nextOffset.ToString() : null);
+    }
+
+    private static int ParseOffset(string? continuationToken)
+    {
+        if (continuationToken is null)
+            return 0;
+        if (!int.TryParse(continuationToken, out var offset) || offset < 0)
+            throw new ArgumentException("The execution-liveness page continuation is invalid.", nameof(continuationToken));
+        return offset;
+    }
 }

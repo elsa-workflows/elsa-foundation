@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Options;
 using Elsa.Workflows.Runtime.Distributed.Services;
 using Xunit;
@@ -115,13 +116,27 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
     }
 
     [Fact]
-    public void Capabilities_AdvertiseDistributedPlacementAndFencing()
+    public void In_memory_capabilities_do_not_claim_provider_admitted_lease_fencing()
     {
         var provider = NewProvider(new InMemoryExecutionPlacementStore(), new InMemoryExecutionCommandTransport(), new MutableTimeProvider(_now), NodeA, new RecordingCommandExecutor());
 
         Assert.True(provider.Capabilities.HasFlag(WorkflowExecutionActorCapabilities.DistributedPlacement));
-        Assert.True(provider.Capabilities.HasFlag(WorkflowExecutionActorCapabilities.LeaseFencing));
+        Assert.False(provider.Capabilities.HasFlag(WorkflowExecutionActorCapabilities.LeaseFencing));
         Assert.True(provider.Capabilities.HasFlag(WorkflowExecutionActorCapabilities.Passivation));
+    }
+
+    [Fact]
+    public void Capabilities_advertise_lease_fencing_only_when_the_persistence_path_admits_it()
+    {
+        var provider = NewProvider(
+            new InMemoryExecutionPlacementStore(),
+            new InMemoryExecutionCommandTransport(),
+            new MutableTimeProvider(_now),
+            NodeA,
+            new RecordingCommandExecutor(),
+            new LeaseFencingCapability());
+
+        Assert.True(provider.Capabilities.HasFlag(WorkflowExecutionActorCapabilities.LeaseFencing));
     }
 
     private DistributedWorkflowExecutionActorProvider NewProvider(
@@ -129,12 +144,13 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
         InMemoryExecutionCommandTransport transport,
         MutableTimeProvider clock,
         string nodeId,
-        RecordingCommandExecutor executor)
+        RecordingCommandExecutor executor,
+        IWorkflowExecutionLeaseFencingCapability? leaseFencingCapability = null)
     {
         var options = new ExecutionPlacementOptions { NodeId = nodeId, LeaseDuration = TimeSpan.FromSeconds(30) };
         var placementService = new ExecutionPlacementService(store, clock, options);
         var local = new InProcessWorkflowExecutionActorProvider(executor);
-        return new DistributedWorkflowExecutionActorProvider(local, placementService, transport, clock);
+        return new DistributedWorkflowExecutionActorProvider(local, placementService, transport, clock, leaseFencingCapability);
     }
 
     private static WorkflowExecutionActorActivationRequest Activation() => new(
@@ -159,6 +175,11 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
             WasResolvedFrom = true;
             return null;
         }
+    }
+
+    private sealed class LeaseFencingCapability : IWorkflowExecutionLeaseFencingCapability
+    {
+        public bool IsAvailable => true;
     }
 
     private WorkflowExecutionCommandEnvelope Envelope(string envelopeId)

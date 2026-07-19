@@ -88,7 +88,7 @@ How should the established `StorageUnit`, `PhysicalizationPolicy`, `Portable`, `
 
 ### Answer
 
-In progress as [Groundwork #28](https://github.com/valence-works/Groundwork/issues/28). Produce a focused vocabulary/API report in the Groundwork repository and link it here.
+The first review is complete in [Groundwork #28](https://github.com/valence-works/Groundwork/issues/28) and its linked report. Keep this decision open only for the post-delivery review tracked by [Groundwork #63](https://github.com/valence-works/Groundwork/issues/63), which must reconcile the now-implemented physical-storage, query, migration, and diagnostic APIs before the public surface stabilizes.
 
 ## version-aware-codecs: Where Does Payload Version Evolution Belong?
 
@@ -102,12 +102,12 @@ Should version-aware serialization, payload policies, concrete codecs, and upcas
 
 ### Answer
 
-Groundwork owns only the generic version-aware codec contract and provider integration delivered through [Groundwork PR #88](https://github.com/valence-works/Groundwork/pull/88), with provider-native ordered query explanations from Groundwork PR #89, certified provider-neutral keyset continuation from Groundwork PR #93, bounded residual predicates from Groundwork PR #95, portable substring search keys from Groundwork PR #96, provider-native latest-per-key execution from Groundwork PR #97, and sort-only index fields admitted as residual predicates by Groundwork PR #101, consumed at `0.0.1-preview.67`. Elsa provider packages own marker-gated per-kind version policies, legacy-stamp parsing, JSON options, and concrete upcasters; Elsa core modules remain Groundwork-free. Every payload-shape change increments its durable kind/manifest version, retains deterministic golden fixtures, and invalidates prior composition fingerprints. Provider evidence must be regenerated from the exact Groundwork and Elsa heads; the accepted `preview.60` Identity matrix is immutable historical evidence and cannot prove the current `preview.67` boundary.
+Groundwork owns only the generic version-aware codec contract and provider integration delivered through [Groundwork PR #88](https://github.com/valence-works/Groundwork/pull/88), with provider-native ordered query explanations from Groundwork PR #89, certified provider-neutral keyset continuation from Groundwork PR #93, bounded residual predicates from Groundwork PR #95, portable substring search keys from Groundwork PR #96, provider-native latest-per-key execution from Groundwork PR #97, sort-only index fields admitted as residual predicates by Groundwork PR #101, and bounded linked hydration from Groundwork PR #108, consumed as one package family at `0.0.1-preview.72`. Elsa provider packages own marker-gated per-kind version policies, legacy-stamp parsing, JSON options, and concrete upcasters; Elsa core modules remain Groundwork-free. Every payload-shape change increments its durable kind/manifest version, retains deterministic golden fixtures, and invalidates prior composition fingerprints. Provider evidence must be regenerated from the exact Groundwork and Elsa heads; the accepted `preview.60` Identity matrix is immutable historical evidence and cannot prove the current `preview.72` boundary.
 
 ## session-concurrency: What Session Lifecycle Replaces The Singleton Gated Connection?
 
 Blocked by: none
-Status: in-progress
+Status: resolved
 Type: Prototype
 
 ### Question
@@ -116,7 +116,7 @@ What stateless facade, pooled per-operation session, explicit unit-of-work sessi
 
 ### Answer
 
-In progress as [Groundwork #27](https://github.com/valence-works/Groundwork/issues/27). Prototype the lifecycle and validate concurrency, cancellation, disposal, pool saturation, and transaction ownership before benchmarking.
+[Groundwork #27](https://github.com/valence-works/Groundwork/issues/27) and [Groundwork #34](https://github.com/valence-works/Groundwork/issues/34) delivered stateless provider facades and per-operation sessions. Elsa consumes that model through an immutable admitted session source, access-bound scoped adapters, and explicit unit-of-work ownership. Provider matrices cover independent clients, cancellation, disposal/reopen, process restart, and transaction ownership; performance remains a separate #646/#50 gate.
 
 ## identity-openiddict: Which Framework Store Contracts Must Groundwork Implement?
 
@@ -148,8 +148,8 @@ Use a provider-neutral diagnostic record store for explicit-scope immutable time
 
 ## physical-table-definition: What Is The Stable Physical Description Contract?
 
-Blocked by: vocabulary-api
-Status: open
+Blocked by: none
+Status: resolved
 Type: Prototype
 
 ### Question
@@ -158,12 +158,12 @@ What exact portable manifest/API represents envelope fields, canonical JSON, ser
 
 ### Answer
 
-Spec 095 supplies the current v1.1 Identity workload contract for #646: `iam-normalized-lookup-update` with fixed input fingerprint `5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9` and public result digest `32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc`. These hashes define the provider-neutral contract, not executed EF equality or performance evidence. Exact-candidate `preview.60` Groundwork provider artifacts are accepted, and #646 still owns real EF execution, equality, timing methodology, EF/Groundwork physical-form comparison, raw benchmark artifacts, reports, and pass/redesign/blocked verdicts.
+[Groundwork #31](https://github.com/valence-works/Groundwork/issues/31) delivered `PhysicalTableDefinition`, deterministic storage resolution, explicit per-unit physical tables, host naming policy, provider normalization, and physical-target fingerprints. Elsa now declares dedicated document and entity-table forms through that contract. The v1.1 Identity workload remains a #646 handoff with fixed input fingerprint `5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9` and public result digest `32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc`; those hashes do not substitute for current `preview.72` provider evidence or an executed EF comparison.
 
 ## unified-query-planner: How Does One Query Contract Select A Physical Plan?
 
-Blocked by: physical-table-definition
-Status: open
+Blocked by: none
+Status: resolved
 Type: Prototype
 
 ### Question
@@ -172,12 +172,12 @@ How does Groundwork compile bounded queries consistently across shared indexes, 
 
 ### Answer
 
-Pending.
+[Groundwork #45](https://github.com/valence-works/Groundwork/issues/45) delivered bounded planning across physical forms. Later provider work added ordered explanations, keyset continuation, residual predicates, substring lookup keys, latest-per-key execution, and bounded linked hydration. Elsa admits exact `BoundedQueryDeclaration.Identity` routes and rejects missing or unsupported scale-bearing paths before serving work.
 
 ## manifest-diff-migrations: How Are Physical Definitions Diffed And Applied?
 
-Blocked by: physical-table-definition
-Status: open
+Blocked by: none
+Status: resolved
 Type: Prototype
 
 ### Question
@@ -186,12 +186,12 @@ What deterministic plan, fingerprint, schema-history, backfill, locking, and aut
 
 ### Answer
 
-Pending.
+[Groundwork #44](https://github.com/valence-works/Groundwork/issues/44) delivered deterministic physical-schema diffs, fingerprints, durable applied history, and authorization classification. Elsa runtime admission is validate-only: it blocks pending or drifting targets and never applies schema implicitly.
 
 ## migration-cli: What Is The Stable DevOps CLI Contract?
 
-Blocked by: manifest-diff-migrations
-Status: open
+Blocked by: none
+Status: resolved
 Type: Prototype
 
 ### Question
@@ -200,12 +200,12 @@ What commands, exit codes, JSON schema, dry-run behavior, environment/configurat
 
 ### Answer
 
-Pending.
+[Groundwork #49](https://github.com/valence-works/Groundwork/issues/49) delivered `plan`, `validate`, `status`, and authorized `apply`, deterministic JSON, stable exit codes, environment-based connection input, and secret-safe diagnostics. Elsa ships public parameterless deployment schema sources so build/deployment pipelines reconstruct the same resolved target as runtime.
 
 ## provider-conformance: How Are Four Providers Proven Equivalent?
 
-Blocked by: session-concurrency, unified-query-planner, manifest-diff-migrations, diagnostic-storage
-Status: open
+Blocked by: diagnostic-storage
+Status: in-progress
 Type: Prototype
 
 ### Question
@@ -214,12 +214,12 @@ What executable conformance kit proves capability claims, storage forms, queries
 
 ### Answer
 
-Pending.
+The local Runtime, IAM/Secrets, distributed, recovery, capability-admission, and provider-native route matrices pass across SQLite, SQL Server, PostgreSQL, and a transaction-capable MongoDB replica set. Completion still requires immutable current-head result/native-plan publication into the coverage ledger and linked current evidence from diagnostics PR #660. Historical `preview.60` Identity artifacts remain provenance only.
 
 ## performance-harness: How Are EF And Groundwork Compared Fairly?
 
-Blocked by: session-concurrency, unified-query-planner, diagnostic-storage
-Status: open
+Blocked by: provider-conformance
+Status: in-progress
 Type: Prototype
 
 ### Question
@@ -228,12 +228,12 @@ What reproducible datasets, payload sizes, concurrency levels, warm/cold runs, m
 
 ### Answer
 
-Pending.
+Spec 094 now supplies versioned correctness workloads, fixed input/result digests, exact native-route prerequisites, and closed ALL32 ledger mapping to [Elsa #646](https://github.com/elsa-workflows/elsa-foundation/issues/646). Groundwork physical-form benchmarking remains [Groundwork #50](https://github.com/valence-works/Groundwork/issues/50). No lane may advance on missing, Redesign, or Blocked verdicts, and no timing verdict is inferred from a passing correctness matrix.
 
 ## elsa-store-migration: In What Vertical Order Do Elsa Stores Move?
 
 Blocked by: none
-Status: open
+Status: in-progress
 Type: Grilling
 
 ### Question
@@ -242,7 +242,7 @@ What dependency-ordered Elsa slices migrate design, runtime, IAM, diagnostics, I
 
 ### Answer
 
-Resolve each store family into independently grabbable issues with only its specific released upstream dependencies. Design, runtime, IAM, diagnostics, Identity, and OpenIddict may migrate independently while EF remains a temporary oracle. Identity #644 now has accepted `preview.60` exact-candidate Groundwork artifacts and may feed #646; its checked-in EF contract baseline is deliberately non-executed. OpenIddict remains a separate migration lane.
+Resolve each store family into independently grabbable issues with only its specific released upstream dependencies. Spec 094 hardens the existing Runtime, IAM, Secrets, and Distributed implementations on Groundwork `preview.72`; Identity #644 is closed, diagnostics PR #660 remains draft, #646 owns executed EF comparison and physical-shape verdicts, and #647 owns the final reference-host switch and EF-family deletion. OpenIddict remains a separate migration lane until its complete contract surface is proven.
 
 ## ef-removal: When May The EF Implementation Family Be Deleted?
 

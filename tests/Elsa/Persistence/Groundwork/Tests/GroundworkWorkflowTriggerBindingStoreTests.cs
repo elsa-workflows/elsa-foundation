@@ -40,8 +40,9 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         Assert.Equal("artifact-4", Assert.Single(bySharedHashOtherType).ArtifactId);
 
         // Per-artifact lookup is scoped to the one artifact.
-        var byArtifact = await store.ListByArtifactAsync("artifact-1");
-        var single = Assert.Single(byArtifact);
+        var byArtifact = await store.ListByArtifactAsync(
+            new WorkflowTriggerBindingArtifactPageQuery("artifact-1"));
+        var single = Assert.Single(byArtifact.Items);
         Assert.Equal("node-a", single.ExecutableNodeId);
         Assert.Equal("order-scope", single.CorrelationScope);
     }
@@ -64,7 +65,7 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         var deleted = await store.DeleteByArtifactAsync("artifact-1");
 
         Assert.Equal(2, deleted);
-        Assert.Empty(await store.ListByArtifactAsync("artifact-1"));
+        Assert.Empty(await store.ListAllByArtifactAsync("artifact-1"));
         var remaining = (await store.ListByStimulusAsync(
             new WorkflowTriggerBindingPageQuery("Event", "hash-order"))).Items;
         Assert.Equal("artifact-2", Assert.Single(remaining).ArtifactId);
@@ -104,6 +105,44 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             new WorkflowTriggerBindingTypePageQuery("Signal"));
         Assert.Empty(missing.Items);
         Assert.Equal(0, missing.TotalCount);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task PublicationAndArtifactQueries_PageInBindingIdOrder(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider, RuntimeManifest());
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            fixture.BoundedDocumentStore);
+        foreach (var artifactId in new[] { "artifact-c", "artifact-a", "artifact-b" })
+        {
+            await store.SaveAsync(PublicationBinding("publication-a", artifactId, "node", $"slot-{artifactId}") with
+            {
+                TriggerBindingId = WorkflowTriggerBinding.BuildId("publication-a", artifactId, "node", $"hash-{artifactId}"),
+                StimulusHash = $"hash-{artifactId}"
+            });
+        }
+
+        var first = await store.ListByPublicationAsync(
+            new WorkflowTriggerBindingPublicationPageQuery("publication-a", limit: 2));
+        var second = await store.ListByPublicationAsync(
+            new WorkflowTriggerBindingPublicationPageQuery(
+                "publication-a",
+                limit: 2,
+                continuationToken: first.NextContinuationToken));
+
+        Assert.Equal(3, first.TotalCount);
+        Assert.Equal(
+            first.Items.Concat(second.Items).Select(binding => binding.TriggerBindingId).Order(StringComparer.Ordinal),
+            first.Items.Concat(second.Items).Select(binding => binding.TriggerBindingId));
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Null(second.NextContinuationToken);
+        var artifact = await store.ListByArtifactAsync(
+            new WorkflowTriggerBindingArtifactPageQuery("artifact-a", limit: 1));
+        Assert.Equal("artifact-a", Assert.Single(artifact.Items).ArtifactId);
     }
 
     [Theory]
@@ -225,8 +264,8 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             store.ActivatePublicationAsync("publication-b", "publication-old").AsTask());
 
-        Assert.True(Assert.Single(await store.ListByPublicationAsync("publication-a")).IsActive);
-        Assert.False(Assert.Single(await store.ListByPublicationAsync("publication-b")).IsActive);
+        Assert.True(Assert.Single(await store.ListAllByPublicationAsync("publication-a")).IsActive);
+        Assert.False(Assert.Single(await store.ListAllByPublicationAsync("publication-b")).IsActive);
     }
 
     private static WorkflowTriggerBinding Binding(string artifactId, string nodeId, string stimulusType, string stimulusHash) =>

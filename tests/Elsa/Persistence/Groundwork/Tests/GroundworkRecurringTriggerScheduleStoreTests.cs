@@ -124,6 +124,49 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         Assert.Equal(17, query.Take);
     }
 
+    [Fact]
+    public async Task ListDue_RejectsLimitsAboveTheRuntimeMaximum()
+    {
+        await using var fixture = CreateStore("memory");
+        IRecurringTriggerScheduleStore store = NewStore(fixture);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            store.ListDueAsync(Now, RuntimeStorePageRequest.MaximumLimit + 1).AsTask());
+    }
+
+    [Fact]
+    public async Task PublicationAndArtifactPagesUseDeclaredOrderedRoutes()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        var store = new GroundworkRecurringTriggerScheduleStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            queries);
+
+        await store.ListByPublicationPageAsync(
+            new RecurringTriggerSchedulePublicationPageQuery("publication-1", limit: 17, continuationToken: "next"));
+        await store.ListByArtifactPageAsync(
+            new RecurringTriggerScheduleArtifactPageQuery("artifact-1", limit: 13, continuationToken: "artifact-next"));
+
+        Assert.Collection(
+            queries.Observed,
+            query =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.PageRecurringTriggerSchedulesByPublicationQuery, query.QueryIdentity);
+                Assert.Equal(17, query.Take);
+                Assert.Equal("next", query.Continuation);
+                Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField, Assert.Single(query.Order).Path);
+            },
+            query =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.PageRecurringTriggerSchedulesByArtifactQuery, query.QueryIdentity);
+                Assert.Equal(13, query.Take);
+                Assert.Equal("artifact-next", query.Continuation);
+                Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField, Assert.Single(query.Order).Path);
+            });
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]

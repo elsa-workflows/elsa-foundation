@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:create-only-try-add",
+  "sourceScenarioId": "secret-concurrent-create-only",
+  "coverageEntryId": "secrets-repository",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "552a6eda8b328782b673e087f71613cb70b422a196bba29a05a852193c0068ca",
+  "executionPath": "provider-driver/postgresql/secrets-repository/6aab3a9a20f9fcdf",
+  "clients": 2,
+  "resultHash": "c77369cef77aa4d608f57f4e42483e901761f588cdbcbeb7ff5b33d7a3993927",
+  "outcome": "pass",
+  "concurrencySemantic": "create-only-try-add",
+  "evidence": "evidence/postgresql/secrets-repository/6aab3a9a20f9fcdf.json"
+}

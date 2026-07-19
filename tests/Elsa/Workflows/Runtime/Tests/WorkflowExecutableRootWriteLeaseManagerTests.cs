@@ -183,7 +183,9 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
         public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default) =>
             inner.FindAsync(artifactId, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default) =>
-            inner.ListAsync(cancellationToken);
+        public ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(
+            RuntimeStorePageRequest request,
+            CancellationToken cancellationToken = default) =>
+            inner.ListPageAsync(request, cancellationToken);
     }
 }

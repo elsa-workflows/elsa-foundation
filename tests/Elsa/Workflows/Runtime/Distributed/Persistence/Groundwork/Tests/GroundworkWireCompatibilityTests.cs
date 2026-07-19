@@ -45,15 +45,34 @@ public sealed class GroundworkWireCompatibilityTests
 
         var root = JsonNode.Parse(envelope.ContentJson)!.AsObject();
         Assert.Equal(
-            new[] { "collection", "item", "sequence", "visibleAt", "workflowExecutionId", "workflowExecutionIdKey" },
+            new[] { "collection", "item", "leaseOwnerId", "leaseToken", "sequence", "visibleAt", "workflowExecutionId", "workflowExecutionIdKey" },
             root.Select(property => property.Key).OrderBy(key => key, StringComparer.Ordinal).ToArray());
         Assert.Equal(DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind, (string?)root["collection"]);
         Assert.Equal("wf-1", (string?)root["workflowExecutionId"]);
         Assert.Equal(PortableStringComparison.CreateOrdinal("wf-1"), (string?)root["workflowExecutionIdKey"]);
+        Assert.Equal(string.Empty, (string?)root["leaseOwnerId"]);
+        Assert.Equal(0, (long?)root["leaseToken"]);
 
         // The nested item carries exactly the frozen shape's property names (the fixture pins values elsewhere;
         // here we pin the structural contract of what the bridge writes).
         AssertSamePropertyNames(ReadFixture("executionCommandTransport"), root["item"]!);
+    }
+
+    [Fact]
+    public async Task PersistedCommandStreamHead_EmbedsThePhysicalSequenceFields()
+    {
+        var documentStore = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
+        var harness = DistributedStoreHarness.FromDocumentStore(documentStore);
+
+        await harness.Transport.SendAsync("wf-1", DistributedStoreHarness.Envelope("wf-1", "env-1", Now), Now);
+
+        var envelope = Assert.Single(documentStore.Snapshot(DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind));
+        var root = JsonNode.Parse(envelope.ContentJson)!.AsObject();
+        Assert.Equal(
+            new[] { "collection", "lastSequence", "workflowExecutionId", "workflowExecutionIdKey" },
+            root.Select(property => property.Key).OrderBy(key => key, StringComparer.Ordinal).ToArray());
+        Assert.Equal(1, (long?)root["lastSequence"]);
+        Assert.Equal(PortableStringComparison.CreateOrdinal("wf-1"), (string?)root["workflowExecutionIdKey"]);
     }
 
     [Fact]

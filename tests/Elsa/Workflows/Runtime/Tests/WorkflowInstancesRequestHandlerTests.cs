@@ -73,6 +73,24 @@ public sealed class WorkflowInstancesRequestHandlerTests
     }
 
     [Fact]
+    public async Task ListWorkflowInstances_uses_provider_count_contracts_for_summary_counts()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Running, "definition-1"));
+        await _activityStore.SaveAsync(Activity("wf-1", "activity-1", ActivityExecutionStatus.Running));
+        await _incidentStore.TryAddAsync(Incident("wf-1", "incident-1"));
+        var activities = new CountOnlyActivityExecutionStateStore(_activityStore);
+        var incidents = new CountOnlyIncidentStateStore(_incidentStore);
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, activities, incidents, AllowAll);
+
+        var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+
+        Assert.Equal(1, Assert.Single(result.Items).ActivityCount);
+        Assert.Equal(1, Assert.Single(result.Items).IncidentCount);
+        Assert.True(activities.CountCalled);
+        Assert.True(incidents.CountCalled);
+    }
+
+    [Fact]
     public async Task ListWorkflowInstances_FiltersAndProjectsDurableRunKind()
     {
         await _workflowStore.SaveAsync(Workflow("wf-test", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.TestRun));
@@ -397,6 +415,55 @@ public sealed class WorkflowInstancesRequestHandlerTests
 
         public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(workflowExecutionId, cancellationToken);
+    }
+
+    private sealed class CountOnlyActivityExecutionStateStore(IActivityExecutionStateStore inner) : IActivityExecutionStateStore
+    {
+        public bool CountCalled { get; private set; }
+
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Instance summaries must use the provider count contract.");
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(ActivityExecutionStateParentPageQuery query, CancellationToken cancellationToken = default) =>
+            inner.ListByParentPageAsync(query, cancellationToken);
+
+        public async ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            CountCalled = true;
+            return await inner.CountAsync(workflowExecutionId, cancellationToken);
+        }
+    }
+
+    private sealed class CountOnlyIncidentStateStore(IIncidentStateStore inner) : IIncidentStateStore
+    {
+        public bool CountCalled { get; private set; }
+
+        public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            inner.TryAddAsync(state, cancellationToken);
+
+        public ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<IncidentState?> FindAsync(string workflowExecutionId, string incidentId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(workflowExecutionId, incidentId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Instance summaries must use the provider count contract.");
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.ListBlockingAsync(workflowExecutionId, cancellationToken);
+
+        public async ValueTask<int> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            CountCalled = true;
+            return await inner.CountAsync(workflowExecutionId, cancellationToken);
+        }
     }
 
     private static ActivityExecutionState Activity(

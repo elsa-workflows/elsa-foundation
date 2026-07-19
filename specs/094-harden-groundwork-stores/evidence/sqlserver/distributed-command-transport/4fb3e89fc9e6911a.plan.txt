@@ -1,0 +1,13 @@
+provider=sqlserver
+document-kind=executionCommandTransport
+route=count-pending-commands-by-execution
+physical-name=execution_command_transport
+physical-cardinality=100000
+plan-classification=index-seek
+index=command-by-execution-sequence
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=none
+materialized-candidate-count=0
+command-count=1
+command-0=Count|count|sqlserver-statistics-xml|index-seek|command-by-execution-sequence|document_kind,storage_scope,workflowExecutionIdKey|1||f9785f916b01eb97d3c272e37f9e081697f8d4cf71c35cbdd05699818dcb2993

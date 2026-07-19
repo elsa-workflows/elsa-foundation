@@ -13,7 +13,7 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// </summary>
 public sealed class GroundworkCredentialStore(
     IDocumentStore store,
-    IPersistenceAccessContextAccessor accessContextAccessor) : ICredentialStore
+    IPersistenceAccessContextAccessor accessContextAccessor) : ICredentialStore, IRevisionAwareCredentialStore
 {
     public async ValueTask<CredentialRecord?> FindAsync(
         string tenantId,
@@ -31,6 +31,42 @@ public sealed class GroundworkCredentialStore(
 
     public async ValueTask SaveAsync(CredentialRecord credential, CancellationToken cancellationToken = default)
     {
+        await SaveCoreAsync(credential, expectedVersion: null, cancellationToken);
+    }
+
+    public async ValueTask<IamRevisionedRecord<CredentialRecord>?> FindWithRevisionAsync(
+        string tenantId,
+        string credentialId,
+        CancellationToken cancellationToken = default)
+    {
+        accessContextAccessor.EnsureCurrentScope(tenantId);
+        var envelope = await store.LoadAsync(
+            IdentityStorageManifest.IdentityCredentialDocumentKind,
+            IdentityCompositeDocumentId.From(tenantId, credentialId),
+            cancellationToken);
+
+        return envelope is null
+            ? null
+            : new IamRevisionedRecord<CredentialRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
+    }
+
+    public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(
+        CredentialRecord credential,
+        string? expectedRevision,
+        CancellationToken cancellationToken = default)
+    {
+        if (!GroundworkIamRevisionMapper.TryExpectedVersion(expectedRevision, out var expectedVersion))
+            return GroundworkIamRevisionMapper.InvalidRevision();
+
+        return GroundworkIamRevisionMapper.ToResult(
+            await SaveCoreAsync(credential, expectedVersion, cancellationToken));
+    }
+
+    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(
+        CredentialRecord credential,
+        long? expectedVersion,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(credential);
         accessContextAccessor.EnsureCurrentScope(credential.TenantId);
 
@@ -39,12 +75,13 @@ public sealed class GroundworkCredentialStore(
             IdentityCompositeDocumentId.Normalize(credential.Id),
             credential);
         var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
-        await store.SaveAsync(
+        return await store.SaveAsync(
             new SaveDocumentRequest(
                 IdentityStorageManifest.IdentityCredentialDocumentKind,
                 IdentityCompositeDocumentId.From(credential.TenantId, credential.Id),
                 IdentityStorageManifest.SchemaVersion,
-                content),
+                content,
+                expectedVersion),
             cancellationToken);
     }
 

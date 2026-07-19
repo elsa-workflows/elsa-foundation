@@ -24,6 +24,12 @@ public sealed class ExecutionCommandTransportContractTests
         DistributedStoreHarness.GroundworkSqlite
     };
 
+    public static TheoryData<string> DurableProviders => new()
+    {
+        DistributedStoreHarness.GroundworkMemory,
+        DistributedStoreHarness.GroundworkSqlite
+    };
+
     [Theory]
     [MemberData(nameof(Providers))]
     public async Task Send_AssignsStrictlyIncreasingSequences_AndLeaseDrainsInEnqueueOrder(string provider)
@@ -72,7 +78,7 @@ public sealed class ExecutionCommandTransportContractTests
         await harness.Transport.SendAsync(ExecutionId, DistributedStoreHarness.Envelope(ExecutionId, "env-1", Now), Now);
         var leased = await harness.Transport.LeaseAsync(ExecutionId, NodeA, Now, LeaseDuration, maxItems: 10);
 
-        Assert.True(await harness.Transport.AckAsync(ExecutionId, leased[0].TransportItemId, NodeA, Now.AddSeconds(1)));
+        Assert.True(await harness.Transport.AckAsync(ExecutionId, leased[0].TransportItemId, NodeA, leased[0].LeaseToken!.Value, Now.AddSeconds(1)));
         Assert.Equal(0, await harness.Transport.CountPendingAsync(ExecutionId));
         Assert.Empty(await harness.Transport.ListPendingExecutionIdsAsync(Now.AddSeconds(1), 10));
     }
@@ -87,11 +93,11 @@ public sealed class ExecutionCommandTransportContractTests
         var itemId = leased[0].TransportItemId;
 
         // A node that never held the lease cannot ack.
-        Assert.False(await harness.Transport.AckAsync(ExecutionId, itemId, NodeB, Now.AddSeconds(1)));
+        Assert.False(await harness.Transport.AckAsync(ExecutionId, itemId, NodeB, leased[0].LeaseToken!.Value, Now.AddSeconds(1)));
 
         // The holder itself cannot ack after its lease expired — the survivor is now responsible.
         var afterExpiry = Now + LeaseDuration + TimeSpan.FromSeconds(1);
-        Assert.False(await harness.Transport.AckAsync(ExecutionId, itemId, NodeA, afterExpiry));
+        Assert.False(await harness.Transport.AckAsync(ExecutionId, itemId, NodeA, leased[0].LeaseToken!.Value, afterExpiry));
         Assert.Equal(1, await harness.Transport.CountPendingAsync(ExecutionId));
     }
 
@@ -108,9 +114,42 @@ public sealed class ExecutionCommandTransportContractTests
         Assert.Single(leasedByB);
 
         // The dead node "wakes up" and tries to ack away the command the survivor now owns.
-        Assert.False(await harness.Transport.AckAsync(ExecutionId, leasedByA[0].TransportItemId, NodeA, afterExpiry.AddSeconds(1)));
-        Assert.True(await harness.Transport.AckAsync(ExecutionId, leasedByB[0].TransportItemId, NodeB, afterExpiry.AddSeconds(1)));
+        Assert.False(await harness.Transport.AckAsync(ExecutionId, leasedByA[0].TransportItemId, NodeA, leasedByA[0].LeaseToken!.Value, afterExpiry.AddSeconds(1)));
+        Assert.True(await harness.Transport.AckAsync(ExecutionId, leasedByB[0].TransportItemId, NodeB, leasedByB[0].LeaseToken!.Value, afterExpiry.AddSeconds(1)));
         Assert.Equal(0, await harness.Transport.CountPendingAsync(ExecutionId));
+    }
+
+    [Theory]
+    [MemberData(nameof(DurableProviders))]
+    public async Task RestartAfterVisibilityExpiry_ReleasesTheItem_AndRejectsTheStaleToken(string provider)
+    {
+        await using var harness = await DistributedStoreHarness.CreateAsync(provider);
+        await harness.Transport.SendAsync(ExecutionId, DistributedStoreHarness.Envelope(ExecutionId, "env-1", Now), Now);
+        var leasedBeforeRestart = await harness.Transport.LeaseAsync(ExecutionId, NodeA, Now, LeaseDuration, maxItems: 10);
+
+        // A fresh adapter simulates the former node being disposed and a process reopening the same durable inbox.
+        var afterExpiry = Now + LeaseDuration + TimeSpan.FromSeconds(1);
+        var reopened = await harness.ReopenTransportAsync();
+        var leasedAfterRestart = await reopened.LeaseAsync(ExecutionId, NodeA, afterExpiry, LeaseDuration, maxItems: 10);
+
+        Assert.Single(leasedBeforeRestart);
+        Assert.Single(leasedAfterRestart);
+        Assert.NotEqual(leasedBeforeRestart[0].LeaseToken, leasedAfterRestart[0].LeaseToken);
+
+        // Owner identity alone is insufficient: a delayed acknowledgement from its first lease must not remove the
+        // command after that same node has recovered and acquired the later lease.
+        Assert.False(await reopened.AckAsync(
+            ExecutionId,
+            leasedBeforeRestart[0].TransportItemId,
+            NodeA,
+            leasedBeforeRestart[0].LeaseToken!.Value,
+            afterExpiry.AddSeconds(1)));
+        Assert.True(await reopened.AckAsync(
+            ExecutionId,
+            leasedAfterRestart[0].TransportItemId,
+            NodeA,
+            leasedAfterRestart[0].LeaseToken!.Value,
+            afterExpiry.AddSeconds(1)));
     }
 
     [Theory]

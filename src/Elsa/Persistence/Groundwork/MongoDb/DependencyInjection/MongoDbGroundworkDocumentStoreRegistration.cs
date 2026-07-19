@@ -47,7 +47,8 @@ public static class MongoDbGroundworkDocumentStoreRegistration
             serviceProvider.GetRequiredService<IMongoDbGroundworkRuntimeAdmission>(),
             // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
             serviceProvider.GetService<ILogger<MongoDbGroundworkDocumentStoreInitializer>>()
-            ?? NullLogger<MongoDbGroundworkDocumentStoreInitializer>.Instance));
+            ?? NullLogger<MongoDbGroundworkDocumentStoreInitializer>.Instance,
+            serviceProvider.GetRequiredService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>()));
         services.AddHostedService(serviceProvider =>
             serviceProvider.GetRequiredService<MongoDbGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(serviceProvider =>

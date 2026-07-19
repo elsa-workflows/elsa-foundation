@@ -104,9 +104,9 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
 
         if (response.StatusCode != HttpStatusCode.RequestTimeout)
         {
-            var executions = await _fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync();
+            var executions = await _fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
             var states = executions.Count == 1
-                ? await _fixture.Services.GetRequiredService<IActivityExecutionStateStore>().ListAsync(executions.Single().WorkflowExecutionId)
+                ? await _fixture.Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executions.Single().WorkflowExecutionId)
                 : [];
             Assert.Fail(
                 $"Expected 408, received {(int)response.StatusCode}. " +
@@ -219,11 +219,11 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
         // envelopes/checkpoints as opaque state; a leaked IServiceProvider would surface as a provider type name in
         // the serialized payload. (Mirrors the T003 integration purity assertion at the HTTP E2E level.)
         var services = _fixture.Services;
-        var executions = await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync();
+        var executions = await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
         var runId = Assert.Single(executions).WorkflowExecutionId;
 
-        var durableValues = await services.GetRequiredService<IDurableValueStateStore>().ListAsync(runId);
-        var bookmarks = await services.GetRequiredService<IBookmarkStateStore>().ListAsync(runId);
+        var durableValues = await services.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(runId);
+        var bookmarks = await services.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(runId);
 
         var serialized = new StringBuilder();
         foreach (var value in durableValues)
@@ -242,7 +242,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     /// <summary>Reads the durable HttpResponse artifact for the single run the test started (the store holds exactly one).</summary>
     private async Task<JsonElement> ReadArtifactForSingleRunAsync()
     {
-        var executions = await _fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync();
+        var executions = await _fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
         var runId = Assert.Single(executions).WorkflowExecutionId;
         return await _fixture.ReadHttpResponseArtifactAsync(runId);
     }

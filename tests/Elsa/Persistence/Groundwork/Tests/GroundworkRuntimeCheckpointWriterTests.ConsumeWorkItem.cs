@@ -25,7 +25,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
         var result = await CreateWriter(store).CommitAsync(BuildConsumeCommit("commit-consume", claim!), Decision);
 
         Assert.Equal(["consume-work-1"], result.ConsumedSchedulerWorkItemIds);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wf-1"))); // gone, in the same commit
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wf-1"))).Items); // gone, in the same commit
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-consume"));
 
         // Redelivery is idempotent: the marker records the consumed id and returns it without re-deleting.
@@ -52,7 +52,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
 
         // Nothing persisted: no marker, and the successor-owned item survives.
         Assert.Null(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-stale"));
-        Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wf-1")));
+        Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wf-1"))).Items);
     }
 
     private static RuntimeSchedulerWorkItem ConsumeWorkItem() =>

@@ -78,6 +78,22 @@ public sealed class GroundworkIncidentStateStore(
         return (await LoadByLogicalIdentityAsync(workflowExecutionId, incidentId, cancellationToken))?.State;
     }
 
+    public async ValueTask<int> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+
+        var count = await BoundedStore.CountAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                    workflowExecutionId))],
+                take: 1),
+            cancellationToken);
+        return count > int.MaxValue ? int.MaxValue : (int)count;
+    }
+
     public async ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);

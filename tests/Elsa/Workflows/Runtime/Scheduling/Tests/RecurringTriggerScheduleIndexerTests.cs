@@ -132,7 +132,7 @@ public sealed class RecurringTriggerScheduleIndexerTests
         Assert.Equal(["test.cron"], exception.ProviderIds);
         Assert.Contains("0 0 30 2 *", exception.Message, StringComparison.Ordinal);
         Assert.False(inner.Called);
-        Assert.Equal([priorBinding], await bindingStore.ListByArtifactAsync("artifact-1"));
+        Assert.Equal([priorBinding], await bindingStore.ListAllByArtifactAsync("artifact-1"));
         Assert.Equal(priorSchedule, await scheduleStore.FindAsync(priorSchedule.ScheduleId));
     }
 
