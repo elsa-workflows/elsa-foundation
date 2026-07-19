@@ -2,6 +2,7 @@ using Elsa.Workflows.Design.Api.Capabilities;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Xunit;
@@ -39,6 +40,19 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
 
         Assert.DoesNotContain(withoutPaging.SelectMany(x => x.Links), link => link.Rel == "workflow-folders");
         Assert.Contains(withPaging.SelectMany(x => x.Links), link => link.Rel == "workflow-folders");
+    }
+
+    [Fact]
+    public async Task Definition_move_relation_requires_the_atomic_command_and_browse_dependencies()
+    {
+        var withoutCommand = await new WorkflowDesignOperationalCapabilitySource(
+            pageStore: new StubPagedStore(), folderStore: new StubFolderStore()).GetCapabilitiesAsync();
+        var withCommand = await new WorkflowDesignOperationalCapabilitySource(
+            pageStore: new StubPagedStore(), folderStore: new StubFolderStore(), moveDefinitions: new StubMoveCommand()).GetCapabilitiesAsync();
+
+        Assert.DoesNotContain(withoutCommand.SelectMany(x => x.Links), link => link.Rel == "workflow-definition-folder-move");
+        var move = Assert.Single(withCommand.SelectMany(x => x.Links), link => link.Rel == "workflow-definition-folder-move");
+        Assert.Equal("design/workflows/definitions/move", move.Href);
     }
 
     [Fact]
@@ -140,5 +154,10 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
         public Task<WorkflowFolderPage> ListDirectChildrenAsync(WorkflowFolderPageRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<WorkflowFolderDetails?> FindWithAncestorsAsync(string folderId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<WorkflowFolder> CreateAsync(WorkflowFolder folder, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class StubMoveCommand : IMoveWorkflowDefinitionsCommand
+    {
+        public Task Execute(IReadOnlyCollection<string> definitionIds, string? folderId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

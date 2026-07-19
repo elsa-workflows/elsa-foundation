@@ -234,6 +234,39 @@ public sealed class WorkflowFolderProviderContractTests
             CancellationToken.None));
     }
 
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Definition_folder_moves_are_atomic_tenant_scoped_and_preserve_lifecycle_placement_on_every_provider(string providerKey)
+    {
+        await using var driver = await InitializeAsync(providerKey);
+        const string tenantA = "tenant-a";
+        await using var client = await driver.OpenPhysicalClientAsync(Access(tenantA));
+        var folders = Store(client, tenantA);
+        var destination = await folders.CreateAsync(Folder("destination", "Destination"));
+        var clock = new Clock();
+        var access = GroundworkTestAccess.AccessContext(tenantA);
+        var save = new GroundworkSaveWorkflowDefinitionCommand(client.DocumentStore, clock, access);
+        await save.Execute(new WorkflowDefinition { Id = "one", Name = "One", TenantId = tenantA, FolderId = "before" });
+        await save.Execute(new WorkflowDefinition { Id = "two", Name = "Two", TenantId = tenantA, FolderId = "before", DeletedAt = DateTimeOffset.UnixEpoch });
+
+        var move = new GroundworkMoveWorkflowDefinitionsCommand(client.DocumentStore, clock, access);
+        await move.Execute(["one", "two"], destination.Id);
+
+        var definitions = new GroundworkWorkflowDefinitionStore(client.DocumentStore);
+        Assert.Equal(destination.Id, (await definitions.GetAsync("one")).FolderId);
+        var deleted = await definitions.GetAsync("two");
+        Assert.Equal(destination.Id, deleted.FolderId);
+        Assert.Equal(DateTimeOffset.UnixEpoch, deleted.DeletedAt);
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => move.Execute(["one", "missing"], null));
+        Assert.Equal(destination.Id, (await definitions.GetAsync("one")).FolderId);
+
+        await using var foreign = await driver.OpenPhysicalClientAsync(Access("tenant-b"));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            new GroundworkMoveWorkflowDefinitionsCommand(foreign.DocumentStore, clock, GroundworkTestAccess.AccessContext("tenant-b"))
+                .Execute(["one"], null));
+    }
+
     private static async Task<GroundworkProviderDriver> InitializeAsync(string providerKey)
     {
         var driver = GroundworkProviderDriverFactory.Create(providerKey);
