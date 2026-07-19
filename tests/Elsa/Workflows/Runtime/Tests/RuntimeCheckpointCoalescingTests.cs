@@ -166,6 +166,56 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(2, innerStore.ListCommits().Count);
     }
 
+    // ADR 0032 R2 / spec 107: a ReplaySafe attempt-claim arrives as a Deferred decision (the coalescing policy
+    // decided so from the checkpoint's profile metadata). Unlike the External/Immediate case above, it must NOT
+    // flush before activation — it buffers into the overlay working set and folds forward into the next flushed
+    // commit, so a hot loop of ReplaySafe activities collapses to one coalesced commit.
+    [Fact]
+    public async Task ReplaySafeAttemptClaim_IsDeferred_BuffersInsteadOfFlushing_AndFoldsForward()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+        var claimedState = NewRunningActivityState() with
+        {
+            Metadata = new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.ActivityAttemptActivationClaim] = "attempt-1"
+            }
+        };
+
+        // The ReplaySafe claim: policy decided Deferred, so the store buffers it — nothing durable yet.
+        await store.CommitAsync(
+            NewEmptyCommit(workflowExecutionId, 1, RuntimeCheckpointNames.ActivityAttemptClaimed) with
+            {
+                StateChanges = ActivityUpsert(claimedState)
+            },
+            new(RuntimeCheckpointPersistenceMode.Deferred));
+
+        Assert.Empty(innerStore.ListCommits());
+        Assert.True(session.IsActive);
+        Assert.Equal(1, session.HopCount);
+        Assert.True(session.TryGetActivity("actexec-1", out var overlayState, out var tombstoned));
+        Assert.False(tombstoned);
+        Assert.Equal("attempt-1", overlayState!.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
+
+        // The terminal boundary folds the buffered claim forward into one durable commit.
+        await store.CommitAsync(
+            NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.WorkflowCompleted),
+            new(RuntimeCheckpointPersistenceMode.Immediate));
+
+        Assert.False(session.IsActive);
+        var folded = Assert.Single(innerStore.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, folded.Checkpoint.Name);
+        Assert.Equal("attempt-1", Assert.Single(folded.StateChanges.ActivityExecutions).State.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
+    }
+
     [Fact]
     public async Task ActivityAttemptBoundary_WithPendingSegmentOutbox_HandsOwnershipToDurableStore()
     {

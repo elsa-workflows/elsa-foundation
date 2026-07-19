@@ -22,8 +22,9 @@ public sealed class ActivityContract
         IReadOnlyDictionary<string, ActivityInputContract> inputs,
         ActivityResultContract result,
         IReadOnlyCollection<string> outcomes,
-        ActivityActivationRequirement activation)
-        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation)
+        ActivityActivationRequirement activation,
+        SideEffectProfile sideEffectProfile = SideEffectProfile.External)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile)
     {
         if (!StringComparer.Ordinal.Equals(schemaFingerprint, SchemaFingerprint))
             throw new JsonException($"Activity contract fingerprint '{schemaFingerprint}' does not match computed fingerprint '{SchemaFingerprint}'.");
@@ -37,7 +38,8 @@ public sealed class ActivityContract
         IEnumerable<ActivityInputContract> inputs,
         ActivityResultContract result,
         IEnumerable<string> outcomes,
-        ActivityActivationRequirement activation)
+        ActivityActivationRequirement activation,
+        SideEffectProfile sideEffectProfile = SideEffectProfile.External)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(contractVersion);
@@ -55,6 +57,9 @@ public sealed class ActivityContract
         if (outcomeArray.Any(string.IsNullOrWhiteSpace))
             throw new ArgumentException("Activity outcomes cannot be empty.", nameof(outcomes));
 
+        if (!Enum.IsDefined(sideEffectProfile))
+            throw new ArgumentOutOfRangeException(nameof(sideEffectProfile), sideEffectProfile, "Activity side-effect profile is not defined.");
+
         ActivityTypeKey = activityTypeKey;
         ContractVersion = contractVersion;
         DescriptorKind = descriptorKind;
@@ -63,6 +68,7 @@ public sealed class ActivityContract
         Result = result;
         Outcomes = outcomeArray.ToArray();
         Activation = activation;
+        SideEffectProfile = sideEffectProfile;
         SchemaFingerprint = ComputeFingerprint();
     }
 
@@ -75,6 +81,17 @@ public sealed class ActivityContract
     public ActivityResultContract Result { get; }
     public IReadOnlyCollection<string> Outcomes { get; }
     public ActivityActivationRequirement Activation { get; }
+
+    /// <summary>
+    /// Author-declared replay/side-effect classification (ADR 0032 R1). Part of the pinned, fingerprinted
+    /// contract: it gates whether the pre-activation attempt-claim checkpoint may be deferred under a
+    /// coalescing cadence. <see cref="SideEffectProfile.External"/> is the fail-safe default — an unmarked
+    /// activity keeps the mandatory pre-activation durability boundary. Omitted from the serialized shape
+    /// when it is the default so a default-External contract's document is byte-identical to before this
+    /// unit (consistent with the fingerprint, which also only carries the non-default profile).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public SideEffectProfile SideEffectProfile { get; }
 
     private string ComputeFingerprint()
     {
@@ -92,8 +109,16 @@ public sealed class ActivityContract
             activation = Activation
         };
 
-        var json = JsonSerializer.Serialize(payload);
-        var canonical = SortNode(JsonNode.Parse(json)!).ToJsonString();
+        var node = JsonNode.Parse(JsonSerializer.Serialize(payload))!.AsObject();
+
+        // The side-effect profile participates in the fingerprint only when it departs from the default
+        // (spec 107 fingerprint decision): a change to ReplaySafe is a contract change and must move the
+        // fingerprint, while every existing default-External contract keeps a byte-identical canonical shape
+        // so no pinned executable, golden, or fixture churns.
+        if (SideEffectProfile != SideEffectProfile.External)
+            node["sideEffectProfile"] = SideEffectProfile.ToString();
+
+        var canonical = SortNode(node).ToJsonString();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
     }
@@ -344,4 +369,27 @@ public enum ActivityValueStorage
     Inline,
     External,
     Custom
+}
+
+/// <summary>
+/// Author-declared replay/side-effect classification of a CLR activity (ADR 0032 R1). Governs whether the
+/// runtime may defer the pre-activation attempt-claim durability boundary under a coalescing checkpoint cadence.
+/// </summary>
+public enum SideEffectProfile
+{
+    /// <summary>
+    /// Fail-safe default. The activity may perform an externally observable effect (an outbound call, an emitted
+    /// event, a durable write another party reads), so its logical-invocation identity and materialized input
+    /// snapshot MUST be durably flushed before its body runs — the attempt-claim checkpoint stays a mandatory
+    /// immediate flush. An unmarked activity is always External.
+    /// </summary>
+    External,
+
+    /// <summary>
+    /// The activity is pure/deterministic between checkpoint boundaries (in-workflow routing, compute, variable
+    /// transforms): re-executing it on replay produces byte-identical state and no observable effect. Its
+    /// attempt-claim checkpoint may be deferred and folded forward into the next flushed commit under a
+    /// coalescing cadence, so a hot loop of such activities collapses to a single coalesced commit.
+    /// </summary>
+    ReplaySafe
 }

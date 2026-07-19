@@ -202,6 +202,28 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("writeline-1a75fea9", Assert.Single(executable.RootActivity.ChildSlots).Activities.Single().ExecutableNodeId);
     }
 
+    // ADR 0032 R1 / spec 107: the [ActivitySideEffectProfile] attribute is folded into the pinned contract by
+    // the publish-time compiler. Flowchart is declared ReplaySafe; WriteLine (unmarked) defaults to External.
+    [Fact]
+    public async Task Compiler_folds_the_declared_side_effect_profile_into_the_pinned_contract()
+    {
+        var root = FlowchartNode("flowchart-0affb8fb", [Node("writeline-1a75fea9", Text("hello"))]);
+        var publication = SourceOwnedPublication(
+            _flowchartActivity,
+            ActivityDefinitionVersionResolutionKind.AuthorableActivity);
+        var compiler = CompilerWithPublication(root, publication, _writeLineActivity, _flowchartActivity);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe,
+            executable.RootActivity.ActivityContract!.SideEffectProfile);
+        var writeLine = Assert.Single(executable.RootActivity.ChildSlots).Activities.Single();
+        Assert.Equal(
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+            writeLine.ActivityContract!.SideEffectProfile);
+    }
+
     [Fact]
     public async Task Legacy_source_owned_sequence_publication_compiles_authored_children_as_ordinary_structure()
     {
