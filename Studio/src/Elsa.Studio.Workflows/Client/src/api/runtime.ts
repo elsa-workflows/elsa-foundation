@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityExecutionInspection,
+  ActivityExecutionHierarchyPage,
+  ActivityExecutionLayout,
   RuntimeDiagnosticsEvidenceLevel,
   RuntimeDiagnosticsSettingsView,
   RuntimeDiagnosticsSubjectOverrides,
@@ -229,14 +231,62 @@ export async function getWorkflowInstance(context: StudioEndpointContext, workfl
 export async function getActivityExecutionInspection(
   context: StudioEndpointContext,
   workflowExecutionId: string,
-  activityExecutionId: string
+  activityExecutionId: string,
+  signal?: AbortSignal
 ) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.runtime,
     "activity-execution",
     { workflowExecutionId, activityExecutionId });
-  return context.http.getJson<ActivityExecutionInspection>(path);
+  return signal
+    ? context.http.getJson<ActivityExecutionInspection>(path, { signal })
+    : context.http.getJson<ActivityExecutionInspection>(path);
+}
+
+export interface ActivityExecutionDescendantsRequest {
+  cursor?: string | null;
+  limit?: number;
+  include?: Array<"outcomes" | "bookmarks" | "incidents">;
+}
+
+export async function getActivityExecutionDescendants(
+  context: StudioEndpointContext,
+  workflowExecutionId: string,
+  activityExecutionId: string,
+  request: ActivityExecutionDescendantsRequest = {},
+  signal?: AbortSignal
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "activity-execution-descendants",
+    { workflowExecutionId, activityExecutionId });
+  const parameters = new URLSearchParams({
+    limit: String(request.limit ?? 100)
+  });
+  if (request.cursor) parameters.set("cursor", request.cursor);
+  if (request.include?.length) parameters.set("include", request.include.join(","));
+  const url = `${path}?${parameters.toString()}`;
+  return signal
+    ? context.http.getJson<ActivityExecutionHierarchyPage>(url, { signal })
+    : context.http.getJson<ActivityExecutionHierarchyPage>(url);
+}
+
+export async function getActivityExecutionLayout(
+  context: StudioEndpointContext,
+  workflowExecutionId: string,
+  activityExecutionId: string,
+  signal?: AbortSignal
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "activity-execution-layout",
+    { workflowExecutionId, activityExecutionId });
+  return signal
+    ? context.http.getJson<ActivityExecutionLayout>(path, { signal })
+    : context.http.getJson<ActivityExecutionLayout>(path);
 }
 
 export async function listWorkflowIncidents(context: StudioEndpointContext, workflowExecutionId: string) {

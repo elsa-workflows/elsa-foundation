@@ -24,7 +24,9 @@ public sealed class StudioRuntimeScriptTests
                 ["Studio:Dashboard:PinnedWidgetIds:0"] = "attention.queue",
                 // Configured server-side — the bridge needs it — but it must never leak into the browser script.
                 ["Studio:BackendModuleManagementApiKey"] = ManagementKey,
-                ["Studio:Auth:Enabled"] = "true"
+                ["Studio:Auth:Enabled"] = "true",
+                ["Studio:ActivityDefinitions:LocalRecovery:Enabled"] = "true",
+                ["Studio:ActivityDefinitions:LocalRecovery:TtlMinutes"] = "90"
             })
             .Build();
 
@@ -57,6 +59,9 @@ public sealed class StudioRuntimeScriptTests
         Assert.Contains("https://backend.example/", script);
         Assert.DoesNotContain("http://elsa-server:8080", script);
         Assert.Contains("\"enabled\":true", script);
+        Assert.Contains("activityDefinitions", script);
+        Assert.Contains("localRecovery", script);
+        Assert.Contains("\"ttlMinutes\":90", script);
         Assert.Contains("\"hostId\":\"studio-primary\"", script);
         Assert.Contains("\"defaultRefreshIntervalMs\":900000", script);
         Assert.Contains("\"widgetTimeoutMs\":12000", script);

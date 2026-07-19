@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { useWorkflowEditorData } from "../workflow-editor/useWorkflowEditorData";
+import { projectRecommendedPalette, useWorkflowEditorData } from "../workflow-editor/useWorkflowEditorData";
 import { clearApiCapabilityCache } from "../api/capabilities";
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -17,14 +17,23 @@ afterEach(() => {
   active = null;
 });
 
-function createApi(expressionResponses: Array<unknown | Error>) {
+function createApi(
+  expressionResponses: Array<unknown | Error>,
+  options: {
+    activities?: unknown[];
+    recommended?: unknown[];
+  } = {}
+) {
   let expressionAttempt = 0;
   const getJson = vi.fn(async (path: string) => {
     if (path === "/capabilities") {
       return {
         capabilities: [
           { id: "elsa.api.workflow-design", contractVersion: "1", links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" }] },
-          { id: "elsa.api.activity-design", contractVersion: "1", links: [{ rel: "activity-catalog", href: "design/activities/catalog" }] },
+          { id: "elsa.api.activity-design", contractVersion: "1", links: [
+            { rel: "activity-catalog", href: "design/activities/catalog" },
+            { rel: "recommended-activity-definitions", href: "design/activities/definitions/picker" }
+          ] },
           { id: "elsa.api.expressions", contractVersion: "1", links: [{ rel: "expression-descriptors", href: "expressions/descriptors" }] }
         ]
       };
@@ -35,7 +44,8 @@ function createApi(expressionResponses: Array<unknown | Error>) {
         versions: []
       };
     }
-    if (path.includes("/design/activities/catalog")) return { activities: [] };
+    if (path.includes("/design/activities/catalog")) return { activities: options.activities ?? [] };
+    if (path.includes("/design/activities/definitions/picker")) return { items: options.recommended ?? [], nextOffset: null };
     if (path.endsWith("/expressions/descriptors")) {
       const response = expressionResponses[Math.min(expressionAttempt++, expressionResponses.length - 1)];
       if (response instanceof Error) throw response;
@@ -59,6 +69,10 @@ function Probe({ context }: { context: StudioEndpointContext }) {
     <div>
       <output data-testid="expressions" data-status={data.expressionDescriptorStatus}>
         {data.expressionDescriptors.map(descriptor => descriptor.type).join(",")}
+      </output>
+      <output data-testid="palette">{data.paletteCatalog.map(activity => activity.activityVersionId).join(",")}</output>
+      <output data-testid="catalog">
+        {data.catalog.map(activity => `${activity.activityVersionId}:${activity.activityDefinitionVersion ?? "-"}`).join(",")}
       </output>
       <button type="button" onClick={() => void data.reload()}>Reload definition</button>
       <button type="button" onClick={() => void data.reloadExpressionDescriptors()}>Retry descriptors</button>
@@ -174,6 +188,81 @@ describe("useWorkflowEditorData expression descriptor contract", () => {
     await Promise.resolve();
 
     expect(output.textContent).toBe("Ruby");
+  });
+
+  it("offers only the exact recommended catalog version while retaining historical versions for resolution", async () => {
+    const version = (activityVersionId: string, semanticVersion: string) => ({
+      activityVersionId,
+      activityTypeKey: "Contoso.Invoice",
+      version: semanticVersion,
+      displayName: "Invoice",
+      category: "Finance",
+      executionType: "Action",
+      available: true,
+      inputs: [],
+      outputs: [],
+      ports: [],
+      containerStructure: null,
+      authoringTemplate: { nodeId: "activity", activityVersionId, inputs: {}, outputs: {}, structure: null }
+    });
+    const api = createApi([[]], {
+      activities: [
+        {
+          ...version("write-line-v1", "1.0.0"),
+          activityTypeKey: "Elsa.WriteLine",
+          displayName: "Write Line",
+          category: "Primitives"
+        },
+        version("invoice-v10", "10.0.0"),
+        version("invoice-v2", "2.0.0")
+      ],
+      recommended: [{
+        definitionId: "invoice-definition",
+        activityTypeKey: "Contoso.Invoice",
+        category: "Finance",
+        displayName: "Invoice",
+        versionId: "invoice-v2",
+        version: "2.0.0",
+        isAvailable: true
+      }]
+    });
+    const container = render(api.context);
+
+    await waitFor(() => expect(container.querySelector("[data-testid='palette']")?.textContent).toBe("invoice-v2"));
+    expect(container.querySelector("[data-testid='catalog']")?.textContent)
+      .toBe("write-line-v1:-,invoice-v10:10.0.0,invoice-v2:2.0.0");
+  });
+
+  it("removes a cleared recommendation and rejects retired, stale, or type-mismatched rows", () => {
+    const catalog = [{
+      activityVersionId: "invoice-v2",
+      activityTypeKey: "Contoso.Invoice",
+      version: "2.0.0",
+      displayName: "Invoice",
+      category: "Finance",
+      executionType: "Action",
+      available: true,
+      inputs: [],
+      outputs: [],
+      ports: [],
+      containerStructure: null,
+      authoringTemplate: { nodeId: "activity", activityVersionId: "invoice-v2", inputs: [], outputs: [], structure: null }
+    }];
+    const recommendation = {
+      definitionId: "invoice-definition",
+      activityTypeKey: "Contoso.Invoice",
+      category: "Finance",
+      displayName: "Invoice",
+      versionId: "invoice-v2",
+      version: "2.0.0",
+      isAvailable: true
+    };
+
+    expect(projectRecommendedPalette(catalog, [recommendation])).toHaveLength(1);
+    expect(projectRecommendedPalette(catalog, [])).toEqual([]);
+    expect(projectRecommendedPalette(catalog, [{ ...recommendation, isAvailable: false }])).toEqual([]);
+    expect(projectRecommendedPalette(catalog, [{ ...recommendation, versionId: "cleared-version" }])).toEqual([]);
+    expect(projectRecommendedPalette(catalog, [{ ...recommendation, activityTypeKey: "Contoso.Other" }])).toEqual([]);
   });
 });
 

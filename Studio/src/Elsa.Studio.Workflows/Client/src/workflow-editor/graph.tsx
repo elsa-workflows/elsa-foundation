@@ -42,6 +42,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         <span className="wf-node-copy">
           <strong>{nodeData.label}</strong>
           {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle ? <small>{subtitle}</small> : null}
+          {nodeData.activityDefinitionVersion ? <small className="wf-node-version">v{nodeData.activityDefinitionVersion}</small> : null}
         </span>
       </div>
       {nodeData.childSlots.length > 0 ? (

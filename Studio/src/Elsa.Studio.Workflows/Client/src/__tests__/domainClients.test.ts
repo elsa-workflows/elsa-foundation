@@ -4,7 +4,7 @@ import { clearApiCapabilityCache } from "../api/capabilities";
 import { listDefinitions } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { preflightPublication, preflightPublicationSnapshot, startWorkflowDraftTestRun } from "../api/publishing";
-import { getExecutable, getExecutableInputSources, listExecutables, runExecutable } from "../api/runtime";
+import { getActivityExecutionDescendants, getActivityExecutionLayout, getExecutable, getExecutableInputSources, listExecutables, runExecutable } from "../api/runtime";
 import { parseWorkflowRunInputs } from "../workflowRunInputs";
 import type { WorkflowInput } from "../workflowTypes";
 
@@ -38,7 +38,9 @@ const capabilities = {
         { rel: "workflow-executables", href: "runtime/workflows/executables" },
         { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
         { rel: "workflow-executable-input-sources", href: "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources", templated: true },
-        { rel: "workflow-execute", href: "runtime/workflows/executables/{artifactId}/execute", templated: true }
+        { rel: "workflow-execute", href: "runtime/workflows/executables/{artifactId}/execute", templated: true },
+        { rel: "activity-execution-descendants", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants", templated: true },
+        { rel: "activity-execution-layout", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout", templated: true }
       ]
     }
   ]
@@ -210,6 +212,40 @@ describe("canonical domain clients", () => {
 
     expect(getJson).toHaveBeenLastCalledWith(
       "/runtime/workflows/executables/artifact%2F1/source-references/reference%2Fold/input-sources"
+    );
+  });
+
+  it("uses the boundary-scoped descendants and pinned layout relations without resolving current Design state", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const context = createContext({ getJson });
+
+    await getActivityExecutionDescendants(context, "run/1", "activity/1");
+    await getActivityExecutionLayout(context, "run/1", "activity/1");
+
+    expect(getJson).toHaveBeenNthCalledWith(
+      2,
+      "/runtime/workflows/instances/run%2F1/activity-executions/activity%2F1/descendants?limit=100"
+    );
+    expect(getJson).toHaveBeenNthCalledWith(
+      3,
+      "/runtime/workflows/instances/run%2F1/activity-executions/activity%2F1/layout"
+    );
+  });
+
+  it("binds descendant continuation requests to the same explicit query and supports cancellation", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const context = createContext({ getJson });
+    const controller = new AbortController();
+
+    await getActivityExecutionDescendants(context, "run/1", "activity/1", {
+      cursor: "cursor/+=",
+      limit: 200,
+      include: ["outcomes", "bookmarks", "incidents"]
+    }, controller.signal);
+
+    expect(getJson).toHaveBeenLastCalledWith(
+      "/runtime/workflows/instances/run%2F1/activity-executions/activity%2F1/descendants?limit=200&cursor=cursor%2F%2B%3D&include=outcomes%2Cbookmarks%2Cincidents",
+      { signal: controller.signal }
     );
   });
 });

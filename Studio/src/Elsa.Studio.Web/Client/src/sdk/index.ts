@@ -1179,9 +1179,25 @@ export interface StudioWorkflowRuntimeSettings {
   autosaveEnabledByDefault?: boolean;
 }
 
+export interface StudioActivityDefinitionRecoverySettings {
+  enabled?: boolean;
+  ttlMinutes?: number;
+}
+
+export interface StudioActivityDefinitionRuntimeSettings {
+  localRecovery?: StudioActivityDefinitionRecoverySettings;
+}
+
+export interface StudioRuntimeIdentity {
+  subject?: string | null;
+  tenantId?: string | null;
+}
+
 export interface StudioRuntimeSettings {
   hostId?: string;
   workflows?: StudioWorkflowRuntimeSettings;
+  activityDefinitions?: StudioActivityDefinitionRuntimeSettings;
+  identity?: StudioRuntimeIdentity;
   attention?: {
     hostApiEnabled?: boolean;
   };
@@ -1190,6 +1206,105 @@ export interface StudioRuntimeSettings {
     widgetTimeoutMs?: number;
     pinnedWidgetIds?: string[];
   };
+}
+
+export const studioNavigationRequestedEvent = "elsa:studio-navigation-requested";
+
+export interface StudioNavigationRequest {
+  fromPath: string;
+  toPath: string;
+}
+
+export function requestStudioNavigation(fromPath: string, toPath: string) {
+  if (typeof window === "undefined") return true;
+  return window.dispatchEvent(new CustomEvent<StudioNavigationRequest>(studioNavigationRequestedEvent, {
+    cancelable: true,
+    detail: { fromPath, toPath }
+  }));
+}
+
+export interface StudioActivityDefinitionLayoutRecord {
+  nodeId: string;
+  data: unknown;
+}
+
+export interface StudioActivityDefinitionImplementationState {
+  payload: unknown;
+  layout: StudioActivityDefinitionLayoutRecord[];
+}
+
+export type StudioActivityDiagnosticSeverity = "Error" | "Warning" | "Info";
+
+export interface StudioActivityDiagnosticSubject {
+  kind: string;
+  id: string;
+  definitionId?: string | null;
+  versionId?: string | null;
+  revision?: number | null;
+}
+
+export interface StudioActivityDependencyPathItem {
+  definitionId: string;
+  versionId: string;
+  version: string;
+  templateHash: string;
+}
+
+export interface StudioActivityNodeOrigin {
+  kind: string;
+  id: string;
+}
+
+export interface StudioActivityDiagnosticLocation {
+  providerKey?: string | null;
+  jsonPointer?: string | null;
+  referenceKey?: string | null;
+  nodeOrigin?: StudioActivityNodeOrigin[] | null;
+  dependencyPath?: StudioActivityDependencyPathItem[] | null;
+}
+
+export interface StudioActivityDiagnostic {
+  code: string;
+  severity: StudioActivityDiagnosticSeverity;
+  message: string;
+  subject: StudioActivityDiagnosticSubject;
+  location?: StudioActivityDiagnosticLocation | null;
+  remediation?: string | null;
+  metadata: Record<string, string>;
+}
+
+export type StudioActivityDiagnosticFocusResult =
+  | { kind: "focused"; announcement: string }
+  | { kind: "unsupported"; announcement: string };
+
+export interface StudioActivityDiagnosticFocusRequest {
+  location: StudioActivityDiagnosticLocation;
+  subject: StudioActivityDiagnosticSubject;
+  editorElement: HTMLElement;
+}
+
+export interface StudioActivityDefinitionImplementationEditorProps {
+  context: StudioEndpointContext;
+  definitionId: string;
+  draftId: string;
+  revision: number;
+  providerKey: string;
+  providerSchemaVersion: string;
+  manifestFingerprint: string;
+  value: StudioActivityDefinitionImplementationState;
+  readOnly: boolean;
+  onChange(value: StudioActivityDefinitionImplementationState): void;
+}
+
+export interface StudioActivityDefinitionImplementationEditorContribution {
+  id: string;
+  providerKey: string;
+  providerSchemaVersion: string;
+  createInitialImplementation(): StudioActivityDefinitionImplementationState;
+  focusDiagnosticLocation?(
+    request: StudioActivityDiagnosticFocusRequest
+  ): StudioActivityDiagnosticFocusResult | Promise<StudioActivityDiagnosticFocusResult>;
+  component: ComponentType<StudioActivityDefinitionImplementationEditorProps>;
 }
 
 export interface ElsaStudioModuleApi {
@@ -1203,7 +1318,7 @@ export interface ElsaStudioModuleApi {
   readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
-  readonly activityEditors: StudioContributionRegistry<unknown>;
+  readonly activityEditors: StudioContributionRegistry<StudioActivityDefinitionImplementationEditorContribution>;
   readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
   readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
   /** Available on hosts that support the workflow run-input editor Slot. */

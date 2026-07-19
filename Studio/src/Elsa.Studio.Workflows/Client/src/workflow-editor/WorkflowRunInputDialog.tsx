@@ -109,7 +109,7 @@ function describeEditorFallback(inputs: WorkflowInput[], inputKey: string, error
   return `${error} ${guidance}`;
 }
 
-function WorkflowRunInputField({ input, editors, value, error, disabled, onEditorFailure, onChange }: {
+export function WorkflowRunInputField({ input, editors, value, error, disabled, onEditorFailure, onChange }: {
   input: WorkflowInput;
   editors: StudioWorkflowRunInputEditorContribution[];
   value: string;

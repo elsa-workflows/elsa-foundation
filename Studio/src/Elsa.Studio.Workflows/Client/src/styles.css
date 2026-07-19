@@ -3462,7 +3462,8 @@
 }
 
 .wf-node[data-icon="flowchart"] .wf-node-icon,
-.wf-node[data-icon="sequence"] .wf-node-icon {
+.wf-node[data-icon="sequence"] .wf-node-icon,
+.wf-node[data-icon="reusable"] .wf-node-icon {
   border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-activity-composite) 12%, var(--wf-panel));
   color: var(--wf-activity-composite);
@@ -3497,6 +3498,94 @@
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: 650;
+}
+
+.wf-node-version,
+.wf-palette-version {
+  color: var(--wf-accent);
+  font-family: var(--studio-font-mono);
+}
+
+.wf-palette-version {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--wf-accent-soft);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+}
+
+.wf-reusable-identity,
+.wf-boundary-layout,
+.wf-boundary-descendants {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  padding: 10px;
+}
+
+.wf-reusable-identity h4,
+.wf-boundary-evidence h4 {
+  margin: 0;
+}
+
+.wf-reusable-identity dl,
+.wf-boundary-evidence > dl {
+  display: grid;
+  min-width: 0;
+  gap: 4px 10px;
+  grid-template-columns: minmax(92px, max-content) minmax(0, 1fr);
+  margin: 0;
+}
+
+.wf-reusable-identity dt,
+.wf-boundary-evidence dt {
+  color: var(--wf-muted-text);
+  font-size: 11px;
+}
+
+.wf-reusable-identity dd,
+.wf-boundary-evidence dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-family: var(--studio-font-mono);
+  font-size: 11px;
+}
+
+.wf-reusable-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.wf-reusable-actions a {
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  color: var(--wf-accent);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 8px;
+  text-decoration: none;
+}
+
+.wf-reusable-actions a:hover,
+.wf-reusable-actions a:focus-visible {
+  background: var(--wf-accent-soft);
+}
+
+.wf-upgrade-available {
+  border-radius: var(--wf-radius);
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent);
+  font-weight: 700;
+  margin: 0;
+  padding: 7px 8px;
+}
+
+.wf-boundary-evidence {
+  display: grid;
+  gap: 10px;
 }
 
 .wf-node-slot-badge {

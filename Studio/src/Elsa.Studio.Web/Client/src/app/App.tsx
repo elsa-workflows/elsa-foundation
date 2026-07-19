@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ChevronDown,
@@ -27,6 +27,7 @@ import type {
   StudioNavigationContribution,
   StudioPanelContribution
 } from "../sdk";
+import { requestStudioNavigation } from "../sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
@@ -114,6 +115,8 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
   const [incomingPrompt, setIncomingPrompt] = useState<{ id: string; message: string; requestId?: string } | null>(null);
+  const acceptedPathRef = useRef(normalizePath(window.location.pathname));
+  const acceptedLocationRef = useRef(currentRelativeLocation());
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
@@ -127,14 +130,27 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   );
 
   useEffect(() => {
-    const onPopState = () => setPath(normalizePath(window.location.pathname));
+    const onPopState = () => {
+      const nextPath = normalizePath(window.location.pathname);
+      const nextLocation = currentRelativeLocation();
+      if (nextPath !== acceptedPathRef.current && !requestStudioNavigation(acceptedLocationRef.current, nextLocation)) {
+        window.history.pushState({}, "", acceptedLocationRef.current);
+        return;
+      }
+      acceptedPathRef.current = nextPath;
+      acceptedLocationRef.current = nextLocation;
+      setPath(nextPath);
+    };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   const navigateTo = useCallback((nextPath: string) => {
+    if (!requestStudioNavigation(acceptedLocationRef.current, nextPath)) return;
     window.history.pushState({}, "", nextPath);
-    setPath(normalizePath(window.location.pathname));
+    acceptedPathRef.current = normalizePath(window.location.pathname);
+    acceptedLocationRef.current = currentRelativeLocation();
+    setPath(acceptedPathRef.current);
     window.dispatchEvent(new PopStateEvent("popstate"));
   }, []);
 
@@ -219,7 +235,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         }, {
           backendBaseUrl,
           backendHttp: backendContext.http,
-          runtime: getStudioRuntimeSettings(runtimeConfig)
+          runtime: getStudioRuntimeSettings(runtimeConfig, authManager?.getSession())
         });
         registerBuiltInSettingEditors(registry);
 
@@ -969,6 +985,10 @@ function normalizePath(path: string) {
   }
 
   return path;
+}
+
+function currentRelativeLocation() {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 
 function resolveRuntimeBaseUrl(value: string | undefined, fallbackBaseUrl: string) {

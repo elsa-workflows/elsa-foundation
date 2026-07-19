@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, Repeat2 } from "lucide-react";
 import type { StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
+import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import type { ScopedVariableAnalysis } from "../api/workflowDesign";
 import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
@@ -30,6 +31,11 @@ interface InspectorPanelProps {
   selectedActivityType: string;
   selectedDescriptor: StudioActivityDescriptor | null;
   selectedNodeAvailability: ActivityAvailabilityDiagnosticEntry | null;
+  selectedReusableDefinitionId?: string | null;
+  selectedReusableSemanticVersion?: string | null;
+  selectedReusableVersion?: ActivityDefinitionVersionView | null;
+  selectedReusableVersionStatus?: "idle" | "loading" | "ready" | "failed";
+  selectedRecommendedVersion?: RecommendedActivityDefinition | null;
   selectedSlots: ChildSlot[];
   // True when the inspected node is the scope OWNER (shown because nothing on the canvas is selected):
   // the container whose contents the canvas displays, e.g. the flowchart a slot entry descended into.
@@ -45,6 +51,7 @@ interface InspectorPanelProps {
   onRetryExpressionDescriptors(): void;
   scopedVariableAnalysis: ScopedVariableAnalysis;
   onSelectedActivityChange(activity: ActivityNode): void;
+  onChangeReusableVersion?(activity: ActivityNode, version: ActivityDefinitionVersionView): void;
   onEnterSlot(ownerNodeId: string, slot: ChildSlot, label: string): void;
   // Assign or replace the activity of a single-cardinality slot with a fresh instance of `activity`.
   onReplaceSlotActivity(ownerNodeId: string, slot: ChildSlot, label: string, activity: ActivityCatalogItem): void;
@@ -60,6 +67,11 @@ export function InspectorPanel({
   selectedActivityType,
   selectedDescriptor,
   selectedNodeAvailability,
+  selectedReusableDefinitionId,
+  selectedReusableSemanticVersion,
+  selectedReusableVersion,
+  selectedReusableVersionStatus = "idle",
+  selectedRecommendedVersion,
   selectedSlots,
   inspectingScopeOwner = false,
   catalog,
@@ -73,6 +85,7 @@ export function InspectorPanel({
   onRetryExpressionDescriptors,
   scopedVariableAnalysis,
   onSelectedActivityChange,
+  onChangeReusableVersion,
   onEnterSlot,
   onReplaceSlotActivity
 }: InspectorPanelProps) {
@@ -102,6 +115,17 @@ export function InspectorPanel({
         <dt>Activity version</dt>
         <dd>{selectedNode.activityVersionId}</dd>
       </dl>
+      {selectedReusableDefinitionId ? (
+        <ReusableActivityIdentity
+          node={selectedNode}
+          definitionId={selectedReusableDefinitionId}
+          semanticVersion={selectedReusableSemanticVersion}
+          version={selectedReusableVersion}
+          status={selectedReusableVersionStatus}
+          recommendation={selectedRecommendedVersion}
+          onChangeVersion={onChangeReusableVersion}
+        />
+      ) : null}
       {selectedNodeAvailability ? (
         <div className="wf-availability-notice">
           <AlertTriangle size={14} />
@@ -179,5 +203,69 @@ export function InspectorPanel({
         />
       ) : null}
     </div>
+  );
+}
+
+function ReusableActivityIdentity({
+  node,
+  definitionId,
+  semanticVersion,
+  version,
+  status,
+  recommendation,
+  onChangeVersion
+}: {
+  node: ActivityNode;
+  definitionId: string;
+  semanticVersion?: string | null;
+  version?: ActivityDefinitionVersionView | null;
+  status: "idle" | "loading" | "ready" | "failed";
+  recommendation?: RecommendedActivityDefinition | null;
+  onChangeVersion?(activity: ActivityNode, version: ActivityDefinitionVersionView): void;
+}) {
+  const upgradeAvailable = Boolean(recommendation
+    && recommendation.isAvailable
+    && recommendation.definitionId === (version?.definition.definitionId ?? definitionId)
+    && recommendation.versionId !== node.activityVersionId);
+  const recommendedVersion = upgradeAvailable ? recommendation : null;
+  const exactDefinitionId = version?.definition.definitionId ?? definitionId;
+  const exactVersionId = version?.versionId ?? node.activityVersionId;
+  const sourceUrl = `/workflows/activity-definitions?definition=${encodeURIComponent(exactDefinitionId)}&section=versions&version=${encodeURIComponent(exactVersionId)}`;
+  const draftUrl = `${sourceUrl}&createDraftFrom=${encodeURIComponent(exactVersionId)}`;
+  return (
+    <section className="wf-reusable-identity" aria-label="Reusable activity identity">
+      <h4>Reusable boundary</h4>
+      <p className="wf-muted">This placed occurrence is pinned and read-only at its immutable version. Contract authoring happens in a separate Activity Definition draft.</p>
+      <dl>
+        <dt>Definition ID</dt>
+        <dd>{exactDefinitionId}</dd>
+        <dt>Version ID</dt>
+        <dd>{exactVersionId}</dd>
+        <dt>Exact version</dt>
+        <dd>{version?.version ?? semanticVersion ?? "Unknown"}</dd>
+        {version ? (
+          <>
+            <dt>Provider</dt>
+            <dd>{version.provider.providerKey}</dd>
+            <dt>Provider schema</dt>
+            <dd>{version.provider.schemaVersion}</dd>
+            <dt>Lifecycle</dt>
+            <dd>{version.lifecycle}</dd>
+          </>
+        ) : null}
+      </dl>
+      {status === "loading" ? <p className="wf-muted" role="status">Loading exact version details…</p> : null}
+      {status === "failed" ? <p className="wf-muted" role="status">Exact authorized version details are unavailable.</p> : null}
+      <div className="wf-reusable-actions">
+        <button type="button" disabled={!version || !onChangeVersion} onClick={() => {
+          if (version) onChangeVersion?.(node, version);
+        }}>
+          <Repeat2 size={14} /> Change exact version
+        </button>
+        <a href={sourceUrl}>Open exact source definition</a>
+        <a href={draftUrl}>Create a separate draft</a>
+      </div>
+      {recommendedVersion ? <p className="wf-upgrade-available">Recommended v{recommendedVersion.version} available</p> : null}
+    </section>
   );
 }
