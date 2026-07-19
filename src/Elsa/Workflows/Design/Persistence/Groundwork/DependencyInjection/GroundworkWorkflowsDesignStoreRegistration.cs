@@ -68,6 +68,9 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.RemoveAll<IMoveWorkflowDefinitionsCommand>();
         services.AddScoped<IMoveWorkflowDefinitionsCommand, GroundworkMoveWorkflowDefinitionsCommand>();
 
+        services.RemoveAll<IRestructureWorkflowFoldersCommand>();
+        services.AddScoped<IRestructureWorkflowFoldersCommand, GroundworkRestructureWorkflowFoldersCommand>();
+
         services.RemoveAll<IDeleteWorkflowDefinitionPermanentlyCommand>();
         services.AddScoped<IDeleteWorkflowDefinitionPermanentlyCommand, GroundworkDeleteWorkflowDefinitionPermanentlyCommand>();
 

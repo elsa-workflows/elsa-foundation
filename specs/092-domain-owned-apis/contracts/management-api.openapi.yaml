@@ -218,6 +218,61 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Workflow Design]
+      operationId: deleteEmptyWorkflowFolder
+      description: Optional capability relation `workflow-folder-delete-empty`; rejects folders with direct children or definitions, including soft-deleted definitions.
+      responses:
+        '204': { description: Empty folder deleted }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /design/workflows/folders/{folderId}/rename:
+    parameters:
+      - $ref: '#/components/parameters/FolderId'
+    post:
+      tags: [Workflow Design]
+      operationId: renameWorkflowFolder
+      description: Optional capability relation `workflow-folder-rename`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RenameWorkflowFolderRequest' }
+      responses:
+        '200':
+          description: Updated public folder view
+          content: { application/json: { schema: { $ref: '#/components/schemas/WorkflowFolder' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /design/workflows/folders/{folderId}/move:
+    parameters:
+      - $ref: '#/components/parameters/FolderId'
+    post:
+      tags: [Workflow Design]
+      operationId: moveWorkflowFolder
+      description: Optional capability relation `workflow-folder-move`; explicit null parentId moves to root.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveWorkflowFolderRequest' }
+      responses:
+        '200':
+          description: Updated public folder view
+          content: { application/json: { schema: { $ref: '#/components/schemas/WorkflowFolder' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   /design/workflows/definitions/{definitionId}:
     parameters:
@@ -1599,6 +1654,16 @@ components:
       required: [name]
       properties:
         name: { type: string, minLength: 1, maxLength: 128 }
+        parentId: { type: [string, 'null'], maxLength: 64 }
+    RenameWorkflowFolderRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+    MoveWorkflowFolderRequest:
+      type: object
+      required: [parentId]
+      properties:
         parentId: { type: [string, 'null'], maxLength: 64 }
     RuntimeDiagnosticsSettings:
       type: object

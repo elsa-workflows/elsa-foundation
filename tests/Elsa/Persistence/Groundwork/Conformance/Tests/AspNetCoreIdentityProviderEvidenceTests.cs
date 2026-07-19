@@ -14,7 +14,7 @@ namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 public sealed class AspNetCoreIdentityProviderEvidenceTests
 {
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.60";
-    private const string CurrentGroundworkVersion = "0.0.1-preview.67";
+    private const string CurrentGroundworkVersion = "0.0.1-preview.72";
     private static readonly Lazy<JsonSchema> EvidenceSchema = new(() =>
         JsonSchema.FromText(File.ReadAllText(EvidenceSchemaPath(RepositoryRoot()))));
 
@@ -107,7 +107,7 @@ public sealed class AspNetCoreIdentityProviderEvidenceTests
         Skip.If(
             true,
             "The accepted preview.60 matrix is immutable historical evidence. " +
-            "Generate preview.67 evidence only in a dedicated evidence-regeneration work unit with a matching schema.");
+            "Generate preview.72 evidence only in a dedicated evidence-regeneration work unit with a matching schema.");
     }
 
     private static IReadOnlyDictionary<string, string> ProviderContents(string value) =>

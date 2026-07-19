@@ -25,13 +25,15 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommand(
         if (access.Scope is null)
             throw new InvalidOperationException("Workflow-definition moves require a tenant-scoped persistence context.");
 
-        var scopeKinds = folderId is null
-            ? new[] { WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind }
-            : new[] { WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind };
+        // Every non-root source or destination is a structural CAS anchor. Always admitting the folder
+        // kind keeps a move-to-Unfiled from racing an empty-folder delete of its old placement.
+        var scopeKinds = new[] { WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind };
         try
         {
             await using var unit = await store.BeginAsync(DocumentCommitScope.Of(scopeKinds), cancellationToken);
-            await ValidateDestinationAsync(unit, folderId, access, cancellationToken);
+            var folderFences = new Dictionary<string, (DocumentEnvelope Envelope, WorkflowFolder Folder)>(StringComparer.Ordinal);
+            if (folderId is not null)
+                folderFences.Add(folderId, await LoadFolderAsync(unit, folderId, access, cancellationToken));
             var movedAt = clock.UtcNow;
 
             // Finish every read and visibility check before staging a single mutation. A missing or foreign
@@ -53,6 +55,15 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommand(
                     throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId);
                 }
                 definitions.Add((envelope, definition));
+                if (definition.FolderId is { } sourceFolderId && !folderFences.ContainsKey(sourceFolderId))
+                {
+                    // Historical documents may retain a placement whose folder was removed before folder
+                    // integrity existed. There is no live anchor to fence in that case; preserve the
+                    // established ability to return it to Unfiled, while still fencing every extant source.
+                    var source = await TryLoadFolderAsync(unit, sourceFolderId, access, cancellationToken);
+                    if (source is not null)
+                        folderFences.Add(sourceFolderId, source.Value);
+                }
             }
 
             foreach (var (envelope, definition) in definitions)
@@ -69,6 +80,18 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommand(
                     GroundworkDesignJson.Options,
                     access) with { ExpectedVersion = envelope.Version };
                 var result = await unit.SaveAsync(save, cancellationToken);
+                if (result.Status != DocumentStoreWriteStatus.Saved)
+                    throw new WorkflowDefinitionFolderMoveConflictException();
+            }
+            foreach (var (_, fence) in folderFences)
+            {
+                var result = await unit.SaveAsync(GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+                    WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
+                    WorkflowsDesignStorageManifest.WorkflowFolderCollection,
+                    WorkflowsDesignStorageManifest.SchemaVersion,
+                    fence.Folder,
+                    GroundworkDesignJson.Options,
+                    access) with { ExpectedVersion = fence.Envelope.Version }, cancellationToken);
                 if (result.Status != DocumentStoreWriteStatus.Saved)
                     throw new WorkflowDefinitionFolderMoveConflictException();
             }
@@ -95,14 +118,12 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommand(
             WorkflowFolderNames.ValidateIdentifier(folderId, nameof(folderId));
     }
 
-    private static async Task ValidateDestinationAsync(
+    private static async Task<(DocumentEnvelope Envelope, WorkflowFolder Folder)> LoadFolderAsync(
         IDocumentUnitOfWork unit,
-        string? folderId,
+        string folderId,
         PersistenceAccessContext access,
         CancellationToken cancellationToken)
     {
-        if (folderId is null)
-            return;
         var envelope = await unit.LoadAsync(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind, folderId, cancellationToken)
             ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
         var folder = JsonSerializer.Deserialize<GroundworkDocument<WorkflowFolder>>(envelope.ContentJson, GroundworkDesignJson.Options)?.Entity
@@ -115,6 +136,23 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommand(
         {
             throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
         }
+        return (envelope, folder);
+    }
+
+    private static async Task<(DocumentEnvelope Envelope, WorkflowFolder Folder)?> TryLoadFolderAsync(
+        IDocumentUnitOfWork unit,
+        string folderId,
+        PersistenceAccessContext access,
+        CancellationToken cancellationToken)
+    {
+        var envelope = await unit.LoadAsync(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind, folderId, cancellationToken);
+        if (envelope is null)
+            return null;
+        var folder = JsonSerializer.Deserialize<GroundworkDocument<WorkflowFolder>>(envelope.ContentJson, GroundworkDesignJson.Options)?.Entity
+            ?? throw new InvalidOperationException("The workflow-folder document is empty.");
+        try { access.EnsureTenantScope(folder.TenantId); }
+        catch (InvalidOperationException) { throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId); }
+        return (envelope, folder);
     }
 
     private static WorkflowDefinition ReadDefinition(DocumentEnvelope envelope) =>

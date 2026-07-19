@@ -51,6 +51,7 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommandTests
         var clock = new Clock();
         var access = GroundworkTestAccess.AccessContext("tenant-a");
         var definitions = new GroundworkSaveWorkflowDefinitionCommand(store, clock, access);
+        await new GroundworkWorkflowFolderStore(store, access, clock).CreateAsync(Folder("before", "Before"));
         await definitions.Execute(new WorkflowDefinition { Id = "one", Name = "One", FolderId = "before", TenantId = "tenant-a" });
 
         var command = new GroundworkMoveWorkflowDefinitionsCommand(store, clock, access);
@@ -77,6 +78,7 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommandTests
         var clock = new Clock();
         var tenantA = GroundworkTestAccess.AccessContext("tenant-a");
         var tenantB = GroundworkTestAccess.AccessContext("tenant-b");
+        await new GroundworkWorkflowFolderStore(store, tenantA, clock).CreateAsync(Folder("before", "Before"));
         await new GroundworkSaveWorkflowDefinitionCommand(store, clock, tenantA).Execute(
             new WorkflowDefinition { Id = "local", Name = "Local", TenantId = "tenant-a", FolderId = "before" });
         await new GroundworkSaveWorkflowDefinitionCommand(store, clock, tenantB).Execute(
@@ -118,6 +120,7 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommandTests
         var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
         var clock = new Clock();
         var access = GroundworkTestAccess.AccessContext("tenant-a");
+        await new GroundworkWorkflowFolderStore(store, access, clock).CreateAsync(Folder("before", "Before"));
         await new GroundworkSaveWorkflowDefinitionCommand(store, clock, access).Execute(
             new WorkflowDefinition { Id = "legacy", Name = "Legacy" });
 
@@ -133,6 +136,7 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommandTests
         var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
         var clock = new Clock();
         var access = GroundworkTestAccess.AccessContext("tenant-a");
+        await new GroundworkWorkflowFolderStore(store, access, clock).CreateAsync(Folder("before", "Before"));
         await new GroundworkSaveWorkflowDefinitionCommand(store, clock, access).Execute(
             new WorkflowDefinition { Id = "one", Name = "One", FolderId = "before", TenantId = "tenant-a" });
         var failures = new GroundworkFailureController();
