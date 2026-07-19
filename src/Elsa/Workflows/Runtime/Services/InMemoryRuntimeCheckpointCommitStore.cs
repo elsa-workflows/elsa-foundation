@@ -32,6 +32,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IActivityScopeCleanupStore? _activityScopeCleanupStore;
     private readonly IActivityExecutionHierarchyWriter? _activityExecutionHierarchyWriter;
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;
+    private readonly IWorkflowSchedulerWorkQueue? _schedulerWorkQueue;
     private readonly IWorkflowExecutableRootWriteLeaseManager? _rootWriteLeaseManager;
     private readonly TimeProvider _timeProvider;
 
@@ -83,7 +84,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         TimeProvider? timeProvider = null,
         IActivityScopeCleanupStore? activityScopeCleanupStore = null,
         IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter = null,
-        IWorkflowDispatchStore? workflowDispatchStore = null)
+        IWorkflowDispatchStore? workflowDispatchStore = null,
+        IWorkflowSchedulerWorkQueue? schedulerWorkQueue = null)
     {
         _state = state ?? new InMemoryRuntimeCheckpointStoreState();
         _workflowExecutionStateStore = workflowExecutionStateStore;
@@ -98,6 +100,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _activityExecutionHierarchyWriter = activityExecutionHierarchyWriter;
         _rootWriteLeaseManager = rootWriteLeaseManager;
         _workflowDispatchStore = workflowDispatchStore;
+        _schedulerWorkQueue = schedulerWorkQueue;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -181,7 +184,10 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                     {
                         throw new RuntimeCheckpointReplayConflictException(commit.CommitId);
                     }
-                    return new RuntimeCheckpointCommitStoreResult(existing.PendingPostCommitWorkIds);
+                    return new RuntimeCheckpointCommitStoreResult(existing.PendingPostCommitWorkIds)
+                    {
+                        ConsumedSchedulerWorkItemIds = existing.ConsumedSchedulerWorkItemIds
+                    };
                 }
             }
 
@@ -212,7 +218,11 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await EnsureExpectedFenceAsync(commit, cancellationToken);
 
         var pendingOutboxItems = commit.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
+        var consumedSchedulerWorkItemIds = commit.StateChanges.ConsumedSchedulerWorkItems
+            .Select(item => item.WorkItemId)
+            .ToArray();
         ValidatePendingOutboxItems(pendingOutboxItems);
+        ValidateConsumedSchedulerWorkItems(commit);
         ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
         await ValidateWorkflowTestScopesAsync(commit, cancellationToken);
         ValidateSchedulerStateChange(commit);
@@ -226,6 +236,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await ValidateWorkflowDispatchCancellationsAsync(commit, cancellationToken);
         await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
         {
+            // Fence-checked consume first: a claim-lost outcome throws before any other state is mutated, so a stale
+            // claimant's commit persists nothing (WU-1 / spec 105).
+            await ApplyConsumedSchedulerWorkItemsAsync(commit.StateChanges.ConsumedSchedulerWorkItems, ct);
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
             await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
             await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, ct);
@@ -250,16 +263,49 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                     foreach (var item in pendingOutboxItems)
                         SavePendingOutboxItem(item);
 
-                    _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(commit, decision, pendingOutboxItems.Select(item => item.OutboxItemId).ToArray()));
+                    _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(
+                        commit,
+                        decision,
+                        pendingOutboxItems.Select(item => item.OutboxItemId).ToArray(),
+                        consumedSchedulerWorkItemIds));
                 }
             }
-            catch (Exception exception)
+            catch (Exception exception) when (exception is not RuntimeSchedulerWorkConsumeConflictException)
             {
                 throw new RuntimeCheckpointInconsistentDurabilityException(commit.CommitId, exception);
             }
         }, cancellationToken);
 
-        return new RuntimeCheckpointCommitStoreResult(pendingOutboxItems.Select(item => item.OutboxItemId).ToArray());
+        return new RuntimeCheckpointCommitStoreResult(pendingOutboxItems.Select(item => item.OutboxItemId).ToArray())
+        {
+            ConsumedSchedulerWorkItemIds = consumedSchedulerWorkItemIds
+        };
+    }
+
+    private async ValueTask ApplyConsumedSchedulerWorkItemsAsync(
+        IReadOnlyCollection<ConsumedSchedulerWorkItem> consumed,
+        CancellationToken cancellationToken)
+    {
+        if (consumed.Count == 0)
+            return;
+        if (_schedulerWorkQueue is null)
+            throw new InvalidOperationException("The checkpoint contains consumed scheduler work items but no scheduler work queue is configured.");
+
+        foreach (var item in consumed)
+        {
+            var result = await _schedulerWorkQueue.ConsumeClaimedAsync(item, cancellationToken);
+            if (!result.Succeeded)
+                throw new RuntimeSchedulerWorkConsumeConflictException(item.WorkflowExecutionId, item.WorkItemId);
+        }
+    }
+
+    private void ValidateConsumedSchedulerWorkItems(RuntimeCheckpointCommit commit)
+    {
+        foreach (var item in commit.StateChanges.ConsumedSchedulerWorkItems)
+        {
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, item.WorkflowExecutionId))
+                throw new InvalidOperationException("Consumed scheduler work item WorkflowExecutionId must match the checkpoint workflow execution ID.");
+        }
     }
 
     private async ValueTask EnsureExpectedFenceAsync(
@@ -1177,4 +1223,5 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 public sealed record RuntimeCheckpointCommitRecord(
     RuntimeCheckpointCommit Commit,
     RuntimeCheckpointPersistenceDecision Decision,
-    IReadOnlyCollection<string> PendingPostCommitWorkIds);
+    IReadOnlyCollection<string> PendingPostCommitWorkIds,
+    IReadOnlyCollection<string> ConsumedSchedulerWorkItemIds);

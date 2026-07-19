@@ -276,6 +276,40 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(
         };
     }
 
+    public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ConsumeClaimedAsync(
+        ConsumedSchedulerWorkItem consumed,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(consumed);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var documentId = PhysicalDocumentId(consumed.WorkflowExecutionId, consumed.WorkItemId);
+        var existing = await Store.LoadAsync(DocumentKind, documentId, cancellationToken);
+        if (existing is null)
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+
+        var envelope = Deserialize(existing);
+        EnsureLogicalIdentity(envelope.Item, consumed.WorkflowExecutionId, consumed.WorkItemId);
+        // Fence on owner + fencing token only (renewal-stable): a renewal advances the document version but keeps these,
+        // so the consume survives an in-flight renewal while a successor reclaim (token advanced) is claim-lost.
+        if (envelope.ClaimOwnerId is null ||
+            !StringComparer.Ordinal.Equals(envelope.ClaimOwnerId, consumed.ClaimOwnerId) ||
+            envelope.ClaimToken != consumed.FencingToken)
+            return RuntimeSchedulerWorkClaimTransitionResult.Stale;
+
+        var result = await Store.DeleteAsync(
+            new DeleteDocumentRequest(DocumentKind, documentId, existing.Version),
+            cancellationToken);
+        return result.Status switch
+        {
+            DocumentStoreWriteStatus.Deleted => RuntimeSchedulerWorkClaimTransitionResult.Applied(),
+            DocumentStoreWriteStatus.NotFound or DocumentStoreWriteStatus.ConcurrencyConflict =>
+                RuntimeSchedulerWorkClaimTransitionResult.Stale,
+            _ => throw new InvalidOperationException(
+                $"Groundwork rejected scheduler work claim consumption for '{consumed.WorkItemId}' with status '{result.Status}'.")
+        };
+    }
+
     private async ValueTask<(DocumentEnvelope Document, WorkQueueEnvelope Envelope)?> LoadClaimDocumentAsync(
         RuntimeSchedulerWorkClaim claim,
         CancellationToken cancellationToken)
