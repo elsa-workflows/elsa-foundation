@@ -106,9 +106,9 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         var redelivered = await queue.EnqueueAsync(NewWorkItem(2, commandId: "command-redelivered"));
 
         var items = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
-        Assert.Equal(new[] { "work-1", "work-2", "work-3" }, items.Select(item => item.WorkItemId));
+        Assert.Equal(new[] { "work-1", "work-2", "work-3" }, items.Items.Select(item => item.WorkItemId));
         Assert.Equal("command-2", redelivered.CommandId);
-        Assert.Equal("command-2", items.ElementAt(1).CommandId);
+        Assert.Equal("command-2", items.Items.ElementAt(1).CommandId);
     }
 
     [Theory]

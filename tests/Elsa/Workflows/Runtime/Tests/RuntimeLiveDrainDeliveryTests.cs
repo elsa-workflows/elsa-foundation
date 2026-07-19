@@ -42,7 +42,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
         Assert.Equal(0, delivered.DeliveryFencingToken); // no claim taken.
 
         var enqueued = await queue.ListAsync(new RuntimeSchedulerWorkQuery(Wfid));
-        Assert.Equal(["work-hop-0"], enqueued.Select(item => item.WorkItemId));
+        Assert.Equal(["work-hop-0"], enqueued.Items.Select(item => item.WorkItemId));
     }
 
     // (b) After in-memory delivery the item is Delivered; a system-wide recovery sweep (claim path, no marker) finds
@@ -63,7 +63,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
 
         Assert.Equal(0, sweepResult.AttemptedCount);
         var enqueued = await queue.ListAsync(new RuntimeSchedulerWorkQuery(Wfid));
-        Assert.Equal(["work-hop-0"], enqueued.Select(item => item.WorkItemId)); // still exactly one, no duplicate.
+        Assert.Equal(["work-hop-0"], enqueued.Items.Select(item => item.WorkItemId)); // still exactly one, no duplicate.
     }
 
     // (d) Crash window: the continuation was enqueued (idempotent) but the Delivered mark was lost, so the outbox item
@@ -90,7 +90,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
         Assert.NotNull(delivered);
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
         var enqueued = await queue.ListAsync(new RuntimeSchedulerWorkQuery(Wfid));
-        Assert.Equal(["work-hop-0"], enqueued.Select(item => item.WorkItemId)); // idempotent enqueue: no duplicate.
+        Assert.Equal(["work-hop-0"], enqueued.Items.Select(item => item.WorkItemId)); // idempotent enqueue: no duplicate.
     }
 
     private static RuntimePostCommitOutboxProcessor NewProcessor(
