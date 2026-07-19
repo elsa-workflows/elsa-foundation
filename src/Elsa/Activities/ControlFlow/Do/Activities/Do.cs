@@ -58,6 +58,7 @@ namespace Elsa.Activities.Do.Activities;
 /// </remarks>
 [ActivityStructure("elsa.do.structure", "1.0.0")]
 [ActivityChildSlot("Do.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Do : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string BodySlotName = "Do.Body";
