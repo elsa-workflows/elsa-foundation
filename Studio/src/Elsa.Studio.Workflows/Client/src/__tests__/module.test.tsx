@@ -239,7 +239,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("pages the canonical definition collection without extra requests", async () => {
+  it("keeps paging the legacy definition collection without probing the page relation", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response({
       items: [definition(), ...Array.from({ length: 9 }, (_, index) => definition({ id: `definition-${index + 2}`, name: `Workflow ${index + 2}` })), definition({ id: "definition-11", name: "Second page" })]
     }));
@@ -255,6 +255,88 @@ describe("workflows module", () => {
       "https://server.example/design/workflows/definitions?state=active",
       "https://server.example/design/workflows/definitions?state=active"
     ]);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(expect.stringContaining("definition-pages"));
+
+    await unmount();
+  });
+
+  it("pages workflow definitions through the advertised capability relation", async () => {
+    let secondPageRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("continuationToken=opaque-refreshed-third")) {
+        return response({ items: [definition({ id: "definition-3", name: "Refreshed third page" })], nextContinuationToken: null });
+      }
+      if (url.includes("continuationToken=opaque-stale-third")) {
+        return response({ items: [definition({ id: "definition-3", name: "Third page" })], nextContinuationToken: null });
+      }
+      if (url.includes("continuationToken=opaque-second")) {
+        secondPageRequests += 1;
+        return response({
+          items: [definition({ id: "definition-2", name: "Second page" })],
+          nextContinuationToken: secondPageRequests === 1 ? "opaque-stale-third" : "opaque-refreshed-third"
+        });
+      }
+      if (url.includes("definition-pages")) {
+        return response({ items: [definition()], nextContinuationToken: "opaque-second" });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Page 1");
+    expect(container.textContent).not.toContain("Page 1 of");
+    await click(buttonByText(container, "Next"));
+    await waitForText(container, "Second page");
+    await click(buttonByText(container, "Next"));
+    await waitForText(container, "Third page");
+    await click(buttonByText(container, "Previous"));
+    await waitForText(container, "Second page");
+    await click(buttonByText(container, "Next"));
+    await waitForText(container, "Refreshed third page");
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://server.example/design/workflows/definition-pages?state=active&pageSize=10",
+      "https://server.example/design/workflows/definition-pages?state=active&pageSize=10&continuationToken=opaque-second",
+      "https://server.example/design/workflows/definition-pages?state=active&pageSize=10&continuationToken=opaque-stale-third",
+      "https://server.example/design/workflows/definition-pages?state=active&pageSize=10&continuationToken=opaque-second",
+      "https://server.example/design/workflows/definition-pages?state=active&pageSize=10&continuationToken=opaque-refreshed-third"
+    ]);
+
+    await unmount();
+  });
+
+  it("preserves paged selection across search and page-size changes but resets it for lifecycle changes", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response({
+      items: [definition()],
+      nextContinuationToken: null
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await waitForText(container, "1 selected");
+
+    await fill(container.querySelector<HTMLInputElement>('input[placeholder="Search definitions"]'), "Hello");
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("search=Hello"))).toBe(true));
+    expect(container.textContent).toContain("1 selected");
+    expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
+
+    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("pageSize=25"))).toBe(true));
+    expect(container.textContent).toContain("1 selected");
+    expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
+
+    await click(buttonByText(container, "Deleted"));
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("state=deleted"))).toBe(true));
+    expect(container.textContent).not.toContain("1 selected");
+    expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(false);
 
     await unmount();
   });
@@ -2912,7 +2994,8 @@ function withHeaders(headers?: HeadersInit, json = false) {
 async function renderRegisteredRoute(
   path = "/workflows/definitions",
   configureApi?: (api: ElsaStudioModuleApi) => void,
-  followNavigation = false
+  followNavigation = false,
+  capabilities = capabilityDocument()
 ) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
@@ -2924,7 +3007,7 @@ async function renderRegisteredRoute(
   const fetchWithoutCapabilities = globalThis.fetch;
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
     (typeof input === "object" && input && "url" in input ? String(input.url) : String(input)).includes("/capabilities")
-      ? response(capabilityDocument())
+      ? response(capabilities)
       : fetchWithoutCapabilities(input, init)));
   window.history.replaceState({}, "", path);
   const api = testApi();

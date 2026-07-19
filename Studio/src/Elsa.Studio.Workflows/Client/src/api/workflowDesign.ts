@@ -28,6 +28,7 @@ export interface DefinitionListRequest {
   state?: DefinitionListState;
   page: number;
   pageSize: number;
+  continuationToken?: string;
 }
 
 type WorkflowDraftResponse = Omit<WorkflowDraft, "validationErrors"> & {
@@ -82,12 +83,39 @@ async function definitionsPath(context: StudioEndpointContext) {
   return resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-definitions");
 }
 
+async function definitionPagePath(context: StudioEndpointContext) {
+  try {
+    return await resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-definitions-page");
+  } catch (error) {
+    if (error instanceof ApiCapabilityUnavailableError && error.relation === "workflow-definitions-page") return null;
+    throw error;
+  }
+}
+
 export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest) {
   const parameters = new URLSearchParams({
     state: request.state ?? "active"
   });
   const search = request.search.trim();
   if (search) parameters.set("search", search);
+
+  const pagedPath = await definitionPagePath(context);
+  if (pagedPath) {
+    parameters.set("pageSize", String(request.pageSize));
+    if (request.continuationToken) parameters.set("continuationToken", request.continuationToken);
+    const response = await context.http.getJson<{
+      items: WorkflowDefinitionsResponse["definitions"];
+      nextContinuationToken?: string | null;
+    }>(`${pagedPath}?${parameters.toString()}`);
+    return {
+      definitions: response.items ?? [],
+      page: request.page,
+      pageSize: request.pageSize,
+      nextContinuationToken: response.nextContinuationToken ?? null,
+      isPaged: true
+    } satisfies WorkflowDefinitionsResponse;
+  }
+
   const response = await context.http.getJson<{ items: WorkflowDefinitionsResponse["definitions"] }>(
     `${await definitionsPath(context)}?${parameters.toString()}`);
   const offset = Math.max(0, request.page - 1) * request.pageSize;

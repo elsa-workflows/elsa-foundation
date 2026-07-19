@@ -44,6 +44,17 @@ const capabilities = {
   ]
 };
 
+const pagedDefinitionCapabilities = {
+  capabilities: [{
+    id: "elsa.api.workflow-design",
+    contractVersion: "1",
+    links: [
+      { rel: "workflow-definitions", href: "design/workflows/definitions" },
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" }
+    ]
+  }]
+};
+
 describe("canonical domain clients", () => {
   it("normalizes the unpaged Design items response for Studio paging", async () => {
     const items = Array.from({ length: 12 }, (_, index) => ({
@@ -61,6 +72,40 @@ describe("canonical domain clients", () => {
     expect(result.definitions.map(item => item.id)).toEqual(["definition-6", "definition-7", "definition-8", "definition-9", "definition-10"]);
     expect(result).toMatchObject({ page: 2, pageSize: 5, totalCount: 12 });
     expect(getJson).toHaveBeenLastCalledWith("/design/workflows/definitions?state=all&search=Definition");
+  });
+
+  it("uses the advertised bounded definition page without downloading the legacy collection", async () => {
+    const items = Array.from({ length: 5 }, (_, index) => ({
+      id: `definition-${index + 1}`,
+      name: `Definition ${index + 1}`,
+      createdAt: "2026-07-13T00:00:00Z",
+      lastModifiedAt: "2026-07-13T00:00:00Z",
+      versionCount: 0
+    }));
+    const getJson = vi.fn(async (url: string) => url === "/capabilities"
+      ? pagedDefinitionCapabilities
+      : { items, nextContinuationToken: "opaque-next-page" });
+    const context = createContext({ getJson });
+
+    const result = await listDefinitions(context, {
+      search: "Definition",
+      state: "all",
+      page: 2,
+      pageSize: 5,
+      continuationToken: "opaque-current-page"
+    });
+
+    expect(result).toMatchObject({
+      definitions: items,
+      page: 2,
+      pageSize: 5,
+      nextContinuationToken: "opaque-next-page",
+      isPaged: true
+    });
+    expect(getJson).toHaveBeenLastCalledWith(
+      "/design/workflows/definition-pages?state=all&search=Definition&pageSize=5&continuationToken=opaque-current-page"
+    );
+    expect(getJson).not.toHaveBeenCalledWith(expect.stringContaining("/design/workflows/definitions?"));
   });
 
   it("uses canonical Activity, Publishing, and Runtime links without probing alternates", async () => {
