@@ -72,6 +72,12 @@ builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange:
 // keys + a seeded well-known admin, while Production hardens to durable stores, a persistent signing key
 // (secret), and a configured initial admin (password supplied as a secret — never committed).
 builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
+// WebApplication.CreateBuilder adds environment variables before these shell files. Re-add the environment and
+// command-line providers after the shell layers so container environment variables override shells.json, while
+// explicit command-line arguments retain the highest precedence.
+builder.Configuration
+    .AddEnvironmentVariables()
+    .AddCommandLine(args);
 var configuration = builder.Configuration;
 
 // Console log streaming is a process-global, host-level diagnostic (not a shell feature): capture is a static tee on
