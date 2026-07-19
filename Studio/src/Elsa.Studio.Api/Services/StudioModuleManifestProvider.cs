@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.RegularExpressions;
 using CShells;
 using CShells.Features;
 using Elsa.Studio.Api.Contracts;
@@ -7,6 +8,7 @@ using Elsa.Studio.Api.Options;
 using Elsa.Studio.Core.Attributes;
 using Elsa.Studio.Core.Events;
 using Elsa.Studio.Core.Models;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -102,7 +104,7 @@ public sealed class StudioModuleManifestProvider(
 
             var entry = $"/_content/{assemblyName}/studio/modules/{attr.Slug}/module.js?v={attr.Version}";
             var styles = attr.HasStyles
-                ? [$"/_content/{assemblyName}/studio/modules/{attr.Slug}/module.css?v={attr.Version}"]
+                ? ResolveStyles(assemblyName, attr.Slug, attr.Version)
                 : Array.Empty<string>();
 
             collection.Manifests.Add(new StudioModuleManifest(
@@ -153,6 +155,39 @@ public sealed class StudioModuleManifestProvider(
 
         return new CollectionResult(studioOptions, shellSettings, collection.Manifests.ToArray(), modules, diagnostics);
     }
+
+    /// <summary>
+    /// Lists the module's emitted stylesheets by enumerating its static web assets. Vite builds with
+    /// <c>cssCodeSplit</c> emit <c>module.css</c>, <c>module2.css</c>, … — the entry stylesheet is not
+    /// guaranteed to be <c>module.css</c>, so hardcoding a single link silently drops the rest.
+    /// Falls back to the single conventional <c>module.css</c> URL when the assets can't be enumerated
+    /// (no web host environment, e.g. in unit tests, or the directory is absent).
+    /// </summary>
+    private string[] ResolveStyles(string assemblyName, string slug, string version)
+    {
+        var basePath = $"/_content/{assemblyName}/studio/modules/{slug}";
+        var fallback = new[] { $"{basePath}/module.css?v={version}" };
+        var webRoot = serviceProvider.GetService<IWebHostEnvironment>()?.WebRootFileProvider;
+
+        if (webRoot is null)
+            return fallback;
+
+        var contents = webRoot.GetDirectoryContents($"_content/{assemblyName}/studio/modules/{slug}");
+
+        if (!contents.Exists)
+            return fallback;
+
+        var styles = contents
+            .Select(file => (file, match: ModuleStylePattern.Match(file.Name)))
+            .Where(x => !x.file.IsDirectory && x.match.Success)
+            .OrderBy(x => x.match.Groups[1].Value is "" ? 1 : int.Parse(x.match.Groups[1].Value))
+            .Select(x => $"{basePath}/{x.file.Name}?v={version}")
+            .ToArray();
+
+        return styles.Length > 0 ? styles : fallback;
+    }
+
+    private static readonly Regex ModuleStylePattern = new(@"^module(\d*)\.css$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static bool IsShellFeatureActive(StudioModuleManifest manifest, ShellSettings? shellSettings) =>
         string.IsNullOrWhiteSpace(manifest.ShellFeatureName) ||

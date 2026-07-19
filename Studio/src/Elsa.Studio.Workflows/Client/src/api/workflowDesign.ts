@@ -14,7 +14,9 @@ import type {
   WorkflowDefinitionState,
   WorkflowDefinitionsResponse,
   WorkflowDefinitionVersionDetails,
-  WorkflowDraft
+  WorkflowDraft,
+  WorkflowFolder,
+  WorkflowFolderDetail
 } from "../workflowTypes";
 import {
   ApiCapabilityUnavailableError,
@@ -28,6 +30,9 @@ export interface DefinitionListRequest {
   state?: DefinitionListState;
   page: number;
   pageSize: number;
+  continuationToken?: string;
+  folderId?: string | null;
+  unfiled?: boolean;
 }
 
 type WorkflowDraftResponse = Omit<WorkflowDraft, "validationErrors"> & {
@@ -43,6 +48,8 @@ export const workflowDesignKeys = {
   definitions: ["workflow-design", "definitions"] as const,
   definitionsList: (request: DefinitionListRequest) => [...workflowDesignKeys.definitions, "list", request] as const,
   definition: (definitionId: string) => [...workflowDesignKeys.definitions, "detail", definitionId] as const,
+  folders: ["workflow-design", "folders"] as const,
+  folderChildren: (parentId?: string | null) => [...workflowDesignKeys.folders, "children", parentId ?? null] as const,
   version: (versionId: string) => ["workflow-design", "versions", versionId] as const
 };
 
@@ -82,12 +89,149 @@ async function definitionsPath(context: StudioEndpointContext) {
   return resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-definitions");
 }
 
+async function definitionPagePath(context: StudioEndpointContext) {
+  try {
+    return await resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-definitions-page");
+  } catch (error) {
+    if (error instanceof ApiCapabilityUnavailableError && error.relation === "workflow-definitions-page") return null;
+    throw error;
+  }
+}
+
+/** Returns the advertised folder root, never a host-constructed URL. */
+export async function workflowFoldersPath(context: StudioEndpointContext) {
+  try {
+    return await resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-folders");
+  } catch (error) {
+    if (error instanceof ApiCapabilityUnavailableError && error.relation === "workflow-folders") return null;
+    throw error;
+  }
+}
+
+/** Folder-scoped inventory requires both the folder tree and bounded definition browsing relations. */
+export async function isWorkflowFolderBrowsingAvailable(context: StudioEndpointContext) {
+  const [folderRoot, definitionPage] = await Promise.all([
+    workflowFoldersPath(context),
+    definitionPagePath(context)
+  ]);
+  return !!folderRoot && !!definitionPage;
+}
+
+/** Returns the advertised bulk-placement endpoint, never a host-constructed URL. */
+export async function workflowDefinitionFolderMovePath(context: StudioEndpointContext) {
+  try {
+    return await resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-definition-folder-move");
+  } catch (error) {
+    if (error instanceof ApiCapabilityUnavailableError && error.relation === "workflow-definition-folder-move") return null;
+    throw error;
+  }
+}
+
+async function optionalWorkflowFolderMutationPath(
+  context: StudioEndpointContext,
+  relation: "workflow-folder-rename" | "workflow-folder-move" | "workflow-folder-delete-empty",
+  folderId: string
+) {
+  try {
+    return await resolveCapabilityLink(context, capabilityIds.workflowDesign, relation, { folderId });
+  } catch (error) {
+    if (error instanceof ApiCapabilityUnavailableError && error.relation === relation) return null;
+    throw error;
+  }
+}
+
+export async function getWorkflowFolderMutationSupport(context: StudioEndpointContext) {
+  const probeId = "capability-check";
+  const [rename, move, deleteEmpty] = await Promise.all([
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-rename", probeId),
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-move", probeId),
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-delete-empty", probeId)
+  ]);
+  return { rename: !!rename, move: !!move, deleteEmpty: !!deleteEmpty };
+}
+
+export interface WorkflowFolderPage {
+  items: WorkflowFolder[];
+  nextContinuationToken: string | null;
+}
+
+export async function listWorkflowFolders(context: StudioEndpointContext, request: { parentId?: string | null; continuationToken?: string | null; pageSize?: number } = {}) {
+  const root = await workflowFoldersPath(context);
+  if (!root) return null;
+  const parameters = new URLSearchParams({ pageSize: String(request.pageSize ?? 100) });
+  if (request.parentId) parameters.set("parentId", request.parentId);
+  if (request.continuationToken) parameters.set("continuationToken", request.continuationToken);
+  const response = await context.http.getJson<{ items?: WorkflowFolder[]; nextContinuationToken?: string | null }>(`${root}?${parameters}`);
+  return { items: response.items ?? [], nextContinuationToken: response.nextContinuationToken ?? null };
+}
+
+export async function getWorkflowFolder(context: StudioEndpointContext, folderId: string) {
+  const root = await workflowFoldersPath(context);
+  if (!root) return null;
+  return context.http.getJson<WorkflowFolderDetail>(`${root}/${encodeURIComponent(folderId)}`);
+}
+
+export async function createWorkflowFolder(context: StudioEndpointContext, request: { name: string; parentId?: string | null }) {
+  const root = await workflowFoldersPath(context);
+  if (!root) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folders");
+  const response = await context.http.postJson<WorkflowFolder | { folder: WorkflowFolder }>(root, request);
+  return "folder" in response ? response.folder : response;
+}
+
+export async function renameWorkflowFolder(context: StudioEndpointContext, folderId: string, name: string) {
+  const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-rename", folderId);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-rename");
+  await context.http.postJson<unknown>(path, { name });
+}
+
+export async function moveWorkflowFolder(context: StudioEndpointContext, folderId: string, parentId: string | null) {
+  const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-move", folderId);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-move");
+  await context.http.postJson<unknown>(path, { parentId });
+}
+
+export async function deleteEmptyWorkflowFolder(context: StudioEndpointContext, folderId: string) {
+  const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-delete-empty", folderId);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-delete-empty");
+  await context.http.deleteJson<unknown>(path);
+}
+
+/** Moves one or more definitions to a persisted folder, or to Unfiled when folderId is null. */
+export async function moveWorkflowDefinitions(
+  context: StudioEndpointContext,
+  request: { definitionIds: string[]; folderId: string | null }
+) {
+  const path = await workflowDefinitionFolderMovePath(context);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-definition-folder-move");
+  await context.http.postJson<unknown>(path, request);
+}
+
 export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest) {
   const parameters = new URLSearchParams({
     state: request.state ?? "active"
   });
   const search = request.search.trim();
   if (search) parameters.set("search", search);
+
+  const pagedPath = await definitionPagePath(context);
+  if (pagedPath) {
+    parameters.set("pageSize", String(request.pageSize));
+    if (request.continuationToken) parameters.set("continuationToken", request.continuationToken);
+    if (request.folderId) parameters.set("folderId", request.folderId);
+    if (request.unfiled) parameters.set("unfiled", "true");
+    const response = await context.http.getJson<{
+      items: WorkflowDefinitionsResponse["definitions"];
+      nextContinuationToken?: string | null;
+    }>(`${pagedPath}?${parameters.toString()}`);
+    return {
+      definitions: response.items ?? [],
+      page: request.page,
+      pageSize: request.pageSize,
+      nextContinuationToken: response.nextContinuationToken ?? null,
+      isPaged: true
+    } satisfies WorkflowDefinitionsResponse;
+  }
+
   const response = await context.http.getJson<{ items: WorkflowDefinitionsResponse["definitions"] }>(
     `${await definitionsPath(context)}?${parameters.toString()}`);
   const offset = Math.max(0, request.page - 1) * request.pageSize;

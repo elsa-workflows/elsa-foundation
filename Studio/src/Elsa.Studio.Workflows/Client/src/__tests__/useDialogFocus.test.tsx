@@ -37,6 +37,30 @@ describe("dialog focus management", () => {
     opener.remove();
     container.remove();
   });
+
+  it("does not replace focus already placed inside before initial focus runs", () => {
+    let runInitialFocus: FrameRequestCallback | undefined;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      runInitialFocus = callback;
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    const opener = document.createElement("button");
+    const container = document.createElement("div");
+    document.body.append(opener, container);
+    opener.focus();
+    const root = createRoot(container);
+
+    flushSync(() => root.render(<Dialog onEscape={vi.fn()} />));
+    const buttons = container.querySelectorAll("button");
+    buttons[1].focus();
+    runInitialFocus?.(0);
+    expect(document.activeElement).toBe(buttons[1]);
+
+    flushSync(() => root.unmount());
+    opener.remove();
+    container.remove();
+  });
 });
 
 function Dialog({ onEscape }: { onEscape(): void }) {
