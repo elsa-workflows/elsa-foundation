@@ -632,6 +632,12 @@ and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-
 - **Usage:** `WorkflowDrainOrchestrator` opens a scope around a drain when the factory is registered (greediest resolvable ctor), buffers intra-drain checkpoints in the session, and flushes one folded atomic commit at quiescence through `RuntimeCheckpointCommitter.CommitAsync` (so W5 ownership fencing still gates it). Only registered by the opt-in extension.
 - **Default implementation:** `RuntimeCoalescingDrainScopeFactory` *(opt-in only)*.
 
+### `IRuntimeLiveDrainDeliveryAccessor` *(engine — `Elsa.Workflows.Runtime`)*
+- **Kind:** Replacement (one ambient accessor marks the live drain that owns an execution's post-commit intent delivery — WU-2, spec 105-runtime-live-drain-delivery).
+- **Signature:** `RuntimeLiveDrainDeliveryScope? Current { get; }`, `IDisposable Push(RuntimeLiveDrainDeliveryScope? scope)`.
+- **Usage:** an `AsyncLocal` push/pop stack, mirroring `IRuntimeCoalescingSessionAccessor`. `WorkflowDrainOrchestrator.DrainCoreAsync` pushes a scope on the Immediate (no coalescing scope factory) branch, bounded by the RT-2 single-writer lease. While the scope is ambient, `RuntimePostCommitOutboxProcessor` delivers `EnqueueSchedulerWork` intents for the owning execution in-memory — idempotent `EnqueueAsync` plus a direct `Pending -> Delivered` mark via the existing non-claim recording contract — skipping the durable claim round-trip. It never engages while a coalescing session is active (the overlay is authoritative) and leaves other intent kinds, other executions, and unmarked callers (recovery sweep, v1 stores) on the durable claim path. Registered by default because Immediate is the default cost model.
+- **Default implementation:** `AsyncLocalRuntimeLiveDrainDeliveryAccessor`.
+
 ## Cross-references
 
 - HTTP endpoint behaviour overrides: [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](Http/EXTENSION_POINTS.md).
