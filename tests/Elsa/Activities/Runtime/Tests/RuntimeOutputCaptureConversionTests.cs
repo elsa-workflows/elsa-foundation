@@ -83,7 +83,7 @@ public sealed class RuntimeOutputCaptureConversionTests
     }
 
     [Fact]
-    public async Task Project_sends_identity_plans_through_the_runtime_conversion_boundary()
+    public async Task Project_rejects_transient_resources_before_durable_capture_state_is_written()
     {
         var type = new ValueTypeDescriptor("String");
         var (node, transition, completion) = NewCaptureScenario(
@@ -100,7 +100,7 @@ public sealed class RuntimeOutputCaptureConversionTests
                 options: null));
         var drivers = new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]);
 
-        var exception = await Assert.ThrowsAsync<RuntimeValueConversionException>(() =>
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new RuntimeOutputCaptureProjector(drivers).ProjectAsync(
                 "workflow",
                 "activity",
@@ -109,7 +109,92 @@ public sealed class RuntimeOutputCaptureConversionTests
                 completion,
                 DateTimeOffset.UnixEpoch).AsTask());
 
-        Assert.Contains("transient resources", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("VF-ACT-005", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("TransientResource", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("destination storage policy 'Custom'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("execution-local activity-result binding", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("DurableReference/resource-handle", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Project_allows_durable_capture_when_mixed_transient_capture_is_not_selected()
+    {
+        var countType = new ValueTypeDescriptor("UInt32");
+        var streamType = new ValueTypeDescriptor("Stream");
+        var descriptor = JsonSerializer.SerializeToElement(new { type = "test.mixed" });
+        var contract = new ActivityContract(
+            "test.mixed",
+            "1",
+            "test",
+            descriptor,
+            [],
+            new ActivityResultContract(
+                new ValueTypeDescriptor("Test.MixedResult"),
+                true,
+                ActivityValuePolicy.Default,
+                [
+                    new ActivityResultProjectionContract("count", "count", countType, true, ActivityValuePolicy.Default),
+                    new ActivityResultProjectionContract("stream", "stream", streamType, true, ActivityValuePolicy.Default, ValueRepresentation.TransientResource)
+                ]),
+            ["Done"],
+            new ActivityActivationRequirement("test", "test.mixed"));
+        var transition = ActivityTransition.Complete(new MixedResult(7U, "execution-local-stream-placeholder"));
+        var completion = new ActivityCompletionProjector().Project(
+            "invocation",
+            new ActivityAttempt("attempt", "invocation", 1, ActivityAttemptReason.Initial, DateTimeOffset.UnixEpoch),
+            contract,
+            transition,
+            DateTimeOffset.UnixEpoch);
+        var node = new ExecutableNode(
+            "mixed",
+            "mixed",
+            "test.mixed",
+            "1",
+            "test",
+            descriptor,
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>(),
+            activityContract: contract,
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>
+            {
+                ["count"] = new RuntimeOutputCapture(
+                    "count",
+                    "variable-count",
+                    new RuntimeValueTypeDescriptor("UInt32", WellKnownRuntimeDurableValueStorageDrivers.Json, null),
+                    DurableValueLifecycle.Instance,
+                    DurableValueStorage.Custom,
+                    captureOnSuccessfulCompletion: true),
+                ["stream"] = new RuntimeOutputCapture(
+                    "stream",
+                    "variable-stream",
+                    new RuntimeValueTypeDescriptor("Stream", WellKnownRuntimeDurableValueStorageDrivers.Json, null),
+                    DurableValueLifecycle.Instance,
+                    DurableValueStorage.Custom,
+                    captureOnSuccessfulCompletion: false,
+                    conversionPlan: new ValueConversionPlan(
+                        ValueConversionPlan.CurrentSchemaVersion,
+                        ValueRepresentation.TransientResource,
+                        streamType,
+                        streamType,
+                        ValueConversionMode.Auto,
+                        ValueConversionOperation.Identity,
+                        profile: null,
+                        limits: null,
+                        options: null))
+            });
+
+        var changes = await new RuntimeOutputCaptureProjector(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]))
+            .ProjectAsync(
+                "workflow",
+                "activity",
+                node,
+                (IActivityCompletionTransition)transition,
+                completion,
+                DateTimeOffset.UnixEpoch);
+
+        var state = Assert.Single(changes).State!;
+        Assert.Equal("variable-count", state.ValueId);
+        Assert.Equal(7U, state.InlineValue!.Value.GetUInt32());
     }
 
     [Fact]
@@ -270,6 +355,7 @@ public sealed class RuntimeOutputCaptureConversionTests
     private sealed record CountResult(uint Count);
     private sealed record EchoResult(string Value);
     private sealed record CustomerResult(string Body);
+    private sealed record MixedResult(uint Count, string Stream);
 
     private sealed class TestTypeRegistry(IReadOnlyDictionary<string, Type> aliases) : IWellKnownTypeRegistry
     {

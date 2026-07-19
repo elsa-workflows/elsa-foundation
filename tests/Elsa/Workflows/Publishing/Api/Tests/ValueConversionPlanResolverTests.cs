@@ -166,6 +166,24 @@ public sealed class ValueConversionPlanResolverTests
     }
 
     [Fact]
+    public void Output_capture_rejects_transient_resources_before_durable_variable_publication()
+    {
+        var outputCompiler = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]), resolver);
+
+        var exception = Assert.Throws<ArgumentException>(() => outputCompiler.CompileBoundaryOutputs(
+            "reader",
+            [new ActivityOutputContract("stream", "Stream", new TypeReference("Stream"), true, "elsa.json")],
+            [new ArgumentState("stream", new ArgumentValue("payload", "Variable"), null, null, null, null)],
+            [new VariableDefinition("payload", "Payload", new TypeReference("Stream"), null, null)]));
+
+        Assert.Contains("VF-ACT-005", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("TransientResource", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("destination storage policy 'Custom'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("execution-local activity-result binding", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("DurableReference/resource-handle", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Conversion_fingerprints_are_behavioral_but_missing_legacy_plans_keep_the_legacy_shape()
     {
         var plan = resolver.Resolve(Type("Int32"), ValueRepresentation.TypedValue, Type("Int64"));

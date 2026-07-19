@@ -54,10 +54,10 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
             throw new InvalidOperationException($"Transition '{transition.Kind}' cannot be projected as an activity completion.");
         if (!contract.Outcomes.Contains(completion.Outcome, StringComparer.Ordinal))
             throw new InvalidOperationException($"VF-ACT-006: Outcome '{completion.Outcome}' is not declared by activity contract '{contract.ActivityTypeKey}'.");
-        if (!contract.Result.Policy.IsPersistable)
-            throw new InvalidOperationException($"VF-ACT-005: Result for activity contract '{contract.ActivityTypeKey}' is not persistable.");
         if (contract.Result.IsRequired && completion.Result is null)
             throw new InvalidOperationException($"VF-ACT-006: Activity contract '{contract.ActivityTypeKey}' requires a result.");
+        if (!contract.Result.Policy.IsPersistable)
+            return ProjectTransient(invocationId, attempt, contract, completion, completedAt);
 
         var resultJson = JsonSerializer.SerializeToElement(completion.Result, completion.ResultType, SerializerOptions);
         var resultPolicy = contract.Result.Projections.Values.Aggregate(
@@ -129,6 +129,44 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
             completedAt,
             contract.SchemaFingerprint);
         return new ActivityCompletionProjection(durableCompletion, projections);
+    }
+
+    private static ActivityCompletionProjection ProjectTransient(
+        string invocationId,
+        ActivityAttempt attempt,
+        ActivityContract contract,
+        IActivityCompletionTransition completion,
+        DateTimeOffset completedAt)
+    {
+        foreach (var projection in contract.Result.Projections.Values)
+        {
+            if (projection.Policy.IsPersistable)
+                throw new InvalidOperationException($"VF-ACT-005: Transient result projection '{projection.Key}' must declare a non-persistable policy.");
+            if (!StringComparer.Ordinal.Equals(projection.Path, "$"))
+            {
+                throw new InvalidOperationException(
+                    $"VF-ACT-005: Transient result projection '{projection.Key}' cannot use path '{projection.Path}' because live resources are not serialized or reflected. Use '$' for execution-local pass-through.");
+            }
+        }
+
+        var resultEnvelope = completion.Result is null
+            ? ValueEnvelope.Null(contract.Result.Type, ValueProtectionPolicy.Transient)
+            : ValueEnvelope.Transient(contract.Result.Type, completion.Result);
+        var projections = contract.Result.Projections.Values.ToDictionary(
+            projection => projection.Key,
+            projection => completion.Result is null
+                ? ValueEnvelope.Null(projection.Type, ValueProtectionPolicy.Transient)
+                : ValueEnvelope.Transient(projection.Type, completion.Result),
+            StringComparer.Ordinal);
+        var activityCompletion = new ActivityCompletion(
+            invocationId,
+            attempt.AttemptId,
+            resultEnvelope,
+            completion.Outcome,
+            completedAt,
+            contract.SchemaFingerprint);
+
+        return new ActivityCompletionProjection(activityCompletion, projections);
     }
 
     private async ValueTask<ValueEnvelope> ToEnvelopeAsync(

@@ -392,6 +392,24 @@ public sealed class ValueConversionPlanTests
     }
 
     [Fact]
+    public void Transient_resource_null_is_retyped_without_materializing_or_persisting_a_resource()
+    {
+        var sourceType = new ValueTypeDescriptor("Stream");
+        var targetType = new ValueTypeDescriptor("Stream");
+        var plan = Plan(sourceType, targetType, ValueRepresentation.TransientResource, ValueConversionOperation.Identity);
+
+        var converted = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Null(sourceType, ValueProtectionPolicy.Transient),
+            plan);
+
+        Assert.Equal(ValuePresence.ExplicitNull, converted.Presence);
+        Assert.Equal(targetType, converted.Type);
+        Assert.Null(converted.InlineValue);
+        Assert.Null(converted.ExternalReference);
+        Assert.Equal(ValueProtectionPolicy.Transient, converted.Policy);
+    }
+
+    [Fact]
     public async Task Materializer_applies_an_explicit_pinned_plan_once_before_creating_the_input_snapshot()
     {
         var sourceType = new ValueTypeDescriptor("Int32");

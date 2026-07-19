@@ -103,6 +103,16 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
                 Envelope = externalProjectionSource
             };
         }
+        if (result.TransientResource is not null)
+        {
+            if (!StringComparer.Ordinal.Equals(projection.Path, "$"))
+                throw new InvalidOperationException($"Activity result '{reference.ProjectionKey}' for input '{binding.InputName}' is a transient resource and cannot be projected from path '{projection.Path}'.");
+
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
+            {
+                Envelope = result.Retype(binding.ConversionPlan?.SourceType ?? binding.TargetType)
+            };
+        }
         if (!result.InlineValue.HasValue)
             throw new InvalidOperationException($"Activity result '{reference.ProjectionKey}' for input '{binding.InputName}' has no readable payload.");
 
@@ -184,6 +194,6 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
     }
 
     private static ValueEnvelope Retype(ValueEnvelope source, ValueTypeDescriptor targetType) =>
-        new(targetType, source.Presence, source.InlineValue, source.ExternalReference, source.Policy);
+        source.Retype(targetType);
 
 }

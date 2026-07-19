@@ -231,6 +231,43 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     }
 
     [Fact]
+    public async Task Materialization_allows_transient_result_to_nonpersistable_direct_input()
+    {
+        await using var stream = new MemoryStream();
+        var streamType = new ValueTypeDescriptor("Stream");
+        var producer = CompletedProducer(ValueEnvelope.Transient(streamType, stream));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            streamType,
+            ValueProtectionPolicy.Transient,
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("producer", "customer-id", "scope:root"));
+        var context = NewContext(
+            consumer: consumer,
+            runtimeView: [producer, consumer],
+            executable: NewProducerExecutable(
+                projectionPolicy: ActivityValuePolicy.Default with { IsPersistable = false },
+                projectionType: streamType,
+                projectionPath: "$"));
+
+        var snapshot = await new RuntimeActivityInputMaterializer(_resolver)
+            .MaterializeSnapshotAsync(
+                NewConsumerNode(
+                    binding,
+                    inputType: streamType,
+                    inputPolicy: ActivityValuePolicy.Default with { IsPersistable = false }),
+                consumer.InvocationId,
+                context,
+                DateTimeOffset.UnixEpoch);
+
+        Assert.Same(stream, snapshot.Values["customer-id"].TransientResource);
+        Assert.Equal(ValueProtectionPolicy.Transient, snapshot.Values["customer-id"].Policy);
+        Assert.Null(snapshot.Values["customer-id"].InlineValue);
+        Assert.Null(snapshot.Values["customer-id"].ExternalReference);
+    }
+
+    [Fact]
     public async Task Materialization_preserves_a_canonical_absent_optional_input_in_the_complete_snapshot()
     {
         var binding = new RuntimeInputBinding(
@@ -343,7 +380,8 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
 
     private static WorkflowExecutable NewProducerExecutable(
         ActivityValuePolicy? projectionPolicy = null,
-        ValueTypeDescriptor? projectionType = null)
+        ValueTypeDescriptor? projectionType = null,
+        string projectionPath = "customerId")
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "producer" });
         var contract = new ActivityContract(
@@ -356,7 +394,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
                 new ValueTypeDescriptor("test/result"),
                 true,
                 ActivityValuePolicy.Default,
-                [new ActivityResultProjectionContract("customer-id", "customerId", projectionType ?? StringType, true, projectionPolicy ?? ActivityValuePolicy.Default)]),
+                [new ActivityResultProjectionContract("customer-id", projectionPath, projectionType ?? StringType, true, projectionPolicy ?? ActivityValuePolicy.Default)]),
             ["Done"],
             new ActivityActivationRequirement("test", "test/producer"));
         var node = new ExecutableNode(
@@ -380,7 +418,8 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     private static ExecutableNode NewConsumerNode(
         RuntimeInputBinding binding,
         bool isRequired = true,
-        ValueTypeDescriptor? inputType = null)
+        ValueTypeDescriptor? inputType = null,
+        ActivityValuePolicy? inputPolicy = null)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "consumer" });
         var contract = new ActivityContract(
@@ -388,7 +427,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             "1.0.0",
             "test",
             descriptor,
-            [new ActivityInputContract("customer-id", "Customer ID", inputType ?? StringType, isRequired, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("customer-id", "Customer ID", inputType ?? StringType, isRequired, false, null, inputPolicy ?? ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/consumer"));
