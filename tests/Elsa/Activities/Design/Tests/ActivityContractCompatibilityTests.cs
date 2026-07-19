@@ -134,6 +134,27 @@ public sealed class ActivityContractCompatibilityTests
     }
 
     [Fact]
+    public void ExplicitResultRepresentation_ChangesSchemaFingerprintAndRoundTrips()
+    {
+        var text = Contract(
+            inputName: "CustomerId",
+            inputKey: "customer-id",
+            result: Result(ValueRepresentation.TextValue));
+        var formatted = Contract(
+            inputName: "CustomerId",
+            inputKey: "customer-id",
+            result: Result(ValueRepresentation.FormattedContent));
+
+        var serialized = JsonSerializer.Serialize(formatted, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var roundTripped = JsonSerializer.Deserialize<ActivityContract>(serialized, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotEqual(text.SchemaFingerprint, formatted.SchemaFingerprint);
+        Assert.NotNull(roundTripped);
+        Assert.Equal(ValueRepresentation.FormattedContent, roundTripped.Result.Projections["receipt-id"].SourceRepresentation);
+        Assert.Equal(formatted.SchemaFingerprint, roundTripped.SchemaFingerprint);
+    }
+
+    [Fact]
     public void Contract_RejectsDuplicateStableKeysAndOutcomes()
     {
         var input = Input("CustomerId", "customer-id", new ValueTypeDescriptor("System.String"));
@@ -169,14 +190,15 @@ public sealed class ActivityContractCompatibilityTests
     private static ActivityContract Contract(
         string inputName,
         string inputKey,
-        ValueTypeDescriptor? inputType = null) =>
+        ValueTypeDescriptor? inputType = null,
+        ActivityResultContract? result = null) =>
         new(
             activityTypeKey: "Payments.ChargeCard",
             contractVersion: "2.0.0",
             descriptorKind: "clr",
             descriptorPayload: JsonSerializer.SerializeToElement(new { typeAlias = "Payments.ChargeCard" }),
             inputs: [Input(inputName, inputKey, inputType ?? new ValueTypeDescriptor("System.String"))],
-            result: Result(),
+            result: result ?? Result(),
             outcomes: ["completed", "declined"],
             activation: new ActivityActivationRequirement("clr", "Payments.ChargeCard"));
 
@@ -218,7 +240,7 @@ public sealed class ActivityContractCompatibilityTests
             defaultValue: null,
             ActivityValuePolicy.Default);
 
-    private static ActivityResultContract Result() =>
+    private static ActivityResultContract Result(ValueRepresentation? projectionRepresentation = null) =>
         new(
             new ValueTypeDescriptor("Payments.ChargeCardResult"),
             isRequired: true,
@@ -229,6 +251,8 @@ public sealed class ActivityContractCompatibilityTests
                     "receiptId",
                     new ValueTypeDescriptor("System.String"),
                     isRequired: true,
-                    ActivityValuePolicy.Default)
-            ]);
+                    ActivityValuePolicy.Default,
+                    projectionRepresentation)
+            ],
+            ValueRepresentation.StructuredValue);
 }

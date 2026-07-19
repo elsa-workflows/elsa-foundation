@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -14,16 +15,28 @@ public sealed record ValueEnvelope
         JsonElement? inlineValue,
         DurableValueExternalReference? externalReference,
         ValueProtectionPolicy policy)
+        : this(type, presence, inlineValue, externalReference, policy, transientResource: null)
+    {
+    }
+
+    private ValueEnvelope(
+        ValueTypeDescriptor type,
+        ValuePresence presence,
+        JsonElement? inlineValue,
+        DurableValueExternalReference? externalReference,
+        ValueProtectionPolicy policy,
+        object? transientResource)
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(policy);
-        Validate(presence, inlineValue, externalReference);
+        Validate(presence, inlineValue, externalReference, transientResource);
 
         Type = type;
         Presence = presence;
         InlineValue = inlineValue?.Clone();
         ExternalReference = externalReference;
         Policy = policy;
+        TransientResource = transientResource;
     }
 
     public ValueTypeDescriptor Type { get; }
@@ -31,6 +44,8 @@ public sealed record ValueEnvelope
     public JsonElement? InlineValue { get; }
     public DurableValueExternalReference? ExternalReference { get; }
     public ValueProtectionPolicy Policy { get; }
+    [JsonIgnore]
+    public object? TransientResource { get; }
 
     public static ValueEnvelope Absent(ValueTypeDescriptor type, ValueProtectionPolicy policy) =>
         new(type, ValuePresence.Absent, null, null, policy);
@@ -47,15 +62,22 @@ public sealed record ValueEnvelope
         ValueProtectionPolicy policy) =>
         new(type, ValuePresence.Present, null, externalReference, policy);
 
+    public static ValueEnvelope Transient(ValueTypeDescriptor type, object resource) =>
+        new(type, ValuePresence.Present, null, null, ValueProtectionPolicy.Transient, resource);
+
+    public ValueEnvelope Retype(ValueTypeDescriptor targetType) =>
+        new(targetType, Presence, InlineValue, ExternalReference, Policy, TransientResource);
+
     private static void Validate(
         ValuePresence presence,
         JsonElement? inlineValue,
-        DurableValueExternalReference? externalReference)
+        DurableValueExternalReference? externalReference,
+        object? transientResource)
     {
-        var payloadCount = (inlineValue.HasValue ? 1 : 0) + (externalReference is not null ? 1 : 0);
+        var payloadCount = (inlineValue.HasValue ? 1 : 0) + (externalReference is not null ? 1 : 0) + (transientResource is not null ? 1 : 0);
 
         if (presence == ValuePresence.Present && payloadCount != 1)
-            throw new ArgumentException("A present value must carry exactly one inline or external payload.");
+            throw new ArgumentException("A present value must carry exactly one inline, external, or transient payload.");
 
         if (presence != ValuePresence.Present && payloadCount != 0)
             throw new ArgumentException("An absent or explicit-null value cannot carry a payload.");

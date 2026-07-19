@@ -175,7 +175,8 @@ public sealed class SourceOwnedActivityVersionPublisher(
             Category: output.Category,
             Order: output.Order,
             UiHint: output.UiHint,
-            UiSpecifications: output.UISpecifications)).ToArray(),
+            UiSpecifications: output.UISpecifications,
+            SourceRepresentation: output.SourceRepresentation)).ToArray(),
         [new("Done", "Done", true)]);
 
     private static string StableId(string prefix, string value) =>

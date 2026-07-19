@@ -1,6 +1,9 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
@@ -53,6 +56,51 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
         var resolved = _resolver.Resolve(binding, context);
 
         Assert.Equal("customer-7", resolved.Envelope!.InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Direct_result_conversion_preserves_the_pinned_source_contract_until_materialization()
+    {
+        var sourceType = new ValueTypeDescriptor("System.UInt32");
+        var targetType = new ValueTypeDescriptor("System.Int64");
+        var plan = new ValueConversionPlan(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.TypedValue,
+            sourceType,
+            targetType,
+            ValueConversionMode.Auto,
+            ValueConversionOperation.NumericWidening,
+            profile: null,
+            limits: null,
+            options: null);
+        var producer = CompletedProducer(ValueEnvelope.Inline(
+            new ValueTypeDescriptor("test/result"),
+            JsonSerializer.SerializeToElement(new { customerId = 7U }),
+            ValueProtectionPolicy.InstanceInline));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            targetType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("producer", "customer-id", "scope:root"),
+            conversionPlan: plan);
+        var context = NewContext(
+            consumer: consumer,
+            runtimeView: [producer, consumer],
+            executable: NewProducerExecutable(projectionType: sourceType));
+
+        var resolved = _resolver.Resolve(binding, context);
+        var snapshot = await new RuntimeActivityInputMaterializer(_resolver)
+            .MaterializeSnapshotAsync(
+                NewConsumerNode(binding, inputType: targetType),
+                consumer.InvocationId,
+                context,
+                DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(sourceType, resolved.Envelope!.Type);
+        Assert.Equal(targetType, snapshot.Values["customer-id"].Type);
+        Assert.Equal(7U, snapshot.Values["customer-id"].InlineValue!.Value.GetUInt32());
     }
 
     [Fact]
@@ -186,6 +234,149 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     }
 
     [Fact]
+    public async Task Materialization_applies_formatted_request_and_variable_conversion_plans_once()
+    {
+        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var requestBinding = new RuntimeInputBinding(
+            "customer-id",
+            new ValueTypeDescriptor("Elsa.Any"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.WorkflowRequest,
+            workflowRequest: new RuntimeWorkflowRequestReference("payload"),
+            conversionPlan: plan);
+        var variableBinding = new RuntimeInputBinding(
+            "customer-id",
+            new ValueTypeDescriptor("Elsa.Any"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.VariableRead,
+            variable: new RuntimeVariableReference("customer", VariableReference.WorkflowScopeId),
+            conversionPlan: plan);
+        var context = NewContext(
+            workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+            {
+                ["payload"] = FormattedJsonEnvelope("""{"name":"Ada","tags":["json"]}""")
+            },
+            variableEnvelopes: new Dictionary<RuntimeVariableValueAddress, ValueEnvelope>
+            {
+                [new RuntimeVariableValueAddress(VariableReference.WorkflowScopeId, "customer")] = FormattedJsonEnvelope("""{"name":"Lin","tags":["variable"]}""")
+            });
+        var materializer = new RuntimeActivityInputMaterializer(_resolver);
+
+        var request = await materializer.MaterializeSnapshotAsync(
+            NewConsumerNode(requestBinding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            "consumer",
+            context,
+            DateTimeOffset.UnixEpoch);
+        var variable = await materializer.MaterializeSnapshotAsync(
+            NewConsumerNode(variableBinding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            "consumer",
+            context,
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal("Ada", request.Values["customer-id"].InlineValue!.Value.GetProperty("name").GetString());
+        Assert.Equal("Lin", variable.Values["customer-id"].InlineValue!.Value.GetProperty("name").GetString());
+        Assert.Equal(JsonValueKind.Array, request.Values["customer-id"].InlineValue!.Value.GetProperty("tags").ValueKind);
+    }
+
+    [Fact]
+    public async Task Materialization_applies_expression_conversion_plan_to_the_expression_source_type_once()
+    {
+        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            new ValueTypeDescriptor("Elsa.Any"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("Test", "payload"),
+            conversionPlan: plan);
+        var materializer = new RuntimeActivityInputMaterializer(
+            _resolver,
+            new TestTypeRegistry(),
+            new ConstantPortableExpressionEvaluator("""{"name":"Ada","tags":["expression"]}"""));
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(
+            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            "consumer",
+            NewContext(),
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal("Ada", snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("name").GetString());
+        Assert.Equal("expression", snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("tags")[0].GetString());
+    }
+
+    [Fact]
+    public async Task Materialization_applies_expression_parameter_conversion_plan_before_evaluation_once()
+    {
+        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            new ValueTypeDescriptor("Elsa.Any"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "Test",
+                "payload",
+                parameters: new Dictionary<string, ExpressionParameterBinding>
+                {
+                    ["payload"] = new LiteralExpressionParameterBinding(JsonSerializer.SerializeToElement("""{"name":"Grace","tags":["parameter"]}"""))
+                },
+                parameterConversionPlans: new Dictionary<string, ValueConversionPlan>
+                {
+                    ["payload"] = plan
+                }));
+        var materializer = new RuntimeActivityInputMaterializer(
+            _resolver,
+            new TestTypeRegistry(),
+            new EchoParameterPortableExpressionEvaluator("payload"));
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(
+            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            "consumer",
+            NewContext(),
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal("Grace", snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("name").GetString());
+        Assert.Equal("parameter", snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("tags")[0].GetString());
+    }
+
+    [Fact]
+    public async Task Materialization_allows_transient_result_to_nonpersistable_direct_input()
+    {
+        await using var stream = new MemoryStream();
+        var streamType = new ValueTypeDescriptor("Stream");
+        var producer = CompletedProducer(ValueEnvelope.Transient(streamType, stream));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            streamType,
+            ValueProtectionPolicy.Transient,
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("producer", "customer-id", "scope:root"));
+        var context = NewContext(
+            consumer: consumer,
+            runtimeView: [producer, consumer],
+            executable: NewProducerExecutable(
+                projectionPolicy: ActivityValuePolicy.Default with { IsPersistable = false },
+                projectionType: streamType,
+                projectionPath: "$"));
+
+        var snapshot = await new RuntimeActivityInputMaterializer(_resolver)
+            .MaterializeSnapshotAsync(
+                NewConsumerNode(
+                    binding,
+                    inputType: streamType,
+                    inputPolicy: ActivityValuePolicy.Default with { IsPersistable = false }),
+                consumer.InvocationId,
+                context,
+                DateTimeOffset.UnixEpoch);
+
+        Assert.Same(stream, snapshot.Values["customer-id"].TransientResource);
+        Assert.Equal(ValueProtectionPolicy.Transient, snapshot.Values["customer-id"].Policy);
+        Assert.Null(snapshot.Values["customer-id"].InlineValue);
+        Assert.Null(snapshot.Values["customer-id"].ExternalReference);
+    }
+
+    [Fact]
     public async Task Materialization_preserves_a_canonical_absent_optional_input_in_the_complete_snapshot()
     {
         var binding = new RuntimeInputBinding(
@@ -279,24 +470,48 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
 
     private static RuntimeInputBindingResolutionContext NewContext(
         IReadOnlyDictionary<string, object?>? workflowInputs = null,
+        IReadOnlyDictionary<string, ValueEnvelope>? workflowInputEnvelopes = null,
+        IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes = null,
         ActivityExecutionState? consumer = null,
         IReadOnlyCollection<ActivityExecutionState>? runtimeView = null,
         WorkflowExecutable? executable = null) =>
         new(
             "workflow-1",
             consumer?.InvocationId ?? "consumer",
-            workflowInputEnvelopes: workflowInputs?.ToDictionary(
+            workflowInputEnvelopes: workflowInputEnvelopes ?? workflowInputs?.ToDictionary(
                 item => item.Key,
                 item => ValueEnvelope.Inline(
                     StringType,
                     item.Value is JsonElement json ? json : JsonSerializer.SerializeToElement(item.Value),
                     ValueProtectionPolicy.InstanceInline),
                 StringComparer.Ordinal),
+            variableEnvelopes: variableEnvelopes,
             consumerInvocation: consumer,
             runtimeView: runtimeView,
             executable: executable);
 
-    private static WorkflowExecutable NewProducerExecutable(ActivityValuePolicy? projectionPolicy = null)
+    private static ValueEnvelope FormattedJsonEnvelope(string json) =>
+        ValueEnvelope.Inline(
+            new ValueTypeDescriptor("String"),
+            JsonSerializer.SerializeToElement(json),
+            ValueProtectionPolicy.InstanceInline);
+
+    private static ValueConversionPlan JsonPlan(ValueTypeDescriptor targetType) =>
+        new(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.FormattedContent,
+            new ValueTypeDescriptor("String"),
+            targetType,
+            ValueConversionMode.Auto,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.json", "1"),
+            limits: ValueConversionLimits.Default,
+            options: null);
+
+    private static WorkflowExecutable NewProducerExecutable(
+        ActivityValuePolicy? projectionPolicy = null,
+        ValueTypeDescriptor? projectionType = null,
+        string projectionPath = "customerId")
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "producer" });
         var contract = new ActivityContract(
@@ -309,7 +524,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
                 new ValueTypeDescriptor("test/result"),
                 true,
                 ActivityValuePolicy.Default,
-                [new ActivityResultProjectionContract("customer-id", "customerId", StringType, true, projectionPolicy ?? ActivityValuePolicy.Default)]),
+                [new ActivityResultProjectionContract("customer-id", projectionPath, projectionType ?? StringType, true, projectionPolicy ?? ActivityValuePolicy.Default)]),
             ["Done"],
             new ActivityActivationRequirement("test", "test/producer"));
         var node = new ExecutableNode(
@@ -330,7 +545,11 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             new Dictionary<string, string>());
     }
 
-    private static ExecutableNode NewConsumerNode(RuntimeInputBinding binding, bool isRequired = true)
+    private static ExecutableNode NewConsumerNode(
+        RuntimeInputBinding binding,
+        bool isRequired = true,
+        ValueTypeDescriptor? inputType = null,
+        ActivityValuePolicy? inputPolicy = null)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "consumer" });
         var contract = new ActivityContract(
@@ -338,7 +557,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             "1.0.0",
             "test",
             descriptor,
-            [new ActivityInputContract("customer-id", "Customer ID", StringType, isRequired, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("customer-id", "Customer ID", inputType ?? StringType, isRequired, false, null, inputPolicy ?? ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/consumer"));
@@ -408,5 +627,44 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             0,
             0,
             new Dictionary<string, string>());
+
+    private sealed class ConstantPortableExpressionEvaluator(string value) : IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
+            ValueTask.FromResult(JsonSerializer.SerializeToElement(value));
+    }
+
+    private sealed class EchoParameterPortableExpressionEvaluator(string parameterName) : IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
+            ValueTask.FromResult(request.ParameterValues[parameterName].Clone());
+    }
+
+    private sealed class TestTypeRegistry : IWellKnownTypeRegistry
+    {
+        public void RegisterType(Type type, string alias) => throw new NotSupportedException();
+        public bool TryGetAlias(Type type, out string alias)
+        {
+            alias = type == typeof(string) ? "String" : type.FullName!;
+            return type == typeof(string);
+        }
+
+        public bool TryGetType(string alias, out Type type)
+        {
+            if (StringComparer.OrdinalIgnoreCase.Equals(alias, "String"))
+            {
+                type = typeof(string);
+                return true;
+            }
+
+            type = null!;
+            return false;
+        }
+
+        public IEnumerable<Type> ListTypes() => [typeof(string)];
+        public string GetAliasOrDefault(Type type) => TryGetAlias(type, out var alias) ? alias : type.FullName!;
+        public Type GetTypeOrDefault(string alias) => TryGetType(alias, out var type) ? type : typeof(object);
+        public bool TryGetTypeOrDefault(string alias, out Type type) => TryGetType(alias, out type);
+    }
 
 }

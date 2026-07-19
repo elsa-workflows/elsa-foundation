@@ -103,6 +103,19 @@ public sealed class ActivityVersionDiffTests
     }
 
     [Fact]
+    public async Task Output_source_representation_change_is_a_breaking_behavior_change()
+    {
+        var result = await new ActivityVersionDiffer().DiffAsync(Request(
+            Contract(outputs: [Output("payload", sourceRepresentation: ValueRepresentation.TextValue)]),
+            Contract(outputs: [Output("payload", sourceRepresentation: ValueRepresentation.FormattedContent)])));
+
+        Assert.True(result.BehaviorChanged);
+        Assert.Equal(ActivityVersionCompatibility.Breaking, result.Compatibility);
+        Assert.Equal(ActivityVersionBump.Major, result.RequiredBump);
+        Assert.Contains(result.Changes, x => x.Kind == "SourceRepresentationChanged");
+    }
+
+    [Fact]
     public async Task Provider_and_runtime_behavior_changes_can_never_be_non_behavioral_patch_changes()
     {
         var fromFacts = new ActivityVersionImplementationFacts(RuntimeRequirements: []);
@@ -236,8 +249,11 @@ public sealed class ActivityVersionDiffTests
         "elsa.json",
         DisplayName: displayName);
 
-    private static ActivityOutputContract Output(string key, bool required = false) =>
-        new(key, key, new("string", CollectionKind.Single), required, "elsa.json");
+    private static ActivityOutputContract Output(
+        string key,
+        bool required = false,
+        ValueRepresentation? sourceRepresentation = null) =>
+        new(key, key, new("string", CollectionKind.Single), required, "elsa.json", SourceRepresentation: sourceRepresentation);
 
     private static ActivityOutcomeContract Outcome(string key, bool emitted = false) => new(key, key, emitted);
 

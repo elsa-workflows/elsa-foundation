@@ -22,7 +22,9 @@ public sealed class RuntimeInputBinding
         RuntimeVariableReference? variable = null,
         RuntimeActivityResultReference? activityResult = null,
         RuntimeExpressionBinding? expression = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        ValueConversionPlan? conversionPlan = null,
+        RuntimeValueConversionRequest? conversionRequest = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputKey);
         ArgumentNullException.ThrowIfNull(targetType);
@@ -45,6 +47,8 @@ public sealed class RuntimeInputBinding
         ActivityResult = activityResult;
         Expression = expression;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        ConversionPlan = conversionPlan;
+        ConversionRequest = conversionRequest;
     }
 
     public string InputName { get; }
@@ -59,6 +63,15 @@ public sealed class RuntimeInputBinding
     public JsonElement? LiteralValue { get; }
     public RuntimeExpressionBinding? Expression { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    /// <summary>Null preserves the legacy identity/retyping behavior of artifacts published before conversion plans.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ValueConversionPlan? ConversionPlan { get; }
+    /// <summary>
+    /// Authored conversion intent retained only until a later publication linker can resolve a source contract.
+    /// Published executable bindings should prefer <see cref="ConversionPlan"/>.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeValueConversionRequest? ConversionRequest { get; }
 
     private static void ValidateCanonical(
         RuntimeInputBindingSource source,
@@ -93,6 +106,12 @@ public sealed class RuntimeInputBinding
     }
 
 }
+
+public sealed record RuntimeValueConversionRequest(
+    ValueConversionMode Mode,
+    ValueConversionProfileReference? Profile = null,
+    ValueConversionLimits? Limits = null,
+    JsonElement? Options = null);
 
 public enum RuntimeInputBindingSource
 {
@@ -165,7 +184,8 @@ public sealed class RuntimeExpressionBinding
         IReadOnlyDictionary<string, string>? metadata = null,
         IReadOnlyDictionary<string, ExpressionParameterBinding>? parameters = null,
         JsonElement? options = null,
-        string? capabilityProfile = null)
+        string? capabilityProfile = null,
+        IReadOnlyDictionary<string, ValueConversionPlan>? parameterConversionPlans = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
         ArgumentException.ThrowIfNullOrWhiteSpace(expression);
@@ -178,6 +198,13 @@ public sealed class RuntimeExpressionBinding
             (parameters ?? new Dictionary<string, ExpressionParameterBinding>())
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        ParameterConversionPlans = new ReadOnlyDictionary<string, ValueConversionPlan>(
+            (parameterConversionPlans ?? new Dictionary<string, ValueConversionPlan>())
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        var unknownPlans = ParameterConversionPlans.Keys.Except(Parameters.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (unknownPlans.Length > 0)
+            throw new ArgumentException($"Runtime expression conversion plans reference unknown parameters: [{string.Join(", ", unknownPlans)}].", nameof(parameterConversionPlans));
         Options = options?.Clone() ?? JsonSerializer.SerializeToElement(new { });
         if (Options.ValueKind != JsonValueKind.Object)
             throw new ArgumentException("Runtime expression evaluator options must be a JSON object.", nameof(options));
@@ -191,6 +218,7 @@ public sealed class RuntimeExpressionBinding
     public RuntimeValueTypeDescriptor? ResultType { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public IReadOnlyDictionary<string, ExpressionParameterBinding> Parameters { get; }
+    public IReadOnlyDictionary<string, ValueConversionPlan> ParameterConversionPlans { get; }
     public JsonElement Options { get; }
     public string CapabilityProfile { get; }
 }

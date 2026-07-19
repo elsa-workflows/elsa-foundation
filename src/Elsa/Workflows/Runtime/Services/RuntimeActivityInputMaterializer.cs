@@ -18,6 +18,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     private readonly IRuntimeInputBindingResolver _inputBindingResolver;
     private readonly IWellKnownTypeRegistry? _wellKnownTypeRegistry;
     private readonly IExternalPayloadStore? _externalPayloadStore;
+    private readonly IRuntimeValueConversionExecutor _valueConversionExecutor;
     private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator;
     private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage;
 
@@ -31,7 +32,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(inputBindingResolver);
 
         _inputBindingResolver = inputBindingResolver;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: null);
+        _valueConversionExecutor = new RuntimeValueConversionExecutor();
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: null, _valueConversionExecutor);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore: null);
     }
 
@@ -43,8 +45,9 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(externalPayloadStore);
 
         _inputBindingResolver = inputBindingResolver;
+        _valueConversionExecutor = new RuntimeValueConversionExecutor();
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -57,9 +60,10 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(wellKnownTypeRegistry);
 
         _inputBindingResolver = inputBindingResolver;
+        _valueConversionExecutor = new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -74,9 +78,30 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(portableExpressionEvaluator);
 
         _inputBindingResolver = inputBindingResolver;
+        _valueConversionExecutor = new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
+        _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
+    }
+
+    public RuntimeActivityInputMaterializer(
+        IRuntimeInputBindingResolver inputBindingResolver,
+        IWellKnownTypeRegistry wellKnownTypeRegistry,
+        IPortableExpressionEvaluator portableExpressionEvaluator,
+        IRuntimeValueConversionExecutor valueConversionExecutor,
+        IExternalPayloadStore? externalPayloadStore = null)
+    {
+        ArgumentNullException.ThrowIfNull(inputBindingResolver);
+        ArgumentNullException.ThrowIfNull(wellKnownTypeRegistry);
+        ArgumentNullException.ThrowIfNull(portableExpressionEvaluator);
+        ArgumentNullException.ThrowIfNull(valueConversionExecutor);
+
+        _inputBindingResolver = inputBindingResolver;
+        _wellKnownTypeRegistry = wellKnownTypeRegistry;
+        _externalPayloadStore = externalPayloadStore;
+        _valueConversionExecutor = valueConversionExecutor;
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -135,11 +160,12 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {
-            var type = ResolveInputType(binding, node.ExecutableNodeId, input.Key);
+            var expressionType = binding.ConversionPlan?.SourceType ?? binding.TargetType;
+            var type = ResolveType(expressionType, node.ExecutableNodeId, input.Key);
             var evaluated = await EvaluateExpressionAsync(
                 resolved,
                 type,
-                binding.TargetType,
+                expressionType,
                 binding.EffectivePolicy,
                 node.ExecutableNodeId,
                 input.Key,
@@ -150,15 +176,15 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 type);
             var expressionPolicy = evaluated.EffectivePolicy ?? binding.EffectivePolicy;
             var envelope = materialized is null
-                ? ValueEnvelope.Null(binding.TargetType, expressionPolicy)
+                ? ValueEnvelope.Null(expressionType, expressionPolicy)
                 : ValueEnvelope.Inline(
-                    binding.TargetType,
+                    expressionType,
                     JsonSerializer.SerializeToElement(materialized, materialized.GetType()),
                     expressionPolicy);
             return await ApplyDestinationStorageAsync(
                 invocationId,
                 input,
-                envelope,
+                ApplyConversionPlan(binding, envelope),
                 expressionPolicy,
                 expressionPolicy,
                 resolutionContext,
@@ -173,10 +199,21 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 "was resolved without its source protection envelope.");
         }
 
-        if (binding.Source == RuntimeInputBindingSource.Literal && !SameType(source.Type, binding.TargetType))
+        if (binding.Source == RuntimeInputBindingSource.Literal && !SameType(source.Type, binding.TargetType) &&
+            (binding.ConversionPlan is null || !SameType(source.Type, binding.ConversionPlan.SourceType)))
             throw new InvalidOperationException($"VF-ACT-004: Literal input '{input.Key}' on executable node '{node.ExecutableNodeId}' does not match its declared portable type.");
         if (source.Policy.Lifecycle == DurableValueLifecycle.None)
-            throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' has a transient source at a durable invocation boundary.");
+        {
+            if (binding.EffectivePolicy.Lifecycle != DurableValueLifecycle.None || input.Policy.IsPersistable)
+                throw new InvalidOperationException(
+                    $"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' has source representation '{ValueRepresentation.TransientResource}' " +
+                    $"but destination storage policy '{binding.EffectivePolicy.Storage}' requires a durable invocation boundary. " +
+                    "Use an execution-local non-persistable input binding for live resources, or model an explicit DurableReference/resource-handle.");
+
+            return binding.ConversionPlan is null
+                ? source.Retype(binding.TargetType)
+                : ApplyConversionPlan(binding, source);
+        }
         var effectivePolicy = ValuePolicyCombiner.Combine(
             binding.EffectivePolicy,
             source.Policy,
@@ -187,13 +224,23 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
         if (source.ExternalReference is not null && HasExternalProjection(binding))
             return await MaterializeExternalProjectionAsync(node, invocationId, input, binding, source, effectivePolicy, resolutionContext, cancellationToken);
+        if (source.ExternalReference is not null && RequiresExternalConversion(binding))
+            return await MaterializeExternalConversionAsync(node, invocationId, input, binding, source, effectivePolicy, resolutionContext, cancellationToken);
 
-        var retyped = new ValueEnvelope(
-            binding.TargetType,
-            source.Presence,
-            source.InlineValue,
-            source.ExternalReference,
-            effectivePolicy);
+        var projected = source;
+        var retyped = binding.ConversionPlan is null
+            ? new ValueEnvelope(
+                binding.TargetType,
+                projected.Presence,
+                projected.InlineValue,
+                projected.ExternalReference,
+                effectivePolicy)
+            : ApplyConversionPlan(binding, new ValueEnvelope(
+                projected.Type,
+                projected.Presence,
+                projected.InlineValue,
+                projected.ExternalReference,
+                effectivePolicy));
         return await ApplyDestinationStorageAsync(
             invocationId,
             input,
@@ -211,7 +258,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ValueProtectionPolicy sourcePolicy,
         ValueProtectionPolicy effectivePolicy,
         RuntimeInputBindingResolutionContext resolutionContext,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? fallbackStorageProfile = null)
     {
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
@@ -220,7 +268,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 $"Input '{input.Key}'",
                 value,
                 sourcePolicy,
-                effectivePolicy),
+                effectivePolicy,
+                fallbackStorageProfile),
             cancellationToken);
     }
 
@@ -237,7 +286,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         if (_externalPayloadStore is null)
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' requires an IExternalPayloadStore for projection.");
 
-        var payload = await _externalPayloadStore.ReadAsync(source.ExternalReference!, cancellationToken);
+        var payload = await ReadExternalPayloadAsync(node, input, source, cancellationToken);
         var path = ResolveProjectionPath(binding, resolutionContext);
         foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
@@ -246,15 +295,16 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         }
 
         if (payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
-            return ValueEnvelope.Null(binding.TargetType, effectivePolicy);
+            return ValueEnvelope.Null(binding.ConversionPlan?.TargetType ?? binding.TargetType, effectivePolicy);
 
-        var projected = ValueEnvelope.Inline(binding.TargetType, payload.Clone(), effectivePolicy);
+        var projected = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, payload.Clone(), effectivePolicy);
+        var converted = ApplyConversionPlan(binding, projected);
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
                 resolutionContext.WorkflowExecutionId,
                 $"activity:{invocationId}:input:{input.Key}",
                 $"Input '{input.Key}' on executable node '{node.ExecutableNodeId}'",
-                projected,
+                converted,
                 source.Policy,
                 effectivePolicy,
                 source.ExternalReference!.StorageProfile,
@@ -262,11 +312,71 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             cancellationToken);
     }
 
+    private async ValueTask<ValueEnvelope> MaterializeExternalConversionAsync(
+        ExecutableNode node,
+        string invocationId,
+        ActivityInputContract input,
+        RuntimeInputBinding binding,
+        ValueEnvelope source,
+        ValueProtectionPolicy effectivePolicy,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        CancellationToken cancellationToken)
+    {
+        if (_externalPayloadStore is null)
+            throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' requires an IExternalPayloadStore for conversion.");
+
+        var payload = await ReadExternalPayloadAsync(node, input, source, cancellationToken);
+        var conversionSource = payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            ? ValueEnvelope.Null(source.Type, effectivePolicy)
+            : ValueEnvelope.Inline(source.Type, payload, effectivePolicy);
+        return await ApplyDestinationStorageAsync(
+            invocationId,
+            input,
+            ApplyConversionPlan(binding, conversionSource),
+            source.Policy,
+            effectivePolicy,
+            resolutionContext,
+            cancellationToken,
+            source.ExternalReference!.StorageProfile);
+    }
+
+    private async ValueTask<JsonElement> ReadExternalPayloadAsync(
+        ExecutableNode node,
+        ActivityInputContract input,
+        ValueEnvelope source,
+        CancellationToken cancellationToken)
+    {
+        var reference = source.ExternalReference
+            ?? throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' has no external payload reference.");
+        try
+        {
+            return await _externalPayloadStore!.ReadAsync(reference, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(
+                $"VF-ACT-005: External payload for input '{input.Key}' on executable node '{node.ExecutableNodeId}' could not be read from storage profile '{reference.StorageProfile}' at locator '{reference.Locator}'.",
+                exception);
+        }
+    }
+
+    private ValueEnvelope ApplyConversionPlan(RuntimeInputBinding binding, ValueEnvelope source) =>
+        binding.ConversionPlan is null
+            ? source
+            : _valueConversionExecutor.Convert(source, binding.ConversionPlan);
+
     private static bool HasExternalProjection(RuntimeInputBinding binding) =>
         binding.Source == RuntimeInputBindingSource.ActivityResult &&
         !StringComparer.Ordinal.Equals(binding.ActivityResult!.ProjectionKey, "$result") ||
         binding.Source == RuntimeInputBindingSource.WorkflowRequest &&
         !string.IsNullOrWhiteSpace(binding.WorkflowRequest!.Path);
+
+    private static bool RequiresExternalConversion(RuntimeInputBinding binding) =>
+        binding.ConversionPlan is { Operation: not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility };
 
     private static bool TryGetProperty(JsonElement value, string name, out JsonElement property)
     {
@@ -334,7 +444,18 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     private static void ValidateEffectivePolicy(ActivityInputContract input, RuntimeInputBinding binding, string nodeId)
     {
         var policy = binding.EffectivePolicy;
-        if (!input.Policy.IsPersistable || policy.Lifecycle == DurableValueLifecycle.None)
+        if (!input.Policy.IsPersistable)
+        {
+            if (policy.Lifecycle != DurableValueLifecycle.None)
+            {
+                throw new InvalidOperationException(
+                    $"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' is non-persistable but binding destination storage policy '{policy.Storage}' is durable.");
+            }
+
+            return;
+        }
+
+        if (policy.Lifecycle == DurableValueLifecycle.None)
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' is not persistable at the durable ActivityStarted boundary.");
 
         if (!policy.Satisfies(ValuePolicyCombiner.ToProtectionPolicy(input.Policy)))
@@ -435,18 +556,23 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
     private Type ResolveInputType(RuntimeInputBinding binding, string nodeId, string inputName)
     {
-        if (binding.TargetType.Alias == "Elsa.Any")
+        return ResolveType(binding.TargetType, nodeId, inputName);
+    }
+
+    private Type ResolveType(ValueTypeDescriptor descriptor, string nodeId, string inputName)
+    {
+        if (descriptor.Alias == "Elsa.Any")
             return typeof(object);
         if (_wellKnownTypeRegistry is null)
-            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares portable type alias '{binding.TargetType.Alias}', but no well-known type registry was supplied.");
+            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares portable type alias '{descriptor.Alias}', but no well-known type registry was supplied.");
 
-        var typeReference = binding.TargetType.ToTypeReference();
+        var typeReference = descriptor.ToTypeReference();
         var resolvedType = TypeReferenceFactory.Resolve(
             typeReference,
             alias => _wellKnownTypeRegistry.TryGetTypeOrDefault(alias, out var type) ? type : typeof(object));
 
-        if (resolvedType == typeof(object) && !string.Equals(binding.TargetType.Alias, "Object", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares unknown portable type alias '{binding.TargetType.Alias}'.");
+        if (resolvedType == typeof(object) && !string.Equals(descriptor.Alias, "Object", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares unknown portable type alias '{descriptor.Alias}'.");
 
         return resolvedType;
     }

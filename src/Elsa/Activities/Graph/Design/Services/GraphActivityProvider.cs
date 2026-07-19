@@ -657,7 +657,8 @@ public sealed class GraphActivityProvider(IActivityStructureService activityStru
             output.ReferenceKey,
             new ValueTypeDescriptor(output.Type.Alias, output.Type.CollectionKind),
             output.IsRequired,
-            resultPolicy));
+            resultPolicy,
+            output.SourceRepresentation));
         var outcomes = request.Contract.Outcomes
             .Where(outcome => outcome.IsEmitted)
             .Select(outcome => outcome.Name)
@@ -673,7 +674,8 @@ public sealed class GraphActivityProvider(IActivityStructureService activityStru
                 new ValueTypeDescriptor("Object"),
                 isRequired: true,
                 resultPolicy,
-                projections),
+                projections,
+                ValueRepresentation.StructuredValue),
             outcomes,
             new ActivityActivationRequirement(
                 WellKnownRuntimeActivityConsumers.GraphActivity,

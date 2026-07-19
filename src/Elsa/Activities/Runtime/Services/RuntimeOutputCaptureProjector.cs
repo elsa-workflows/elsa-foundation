@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -10,8 +11,27 @@ namespace Elsa.Activities.Runtime.Services;
 /// Projects selected atomic activity-result values into their published durable targets.
 /// The returned changes are committed in the same checkpoint as activity completion.
 /// </summary>
-public sealed class RuntimeOutputCaptureProjector(IRuntimeDurableValueStorageDriverRegistry storageDrivers)
+public sealed class RuntimeOutputCaptureProjector
 {
+    private readonly IRuntimeDurableValueStorageDriverRegistry _storageDrivers;
+    private readonly IRuntimeValueConversionExecutor _valueConversionExecutor;
+
+    public RuntimeOutputCaptureProjector(IRuntimeDurableValueStorageDriverRegistry storageDrivers)
+        : this(storageDrivers, new RuntimeValueConversionExecutor())
+    {
+    }
+
+    public RuntimeOutputCaptureProjector(
+        IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+        IRuntimeValueConversionExecutor valueConversionExecutor)
+    {
+        ArgumentNullException.ThrowIfNull(storageDrivers);
+        ArgumentNullException.ThrowIfNull(valueConversionExecutor);
+
+        _storageDrivers = storageDrivers;
+        _valueConversionExecutor = valueConversionExecutor;
+    }
+
     public async ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> ProjectAsync(
         string workflowExecutionId,
         string activityExecutionId,
@@ -42,13 +62,16 @@ public sealed class RuntimeOutputCaptureProjector(IRuntimeDurableValueStorageDri
                 throw new InvalidOperationException($"Activity completion did not produce declared output projection '{capture.OutputName}'.");
             if (projected.Presence == ValuePresence.Absent)
                 continue;
+            ValidateDurableCaptureBoundary(capture, projected);
 
-            var value = StringComparer.Ordinal.Equals(projectionContract.Path, "$")
-                ? transition.Result
-                : projected.Presence == ValuePresence.ExplicitNull
-                    ? null
-                    : projected.InlineValue;
-            var driver = storageDrivers.GetRequired(capture.StorageDriverKey);
+            var value = capture.ConversionPlan is null
+                ? StringComparer.Ordinal.Equals(projectionContract.Path, "$")
+                    ? transition.Result
+                    : projected.Presence == ValuePresence.ExplicitNull
+                        ? null
+                        : projected.InlineValue
+                : ToEncodedValue(_valueConversionExecutor.Convert(projected, capture.ConversionPlan));
+            var driver = _storageDrivers.GetRequired(capture.StorageDriverKey);
             var encoding = await driver.EncodeAsync(value, capture.Type, cancellationToken);
             if (capture.Storage != DurableValueStorage.Custom && encoding.Storage != capture.Storage)
             {
@@ -82,6 +105,22 @@ public sealed class RuntimeOutputCaptureProjector(IRuntimeDurableValueStorageDri
         return changes;
     }
 
+    private static void ValidateDurableCaptureBoundary(RuntimeOutputCapture capture, ValueEnvelope projected)
+    {
+        if (projected.Presence != ValuePresence.Present)
+            return;
+
+        var sourceRepresentation = capture.ConversionPlan?.SourceRepresentation ??
+                                   ValueRepresentationDefaults.Infer(projected.Type);
+        if (sourceRepresentation != ValueRepresentation.TransientResource && projected.TransientResource is null)
+            return;
+
+        throw new InvalidOperationException(
+            $"VF-ACT-005: Output capture '{capture.OutputName}' cannot persist source representation '{ValueRepresentation.TransientResource}' " +
+            $"into destination storage policy '{capture.Storage}' using driver '{capture.StorageDriverKey}'. " +
+            "Use an execution-local activity-result binding for live resources, or model an explicit DurableReference/resource-handle output before persisting.");
+    }
+
     private static void AddReservedTargetMetadata(
         RuntimeOutputCapture capture,
         IDictionary<string, string> metadata)
@@ -99,4 +138,12 @@ public sealed class RuntimeOutputCaptureProjector(IRuntimeDurableValueStorageDri
                 capture.ValueId[RuntimeWorkflowStateSeed.VariableValueIdPrefix.Length..]);
         }
     }
+
+    private static object? ToEncodedValue(ValueEnvelope envelope) => envelope.Presence switch
+    {
+        ValuePresence.ExplicitNull => null,
+        ValuePresence.Present when envelope.InlineValue.HasValue => envelope.InlineValue.Value,
+        ValuePresence.Present => throw new InvalidOperationException("Output capture conversion produced an external reference, which cannot be encoded by an output storage driver."),
+        _ => throw new InvalidOperationException("Output capture conversion produced an absent value after completion projection.")
+    };
 }

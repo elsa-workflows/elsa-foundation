@@ -323,7 +323,8 @@ public sealed class ExecutableNodeCompiler(
                     attribute.Path ?? JsonNamingPolicy.CamelCase.ConvertName(candidate.Property.Name),
                     new ValueTypeDescriptor(type.Alias, type.CollectionKind),
                     attribute.IsRequired,
-                    CompileActivityPolicy(outputDefinition?.StorageDriverType, outputState, $"Result projection '{key}' on activity node '{activity.NodeId}'"));
+                    CompileActivityPolicy(outputDefinition?.StorageDriverType, outputState, $"Result projection '{key}' on activity node '{activity.NodeId}'"),
+                    ResolveSourceRepresentation(attribute, outputDefinition, new ValueTypeDescriptor(type.Alias, type.CollectionKind)));
             })
             .ToArray();
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
@@ -345,10 +346,18 @@ public sealed class ExecutableNodeCompiler(
                 new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind),
                 isRequired: true,
                 resultPolicy,
-                projections),
+                projections,
+                ValueRepresentationDefaults.Infer(new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind))),
             outcomes,
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)));
     }
+
+    private static ValueRepresentation ResolveSourceRepresentation(
+        OutputAttribute attribute,
+        OutputDefinition? outputDefinition,
+        ValueTypeDescriptor sourceType) =>
+        outputDefinition?.SourceRepresentation ??
+        (attribute.HasSourceRepresentation ? attribute.SourceRepresentation : ValueRepresentationDefaults.Infer(sourceType));
 
     private static IReadOnlyCollection<InputDefinition> NormalizeLegacyClrInputNullability(
         IEnumerable<InputDefinition> inputDefinitions,

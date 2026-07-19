@@ -87,15 +87,7 @@ public sealed class ActivityContract
             inputs = Inputs.Values
                 .OrderBy(x => x.Key, StringComparer.Ordinal)
                 .Select(BuildInputFingerprintProjection),
-            result = new
-            {
-                Result.Type,
-                Result.IsRequired,
-                Result.Policy,
-                projections = Result.Projections.Values
-                    .OrderBy(x => x.Key, StringComparer.Ordinal)
-                    .Select(x => new { x.Key, x.Path, x.Type, x.IsRequired, x.Policy })
-            },
+            result = BuildResultFingerprintProjection(),
             outcomes = Outcomes.Order(StringComparer.Ordinal),
             activation = Activation
         };
@@ -124,6 +116,41 @@ public sealed class ActivityContract
         projection[nameof(input.DefaultValue)] = input.DefaultValue;
         projection[nameof(input.Policy)] = input.Policy;
         return projection;
+    }
+
+    private IReadOnlyDictionary<string, object?> BuildResultFingerprintProjection()
+    {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [nameof(Result.Type)] = Result.Type,
+            [nameof(Result.IsRequired)] = Result.IsRequired,
+            [nameof(Result.Policy)] = Result.Policy,
+            ["projections"] = Result.Projections.Values
+                .OrderBy(x => x.Key, StringComparer.Ordinal)
+                .Select(BuildResultProjectionFingerprintProjection)
+        };
+
+        if (Result.SourceRepresentation.HasValue)
+            result[nameof(Result.SourceRepresentation)] = Result.SourceRepresentation;
+
+        return result;
+    }
+
+    private static IReadOnlyDictionary<string, object?> BuildResultProjectionFingerprintProjection(ActivityResultProjectionContract projection)
+    {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [nameof(projection.Key)] = projection.Key,
+            [nameof(projection.Path)] = projection.Path,
+            [nameof(projection.Type)] = projection.Type,
+            [nameof(projection.IsRequired)] = projection.IsRequired,
+            [nameof(projection.Policy)] = projection.Policy
+        };
+
+        if (projection.SourceRepresentation.HasValue)
+            result[nameof(projection.SourceRepresentation)] = projection.SourceRepresentation;
+
+        return result;
     }
 
     private static void ValidateUnique(IEnumerable<string> keys, string role)
@@ -201,8 +228,9 @@ public sealed class ActivityResultContract
         ValueTypeDescriptor type,
         bool isRequired,
         ActivityValuePolicy policy,
+        ValueRepresentation? sourceRepresentation,
         IReadOnlyDictionary<string, ActivityResultProjectionContract> projections)
-        : this(type, isRequired, policy, projections.Values)
+        : this(type, isRequired, policy, projections.Values, sourceRepresentation)
     {
     }
 
@@ -210,7 +238,8 @@ public sealed class ActivityResultContract
         ValueTypeDescriptor type,
         bool isRequired,
         ActivityValuePolicy policy,
-        IEnumerable<ActivityResultProjectionContract> projections)
+        IEnumerable<ActivityResultProjectionContract> projections,
+        ValueRepresentation? sourceRepresentation = null)
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(policy);
@@ -227,12 +256,17 @@ public sealed class ActivityResultContract
         Type = type;
         IsRequired = isRequired;
         Policy = policy;
+        SourceRepresentation = sourceRepresentation;
         Projections = projectionArray.ToDictionary(x => x.Key, StringComparer.Ordinal);
     }
 
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
     public ActivityValuePolicy Policy { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ValueRepresentation? SourceRepresentation { get; }
+    [JsonIgnore]
+    public ValueRepresentation EffectiveSourceRepresentation => SourceRepresentation ?? ValueRepresentationDefaults.Infer(Type);
     public IReadOnlyDictionary<string, ActivityResultProjectionContract> Projections { get; }
 }
 
@@ -243,7 +277,8 @@ public sealed class ActivityResultProjectionContract
         string path,
         ValueTypeDescriptor type,
         bool isRequired,
-        ActivityValuePolicy policy)
+        ActivityValuePolicy policy,
+        ValueRepresentation? sourceRepresentation = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -255,6 +290,7 @@ public sealed class ActivityResultProjectionContract
         Type = type;
         IsRequired = isRequired;
         Policy = policy;
+        SourceRepresentation = sourceRepresentation;
     }
 
     public string Key { get; }
@@ -262,6 +298,10 @@ public sealed class ActivityResultProjectionContract
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
     public ActivityValuePolicy Policy { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ValueRepresentation? SourceRepresentation { get; }
+    [JsonIgnore]
+    public ValueRepresentation EffectiveSourceRepresentation => SourceRepresentation ?? ValueRepresentationDefaults.Infer(Type);
 }
 
 public sealed record ActivityActivationRequirement
