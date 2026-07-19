@@ -12,12 +12,14 @@ using Elsa.Expressions.Api.Models;
 using Elsa.Expressions.Api.Requests;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -150,6 +152,56 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Equal(["items"], legacyJson.RootElement.EnumerateObject().Select(property => property.Name));
     }
 
+    [Fact]
+    public async Task Workflow_folder_routes_are_capability_discovered_and_use_the_public_page_contract()
+    {
+        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false, includePaging: true, includeFolders: true);
+        var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
+        Assert.Contains(capabilities!.Capabilities.SelectMany(x => x.Links), link => link.Rel == "workflow-folders");
+
+        var page = await host.Client.GetFromJsonAsync<WorkflowFolderListView>("/design/workflows/folders?pageSize=1");
+        Assert.Equal("folder-1", Assert.Single(page!.Items).Id);
+        Assert.Equal("folder-token", page.NextContinuationToken);
+        var detail = await host.Client.GetFromJsonAsync<WorkflowFolderDetailsView>("/design/workflows/folders/folder-1");
+        Assert.Equal("folder-1", detail!.Folder.Id);
+
+        using var created = await host.Client.PostAsJsonAsync("/design/workflows/folders", new { name = "Created" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        using var malformed = await host.Client.GetAsync("/design/workflows/folders?continuationToken=malformed");
+        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
+
+        using var unknown = await host.Client.GetAsync("/design/workflows/folders/missing");
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+
+        using var duplicate = await host.Client.PostAsJsonAsync("/design/workflows/folders", new { name = "Duplicate" });
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+
+        var folderDefinitions = await host.Client.GetFromJsonAsync<WorkflowDefinitionPageView>(
+            "/design/workflows/definitions/page?folderId=folder-1");
+        Assert.Equal("folder-1", Assert.Single(folderDefinitions!.Items).FolderId);
+
+        var unfiledDefinitions = await host.Client.GetFromJsonAsync<WorkflowDefinitionPageView>(
+            "/design/workflows/definitions/page?unfiled=true");
+        Assert.Null(Assert.Single(unfiledDefinitions!.Items).FolderId);
+
+        using var mutuallyExclusiveSelectors = await host.Client.GetAsync(
+            "/design/workflows/definitions/page?folderId=folder-1&unfiled=true");
+        Assert.Equal(HttpStatusCode.BadRequest, mutuallyExclusiveSelectors.StatusCode);
+    }
+
+    [Fact]
+    public async Task Workflow_folder_routes_and_capability_are_omitted_when_the_folder_store_is_unavailable()
+    {
+        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false, includePaging: true);
+
+        var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
+        Assert.DoesNotContain(capabilities!.Capabilities.SelectMany(x => x.Links), link => link.Rel == "workflow-folders");
+
+        using var omitted = await host.Client.SendAsync(new HttpRequestMessage(HttpMethod.Options, "/design/workflows/folders"));
+        Assert.Equal(HttpStatusCode.NotFound, omitted.StatusCode);
+    }
+
     private sealed class CustomManagementHost(WebApplication app, HttpClient client) : IAsyncDisposable
     {
         private static readonly string[] CommonEndpointTypes =
@@ -164,7 +216,7 @@ public sealed class DomainManagementApiCompositionTests
 
         public HttpClient Client { get; } = client;
 
-        public static async Task<CustomManagementHost> StartAsync(bool includeExpressions, bool includePaging = false)
+        public static async Task<CustomManagementHost> StartAsync(bool includeExpressions, bool includePaging = false, bool includeFolders = false)
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
@@ -200,8 +252,19 @@ public sealed class DomainManagementApiCompositionTests
                 builder.Services.AddSingleton<IWorkflowDefinitionListProjectionStore, HttpWorkflowDefinitionProjectionStore>();
                 endpointTypes.Add("Elsa.Workflows.Design.Api.Endpoints.Definitions.Page");
             }
+            if (includeFolders)
+            {
+                builder.Services.AddSingleton<IWorkflowFolderStore, HttpWorkflowFolderStore>();
+                builder.Services.AddSingleton<IIdentityGenerator, HttpIdentityGenerator>();
+                endpointTypes.UnionWith([
+                    "Elsa.Workflows.Design.Api.Endpoints.Folders.List",
+                    "Elsa.Workflows.Design.Api.Endpoints.Folders.Get",
+                    "Elsa.Workflows.Design.Api.Endpoints.Folders.Create"]);
+            }
 
-            builder.Services.AddSingleton<IRequestSender, JourneyRequestSender>();
+            builder.Services.AddSingleton<JourneyRequestSender>();
+            builder.Services.AddSingleton<IRequestSender>(services => services.GetRequiredService<JourneyRequestSender>());
+            builder.Services.AddSingleton<ICommandSender>(services => services.GetRequiredService<JourneyRequestSender>());
             builder.Services.AddFastEndpoints(options =>
             {
                 options.Assemblies = assemblies.ToArray();
@@ -233,7 +296,7 @@ public sealed class DomainManagementApiCompositionTests
         }
     }
 
-    private sealed class JourneyRequestSender(IServiceProvider services) : IRequestSender
+    private sealed class JourneyRequestSender(IServiceProvider services) : IRequestSender, ICommandSender
     {
         public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
@@ -241,6 +304,10 @@ public sealed class DomainManagementApiCompositionTests
                 return HandleExpressionDescriptors<T>(expressionDescriptors, cancellationToken);
             if (request is ListWorkflowDefinitionPage page)
                 return HandleWorkflowDefinitionPage<T>(page, cancellationToken);
+            if (request is ListWorkflowFolders folders)
+                return HandleWorkflowFolders<T>(folders, cancellationToken);
+            if (request is GetWorkflowFolder folder)
+                return HandleWorkflowFolder<T>(folder, cancellationToken);
 
             object response = typeof(T) switch
             {
@@ -259,6 +326,18 @@ public sealed class DomainManagementApiCompositionTests
             return Task.FromResult((T)response);
         }
 
+        public async Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull
+        {
+            if (command is CreateWorkflowFolder folder)
+            {
+                var handler = services.GetRequiredService<Elsa.Mediator.Core.Contracts.ICommandHandler<CreateWorkflowFolder, WorkflowFolderView>>();
+                return (T)(object)await handler.Handle(folder, cancellationToken);
+            }
+            throw new InvalidOperationException($"Unexpected command '{command.GetType().Name}'.");
+        }
+
+        public Task Send(Elsa.Mediator.Core.Contracts.ICommand command, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         private async Task<T> HandleWorkflowDefinitionPage<T>(
             ListWorkflowDefinitionPage request,
             CancellationToken cancellationToken) where T : notnull
@@ -275,6 +354,18 @@ public sealed class DomainManagementApiCompositionTests
             var handler = services.GetRequiredService<IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>>();
             return (T)(object)await handler.Handle(request, cancellationToken);
         }
+
+        private async Task<T> HandleWorkflowFolders<T>(ListWorkflowFolders request, CancellationToken cancellationToken) where T : notnull
+        {
+            var handler = services.GetRequiredService<IRequestHandler<ListWorkflowFolders, WorkflowFolderListView>>();
+            return (T)(object)await handler.Handle(request, cancellationToken);
+        }
+
+        private async Task<T> HandleWorkflowFolder<T>(GetWorkflowFolder request, CancellationToken cancellationToken) where T : notnull
+        {
+            var handler = services.GetRequiredService<IRequestHandler<GetWorkflowFolder, WorkflowFolderDetailsView>>();
+            return (T)(object)await handler.Handle(request, cancellationToken);
+        }
     }
 
     private sealed class HttpWorkflowDefinitionPageStore : IWorkflowDefinitionPageStore
@@ -287,6 +378,20 @@ public sealed class DomainManagementApiCompositionTests
         {
             if (query.ContinuationToken is "malformed" or "context-token")
                 throw new ArgumentException("The continuation token is invalid for this query.", nameof(query.ContinuationToken));
+
+            if (query.FolderId is not null || query.Unfiled == true)
+            {
+                var definition = new WorkflowDefinition
+                {
+                    Id = query.Unfiled == true ? "unfiled-definition" : "folder-definition",
+                    Name = "Orders",
+                    CreatedAt = DateTimeOffset.UnixEpoch,
+                    LastModifiedAt = DateTimeOffset.UnixEpoch,
+                    FolderId = query.Unfiled == true ? null : query.FolderId
+                };
+                return Task.FromResult(new WorkflowDefinitionPage([definition], null));
+            }
+
             Assert.Equal(1, query.PageSize);
             Assert.Equal("definition-42", query.SearchTerm);
             Assert.Equal(WorkflowDefinitionPageState.Deleted, query.State);
@@ -313,5 +418,30 @@ public sealed class DomainManagementApiCompositionTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<WorkflowDefinitionListProjection>>(
                 [new("definition-42", "draft-42", "version-42", "2.3.4", 7)]);
+    }
+
+    private sealed class HttpWorkflowFolderStore : IWorkflowFolderStore
+    {
+        private static readonly WorkflowFolder Folder = new() { Id = "folder-1", Name = "Orders", NormalizedName = "ORDERS", ParentKey = WorkflowFolder.RootParentKey };
+        public bool IsAvailable => true;
+        public Task<WorkflowFolderPage> ListDirectChildrenAsync(WorkflowFolderPageRequest request, CancellationToken cancellationToken = default)
+        {
+            if (request.ContinuationToken == "malformed")
+                throw new ArgumentException("The continuation token is invalid for this query.", nameof(request.ContinuationToken));
+            return Task.FromResult(new WorkflowFolderPage([Folder], "folder-token"));
+        }
+        public Task<WorkflowFolderDetails?> FindWithAncestorsAsync(string folderId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<WorkflowFolderDetails?>(folderId == Folder.Id ? new WorkflowFolderDetails(Folder, []) : null);
+        public Task<WorkflowFolder> CreateAsync(WorkflowFolder folder, CancellationToken cancellationToken = default)
+        {
+            if (folder.NormalizedName == "DUPLICATE")
+                throw new Elsa.Workflows.Design.Persistence.Core.Exceptions.WorkflowFolderSiblingConflictException();
+            return Task.FromResult(folder);
+        }
+    }
+
+    private sealed class HttpIdentityGenerator : IIdentityGenerator
+    {
+        public string Generate() => "created-folder";
     }
 }
