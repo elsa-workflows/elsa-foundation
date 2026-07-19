@@ -3076,6 +3076,8 @@ describe("workflows module", () => {
     expect(container.querySelector("[role='status']")?.textContent).toContain(
       "Workflow folders are unavailable. Showing all workflows while preserving the requested folder context."
     );
+    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.getAttribute("aria-label")).toBe("Search all workflows");
+    expect(buttonByText(container, "Search all workflows")).toBeNull();
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
     await unmount();
   });

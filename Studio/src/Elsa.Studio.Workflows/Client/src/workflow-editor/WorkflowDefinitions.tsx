@@ -50,18 +50,20 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const loadGenerationRef = useRef(0);
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
   const continuationToken = nextContinuationTokens[page];
+  const effectiveFolderSelection: WorkflowFolderSelection =
+    folderCapability === "available" ? folderSelection : "all";
   const suggestMetadataAction = findAiAction(ai, "weaver.workflows.suggest-create-metadata");
   const explainDefinitionAction = findAiAction(ai, "weaver.workflows.explain-definition");
   const selectedVisibleCount = visibleDefinitionIds.filter(id => selectedDefinitionIds.has(id)).length;
   const allVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCount === visibleDefinitionIds.length;
-  const searchLabel = folderSelection === "all"
+  const searchLabel = effectiveFolderSelection === "all"
     ? "Search all workflows"
-    : folderSelection === "unfiled"
+    : effectiveFolderSelection === "unfiled"
       ? "Search Unfiled"
       : "Search selected folder";
-  const emptyScope = folderSelection === "all"
+  const emptyScope = effectiveFolderSelection === "all"
     ? "All workflows"
-    : folderSelection === "unfiled"
+    : effectiveFolderSelection === "unfiled"
       ? "Unfiled"
       : "the selected folder";
   const emptyLifecycle = listState === "all"
@@ -367,7 +369,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
           <Search size={15} />
           <input aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
         </label>
-        {folderSelection !== "all" ? <button type="button" onClick={() => changeFolder("all")}>Search all workflows</button> : null}
+        {effectiveFolderSelection !== "all" ? <button type="button" onClick={() => changeFolder("all")}>Search all workflows</button> : null}
         <button ref={refreshButtonRef} type="button" onClick={() => void load()}>Refresh</button>
         <div className="wf-actions">
           <button type="button" title="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create</button>
@@ -461,7 +463,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
                 <span>
                   <strong>{definition.name}</strong>
                   <small>{definition.description || definition.id}</small>
-                  {folderSelection === "all" ? (
+                  {effectiveFolderSelection === "all" ? (
                     <ResultFolderBreadcrumb definition={definition} onSelect={changeFolder} />
                   ) : null}
                 </span>
