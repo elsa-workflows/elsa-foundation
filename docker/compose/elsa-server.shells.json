@@ -23,6 +23,7 @@
           },
           "DiagnosticsConsoleLogStreaming": {},
           "DiagnosticsOpenTelemetry": {},
+          "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsStructuredLogs": {},
           "Events": {},
           "Expressions": {},
@@ -73,7 +74,6 @@
           },
           "JavaScriptJintEngine": {},
           "JavaScriptWorkflowsDesign": {},
-          "JavaScriptWorkflowsRuntime": {},
           "Mediator": {},
           "MemoryCache": {},
           "ModularityApi": {},
@@ -86,6 +86,7 @@
           "WorkflowsDesignApi": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeTracing": {},
           "WorkflowsRuntimeTriggers": {}
         },
         "Configuration": {
