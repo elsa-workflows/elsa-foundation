@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
@@ -57,6 +58,13 @@ public static class GroundworkSqliteUnifiedRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         services.AddSqliteGroundworkDocumentStore(connectionString, autoApplyOnStartup);
-        return services.AddGroundworkUnifiedStoreFamilies();
+        services.AddGroundworkUnifiedStoreFamilies();
+        services.AddGroundworkWorkflowRunHealth(
+            _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),
+            GroundworkRunHealthDialect.Sqlite);
+        services.AddGroundworkWorkflowPortfolio(
+            _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),
+            GroundworkRunHealthDialect.Sqlite);
+        return services;
     }
 }

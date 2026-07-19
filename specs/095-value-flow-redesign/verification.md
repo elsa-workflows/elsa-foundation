@@ -64,9 +64,8 @@ transitions, token-aware cancellation faulting, and disposal-before-checkpoint a
 The self-review loop further covers bounded JavaScript input conversion with exact UTF-8 byte
 accounting, validated immutable external references, C# `required` input reconciliation,
 optional-Absent persistence round trips, nullable CLR hydration, and disposal-before-checkpoint
-structural child callbacks. Workflow-executable v6 coverage pins explicit input nullability, preserves
-v5 unknown-nullability contracts and their fingerprints through deterministic upcasting, and proves
-that a v5 worker rejects a v6 executable before deserialization.
+structural child callbacks. Workflow-executable v6 coverage pins required explicit input nullability,
+rejects pre-v6 executables at the version boundary, and verifies the clean current fixture.
 
 | Project | Result |
 |---|---|

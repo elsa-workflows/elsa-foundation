@@ -509,6 +509,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
             StorageDriverType: null,
             DisplayName: name,
             Category: null,
+            IsNullable: !isRequired,
             IsRequired: isRequired,
             DefaultValue: defaultValue,
             DefaultSyntax: defaultSyntax);
@@ -540,7 +541,10 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         new("Text", new ArgumentValue(reference, "Variable"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
-        ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]);
+        ActivityVersion(
+            id,
+            "Test.WriteLine",
+            [new InputDefinition(inputName, inputName, inputType, null, inputName, null, IsNullable: true)]);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey, IReadOnlyCollection<InputDefinition>? inputs = null) =>
         new("1.0.0", "activity-definition-1")

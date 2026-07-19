@@ -11,6 +11,7 @@ public sealed class SecretModelMapper
         return new()
         {
             Id = secret.Id,
+            TenantId = secret.TenantId,
             Name = secret.Name,
             DisplayName = secret.DisplayName,
             Description = secret.Description,

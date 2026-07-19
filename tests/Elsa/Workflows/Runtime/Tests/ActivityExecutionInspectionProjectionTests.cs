@@ -31,14 +31,19 @@ public class ActivityExecutionInspectionProjectionTests
             ],
             Bookmarks =
             [
-                new("bookmark", "resume", "test", "hash", DateTimeOffset.UnixEpoch, null,
-                    new Dictionary<string, string> { ["secret"] = "protected-bookmark-metadata" }, JsonSerializer.SerializeToElement("protected-bookmark"))
+                new(
+                    new("bookmark", "wf", "outer", "resume"),
+                    "test",
+                    "hash",
+                    DateTimeOffset.UnixEpoch,
+                    null)
             ],
             Incidents =
             [
                 new("incident", IncidentSeverity.Error, IncidentStatus.Blocking, IncidentResolutionAction.Retry,
                     "TestFailure", "protected-incident", DateTimeOffset.UnixEpoch, null, true,
-                    new Dictionary<string, string> { ["secret"] = "protected-incident-metadata" })
+                    new Dictionary<string, string> { ["secret"] = "protected-incident-metadata" },
+                    new("causal-incident", "child", "node-child", "graph-descendant-fault"))
             ],
             Metadata = executionMetadata,
             Provenance = baseRoot.Provenance with
@@ -61,18 +66,68 @@ public class ActivityExecutionInspectionProjectionTests
         Assert.Equal("Completed", view.Boundary.Aggregate.Status);
         Assert.Equal(1, view.Boundary.Aggregate.Total);
         var value = Assert.Single(view.ValueSnapshots);
-        Assert.Equal("redacted", value.State);
+        Assert.Equal("payloadCaptured", value.CaptureState);
+        Assert.Equal("redacted", value.AccessState);
         Assert.Null(value.Payload);
         Assert.Null(value.Snapshot);
         Assert.Empty(value.Metadata);
         var bookmark = Assert.Single(view.Bookmarks);
-        Assert.Null(bookmark.Payload);
-        Assert.Empty(bookmark.Metadata);
+        Assert.Equal("bookmark", bookmark.Identity.BookmarkId);
+        Assert.Equal("resume", bookmark.Identity.ResumeTargetId);
         var incident = Assert.Single(view.Incidents);
         Assert.Equal("Incident details are redacted.", incident.Message);
+        Assert.Equal("causal-incident", incident.Causation!.IncidentId);
+        Assert.Equal("child", incident.Causation.ActivityExecutionId);
         Assert.Empty(incident.Metadata);
         Assert.Empty(view.Metadata);
         Assert.Empty(view.Provenance.Metadata);
+    }
+
+    [Fact]
+    public void Detail_keeps_capture_truth_separate_from_payload_resolution_authorization()
+    {
+        var projection = Projection("outer", "outer", null, 1, ActivityExecutionStatus.Completed, boundary: true) with
+        {
+            ValueSnapshots =
+            [
+                new("result", ActivityExecutionInspectionValueSubject.ActivityOutput, RuntimePayloadCaptureMode.Payload,
+                    null, DateTimeOffset.UnixEpoch, JsonSerializer.SerializeToElement(42), "captured", false,
+                    new Dictionary<string, string>(), EvidenceId: "value-1")
+            ]
+        };
+
+        var view = ActivityExecutionInspectionView.From(
+            projection,
+            canInspectSensitiveValues: true,
+            canResolveValuePayloads: true);
+
+        var evidence = Assert.Single(view.ValueSnapshots);
+        Assert.Equal("payloadCaptured", evidence.CaptureState);
+        Assert.Equal("resolutionAvailable", evidence.AccessState);
+        Assert.Null(evidence.Payload);
+        Assert.Null(evidence.Snapshot);
+        Assert.Equal("value-1", evidence.EvidenceId);
+    }
+
+    [Fact]
+    public void Failed_capture_takes_precedence_over_the_policy_capture_mode()
+    {
+        var snapshot = new ActivityExecutionInspectionValueSnapshot(
+            "secret",
+            ActivityExecutionInspectionValueSubject.ActivityInput,
+            RuntimePayloadCaptureMode.None,
+            null,
+            DateTimeOffset.UnixEpoch,
+            null,
+            "sensitive",
+            true,
+            new Dictionary<string, string>(),
+            Failure: new("InputEvaluationFailed", "Safe failure"));
+
+        var view = ActivityExecutionInspectionValueSnapshotView.From(snapshot);
+
+        Assert.Equal("captureFailed", view.CaptureState);
+        Assert.Equal("unavailable", view.AccessState);
     }
 
     [Fact]
@@ -121,6 +176,37 @@ public class ActivityExecutionInspectionProjectionTests
         ], "test"));
         Assert.True(authorization.CanInspectSensitiveValues(sameTenant));
         Assert.NotEqual(structureOnlyProfile, authorization.AuthorizationProfile);
+    }
+
+    [Fact]
+    public void Http_payload_audit_subject_requires_a_stable_subject_identifier()
+    {
+        var context = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.Name, "mutable-display-name")
+            ], "test"))
+        };
+        var authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(
+            new HttpContextAccessor { HttpContext = context });
+
+        Assert.Empty(authorization.AuditSubject);
+
+        context.User = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, "stable-subject-1"),
+            new Claim(ClaimTypes.Name, "mutable-display-name")
+        ], "test"));
+        Assert.Equal("stable-subject-1", authorization.AuditSubject);
+
+        context.User = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, " "),
+            new Claim("sub", "oidc-subject-1"),
+            new Claim(ClaimTypes.Name, "mutable-display-name")
+        ], "test"));
+        Assert.Equal("oidc-subject-1", authorization.AuditSubject);
     }
 
     internal static ActivityExecutionInspectionProjection Projection(
@@ -176,7 +262,10 @@ public class ActivityExecutionInspectionProjectionTests
     {
         public string TenantScope => "tenant:b";
         public string AuthorizationProfile => "denied";
+        public string AuditSubject => "test";
+        public string RequestCorrelationId => "test-request";
         public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => false;
         public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => true;
+        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
     }
 }

@@ -144,15 +144,13 @@ public sealed class ClrAssemblyScanner(
                 StorageDriverType: null,
                 DisplayName: property.Name,
                 Category: metadata.Category,
+                IsNullable: IsNullable(property),
                 Order: metadata.Order,
                 UiHint: metadata.UiHint,
                 UISpecifications: metadata.UiSpecifications,
                 IsRequired: HasRequired(property),
                 DefaultValue: metadata.DefaultValue,
-                DefaultSyntax: metadata.DefaultSyntax)
-            {
-                IsNullable = IsNullable(property)
-            });
+                DefaultSyntax: metadata.DefaultSyntax));
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -165,6 +163,10 @@ public sealed class ClrAssemblyScanner(
                     continue;
 
                 var key = ReadNamedStringArgument(attribute, nameof(OutputAttribute.Key)) ?? property.Name;
+                var sourceRepresentation = HasNamedArgument(attribute, nameof(OutputAttribute.HasSourceRepresentation)) &&
+                                           ReadNamedBoolArgument(attribute, nameof(OutputAttribute.HasSourceRepresentation))
+                    ? ReadNamedEnumArgument<ValueRepresentation>(attribute, nameof(OutputAttribute.SourceRepresentation))
+                    : null;
                 outputs.Add(new OutputDefinition(
                     ReferenceKey: key,
                     Name: property.Name,
@@ -172,8 +174,10 @@ public sealed class ClrAssemblyScanner(
                     StorageDriverType: null,
                     DisplayName: property.Name,
                     Category: null,
+                    IsNullable: IsNullable(property),
                     IsRequired: !HasNamedArgument(attribute, nameof(OutputAttribute.IsRequired)) ||
-                                ReadNamedBoolArgument(attribute, nameof(OutputAttribute.IsRequired))));
+                                ReadNamedBoolArgument(attribute, nameof(OutputAttribute.IsRequired)),
+                    SourceRepresentation: sourceRepresentation));
             }
         }
 
@@ -315,6 +319,18 @@ public sealed class ClrAssemblyScanner(
     {
         var value = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == name).TypedValue.Value;
         return value is bool boolValue && boolValue;
+    }
+
+    private static TEnum? ReadNamedEnumArgument<TEnum>(CustomAttributeData attribute, string name)
+        where TEnum : struct, Enum
+    {
+        var value = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == name).TypedValue.Value;
+        return value switch
+        {
+            TEnum enumValue => enumValue,
+            int integer when Enum.IsDefined(typeof(TEnum), integer) => (TEnum)Enum.ToObject(typeof(TEnum), integer),
+            _ => null
+        };
     }
 
     private static bool IsActivityType(Type type) =>

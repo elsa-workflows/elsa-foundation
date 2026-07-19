@@ -35,6 +35,22 @@ public sealed class AnyValueReadParityTests
     public async Task JsonElementForm_ReadsIdenticallyFromPortableJavaScriptAndLiquid(string path, string expected) =>
         await AssertParity(JsonSerializer.Deserialize<JsonElement>(PayloadJson), path, expected);
 
+    [Fact]
+    public async Task FormattedJsonConversionResult_ReadsPropertiesAndArrayItemsFromPortableJavaScript()
+    {
+        var converted = JsonSerializer.Deserialize<JsonElement>(PayloadJson);
+        var values = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        {
+            ["payload"] = converted
+        };
+
+        var property = await ReadWithJavaScript(values, "customer.name");
+        var arrayItem = await ReadWithJavaScript(values, "tags[1]");
+
+        Assert.Equal("Alice", property);
+        Assert.Equal("green", arrayItem);
+    }
+
     private static async Task AssertParity(object value, string path, string expected)
     {
         var frozenValue = JsonSerializer.SerializeToElement(value, value.GetType());

@@ -1,6 +1,8 @@
 using System.Text.Json;
+using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
@@ -54,6 +56,159 @@ public sealed class GroundworkReusableActivityStoreTests
         Assert.Equal("definition-1", (await harness.Stores.FindAsync("definition-1"))!.DefinitionId);
         Assert.Equal("draft-1", (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"))!.Id);
         Assert.Equal("node-1", Assert.Single((await harness.Stores.FindDraftLayoutAsync("draft-1"))!.Records).NodeId);
+    }
+
+    [Fact]
+    public async Task Fork_candidate_apply_commits_exact_reserved_identity_receipt_and_management_projection_atomically()
+    {
+        var harness = Harness.Create();
+        var candidate = ForkCandidate();
+        await SaveForkSourceAsync(harness, candidate);
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(candidate));
+        var request = ForkApply(candidate, "operation-1");
+
+        var applied = await harness.Stores.ExecuteAsync(request);
+        var replay = await harness.Stores.ExecuteAsync(request);
+
+        Assert.False(applied.AlreadyApplied);
+        Assert.True(replay.AlreadyApplied);
+        Assert.Equal(candidate.ReservedDefinition.Id, applied.Receipt.DefinitionId);
+        Assert.Equal(candidate.ReservedDefinition.ActivityTypeKey, applied.Receipt.ActivityTypeKey);
+        Assert.Equal(candidate.ReservedDraft.Id, applied.Receipt.DraftId);
+        Assert.NotNull(await harness.Stores.FindReceiptAsync(request.ReceiptId));
+        Assert.Equal(
+            ActivityForkCandidateStatus.Applied,
+            (await harness.Stores.FindCandidateAsync(candidate.Id))!.Status);
+        Assert.Equal(
+            candidate.ReservedDefinition.ActivityTypeKey,
+            (await new GroundworkActivityDefinitionStore(harness.Documents)
+                .GetAsync(candidate.ReservedDefinition.Id)).ActivityTypeKey);
+        Assert.Equal(
+            candidate.ReservedDraft.Id,
+            (await ((IActivityDefinitionDraftStore)harness.Stores)
+                .FindAsync(candidate.ReservedDraft.Id))!.Id);
+        Assert.Single(harness.Documents.Snapshot(
+            ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind));
+    }
+
+    [Fact]
+    public async Task Fork_candidate_collision_rejects_without_receipt_or_partial_reserved_identity_writes()
+    {
+        var harness = Harness.Create();
+        var candidate = ForkCandidate();
+        await SaveForkSourceAsync(harness, candidate);
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(candidate));
+        var collision = CreateRequest();
+        await harness.Stores.ExecuteAsync(collision);
+        var request = ForkApply(candidate, "operation-1");
+
+        await Assert.ThrowsAsync<ActivityForkCollisionException>(() =>
+            harness.Stores.ExecuteAsync(request));
+
+        Assert.Null(await harness.Stores.FindReceiptAsync(request.ReceiptId));
+        Assert.Equal(
+            ActivityForkCandidateStatus.Reserved,
+            (await harness.Stores.FindCandidateAsync(candidate.Id))!.Status);
+        Assert.Null(await ((IActivityDefinitionDraftStore)harness.Stores)
+            .FindAsync(candidate.ReservedDraft.Id));
+        await Assert.ThrowsAsync<Elsa.Primitives.Exceptions.EntityNotFoundException>(() =>
+            new GroundworkActivityDefinitionStore(harness.Documents)
+                .GetAsync(candidate.ReservedDefinition.Id));
+    }
+
+    [Fact]
+    public async Task Fork_receipt_replay_rejects_changed_candidate_binding_without_writes()
+    {
+        var harness = Harness.Create();
+        var first = ForkCandidate();
+        await SaveForkSourceAsync(harness, first);
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(first));
+        var firstRequest = ForkApply(first, "operation-1");
+        await harness.Stores.ExecuteAsync(firstRequest);
+        var second = ForkCandidate("candidate-2", "target-definition-2", "target-draft-2");
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(second));
+        var conflict = ForkApply(second, "operation-1") with { ReceiptId = firstRequest.ReceiptId };
+
+        await Assert.ThrowsAsync<ActivityForkIdempotencyConflictException>(() =>
+            harness.Stores.ExecuteAsync(conflict));
+
+        Assert.Null(await ((IActivityDefinitionDraftStore)harness.Stores)
+            .FindAsync(second.ReservedDraft.Id));
+        Assert.Equal(first.Id, (await harness.Stores.FindReceiptAsync(firstRequest.ReceiptId))!.CandidateId);
+    }
+
+    [Fact]
+    public async Task Concurrent_fork_candidates_with_one_operation_identity_have_one_exact_winner()
+    {
+        var harness = Harness.Create(new YieldingDistributedLockProvider());
+        var first = ForkCandidate();
+        await SaveForkSourceAsync(harness, first);
+        var second = ForkCandidate(
+            "candidate-2",
+            "target-definition-2",
+            "target-draft-2",
+            activityTypeKey: "Acme.Other");
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(first));
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(second));
+        var firstRequest = ForkApply(first, "shared-operation");
+        var secondRequest = ForkApply(second, "shared-operation") with
+        {
+            ReceiptId = firstRequest.ReceiptId
+        };
+
+        var attempts = await Task.WhenAll(
+            CaptureAsync(() => harness.Stores.ExecuteAsync(firstRequest)),
+            CaptureAsync(() => harness.Stores.ExecuteAsync(secondRequest)));
+
+        Assert.Single(attempts.Where(x => x.Result is not null));
+        Assert.Single(attempts.Where(x => x.Exception is ActivityForkIdempotencyConflictException));
+        var receipt = await harness.Stores.FindReceiptAsync(firstRequest.ReceiptId);
+        Assert.NotNull(receipt);
+        Assert.Equal(
+            receipt!.CandidateId == first.Id ? first.ReservedDefinition.Id : second.ReservedDefinition.Id,
+            receipt.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Fork_preview_retries_return_the_first_reservation_and_reject_changed_material()
+    {
+        var harness = Harness.Create();
+        var first = ForkCandidate();
+        var retry = ForkCandidate(definitionId: "losing-definition", draftId: "losing-draft");
+        var changed = ForkCandidate(
+            definitionId: "changed-definition",
+            draftId: "changed-draft",
+            requestFingerprint: $"sha256:{new string('f', 64)}");
+
+        var reserved = await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(first));
+        var replay = await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(retry));
+        await Assert.ThrowsAsync<ActivityForkPreviewIdempotencyConflictException>(() =>
+            harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(changed)));
+
+        Assert.Equal(first.ReservedDefinition.Id, reserved.ReservedDefinition.Id);
+        Assert.Equal(first.ReservedDefinition.Id, replay.ReservedDefinition.Id);
+        Assert.Single(harness.Documents.Snapshot(ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind));
+    }
+
+    [Fact]
+    public async Task Fork_candidate_retention_prunes_bounded_candidates_but_preserves_append_only_receipt()
+    {
+        var harness = Harness.Create();
+        var candidate = ForkCandidate();
+        await SaveForkSourceAsync(harness, candidate);
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(candidate));
+        var request = ForkApply(candidate, "operation-1");
+        await harness.Stores.ExecuteAsync(request);
+
+        var pruned = await harness.Stores.ExecuteAsync(candidate.RetainUntil, 1);
+
+        Assert.Equal(1, pruned);
+        Assert.Null(await harness.Stores.FindCandidateAsync(candidate.Id));
+        var receipt = await harness.Stores.FindReceiptAsync(request.ReceiptId);
+        Assert.NotNull(receipt);
+        Assert.Equal(candidate.CandidateId, receipt!.PublicCandidateId);
+        Assert.Equal(candidate.ReservedDefinition.Id, receipt.Definition.Id);
+        Assert.Single(harness.Documents.Snapshot(ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind));
     }
 
     [Fact]
@@ -123,7 +278,11 @@ public sealed class GroundworkReusableActivityStoreTests
             racingStore,
             new FakeClock(),
             new ImmediateDistributedLockProvider(),
-            new TestBoundedDocumentStore(racingStore));
+            new ActivityDesignTestBoundedDocumentStore(racingStore),
+            new GroundworkActivityManagementProjectionWriter(
+                racingStore,
+                new ImmediateDistributedLockProvider(),
+                harness.Documents));
 
         await Assert.ThrowsAsync<DocumentAtomicWriteException>(() => stores.ExecuteAsync(new UpdateActivityDefinitionPresentationRequest(
             "definition-1", null, "Losing update", "Losing update", null, DateTimeOffset.UtcNow)));
@@ -151,6 +310,63 @@ public sealed class GroundworkReusableActivityStoreTests
         Assert.Equal("updated", draft.State.Options["label"]);
         Assert.Equal(1, layout!.Revision);
         Assert.Equal("node-2", Assert.Single(layout.Records).NodeId);
+    }
+
+    [Fact]
+    public async Task ApplyContractProposal_Uses_Exact_Provider_Binding_And_Changes_Only_Contract_And_Revisions()
+    {
+        var harness = Harness.Create();
+        await harness.Stores.ExecuteAsync(CreateRequest());
+        var before = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"))!;
+        var fingerprint = ActivityProviderManifestFingerprint.Compute(before.State.Provider);
+        var contract = new ActivityContract(
+            "proposal",
+            [new("note", "Note", new("String", Elsa.Primitives.Models.CollectionKind.Single), true, true, null, "elsa.json")],
+            [new("result", "Result", new("String", Elsa.Primitives.Models.CollectionKind.Single), true, false, "elsa.json")],
+            [new("done", "Done", true)]);
+
+        var applied = await harness.Stores.ExecuteAsync(new ApplyActivityContractProposalRequest(
+            before.Id,
+            before.TenantId,
+            before.Revision,
+            before.State.Provider.ProviderKey,
+            before.State.Provider.SchemaVersion,
+            fingerprint,
+            contract));
+
+        var layout = await harness.Stores.FindDraftLayoutAsync(before.Id);
+        Assert.Equal(1, applied.Revision);
+        Assert.Equal("proposal", applied.State.Contract.ContractSchemaVersion);
+        Assert.True(Assert.Single(applied.State.Contract.Inputs).IsNullable);
+        Assert.False(Assert.Single(applied.State.Contract.Outputs).IsNullable);
+        Assert.Equal(before.State.Provider.ProviderKey, applied.State.Provider.ProviderKey);
+        Assert.Equal(before.State.Provider.SchemaVersion, applied.State.Provider.SchemaVersion);
+        Assert.Equal(before.State.Provider.Payload.GetRawText(), applied.State.Provider.Payload.GetRawText());
+        Assert.Equal(before.State.Options["label"], applied.State.Options["label"]);
+        Assert.Equal(1, layout!.Revision);
+        Assert.Equal("node-1", Assert.Single(layout.Records).NodeId);
+    }
+
+    [Fact]
+    public async Task ApplyContractProposal_Rejects_Stale_Manifest_Fingerprint_Without_Writes()
+    {
+        var harness = Harness.Create();
+        await harness.Stores.ExecuteAsync(CreateRequest());
+        var before = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"))!;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Stores.ExecuteAsync(new ApplyActivityContractProposalRequest(
+            before.Id,
+            before.TenantId,
+            before.Revision,
+            before.State.Provider.ProviderKey,
+            before.State.Provider.SchemaVersion,
+            "sha256:stale",
+            new("proposal", [], [], []))));
+
+        var persisted = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(before.Id))!;
+        Assert.Equal(before.Revision, persisted.Revision);
+        AssertContractEqual(before.State.Contract, persisted.State.Contract);
+        Assert.Equal(before.Revision, (await harness.Stores.FindDraftLayoutAsync(before.Id))!.Revision);
     }
 
     [Theory]
@@ -195,6 +411,19 @@ public sealed class GroundworkReusableActivityStoreTests
     public async Task Publication_Layout_Edge_Lifecycle_And_Dependency_Reads_RoundTrip()
     {
         var harness = Harness.Create();
+        await harness.SaveAsync(new ActivityDefinition
+        {
+            Id = "definition-parent",
+            ActivityTypeKey = "Acme.Parent",
+            Category = "Samples"
+        });
+        await harness.SaveAsync(new ActivityDefinitionAuthoringState
+        {
+            Id = "authoring-parent",
+            DefinitionId = "definition-parent",
+            ContentAuthority = new(ActivityContentAuthorityKind.Design, "design"),
+            HeadVersionId = "version-parent"
+        });
         await harness.SaveAsync(Publication("publication-parent", "version-parent", "definition-parent", "1.0.0", 1));
         await harness.SaveAsync(Publication("publication-child", "version-child", "definition-child", "2.0.0", 0));
         await harness.SaveAsync(new ActivityDefinitionVersionLayout
@@ -247,6 +476,45 @@ public sealed class GroundworkReusableActivityStoreTests
         Assert.Equal(
             ActivityDefinitionVersionLifecycle.Retired,
             (await ((IActivityDefinitionVersionPublicationStore)harness.Stores).FindAsync("version-parent"))!.Lifecycle);
+    }
+
+    [Fact]
+    public async Task Recommendation_move_picker_and_lifecycle_replacement_share_exact_groundwork_cas()
+    {
+        var harness = Harness.Create();
+        await harness.Stores.ExecuteAsync(CreateRequest(
+            headVersionId: "version-2",
+            recommendedVersionId: "version-1"));
+        await harness.SaveAsync(Publication("publication-1", "version-1", "definition-1", "1.0.0", 0));
+        await harness.SaveAsync(Publication("publication-2", "version-2", "definition-1", "2.0.0", 0));
+
+        await harness.Stores.ExecuteAsync(new SetActivityDefinitionRecommendationRequest(
+            "definition-1",
+            null,
+            "version-2",
+            "version-1",
+            "version-2",
+            ActivityDefinitionVersionLifecycle.Active,
+            DateTimeOffset.UtcNow));
+        var picker = await harness.Stores.ReadAsync(null, 0, 25);
+        await harness.Stores.ExecuteAsync(new ChangeActivityVersionLifecycleRequest(
+            "version-2",
+            ActivityDefinitionVersionLifecycle.Active,
+            ActivityDefinitionVersionLifecycle.Retired,
+            "Superseded",
+            null,
+            new(
+                "version-2",
+                "version-2",
+                ActivityRecommendationDisposition.Replace,
+                "version-1",
+                ActivityDefinitionVersionLifecycle.Active)));
+
+        Assert.Equal("version-2", Assert.Single(picker.Items).Version.DefinitionVersionId);
+        Assert.Equal("version-1", (await harness.Stores.FindAsync("definition-1"))!.RecommendedVersionId);
+        Assert.Equal(
+            ActivityDefinitionVersionLifecycle.Retired,
+            (await ((IActivityDefinitionVersionPublicationStore)harness.Stores).FindAsync("version-2"))!.Lifecycle);
     }
 
     [Fact]
@@ -316,7 +584,11 @@ public sealed class GroundworkReusableActivityStoreTests
             racingStore,
             new FakeClock(),
             new ImmediateDistributedLockProvider(),
-            new TestBoundedDocumentStore(racingStore));
+            new ActivityDesignTestBoundedDocumentStore(racingStore),
+            new GroundworkActivityManagementProjectionWriter(
+                racingStore,
+                new ImmediateDistributedLockProvider(),
+                documents));
 
         await Assert.ThrowsAsync<DocumentAtomicWriteException>(() => stores.ExecuteAsync(CreateRequest()));
 
@@ -327,7 +599,9 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     private static CreateActivityDefinitionRequest CreateRequest(
-        ActivityContentAuthorityKind authority = ActivityContentAuthorityKind.Design)
+        ActivityContentAuthorityKind authority = ActivityContentAuthorityKind.Design,
+        string? headVersionId = null,
+        string? recommendedVersionId = null)
     {
         var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         return new CreateActivityDefinitionRequest(
@@ -344,6 +618,8 @@ public sealed class GroundworkReusableActivityStoreTests
                 Id = "authoring-1",
                 DefinitionId = "definition-1",
                 ContentAuthority = new(authority, authority == ActivityContentAuthorityKind.Design ? "design" : "provider"),
+                HeadVersionId = headVersionId,
+                RecommendedVersionId = recommendedVersionId,
                 CreatedAt = now,
                 LastModifiedAt = now
             },
@@ -417,6 +693,162 @@ public sealed class GroundworkReusableActivityStoreTests
 
     private static ActivityContract Contract() => new("1", [], [], []);
 
+    private static ActivityForkCandidate ForkCandidate(
+        string candidateId = "candidate-1",
+        string definitionId = "target-definition-1",
+        string draftId = "target-draft-1",
+        string? requestFingerprint = null,
+        string activityTypeKey = "Acme.Sample")
+    {
+        var createdAt = new DateTimeOffset(2026, 1, 1, 1, 0, 0, TimeSpan.Zero);
+        var definition = new ActivityDefinition
+        {
+            Id = definitionId,
+            TenantId = null,
+            ActivityTypeKey = activityTypeKey,
+            Category = "Samples",
+            DisplayName = "Forked",
+            CreatedAt = createdAt,
+            LastModifiedAt = createdAt
+        };
+        var authoring = new ActivityDefinitionAuthoringState
+        {
+            Id = $"authoring-{definitionId}",
+            TenantId = null,
+            DefinitionId = definitionId,
+            ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design),
+            ForkedFrom = new("source-definition", "source-version", "1.0.0"),
+            CreatedAt = createdAt,
+            LastModifiedAt = createdAt
+        };
+        var draft = new ActivityDefinitionDraft
+        {
+            Id = draftId,
+            TenantId = null,
+            DefinitionId = definitionId,
+            Revision = 1,
+            SourceVersionId = "source-version",
+            State = State("initial"),
+            CreatedAt = createdAt,
+            LastModifiedAt = createdAt
+        };
+        var layout = new ActivityDefinitionDraftLayout
+        {
+            Id = $"layout-{draftId}",
+            TenantId = null,
+            DraftId = draftId,
+            Revision = 1,
+            Records = [LayoutRecord("node-1")],
+            CreatedAt = createdAt,
+            LastModifiedAt = createdAt
+        };
+        var sourceContract = Contract();
+        var sourceProvider = Provider();
+        return new()
+        {
+            Id = candidateId,
+            CandidateId = $"public-{candidateId}",
+            PreviewIdempotencyKey = $"preview-{candidateId}",
+            TenantId = null,
+            RequestFingerprint = requestFingerprint ?? $"sha256:{new string('a', 64)}",
+            AccessBindingFingerprint = $"sha256:{new string('b', 64)}",
+            ActorId = "actor-a",
+            AuthorizationProfile = "profile-a",
+            SourceDefinitionId = "source-definition",
+            SourceVersionId = "source-version",
+            SourceVersion = "1.0.0",
+            SourceLifecycle = ActivityDefinitionVersionLifecycle.Active,
+            SourceProviderFingerprint = ActivityProviderManifestFingerprint.Compute(sourceProvider),
+            TargetProviderFingerprint = $"sha256:{new string('d', 64)}",
+            ReservedDefinition = definition,
+            ReservedAuthoringState = authoring,
+            ReservedDraft = draft,
+            ReservedLayout = layout,
+            SourceContractFingerprint = ActivityForkMaterialFingerprint.Compute(sourceContract),
+            TargetContractFingerprint = $"sha256:{new string('e', 64)}",
+            ExpiresAt = createdAt.AddMinutes(15),
+            RetainUntil = createdAt.AddDays(1),
+            RetentionKey = ActivityForkCandidateIdentity.RetentionKey(createdAt.AddDays(1)),
+            CreatedAt = createdAt,
+            LastModifiedAt = createdAt
+        };
+    }
+
+    private static async Task SaveForkSourceAsync(
+        Harness harness,
+        ActivityForkCandidate candidate)
+    {
+        var createdAt = candidate.CreatedAt.AddHours(-1);
+        await harness.SaveAsync(new ActivityDefinitionAuthoringState
+        {
+            Id = $"authoring-{candidate.SourceDefinitionId}",
+            TenantId = candidate.TenantId,
+            DefinitionId = candidate.SourceDefinitionId,
+            ContentAuthority = new(
+                ActivityContentAuthorityKind.ProviderSource,
+                "source.provider"),
+            HeadVersionId = candidate.SourceVersionId,
+            RecommendedVersionId = candidate.SourceVersionId,
+            CreatedAt = createdAt,
+            LastModifiedAt = createdAt
+        });
+        await harness.SaveAsync(new ActivityDefinitionVersionPublication
+        {
+            Id = $"publication-{candidate.SourceVersionId}",
+            TenantId = candidate.TenantId,
+            DefinitionVersionId = candidate.SourceVersionId,
+            DefinitionId = candidate.SourceDefinitionId,
+            Version = candidate.SourceVersion,
+            ActivityTypeKey = "Acme.Source",
+            Contract = Contract(),
+            Provider = Provider(),
+            TemplateId = $"template-{candidate.SourceVersionId}",
+            TemplateHash = $"hash-{candidate.SourceVersionId}",
+            SourceReferenceId = $"source-{candidate.SourceVersionId}",
+            ProviderFingerprint = candidate.SourceProviderFingerprint,
+            DirectDependencyCount = 0,
+            ClosedTemplateCount = 1,
+            RuntimeRequirements = [],
+            Lifecycle = candidate.SourceLifecycle,
+            PublishedAt = createdAt,
+            CreatedAt = createdAt,
+            LastModifiedAt = createdAt
+        });
+    }
+
+    private static ApplyActivityForkCandidateRequest ForkApply(
+        ActivityForkCandidate candidate,
+        string idempotencyKey) => new(
+        candidate.Id,
+        candidate.RequestFingerprint,
+        candidate.AccessBindingFingerprint,
+        candidate.ActorId,
+        candidate.AuthorizationProfile,
+        idempotencyKey,
+        ActivityForkReceiptIdentity.Compute(candidate.TenantId, candidate.ActorId, idempotencyKey),
+        candidate.CreatedAt.AddMinutes(1));
+
+    private static async Task<(ActivityForkApplyResult? Result, Exception? Exception)> CaptureAsync(
+        Func<Task<ActivityForkApplyResult>> operation)
+    {
+        try
+        {
+            return (await operation(), null);
+        }
+        catch (Exception exception)
+        {
+            return (null, exception);
+        }
+    }
+
+    private static void AssertContractEqual(ActivityContract expected, ActivityContract actual)
+    {
+        Assert.Equal(expected.ContractSchemaVersion, actual.ContractSchemaVersion);
+        Assert.Equal(expected.Inputs, actual.Inputs);
+        Assert.Equal(expected.Outputs, actual.Outputs);
+        Assert.Equal(expected.Outcomes, actual.Outcomes);
+    }
+
     private static ActivityProviderManifest Provider() => new("workflow", "1", Json("{}"));
 
     private static ActivityLayoutRecord LayoutRecord(string nodeId) => new(nodeId, Json("{}"));
@@ -441,20 +873,30 @@ public sealed class GroundworkReusableActivityStoreTests
         public InMemoryDocumentStore Documents { get; } = documents;
         public GroundworkReusableActivityStores Stores { get; } = stores;
 
-        public static Harness Create()
+        public static Harness Create(IDistributedLockProvider? lockProvider = null)
         {
             var documents = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
             return new Harness(documents, new GroundworkReusableActivityStores(
                 documents,
                 new FakeClock(),
-                new ImmediateDistributedLockProvider(),
-                new TestBoundedDocumentStore(documents)));
+                lockProvider ?? new ImmediateDistributedLockProvider(),
+                new ActivityDesignTestBoundedDocumentStore(documents),
+                new GroundworkActivityManagementProjectionWriter(
+                    documents,
+                    new ImmediateDistributedLockProvider(),
+                    documents)));
         }
 
         public Task SaveAsync<TEntity>(TEntity entity) where TEntity : Entity
         {
             var (kind, collection) = entity switch
             {
+                ActivityDefinition => (
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionCollection),
+                ActivityDefinitionAuthoringState => (
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection),
                 ActivityDefinitionVersionPublication => (
                     ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
                     ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection),
@@ -525,10 +967,33 @@ public sealed class GroundworkReusableActivityStoreTests
         }
     }
 
-    private sealed class TestBoundedDocumentStore(IDocumentStore documents) : IBoundedDocumentStore
+    internal sealed class ActivityDesignTestBoundedDocumentStore(IDocumentStore documents) : IBoundedDocumentStore
     {
         public async Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
         {
+            if (query.QueryIdentity == ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery)
+            {
+                var expiredComparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+                Assert.Equal(QueryComparisonOperator.LessThanOrEqual, expiredComparison.Operator);
+                var retainBefore = Assert.Single(expiredComparison.Values)!;
+                var memory = Assert.IsType<InMemoryDocumentStore>(documents);
+                var expiredMatches = memory
+                    .Snapshot(query.DocumentKind)
+                    .Where(x =>
+                    {
+                        using var json = JsonDocument.Parse(x.ContentJson);
+                        var retentionKey = json.RootElement
+                            .GetProperty("entity")
+                            .GetProperty("retentionKey")
+                            .GetString();
+                        return StringComparer.Ordinal.Compare(retentionKey, retainBefore) <= 0;
+                    })
+                    .ToArray();
+                IEnumerable<DocumentEnvelope> expiredPage = expiredMatches.Skip(query.Skip ?? 0);
+                if (query.Take is { } expiredTake)
+                    expiredPage = expiredPage.Take(expiredTake);
+                return new DocumentQueryResult(expiredPage.ToArray(), expiredMatches.Length);
+            }
             var index = query.QueryIdentity switch
             {
                 ActivitiesDesignStorageManifest.ListAllQuery => ActivitiesDesignStorageManifest.ByCollectionIndex,
@@ -563,6 +1028,63 @@ public sealed class GroundworkReusableActivityStoreTests
             await FirstOrDefaultAsync(query, cancellationToken) is not null;
     }
 
+}
+
+internal sealed class YieldingDistributedLockProvider : IDistributedLockProvider
+{
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.Ordinal);
+
+    public IDistributedSynchronizationHandle? TryAcquireLock(
+        string name,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        var gate = Gate(name);
+        return gate.Wait(timeout ?? TimeSpan.Zero, cancellationToken)
+            ? new Handle(gate)
+            : null;
+    }
+
+    public async ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(
+        string name,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        var gate = Gate(name);
+        return await gate.WaitAsync(timeout ?? TimeSpan.Zero, cancellationToken)
+            ? new Handle(gate)
+            : null;
+    }
+
+    public async ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(
+        string name,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        var gate = Gate(name);
+        if (!await gate.WaitAsync(timeout ?? Timeout.InfiniteTimeSpan, cancellationToken))
+            throw new TimeoutException($"Timed out acquiring test lock '{name}'.");
+        return new Handle(gate);
+    }
+
+    private SemaphoreSlim Gate(string name) => _locks.GetOrAdd(name, static _ => new(1, 1));
+
+    private sealed class Handle(SemaphoreSlim gate) : IDistributedSynchronizationHandle
+    {
+        private SemaphoreSlim? _gate = gate;
+
+        public CancellationToken HandleLostToken => CancellationToken.None;
+
+        public void Dispose() => Interlocked.Exchange(ref _gate, null)?.Release();
+
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
+        }
+    }
 }
 
 internal sealed class ImmediateDistributedLockProvider : IDistributedLockProvider

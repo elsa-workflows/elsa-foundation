@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
+using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
@@ -17,6 +18,7 @@ public static class GroundworkUnifiedStoreFamiliesRegistration
 
         services.AddGroundworkRuntimeStores();
         services.AddGroundworkSecretsStore();
+        services.AddGroundworkStudioPreferences();
         services.AddGroundworkDistributedRuntimeStores();
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();

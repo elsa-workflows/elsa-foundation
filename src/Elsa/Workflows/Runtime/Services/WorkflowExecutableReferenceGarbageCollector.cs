@@ -291,7 +291,12 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             }
 
             if (await _executableStore.DeleteAsync(deletionGuard, _timeProvider.GetUtcNow(), cancellationToken))
+            {
                 deletedArtifactCount++;
+                _logger.LogInformation(
+                    "Reference GC permanently deleted unreferenced workflow executable artifact {ArtifactId}",
+                    artifactId);
+            }
         }
 
         var templateIds = templates

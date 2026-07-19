@@ -19,8 +19,8 @@ public sealed class ConstructActivityRequestHandlerTests
             Id = "v1",
             DescriptorType = "Elsa.Primitives.Models.ClrActivityDescriptor",
             DescriptorPayload = payload,
-            Inputs = [new InputDefinition("text", "Text", new TypeReference("String"), null, "Text", null)],
-            Outputs = [new OutputDefinition("result", "Result", new TypeReference("Object"), null, "Result", null)]
+            Inputs = [new InputDefinition("text", "Text", new TypeReference("String"), null, "Text", null, false)],
+            Outputs = [new OutputDefinition("result", "Result", new TypeReference("Object"), null, "Result", null, false)]
         };
         var handler = new ConstructActivityRequestHandler(new FakeActivityVersionStore([version]));
 

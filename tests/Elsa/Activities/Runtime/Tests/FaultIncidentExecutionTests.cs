@@ -111,7 +111,7 @@ public sealed class FaultIncidentExecutionTests
             "1.0.0",
             "test/fault",
             descriptor.RootElement,
-            [new ActivityInputContract("message", nameof(Fault.Message), stringType, false, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("message", nameof(Fault.Message), stringType, false, true, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             [ActivityOutcomes.Done],
             new ActivityActivationRequirement("test/fault", typeof(Fault).FullName!));

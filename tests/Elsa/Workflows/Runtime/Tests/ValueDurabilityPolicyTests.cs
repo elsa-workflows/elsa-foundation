@@ -6,6 +6,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,8 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class ValueDurabilityPolicyTests
 {
     private static readonly ValueTypeDescriptor StringType = new("String");
+    private static readonly ValueTypeDescriptor AnyType = new("Elsa.Any");
+    private static readonly ValueTypeDescriptor CustomerType = new("Acme.Customer");
     private static readonly DateTimeOffset Now = new(2026, 7, 16, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -420,6 +423,171 @@ public sealed class ValueDurabilityPolicyTests
     }
 
     [Fact]
+    public async Task External_json_source_is_read_converted_and_re_externalized_with_destination_policy()
+    {
+        var sourcePolicy = SensitiveExternalPolicy();
+        var contractPolicy = new ActivityValuePolicy(
+            true,
+            true,
+            true,
+            "Full",
+            ActivityValueLifecycle.Instance,
+            ActivityValueStorage.External,
+            "encrypted-inputs",
+            "P30D");
+        var reference = new DurableValueExternalReference("encrypted-source", "payloads/source-json", new Dictionary<string, string>());
+        var binding = new RuntimeInputBinding(
+            "message",
+            AnyType,
+            ValuePolicyCombiner.ToProtectionPolicy(contractPolicy),
+            RuntimeInputBindingSource.WorkflowRequest,
+            workflowRequest: new RuntimeWorkflowRequestReference("payload"),
+            conversionPlan: JsonPlan(AnyType));
+        var store = new RecordingExternalPayloadStore(new Dictionary<string, JsonElement>
+        {
+            [reference.Locator] = JsonSerializer.SerializeToElement("""{"name":"Ada","tags":["external"]}""")
+        });
+
+        var snapshot = await new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), store)
+            .MaterializeSnapshotAsync(
+                NewTypedNode(binding, contractPolicy, inputType: AnyType),
+                "invocation-1",
+                NewResolutionContext(workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+                {
+                    ["payload"] = ValueEnvelope.External(StringType, reference, sourcePolicy)
+                }),
+                Now);
+
+        var value = snapshot.Values["message"];
+        Assert.Equal(AnyType, value.Type);
+        Assert.Null(value.InlineValue);
+        Assert.Equal("payloads/activity:invocation-1:input:message", value.ExternalReference!.Locator);
+        var write = Assert.Single(store.Writes);
+        Assert.Equal(AnyType, write.Type);
+        Assert.Equal("encrypted-inputs", write.StorageProfile);
+        Assert.Equal("P30D", write.Policy.RetentionPolicy);
+        Assert.Equal("Ada", write.Payload.GetProperty("name").GetString());
+        Assert.Equal("external", write.Payload.GetProperty("tags")[0].GetString());
+    }
+
+    [Fact]
+    public async Task External_xml_source_is_read_and_converted_to_registered_typed_alias()
+    {
+        var reference = new DurableValueExternalReference("encrypted-source", "payloads/source-xml", new Dictionary<string, string>());
+        var binding = new RuntimeInputBinding(
+            "message",
+            CustomerType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.WorkflowRequest,
+            workflowRequest: new RuntimeWorkflowRequestReference("payload"),
+            conversionPlan: XmlPlan(CustomerType));
+        var store = new RecordingExternalPayloadStore(new Dictionary<string, JsonElement>
+        {
+            [reference.Locator] = JsonSerializer.SerializeToElement("""
+            <customer loyaltyPoints="42">
+              <name>Ada</name>
+              <address>
+                <city>Brussels</city>
+              </address>
+            </customer>
+            """)
+        });
+
+        var snapshot = await new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new CustomerTypeRegistry(), store)
+            .MaterializeSnapshotAsync(
+                NewTypedNode(binding, ActivityValuePolicy.Default, inputType: CustomerType),
+                "invocation-1",
+                NewResolutionContext(workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+                {
+                    ["payload"] = ValueEnvelope.External(StringType, reference, SensitiveExternalPolicy())
+                }),
+                Now);
+
+        Assert.Null(snapshot.Values["message"].InlineValue);
+        Assert.NotNull(snapshot.Values["message"].ExternalReference);
+        var value = Assert.Single(store.Writes).Payload;
+        Assert.Equal("Ada", value.GetProperty("name").GetString());
+        Assert.Equal(42, value.GetProperty("loyaltyPoints").GetInt64());
+        Assert.Equal("Brussels", value.GetProperty("address").GetProperty("city").GetString());
+    }
+
+    [Fact]
+    public async Task External_payload_read_failures_are_distinct_from_conversion_failures()
+    {
+        var missingReference = new DurableValueExternalReference("encrypted-source", "payloads/missing", new Dictionary<string, string>());
+        var missingBinding = new RuntimeInputBinding(
+            "message",
+            AnyType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.WorkflowRequest,
+            workflowRequest: new RuntimeWorkflowRequestReference("payload"),
+            conversionPlan: JsonPlan(AnyType));
+        var missing = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new RecordingExternalPayloadStore(new Dictionary<string, JsonElement>()))
+                .MaterializeSnapshotAsync(
+                    NewTypedNode(missingBinding, ActivityValuePolicy.Default, inputType: AnyType),
+                    "invocation-1",
+                    NewResolutionContext(workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+                    {
+                        ["payload"] = ValueEnvelope.External(StringType, missingReference, SensitiveExternalPolicy())
+                    }),
+                    Now)
+                .AsTask());
+        Assert.Contains("VF-ACT-005", missing.Message, StringComparison.Ordinal);
+        Assert.Contains("could not be read", missing.Message, StringComparison.Ordinal);
+
+        var malformedReference = new DurableValueExternalReference("encrypted-source", "payloads/malformed", new Dictionary<string, string>());
+        var malformed = await Assert.ThrowsAsync<RuntimeValueConversionException>(() =>
+            new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new RecordingExternalPayloadStore(new Dictionary<string, JsonElement>
+                {
+                    [malformedReference.Locator] = JsonSerializer.SerializeToElement("{not-json")
+                }))
+                .MaterializeSnapshotAsync(
+                    NewTypedNode(missingBinding, ActivityValuePolicy.Default, inputType: AnyType),
+                    "invocation-1",
+                    NewResolutionContext(workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+                    {
+                        ["payload"] = ValueEnvelope.External(StringType, malformedReference, SensitiveExternalPolicy())
+                    }),
+                    Now)
+                .AsTask());
+        Assert.Contains("malformed JSON content", malformed.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("could not be read", malformed.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task External_json_conversion_enforces_the_pinned_payload_limits_after_dereference()
+    {
+        var reference = new DurableValueExternalReference("encrypted-source", "payloads/large", new Dictionary<string, string>());
+        var binding = new RuntimeInputBinding(
+            "message",
+            AnyType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.WorkflowRequest,
+            workflowRequest: new RuntimeWorkflowRequestReference("payload"),
+            conversionPlan: JsonPlan(AnyType, new ValueConversionLimits(64, 10_000, 8)));
+        var store = new RecordingExternalPayloadStore(new Dictionary<string, JsonElement>
+        {
+            [reference.Locator] = JsonSerializer.SerializeToElement("""{"name":"Ada"}""")
+        });
+
+        var exception = await Assert.ThrowsAsync<RuntimeValueConversionException>(() =>
+            new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), store)
+                .MaterializeSnapshotAsync(
+                    NewTypedNode(binding, ActivityValuePolicy.Default, inputType: AnyType),
+                    "invocation-1",
+                    NewResolutionContext(workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+                    {
+                        ["payload"] = ValueEnvelope.External(StringType, reference, SensitiveExternalPolicy())
+                    }),
+                    Now)
+                .AsTask());
+
+        Assert.Contains("maximum payload size '8' bytes was exceeded", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(store.Writes);
+    }
+
+    [Fact]
     public async Task Portable_expression_dereferences_external_dependency_and_propagates_its_policy()
     {
         var dependencyPolicy = new ValueProtectionPolicy(
@@ -546,7 +714,7 @@ public sealed class ValueDurabilityPolicyTests
         ValueProtectionPolicy effectivePolicy,
         ActivityValuePolicy contractPolicy,
         bool isRequired = true,
-        bool? isNullable = null)
+        bool isNullable = false)
     {
         var binding = new RuntimeInputBinding(
             "message",
@@ -562,7 +730,8 @@ public sealed class ValueDurabilityPolicyTests
         RuntimeInputBinding binding,
         ActivityValuePolicy contractPolicy,
         bool isRequired = true,
-        bool? isNullable = null)
+        bool isNullable = false,
+        ValueTypeDescriptor? inputType = null)
     {
         using var descriptor = JsonDocument.Parse("""{"type":"test"}""");
         var contract = new ActivityContract(
@@ -570,7 +739,7 @@ public sealed class ValueDurabilityPolicyTests
             "1.0.0",
             "test",
             descriptor.RootElement,
-            [new ActivityInputContract("message", "Message", StringType, isRequired, false, null, contractPolicy) { IsNullable = isNullable }],
+            [new ActivityInputContract("message", "Message", inputType ?? StringType, isRequired, isNullable, false, null, contractPolicy)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/activity"));
@@ -605,6 +774,30 @@ public sealed class ValueDurabilityPolicyTests
             metadata.Add(entry.Key, entry.Value);
         return new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.External, metadata: metadata);
     }
+
+    private static ValueConversionPlan JsonPlan(ValueTypeDescriptor targetType, ValueConversionLimits? limits = null) =>
+        new(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.FormattedContent,
+            StringType,
+            targetType,
+            ValueConversionMode.Auto,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.json", "1"),
+            limits: limits ?? ValueConversionLimits.Default,
+            options: null);
+
+    private static ValueConversionPlan XmlPlan(ValueTypeDescriptor targetType) =>
+        new(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.FormattedContent,
+            StringType,
+            targetType,
+            ValueConversionMode.Xml,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.xml", "1"),
+            limits: ValueConversionLimits.Default,
+            options: null);
 
     private sealed class RecordingExternalPayloadStore(
         IReadOnlyDictionary<string, JsonElement> payloads,
@@ -666,5 +859,37 @@ public sealed class ValueDurabilityPolicyTests
             type = typeof(string);
             return StringComparer.Ordinal.Equals(alias, "String");
         }
+    }
+
+    private sealed class CustomerTypeRegistry : IWellKnownTypeRegistry
+    {
+        public void RegisterType(Type type, string alias) => throw new NotSupportedException();
+        public bool TryGetAlias(Type type, out string alias)
+        {
+            alias = "Acme.Customer";
+            return type == typeof(CustomerContract);
+        }
+
+        public bool TryGetType(string alias, out Type type) => TryGetTypeOrDefault(alias, out type);
+        public IEnumerable<Type> ListTypes() => [typeof(CustomerContract)];
+        public string GetAliasOrDefault(Type type) => TryGetAlias(type, out var alias) ? alias : type.FullName!;
+        public Type GetTypeOrDefault(string alias) => TryGetTypeOrDefault(alias, out var type) ? type : typeof(object);
+        public bool TryGetTypeOrDefault(string alias, out Type type)
+        {
+            type = typeof(CustomerContract);
+            return StringComparer.Ordinal.Equals(alias, "Acme.Customer");
+        }
+    }
+
+    private sealed record CustomerContract
+    {
+        public required string Name { get; init; }
+        public long LoyaltyPoints { get; init; }
+        public AddressContract? Address { get; init; }
+    }
+
+    private sealed record AddressContract
+    {
+        public required string City { get; init; }
     }
 }

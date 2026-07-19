@@ -15,6 +15,7 @@
 	  <ProjectReference Include="..\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
 	  <ProjectReference Include="..\..\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
 	  <ProjectReference Include="..\..\..\..\Persistence\EFCore\Elsa.Persistence.EFCore.csproj" />
+	  <ProjectReference Include="..\..\..\Dashboard\Elsa.Workflows.Dashboard.csproj" />
 	</ItemGroup>
 
 

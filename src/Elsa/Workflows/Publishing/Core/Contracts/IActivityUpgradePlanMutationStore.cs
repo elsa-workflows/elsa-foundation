@@ -11,6 +11,7 @@ public interface IActivityUpgradePlanMutationStore
     ValueTask<ActivityUpgradeApplyResult> ApplyAsync(
         ActivityUpgradePlan plan,
         IReadOnlyList<ActivityUpgradeStep> selectedSteps,
+        ActivityUpgradeApplyReceipt receipt,
         DateTimeOffset appliedAt,
         CancellationToken cancellationToken = default);
 }

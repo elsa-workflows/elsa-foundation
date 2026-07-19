@@ -25,11 +25,14 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         Assert.Equal(ActivityContentAuthorityKind.ProviderSource, commit.AuthoringState.ContentAuthority.Kind);
         Assert.Equal("elsa.clr-activity", commit.AuthoringState.ContentAuthority.AuthorityKey);
         Assert.Equal("assembly-a", commit.AuthoringState.ContentAuthority.SourceId);
+        Assert.Equal("version-1", commit.AuthoringState.RecommendedVersionId);
         Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, commit.CatalogVersion.ConsumerKey);
         Assert.Equal("1", commit.CatalogVersion.ConsumerSchemaVersion);
         Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, commit.ExecutableTemplate.Root.Descriptor.ConsumerKey);
         Assert.Equal(commit.ExecutableTemplate.TemplateId, commit.Publication.TemplateId);
         Assert.Equal(commit.ExecutableTemplate.TemplateHash, commit.Publication.TemplateHash);
+        Assert.True(Assert.Single(commit.Publication.Contract.Inputs).IsNullable);
+        Assert.False(Assert.Single(commit.Publication.Contract.Outputs).IsNullable);
         Assert.Equal(ActivityDefinitionVersionResolutionKind.AuthorableActivity, commit.Publication.ResolutionKind);
     }
 
@@ -85,7 +88,15 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         SourceKind = "CLR",
         SourceId = "assembly-a",
         Hash = "catalog-hash",
-        Definition = Definition()
+        Definition = Definition(),
+        Inputs =
+        [
+            new("message", "Message", new("String"), null, "Message", null, true)
+        ],
+        Outputs =
+        [
+            new("result", "Result", new("String"), null, "Result", null, false)
+        ]
     };
 
     private sealed class RecordingCommand : ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>

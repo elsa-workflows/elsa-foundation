@@ -19,7 +19,14 @@ internal sealed class Delete(ISecretManager secretManager) : ElsaEndpoint<Delete
 
     public override async Task HandleAsync(DeleteSecretRequest request, CancellationToken cancellationToken)
     {
-        var deleted = await secretManager.DeleteAsync(request.Name, cancellationToken);
+        var tenantId = SecretEndpointTenant.Resolve(User);
+        if (tenantId is null)
+        {
+            await Send.ForbiddenAsync(cancellationToken);
+            return;
+        }
+
+        var deleted = await secretManager.DeleteAsync(tenantId, request.Name, cancellationToken);
 
         if (!deleted)
         {

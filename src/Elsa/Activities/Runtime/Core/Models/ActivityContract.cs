@@ -87,15 +87,7 @@ public sealed class ActivityContract
             inputs = Inputs.Values
                 .OrderBy(x => x.Key, StringComparer.Ordinal)
                 .Select(BuildInputFingerprintProjection),
-            result = new
-            {
-                Result.Type,
-                Result.IsRequired,
-                Result.Policy,
-                projections = Result.Projections.Values
-                    .OrderBy(x => x.Key, StringComparer.Ordinal)
-                    .Select(x => new { x.Key, x.Path, x.Type, x.IsRequired, x.Policy })
-            },
+            result = BuildResultFingerprintProjection(),
             outcomes = Outcomes.Order(StringComparer.Ordinal),
             activation = Activation
         };
@@ -108,22 +100,51 @@ public sealed class ActivityContract
 
     private static IReadOnlyDictionary<string, object?> BuildInputFingerprintProjection(ActivityInputContract input)
     {
-        // Keep the original property names and insertion order intact. In particular, do not serialize a null
-        // IsNullable member: contracts persisted before nullability was introduced must reproduce their original
-        // schema fingerprint. Explicit true/false values remain behaviorally relevant and are inserted beside
-        // IsRequired in the canonical input shape.
-        var projection = new Dictionary<string, object?>(StringComparer.Ordinal)
+        return new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             [nameof(input.Key)] = input.Key,
             [nameof(input.Type)] = input.Type,
-            [nameof(input.IsRequired)] = input.IsRequired
+            [nameof(input.IsRequired)] = input.IsRequired,
+            [nameof(input.IsNullable)] = input.IsNullable,
+            [nameof(input.HasDefault)] = input.HasDefault,
+            [nameof(input.DefaultValue)] = input.DefaultValue,
+            [nameof(input.Policy)] = input.Policy
         };
-        if (input.IsNullable is { } isNullable)
-            projection[nameof(input.IsNullable)] = isNullable;
-        projection[nameof(input.HasDefault)] = input.HasDefault;
-        projection[nameof(input.DefaultValue)] = input.DefaultValue;
-        projection[nameof(input.Policy)] = input.Policy;
-        return projection;
+    }
+
+    private IReadOnlyDictionary<string, object?> BuildResultFingerprintProjection()
+    {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [nameof(Result.Type)] = Result.Type,
+            [nameof(Result.IsRequired)] = Result.IsRequired,
+            [nameof(Result.Policy)] = Result.Policy,
+            ["projections"] = Result.Projections.Values
+                .OrderBy(x => x.Key, StringComparer.Ordinal)
+                .Select(BuildResultProjectionFingerprintProjection)
+        };
+
+        if (Result.SourceRepresentation.HasValue)
+            result[nameof(Result.SourceRepresentation)] = Result.SourceRepresentation;
+
+        return result;
+    }
+
+    private static IReadOnlyDictionary<string, object?> BuildResultProjectionFingerprintProjection(ActivityResultProjectionContract projection)
+    {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [nameof(projection.Key)] = projection.Key,
+            [nameof(projection.Path)] = projection.Path,
+            [nameof(projection.Type)] = projection.Type,
+            [nameof(projection.IsRequired)] = projection.IsRequired,
+            [nameof(projection.Policy)] = projection.Policy
+        };
+
+        if (projection.SourceRepresentation.HasValue)
+            result[nameof(projection.SourceRepresentation)] = projection.SourceRepresentation;
+
+        return result;
     }
 
     private static void ValidateUnique(IEnumerable<string> keys, string role)
@@ -158,6 +179,7 @@ public sealed class ActivityInputContract
         string name,
         ValueTypeDescriptor type,
         bool isRequired,
+        bool isNullable,
         bool hasDefault,
         JsonElement? defaultValue,
         ActivityValuePolicy policy,
@@ -175,6 +197,7 @@ public sealed class ActivityInputContract
         Name = name;
         Type = type;
         IsRequired = isRequired;
+        IsNullable = isNullable;
         HasDefault = hasDefault;
         DefaultValue = defaultValue?.Clone();
         Policy = policy;
@@ -187,10 +210,10 @@ public sealed class ActivityInputContract
     public string Name { get; }
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
+    public bool IsNullable { get; }
     public bool HasDefault { get; }
     public JsonElement? DefaultValue { get; }
     public ActivityValuePolicy Policy { get; }
-    public bool? IsNullable { get; init; }
     public IReadOnlyDictionary<string, string> EditorMetadata { get; }
 }
 
@@ -201,8 +224,9 @@ public sealed class ActivityResultContract
         ValueTypeDescriptor type,
         bool isRequired,
         ActivityValuePolicy policy,
+        ValueRepresentation? sourceRepresentation,
         IReadOnlyDictionary<string, ActivityResultProjectionContract> projections)
-        : this(type, isRequired, policy, projections.Values)
+        : this(type, isRequired, policy, projections.Values, sourceRepresentation)
     {
     }
 
@@ -210,7 +234,8 @@ public sealed class ActivityResultContract
         ValueTypeDescriptor type,
         bool isRequired,
         ActivityValuePolicy policy,
-        IEnumerable<ActivityResultProjectionContract> projections)
+        IEnumerable<ActivityResultProjectionContract> projections,
+        ValueRepresentation? sourceRepresentation = null)
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(policy);
@@ -227,12 +252,17 @@ public sealed class ActivityResultContract
         Type = type;
         IsRequired = isRequired;
         Policy = policy;
+        SourceRepresentation = sourceRepresentation;
         Projections = projectionArray.ToDictionary(x => x.Key, StringComparer.Ordinal);
     }
 
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
     public ActivityValuePolicy Policy { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ValueRepresentation? SourceRepresentation { get; }
+    [JsonIgnore]
+    public ValueRepresentation EffectiveSourceRepresentation => SourceRepresentation ?? ValueRepresentationDefaults.Infer(Type);
     public IReadOnlyDictionary<string, ActivityResultProjectionContract> Projections { get; }
 }
 
@@ -243,7 +273,8 @@ public sealed class ActivityResultProjectionContract
         string path,
         ValueTypeDescriptor type,
         bool isRequired,
-        ActivityValuePolicy policy)
+        ActivityValuePolicy policy,
+        ValueRepresentation? sourceRepresentation = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -255,6 +286,7 @@ public sealed class ActivityResultProjectionContract
         Type = type;
         IsRequired = isRequired;
         Policy = policy;
+        SourceRepresentation = sourceRepresentation;
     }
 
     public string Key { get; }
@@ -262,6 +294,10 @@ public sealed class ActivityResultProjectionContract
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
     public ActivityValuePolicy Policy { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ValueRepresentation? SourceRepresentation { get; }
+    [JsonIgnore]
+    public ValueRepresentation EffectiveSourceRepresentation => SourceRepresentation ?? ValueRepresentationDefaults.Infer(Type);
 }
 
 public sealed record ActivityActivationRequirement

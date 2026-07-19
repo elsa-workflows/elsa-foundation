@@ -46,6 +46,7 @@ internal static class TypedActivityTestActivation
                     item.Property.Name,
                     new ValueTypeDescriptor(reference.Alias, reference.CollectionKind),
                     item.Property.GetCustomAttribute<RequiredAttribute>(inherit: true) is not null,
+                    IsNullable(item.Property),
                     false,
                     null,
                     ActivityValuePolicy.Default);
@@ -91,5 +92,14 @@ internal static class TypedActivityTestActivation
             serializer);
         var activator = new ActivityActivator([strategy], new ActivityInputHydrator());
         return await activator.ActivateAsync(request);
+    }
+
+    private static bool IsNullable(PropertyInfo property)
+    {
+        if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
+            return true;
+        if (property.PropertyType.IsValueType)
+            return false;
+        return new NullabilityInfoContext().Create(property).ReadState is not NullabilityState.NotNull;
     }
 }

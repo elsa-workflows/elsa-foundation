@@ -15,8 +15,8 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// The drift test freezes the serialized shape of every runtime document kind: it compares the JSON the
 /// real store bridge writes today against the fixture for that kind's current version and fails when a
 /// shape changes without a version bump. The read-path test loads every supported generation; every kind
-/// except explicitly retained rolling windows supports only its clean current baseline. Workflow executables
-/// retain v5-to-v6 and executable activity templates retain v1-to-v2.
+/// except explicitly retained rolling windows supports only its clean current baseline. Executable activity
+/// templates retain v1-to-v2.
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentFixtureTests
 {
@@ -30,7 +30,6 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
                 var minimumReadable = Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(pair.Key);
                 var expected = pair.Key switch
                 {
-                    ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind => 5,
                     ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => 1,
                     _ => pair.Value
                 };
@@ -65,14 +64,14 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     }
 
     [Fact]
-    public void Workflow_executable_declares_the_v5_to_v6_rolling_window()
+    public void Workflow_executable_declares_a_clean_v6_baseline()
     {
         Assert.Equal(
             6,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
         Assert.Equal(
-            5,
+            6,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
     }
@@ -160,20 +159,6 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         Assert.Equal(GroundworkRuntimeDocumentFixtureFactory.ExpectedSpotValue(kind), spot);
     }
 
-    [Fact]
-    public async Task Current_worker_loads_v5_unknown_and_v6_explicit_input_nullability()
-    {
-        var legacy = await LoadWorkflowExecutableFixtureAsync(5, "workflowExecutable-input-contract");
-        var current = await LoadWorkflowExecutableFixtureAsync(6, "workflowExecutable");
-
-        Assert.NotNull(legacy.RootActivity.ActivityContract);
-        Assert.NotNull(current.RootActivity.ChildSlots.Single().Activities.Single().ActivityContract);
-        var legacyInput = Assert.Single(legacy.RootActivity.ActivityContract!.Inputs).Value;
-        var currentInput = Assert.Single(current.RootActivity.ChildSlots.Single().Activities.Single().ActivityContract!.Inputs).Value;
-        Assert.Null(legacyInput.IsNullable);
-        Assert.False(currentInput.IsNullable);
-    }
-
     // --- Semantic JSON comparison ---
 
     // Golden fixtures are compared semantically, not byte-for-byte: incidental formatting or property
@@ -238,7 +223,11 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
 
     private static string ReadCommittedFixtureFile(string fixtureName, int version)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", $"v{version}", fixtureName + ".json");
+        var fileName = fixtureName + ".json";
+        if (Path.IsPathRooted(fileName) || !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal))
+            throw new ArgumentException("Fixture names must be file names.", nameof(fixtureName));
+        var fixturesDirectory = Path.Join(AppContext.BaseDirectory, "Fixtures", $"v{version}");
+        var path = Path.Join(fixturesDirectory, fileName);
         Assert.True(
             File.Exists(path),
             $"Missing committed golden fixture '{fixtureName}' at '{path}'. " +
@@ -246,24 +235,12 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         return File.ReadAllText(path);
     }
 
-    private static async Task<WorkflowExecutable> LoadWorkflowExecutableFixtureAsync(int version, string fixtureName)
-    {
-        const string kind = ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind;
-        var content = ReadCommittedFixtureFile(fixtureName, version);
-        var store = await GroundworkRuntimeDocumentFixtureFactory.SeedFixtureAsync(kind, version, content);
-
-        return await new GroundworkWorkflowExecutableStore(store, GroundworkTestSerialization.Serializer)
-                   .FindAsync("artifact-1")
-               ?? throw new InvalidOperationException(
-                   $"Workflow executable fixture v{version}/{fixtureName}.json did not load.");
-    }
-
     private static void WriteFixtureToSource(string kind, int version, string contentJson)
     {
-        var directory = Path.Combine(SourceDirectory(), "Fixtures", $"v{version}");
+        var directory = Path.Join(SourceDirectory(), "Fixtures", $"v{version}");
         Directory.CreateDirectory(directory);
         var canonical = Canonicalize(JsonNode.Parse(contentJson));
-        File.WriteAllText(Path.Combine(directory, kind + ".json"), canonical);
+        File.WriteAllText(Path.Join(directory, kind + ".json"), canonical);
     }
 
     private static string SourceDirectory([CallerFilePath] string? callerFilePath = null) =>

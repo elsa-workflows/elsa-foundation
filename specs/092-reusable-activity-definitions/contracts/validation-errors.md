@@ -23,8 +23,26 @@ Rules:
 - `errorCode` is the stable machine-action code for the failed operation. Clients branch on this value, not on `title` or `detail`.
 - `traceId` correlates the response to logs/traces and is not a domain identity.
 - `diagnostics` is an ordered array. It may be empty for failures that have no safe structured detail.
+- `recovery` is an optional typed recovery object. It is omitted when the server has no safe
+  machine-actionable recovery to advertise.
 - Existing framework validation members may remain additive, but activity authoring clients use `diagnostics` as the cross-domain location model.
 - Unknown top-level extensions and unknown diagnostic fields must be ignored by clients.
+
+### Typed recovery
+
+```json
+{
+  "currentRevision": 8,
+  "relation": "activity-draft-conflict-copies",
+  "href": "design/activities/drafts/activity-draft-1/conflict-copies",
+  "instruction": "review-current-revision-and-create-conflict-copy"
+}
+```
+
+All four fields are optional for forward-compatible recovery kinds. Clients branch on stable
+`relation` and `instruction` values rather than parsing `detail`, diagnostic messages, or URLs. For
+a stale draft revision, `currentRevision` is the revision the server actually observed, `relation`
+identifies the capability relation, and `href` is the resolved recovery target.
 
 ## 2. `ActivityDiagnosticView`
 
@@ -154,31 +172,59 @@ This makes CI output and publication retries stable. Providers return findings; 
 | Status | Error code | Meaning |
 |---|---|---|
 | `400` | `activity.request.invalid` | Malformed route/body, invalid enum/syntax envelope, or impossible request combination. |
+| `400` | `activity.management.cursor-invalid` | Management continuation is malformed or belongs to another authorization/filter snapshot. Recovery instructs the client to restart without a cursor. |
 | `403` | `activity.authorization.denied` | Caller lacks authoring/lifecycle/inspection permission. |
 | `403` | `activity.tenant.reference-denied` | An exact identifier resolves but is outside allowed tenant/global visibility. The response does not disclose unauthorized target details. |
 | `404` | `activity.definition.not-found` | Definition absent in authorized scope. |
 | `404` | `activity.draft.not-found` | Draft absent in authorized scope. |
 | `404` | `activity.version.not-found` | Version absent in authorized scope. |
+| `404` | `activity.fork.candidate-not-found` | Reviewed fork candidate absent in authorized scope. |
+| `404` | `activity.fork.receipt-not-found` | No durable fork receipt exists for the scoped operation identity. |
 | `404` | `activity.execution.not-found` | Runtime execution or requested boundary absent in authorized scope. |
 | `409` | `activity.definition.key-conflict` | Duplicate tenant/key identity. |
 | `409` | `activity.definition.content-authority` | General authoring command attempted against a source-owned lineage. |
 | `409` | `activity.draft.stale-revision` | Expected optimistic revision differs from current revision. |
 | `409` | `activity.definition.stale-head` | Expected definition head differs under publication lock. |
+| `409` | `activity.publication.review-stale` | Draft, head, compiled evidence, readiness, diagnostics, or valid version choices changed after preflight. Run preflight again. |
+| `409` | `activity.publication.idempotency-conflict` | The operation key is already bound to different reviewed publication material. |
 | `409` | `activity.version.conflict` | Requested semantic version already exists for the definition. |
 | `409` | `activity.version.stale-lifecycle` | Lifecycle command observed a different current state. |
 | `409` | `activity.upgrade.stale-plan` | At least one pinned draft revision/head changed before apply. |
-| `409` | `activity.cursor.binding-mismatch` | Opaque cursor belongs to another tenant, root, query, or authorization profile. |
-| `410` | `activity.cursor.expired` | Cursor or its retained snapshot/watermark is no longer valid. |
+| `409` | `activity.cursor.binding-mismatch` | A non-management opaque cursor belongs to another tenant, root, query, or authorization profile. |
+| `409` | `activity.fork.preview-idempotency-conflict` | Preview operation key is already bound to different normalized fork material. |
+| `409` | `activity.fork.candidate-stale` | Candidate identity, fingerprint, exact source/provider binding, or consumption state changed after review. |
+| `409` | `activity.fork.idempotency-conflict` | Apply operation key is already bound to different reviewed fork material. |
+| `409` | `activity.fork.collision` | A server-reserved target identity or immutable activity type key is no longer available. |
+| `410` | `activity.cursor.expired` | A retained management snapshot, non-management cursor snapshot, or watermark is no longer valid. Recovery may instruct the client to restart without a cursor. |
+| `410` | `activity.fork.preview-expired` | Preview operation key belongs to an expired reservation and cannot allocate replacement identities. |
+| `410` | `activity.fork.candidate-expired` | Reviewed candidate expired before apply. |
 | `422` | `activity.publication.invalid` | One or more deterministic publication diagnostics block publication. |
+| `422` | `activity.contract.capability-rejected` | A mutable contract uses a type, collection kind, storage driver, durability, or nullability fact unavailable in the activated authoring capability catalog. |
+| `422` | `activity.version.choice-invalid` | Requested version was not one of the exact choices in the reviewed preflight. |
+| `422` | `activity.runtime.consumer-missing` | A required Runtime consumer is not registered. Usually included under publication invalid. |
+| `422` | `activity.runtime.consumer-schema-unsupported` | A Runtime consumer exists but not for the required exact schema. Usually included under publication invalid. |
+| `422` | `activity.runtime.storage-driver-missing` | A required durable value storage driver is not registered. Usually included under publication invalid. |
 | `422` | `activity.version.bump-insufficient` | Requested SemVer does not meet the calculated minimum. Usually included under publication invalid. |
 | `422` | `activity.dependency.cycle` | Exact dependency cycle detected. Usually included under publication invalid. |
 | `422` | `activity.provider.compilation-failed` | Provider rejected or could not deterministically compile valid source. |
 | `422` | `activity.provider.migration-unsupported` | No deterministic migration exists for the requested provider schema transition. |
 | `422` | `activity.admission.rejected` | Host/tenant policy rejects measured resource requirements. |
 | `500` | `activity.operation.failed` | Unexpected domain operation failure after infrastructure exceptions are wrapped/logged. Details remain non-disclosing. |
+| `500` | `activity.publication.outcome-unknown` | The server cannot prove whether an operation was applied; query the receipt before retrying with a new key. |
+| `500` | `activity.fork.outcome-unknown` | The server cannot prove whether fork apply committed; query the fork receipt before retrying. |
 | `503` | `activity.runtime.requirement-unavailable` | Requested activation cannot proceed because a required Runtime consumer/schema is unavailable. Runtime also records an activation incident. |
 
 An endpoint may choose the operation-level code (`activity.publication.invalid`) while individual diagnostics carry more specific codes (`activity.dependency.cycle`, `activity.version.bump-insufficient`).
+
+Nullability-specific mutable-contract diagnostics are:
+
+- `activity.contract.nullability-unavailable` at the member's `/isNullable` location when a nullable
+  member is requested for a type whose capability has `supportsNull: false`.
+- `activity.contract.null-default-not-allowed` at the input default value when a null default is
+  requested for a member whose own `isNullable` value is false.
+
+Both are deterministic errors. The rejected operation writes no draft, version, proposal
+application, conflict copy, or reconciliation publication.
 
 ## 5. Validation response versus error response
 
@@ -207,6 +253,12 @@ Publication returns `422` when those or additional in-lock findings block the st
   "instance": "/design/activities/drafts/activity-draft-1",
   "errorCode": "activity.draft.stale-revision",
   "traceId": "00-...",
+  "recovery": {
+    "currentRevision": 8,
+    "relation": "activity-draft-conflict-copies",
+    "href": "design/activities/drafts/activity-draft-1/conflict-copies",
+    "instruction": "review-current-revision-and-create-conflict-copy"
+  },
   "diagnostics": [
     {
       "code": "activity.draft.stale-revision",
@@ -241,3 +293,12 @@ Diagnostics and Problem Details MUST NOT include:
 - secrets embedded in expression source or reference resolution.
 
 Provider validators are given a diagnostic builder that accepts the stable fields above; raw provider exceptions are wrapped into provider-scoped domain failures before crossing the feature boundary.
+
+Management and authoring failures apply the same disclosure boundary:
+
+- `404` means the resource is absent in the caller's authorized scope and does not confirm whether
+  a hidden resource exists.
+- `403` means the visible operation or exact tenant reference is denied. Its title, detail,
+  diagnostics, and recovery remain generic and do not reveal hidden resource facts.
+- Neither status returns hidden display names, identifiers, collection counts, action availability,
+  provider facts, or recovery links whose presence would disclose a protected target.

@@ -761,10 +761,12 @@ public class GroundworkStorageCompositionTests
         [
             typeof(IActivityDefinitionStore),
             typeof(IActivityDefinitionVersionStore),
+            typeof(IActivityDefinitionManagementProjectionStore),
             typeof(IActivityAvailabilitySettingsStore)
         ],
         "publishing" =>
         [
+            typeof(IActivityDraftTestRunStore),
             typeof(IPublicationSlotStore),
             typeof(IPublicationRecordStore),
             typeof(IPublicationPolicyStore),

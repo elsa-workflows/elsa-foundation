@@ -32,7 +32,11 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
         var sourceById = collection.Definitions
             .Where(x => selectedById.ContainsKey(x.Id))
             .ToDictionary(x => x.Id, StringComparer.Ordinal);
-        var canonicalByDefinition = sourceById.Values
+        var selectedDefinitionIds = sourceById.Values
+            .Select(x => x.DefinitionId)
+            .ToHashSet(StringComparer.Ordinal);
+        var canonicalByDefinition = collection.Definitions
+            .Where(x => selectedDefinitionIds.Contains(x.DefinitionId))
             .GroupBy(x => x.DefinitionId, StringComparer.Ordinal)
             .ToDictionary(
                 x => x.Key,
@@ -166,7 +170,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             CreatedAt = source.CreatedAt,
             LastModifiedAt = source.CreatedAt
         };
-        return new(definition, version);
+        return new(item.SourceDefinitionId, item.SourceVersionId, definition, version);
     }
 
     private static WorkflowDefinitionState BuildWrapperState(

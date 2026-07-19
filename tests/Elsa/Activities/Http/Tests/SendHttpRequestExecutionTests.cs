@@ -130,6 +130,7 @@ public sealed class SendHttpRequestExecutionTests
                 _ => throw new InvalidOperationException($"Unknown test input '{key}'.")
             },
             isRequired: key == "Url",
+            isNullable: key != "Url",
             hasDefault: false,
             defaultValue: null,
             ActivityValuePolicy.Default));

@@ -10,6 +10,7 @@ using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -25,38 +26,82 @@ public sealed class PublishingHttpContractTests
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public void Activity_publish_route_and_body_match_the_reviewed_contract()
+    public void Activity_preflight_publish_and_receipt_routes_match_the_reviewed_contract()
     {
-        var endpoint = CreateEndpoint("Elsa.Workflows.Publishing.Api.Endpoints.PublishActivityDraftEndpoint", new ThrowingSender());
-        endpoint.Configure();
+        var preflightEndpoint = CreateEndpoint(
+            "Elsa.Workflows.Publishing.Api.Endpoints.PreflightActivityDraftPublicationEndpoint",
+            new ThrowingSender());
+        preflightEndpoint.Configure();
 
-        Assert.Equal("POST", Assert.Single(endpoint.Definition.Verbs));
-        Assert.Equal("design/activities/drafts/{draftId}/publish", Assert.Single(endpoint.Definition.Routes));
-        var json = JsonSerializer.Serialize(new PublishActivityDraft("draft-1", 8, "activity-ver-1", "2.0.0"), JsonOptions);
+        Assert.Equal("POST", Assert.Single(preflightEndpoint.Definition.Verbs));
         Assert.Equal(
-            "{\"expectedDraftRevision\":8,\"expectedDefinitionHeadVersionId\":\"activity-ver-1\",\"version\":\"2.0.0\"}",
+            "design/activities/drafts/{draftId}/publication-preflight",
+            Assert.Single(preflightEndpoint.Definition.Routes));
+        Assert.Equal(
+            "{\"expectedDraftRevision\":8,\"expectedDefinitionHeadVersionId\":\"activity-ver-1\"}",
+            JsonSerializer.Serialize(
+                new PreflightActivityDraftPublication("draft-1", 8, "activity-ver-1"),
+                JsonOptions));
+
+        var publishEndpoint = CreateEndpoint(
+            "Elsa.Workflows.Publishing.Api.Endpoints.PublishActivityDraftEndpoint",
+            new ThrowingSender());
+        publishEndpoint.Configure();
+
+        Assert.Equal("POST", Assert.Single(publishEndpoint.Definition.Verbs));
+        Assert.Equal("design/activities/drafts/{draftId}/publish", Assert.Single(publishEndpoint.Definition.Routes));
+        var json = JsonSerializer.Serialize(
+            new PublishActivityDraft(
+                "draft-1",
+                8,
+                "activity-ver-1",
+                "2.0.0",
+                "review-sha256",
+                "publish-operation-1"),
+            JsonOptions);
+        Assert.Equal(
+            "{\"expectedDraftRevision\":8,\"expectedDefinitionHeadVersionId\":\"activity-ver-1\",\"version\":\"2.0.0\",\"reviewToken\":\"review-sha256\",\"idempotencyKey\":\"publish-operation-1\"}",
             json);
         Assert.DoesNotContain("providerFingerprint", json, StringComparison.Ordinal);
         Assert.DoesNotContain("directDependencies", json, StringComparison.Ordinal);
+
+        var receiptEndpoint = CreateEndpoint(
+            "Elsa.Workflows.Publishing.Api.Endpoints.GetActivityPublicationReceiptEndpoint",
+            new ThrowingSender());
+        receiptEndpoint.Configure();
+        Assert.Equal("GET", Assert.Single(receiptEndpoint.Definition.Verbs));
+        Assert.Equal(
+            "design/activities/publications/{idempotencyKey}",
+            Assert.Single(receiptEndpoint.Definition.Routes));
     }
 
     [Fact]
     public async Task Activity_publish_handler_forwards_only_public_inputs_and_maps_the_success_view()
     {
-        var publisher = new RecordingPublisher(PublishResult());
+        var publisher = new RecordingPublisher(AppliedReceipt());
         var handler = new PublishActivityDraftRequestHandler(publisher);
 
-        var view = await handler.Handle(new("draft-1", 8, null, "1.0.0"), CancellationToken.None);
+        var view = await handler.Handle(
+            new("draft-1", 8, null, "1.0.0", "review-sha256", "publish-operation-1"),
+            CancellationToken.None);
 
-        Assert.Equal(new PublishActivityDefinitionRequest("draft-1", 8, null, "1.0.0"), publisher.Request);
-        Assert.Equal("test.provider/compiler/1", view.Provider.Fingerprint);
-        Assert.Equal("test.provider", view.Provider.ProviderKey);
-        Assert.Equal("1", view.Provider.SchemaVersion);
-        Assert.Equal("version-1", view.VersionId);
-        Assert.Null(view.Diff);
+        Assert.Equal(
+            new PublishActivityDefinitionRequest(
+                "draft-1",
+                8,
+                null,
+                "1.0.0",
+                "review-sha256",
+                "publish-operation-1"),
+            publisher.Request);
+        Assert.Equal("Applied", view.Status);
+        Assert.Equal("version-1", view.Outcome?.DefinitionVersionId);
+        Assert.Equal("sha256:template-1", view.Outcome?.TemplateHash);
 
         var invalid = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
-            handler.Handle(new("draft-1", 8, null, "not-semver"), CancellationToken.None));
+            handler.Handle(
+                new("draft-1", 8, null, "not-semver", "review-sha256", "publish-operation-2"),
+                CancellationToken.None));
         Assert.Equal("activity.request.invalid", invalid.ErrorCode);
         Assert.Equal("activity.version.invalid", Assert.Single(invalid.Diagnostics).Code);
     }
@@ -64,15 +109,19 @@ public sealed class PublishingHttpContractTests
     [Fact]
     public async Task Activity_publish_endpoint_returns_201_location_and_rfc7807_conflicts()
     {
-        var response = PublishedView();
+        var response = ActivityPublicationReceiptView.From(AppliedReceipt());
         var success = CreateEndpoint(
             "Elsa.Workflows.Publishing.Api.Endpoints.PublishActivityDraftEndpoint",
             new ValueSender(response));
 
-        await InvokeHandleAsync(success, new PublishActivityDraft("draft-1", 8, null, "1.0.0"));
+        await InvokeHandleAsync(
+            success,
+            new PublishActivityDraft("draft-1", 8, null, "1.0.0", "review-sha256", "publish-operation-1"));
 
         Assert.Equal(StatusCodes.Status201Created, success.HttpContext.Response.StatusCode);
-        Assert.Equal("/design/activities/versions/version-1", success.HttpContext.Response.Headers.Location);
+        Assert.Equal(
+            "/design/activities/publications/publish-operation-1",
+            success.HttpContext.Response.Headers.Location);
 
         var conflict = CreateEndpoint(
             "Elsa.Workflows.Publishing.Api.Endpoints.PublishActivityDraftEndpoint",
@@ -81,7 +130,9 @@ public sealed class PublishingHttpContractTests
                 "The activity draft revision is stale.",
                 [],
                 true)));
-        await InvokeHandleAsync(conflict, new PublishActivityDraft("draft-1", 7, null, "1.0.0"));
+        await InvokeHandleAsync(
+            conflict,
+            new PublishActivityDraft("draft-1", 7, null, "1.0.0", "review-sha256", "publish-operation-2"));
 
         Assert.Equal(StatusCodes.Status409Conflict, conflict.HttpContext.Response.StatusCode);
         Assert.Equal("application/problem+json", conflict.HttpContext.Response.ContentType);
@@ -102,7 +153,9 @@ public sealed class PublishingHttpContractTests
                     new("a.error", ActivityDiagnosticSeverity.Error, "Error", subject)
                 ])));
 
-        await InvokeHandleAsync(endpoint, new PublishActivityDraft("draft-1", 8, null, "1.0.0"));
+        await InvokeHandleAsync(
+            endpoint,
+            new PublishActivityDraft("draft-1", 8, null, "1.0.0", "review-sha256", "publish-operation-1"));
 
         Assert.Equal(StatusCodes.Status422UnprocessableEntity, endpoint.HttpContext.Response.StatusCode);
         using var body = JsonDocument.Parse(await ResponseBodyAsync(endpoint));
@@ -124,7 +177,7 @@ public sealed class PublishingHttpContractTests
                 "The requested activity draft was not found.",
                 [])));
 
-        await InvokeHandleAsync(notFound, new StartActivityDraftTestRun("missing", 1));
+        await InvokeHandleAsync(notFound, new StartActivityDraftTestRun("missing", 1, "run-1"));
 
         Assert.Equal(StatusCodes.Status404NotFound, notFound.HttpContext.Response.StatusCode);
         Assert.Contains("\"errorCode\":\"activity.draft.not-found\"", await ResponseBodyAsync(notFound), StringComparison.Ordinal);
@@ -132,7 +185,7 @@ public sealed class PublishingHttpContractTests
         var unexpected = CreateEndpoint(
             "Elsa.Workflows.Publishing.Api.Endpoints.ActivityDraftTestRunEndpoint",
             new ExceptionSender(new InvalidOperationException("secret provider payload")));
-        await InvokeHandleAsync(unexpected, new StartActivityDraftTestRun("draft-1", 1));
+        await InvokeHandleAsync(unexpected, new StartActivityDraftTestRun("draft-1", 1, "run-1"));
 
         Assert.Equal(StatusCodes.Status500InternalServerError, unexpected.HttpContext.Response.StatusCode);
         var body = await ResponseBodyAsync(unexpected);
@@ -150,7 +203,9 @@ public sealed class PublishingHttpContractTests
                 "The requested activity identity is outside the caller's authorized scope.",
                 [])));
 
-        await InvokeHandleAsync(endpoint, new PublishActivityDraft("foreign-id", 8, null, "1.0.0"));
+        await InvokeHandleAsync(
+            endpoint,
+            new PublishActivityDraft("foreign-id", 8, null, "1.0.0", "review-sha256", "publish-operation-1"));
 
         Assert.Equal(StatusCodes.Status403Forbidden, endpoint.HttpContext.Response.StatusCode);
         var body = await ResponseBodyAsync(endpoint);
@@ -297,20 +352,55 @@ public sealed class PublishingHttpContractTests
             []);
     }
 
-    private static PublishedActivityDefinitionView PublishedView() =>
-        PublishedActivityDefinitionView.From(PublishResult());
+    private static ActivityPublicationReceipt AppliedReceipt()
+    {
+        var publishedAt = new DateTimeOffset(2026, 7, 15, 12, 20, 0, TimeSpan.Zero);
+        return new(
+            null,
+            "publish-operation-1",
+            "sha256:request",
+            ActivityPublicationReceiptStatus.Applied,
+            "draft-1",
+            8,
+            null,
+            "review-sha256",
+            "1.0.0",
+            new(
+                "definition-1",
+                "version-1",
+                "draft-1",
+                "1.0.0",
+                "template-1",
+                "sha256:template-1",
+                "source-ref-1",
+                publishedAt),
+            null,
+            [],
+            publishedAt);
+    }
 
-    private sealed class RecordingPublisher(PublishActivityDefinitionResult result) : IActivityDefinitionPublisher
+    private sealed class RecordingPublisher(ActivityPublicationReceipt receipt) : IActivityDefinitionPublisher
     {
         public PublishActivityDefinitionRequest? Request { get; private set; }
 
-        public Task<PublishActivityDefinitionResult> PublishAsync(
+        public Task<ActivityPublicationPreflightView> PreflightAsync(
+            PreflightActivityDefinitionPublicationRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ActivityPublicationReceipt> PublishReviewedAsync(
             PublishActivityDefinitionRequest request,
             CancellationToken cancellationToken = default)
         {
             Request = request;
-            return Task.FromResult(result);
+            return Task.FromResult(receipt);
         }
+
+        public ValueTask<ActivityPublicationReceipt> GetReceiptAsync(
+            string idempotencyKey,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(receipt);
+
     }
 
     private sealed class ValueSender(object value) : IRequestSender

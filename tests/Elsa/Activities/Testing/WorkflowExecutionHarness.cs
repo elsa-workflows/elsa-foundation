@@ -248,7 +248,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var contract = NewActivityContract(
             activityType,
             descriptor,
-            [new ActivityInputContract(nameof(ProbeActivity.Outcomes), nameof(ProbeActivity.Outcomes), inputType, true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract(nameof(ProbeActivity.Outcomes), nameof(ProbeActivity.Outcomes), inputType, true, false, false, null, ActivityValuePolicy.Default)],
             selectedOutcomes);
 
         return new ExecutableNode(
@@ -273,7 +273,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var contract = NewActivityContract(
             activityType,
             descriptor,
-            [new ActivityInputContract(nameof(FaultingActivity.Message), nameof(FaultingActivity.Message), inputType, true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract(nameof(FaultingActivity.Message), nameof(FaultingActivity.Message), inputType, true, false, false, null, ActivityValuePolicy.Default)],
             [ActivityOutcomes.Done]);
 
         return new ExecutableNode(
@@ -319,6 +319,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                 candidate.Property.Name,
                 NewValueType(candidate.Property.PropertyType),
                 candidate.Property.GetCustomAttribute<RequiredAttribute>(inherit: true) is not null,
+                IsNullable(candidate.Property),
                 false,
                 null,
                 ActivityValuePolicy.Default);
@@ -331,6 +332,15 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var contract = NewActivityContract(activityType, descriptor, inputs, outcomes);
 
         return CopyNode(node, childSlots, descriptor.Payload, bindings, contract);
+    }
+
+    private static bool IsNullable(PropertyInfo property)
+    {
+        if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
+            return true;
+        if (property.PropertyType.IsValueType)
+            return false;
+        return new NullabilityInfoContext().Create(property).ReadState is not NullabilityState.NotNull;
     }
 
     private static ExecutableNode CopyNode(

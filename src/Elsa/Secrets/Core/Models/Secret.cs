@@ -5,6 +5,7 @@ namespace Elsa.Secrets.Core.Models;
 public sealed class Secret
 {
     public string Id { get; set; } = ShortIdentityGenerator.Generate(DateTimeOffset.UtcNow);
+    public string TenantId { get; set; } = "";
     public string Name { get; set; } = "";
     public string DisplayName { get; set; } = "";
     public string? Description { get; set; }

@@ -18,7 +18,14 @@ internal sealed class Revoke(ISecretManager secretManager) : ElsaEndpoint<Revoke
 
     public override async Task HandleAsync(RevokeSecretRequest request, CancellationToken cancellationToken)
     {
-        var secret = await secretManager.RevokeAsync(request.Name, cancellationToken);
+        var tenantId = SecretEndpointTenant.Resolve(User);
+        if (tenantId is null)
+        {
+            await Send.ForbiddenAsync(cancellationToken);
+            return;
+        }
+
+        var secret = await secretManager.RevokeAsync(tenantId, request.Name, cancellationToken);
 
         if (secret is null)
         {

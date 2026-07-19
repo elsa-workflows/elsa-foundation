@@ -223,7 +223,16 @@ public sealed class CodeFirstDynamicConformanceTests
         string alias,
         JsonElement? defaultValue = null,
         string? defaultSyntax = null) =>
-        new(key, key, new TypeReference(alias), null, key, null, DefaultValue: defaultValue, DefaultSyntax: defaultSyntax);
+        new(
+            key,
+            key,
+            new TypeReference(alias),
+            StorageDriverType: null,
+            DisplayName: key,
+            Category: null,
+            IsNullable: false,
+            DefaultValue: defaultValue,
+            DefaultSyntax: defaultSyntax);
 
     private static string CanonicalBindings(IReadOnlyDictionary<string, RuntimeInputBinding> bindings) =>
         JsonSerializer.Serialize(bindings.OrderBy(binding => binding.Key, StringComparer.Ordinal));

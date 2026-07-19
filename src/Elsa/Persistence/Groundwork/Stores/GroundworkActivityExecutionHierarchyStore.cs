@@ -44,6 +44,15 @@ public sealed class GroundworkActivityExecutionHierarchyStore(
         return ActivityExecutionHierarchyProjector.FindBoundary(records, activityExecutionId);
     }
 
+    public async ValueTask<ActivityExecutionAttemptNavigation?> FindAttemptNavigationAsync(
+        string workflowExecutionId,
+        string activityExecutionId,
+        CancellationToken cancellationToken = default)
+    {
+        var records = await ListWorkflowAsync(workflowExecutionId, cancellationToken);
+        return ActivityExecutionHierarchyProjector.FindAttemptNavigation(records, activityExecutionId);
+    }
+
     public ValueTask<ActivityExecutionLayout?> FindLayoutAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult<ActivityExecutionLayout?>(null);
 

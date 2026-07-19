@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
@@ -8,9 +9,10 @@ namespace Elsa.Activities.Design.Tests.Fixtures;
 
 /// <summary>
 /// Default object-backed reusable-activity conformance fixture. Tests that need typed executable
-/// artifacts can use <see cref="InMemoryReusableActivityStores{TExecutableTemplate,TSourceReference}"/>.
+/// artifacts can use
+/// <see cref="InMemoryReusableActivityStores{TExecutableTemplate,TSourceReference,TReceipt}"/>.
 /// </summary>
-public sealed class InMemoryReusableActivityStores : InMemoryReusableActivityStores<object, object>
+public sealed class InMemoryReusableActivityStores : InMemoryReusableActivityStores<object, object, object>
 {
 }
 
@@ -19,26 +21,36 @@ public sealed class InMemoryReusableActivityStores : InMemoryReusableActivitySto
 /// the transaction boundary, optimistic revisions/heads, and immutable publication behavior expected
 /// from the eventual Groundwork adapters rather than acting as independent per-port dictionaries.
 /// </summary>
-public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReference> :
+public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReference, TReceipt> :
     IActivityDefinitionStore,
     IActivityDefinitionAuthoringStore,
     IActivityDefinitionDraftStore,
     IActivityDefinitionVersionPublicationStore,
+    IRecommendedActivityDefinitionPickerStore,
     IActivityDefinitionLayoutStore,
     IActivityDraftValidationStore,
+    IActivityForkStore,
     IActivityDirectDependencyStore,
     IActivityDependencyProjectionStore,
     IActivityUpgradePlanStore,
     ICreateActivityDefinitionCommand,
+    ISaveActivityForkCandidateCommand,
+    IPruneActivityForkCandidatesCommand,
+    IApplyActivityForkCandidateCommand,
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
+    IUpdateActivityDraftPresentationCommand,
+    ICreateActivityDraftConflictCopyCommand,
     IReplaceActivityDraftCommand,
+    IApplyActivityContractProposalCommand,
     IDiscardActivityDraftCommand,
     IStoreActivityDraftValidationCommand,
     IChangeActivityVersionLifecycleCommand,
-    ICommitActivityPublicationCommand<TExecutableTemplate, TSourceReference>
+    ISetActivityDefinitionRecommendationCommand,
+    ICommitActivityPublicationCommand<TExecutableTemplate, TSourceReference, TReceipt>
     where TExecutableTemplate : class
     where TSourceReference : class
+    where TReceipt : class
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<string, ActivityDefinition> _definitions = new(StringComparer.Ordinal);
@@ -51,6 +63,8 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     private readonly Dictionary<string, ActivityDefinitionVersionLayout> _versionLayouts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ActivityDependencyEdge> _edges = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ActivityUpgradePlan> _upgradePlans = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ActivityForkCandidate> _forkCandidates = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ActivityForkReceipt> _forkReceipts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TExecutableTemplate> _templates = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TSourceReference> _sourceReferences = new(StringComparer.Ordinal);
     private readonly HashSet<(string? TenantId, string ActivityTypeKey)> _definitionKeys = [];
@@ -133,6 +147,19 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         }
     }
 
+    public void SetPublicationLifecycle(
+        string definitionVersionId,
+        ActivityDefinitionVersionLifecycle lifecycle)
+    {
+        lock (_gate)
+        {
+            var publication = _publications.GetValueOrDefault(definitionVersionId)
+                ?? throw new KeyNotFoundException($"Activity version '{definitionVersionId}' was not found.");
+            publication.Lifecycle = lifecycle;
+            _sequence++;
+        }
+    }
+
     public void SeedDependency(ActivityDependencyEdge edge)
     {
         lock (_gate)
@@ -202,6 +229,40 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
                     .OrderBy(x => x.Version, StringComparer.Ordinal)
                     .Select(Clone)
                     .ToArray());
+    }
+
+    public Task<RecommendedActivityDefinitionPickerPage> ReadAsync(
+        string? tenantId,
+        int offset,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (offset < 0)
+            throw new ArgumentOutOfRangeException(nameof(offset));
+        if (limit is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+        lock (_gate)
+        {
+            var source = _authoring.Values.OrderBy(x => x.Id, StringComparer.Ordinal).ToArray();
+            var items = new List<RecommendedActivityDefinitionPickerItem>(limit);
+            var sourceOffset = offset;
+            while (sourceOffset < source.Length && items.Count < limit)
+            {
+                var authoring = source[sourceOffset++];
+                if (!IsVisible(authoring.TenantId, tenantId) || authoring.RecommendedVersionId is null ||
+                    !_publications.TryGetValue(authoring.RecommendedVersionId, out var publication) ||
+                    publication.Lifecycle != ActivityDefinitionVersionLifecycle.Active ||
+                    !StringComparer.Ordinal.Equals(publication.DefinitionId, authoring.DefinitionId) ||
+                    !StringComparer.Ordinal.Equals(publication.TenantId, authoring.TenantId) ||
+                    !_definitions.TryGetValue(authoring.DefinitionId, out var definition))
+                    continue;
+                items.Add(new(Clone(definition), Clone(publication)));
+            }
+            return Task.FromResult(new RecommendedActivityDefinitionPickerPage(
+                items,
+                sourceOffset < source.Length ? sourceOffset : null));
+        }
     }
 
     public Task<ActivityDefinitionDraftLayout?> FindDraftLayoutAsync(string draftId, CancellationToken cancellationToken = default)
@@ -301,6 +362,48 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         return Task.CompletedTask;
     }
 
+    public Task LinkSuccessorAsync(
+        string planId,
+        string successorPlanId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (!_upgradePlans.TryGetValue(planId, out var plan))
+                throw Conflict($"Upgrade plan '{planId}' does not exist.");
+            _upgradePlans[planId] = plan with
+            {
+                Status = ActivityUpgradePlanStatus.Superseded,
+                SuccessorPlanId = successorPlanId
+            };
+            _sequence++;
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<ActivityForkCandidate?> FindCandidateAsync(
+        string candidateId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+            return Task.FromResult(_forkCandidates.TryGetValue(candidateId, out var candidate)
+                ? Clone(candidate)
+                : null);
+    }
+
+    public Task<ActivityForkReceipt?> FindReceiptAsync(
+        string receiptId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+            return Task.FromResult(_forkReceipts.TryGetValue(receiptId, out var receipt)
+                ? Clone(receipt)
+                : null);
+    }
+
     public Task ExecuteAsync(CreateActivityDefinitionRequest request, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -324,6 +427,130 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             _sequence++;
         }
         return Task.CompletedTask;
+    }
+
+    public Task<ActivityForkCandidate> ExecuteAsync(
+        SaveActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (_forkCandidates.TryGetValue(request.Candidate.Id, out var existing))
+            {
+                if (existing.ExpiresAt <= request.Candidate.CreatedAt)
+                    throw new ActivityForkPreviewExpiredException("The reviewed fork reservation expired.");
+                if (!StringComparer.Ordinal.Equals(existing.PreviewIdempotencyKey, request.Candidate.PreviewIdempotencyKey) ||
+                    !StringComparer.Ordinal.Equals(existing.RequestFingerprint, request.Candidate.RequestFingerprint) ||
+                    !StringComparer.Ordinal.Equals(existing.AccessBindingFingerprint, request.Candidate.AccessBindingFingerprint) ||
+                    !StringComparer.Ordinal.Equals(existing.ActorId, request.Candidate.ActorId) ||
+                    !StringComparer.Ordinal.Equals(existing.AuthorizationProfile, request.Candidate.AuthorizationProfile))
+                    throw new ActivityForkPreviewIdempotencyConflictException("The preview operation identity is already bound.");
+                return Task.FromResult(Clone(existing));
+            }
+            _forkCandidates.Add(request.Candidate.Id, Clone(request.Candidate));
+            _sequence++;
+            return Task.FromResult(Clone(request.Candidate));
+        }
+    }
+
+    public Task<int> ExecuteAsync(
+        DateTimeOffset retainBefore,
+        int maximumCount = 100,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (maximumCount is < 1 or > 500)
+            throw new ArgumentOutOfRangeException(nameof(maximumCount));
+        lock (_gate)
+        {
+            var expired = _forkCandidates.Values
+                .Where(x => x.RetainUntil <= retainBefore)
+                .OrderBy(x => x.RetentionKey, StringComparer.Ordinal)
+                .Take(maximumCount)
+                .Select(x => x.Id)
+                .ToArray();
+            foreach (var id in expired)
+                _forkCandidates.Remove(id);
+            if (expired.Length > 0)
+                _sequence++;
+            return Task.FromResult(expired.Length);
+        }
+    }
+
+    public Task<ActivityForkApplyResult> ExecuteAsync(
+        ApplyActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (_forkReceipts.TryGetValue(request.ReceiptId, out var existing))
+            {
+                if (!StringComparer.Ordinal.Equals(existing.CandidateId, request.CandidateId) ||
+                    !StringComparer.Ordinal.Equals(existing.RequestFingerprint, request.RequestFingerprint) ||
+                    !StringComparer.Ordinal.Equals(existing.AccessBindingFingerprint, request.AccessBindingFingerprint) ||
+                    !StringComparer.Ordinal.Equals(existing.ActorId, request.ActorId) ||
+                    !StringComparer.Ordinal.Equals(existing.AuthorizationProfile, request.AuthorizationProfile) ||
+                    !StringComparer.Ordinal.Equals(existing.IdempotencyKey, request.IdempotencyKey))
+                    throw new ActivityForkIdempotencyConflictException("The fork operation identity is already bound.");
+                return Task.FromResult(new ActivityForkApplyResult(Clone(existing), true));
+            }
+
+            var candidate = _forkCandidates.GetValueOrDefault(request.CandidateId)
+                ?? throw new ActivityForkCandidateStaleException("The fork candidate does not exist.");
+            if (candidate.Status != ActivityForkCandidateStatus.Reserved ||
+                !StringComparer.Ordinal.Equals(candidate.RequestFingerprint, request.RequestFingerprint) ||
+                !StringComparer.Ordinal.Equals(candidate.AccessBindingFingerprint, request.AccessBindingFingerprint) ||
+                !StringComparer.Ordinal.Equals(candidate.ActorId, request.ActorId) ||
+                !StringComparer.Ordinal.Equals(candidate.AuthorizationProfile, request.AuthorizationProfile))
+                throw new ActivityForkCandidateStaleException("The fork candidate binding changed.");
+
+            var definition = candidate.ReservedDefinition;
+            var key = (definition.TenantId, definition.ActivityTypeKey);
+            if (_definitions.ContainsKey(definition.Id) ||
+                _definitionKeys.Contains(key) ||
+                _authoring.ContainsKey(candidate.ReservedAuthoringState.DefinitionId) ||
+                _drafts.ContainsKey(candidate.ReservedDraft.Id) ||
+                _draftLayouts.ContainsKey(candidate.ReservedLayout.DraftId))
+                throw new ActivityForkCollisionException("A reserved fork target identity is no longer available.");
+
+            var applied = Clone(candidate);
+            applied.Status = ActivityForkCandidateStatus.Applied;
+            applied.AppliedIdempotencyKey = request.IdempotencyKey;
+            applied.LastModifiedAt = request.AppliedAt;
+            var receipt = new ActivityForkReceipt
+            {
+                Id = request.ReceiptId,
+                TenantId = applied.TenantId,
+                IdempotencyKey = request.IdempotencyKey,
+                CandidateId = applied.Id,
+                PublicCandidateId = applied.CandidateId,
+                RequestFingerprint = applied.RequestFingerprint,
+                AccessBindingFingerprint = applied.AccessBindingFingerprint,
+                ActorId = applied.ActorId,
+                AuthorizationProfile = applied.AuthorizationProfile,
+                DefinitionId = applied.ReservedDefinition.Id,
+                ActivityTypeKey = applied.ReservedDefinition.ActivityTypeKey,
+                DraftId = applied.ReservedDraft.Id,
+                Definition = Clone(applied.ReservedDefinition),
+                AuthoringState = Clone(applied.ReservedAuthoringState),
+                Draft = Clone(applied.ReservedDraft),
+                AppliedAt = request.AppliedAt,
+                CreatedAt = request.AppliedAt,
+                LastModifiedAt = request.AppliedAt
+            };
+
+            _definitionKeys.Add(key);
+            _definitions.Add(definition.Id, Clone(definition));
+            _authoring.Add(applied.ReservedAuthoringState.DefinitionId, Clone(applied.ReservedAuthoringState));
+            _drafts.Add(applied.ReservedDraft.Id, Clone(applied.ReservedDraft));
+            _draftLayouts.Add(applied.ReservedLayout.DraftId, Clone(applied.ReservedLayout));
+            _forkCandidates[applied.Id] = applied;
+            _forkReceipts.Add(receipt.Id, receipt);
+            _sequence++;
+            return Task.FromResult(new ActivityForkApplyResult(Clone(receipt), false));
+        }
     }
 
     public Task<ActivityDefinition> ExecuteAsync(
@@ -374,6 +601,54 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
     }
 
     public Task<ActivityDefinitionDraft> ExecuteAsync(
+        UpdateActivityDraftPresentationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var draft = ActiveDraft(request.DraftId, request.ExpectedRevision);
+            EnsureDesignAuthority(Authoring(draft.DefinitionId));
+            var updated = Clone(draft);
+            updated.Revision = checked(updated.Revision + 1);
+            updated.PresentationLabel = request.PresentationLabel;
+            updated.LastModifiedAt = request.ChangedAt;
+            var layout = Clone(_draftLayouts[request.DraftId]);
+            layout.Revision = updated.Revision;
+            layout.LastModifiedAt = request.ChangedAt;
+            _drafts[request.DraftId] = updated;
+            _draftLayouts[request.DraftId] = layout;
+            _sequence++;
+            return Task.FromResult(Clone(updated));
+        }
+    }
+
+    public Task ExecuteAsync(
+        CreateActivityDraftConflictCopyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateDraftAndLayout(request.ConflictCopy, request.Layout);
+        lock (_gate)
+        {
+            var source = Draft(request.SourceDraftId);
+            if (source.Status != ActivityDefinitionDraftStatus.Active || source.Revision != request.ExpectedSourceRevision)
+                throw Conflict($"Activity draft '{request.SourceDraftId}' changed before its conflict copy could be created.");
+            EnsureDesignAuthority(Authoring(source.DefinitionId));
+            if (!StringComparer.Ordinal.Equals(source.DefinitionId, request.ConflictCopy.DefinitionId) ||
+                !StringComparer.Ordinal.Equals(source.TenantId, request.ConflictCopy.TenantId) ||
+                !StringComparer.Ordinal.Equals(source.SourceVersionId, request.ConflictCopy.SourceVersionId))
+                throw new ArgumentException("The conflict copy must inherit its source draft lineage.", nameof(request));
+            if (_drafts.ContainsKey(request.ConflictCopy.Id) || _draftLayouts.ContainsKey(request.Layout.DraftId))
+                throw Conflict($"Activity draft '{request.ConflictCopy.Id}' already exists.");
+            _drafts.Add(request.ConflictCopy.Id, Clone(request.ConflictCopy));
+            _draftLayouts.Add(request.ConflictCopy.Id, Clone(request.Layout));
+            _sequence++;
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<ActivityDefinitionDraft> ExecuteAsync(
         ReplaceActivityDraftRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -386,6 +661,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             var updated = Clone(draft);
             updated.Revision = nextRevision;
             updated.State = Clone(request.State);
+            updated.PresentationLabel = request.PresentationLabel;
             updated.LastModifiedAt = DateTimeOffset.UtcNow;
 
             var layout = Clone(_draftLayouts[request.DraftId]);
@@ -393,6 +669,34 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             layout.Records = request.Layout.Select(Clone).ToList();
             layout.LastModifiedAt = updated.LastModifiedAt;
 
+            _drafts[request.DraftId] = updated;
+            _draftLayouts[request.DraftId] = layout;
+            _sequence++;
+            return Task.FromResult(Clone(updated));
+        }
+    }
+
+    public Task<ActivityDefinitionDraft> ExecuteAsync(
+        ApplyActivityContractProposalRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var draft = ActiveDraft(request.DraftId, request.ExpectedRevision);
+            EnsureDesignAuthority(Authoring(draft.DefinitionId));
+            if (!IsVisible(draft.TenantId, request.TenantId) ||
+                !StringComparer.Ordinal.Equals(draft.State.Provider.ProviderKey, request.ExpectedProviderKey) ||
+                !StringComparer.Ordinal.Equals(draft.State.Provider.SchemaVersion, request.ExpectedProviderSchemaVersion) ||
+                !StringComparer.Ordinal.Equals(ActivityProviderManifestFingerprint.Compute(draft.State.Provider), request.ExpectedManifestFingerprint))
+                throw Conflict($"Draft '{request.DraftId}' provider binding is stale.");
+            var updated = Clone(draft);
+            updated.Revision = checked(updated.Revision + 1);
+            updated.State = updated.State with { Contract = Clone(request.Contract) };
+            updated.LastModifiedAt = DateTimeOffset.UtcNow;
+            var layout = Clone(_draftLayouts[request.DraftId]);
+            layout.Revision = updated.Revision;
+            layout.LastModifiedAt = updated.LastModifiedAt;
             _drafts[request.DraftId] = updated;
             _draftLayouts[request.DraftId] = layout;
             _sequence++;
@@ -439,10 +743,47 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         lock (_gate)
         {
             var current = Publication(request.DefinitionVersionId);
+            var authoring = Authoring(current.DefinitionId);
+            if (!IsVisible(authoring.TenantId, request.TenantId) ||
+                !StringComparer.Ordinal.Equals(authoring.TenantId, current.TenantId))
+                throw Conflict($"Activity version '{request.DefinitionVersionId}' is outside the caller tenant scope.");
             if (current.Lifecycle != request.ExpectedLifecycle)
                 throw Conflict($"Activity version '{request.DefinitionVersionId}' is {current.Lifecycle}, not {request.ExpectedLifecycle}.");
             if (!IsAllowedTransition(current.Lifecycle, request.Lifecycle))
                 throw Conflict($"Activity version lifecycle cannot transition from {current.Lifecycle} to {request.Lifecycle}.");
+
+            var invalidatesRecommendation = request.Lifecycle is ActivityDefinitionVersionLifecycle.Retired or ActivityDefinitionVersionLifecycle.Revoked &&
+                                            StringComparer.Ordinal.Equals(authoring.RecommendedVersionId, current.DefinitionVersionId);
+            if (invalidatesRecommendation)
+            {
+                var decision = request.RecommendationDecision ?? throw Conflict("An explicit recommendation decision is required.");
+                EnsureExpectedHead(authoring, decision.ExpectedDefinitionHeadVersionId);
+                if (!StringComparer.Ordinal.Equals(authoring.RecommendedVersionId, decision.ExpectedRecommendedVersionId))
+                    throw Conflict($"Activity definition '{authoring.DefinitionId}' recommendation is stale.");
+                var changedAuthoring = Clone(authoring);
+                if (decision.Disposition == ActivityRecommendationDisposition.Clear)
+                {
+                    if (decision.ReplacementVersionId is not null || decision.ExpectedReplacementLifecycle is not null)
+                        throw new ArgumentException("A clear recommendation decision cannot include a replacement.", nameof(request));
+                    changedAuthoring.RecommendedVersionId = null;
+                }
+                else
+                {
+                    if (decision.ReplacementVersionId is null || decision.ExpectedReplacementLifecycle is null)
+                        throw new ArgumentException("A replacement recommendation decision requires a version and lifecycle.", nameof(request));
+                    var replacement = Publication(decision.ReplacementVersionId);
+                    if (!StringComparer.Ordinal.Equals(replacement.DefinitionId, current.DefinitionId) ||
+                        !StringComparer.Ordinal.Equals(replacement.TenantId, current.TenantId))
+                        throw Missing($"Activity version publication '{decision.ReplacementVersionId}' was not found.");
+                    if (replacement.Lifecycle != decision.ExpectedReplacementLifecycle || replacement.Lifecycle != ActivityDefinitionVersionLifecycle.Active)
+                        throw Conflict($"Activity version '{decision.ReplacementVersionId}' lifecycle is stale.");
+                    changedAuthoring.RecommendedVersionId = replacement.DefinitionVersionId;
+                }
+                changedAuthoring.LastModifiedAt = DateTimeOffset.UtcNow;
+                _authoring[current.DefinitionId] = changedAuthoring;
+            }
+            else if (request.RecommendationDecision is not null)
+                throw new ArgumentException("A recommendation decision is valid only for the recommended version.", nameof(request));
 
             var updated = Clone(current);
             updated.Lifecycle = request.Lifecycle;
@@ -453,8 +794,48 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         }
     }
 
+    public Task<ActivityDefinitionAuthoringState> ExecuteAsync(
+        SetActivityDefinitionRecommendationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var authoring = Authoring(request.DefinitionId);
+            if (!IsVisible(authoring.TenantId, request.TenantId))
+                throw Conflict($"Activity definition '{request.DefinitionId}' is outside the caller tenant scope.");
+            EnsureExpectedHead(authoring, request.ExpectedDefinitionHeadVersionId);
+            if (!StringComparer.Ordinal.Equals(authoring.RecommendedVersionId, request.ExpectedRecommendedVersionId))
+                throw Conflict($"Activity definition '{request.DefinitionId}' recommendation is stale.");
+            if (request.RecommendedVersionId is null)
+            {
+                if (request.ExpectedRecommendedVersionLifecycle is not null)
+                    throw new ArgumentException("A cleared recommendation cannot declare a target lifecycle.", nameof(request));
+            }
+            else
+            {
+                if (request.ExpectedRecommendedVersionLifecycle is null)
+                    throw new ArgumentException("A recommendation target requires an expected lifecycle.", nameof(request));
+                var target = Publication(request.RecommendedVersionId);
+                if (!StringComparer.Ordinal.Equals(target.DefinitionId, request.DefinitionId) ||
+                    !StringComparer.Ordinal.Equals(target.TenantId, authoring.TenantId))
+                    throw Missing($"Activity version publication '{request.RecommendedVersionId}' was not found.");
+                if (target.Lifecycle != request.ExpectedRecommendedVersionLifecycle ||
+                    target.Lifecycle != ActivityDefinitionVersionLifecycle.Active)
+                    throw Conflict($"Activity version '{request.RecommendedVersionId}' lifecycle is stale.");
+            }
+
+            var changed = Clone(authoring);
+            changed.RecommendedVersionId = request.RecommendedVersionId;
+            changed.LastModifiedAt = request.ChangedAt;
+            _authoring[request.DefinitionId] = changed;
+            _sequence++;
+            return Task.FromResult(Clone(changed));
+        }
+    }
+
     public Task<ActivityPublicationResult> ExecuteAsync(
-        ActivityPublicationCommit<TExecutableTemplate, TSourceReference> commit,
+        ActivityPublicationCommit<TExecutableTemplate, TSourceReference, TReceipt> commit,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -496,6 +877,8 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
             _drafts[draft.Id] = publishedDraft;
 
             var advanced = Clone(authoring);
+            if (advanced.HeadVersionId is null && advanced.RecommendedVersionId is null)
+                advanced.RecommendedVersionId = mutation.Publication.DefinitionVersionId;
             advanced.HeadVersionId = mutation.Publication.DefinitionVersionId;
             advanced.LastModifiedAt = mutation.Publication.PublishedAt;
             _authoring[mutation.DefinitionId] = advanced;
@@ -714,6 +1097,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         ContentAuthority = source.ContentAuthority,
         ForkedFrom = source.ForkedFrom,
         HeadVersionId = source.HeadVersionId,
+        RecommendedVersionId = source.RecommendedVersionId,
         CreatedAt = source.CreatedAt,
         LastModifiedAt = source.LastModifiedAt
     };
@@ -725,6 +1109,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         DefinitionId = source.DefinitionId,
         Revision = source.Revision,
         SourceVersionId = source.SourceVersionId,
+        PresentationLabel = source.PresentationLabel,
         Status = source.Status,
         State = Clone(source.State),
         PublishedVersionId = source.PublishedVersionId,
@@ -818,6 +1203,60 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         LastModifiedAt = source.LastModifiedAt
     };
 
+    private static ActivityForkCandidate Clone(ActivityForkCandidate source) => new()
+    {
+        Id = source.Id,
+        CandidateId = source.CandidateId,
+        PreviewIdempotencyKey = source.PreviewIdempotencyKey,
+        TenantId = source.TenantId,
+        RequestFingerprint = source.RequestFingerprint,
+        AccessBindingFingerprint = source.AccessBindingFingerprint,
+        ActorId = source.ActorId,
+        AuthorizationProfile = source.AuthorizationProfile,
+        SourceDefinitionId = source.SourceDefinitionId,
+        SourceVersionId = source.SourceVersionId,
+        SourceVersion = source.SourceVersion,
+        SourceProviderFingerprint = source.SourceProviderFingerprint,
+        TargetProviderFingerprint = source.TargetProviderFingerprint,
+        ReservedDefinition = Clone(source.ReservedDefinition),
+        ReservedAuthoringState = Clone(source.ReservedAuthoringState),
+        ReservedDraft = Clone(source.ReservedDraft),
+        ReservedLayout = Clone(source.ReservedLayout),
+        MigrationDiagnostics = source.MigrationDiagnostics.Select(Clone).ToList(),
+        SourceContractFingerprint = source.SourceContractFingerprint,
+        TargetContractFingerprint = source.TargetContractFingerprint,
+        ExpiresAt = source.ExpiresAt,
+        RetainUntil = source.RetainUntil,
+        RetentionKey = source.RetentionKey,
+        Status = source.Status,
+        AppliedIdempotencyKey = source.AppliedIdempotencyKey,
+        CreatedAt = source.CreatedAt,
+        LastModifiedAt = source.LastModifiedAt
+    };
+
+    private static ActivityForkReceipt Clone(ActivityForkReceipt source) => new()
+    {
+        Id = source.Id,
+        TenantId = source.TenantId,
+        IdempotencyKey = source.IdempotencyKey,
+        CandidateId = source.CandidateId,
+        PublicCandidateId = source.PublicCandidateId,
+        RequestFingerprint = source.RequestFingerprint,
+        AccessBindingFingerprint = source.AccessBindingFingerprint,
+        ActorId = source.ActorId,
+        AuthorizationProfile = source.AuthorizationProfile,
+        Status = source.Status,
+        DefinitionId = source.DefinitionId,
+        ActivityTypeKey = source.ActivityTypeKey,
+        DraftId = source.DraftId,
+        Definition = Clone(source.Definition),
+        AuthoringState = Clone(source.AuthoringState),
+        Draft = Clone(source.Draft),
+        AppliedAt = source.AppliedAt,
+        CreatedAt = source.CreatedAt,
+        LastModifiedAt = source.LastModifiedAt
+    };
+
     private static ActivityDependencyEdge Clone(ActivityDependencyEdge source) => new()
     {
         Id = source.Id,
@@ -866,7 +1305,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
                 NodeOrigin = source.Location.NodeOrigin?.ToArray(),
                 DependencyPath = source.Location.DependencyPath?.ToArray()
             },
-        Metadata = source.Metadata?.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal)
+        Metadata = source.Metadata.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal)
     };
 
     private static System.Text.Json.JsonElement? Clone(System.Text.Json.JsonElement? source) =>

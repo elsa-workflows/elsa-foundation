@@ -55,8 +55,7 @@ public interface IGroundworkRuntimeDocumentSerializer
     /// <summary>
     /// Deserializes a persisted envelope, enforcing its schema-version stamp: the current version
     /// deserializes directly, while versions below the kind's minimum-readable boundary plus unrecognized or
-    /// future versions fail loudly. Workflow executables retain the compatible v5-to-v6 rolling window;
-    /// other kinds currently admit only their clean current baseline.
+    /// future versions fail loudly. Workflow executables admit only their clean current baseline.
     /// </summary>
     /// <exception cref="DocumentSchemaVersionException">
     /// The kind is unknown (<see cref="DocumentSchemaVersionFailure.UnknownDocumentKind"/>), the stamp is

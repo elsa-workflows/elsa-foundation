@@ -151,6 +151,7 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         IDictionary<string, ActivityVersionChange> changes)
     {
         CompareCommon(before, after, memberKind, changes);
+        CompareNullability(before, after, memberKind, changes);
         if (before.IsRequired != after.IsRequired)
         {
             var breaking = after.IsRequired && after.Default is null;
@@ -171,12 +172,35 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         IDictionary<string, ActivityVersionChange> changes)
     {
         CompareCommon(before, after, memberKind, changes);
+        CompareNullability(before, after, memberKind, changes);
+        if (before.SourceRepresentation != after.SourceRepresentation)
+            Add(changes, MemberChange(after, memberKind, "SourceRepresentationChanged", Project(before), Project(after), ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major,
+                $"Output '{after.ReferenceKey}' changed source representation."));
         if (before.IsRequired == after.IsRequired) return;
         var breaking = before.IsRequired && !after.IsRequired;
         Add(changes, MemberChange(after, memberKind, "RequirednessChanged", Project(before), Project(after),
             breaking ? ActivityVersionChangeImpact.Breaking : ActivityVersionChangeImpact.Additive,
             breaking ? ActivityVersionBump.Major : ActivityVersionBump.Minor,
             $"Output '{after.ReferenceKey}' requiredness changed."));
+    }
+
+    private static void CompareNullability<T>(
+        T before,
+        T after,
+        string memberKind,
+        IDictionary<string, ActivityVersionChange> changes)
+        where T : notnull
+    {
+        var wasNullable = IsNullable(before);
+        var isNullable = IsNullable(after);
+        if (wasNullable == isNullable) return;
+        var tightening = wasNullable && !isNullable;
+        Add(changes, MemberChange(after, memberKind, "NullabilityChanged", ProjectMember(before), ProjectMember(after),
+            tightening ? ActivityVersionChangeImpact.Breaking : ActivityVersionChangeImpact.Additive,
+            tightening ? ActivityVersionBump.Major : ActivityVersionBump.Minor,
+            tightening
+                ? $"{memberKind} '{ReferenceKey(after)}' nullability was tightened."
+                : $"{memberKind} '{ReferenceKey(after)}' nullability was relaxed."));
     }
 
     private static void CompareOutcome(
@@ -494,6 +518,7 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         member.Name,
         type = TypeProjection(member.Type),
         member.IsRequired,
+        member.IsNullable,
         hasDefault = member.Default is not null,
         defaultHash = member.Default is null ? null : DefaultHash(member.Default),
         member.StorageDriverKey,
@@ -505,8 +530,10 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         member.Name,
         type = TypeProjection(member.Type),
         member.IsRequired,
+        member.IsNullable,
         member.StorageDriverKey,
-        member.Durability
+        member.Durability,
+        member.SourceRepresentation
     });
 
     private static JsonElement Project(ActivityOutcomeContract member) => Element(new { member.Name, member.IsEmitted });
@@ -537,7 +564,7 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
     private static object TypeProjection(TypeReference type) => new
     {
         type.Alias,
-        collectionKind = type.CollectionKind == CollectionKind.Single ? "None" : type.CollectionKind.ToString()
+        collectionKind = type.CollectionKind.ToString()
     };
 
     private static JsonElement ImplementationProjection(string? templateHash, ActivityVersionImplementationFacts? facts) => Element(new
@@ -585,6 +612,13 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
     {
         ActivityInputContract value => value.Durability,
         ActivityOutputContract value => value.Durability,
+        _ => throw new InvalidOperationException()
+    };
+
+    private static bool IsNullable<T>(T member) => member switch
+    {
+        ActivityInputContract value => value.IsNullable,
+        ActivityOutputContract value => value.IsNullable,
         _ => throw new InvalidOperationException()
     };
 

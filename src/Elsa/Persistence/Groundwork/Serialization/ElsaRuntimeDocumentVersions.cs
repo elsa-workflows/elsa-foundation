@@ -11,10 +11,8 @@ namespace Elsa.Persistence.Groundwork.Serialization;
 /// </summary>
 /// <remarks>
 /// The clean-baseline policy resets changed kinds to their current fixture unless an explicitly supported
-/// rolling window is required. Workflow executables retain v5 as the first such window and migrate through
-/// Groundwork's <c>IDocumentJsonUpcaster</c> contract. The fixture drift test in
-/// <c>Elsa.Persistence.Groundwork.Tests</c> fails on unversioned shape changes. See
-/// <c>docs/serialization.md</c> for the full evolution contract.
+/// rolling window is required. The fixture drift test in <c>Elsa.Persistence.Groundwork.Tests</c> fails on
+/// unversioned shape changes. See <c>docs/serialization.md</c> for the full evolution contract.
 /// </remarks>
 public static class ElsaRuntimeDocumentVersions
 {
@@ -69,7 +67,6 @@ public static class ElsaRuntimeDocumentVersions
         var currentVersion = CurrentFor(documentKind);
         return documentKind switch
         {
-            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind => 5,
             ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => 1,
             _ => currentVersion
         };

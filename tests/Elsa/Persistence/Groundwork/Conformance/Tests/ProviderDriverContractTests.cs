@@ -166,6 +166,74 @@ public class ProviderDriverContractTests
     }
 
     [Fact]
+    public async Task Sqlite_physical_client_disposes_connection_when_store_construction_fails()
+    {
+        var connectionDisposals = 0;
+        var failure = new InvalidOperationException("store-construction-failure");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SqlitePhysicalClientResourceOwner.OpenAsync(
+                Guid.NewGuid(),
+                static () => new object(),
+                static (_, _) => ValueTask.CompletedTask,
+                _ => throw failure,
+                _ =>
+                {
+                    connectionDisposals++;
+                    return ValueTask.CompletedTask;
+                },
+                CancellationToken.None).AsTask());
+
+        Assert.Same(failure, exception);
+        Assert.Equal(1, connectionDisposals);
+    }
+
+    [Fact]
+    public async Task Sqlite_physical_client_disposes_connection_when_service_disposal_fails()
+    {
+        var connectionDisposals = 0;
+        var servicesFailure = new InvalidOperationException("service-disposal-failure");
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var client = await SqlitePhysicalClientResourceOwner.OpenAsync(
+            Guid.NewGuid(),
+            static () => new object(),
+            static (_, _) => ValueTask.CompletedTask,
+            _ => store,
+            _ =>
+            {
+                connectionDisposals++;
+                return ValueTask.CompletedTask;
+            },
+            CancellationToken.None,
+            _ => ValueTask.FromException(servicesFailure));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.DisposeAsync().AsTask());
+
+        Assert.Same(servicesFailure, exception);
+        Assert.Equal(1, connectionDisposals);
+    }
+
+    [Fact]
+    public async Task Sqlite_physical_client_reports_both_service_and_connection_disposal_failures()
+    {
+        var servicesFailure = new InvalidOperationException("service-disposal-failure");
+        var connectionFailure = new InvalidOperationException("connection-disposal-failure");
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var client = await SqlitePhysicalClientResourceOwner.OpenAsync(
+            Guid.NewGuid(),
+            static () => new object(),
+            static (_, _) => ValueTask.CompletedTask,
+            _ => store,
+            _ => ValueTask.FromException(connectionFailure),
+            CancellationToken.None,
+            _ => ValueTask.FromException(servicesFailure));
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() => client.DisposeAsync().AsTask());
+
+        Assert.Equal([servicesFailure, connectionFailure], exception.InnerExceptions);
+    }
+
+    [Fact]
     public void Scenario_result_digest_is_provider_independent_and_evidence_rejects_secrets()
     {
         var observations = new[]

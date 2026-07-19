@@ -4,20 +4,20 @@ namespace Elsa.Secrets.Core.Contracts;
 
 public interface ISecretRepository : IPagedSecretRepository
 {
-    ValueTask<Secret?> FindAsync(string normalizedName, CancellationToken cancellationToken = default);
+    ValueTask<Secret?> FindAsync(string tenantId, string normalizedName, CancellationToken cancellationToken = default);
     ValueTask<bool> TryAddAsync(Secret secret, CancellationToken cancellationToken = default);
     ValueTask SaveAsync(Secret secret, CancellationToken cancellationToken = default);
 }
 
 public interface IRevisionAwareSecretRepository
 {
-    ValueTask<SecretRevisionedRecord?> FindWithRevisionAsync(string normalizedName, CancellationToken cancellationToken = default);
+    ValueTask<SecretRevisionedRecord?> FindWithRevisionAsync(string tenantId, string normalizedName, CancellationToken cancellationToken = default);
     ValueTask<SecretRevisionSaveResult> SaveWithRevisionAsync(Secret secret, string? expectedRevision, CancellationToken cancellationToken = default);
 }
 
 public interface IPagedSecretRepository
 {
-    ValueTask<SecretRepositoryPage> ListPageAsync(SecretRepositoryListRequest request, CancellationToken cancellationToken = default);
+    ValueTask<SecretRepositoryPage> ListPageAsync(string tenantId, SecretRepositoryListRequest request, CancellationToken cancellationToken = default);
 }
 
 public sealed record SecretRevisionedRecord(Secret Secret, string Revision);

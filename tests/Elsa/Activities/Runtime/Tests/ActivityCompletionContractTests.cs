@@ -82,7 +82,43 @@ public sealed class ActivityCompletionContractTests
         Assert.Throws<InvalidOperationException>(() => projector.Project(
             "invocation-1", Attempt(), Contract(), ActivityTransition.Complete(new ChargeResult("r", true), "Unknown"), DateTimeOffset.UtcNow));
         Assert.Throws<InvalidOperationException>(() => projector.Project(
-            "invocation-1", Attempt(), Contract(resultPolicy: ActivityValuePolicy.Default with { IsPersistable = false }), ActivityTransition.Complete(new ChargeResult("r", true), "Charged"), DateTimeOffset.UtcNow));
+            "invocation-1", Attempt(), Contract(
+                resultPolicy: ActivityValuePolicy.Default with { IsPersistable = false },
+                projectionPolicy: ActivityValuePolicy.Default with { IsPersistable = false }), ActivityTransition.Complete(new ChargeResult("r", true), "Charged"), DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public void Transient_whole_result_projection_preserves_resource_identity_without_serialization()
+    {
+        using var stream = new MemoryStream();
+        var streamType = new ValueTypeDescriptor("Stream");
+        var policy = ActivityValuePolicy.Default with { IsPersistable = false };
+        var contract = new ActivityContract(
+            "Files.OpenStream",
+            "1.0.0",
+            "clr",
+            System.Text.Json.JsonSerializer.SerializeToElement(new { typeAlias = "Files.OpenStream" }),
+            [],
+            new ActivityResultContract(
+                streamType,
+                true,
+                policy,
+                [new ActivityResultProjectionContract("stream", "$", streamType, true, policy, ValueRepresentation.TransientResource)],
+                ValueRepresentation.TransientResource),
+            ["Done"],
+            new ActivityActivationRequirement("clr", "Files.OpenStream"));
+
+        var projected = new ActivityCompletionProjector().Project(
+            "invocation-1",
+            Attempt(),
+            contract,
+            ActivityTransition.Complete(stream),
+            DateTimeOffset.UtcNow);
+
+        Assert.Same(stream, projected.Completion.Result.TransientResource);
+        Assert.Same(stream, projected.Projections["stream"].TransientResource);
+        Assert.Null(projected.Completion.Result.InlineValue);
+        Assert.Equal(ValueProtectionPolicy.Transient, projected.Completion.Result.Policy);
     }
 
     [Fact]

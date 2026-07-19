@@ -28,7 +28,7 @@ namespace Elsa.Activities.Design.Api;
     name: "ActivitiesDesignApi",
     DisplayName = "Activities Design API",
     Description = "Contains endpoints to manage data in the Activities Design Domain",
-    DependsOn = new object[] { "ApiCapabilities" }
+    DependsOn = new object[] { "ApiCapabilities", "Expressions" }
 )]
 public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
 {
@@ -38,6 +38,8 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
     public string? DependencyCursorSigningKey { get; set; }
     public int DependencyDefaultPageSize { get; set; } = 100;
     public int DependencyMaximumPageSize { get; set; } = 500;
+    public TimeSpan ForkReservationLifetime { get; set; } = TimeSpan.FromMinutes(15);
+    public TimeSpan ForkReservationRetention { get; set; } = TimeSpan.FromDays(1);
 
     public override void ConfigureServices(IServiceCollection services)
     {
@@ -55,9 +57,14 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
             new DefaultActivityAvailabilityEvaluator(sp.GetRequiredService<IOptions<ActivityAvailabilityOptions>>().Value));
         services.TryAddSingleton<IActivityAvailabilityDiagnosticsProjector, DefaultActivityAvailabilityDiagnosticsProjector>();
         services.TryAddSingleton<IActivityAvailabilitySettingsStore, InMemoryActivityAvailabilitySettingsStore>();
-        services.TryAddScoped<IActivityUpgradePlanner, ActivityUpgradePlanner>();
+        services.TryAddScoped<ActivityUpgradePlanner>();
+        services.TryAddScoped<IActivityUpgradePlanner>(sp => sp.GetRequiredService<ActivityUpgradePlanner>());
+        services.TryAddScoped<IActivityUpgradePlanRefresher>(sp => sp.GetRequiredService<ActivityUpgradePlanner>());
         services.TryAddScoped<IActivityUpgradeDiffBuilder, ActivityUpgradeDiffBuilder>();
         services.TryAddSingleton<IActivityProviderRegistry, ActivityProviderRegistry>();
+        services.TryAddSingleton<IActivityContractCapabilityCatalog, ExpressionActivityContractCapabilityCatalog>();
+        services.TryAddSingleton<ActivityContractAuthoringValidator>();
+        services.TryAddSingleton<IActivityTypeKeyPolicy, DefaultActivityTypeKeyPolicy>();
         services.TryAddScoped<IActivityDraftValidator, ActivityDraftValidator>();
         services.TryAddSingleton<IActivityVersionDiffer, ActivityVersionDiffer>();
         services.TryAddSingleton(TimeProvider.System);
@@ -71,9 +78,20 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
             options.MaximumPageSize = DependencyMaximumPageSize;
         });
         services.TryAddSingleton<IActivityDependencyCursorCodec, HmacActivityDependencyCursorCodec>();
+        services.TryAddSingleton<IActivityManagementCursorCodec, HmacActivityManagementCursorCodec>();
+        services.TryAddSingleton<IActivityForkCandidateIdCodec, HmacActivityForkCandidateIdCodec>();
+        services.AddOptions<ActivityForkReservationOptions>().Configure(options =>
+        {
+            options.Lifetime = ForkReservationLifetime;
+            options.Retention = ForkReservationRetention;
+        });
         services.TryAddScoped<ActivityDependencyReader>();
         services.TryAddScoped<ReusableActivityAuthoringService>();
+        services.TryAddScoped<ActivityForkService>();
+        services.TryAddScoped<ActivityDefinitionManagementProjectionService>();
+        services.TryAddScoped<ActivityContractProposalService>();
         services.TryAddScoped<ActivityVersionLifecycleService>();
+        services.TryAddScoped<ActivityDefinitionRecommendationService>();
         services.TryAddSingleton<IActivityVersionSelectionPolicy, DefaultActivityVersionSelectionPolicy>();
 
         services.AddEventHandlersFrom(assembly);

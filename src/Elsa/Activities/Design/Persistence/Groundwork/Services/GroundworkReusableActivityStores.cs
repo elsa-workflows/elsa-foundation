@@ -2,7 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Constants;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Locking.Core;
@@ -26,21 +28,31 @@ public sealed class GroundworkReusableActivityStores(
     IDocumentStore store,
     ISystemClock clock,
     IDistributedLockProvider lockProvider,
-    IBoundedDocumentStore? boundedStore = null) :
+    IBoundedDocumentStore boundedStore,
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter) :
     IActivityDefinitionAuthoringStore,
     IActivityDefinitionDraftStore,
     IActivityDefinitionVersionPublicationStore,
+    IRecommendedActivityDefinitionPickerStore,
     IActivityDefinitionLayoutStore,
     IActivityDraftValidationStore,
+    IActivityForkStore,
     IActivityDirectDependencyStore,
     IActivityDependencyProjectionStore,
     ICreateActivityDefinitionCommand,
+    ISaveActivityForkCandidateCommand,
+    IPruneActivityForkCandidatesCommand,
+    IApplyActivityForkCandidateCommand,
     IUpdateActivityDefinitionPresentationCommand,
     ICreateActivityDraftCommand,
+    IUpdateActivityDraftPresentationCommand,
+    ICreateActivityDraftConflictCopyCommand,
     IReplaceActivityDraftCommand,
+    IApplyActivityContractProposalCommand,
     IDiscardActivityDraftCommand,
     IStoreActivityDraftValidationCommand,
-    IChangeActivityVersionLifecycleCommand
+    IChangeActivityVersionLifecycleCommand,
+    ISetActivityDefinitionRecommendationCommand
 {
     // This initial concrete projection derives immutable activity-version edges. The aggregate port
     // already carries all four owner kinds; T060 adds current activity/workflow draft and workflow-
@@ -108,6 +120,84 @@ public sealed class GroundworkReusableActivityStores(
         .Select(x => x.Entity)
         .OrderBy(x => x.Version, StringComparer.Ordinal)
         .ToArray();
+
+    public async Task<RecommendedActivityDefinitionPickerPage> ReadAsync(
+        string? tenantId,
+        int offset,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (offset < 0)
+            throw new ArgumentOutOfRangeException(nameof(offset));
+        if (limit is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        var items = new List<RecommendedActivityDefinitionPickerItem>(limit);
+        var sourceOffset = offset;
+        long totalCount = offset;
+        while (items.Count < limit)
+        {
+            var result = await boundedStore.QueryAsync(
+                new DocumentQuery(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                    ActivitiesDesignStorageManifest.ListAllQuery,
+                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                        ActivitiesDesignStorageManifest.CollectionField,
+                        ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection))],
+                    null,
+                    sourceOffset,
+                    Math.Min(100, Math.Max(limit * 2, 20))),
+                cancellationToken);
+            totalCount = result.TotalCount;
+            if (result.Documents.Count == 0)
+                break;
+
+            foreach (var envelope in result.Documents)
+            {
+                sourceOffset++;
+                var authoring = Deserialize<ActivityDefinitionAuthoringState>(
+                    envelope,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind).Entity;
+                if (!IsVisible(authoring.TenantId, tenantId) || authoring.RecommendedVersionId is null)
+                    continue;
+                var publication = await ((IActivityDefinitionVersionPublicationStore)this).FindAsync(authoring.RecommendedVersionId, cancellationToken);
+                if (publication is null ||
+                    publication.Lifecycle != ActivityDefinitionVersionLifecycle.Active ||
+                    !StringComparer.Ordinal.Equals(publication.DefinitionId, authoring.DefinitionId) ||
+                    !StringComparer.Ordinal.Equals(publication.TenantId, authoring.TenantId))
+                    continue;
+                var definition = await LoadAsync<ActivityDefinition>(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                    authoring.DefinitionId,
+                    cancellationToken);
+                if (definition is null ||
+                    !StringComparer.Ordinal.Equals(definition.Entity.TenantId, authoring.TenantId) ||
+                    !IsVisible(definition.Entity.TenantId, tenantId))
+                    continue;
+                items.Add(new(definition.Entity, publication));
+                if (items.Count == limit)
+                    break;
+            }
+        }
+
+        return new(items, sourceOffset < totalCount ? sourceOffset : null);
+    }
+
+    public async Task<ActivityForkCandidate?> FindCandidateAsync(
+        string candidateId,
+        CancellationToken cancellationToken = default) =>
+        (await LoadAsync<ActivityForkCandidate>(
+            ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+            candidateId,
+            cancellationToken))?.Entity;
+
+    public async Task<ActivityForkReceipt?> FindReceiptAsync(
+        string receiptId,
+        CancellationToken cancellationToken = default) =>
+        (await LoadAsync<ActivityForkReceipt>(
+            ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind,
+            receiptId,
+            cancellationToken))?.Entity;
 
     public async Task<ActivityDefinitionDraftLayout?> FindDraftLayoutAsync(
         string draftId,
@@ -228,19 +318,256 @@ public sealed class GroundworkReusableActivityStores(
         if (await FindDraftLayoutAsync(request.InitialDraft.Id, cancellationToken) is not null)
             throw Conflict($"Activity draft layout '{request.InitialDraft.Id}' already exists.");
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        await CommitWithManagementProjectionAsync(
+            [
                 ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind),
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
             [
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionCollection, request.Definition, 0),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection, request.AuthoringState, 0),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, request.InitialDraft, 0),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, request.InitialLayout, 0)
             ],
+            new(
+                request.Definition.LastModifiedAt,
+                [new(request.Definition, request.AuthoringState)],
+                [request.InitialDraft],
+                []),
             cancellationToken);
+    }
+
+    public async Task<ActivityForkCandidate> ExecuteAsync(
+        SaveActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateForkCandidate(request.Candidate);
+        await using var lockHandle = await lockProvider.AcquireLockAsync(
+            ForkCandidateLock(request.Candidate.Id),
+            null,
+            cancellationToken);
+        var existing = await LoadAsync<ActivityForkCandidate>(
+            ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+            request.Candidate.Id,
+            cancellationToken);
+        if (existing is not null)
+        {
+            if (existing.Entity.ExpiresAt <= request.Candidate.CreatedAt)
+                throw new ActivityForkPreviewExpiredException("The reviewed fork reservation expired.");
+            EnsureExactPreviewReplay(existing.Entity, request.Candidate);
+            return existing.Entity;
+        }
+        await store.SaveAsync(
+            Save(
+                ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityForkCandidateCollection,
+            request.Candidate,
+            0),
+            cancellationToken);
+        return request.Candidate;
+    }
+
+    public async Task<int> ExecuteAsync(
+        DateTimeOffset retainBefore,
+        int maximumCount = 100,
+        CancellationToken cancellationToken = default)
+    {
+        if (maximumCount is < 1 or > 500)
+            throw new ArgumentOutOfRangeException(nameof(maximumCount));
+        var result = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+                    ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionField,
+                    ActivityForkCandidateIdentity.RetentionKey(retainBefore)))],
+                null,
+                0,
+                maximumCount),
+            cancellationToken);
+        if (result.Documents.Count == 0)
+            return 0;
+        await store.WriteAllAsync(
+            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind),
+            result.Documents.Select(x => DocumentWriteOperation.Delete(new DeleteDocumentRequest(
+                x.DocumentKind,
+                x.Id,
+                x.Version))).ToArray(),
+            cancellationToken);
+        return result.Documents.Count;
+    }
+
+    public async Task<ActivityForkApplyResult> ExecuteAsync(
+        ApplyActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await using var operationLock = await lockProvider.AcquireLockAsync(
+            ForkApplyLock(request.ReceiptId),
+            null,
+            cancellationToken);
+
+        var existingReceipt = await LoadAsync<ActivityForkReceipt>(
+            ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind,
+            request.ReceiptId,
+            cancellationToken);
+        if (existingReceipt is not null)
+        {
+            EnsureExactReplay(existingReceipt.Entity, request);
+            return new(existingReceipt.Entity, true);
+        }
+
+        var candidate = await LoadAsync<ActivityForkCandidate>(
+            ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+            request.CandidateId,
+            cancellationToken)
+            ?? throw new ActivityForkCandidateStaleException("The activity fork candidate no longer exists.");
+        EnsureApplicable(candidate.Entity, request);
+        ValidateForkCandidate(candidate.Entity);
+
+        await using var sourceLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(
+                candidate.Entity.SourceDefinitionId),
+            null,
+            cancellationToken);
+        await using var keyLock = await lockProvider.AcquireLockAsync(
+            DefinitionKeyLock(
+                candidate.Entity.ReservedDefinition.TenantId,
+                candidate.Entity.ReservedDefinition.ActivityTypeKey),
+            null,
+            cancellationToken);
+
+        await RecheckForkSourceAsync(candidate.Entity, cancellationToken);
+        var existingDefinitions = await ListAllAsync<ActivityDefinition>(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+            cancellationToken);
+        if (existingDefinitions.Any(x =>
+                StringComparer.Ordinal.Equals(x.Entity.TenantId, candidate.Entity.ReservedDefinition.TenantId) &&
+                StringComparer.Ordinal.Equals(x.Entity.ActivityTypeKey, candidate.Entity.ReservedDefinition.ActivityTypeKey)))
+            throw new ActivityForkCollisionException("The reserved activity type key is no longer available.");
+
+        try
+        {
+            await EnsureAbsentAsync<ActivityDefinition>(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                candidate.Entity.ReservedDefinition.Id,
+                cancellationToken);
+            await EnsureAbsentAsync<ActivityDefinitionAuthoringState>(
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                candidate.Entity.ReservedAuthoringState.Id,
+                cancellationToken);
+            await EnsureAbsentAsync<ActivityDefinitionDraft>(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                candidate.Entity.ReservedDraft.Id,
+                cancellationToken);
+            await EnsureAbsentAsync<ActivityDefinitionDraftLayout>(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind,
+                candidate.Entity.ReservedLayout.Id,
+                cancellationToken);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new ActivityForkCollisionException(exception.Message);
+        }
+
+        candidate.Entity.Status = ActivityForkCandidateStatus.Applied;
+        candidate.Entity.AppliedIdempotencyKey = request.IdempotencyKey;
+        candidate.Entity.LastModifiedAt = request.AppliedAt;
+        var receipt = new ActivityForkReceipt
+        {
+            Id = request.ReceiptId,
+            TenantId = candidate.Entity.TenantId,
+            IdempotencyKey = request.IdempotencyKey,
+            CandidateId = candidate.Entity.Id,
+            PublicCandidateId = candidate.Entity.CandidateId,
+            RequestFingerprint = candidate.Entity.RequestFingerprint,
+            AccessBindingFingerprint = candidate.Entity.AccessBindingFingerprint,
+            ActorId = candidate.Entity.ActorId,
+            AuthorizationProfile = candidate.Entity.AuthorizationProfile,
+            Status = ActivityForkReceiptStatus.Applied,
+            DefinitionId = candidate.Entity.ReservedDefinition.Id,
+            ActivityTypeKey = candidate.Entity.ReservedDefinition.ActivityTypeKey,
+            DraftId = candidate.Entity.ReservedDraft.Id,
+            Definition = candidate.Entity.ReservedDefinition,
+            AuthoringState = candidate.Entity.ReservedAuthoringState,
+            Draft = candidate.Entity.ReservedDraft,
+            AppliedAt = request.AppliedAt,
+            CreatedAt = request.AppliedAt,
+            LastModifiedAt = request.AppliedAt
+        };
+
+        await CommitWithManagementProjectionAsync(
+            [
+                ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
+            [
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityForkCandidateCollection,
+                    candidate.Entity,
+                    candidate.Envelope.Version),
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityForkReceiptCollection,
+                    receipt,
+                    0),
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+                    candidate.Entity.ReservedDefinition,
+                    0),
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection,
+                    candidate.Entity.ReservedAuthoringState,
+                    0),
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection,
+                    candidate.Entity.ReservedDraft,
+                    0),
+                Save(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection,
+                    candidate.Entity.ReservedLayout,
+                    0)
+            ],
+            new(
+                request.AppliedAt,
+                [new(candidate.Entity.ReservedDefinition, candidate.Entity.ReservedAuthoringState)],
+                [candidate.Entity.ReservedDraft],
+                []),
+            cancellationToken);
+        return new(receipt, false);
+    }
+
+    private async Task RecheckForkSourceAsync(
+        ActivityForkCandidate candidate,
+        CancellationToken cancellationToken)
+    {
+        var authoring = await RequiredAuthoringAsync(candidate.SourceDefinitionId, cancellationToken);
+        var publication = await RequiredPublicationAsync(candidate.SourceVersionId, cancellationToken);
+        if (authoring.Entity.ContentAuthority.Kind != ActivityContentAuthorityKind.ProviderSource ||
+            !StringComparer.Ordinal.Equals(authoring.Entity.TenantId, candidate.TenantId) ||
+            !StringComparer.Ordinal.Equals(publication.Entity.TenantId, candidate.TenantId) ||
+            !StringComparer.Ordinal.Equals(publication.Entity.DefinitionId, candidate.SourceDefinitionId) ||
+            !StringComparer.Ordinal.Equals(publication.Entity.Version, candidate.SourceVersion) ||
+            publication.Entity.Lifecycle != candidate.SourceLifecycle ||
+            !StringComparer.Ordinal.Equals(
+                ActivityProviderManifestFingerprint.Compute(publication.Entity.Provider),
+                candidate.SourceProviderFingerprint) ||
+            !StringComparer.Ordinal.Equals(
+                ActivityForkMaterialFingerprint.Compute(publication.Entity.Contract),
+                candidate.SourceContractFingerprint))
+            throw new ActivityForkCandidateStaleException(
+                "The exact source version or authority changed before the atomic fork commit.");
     }
 
     public async Task<ActivityDefinition> ExecuteAsync(
@@ -264,19 +591,28 @@ public sealed class GroundworkReusableActivityStores(
         definition.Entity.Description = request.Description;
         definition.Entity.LastModifiedAt = request.LastModifiedAt;
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind),
+        await CommitWithManagementProjectionAsync(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind],
             [Save(
                 ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
                 definition.Entity,
                 definition.Envelope.Version)],
+            new(
+                request.LastModifiedAt,
+                [new(definition.Entity, authoring.Entity)],
+                [],
+                []),
             cancellationToken);
         return definition.Entity;
     }
 
     public async Task ExecuteAsync(CreateActivityDraftRequest request, CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.Draft.Id),
+            null,
+            cancellationToken);
         ValidateDraftAndLayout(request.Draft, request.Layout);
         var authoring = await RequiredAuthoringAsync(request.Draft.DefinitionId, cancellationToken);
         EnsureDesignAuthority(authoring.Entity);
@@ -288,16 +624,88 @@ public sealed class GroundworkReusableActivityStores(
         if (await FindDraftLayoutAsync(request.Draft.Id, cancellationToken) is not null)
             throw Conflict($"Activity draft layout '{request.Draft.Id}' already exists.");
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        await CommitWithManagementProjectionAsync(
+            [
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind),
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
             [
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection, authoring.Entity, authoring.Envelope.Version),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, request.Draft, 0),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, request.Layout, 0)
             ],
+            new(request.Draft.LastModifiedAt, [], [request.Draft], []),
+            cancellationToken);
+    }
+
+    public async Task<ActivityDefinitionDraft> ExecuteAsync(
+        UpdateActivityDraftPresentationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.DraftId),
+            null,
+            cancellationToken);
+        var draft = await RequiredDraftAsync(request.DraftId, cancellationToken);
+        EnsureActiveRevision(draft.Entity, request.ExpectedRevision);
+        var authoring = await RequiredAuthoringAsync(draft.Entity.DefinitionId, cancellationToken);
+        EnsureDesignAuthority(authoring.Entity);
+        EnsureTenant(authoring.Entity, draft.Entity);
+        var layout = await RequiredDraftLayoutAsync(request.DraftId, cancellationToken);
+        if (layout.Entity.Revision != draft.Entity.Revision)
+            throw Conflict($"Draft '{request.DraftId}' and its layout do not have the same revision.");
+        draft.Entity.Revision = checked(draft.Entity.Revision + 1);
+        draft.Entity.PresentationLabel = request.PresentationLabel;
+        draft.Entity.LastModifiedAt = request.ChangedAt;
+        layout.Entity.Revision = draft.Entity.Revision;
+        layout.Entity.LastModifiedAt = request.ChangedAt;
+        await CommitWithManagementProjectionAsync(
+            [
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
+            [
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, draft.Entity, draft.Envelope.Version),
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, layout.Entity, layout.Envelope.Version)
+            ],
+            new(request.ChangedAt, [], [draft.Entity], []),
+            cancellationToken);
+        return draft.Entity;
+    }
+
+    public async Task ExecuteAsync(
+        CreateActivityDraftConflictCopyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.SourceDraftId),
+            null,
+            cancellationToken);
+        ValidateDraftAndLayout(request.ConflictCopy, request.Layout);
+        var source = await RequiredDraftAsync(request.SourceDraftId, cancellationToken);
+        EnsureActiveRevision(source.Entity, request.ExpectedSourceRevision);
+        var authoring = await RequiredAuthoringAsync(source.Entity.DefinitionId, cancellationToken);
+        EnsureDesignAuthority(authoring.Entity);
+        EnsureTenant(authoring.Entity, source.Entity);
+        if (!StringComparer.Ordinal.Equals(source.Entity.DefinitionId, request.ConflictCopy.DefinitionId) ||
+            !StringComparer.Ordinal.Equals(source.Entity.TenantId, request.ConflictCopy.TenantId) ||
+            !StringComparer.Ordinal.Equals(source.Entity.SourceVersionId, request.ConflictCopy.SourceVersionId))
+            throw new ArgumentException("The conflict copy must inherit its source draft lineage.", nameof(request));
+        await EnsureAbsentAsync<ActivityDefinitionDraft>(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, request.ConflictCopy.Id, cancellationToken);
+        if (await FindDraftLayoutAsync(request.ConflictCopy.Id, cancellationToken) is not null)
+            throw Conflict($"Activity draft layout '{request.ConflictCopy.Id}' already exists.");
+        await CommitWithManagementProjectionAsync(
+            [
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
+            [
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, source.Entity, source.Envelope.Version),
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, request.ConflictCopy, 0),
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, request.Layout, 0)
+            ],
+            new(request.ConflictCopy.LastModifiedAt, [], [request.ConflictCopy], []),
             cancellationToken);
     }
 
@@ -305,6 +713,10 @@ public sealed class GroundworkReusableActivityStores(
         ReplaceActivityDraftRequest request,
         CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.DraftId),
+            null,
+            cancellationToken);
         var draft = await RequiredDraftAsync(request.DraftId, cancellationToken);
         EnsureActiveRevision(draft.Entity, request.ExpectedRevision);
         var authoring = await RequiredAuthoringAsync(draft.Entity.DefinitionId, cancellationToken);
@@ -317,26 +729,75 @@ public sealed class GroundworkReusableActivityStores(
         var now = clock.UtcNow;
         draft.Entity.Revision = checked(draft.Entity.Revision + 1);
         draft.Entity.State = request.State;
+        draft.Entity.PresentationLabel = request.PresentationLabel;
         draft.Entity.LastModifiedAt = now;
         layout.Entity.Revision = draft.Entity.Revision;
         layout.Entity.Records = request.Layout.ToList();
         layout.Entity.LastModifiedAt = now;
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        await CommitWithManagementProjectionAsync(
+            [
                 ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind),
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
             [
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, draft.Entity, draft.Envelope.Version),
                 Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, layout.Entity, layout.Envelope.Version)
             ],
+            new(now, [], [draft.Entity], []),
             cancellationToken);
 
         return draft.Entity;
     }
 
+    public async Task<ActivityDefinitionDraft> ExecuteAsync(
+        ApplyActivityContractProposalRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.DraftId),
+            null,
+            cancellationToken);
+        var draft = await RequiredDraftAsync(request.DraftId, cancellationToken);
+        EnsureActiveRevision(draft.Entity, request.ExpectedRevision);
+        var authoring = await RequiredAuthoringAsync(draft.Entity.DefinitionId, cancellationToken);
+        EnsureDesignAuthority(authoring.Entity);
+        EnsureTenant(authoring.Entity, draft.Entity);
+        if (!IsVisible(draft.Entity.TenantId, request.TenantId) ||
+            !StringComparer.Ordinal.Equals(draft.Entity.State.Provider.ProviderKey, request.ExpectedProviderKey) ||
+            !StringComparer.Ordinal.Equals(draft.Entity.State.Provider.SchemaVersion, request.ExpectedProviderSchemaVersion) ||
+            !StringComparer.Ordinal.Equals(ActivityProviderManifestFingerprint.Compute(draft.Entity.State.Provider), request.ExpectedManifestFingerprint))
+            throw Conflict($"Draft '{request.DraftId}' provider binding is stale.");
+        var layout = await RequiredDraftLayoutAsync(request.DraftId, cancellationToken);
+        if (layout.Entity.Revision != draft.Entity.Revision)
+            throw Conflict($"Draft '{request.DraftId}' and its layout do not have the same revision.");
+
+        var now = clock.UtcNow;
+        draft.Entity.Revision = checked(draft.Entity.Revision + 1);
+        draft.Entity.State = draft.Entity.State with { Contract = request.Contract };
+        draft.Entity.LastModifiedAt = now;
+        layout.Entity.Revision = draft.Entity.Revision;
+        layout.Entity.LastModifiedAt = now;
+        await CommitWithManagementProjectionAsync(
+            [
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind
+            ],
+            [
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, draft.Entity, draft.Envelope.Version),
+                Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection, layout.Entity, layout.Envelope.Version)
+            ],
+            new(now, [], [draft.Entity], []),
+            cancellationToken);
+        return draft.Entity;
+    }
+
     public async Task ExecuteAsync(DiscardActivityDraftRequest request, CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(request.DraftId),
+            null,
+            cancellationToken);
         var draft = await RequiredDraftAsync(request.DraftId, cancellationToken);
         EnsureActiveRevision(draft.Entity, request.ExpectedRevision);
         var authoring = await RequiredAuthoringAsync(draft.Entity.DefinitionId, cancellationToken);
@@ -346,14 +807,19 @@ public sealed class GroundworkReusableActivityStores(
         draft.Entity.Status = ActivityDefinitionDraftStatus.Discarded;
         draft.Entity.LastModifiedAt = clock.UtcNow;
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind),
+        await CommitWithManagementProjectionAsync(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind],
             [Save(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection, draft.Entity, draft.Envelope.Version)],
+            new(draft.Entity.LastModifiedAt, [], [draft.Entity], []),
             cancellationToken);
     }
 
     public async Task ExecuteAsync(ActivityDraftValidationState validation, CancellationToken cancellationToken = default)
     {
+        await using var draftLock = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.DraftKey(validation.DraftId),
+            null,
+            cancellationToken);
         var draft = await RequiredDraftAsync(validation.DraftId, cancellationToken);
         if (draft.Entity.Revision != validation.Revision)
             throw Conflict($"Draft '{validation.DraftId}' is at revision {draft.Entity.Revision}, not {validation.Revision}.");
@@ -386,18 +852,149 @@ public sealed class GroundworkReusableActivityStores(
         CancellationToken cancellationToken = default)
     {
         var publication = await RequiredPublicationAsync(request.DefinitionVersionId, cancellationToken);
+        await using var lockHandle = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(publication.Entity.DefinitionId),
+            null,
+            cancellationToken);
+        publication = await RequiredPublicationAsync(request.DefinitionVersionId, cancellationToken);
+        var authoring = await RequiredAuthoringAsync(publication.Entity.DefinitionId, cancellationToken);
+        if (!IsVisible(authoring.Entity.TenantId, request.TenantId) ||
+            !StringComparer.Ordinal.Equals(authoring.Entity.TenantId, publication.Entity.TenantId))
+            throw Conflict($"Activity version '{request.DefinitionVersionId}' is outside the caller tenant scope.");
         if (publication.Entity.Lifecycle != request.ExpectedLifecycle)
             throw Conflict($"Activity version '{request.DefinitionVersionId}' is {publication.Entity.Lifecycle}, not {request.ExpectedLifecycle}.");
         if (!IsAllowedTransition(publication.Entity.Lifecycle, request.Lifecycle))
             throw Conflict($"Activity version lifecycle cannot transition from {publication.Entity.Lifecycle} to {request.Lifecycle}.");
 
+        Stored<ActivityDefinitionVersionPublication>? replacement = null;
+        var invalidatesRecommendation = request.Lifecycle is ActivityDefinitionVersionLifecycle.Retired or ActivityDefinitionVersionLifecycle.Revoked &&
+                                        StringComparer.Ordinal.Equals(authoring.Entity.RecommendedVersionId, publication.Entity.DefinitionVersionId);
+        if (invalidatesRecommendation)
+        {
+            var decision = request.RecommendationDecision ?? throw Conflict("An explicit recommendation decision is required.");
+            EnsureExpectedHead(authoring.Entity, decision.ExpectedDefinitionHeadVersionId);
+            if (!StringComparer.Ordinal.Equals(authoring.Entity.RecommendedVersionId, decision.ExpectedRecommendedVersionId))
+                throw Conflict($"Activity definition '{authoring.Entity.DefinitionId}' recommendation is stale.");
+            if (decision.Disposition == ActivityRecommendationDisposition.Clear)
+            {
+                if (decision.ReplacementVersionId is not null || decision.ExpectedReplacementLifecycle is not null)
+                    throw new ArgumentException("A clear recommendation decision cannot include a replacement.", nameof(request));
+                authoring.Entity.RecommendedVersionId = null;
+            }
+            else
+            {
+                if (decision.ReplacementVersionId is null || decision.ExpectedReplacementLifecycle is null)
+                    throw new ArgumentException("A replacement recommendation decision requires a version and lifecycle.", nameof(request));
+                replacement = await RequiredPublicationAsync(decision.ReplacementVersionId, cancellationToken);
+                if (!StringComparer.Ordinal.Equals(replacement.Entity.DefinitionId, publication.Entity.DefinitionId) ||
+                    !StringComparer.Ordinal.Equals(replacement.Entity.TenantId, publication.Entity.TenantId))
+                    throw Missing($"Activity version publication '{decision.ReplacementVersionId}' was not found.");
+                if (replacement.Entity.Lifecycle != decision.ExpectedReplacementLifecycle ||
+                    replacement.Entity.Lifecycle != ActivityDefinitionVersionLifecycle.Active)
+                    throw Conflict($"Activity version '{decision.ReplacementVersionId}' lifecycle is stale.");
+                authoring.Entity.RecommendedVersionId = replacement.Entity.DefinitionVersionId;
+            }
+            authoring.Entity.LastModifiedAt = clock.UtcNow;
+        }
+        else if (request.RecommendationDecision is not null)
+            throw new ArgumentException("A recommendation decision is valid only for the recommended version.", nameof(request));
+
         publication.Entity.Lifecycle = request.Lifecycle;
         publication.Entity.LastModifiedAt = clock.UtcNow;
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind),
-            [Save(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection, publication.Entity, publication.Envelope.Version)],
+        var requests = new List<SaveDocumentRequest>
+        {
+            Save(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection, publication.Entity, publication.Envelope.Version)
+        };
+        if (invalidatesRecommendation)
+            requests.Add(Save(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection, authoring.Entity, authoring.Envelope.Version));
+        if (replacement is not null)
+            requests.Add(Save(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection, replacement.Entity, replacement.Envelope.Version));
+        var definitionChanges = new List<ActivityManagementDefinitionChange>();
+        var changesDefinitionReference =
+            StringComparer.Ordinal.Equals(authoring.Entity.HeadVersionId, publication.Entity.DefinitionVersionId) ||
+            StringComparer.Ordinal.Equals(authoring.Entity.RecommendedVersionId, publication.Entity.DefinitionVersionId) ||
+            invalidatesRecommendation;
+        if (changesDefinitionReference)
+        {
+            var definition = await RequiredDefinitionAsync(publication.Entity.DefinitionId, cancellationToken);
+            definitionChanges.Add(new(definition.Entity, authoring.Entity));
+        }
+        await CommitWithManagementProjectionAsync(
+            invalidatesRecommendation
+                ? [
+                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind
+                ]
+                : [ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind],
+            requests,
+            new(
+                publication.Entity.LastModifiedAt,
+                definitionChanges,
+                [],
+                [publication.Entity]),
             cancellationToken);
         return publication.Entity;
+    }
+
+    public async Task<ActivityDefinitionAuthoringState> ExecuteAsync(
+        SetActivityDefinitionRecommendationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var authoring = await RequiredAuthoringAsync(request.DefinitionId, cancellationToken);
+        if (!IsVisible(authoring.Entity.TenantId, request.TenantId))
+            throw Conflict($"Activity definition '{request.DefinitionId}' is outside the caller tenant scope.");
+        EnsureExpectedHead(authoring.Entity, request.ExpectedDefinitionHeadVersionId);
+        if (!StringComparer.Ordinal.Equals(authoring.Entity.RecommendedVersionId, request.ExpectedRecommendedVersionId))
+            throw Conflict($"Activity definition '{request.DefinitionId}' recommendation is stale.");
+
+        Stored<ActivityDefinitionVersionPublication>? target = null;
+        if (request.RecommendedVersionId is null)
+        {
+            if (request.ExpectedRecommendedVersionLifecycle is not null)
+                throw new ArgumentException("A cleared recommendation cannot declare a target lifecycle.", nameof(request));
+        }
+        else
+        {
+            if (request.ExpectedRecommendedVersionLifecycle is null)
+                throw new ArgumentException("A recommendation target requires an expected lifecycle.", nameof(request));
+            target = await RequiredPublicationAsync(request.RecommendedVersionId, cancellationToken);
+            if (!StringComparer.Ordinal.Equals(target.Entity.DefinitionId, request.DefinitionId) ||
+                !StringComparer.Ordinal.Equals(target.Entity.TenantId, authoring.Entity.TenantId))
+                throw Missing($"Activity version publication '{request.RecommendedVersionId}' was not found.");
+            if (target.Entity.Lifecycle != request.ExpectedRecommendedVersionLifecycle)
+                throw Conflict($"Activity version '{request.RecommendedVersionId}' lifecycle is stale.");
+            if (target.Entity.Lifecycle != ActivityDefinitionVersionLifecycle.Active)
+                throw Conflict($"Activity version '{request.RecommendedVersionId}' is not active.");
+        }
+
+        authoring.Entity.RecommendedVersionId = request.RecommendedVersionId;
+        authoring.Entity.LastModifiedAt = request.ChangedAt;
+        var requests = new List<SaveDocumentRequest>
+        {
+            Save(
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection,
+                authoring.Entity,
+                authoring.Envelope.Version)
+        };
+        if (target is not null)
+            requests.Add(Save(
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection,
+                target.Entity,
+                target.Envelope.Version));
+        var definition = await RequiredDefinitionAsync(request.DefinitionId, cancellationToken);
+        await CommitWithManagementProjectionAsync(
+            target is null
+                ? [ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind]
+                : [
+                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind
+                ],
+            requests,
+            new(request.ChangedAt, [new(definition.Entity, authoring.Entity)], [], []),
+            cancellationToken);
+        return authoring.Entity;
     }
 
     private async Task<Stored<ActivityDefinitionAuthoringState>> RequiredAuthoringAsync(string definitionId, CancellationToken cancellationToken) =>
@@ -407,6 +1004,13 @@ public sealed class GroundworkReusableActivityStores(
             definitionId,
             cancellationToken)
         ?? throw Missing($"Activity definition authoring state '{definitionId}' was not found.");
+
+    private async Task<Stored<ActivityDefinition>> RequiredDefinitionAsync(string definitionId, CancellationToken cancellationToken) =>
+        await LoadAsync<ActivityDefinition>(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            definitionId,
+            cancellationToken)
+        ?? throw Missing($"Activity definition '{definitionId}' was not found.");
 
     private async Task<Stored<ActivityDefinitionDraft>> RequiredDraftAsync(string draftId, CancellationToken cancellationToken) =>
         await LoadAsync<ActivityDefinitionDraft>(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, draftId, cancellationToken)
@@ -483,14 +1087,12 @@ public sealed class GroundworkReusableActivityStores(
             ActivitiesDesignStorageManifest.ByDependencyVersionIndex => ("list-by-dependency-version", ActivitiesDesignStorageManifest.DependencyVersionIdField),
             _ => throw new ArgumentOutOfRangeException(nameof(index), index, "The activity-design query index is not declared.")
         };
-        var result = await (boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
-                "Reusable-activity design queries require an admitted bounded document-store runtime."))
-            .QueryAsync(
-                new DocumentQuery(
-                    kind,
-                    queryIdentity,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
-                cancellationToken);
+        var result = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                kind,
+                queryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+            cancellationToken);
         return result.Documents.Select(x => Deserialize<TEntity>(x, kind)).ToArray();
     }
 
@@ -510,6 +1112,16 @@ public sealed class GroundworkReusableActivityStores(
         return new SaveDocumentRequest(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, expectedVersion);
     }
 
+    private async Task CommitWithManagementProjectionAsync(
+        IReadOnlyCollection<string> documentKinds,
+        IReadOnlyList<SaveDocumentRequest> requests,
+        ActivityManagementProjectionMutation mutation,
+        CancellationToken cancellationToken)
+    {
+        await using var update = await managementProjectionWriter.PrepareAsync(mutation, cancellationToken);
+        await update.CommitAsync(documentKinds, requests, cancellationToken);
+    }
+
     private static void ValidateCreate(CreateActivityDefinitionRequest request)
     {
         if (!StringComparer.Ordinal.Equals(request.Definition.Id, request.AuthoringState.DefinitionId) ||
@@ -520,6 +1132,64 @@ public sealed class GroundworkReusableActivityStores(
             !StringComparer.Ordinal.Equals(request.Definition.TenantId, request.InitialLayout.TenantId))
             throw new ArgumentException("Definition, authoring-state, draft, and layout tenants must match.", nameof(request));
         ValidateDraftAndLayout(request.InitialDraft, request.InitialLayout);
+    }
+
+    private static void ValidateForkCandidate(ActivityForkCandidate candidate)
+    {
+        ValidateCreate(new(
+            candidate.ReservedDefinition,
+            candidate.ReservedAuthoringState,
+            candidate.ReservedDraft,
+            candidate.ReservedLayout));
+        if (candidate.Status == ActivityForkCandidateStatus.Applied &&
+            string.IsNullOrWhiteSpace(candidate.AppliedIdempotencyKey))
+            throw new ArgumentException("An applied fork candidate requires its operation identity.", nameof(candidate));
+        if (!StringComparer.Ordinal.Equals(candidate.TenantId, candidate.ReservedDefinition.TenantId) ||
+            !StringComparer.Ordinal.Equals(candidate.SourceVersionId, candidate.ReservedDraft.SourceVersionId))
+            throw new ArgumentException("Fork candidate tenant and exact source bindings must match its reserved authoring material.", nameof(candidate));
+        if (candidate.ExpiresAt <= candidate.CreatedAt || candidate.RetainUntil <= candidate.ExpiresAt)
+            throw new ArgumentException("Fork candidate expiry and retention must be strictly ordered.", nameof(candidate));
+        if (!StringComparer.Ordinal.Equals(
+                candidate.RetentionKey,
+                ActivityForkCandidateIdentity.RetentionKey(candidate.RetainUntil)))
+            throw new ArgumentException("Fork candidate retention key must exactly represent its retention deadline.", nameof(candidate));
+    }
+
+    private static void EnsureExactPreviewReplay(ActivityForkCandidate existing, ActivityForkCandidate requested)
+    {
+        if (!StringComparer.Ordinal.Equals(existing.PreviewIdempotencyKey, requested.PreviewIdempotencyKey) ||
+            !StringComparer.Ordinal.Equals(existing.RequestFingerprint, requested.RequestFingerprint) ||
+            !StringComparer.Ordinal.Equals(existing.AccessBindingFingerprint, requested.AccessBindingFingerprint) ||
+            !StringComparer.Ordinal.Equals(existing.ActorId, requested.ActorId) ||
+            !StringComparer.Ordinal.Equals(existing.AuthorizationProfile, requested.AuthorizationProfile))
+            throw new ActivityForkPreviewIdempotencyConflictException(
+                "The preview operation identity is already bound to different material.");
+    }
+
+    private static void EnsureApplicable(
+        ActivityForkCandidate candidate,
+        ApplyActivityForkCandidateRequest request)
+    {
+        if (candidate.Status != ActivityForkCandidateStatus.Reserved)
+            throw new ActivityForkCandidateStaleException("The activity fork candidate has already been consumed.");
+        if (!StringComparer.Ordinal.Equals(candidate.RequestFingerprint, request.RequestFingerprint) ||
+            !StringComparer.Ordinal.Equals(candidate.AccessBindingFingerprint, request.AccessBindingFingerprint) ||
+            !StringComparer.Ordinal.Equals(candidate.ActorId, request.ActorId) ||
+            !StringComparer.Ordinal.Equals(candidate.AuthorizationProfile, request.AuthorizationProfile))
+            throw new ActivityForkCandidateStaleException("The activity fork candidate binding changed before commit.");
+    }
+
+    private static void EnsureExactReplay(
+        ActivityForkReceipt receipt,
+        ApplyActivityForkCandidateRequest request)
+    {
+        if (!StringComparer.Ordinal.Equals(receipt.CandidateId, request.CandidateId) ||
+            !StringComparer.Ordinal.Equals(receipt.RequestFingerprint, request.RequestFingerprint) ||
+            !StringComparer.Ordinal.Equals(receipt.AccessBindingFingerprint, request.AccessBindingFingerprint) ||
+            !StringComparer.Ordinal.Equals(receipt.ActorId, request.ActorId) ||
+            !StringComparer.Ordinal.Equals(receipt.AuthorizationProfile, request.AuthorizationProfile) ||
+            !StringComparer.Ordinal.Equals(receipt.IdempotencyKey, request.IdempotencyKey))
+            throw new ActivityForkIdempotencyConflictException("The activity fork operation identity is already bound to different material.");
     }
 
     private static void ValidateDraftAndLayout(ActivityDefinitionDraft draft, ActivityDefinitionDraftLayout layout)
@@ -665,6 +1335,15 @@ public sealed class GroundworkReusableActivityStores(
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key))).ToLowerInvariant();
         return $"elsa:activities:design:definition-key:{hash}";
     }
+
+    private static string ForkCandidateLock(string candidateId) =>
+        $"elsa:activities:design:fork-candidate:{HashLock(candidateId)}";
+
+    private static string ForkApplyLock(string receiptId) =>
+        $"elsa:activities:design:fork-apply:{HashLock(receiptId)}";
+
+    private static string HashLock(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
     private static bool IsVisible(string? itemTenantId, string? tenantId) =>
         itemTenantId is null || StringComparer.Ordinal.Equals(itemTenantId, tenantId);

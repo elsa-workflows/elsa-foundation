@@ -44,7 +44,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         {
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
-                Envelope = Retype(envelope, binding.TargetType)
+                Envelope = Retype(envelope, binding.ConversionPlan?.SourceType ?? binding.TargetType)
             };
         }
 
@@ -59,7 +59,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         var resolution = new CausalActivityResultResolver().Resolve(reference, consumer, context.RuntimeView);
         if (resolution is null)
         {
-            var unavailable = ValueEnvelope.Null(binding.TargetType, binding.EffectivePolicy);
+            var unavailable = ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, binding.EffectivePolicy);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = unavailable
@@ -71,7 +71,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         {
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
-                Envelope = Retype(result, binding.TargetType)
+                Envelope = Retype(result, binding.ConversionPlan?.SourceType ?? binding.TargetType)
             };
         }
 
@@ -86,7 +86,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
 
         if (result.Presence == ValuePresence.ExplicitNull)
         {
-            var projectedNull = ValueEnvelope.Null(binding.TargetType, projectedPolicy);
+            var projectedNull = ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, projectedPolicy);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = projectedNull
@@ -94,10 +94,23 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         }
         if (!result.InlineValue.HasValue && result.ExternalReference is not null)
         {
-            var externalProjectionSource = ValueEnvelope.External(binding.TargetType, result.ExternalReference, projectedPolicy);
+            var externalProjectionSource = ValueEnvelope.External(
+                binding.ConversionPlan?.SourceType ?? binding.TargetType,
+                result.ExternalReference,
+                projectedPolicy);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = externalProjectionSource
+            };
+        }
+        if (result.TransientResource is not null)
+        {
+            if (!StringComparer.Ordinal.Equals(projection.Path, "$"))
+                throw new InvalidOperationException($"Activity result '{reference.ProjectionKey}' for input '{binding.InputName}' is a transient resource and cannot be projected from path '{projection.Path}'.");
+
+            return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
+            {
+                Envelope = result.Retype(binding.ConversionPlan?.SourceType ?? binding.TargetType)
             };
         }
         if (!result.InlineValue.HasValue)
@@ -110,9 +123,10 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
                 throw new InvalidOperationException($"Committed result from producer node '{reference.ProducerExecutableNodeId}' has no projection path '{projection.Path}'.");
         }
 
+        var projectedType = binding.ConversionPlan?.SourceType ?? binding.TargetType;
         var projectedEnvelope = value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-            ? ValueEnvelope.Null(binding.TargetType, projectedPolicy)
-            : ValueEnvelope.Inline(binding.TargetType, value, projectedPolicy);
+            ? ValueEnvelope.Null(projectedType, projectedPolicy)
+            : ValueEnvelope.Inline(projectedType, value, projectedPolicy);
         return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
         {
             Envelope = projectedEnvelope
@@ -143,7 +157,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
     {
         if (string.IsNullOrWhiteSpace(reference.Path))
         {
-            var wholeEnvelope = Retype(source, binding.TargetType);
+            var wholeEnvelope = Retype(source, binding.ConversionPlan?.SourceType ?? binding.TargetType);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = wholeEnvelope
@@ -152,7 +166,10 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
 
         if (!source.InlineValue.HasValue && source.ExternalReference is not null)
         {
-            var externalProjectionSource = ValueEnvelope.External(binding.TargetType, source.ExternalReference, source.Policy);
+            var externalProjectionSource = ValueEnvelope.External(
+                binding.ConversionPlan?.SourceType ?? binding.TargetType,
+                source.ExternalReference,
+                source.Policy);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = externalProjectionSource
@@ -171,8 +188,8 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         }
 
         var envelope = json.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-            ? ValueEnvelope.Null(binding.TargetType, source.Policy)
-            : ValueEnvelope.Inline(binding.TargetType, json, source.Policy);
+            ? ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, source.Policy)
+            : ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, json, source.Policy);
         return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
         {
             Envelope = envelope
@@ -180,6 +197,6 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
     }
 
     private static ValueEnvelope Retype(ValueEnvelope source, ValueTypeDescriptor targetType) =>
-        new(targetType, source.Presence, source.InlineValue, source.ExternalReference, source.Policy);
+        source.Retype(targetType);
 
 }

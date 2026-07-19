@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Core.Models;
@@ -22,6 +23,19 @@ public enum ActivityDefinitionVersionLifecycle
     Retired,
     Revoked
 }
+
+public enum ActivityRecommendationDisposition
+{
+    Clear,
+    Replace
+}
+
+public sealed record ActivityRecommendationDecision(
+    string? ExpectedDefinitionHeadVersionId,
+    string? ExpectedRecommendedVersionId,
+    ActivityRecommendationDisposition Disposition,
+    string? ReplacementVersionId = null,
+    ActivityDefinitionVersionLifecycle? ExpectedReplacementLifecycle = null);
 
 public enum ActivityDefinitionVersionResolutionKind
 {
@@ -93,8 +107,25 @@ public enum ActivityUpgradePlanStatus
 {
     Ready,
     Blocked,
+    AwaitingPublication,
     Applied,
+    Superseded,
     Expired
+}
+
+public enum ActivityUpgradeStageStatus
+{
+    Ready,
+    AwaitingPublication,
+    Applied,
+    Blocked
+}
+
+public enum ActivityUpgradeApplyReceiptStatus
+{
+    Preparing,
+    Applied,
+    Rejected
 }
 
 public enum ActivityUpgradeAction
@@ -129,6 +160,7 @@ public sealed record ReusableActivityDefinition(
     ActivityContentAuthority ContentAuthority,
     ActivityDefinitionForkOrigin? ForkedFrom,
     string? HeadVersionId,
+    string? RecommendedVersionId,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -139,6 +171,7 @@ public sealed record ActivityInputContract(
     string Name,
     TypeReference Type,
     bool IsRequired,
+    [property: JsonRequired] bool IsNullable,
     ActivityInputDefault? Default,
     string StorageDriverKey,
     ActivityBoundaryDurability Durability = ActivityBoundaryDurability.Required,
@@ -154,6 +187,7 @@ public sealed record ActivityOutputContract(
     string Name,
     TypeReference Type,
     bool IsRequired,
+    [property: JsonRequired] bool IsNullable,
     string StorageDriverKey,
     ActivityBoundaryDurability Durability = ActivityBoundaryDurability.Required,
     string? DisplayName = null,
@@ -161,7 +195,8 @@ public sealed record ActivityOutputContract(
     string? Category = null,
     float Order = 0,
     string? UiHint = null,
-    JsonElement? UiSpecifications = null);
+    JsonElement? UiSpecifications = null,
+    ValueRepresentation? SourceRepresentation = null);
 
 public sealed record ActivityOutcomeContract(
     string ReferenceKey,
@@ -174,6 +209,38 @@ public sealed record ActivityContract(
     IReadOnlyList<ActivityInputContract> Inputs,
     IReadOnlyList<ActivityOutputContract> Outputs,
     IReadOnlyList<ActivityOutcomeContract> Outcomes);
+
+public sealed record ActivityContractTypeCapability(
+    string Alias,
+    string DisplayName,
+    string Category,
+    string DefaultEditor,
+    IReadOnlySet<CollectionKind> SupportedCollectionKinds,
+    bool SupportsNull,
+    bool SupportsDurability,
+    IReadOnlySet<string> CompatibleStorageDriverKeys);
+
+public sealed record ActivityTypeKeyRules(
+    bool ServerGenerated,
+    bool AllowsPreCreationOverride,
+    bool Immutable,
+    string Prefix,
+    string Pattern,
+    int MaximumLength,
+    string CollisionScope);
+
+public sealed record ActivityProviderManifestSchemaCapabilities(
+    string SchemaVersion,
+    bool IsAuthorable,
+    IReadOnlySet<string> MigratableFromSchemaVersions);
+
+public sealed record ActivityProviderContractConstraints(
+    IReadOnlyList<ActivityOutcomeContract> RequiredOutcomes);
+
+public sealed record ActivityProviderAuthoringCapabilities(
+    string DisplayName,
+    IReadOnlyList<ActivityProviderManifestSchemaCapabilities> ManifestSchemas,
+    ActivityProviderContractConstraints ContractConstraints);
 
 public sealed record ActivityProviderManifest(
     string ProviderKey,
@@ -349,6 +416,12 @@ public sealed record ActivityDependencyOccurrence(
     string OccurrenceId,
     IReadOnlyList<ActivityNodeOrigin> NodeOrigin);
 
+/// <summary>Disclosure-safe public-contract usage evidence. Values and expressions are excluded.</summary>
+public sealed record ActivityContractMemberUsage(
+    string MemberKind,
+    string ReferenceKey,
+    string UsageKind);
+
 public sealed record ActivityDependencyItem(
     string RelationshipId,
     ActivityDefinitionReference Owner,
@@ -356,7 +429,11 @@ public sealed record ActivityDependencyItem(
     ActivityDependencyOccurrence Occurrence,
     bool IsDirect,
     int Depth,
-    IReadOnlyList<ActivityDefinitionReference> Path);
+    IReadOnlyList<ActivityDefinitionReference> Path,
+    IReadOnlyList<ActivityContractMemberUsage>? MemberUsage = null)
+{
+    public IReadOnlyList<ActivityContractMemberUsage> MemberUsage { get; init; } = MemberUsage ?? [];
+}
 
 public sealed record ActivityDependencyQuery(
     ActivityDependencyDirection Direction,
@@ -401,7 +478,9 @@ public sealed record ActivityUpgradePlanRequest(
     IReadOnlyList<ActivityUpgradeRoot> Roots,
     bool IncludeTransitiveDependents,
     bool CreateDraftsForPublishedDependents,
-    string? TenantId = null);
+    string? TenantId = null,
+    string? AccessProfileFingerprint = null,
+    string? PredecessorPlanId = null);
 
 /// <summary>
 /// One exact owner snapshot returned by the authoritative upgrade-discovery seam. The planner only
@@ -413,7 +492,7 @@ public sealed record ActivityUpgradeOwnerSnapshot(
     string? DefinitionHeadVersionId,
     string? SourceVersionId,
     IReadOnlyList<ActivityUpgradeOccurrenceReplacement> DirectReplacements,
-    IReadOnlyList<ActivityDefinitionReference> DependencyPath,
+    IReadOnlyList<IReadOnlyList<ActivityDefinitionReference>> DependencyPaths,
     bool RequiresPublishedChildVersion = false,
     string? RequiredChildStepId = null,
     ActivityDraftDiffCandidateRequest? DiffCandidate = null);
@@ -451,7 +530,22 @@ public sealed record ActivityUpgradeStep(
     long? ExpectedRevision,
     string? ExpectedDefinitionHeadVersionId,
     ActivityVersionDiff? ResultingDiff,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+    IReadOnlyList<ActivityDiagnostic> Diagnostics,
+    string? StageId = null);
+
+public sealed record ActivityUpgradeStage(
+    string StageId,
+    int Order,
+    ActivityUpgradeStageStatus Status,
+    IReadOnlyList<string> StepIds,
+    IReadOnlyList<string> DependsOnStageIds);
+
+public sealed record ActivityUpgradePlanBinding(
+    IReadOnlyList<ActivityUpgradeRoot> Roots,
+    bool IncludeTransitiveDependents,
+    bool CreateDraftsForPublishedDependents,
+    string AccessProfileFingerprint,
+    IReadOnlyList<ActivityDefinitionReference> SelectedClosure);
 
 public sealed record ActivityUpgradePlan(
     string PlanId,
@@ -464,25 +558,90 @@ public sealed record ActivityUpgradePlan(
     IReadOnlyList<ActivityDiagnostic> Diagnostics,
     DateTimeOffset? AppliedAt = null,
     IReadOnlyList<ActivityUpgradeAppliedDraft>? AppliedDrafts = null,
-    string? TenantId = null);
+    string? TenantId = null,
+    ActivityUpgradePlanBinding? Binding = null,
+    IReadOnlyList<ActivityUpgradeStage>? Stages = null,
+    string? PredecessorPlanId = null,
+    string? SuccessorPlanId = null)
+{
+    public IReadOnlyList<ActivityUpgradeStage> Stages { get; init; } = Stages ?? [];
+}
 
 public sealed record ActivityUpgradeApplyRequest(
     string PlanId,
-    IReadOnlyList<string>? SelectedStepIds = null);
+    string StageId,
+    string IdempotencyKey);
 
 public sealed record ActivityUpgradeAppliedDraft(
     string Kind,
     string DraftId,
     string DefinitionId,
     long Revision,
-    bool Created);
+    bool Created,
+    string? SourceVersionId = null);
+
+public sealed record ActivityUpgradePublicationHandoff(
+    string DraftKind,
+    string DraftId,
+    string DefinitionId,
+    long Revision,
+    string SourceVersionId,
+    IReadOnlyList<string> RequiredByStageIds);
 
 public sealed record ActivityUpgradeApplyResult(
     string PlanId,
     ActivityUpgradePlanStatus Status,
     DateTimeOffset AppliedAt,
     IReadOnlyList<ActivityUpgradeAppliedDraft> Drafts,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+    IReadOnlyList<ActivityDiagnostic> Diagnostics,
+    string? ReceiptId = null,
+    string? StageId = null,
+    IReadOnlyList<ActivityUpgradePublicationHandoff>? AwaitingPublications = null)
+{
+    public IReadOnlyList<ActivityUpgradePublicationHandoff> AwaitingPublications { get; init; } =
+        AwaitingPublications ?? [];
+}
+
+public sealed record ActivityUpgradeApplyReceipt(
+    string ReceiptId,
+    string PlanId,
+    string StageId,
+    string IdempotencyKeyHash,
+    string RequestFingerprint,
+    string? TenantId,
+    string AccessProfileFingerprint,
+    ActivityUpgradeApplyReceiptStatus Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    long Revision,
+    ActivityUpgradeApplyResult? Result = null,
+    IReadOnlyList<ActivityDiagnostic>? Diagnostics = null,
+    int? RejectionStatusCode = null,
+    string? RejectionCode = null,
+    DateTimeOffset LeaseExpiresAt = default)
+{
+    public IReadOnlyList<ActivityDiagnostic> Diagnostics { get; init; } = Diagnostics ?? [];
+}
+
+public sealed record ActivityUpgradePublishedDraftSelection(
+    string DraftId,
+    string PublishedVersionId);
+
+public sealed record ActivityUpgradePublishedDraft(
+    string Kind,
+    string DraftId,
+    string DefinitionId,
+    string PublishedVersionId);
+
+public sealed record ActivityUpgradePublicationReceipt(
+    string ReceiptId,
+    IReadOnlyList<ActivityUpgradePublishedDraftSelection> PublishedDrafts);
+
+public sealed record ActivityUpgradePlanRefreshRequest(
+    string PlanId,
+    IReadOnlyList<ActivityUpgradePublicationReceipt> Publications,
+    string? TenantId,
+    string AccessProfileFingerprint);
 
 public sealed class ActivityUpgradeApplyException(
     int statusCode,
@@ -514,7 +673,11 @@ public sealed record ActivityResolvedDependency(
     IReadOnlyList<ActivityNodeOrigin> NodeOrigin,
     string? ParentOccurrenceId = null,
     string ChildSlotName = "activity-graph",
-    int ChildIndex = 0);
+    int ChildIndex = 0,
+    IReadOnlyList<ActivityContractMemberUsage>? MemberUsage = null)
+{
+    public IReadOnlyList<ActivityContractMemberUsage> MemberUsage { get; init; } = MemberUsage ?? [];
+}
 
 public sealed record ActivityRuntimeRequirementDeclaration(string ConsumerKey, string SchemaVersion);
 
@@ -527,9 +690,36 @@ public sealed record ActivityResourceMeasurements(
     long LayoutBytes,
     long EstimatedDurableBoundarySlots);
 
+public enum ActivityContractProposalOperation
+{
+    Add,
+    Replace,
+    Remove
+}
+
+public enum ActivityContractMemberKind
+{
+    Input,
+    Output,
+    Outcome
+}
+
+public sealed record ActivityContractProposalChange(
+    string ChangeId,
+    ActivityContractProposalOperation Operation,
+    ActivityContractMemberKind MemberKind,
+    string ReferenceKey,
+    ActivityInputContract? Input = null,
+    ActivityOutputContract? Output = null,
+    ActivityOutcomeContract? Outcome = null);
+
 public sealed record ActivityContractProposal(
-    ActivityContract Contract,
+    IReadOnlyList<ActivityContractProposalChange> Changes,
     IReadOnlyList<ActivityDiagnostic> Diagnostics);
+
+public sealed record ActivityProviderContractProposalRequest(
+    ActivityProviderManifest Manifest,
+    ActivityContract Contract);
 
 public sealed record ActivityManifestMigrationRequest(
     ActivityProviderManifest Source,

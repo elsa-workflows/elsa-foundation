@@ -31,6 +31,14 @@ public sealed class WorkflowDefinition : TenantEntity, IWorkflowDefinition
     public string? DeletedReason { get; set; }
 
     /// <summary>
+    /// True when this definition was first materialized by the workflow reconciler from an
+    /// <c>IWorkflowReconciliationSource</c> (e.g. git) rather than authored in the catalog (Studio).
+    /// Scopes latest-wins <see cref="DeletedAt"/> reconciliation: a source can only soft-delete or
+    /// un-delete definitions it owns, never a catalog-authored one.
+    /// </summary>
+    public bool IsSourceOwned { get; set; }
+
+    /// <summary>
     /// Creates and returns a shallow copy of the workflow definition.
     /// </summary>
     public IWorkflowDefinition ShallowClone() => (WorkflowDefinition)MemberwiseClone();
@@ -48,14 +56,15 @@ public sealed class WorkflowDefinition : TenantEntity, IWorkflowDefinition
             DeletedAt = source.DeletedAt,
         };
 
-        // DeletedReason is persistence-only (not on IWorkflowDefinition), so it can only be carried
-        // across when the source is itself a materialised entity.
+        // DeletedReason/IsSourceOwned are persistence-only (not on IWorkflowDefinition), so they can
+        // only be carried across when the source is itself a materialised entity.
         if (source is WorkflowDefinition entity)
         {
             definition.DeletedReason = entity.DeletedReason;
             // Reconciliation reads an existing persistence entity before applying source content.
             // Preserve the server-owned placement in that path; new source imports remain Unfiled.
             definition.FolderId = entity.FolderId;
+            definition.IsSourceOwned = entity.IsSourceOwned;
         }
 
         return definition;

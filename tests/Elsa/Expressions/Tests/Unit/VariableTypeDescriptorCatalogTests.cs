@@ -14,7 +14,16 @@ public sealed class VariableTypeDescriptorCatalogTests
     }
 
     private static TypeDescriptor Descriptor(string alias, string category = "Primitives") =>
-        new(alias, typeof(object), alias, category, "text");
+        new(
+            alias,
+            typeof(object),
+            alias,
+            category,
+            "text",
+            new HashSet<Elsa.Primitives.Models.CollectionKind> { Elsa.Primitives.Models.CollectionKind.Single },
+            true,
+            true,
+            new HashSet<string> { "elsa.json" });
 
     [Fact]
     public void GetDescriptors_TwoProviders_ReturnsUnion()
@@ -80,7 +89,7 @@ public sealed class VariableTypeDescriptorCatalogTests
     {
         var catalog = new VariableTypeDescriptorCatalog(
         [
-            new StubProvider(new TypeDescriptor("String", typeof(string), "String", "Primitives", "text"))
+            new StubProvider(Descriptor("String"))
         ]);
 
         var wire = catalog.GetDescriptors()

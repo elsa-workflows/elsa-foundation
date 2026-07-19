@@ -38,7 +38,8 @@ public sealed class WorkflowExecutableCompiler(
     ExecutableNodeCompiler executableNodeCompiler,
     WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
     IExecutableNodeMetadataEnricher? metadataEnricher = null,
-    IWorkflowExecutableStore? executableStore = null)
+    IWorkflowExecutableStore? executableStore = null,
+    ActivityResultConversionPlanLinker? activityResultConversionPlanLinker = null)
     : IWorkflowExecutableCompiler
 {
     private readonly IWorkflowExecutableStore? _executableStore = executableStore;
@@ -197,6 +198,12 @@ public sealed class WorkflowExecutableCompiler(
 
             ValidatePinnedActivityContracts(compiledRoot);
 
+            // Direct result references can only be resolved once the complete executable tree (including
+            // placed template boundaries and optional metadata enrichment) is available. Pin the producer
+            // contract before computing the behavioral hash.
+            compiledRoot = (activityResultConversionPlanLinker ?? new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver()))
+                .Link(compiledRoot);
+
             var inputContract = BuildInputContract(state.Inputs);
             var dependencies = BuildDependencies(dependencyClaims);
             var artifactHash = hasher.ComputeHash(compiledRoot, inputContract, dependencies);
@@ -288,6 +295,7 @@ public sealed class WorkflowExecutableCompiler(
                 input.StorageDriverKey,
                 input.DisplayName ?? input.Name,
                 input.Category,
+                input.IsNullable,
                 Description: input.Description,
                 Order: input.Order,
                 UiHint: input.UiHint,

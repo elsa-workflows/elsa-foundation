@@ -8,6 +8,7 @@ using Elsa.Mediator.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Capabilities;
 using Elsa.Workflows.Publishing.Api.Commands;
@@ -50,6 +51,7 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 
         services.AddHttpContextAccessor();
         services.TryAddScoped<IActivityPublishingAuthorizationContext, HttpContextActivityPublishingAuthorizationContext>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityContractStorageDriverProvider, RuntimeActivityContractStorageDriverProvider>());
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.TryAddScoped<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
@@ -70,12 +72,19 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<WorkflowPublicationPreflightReader>();
         services.TryAddScoped<PublicationSnapshotReviewService>();
         services.TryAddSingleton<IPublicationSnapshotReviewStore, InMemoryPublicationSnapshotReviewStore>();
+        services.TryAddSingleton<IActivityPublicationReceiptStore, InMemoryActivityPublicationReceiptStore>();
         // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
         // own registration so the publish flow copies the real layout sidecar onto the source reference (ADR 0039).
         services.TryAddScoped<IWorkflowDefinitionVersionLayoutStore, EmptyWorkflowDefinitionVersionLayoutStore>();
         services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
+        // Permanent definition deletion must not strand a live publication: the guard is contributed into the
+        // design-persistence delete commands and vetoes while a slot is active or a Published reference is live.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDefinitionPermanentDeletionGuard, PublishedWorkflowDeletionGuard>());
         // W30b (#418): WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
         // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
+        services.TryAddSingleton<IValueConversionProfileRegistry>(BuiltInValueConversionProfileRegistry.Instance);
+        services.TryAddScoped<ValueConversionPlanResolver>();
+        services.TryAddScoped<ActivityResultConversionPlanLinker>();
         services.TryAddScoped<RuntimeInputBindingCompiler>();
         services.TryAddScoped<RuntimeOutputCaptureCompiler>();
         services.TryAddScoped<WorkflowExecutableHasher>();
@@ -90,7 +99,9 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
         services.TryAddScoped<IActivityDefinitionPublisher, ActivityDefinitionPublisher>();
         services.TryAddScoped<IActivitySourceVersionPublisher, SourceOwnedActivityVersionPublisher>();
-        services.TryAddScoped<IActivityDraftTestRunPublisher, ActivityDraftTestRunPublisher>();
+        services.TryAddScoped<IActivityDraftTestRunService, ActivityDraftTestRunService>();
+        services.TryAddSingleton<IActivityDraftTestRunStore, InMemoryActivityDraftTestRunStore>();
+        services.TryAddSingleton<IActivityDraftTestRunCancellationPolicy, DefaultActivityDraftTestRunCancellationPolicy>();
         services.TryAddScoped<IActivityDraftDiffCandidateCompiler, ActivityDraftDiffCandidateCompiler>();
         services.TryAddScoped<IActivityUpgradePlanApplier, ApplyActivityUpgradePlanCommand>();
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();

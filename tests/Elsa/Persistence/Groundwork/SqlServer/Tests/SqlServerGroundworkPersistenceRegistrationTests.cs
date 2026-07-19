@@ -15,6 +15,7 @@ using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -62,7 +63,7 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
     }
 
     [Fact]
-    public void Unified_feature_registers_the_six_provider_families_without_selecting_identity()
+    public void Unified_feature_registers_the_seven_provider_families_without_selecting_identity()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -81,7 +82,8 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
             typeof(IExecutionPlacementStore),
             typeof(IWorkflowDefinitionStore),
             typeof(IActivityDefinitionStore),
-            typeof(IPublicationRecordStore));
+            typeof(IPublicationRecordStore),
+            typeof(IStudioPreferenceStore));
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IUserStore));
         AssertRegistrationDiagnosticsAreSanitized(services, RegistrationSecret, ConnectionString);
         Assert.False(typeof(SqlServerGroundworkUnifiedPersistenceShellFeature).IsSealed);

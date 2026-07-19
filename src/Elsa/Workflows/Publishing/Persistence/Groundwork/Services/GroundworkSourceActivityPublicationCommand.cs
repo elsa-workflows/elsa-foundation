@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Groundwork;
+using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
@@ -21,7 +22,8 @@ public sealed class GroundworkSourceActivityPublicationCommand(
     IDocumentStore store,
     IBoundedDocumentStore boundedStore,
     IPayloadSerializer payloadSerializer,
-    IGroundworkRuntimeDocumentSerializer runtimeSerializer)
+    IGroundworkRuntimeDocumentSerializer runtimeSerializer,
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter)
     : ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
 {
     public async Task ExecuteAsync(
@@ -34,6 +36,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
             commit.Definition.Id,
             cancellationToken);
+        var effectiveDefinition = commit.Definition;
         if (definitionEnvelope is null)
             requests.Add(DesignRequest(
                 ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
@@ -46,9 +49,11 @@ public sealed class GroundworkSourceActivityPublicationCommand(
             var existingDefinition = ReadDesign<ActivityDefinition>(definitionEnvelope, GroundworkActivitiesDesignJson.Options);
             if (!StringComparer.Ordinal.Equals(existingDefinition.ActivityTypeKey, commit.Definition.ActivityTypeKey))
                 throw Conflict($"Activity definition '{commit.Definition.Id}' is already bound to another source identity.");
+            effectiveDefinition = existingDefinition;
         }
 
         var authoringEnvelope = await FindAuthoringAsync(commit.Definition.Id, cancellationToken);
+        var effectiveAuthoring = commit.AuthoringState;
         if (authoringEnvelope is null)
         {
             requests.Add(DesignRequest(
@@ -74,6 +79,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
                 existing,
                 GroundworkActivitiesDesignJson.Options,
                 authoringEnvelope.Version));
+            effectiveAuthoring = existing;
         }
 
         var catalogEnvelope = await store.LoadAsync(
@@ -127,15 +133,23 @@ public sealed class GroundworkSourceActivityPublicationCommand(
                 commit.SourceReference),
             0));
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        await using var managementProjection = await managementProjectionWriter.PrepareAsync(
+            new(
+                commit.Publication.PublishedAt,
+                [new(effectiveDefinition, effectiveAuthoring)],
+                [],
+                [commit.Publication]),
+            cancellationToken);
+        await managementProjection.CommitAsync(
+            [
                 ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind,
                 ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
-                ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind),
+                ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+            ],
             requests,
             cancellationToken);
     }

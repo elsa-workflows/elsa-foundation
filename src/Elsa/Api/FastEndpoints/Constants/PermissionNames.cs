@@ -18,4 +18,6 @@ public static class PermissionNames
     public const string WorkflowRuntimeExecute = "workflow-runtime.execute";
     public const string WorkflowRuntimeManage = "workflow-runtime.manage";
     public const string ApiCapabilitiesRead = "api-capabilities.read";
+    public const string Elsa3ImportRead = "elsa3-import.read";
+    public const string Elsa3ImportManage = "elsa3-import.manage";
 }

@@ -213,7 +213,23 @@ public sealed class WorkflowExecutableInspector(
             node.Structure?.Kind,
             node.InputBindings.Values.OrderBy(binding => binding.InputName, StringComparer.Ordinal).Select(binding => Binding(binding, includeSourceDetails)).ToArray(),
             node.ChildSlots.Select(slot => new WorkflowExecutableChildSlotView(slot.Name, slot.Activities.Select(child => Node(child, includeSourceDetails)).ToArray())).ToArray(),
-            ProjectConnections(node));
+            ProjectConnections(node),
+            node.OutputCaptures.Values
+                .OrderBy(capture => capture.OutputName, StringComparer.Ordinal)
+                .Select(OutputCapture)
+                .ToArray());
+
+    private static WorkflowExecutableOutputCaptureView OutputCapture(RuntimeOutputCapture capture) =>
+        new(
+            capture.OutputName,
+            capture.ValueId,
+            capture.Type,
+            capture.Lifecycle.ToString(),
+            capture.Storage.ToString(),
+            capture.StorageDriverKey,
+            capture.CaptureOnSuccessfulCompletion,
+            capture.ConversionPlan,
+            capture.Metadata);
 
     // The immutable executable structure is activity-owned, so Runtime API does not deserialize it through an
     // activity-module type. It projects only the compact endpoint shape understood by inspection clients and skips
@@ -270,6 +286,7 @@ public sealed class WorkflowExecutableInspector(
             includeSourceDetails ? binding.WorkflowRequest : null,
             includeSourceDetails ? binding.Variable : null,
             includeSourceDetails ? binding.ActivityResult : null,
+            includeSourceDetails ? binding.ConversionPlan : null,
             includeSourceDetails ? binding.Metadata : null);
 
     private static WorkflowExecutableInputContractView? InputContract(WorkflowExecutableInputContract? contract) =>

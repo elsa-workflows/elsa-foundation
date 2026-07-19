@@ -176,7 +176,8 @@ public sealed class RoleOwnedInputBindingContractTests
             Type: new TypeReference("String"),
             StorageDriverType: null,
             DisplayName: "Text",
-            Category: null);
+            Category: null,
+            IsNullable: false);
 
         var binding = compiler.Compile("node-write", input, new ArgumentValue("hello", "Literal"));
 
@@ -197,7 +198,8 @@ public sealed class RoleOwnedInputBindingContractTests
             Type: new TypeReference("String"),
             StorageDriverType: null,
             DisplayName: "Text",
-            Category: null);
+            Category: null,
+            IsNullable: false);
         var state = new ArgumentState(
             "message",
             new ArgumentValue("secret", "Literal"),
@@ -224,7 +226,8 @@ public sealed class RoleOwnedInputBindingContractTests
             Type: new TypeReference("String"),
             StorageDriverType: null,
             DisplayName: "Text",
-            Category: null);
+            Category: null,
+            IsNullable: false);
         var definition = new ExpressionDefinition(
             "JavaScript",
             "args.customerId",

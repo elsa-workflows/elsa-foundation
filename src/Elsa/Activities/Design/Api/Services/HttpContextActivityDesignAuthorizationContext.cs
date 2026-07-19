@@ -1,8 +1,10 @@
 using System.Security.Cryptography;
+using System.Security.Claims;
 using System.Text;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Api.FastEndpoints.Constants;
 using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Activities.Design.Api.Services;
@@ -26,6 +28,12 @@ public sealed class HttpContextActivityDesignAuthorizationContext(IHttpContextAc
         HttpContext?.User.FindFirst(ElsaTenantClaim)?.Value
         ?? HttpContext?.User.FindFirst(ConventionalTenantClaim)?.Value;
 
+    public string ActorId =>
+        HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+        ?? HttpContext?.User.FindFirst("sub")?.Value
+        ?? HttpContext?.User.Identity?.Name
+        ?? string.Empty;
+
     public string AuthorizationProfile
     {
         get
@@ -41,6 +49,8 @@ public sealed class HttpContextActivityDesignAuthorizationContext(IHttpContextAc
 
     public bool CanReadProviderPayload(string providerKey) =>
         !string.IsNullOrWhiteSpace(providerKey) && HasPermission(ProviderPayloadReadPermission);
+
+    public bool CanManageActivityDefinitions => HasPermission(PermissionNames.ActivityDesignManage);
 
     public bool CanRead(ActivityDefinitionReference reference) =>
         reference.TenantId is null || StringComparer.Ordinal.Equals(reference.TenantId, TenantId);

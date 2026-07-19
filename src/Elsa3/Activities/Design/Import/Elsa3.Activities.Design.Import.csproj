@@ -11,13 +11,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="..\..\..\..\Elsa\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Elsa\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Models\Elsa3.Models.csproj" />

@@ -8,6 +8,8 @@ using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 
@@ -38,7 +40,9 @@ public static class SqliteGroundworkDocumentStoreRegistration
             autoApplyOnStartup,
             sp.GetRequiredService<IServiceScopeFactory>(),
             sp.GetRequiredService<GroundworkStoreSessionSource>(),
-            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SqliteGroundworkDocumentStoreInitializer>>()));
+            // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
+            sp.GetService<ILogger<SqliteGroundworkDocumentStoreInitializer>>()
+            ?? NullLogger<SqliteGroundworkDocumentStoreInitializer>.Instance));
         services.AddHostedService(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(

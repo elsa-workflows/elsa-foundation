@@ -257,9 +257,9 @@ internal sealed class Elsa3MemoryReferenceImportFixture
             Definition = new TestActivityDefinition(shape.Type);
             Id = $"catalog:{shape.Type}@1";
             Inputs = shape.Inputs.Select(name => new InputDefinition(
-                StableKey(name), name, new TypeReference(shape.InputType), null, name, null)).ToArray();
+                StableKey(name), name, new TypeReference(shape.InputType), null, name, null, false)).ToArray();
             Outputs = shape.Outputs.Select(name => new OutputDefinition(
-                StableKey(name), name, new TypeReference(shape.OutputType), null, name, null)).ToArray();
+                StableKey(name), name, new TypeReference(shape.OutputType), null, name, null, false)).ToArray();
         }
 
         public string Id { get; }

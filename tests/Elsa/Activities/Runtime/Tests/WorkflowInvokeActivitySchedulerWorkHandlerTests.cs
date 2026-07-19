@@ -860,7 +860,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             "1.0.0",
             "typed",
             descriptor,
-            [new ActivityInputContract("text", "Text", new Elsa.Primitives.Models.ValueTypeDescriptor("String"), true, false, null, ActivityValuePolicy.Default with { IsSensitive = isSensitive })],
+            [new ActivityInputContract("text", "Text", new Elsa.Primitives.Models.ValueTypeDescriptor("String"), true, false, false, null, ActivityValuePolicy.Default with { IsSensitive = isSensitive })],
             new ActivityResultContract(
                 new Elsa.Primitives.Models.ValueTypeDescriptor("test/typed-result"),
                 true,

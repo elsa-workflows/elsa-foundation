@@ -595,7 +595,7 @@ public sealed class HttpEndpointExecutionTests
             new ActivityActivationRequirement(ClrConstruction.DescriptorType, TypeAliasConvention.CanonicalAlias(typeof(HttpEndpoint))));
 
     private static ActivityInputContract InputContract(string key, Type type, bool isRequired = false) =>
-        new(key, key, ValueType(type), isRequired, hasDefault: false, defaultValue: null, ActivityValuePolicy.Default);
+        new(key, key, ValueType(type), isRequired, isNullable: !isRequired, hasDefault: false, defaultValue: null, ActivityValuePolicy.Default);
 
     private static ActivityResultProjectionContract Projection(string key, string path, Type type, bool isRequired) =>
         new(key, path, ValueType(type), isRequired, ActivityValuePolicy.Default);

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Core.Models;
@@ -21,6 +22,7 @@ public sealed record InputDefinition(
     string? StorageDriverType,
     string DisplayName,
     string? Category,
+    [property: JsonRequired] bool IsNullable,
     bool? IsBrowsable = null,
     bool? IsSerializable = null,
     string? Description = null,
@@ -30,11 +32,4 @@ public sealed record InputDefinition(
     JsonElement? UISpecifications = null,
     bool IsRequired = false,
     JsonElement? DefaultValue = null,
-    string? DefaultSyntax = null)
-{
-    /// <summary>
-    /// Whether the input accepts null. A null value means that the source did not provide explicit
-    /// nullability metadata.
-    /// </summary>
-    public bool? IsNullable { get; init; }
-}
+    string? DefaultSyntax = null);

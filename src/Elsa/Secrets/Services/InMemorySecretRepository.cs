@@ -8,21 +8,24 @@ public sealed class InMemorySecretRepository : ISecretRepository
 {
     private readonly ConcurrentDictionary<string, Secret> _secrets = new(StringComparer.OrdinalIgnoreCase);
 
-    public ValueTask<Secret?> FindAsync(string normalizedName, CancellationToken cancellationToken = default)
+    public ValueTask<Secret?> FindAsync(string tenantId, string normalizedName, CancellationToken cancellationToken = default)
     {
+        ValidateTenantId(tenantId);
         SecretNameConstraints.Validate(normalizedName);
-        _secrets.TryGetValue(normalizedName, out var secret);
+        _secrets.TryGetValue(Key(tenantId, normalizedName), out var secret);
         return new(secret);
     }
 
     public ValueTask<SecretRepositoryPage> ListPageAsync(
+        string tenantId,
         SecretRepositoryListRequest request,
         CancellationToken cancellationToken = default)
     {
+        ValidateTenantId(tenantId);
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var filtered = _secrets.Values.AsEnumerable();
+        var filtered = _secrets.Values.Where(secret => string.Equals(secret.TenantId, tenantId, StringComparison.Ordinal));
         if (request.Status is not null)
             filtered = filtered.Where(secret => secret.Status == request.Status);
         if (request.ExcludedStatus is not null)
@@ -62,7 +65,8 @@ public sealed class InMemorySecretRepository : ISecretRepository
     {
         ArgumentNullException.ThrowIfNull(secret);
         SecretNameConstraints.Validate(secret.Name);
-        var added = _secrets.TryAdd(secret.Name, secret);
+        ValidateTenantId(secret.TenantId);
+        var added = _secrets.TryAdd(Key(secret.TenantId, secret.Name), secret);
         return new(added);
     }
 
@@ -70,7 +74,12 @@ public sealed class InMemorySecretRepository : ISecretRepository
     {
         ArgumentNullException.ThrowIfNull(secret);
         SecretNameConstraints.Validate(secret.Name);
-        _secrets[secret.Name] = secret;
+        ValidateTenantId(secret.TenantId);
+        _secrets[Key(secret.TenantId, secret.Name)] = secret;
         return ValueTask.CompletedTask;
     }
+
+    private static string Key(string tenantId, string name) => $"{tenantId.Length}:{tenantId}{name}";
+
+    private static void ValidateTenantId(string tenantId) => ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
 }

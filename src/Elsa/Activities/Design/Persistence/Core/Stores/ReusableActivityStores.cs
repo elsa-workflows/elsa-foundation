@@ -37,6 +37,23 @@ public interface IActivityDefinitionVersionPublicationStore
         CancellationToken cancellationToken = default);
 }
 
+public sealed record RecommendedActivityDefinitionPickerItem(
+    ActivityDefinition Definition,
+    ActivityDefinitionVersionPublication Version);
+
+public sealed record RecommendedActivityDefinitionPickerPage(
+    IReadOnlyList<RecommendedActivityDefinitionPickerItem> Items,
+    int? NextOffset);
+
+public interface IRecommendedActivityDefinitionPickerStore
+{
+    Task<RecommendedActivityDefinitionPickerPage> ReadAsync(
+        string? tenantId,
+        int offset,
+        int limit,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IActivityDefinitionLayoutStore
 {
     Task<ActivityDefinitionDraftLayout?> FindDraftLayoutAsync(
@@ -53,6 +70,17 @@ public interface IActivityDraftValidationStore
     Task<ActivityDraftValidationState?> FindAsync(
         string draftId,
         long revision,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IActivityForkStore
+{
+    Task<ActivityForkCandidate?> FindCandidateAsync(
+        string candidateId,
+        CancellationToken cancellationToken = default);
+
+    Task<ActivityForkReceipt?> FindReceiptAsync(
+        string receiptId,
         CancellationToken cancellationToken = default);
 }
 
@@ -92,6 +120,41 @@ public interface IActivityUpgradePlanStore
 
     Task SaveAsync(
         ActivityUpgradePlan plan,
+        CancellationToken cancellationToken = default);
+
+    Task LinkSuccessorAsync(
+        string planId,
+        string successorPlanId,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IActivityUpgradeApplyReceiptStore
+{
+    Task<ActivityUpgradeApplyReceipt?> FindAsync(
+        string receiptId,
+        CancellationToken cancellationToken = default);
+
+    Task<ActivityUpgradeApplyReceipt?> FindByIdempotencyKeyAsync(
+        string planId,
+        string idempotencyKeyHash,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryCreateAsync(
+        ActivityUpgradeApplyReceipt receipt,
+        CancellationToken cancellationToken = default);
+
+    Task<ActivityUpgradeApplyReceipt?> TryReclaimAsync(
+        ActivityUpgradeApplyReceipt receipt,
+        DateTimeOffset reclaimedAt,
+        DateTimeOffset leaseExpiresAt,
+        CancellationToken cancellationToken = default);
+
+    Task RejectAsync(
+        ActivityUpgradeApplyReceipt receipt,
+        int statusCode,
+        string errorCode,
+        IReadOnlyList<ActivityDiagnostic> diagnostics,
+        DateTimeOffset rejectedAt,
         CancellationToken cancellationToken = default);
 }
 

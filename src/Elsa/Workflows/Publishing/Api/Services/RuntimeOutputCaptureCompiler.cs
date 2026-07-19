@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -15,9 +16,14 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// resolved to one concrete execution during publication, and treating arbitrary authored values as durable ids
 /// would guess at target semantics.
 /// </summary>
-public sealed class RuntimeOutputCaptureCompiler(IRuntimeDurableValueStorageDriverRegistry storageDrivers)
+public sealed class RuntimeOutputCaptureCompiler(
+    IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+    ValueConversionPlanResolver? conversionPlanResolver = null,
+    IWellKnownTypeRegistry? wellKnownTypeRegistry = null)
 {
     private const string VariableExpressionType = "Variable";
+
+    private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
 
     public IReadOnlyDictionary<string, RuntimeOutputCapture> CompileBoundaryOutputs(
         string nodeId,
@@ -71,17 +77,32 @@ public sealed class RuntimeOutputCaptureCompiler(IRuntimeDurableValueStorageDriv
                     $"Activity node '{nodeId}' output '{definition.ReferenceKey}' targets unknown workflow variable '{target.ReferenceKey}'.");
             }
 
-            if (variable.Type != definition.Type)
+            storageDrivers.GetRequired(definition.StorageDriverKey);
+            var sourceType = new ValueTypeDescriptor(definition.Type.Alias, definition.Type.CollectionKind);
+            var sourceRepresentation = definition.SourceRepresentation ?? ValueRepresentationDefaults.Infer(sourceType);
+            if (sourceRepresentation == ValueRepresentation.TransientResource)
             {
                 throw new ArgumentException(
-                    $"Activity node '{nodeId}' output '{definition.ReferenceKey}' type '{definition.Type}' does not match target workflow variable '{target.ReferenceKey}' type '{variable.Type}'.");
+                    $"VF-ACT-005: Activity node '{nodeId}' output '{definition.ReferenceKey}' has source representation '{ValueRepresentation.TransientResource}' " +
+                    $"and cannot be captured into durable workflow variable destination storage policy '{DurableValueStorage.Custom}' using driver '{definition.StorageDriverKey}'. " +
+                    "Use an execution-local activity-result binding for live resources, or model an explicit DurableReference/resource-handle output before persisting.");
             }
 
-            storageDrivers.GetRequired(definition.StorageDriverKey);
+            var targetType = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
+            var conversionPlan = output.Conversion is null
+                ? null
+                : resolvedConversionPlanResolver.Resolve(
+                    sourceType,
+                    sourceRepresentation,
+                    targetType,
+                    AuthoredValueConversionMapper.Mode(output.Conversion),
+                    AuthoredValueConversionMapper.Profile(output.Conversion),
+                    AuthoredValueConversionMapper.Limits(output.Conversion),
+                    AuthoredValueConversionMapper.Options(output.Conversion));
             var type = new RuntimeValueTypeDescriptor(
-                definition.Type.Alias,
+                variable.Type.Alias,
                 definition.StorageDriverKey,
-                System.Text.Json.JsonSerializer.SerializeToElement(definition.Type));
+                System.Text.Json.JsonSerializer.SerializeToElement(variable.Type));
             captures.Add(definition.Name, new RuntimeOutputCapture(
                 definition.Name,
                 $"{RuntimeWorkflowStateSeed.VariableValueIdPrefix}{variable.Name}",
@@ -96,7 +117,8 @@ public sealed class RuntimeOutputCaptureCompiler(IRuntimeDurableValueStorageDriv
                     [RuntimeMetadataKeys.VariableName] = variable.Name,
                     [RuntimeMetadataKeys.StorageDriverKey] = definition.StorageDriverKey
                 },
-                definition.StorageDriverKey));
+                definition.StorageDriverKey,
+                conversionPlan));
         }
 
         return captures;

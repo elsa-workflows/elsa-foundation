@@ -201,7 +201,7 @@ public sealed class ForEachRuntimeTests
             "1.0.0",
             typeof(ClrActivityDescriptor).FullName!,
             descriptor,
-            [new ActivityInputContract("text", nameof(WriteLine.Text), new ValueTypeDescriptor("String"), true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("text", nameof(WriteLine.Text), new ValueTypeDescriptor("String"), true, false, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             [ActivityOutcomes.Done],
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(typeof(WriteLine))));

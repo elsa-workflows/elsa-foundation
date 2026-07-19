@@ -22,6 +22,12 @@ public interface IActivityStructureHandler
 
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
+    /// <summary>
+    /// Projects public-contract members referenced by structure-owned relationships such as
+    /// Flowchart outcome ports. Values and expressions must never be included.
+    /// </summary>
+    IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];
+
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
 
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);

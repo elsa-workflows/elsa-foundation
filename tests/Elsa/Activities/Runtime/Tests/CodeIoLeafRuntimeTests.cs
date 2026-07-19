@@ -161,7 +161,7 @@ public sealed class CodeIoLeafRuntimeTests
         {
             return NewContract(
                 activityType,
-                [new ActivityInputContract("Expression", nameof(Inline.Expression), new ValueTypeDescriptor("Object"), false, false, null, ActivityValuePolicy.Default)],
+                [new ActivityInputContract("Expression", nameof(Inline.Expression), new ValueTypeDescriptor("Object"), false, false, false, null, ActivityValuePolicy.Default)],
                 new ActivityResultContract(new ValueTypeDescriptor("Object"), false, ActivityValuePolicy.Default, []));
         }
 
@@ -169,7 +169,7 @@ public sealed class CodeIoLeafRuntimeTests
         {
             return NewContract(
                 activityType,
-                [new ActivityInputContract("Lines", nameof(WriteLines.Lines), LinesType, false, false, null, ActivityValuePolicy.Default)],
+                [new ActivityInputContract("Lines", nameof(WriteLines.Lines), LinesType, false, false, false, null, ActivityValuePolicy.Default)],
                 UnitResult());
         }
 

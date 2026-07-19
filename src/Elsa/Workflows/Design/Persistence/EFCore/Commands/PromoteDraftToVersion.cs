@@ -57,6 +57,7 @@ public sealed class PromoteDraftToVersion(
         {
             Id = versionId,
             State = draft.State,
+            SourceDraftId = draft.Id,
         };
 
         var draftLayout = await dbContext.WorkflowDefinitionDraftLayouts

@@ -401,6 +401,7 @@
       "src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Migrations/20260618012500_AddWorkflowDefinitionSoftDelete.cs",
       "src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Migrations/20260705185806_DropWorkflowDefinitionDraftValidations.Designer.cs",
       "src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Migrations/20260705185806_DropWorkflowDefinitionDraftValidations.cs",
+      "src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Migrations/20260719080000_AddWorkflowDefinitionSourceOwnership.cs",
       "src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Migrations/WorkflowsDesignDbContextModelSnapshot.cs"
     ],
     "DbContextFiles": [

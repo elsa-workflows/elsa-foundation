@@ -14,6 +14,7 @@ public sealed record ActivityInputContractView(
     string Name,
     ActivityTypeReferenceView Type,
     bool IsRequired,
+    [property: JsonRequired] bool IsNullable,
     ActivityInputDefaultView? Default,
     string StorageDriverKey,
     ActivityBoundaryDurability Durability = ActivityBoundaryDurability.Required,
@@ -29,6 +30,7 @@ public sealed record ActivityOutputContractView(
     string Name,
     ActivityTypeReferenceView Type,
     bool IsRequired,
+    [property: JsonRequired] bool IsNullable,
     string StorageDriverKey,
     ActivityBoundaryDurability Durability = ActivityBoundaryDurability.Required,
     string? DisplayName = null,
@@ -36,7 +38,8 @@ public sealed record ActivityOutputContractView(
     string? Category = null,
     float Order = 0,
     string? UiHint = null,
-    JsonElement? UiSpecifications = null);
+    JsonElement? UiSpecifications = null,
+    ValueRepresentation? SourceRepresentation = null);
 
 public sealed record ActivityOutcomeContractView(
     string ReferenceKey,
@@ -59,6 +62,7 @@ public static class ActivityContractViewMappings
             x.Name,
             x.Type.ToDomain(),
             x.IsRequired,
+            x.IsNullable,
             x.Default is null ? null : new(x.Default.Syntax, x.Default.Value.Clone()),
             x.StorageDriverKey,
             x.Durability,
@@ -73,6 +77,7 @@ public static class ActivityContractViewMappings
             x.Name,
             x.Type.ToDomain(),
             x.IsRequired,
+            x.IsNullable,
             x.StorageDriverKey,
             x.Durability,
             x.DisplayName,
@@ -80,7 +85,8 @@ public static class ActivityContractViewMappings
             x.Category,
             x.Order,
             x.UiHint,
-            Clone(x.UiSpecifications))).ToArray(),
+            Clone(x.UiSpecifications),
+            x.SourceRepresentation)).ToArray(),
         view.Outcomes.Select(x => new ActivityOutcomeContract(x.ReferenceKey, x.Name, x.IsEmitted, x.Description)).ToArray());
 
     public static ActivityContractView ToView(this ActivityContract contract) => new(
@@ -90,6 +96,7 @@ public static class ActivityContractViewMappings
             x.Name,
             x.Type.ToView(),
             x.IsRequired,
+            x.IsNullable,
             x.Default is null ? null : new(x.Default.Syntax, x.Default.Value.Clone()),
             x.StorageDriverKey,
             x.Durability,
@@ -104,6 +111,7 @@ public static class ActivityContractViewMappings
             x.Name,
             x.Type.ToView(),
             x.IsRequired,
+            x.IsNullable,
             x.StorageDriverKey,
             x.Durability,
             x.DisplayName,
@@ -111,24 +119,21 @@ public static class ActivityContractViewMappings
             x.Category,
             x.Order,
             x.UiHint,
-            Clone(x.UiSpecifications))).ToArray(),
+            Clone(x.UiSpecifications),
+            x.SourceRepresentation)).ToArray(),
         contract.Outcomes.Select(x => new ActivityOutcomeContractView(x.ReferenceKey, x.Name, x.IsEmitted, x.Description)).ToArray());
 
     public static TypeReference ToDomain(this ActivityTypeReferenceView view)
     {
-        var collectionKind = view.CollectionKind switch
-        {
-            var value when string.Equals(value, "None", StringComparison.OrdinalIgnoreCase) => CollectionKind.Single,
-            var value when string.Equals(value, "Single", StringComparison.OrdinalIgnoreCase) => CollectionKind.Single,
-            var value when Enum.TryParse<CollectionKind>(value, true, out var parsed) => parsed,
-            _ => throw new ArgumentException($"Collection kind '{view.CollectionKind}' is not supported.", nameof(view))
-        };
+        if (!Enum.TryParse<CollectionKind>(view.CollectionKind, false, out var collectionKind) ||
+            !StringComparer.Ordinal.Equals(collectionKind.ToString(), view.CollectionKind))
+            throw new ArgumentException($"Collection kind '{view.CollectionKind}' is not supported.", nameof(view));
         return new(view.Alias, collectionKind);
     }
 
     public static ActivityTypeReferenceView ToView(this TypeReference type) => new(
         type.Alias,
-        type.CollectionKind == CollectionKind.Single ? "None" : type.CollectionKind.ToString());
+        type.CollectionKind.ToString());
 
     private static JsonElement? Clone(JsonElement? value) => value is { } element ? element.Clone() : null;
 }
@@ -142,12 +147,121 @@ public sealed record ActivityDefinitionIdentityView(
     string? Description,
     ActivityContentAuthority ContentAuthority,
     ActivityDefinitionForkOrigin? ForkedFrom,
-    string? HeadVersionId);
+    string? HeadVersionId,
+    string? RecommendedVersionId);
 
-public sealed record ReusableActivityDefinitionDetailsView(
+public sealed record ActivityDefinitionRecommendationView(
+    string DefinitionId,
+    string? HeadVersionId,
+    string? RecommendedVersionId,
+    DateTimeOffset ChangedAt,
+    string Reason);
+
+public sealed record RecommendedActivityDefinitionView(
+    string DefinitionId,
+    string ActivityTypeKey,
+    string? TenantId,
+    string Category,
+    string DisplayName,
+    string? Description,
+    string VersionId,
+    string Version,
+    bool IsAvailable,
+    string? UnavailableReason);
+
+public sealed record RecommendedActivityDefinitionPageView(
+    IReadOnlyList<RecommendedActivityDefinitionView> Items,
+    int? NextOffset);
+
+public sealed record ReusableActivityDefinitionMutationView(
     ActivityDefinitionIdentityView Definition,
-    IReadOnlyList<ReusableActivityDraftSummaryView> Drafts,
-    IReadOnlyList<ReusableActivityVersionSummaryView> Versions);
+    ReusableActivityDraftSummaryView Draft);
+
+public enum ActivityForkCandidateLifecycleView
+{
+    Reserved,
+    Applied,
+    Expired
+}
+
+public enum ActivityForkOutcomeView
+{
+    Applied,
+    AlreadyApplied,
+    Stale,
+    Expired,
+    Rejected,
+    Collision,
+    Failed,
+    OutcomeUnknown
+}
+
+public sealed record ActivityForkAccessBindingView(string Fingerprint);
+
+public sealed record ActivityForkSourceView(
+    string DefinitionId,
+    string VersionId,
+    string Version,
+    ActivityDefinitionVersionLifecycle Lifecycle,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    string ProviderFingerprint);
+
+public sealed record ActivityForkPresentationView(
+    string Category,
+    string DisplayName,
+    string? Description);
+
+public sealed record ActivityForkTargetView(
+    string DefinitionId,
+    string ActivityTypeKey,
+    string DraftId,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    string ManifestFingerprint,
+    ActivityContractView Contract);
+
+public sealed record ActivityForkProviderMigrationView(
+    string SourceProviderKey,
+    string SourceProviderSchemaVersion,
+    string TargetProviderKey,
+    string TargetProviderSchemaVersion,
+    string TargetManifestFingerprint,
+    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+
+public sealed record ActivityForkContractChangeView(
+    string Kind,
+    string? ReferenceKey,
+    string Detail);
+
+public sealed record ActivityForkContractComparisonView(
+    string SourceFingerprint,
+    string TargetFingerprint,
+    bool IsCompatible,
+    IReadOnlyList<ActivityForkContractChangeView> Changes);
+
+public sealed record ActivityForkPreviewView(
+    string CandidateId,
+    string RequestFingerprint,
+    ActivityForkCandidateLifecycleView Status,
+    ActivityForkAccessBindingView AccessBinding,
+    ActivityForkSourceView Source,
+    ActivityForkPresentationView Presentation,
+    ActivityForkTargetView Target,
+    ActivityForkProviderMigrationView ProviderMigration,
+    ActivityForkContractComparisonView ContractComparison,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset ExpiresAt);
+
+public sealed record ActivityForkReceiptView(
+    string IdempotencyKey,
+    string CandidateId,
+    string RequestFingerprint,
+    ActivityForkOutcomeView Outcome,
+    ActivityForkAccessBindingView AccessBinding,
+    ActivityDefinitionIdentityView Definition,
+    ReusableActivityDraftSummaryView Draft,
+    DateTimeOffset AppliedAt);
 
 public sealed record ReusableActivityDraftSummaryView(
     string DraftId,
@@ -157,12 +271,104 @@ public sealed record ReusableActivityDraftSummaryView(
     ActivityDefinitionDraftStatus Status,
     string ProviderKey,
     string ProviderSchemaVersion,
+    DateTimeOffset UpdatedAt,
+    string? PresentationLabel = null);
+
+public sealed record ActivityManagementSnapshotView(string SnapshotId, DateTimeOffset AsOf);
+
+public sealed record ActivityManagementPageView<T>(
+    IReadOnlyList<T> Items,
+    int Count,
+    long TotalCount,
+    bool HasMore,
+    string? Continuation,
+    ActivityManagementSnapshotView Snapshot);
+
+public sealed record ActivityDefinitionVersionReferenceView(
+    string VersionId,
+    string Version,
+    ActivityDefinitionVersionLifecycle Lifecycle,
+    string ProviderKey,
+    string ProviderSchemaVersion);
+
+public sealed record ActivityDefinitionLifecycleSummaryView(
+    long DraftCount,
+    long VersionCount,
+    ActivityDefinitionVersionReferenceView? Head,
+    ActivityDefinitionVersionReferenceView? Recommendation);
+
+public sealed record ReusableActivityDefinitionManagementView(
+    ActivityDefinitionIdentityView Definition,
+    ActivityDefinitionLifecycleSummaryView Lifecycle,
+    IReadOnlyList<ActivityActionAvailabilityView> Actions,
     DateTimeOffset UpdatedAt);
+
+public sealed record ActivityActionAvailabilityView(string Action, bool Allowed, string? UnavailableCode = null);
+
+public sealed record ReusableActivityDraftManagementView(
+    ReusableActivityDraftSummaryView Draft,
+    IReadOnlyList<ActivityActionAvailabilityView> Actions);
+
+public sealed record ReusableActivityVersionManagementView(
+    ReusableActivityVersionSummaryView Version,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    bool IsRecommended,
+    IReadOnlyList<ActivityActionAvailabilityView> Actions);
 
 public sealed record ActivityProviderManifestView(
     string ProviderKey,
     string SchemaVersion,
+    string ManifestFingerprint,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Payload);
+
+public sealed record ActivityProviderManifestSchemaCapabilityView(
+    string SchemaVersion,
+    bool IsAuthorable,
+    IReadOnlyList<string> MigratableFromSchemaVersions);
+
+public sealed record ActivityProviderAuthoringCapabilityView(
+    string ProviderKey,
+    string DisplayName,
+    IReadOnlyList<ActivityProviderManifestSchemaCapabilityView> ManifestSchemas,
+    IReadOnlyList<ActivityOutcomeContractView> RequiredOutcomes);
+
+public sealed record ActivityContractTypeCapabilityView(
+    string Alias,
+    string DisplayName,
+    string Category,
+    string DefaultEditor,
+    IReadOnlyList<string> SupportedCollectionKinds,
+    bool SupportsNull,
+    bool SupportsDurability,
+    IReadOnlyList<string> CompatibleStorageDriverKeys);
+
+public sealed record ActivityAuthoringCapabilitiesView(
+    IReadOnlyList<string> ContractSchemaVersions,
+    ActivityTypeKeyRules ActivityTypeKeyRules,
+    IReadOnlyList<ActivityProviderAuthoringCapabilityView> Providers,
+    IReadOnlyList<ActivityContractTypeCapabilityView> Types,
+    IReadOnlyList<string> StorageDriverKeys,
+    string SnapshotFingerprint);
+
+public sealed record ActivityContractProposalChangeView(
+    string ChangeId,
+    ActivityContractProposalOperation Operation,
+    ActivityContractMemberKind MemberKind,
+    string ReferenceKey,
+    ActivityInputContractView? Input,
+    ActivityOutputContractView? Output,
+    ActivityOutcomeContractView? Outcome);
+
+public sealed record ActivityContractProposalView(
+    string DraftId,
+    long Revision,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    string ManifestFingerprint,
+    string ProposalFingerprint,
+    IReadOnlyList<ActivityContractProposalChangeView> Changes,
+    IReadOnlyList<ActivityDiagnostic> Diagnostics);
 
 public sealed record ActivityDraftValidationView(
     string DraftId,
@@ -183,7 +389,8 @@ public sealed record ReusableActivityDraftView(
     IReadOnlyList<ActivityLayoutRecord> Layout,
     ActivityDraftValidationView? Validation,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? PresentationLabel = null);
 
 public sealed record ReusableActivityVersionSummaryView(
     string VersionId,
@@ -225,10 +432,12 @@ public sealed class ActivityAuthoringException(
     string title,
     string message,
     IReadOnlyList<ActivityDiagnostic>? diagnostics = null,
-    Exception? innerException = null) : Exception(message, innerException)
+    Exception? innerException = null,
+    ActivityRecoveryView? recovery = null) : Exception(message, innerException)
 {
     public int StatusCode { get; } = statusCode;
     public string ErrorCode { get; } = errorCode;
     public string Title { get; } = title;
     public IReadOnlyList<ActivityDiagnostic> Diagnostics { get; } = diagnostics ?? [];
+    public ActivityRecoveryView? Recovery { get; } = recovery;
 }

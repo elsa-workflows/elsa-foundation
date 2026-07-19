@@ -11,6 +11,8 @@ using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Groundwork.Documents.Store;
+using Groundwork.Core.Intents;
+using Groundwork.Core.Manifests;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -23,10 +25,27 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 /// </summary>
 public class GroundworkActivitiesDesignRegistrationTests
 {
+    [Fact]
+    public void Fork_receipt_is_append_only_and_candidate_retention_is_an_admitted_bounded_query()
+    {
+        var manifest = ActivitiesDesignStorageManifest.Create();
+        var receipt = manifest.StorageUnits.Single(x =>
+            x.Identity.Value == ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind);
+        var candidate = manifest.StorageUnits.Single(x =>
+            x.Identity.Value == ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind);
+
+        Assert.Equal(LifecyclePolicy.AppendOnly, receipt.Lifecycle);
+        Assert.Contains(candidate.Queries, x =>
+            x.Identity == ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery);
+    }
+
     private static ServiceProvider BuildProvider(Action<IServiceCollection>? preRegister = null)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create()));
+        var documents = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        services.AddSingleton<IDocumentStore>(documents);
+        services.AddSingleton<IBoundedDocumentStore>(
+            new GroundworkReusableActivityStoreTests.ActivityDesignTestBoundedDocumentStore(documents));
         services.AddSingleton<IPayloadSerializer, FakePayloadSerializer>();
         services.AddSingleton<ISystemClock, FakeClock>();
         services.AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>();
@@ -53,11 +72,16 @@ public class GroundworkActivitiesDesignRegistrationTests
         Assert.Same(reusable, sp.GetRequiredService<IActivityDefinitionVersionPublicationStore>());
         Assert.Same(reusable, sp.GetRequiredService<IActivityDefinitionLayoutStore>());
         Assert.Same(reusable, sp.GetRequiredService<IActivityDraftValidationStore>());
+        Assert.Same(reusable, sp.GetRequiredService<IActivityForkStore>());
         Assert.Same(reusable, sp.GetRequiredService<IActivityDirectDependencyStore>());
         var projection = Assert.IsType<GroundworkActivityDependencyProjection>(sp.GetRequiredService<IActivityDependencyProjectionStore>());
         Assert.Same(projection, sp.GetRequiredService<IActivityDependencyProjectionRebuilder>());
-        Assert.IsType<GroundworkActivityUpgradePlanStore>(sp.GetRequiredService<IActivityUpgradePlanStore>());
+        var upgradePlans = Assert.IsType<GroundworkActivityUpgradePlanStore>(sp.GetRequiredService<IActivityUpgradePlanStore>());
+        Assert.Same(upgradePlans, sp.GetRequiredService<IActivityUpgradeApplyReceiptStore>());
         Assert.Same(reusable, sp.GetRequiredService<ICreateActivityDefinitionCommand>());
+        Assert.Same(reusable, sp.GetRequiredService<ISaveActivityForkCandidateCommand>());
+        Assert.Same(reusable, sp.GetRequiredService<IPruneActivityForkCandidatesCommand>());
+        Assert.Same(reusable, sp.GetRequiredService<IApplyActivityForkCandidateCommand>());
         Assert.Same(reusable, sp.GetRequiredService<IUpdateActivityDefinitionPresentationCommand>());
         Assert.Same(reusable, sp.GetRequiredService<ICreateActivityDraftCommand>());
         Assert.Same(reusable, sp.GetRequiredService<IReplaceActivityDraftCommand>());

@@ -19,7 +19,11 @@ public sealed record ActivityTemplateDependencyRequest(
     IReadOnlyList<ActivityNodeOrigin> NodeOrigin,
     string? ParentOccurrenceId = null,
     string ChildSlotName = "activity-graph",
-    int ChildIndex = 0);
+    int ChildIndex = 0,
+    IReadOnlyList<ActivityContractMemberUsage>? MemberUsage = null)
+{
+    public IReadOnlyList<ActivityContractMemberUsage> MemberUsage { get; init; } = MemberUsage ?? [];
+}
 
 public sealed record ActivityTemplateCompilerRequest(
     ActivityDefinition Definition,
@@ -96,7 +100,8 @@ public sealed class ActivityTemplateCompiler(
             x.NodeOrigin,
             x.ParentOccurrenceId,
             x.ChildSlotName,
-            x.ChildIndex)).ToArray();
+            x.ChildIndex,
+            x.MemberUsage)).ToArray();
 
         foreach (var dependencyRequest in authoritativeDependencies
                      .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
@@ -158,7 +163,8 @@ public sealed class ActivityTemplateCompiler(
                 dependencyRequest.NodeOrigin,
                 dependencyRequest.ParentOccurrenceId,
                 dependencyRequest.ChildSlotName,
-                dependencyRequest.ChildIndex));
+                dependencyRequest.ChildIndex,
+                dependencyRequest.MemberUsage));
         }
 
         diagnostics.AddRange(ValidateOccurrenceRequests(authoritativeDependencies, subject));
@@ -544,7 +550,7 @@ public sealed class ActivityTemplateCompiler(
         IReadOnlyList<ActivityResolvedDependency> authoritative)
     {
         static string Key(ActivityResolvedDependency value) =>
-            $"{value.DefinitionId}\u001f{value.VersionId}\u001f{value.Version}\u001f{value.TemplateId}\u001f{value.TemplateHash}\u001f{value.OccurrenceId}\u001f{value.ParentOccurrenceId}\u001f{value.ChildSlotName}\u001f{value.ChildIndex}\u001f{string.Join("\u001e", value.NodeOrigin.Select(x => $"{x.Kind}\u001d{x.Id}"))}";
+            $"{value.DefinitionId}\u001f{value.VersionId}\u001f{value.Version}\u001f{value.TemplateId}\u001f{value.TemplateHash}\u001f{value.OccurrenceId}\u001f{value.ParentOccurrenceId}\u001f{value.ChildSlotName}\u001f{value.ChildIndex}\u001f{string.Join("\u001e", value.NodeOrigin.Select(x => $"{x.Kind}\u001d{x.Id}"))}\u001f{string.Join("\u001e", value.MemberUsage.OrderBy(x => x.MemberKind, StringComparer.Ordinal).ThenBy(x => x.ReferenceKey, StringComparer.Ordinal).ThenBy(x => x.UsageKind, StringComparer.Ordinal).Select(x => $"{x.MemberKind}\u001d{x.ReferenceKey}\u001d{x.UsageKind}"))}";
         return providerDependencies.Select(Key).Order(StringComparer.Ordinal)
             .SequenceEqual(authoritative.Select(Key).Order(StringComparer.Ordinal), StringComparer.Ordinal);
     }

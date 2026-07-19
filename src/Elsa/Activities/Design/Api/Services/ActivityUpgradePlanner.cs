@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
@@ -13,9 +14,12 @@ namespace Elsa.Activities.Design.Api.Services;
 public sealed class ActivityUpgradePlanner(
     IActivityUpgradeDiscoverySource discoverySource,
     IActivityUpgradePlanStore planStore,
+    IActivityUpgradeApplyReceiptStore receiptStore,
+    IActivityUpgradePublishedDraftResolver publishedDraftResolver,
     IActivityUpgradeDiffBuilder diffBuilder,
+    IActivityDependencyAuthorizationContext authorization,
     IIdentityGenerator identityGenerator,
-    ISystemClock clock) : IActivityUpgradePlanner
+    ISystemClock clock) : IActivityUpgradePlanner, IActivityUpgradePlanRefresher
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(30);
 
@@ -25,9 +29,36 @@ public sealed class ActivityUpgradePlanner(
         ValidateRequest(request);
 
         var discovery = await discoverySource.DiscoverAsync(request, cancellationToken);
-        var diagnostics = discovery.Diagnostics.ToList();
-        var owners = discovery.Owners
-            .OrderBy(x => x.DependencyPath.Count)
+        var authorizedOwners = discovery.Owners
+            .Where(owner => Authorized(owner.Owner, request))
+            .Select(owner => owner with
+            {
+                DependencyPaths = owner.DependencyPaths
+                    .Where(path => path.All(reference => Authorized(reference, request)))
+                    .ToArray()
+            })
+            .Where(owner => owner.DependencyPaths.Count != 0)
+            .GroupBy(owner => ReferenceKey(owner.Owner), StringComparer.Ordinal)
+            .Select(MergeOwnerPaths)
+            .ToArray();
+        var authorizedIds = authorizedOwners
+            .SelectMany(owner => owner.DependencyPaths.SelectMany(path => path.Append(owner.Owner)))
+            .Select(ReferenceIdentity)
+            .Where(id => id is not null)
+            .ToHashSet(StringComparer.Ordinal);
+        var callerSuppliedIds = request.Roots.Select(x => x.Id)
+            .Concat(request.Replacements.SelectMany(x => new[] { x.FromVersionId, x.ToVersionId }))
+            .ToHashSet(StringComparer.Ordinal);
+        var diagnostics = discovery.Diagnostics
+            .Where(diagnostic => authorizedIds.Contains(diagnostic.Subject.Id) || callerSuppliedIds.Contains(diagnostic.Subject.Id))
+            .ToList();
+        foreach (var root in request.Roots.Where(root => authorizedOwners.All(owner => !MatchesRoot(owner, root))))
+        {
+            if (diagnostics.All(x => x.Code != "activity.upgrade.root-not-affected" || !StringComparer.Ordinal.Equals(x.Subject.Id, root.Id)))
+                diagnostics.Add(RootNotAffected(root));
+        }
+        var owners = authorizedOwners
+            .OrderBy(x => x.DependencyPaths.Min(path => path.Count))
             .ThenBy(x => KindOrder(x.Owner.Kind))
             .ThenBy(x => x.Owner.DefinitionId, StringComparer.Ordinal)
             .ThenBy(x => x.Owner.DraftId ?? x.Owner.VersionId, StringComparer.Ordinal)
@@ -53,8 +84,10 @@ public sealed class ActivityUpgradePlanner(
             if (owner.Owner.Kind.StartsWith("Activity", StringComparison.Ordinal) &&
                 !owner.RequiresPublishedChildVersion && resultingDiff is null)
                 stepDiagnostics.Add(DiffUnavailable(owner));
+            var stepId = $"step-{identityGenerator.Generate()}";
+            var stageId = $"stage-{identityGenerator.Generate()}";
             steps.Add(new ActivityUpgradeStep(
-                $"step-{identityGenerator.Generate()}",
+                stepId,
                 (index + 1) * 10,
                 new ActivityUpgradeTarget(
                     action is ActivityUpgradeAction.CloneActivityVersion ? "ActivityDraft" :
@@ -69,9 +102,11 @@ public sealed class ActivityUpgradePlanner(
                 owner.Owner.Revision,
                 owner.DefinitionHeadVersionId,
                 resultingDiff,
-                ActivityDiagnosticOrderer.Order(stepDiagnostics)));
+                ActivityDiagnosticOrderer.Order(stepDiagnostics),
+                stageId));
         }
 
+        var hasBlockingGlobalError = diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error);
         diagnostics.AddRange(steps.SelectMany(x => x.Diagnostics));
         var snapshots = owners
             .SelectMany(ToSnapshots)
@@ -80,22 +115,128 @@ public sealed class ActivityUpgradePlanner(
             .OrderBy(x => KindOrder(x.Kind))
             .ThenBy(x => x.Id, StringComparer.Ordinal)
             .ToArray();
+        var stages = steps.Select(step => new ActivityUpgradeStage(
+                step.StageId!,
+                step.Order,
+                StageStatus(step),
+                [step.StepId],
+                step.DependsOnStepIds
+                    .Select(dependency => steps.Single(x => StringComparer.Ordinal.Equals(x.StepId, dependency)).StageId!)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray()))
+            .ToArray();
+        var selectedClosure = owners
+            .SelectMany(x => x.DependencyPaths.SelectMany(path => path.Append(x.Owner)))
+            .GroupBy(ReferenceKey, StringComparer.Ordinal)
+            .Select(x => x.First())
+            .OrderBy(x => KindOrder(x.Kind))
+            .ThenBy(x => x.DraftId ?? x.VersionId, StringComparer.Ordinal)
+            .ToArray();
         var now = clock.UtcNow;
         var orderedDiagnostics = ActivityDiagnosticOrderer.Order(diagnostics);
+        var status = hasBlockingGlobalError
+            ? ActivityUpgradePlanStatus.Blocked
+            : stages.Any(x => x.Status == ActivityUpgradeStageStatus.Ready)
+            ? ActivityUpgradePlanStatus.Ready
+            : stages.Any(x => x.Status == ActivityUpgradeStageStatus.AwaitingPublication)
+                ? ActivityUpgradePlanStatus.AwaitingPublication
+                : ActivityUpgradePlanStatus.Blocked;
         var plan = new ActivityUpgradePlan(
             $"upgrade-plan-{identityGenerator.Generate()}",
             now,
             now.Add(Lifetime),
-            orderedDiagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error)
-                ? ActivityUpgradePlanStatus.Blocked
-                : ActivityUpgradePlanStatus.Ready,
+            status,
             request.Replacements.OrderBy(x => x.FromVersionId, StringComparer.Ordinal).ToArray(),
             snapshots,
             steps,
             orderedDiagnostics,
-            TenantId: request.TenantId);
+            TenantId: request.TenantId,
+            Binding: new(
+                request.Roots.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Id, StringComparer.Ordinal).ToArray(),
+                request.IncludeTransitiveDependents,
+                request.CreateDraftsForPublishedDependents,
+                request.AccessProfileFingerprint!,
+                selectedClosure),
+            Stages: stages,
+            PredecessorPlanId: request.PredecessorPlanId);
         await planStore.SaveAsync(plan, cancellationToken);
         return plan;
+    }
+
+    public async ValueTask<ActivityUpgradePlan> RefreshAsync(
+        ActivityUpgradePlanRefreshRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var predecessor = await planStore.FindAsync(request.PlanId, cancellationToken)
+                          ?? throw new ActivityUpgradeApplyException(404, "activity.upgrade.plan-not-found", "The activity upgrade plan was not found.");
+        if (predecessor.Binding is null ||
+            !StringComparer.Ordinal.Equals(predecessor.TenantId, request.TenantId) ||
+            !StringComparer.Ordinal.Equals(predecessor.Binding.AccessProfileFingerprint, request.AccessProfileFingerprint))
+            throw new ActivityUpgradeApplyException(404, "activity.upgrade.plan-not-found", "The activity upgrade plan was not found.");
+        if (request.Publications.Count == 0 ||
+            request.Publications.GroupBy(x => x.ReceiptId, StringComparer.Ordinal).Any(x => x.Count() != 1))
+            throw new ActivityUpgradeApplyException(422, "activity.upgrade.publication-selection-invalid", "At least one unique publication receipt is required.");
+
+        var replacements = new List<ActivityVersionReplacement>();
+        foreach (var publication in request.Publications.OrderBy(x => x.ReceiptId, StringComparer.Ordinal))
+        {
+            var receipt = await receiptStore.FindAsync(publication.ReceiptId, cancellationToken);
+            if (receipt?.Result is null ||
+                receipt.Status != ActivityUpgradeApplyReceiptStatus.Applied ||
+                !StringComparer.Ordinal.Equals(receipt.PlanId, predecessor.PlanId) ||
+                !StringComparer.Ordinal.Equals(receipt.TenantId, request.TenantId) ||
+                !StringComparer.Ordinal.Equals(receipt.AccessProfileFingerprint, request.AccessProfileFingerprint))
+                throw new ActivityUpgradeApplyException(404, "activity.upgrade.receipt-not-found", "An activity upgrade apply receipt was not found.");
+            var handoffs = receipt.Result.AwaitingPublications;
+            if (handoffs.Count == 0)
+                throw new ActivityUpgradeApplyException(422, "activity.upgrade.publication-not-required", "An applied stage has no publication handoff.");
+            if (publication.PublishedDrafts.Count != handoffs.Count ||
+                publication.PublishedDrafts.GroupBy(x => x.DraftId, StringComparer.Ordinal).Any(x => x.Count() != 1))
+                throw new ActivityUpgradeApplyException(422, "activity.upgrade.publication-selection-invalid", "Every exact handoff draft requires one published version.");
+
+            foreach (var handoff in handoffs.OrderBy(x => x.DraftId, StringComparer.Ordinal))
+            {
+                var selection = publication.PublishedDrafts.SingleOrDefault(x => StringComparer.Ordinal.Equals(x.DraftId, handoff.DraftId))
+                                ?? throw new ActivityUpgradeApplyException(422, "activity.upgrade.publication-selection-invalid", "A handoff draft selection is missing.");
+                var expectedVersionKind = handoff.DraftKind == "ActivityDraft" ? "ActivityVersion" : "WorkflowVersion";
+                var published = await publishedDraftResolver.ResolveAsync(selection.PublishedVersionId, expectedVersionKind, cancellationToken)
+                                ?? throw new ActivityUpgradeApplyException(422, "activity.upgrade.publication-selection-invalid", "A selected publication was not produced from the handoff draft.");
+                if (!StringComparer.Ordinal.Equals(published.DraftId, handoff.DraftId) ||
+                    !StringComparer.Ordinal.Equals(published.DefinitionId, handoff.DefinitionId) ||
+                    !StringComparer.Ordinal.Equals(published.Kind, expectedVersionKind))
+                    throw new ActivityUpgradeApplyException(422, "activity.upgrade.publication-selection-invalid", "A selected publication was not produced from the exact handoff draft.");
+                replacements.Add(new(handoff.SourceVersionId, published.PublishedVersionId));
+            }
+        }
+
+        var latest = predecessor;
+        while (latest.SuccessorPlanId is not null)
+            latest = await planStore.FindAsync(latest.SuccessorPlanId, cancellationToken)
+                     ?? throw new InvalidOperationException($"Successor plan '{latest.SuccessorPlanId}' is unavailable.");
+        var combined = (StringComparer.Ordinal.Equals(latest.PlanId, predecessor.PlanId)
+                ? Array.Empty<ActivityVersionReplacement>()
+                : latest.Replacements)
+            .Concat(replacements)
+            .GroupBy(x => x.FromVersionId, StringComparer.Ordinal)
+            .Select(x => x.Select(y => y.ToVersionId).Distinct(StringComparer.Ordinal).Count() == 1
+                ? x.First()
+                : throw new ActivityUpgradeApplyException(422, "activity.upgrade.publication-selection-invalid", "One source version cannot resolve to multiple publications."))
+            .OrderBy(x => x.FromVersionId, StringComparer.Ordinal)
+            .ToArray();
+        if (SameReplacements(latest.Replacements, combined))
+            return latest;
+
+        var successor = await PlanAsync(new(
+            combined,
+            latest.Binding!.Roots,
+            latest.Binding.IncludeTransitiveDependents,
+            latest.Binding.CreateDraftsForPublishedDependents,
+            request.TenantId,
+            request.AccessProfileFingerprint,
+            latest.PlanId), cancellationToken);
+        await planStore.LinkSuccessorAsync(latest.PlanId, successor.PlanId, cancellationToken);
+        return successor;
     }
 
     private static void ValidateRequest(ActivityUpgradePlanRequest request)
@@ -112,6 +253,8 @@ public sealed class ActivityUpgradePlanner(
             throw new ArgumentException("Every root must use a supported kind and exact identity.", nameof(request));
         if (request.Roots.GroupBy(x => (x.Kind, x.Id)).Any(x => x.Count() != 1))
             throw new ArgumentException("Every upgrade root kind and identity pair must be unique.", nameof(request));
+        if (string.IsNullOrWhiteSpace(request.AccessProfileFingerprint))
+            throw new ArgumentException("An access-profile fingerprint is required.", nameof(request));
     }
 
     private static IReadOnlyList<string> FindPrerequisites(
@@ -119,9 +262,9 @@ public sealed class ActivityUpgradePlanner(
         IReadOnlyList<ActivityUpgradeOwnerSnapshot> owners,
         IReadOnlyList<ActivityUpgradeStep> steps)
     {
-        if (owner.DependencyPath.Count < 3)
-            return [];
-        var descendants = owner.DependencyPath.Skip(1).SkipLast(1)
+        var descendants = owner.DependencyPaths
+            .Where(path => path.Count >= 3)
+            .SelectMany(path => path.Skip(1).SkipLast(1))
             .Select(x => x.DraftId ?? x.VersionId)
             .Where(x => x is not null)
             .ToHashSet(StringComparer.Ordinal);
@@ -154,6 +297,71 @@ public sealed class ActivityUpgradePlanner(
         "The exact post-rewrite activity candidate could not be compiled for compatibility analysis.",
         new ActivityDiagnosticSubject(owner.Owner.Kind, owner.Owner.DraftId ?? owner.Owner.VersionId ?? owner.Owner.DefinitionId, owner.Owner.DefinitionId, owner.Owner.VersionId, owner.Owner.Revision),
         Remediation: "Resolve provider rewrite or compilation diagnostics before applying the upgrade.");
+
+    private static ActivityUpgradeStageStatus StageStatus(ActivityUpgradeStep step)
+    {
+        if (step.Diagnostics.Any(x => x.Code == "activity.upgrade.requires-published-version"))
+            return ActivityUpgradeStageStatus.AwaitingPublication;
+        return step.Diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error)
+            ? ActivityUpgradeStageStatus.Blocked
+            : ActivityUpgradeStageStatus.Ready;
+    }
+
+    private static string ReferenceKey(ActivityDefinitionReference reference) =>
+        $"{reference.Kind}\u001f{reference.DraftId ?? reference.VersionId}";
+
+    private bool Authorized(ActivityDefinitionReference reference, ActivityUpgradePlanRequest request) =>
+        StringComparer.Ordinal.Equals(authorization.TenantId, request.TenantId) &&
+        (reference.TenantId is null || StringComparer.Ordinal.Equals(reference.TenantId, request.TenantId)) &&
+        authorization.CanRead(reference);
+
+    private static bool MatchesRoot(ActivityUpgradeOwnerSnapshot owner, ActivityUpgradeRoot root) =>
+        owner.DependencyPaths.SelectMany(path => path.Append(owner.Owner)).Any(reference =>
+            StringComparer.Ordinal.Equals(reference.Kind, root.Kind) &&
+            StringComparer.Ordinal.Equals(ReferenceIdentity(reference), root.Id));
+
+    private static ActivityUpgradeOwnerSnapshot MergeOwnerPaths(
+        IGrouping<string, ActivityUpgradeOwnerSnapshot> group)
+    {
+        var first = group.First();
+        var paths = group
+            .SelectMany(x => x.DependencyPaths)
+            .GroupBy(PathKey, StringComparer.Ordinal)
+            .Select(x => x.First())
+            .OrderBy(x => x.Count)
+            .ThenBy(PathKey, StringComparer.Ordinal)
+            .ToArray();
+        return first with
+        {
+            DirectReplacements = group
+                .SelectMany(x => x.DirectReplacements)
+                .Distinct()
+                .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
+                .ThenBy(x => x.FromVersionId, StringComparer.Ordinal)
+                .ToArray(),
+            DependencyPaths = paths,
+            RequiresPublishedChildVersion = group.Any(x => x.RequiresPublishedChildVersion),
+            RequiredChildStepId = group.Select(x => x.RequiredChildStepId).FirstOrDefault(x => x is not null)
+        };
+    }
+
+    private static string PathKey(IReadOnlyList<ActivityDefinitionReference> path) =>
+        string.Join('\u001e', path.Select(ReferenceKey));
+
+    private static bool SameReplacements(
+        IReadOnlyList<ActivityVersionReplacement> left,
+        IReadOnlyList<ActivityVersionReplacement> right) =>
+        left.OrderBy(x => x.FromVersionId, StringComparer.Ordinal)
+            .SequenceEqual(right.OrderBy(x => x.FromVersionId, StringComparer.Ordinal));
+
+    private static string? ReferenceIdentity(ActivityDefinitionReference reference) =>
+        reference.DraftId ?? reference.VersionId;
+
+    private static ActivityDiagnostic RootNotAffected(ActivityUpgradeRoot root) => new(
+        "activity.upgrade.root-not-affected",
+        ActivityDiagnosticSeverity.Error,
+        "The selected root does not contain an authorized dependency on a requested source version.",
+        new(root.Kind, root.Id));
 
     private static int KindOrder(string kind) => kind switch
     {

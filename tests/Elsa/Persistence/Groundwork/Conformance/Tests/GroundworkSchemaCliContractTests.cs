@@ -270,6 +270,7 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         Assert.Equal(source.TargetFingerprint, admission.TargetFingerprint);
         Assert.Equal(EffectiveNames(source.ResolvedNames), EffectiveNames(admission.ResolvedNames));
         Assert.NotEmpty(admission.PendingOperations);
+        Assert.Single(admission.Diagnostics, x => x.Code == "ELSA-GW-SCHEMA-PENDING");
         Assert.False(File.Exists(database));
     }
 
@@ -294,7 +295,7 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
 
         Assert.False(admission.IsReady);
         Assert.Equal(source.TargetFingerprint, admission.TargetFingerprint);
-        Assert.Contains(admission.Diagnostics, x => x.Code == "ELSA-GW-SCHEMA-DRIFT");
+        Assert.Single(admission.Diagnostics, x => x.Code == "ELSA-GW-SCHEMA-DRIFT");
         Assert.False(await TableExistsAsync(database, "host_orders"));
     }
 

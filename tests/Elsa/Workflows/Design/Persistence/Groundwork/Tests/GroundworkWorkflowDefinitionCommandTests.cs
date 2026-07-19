@@ -252,6 +252,31 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task DeleteWorkflowDefinitionPermanently_refuses_when_a_deletion_guard_vetoes()
+    {
+        var definitions = new GroundworkWorkflowDefinitionStore(_store);
+        await new GroundworkSaveWorkflowDefinitionCommand(_store, _clock, _accessContext).Execute(
+            new WorkflowDefinition { Id = "definition-published", Name = "Still live", DeletedAt = _clock.UtcNow },
+            CancellationToken.None);
+        var guard = new VetoingDeletionGuard();
+        var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
+            _store,
+            Payloads,
+            definitions,
+            DraftStore(),
+            VersionStore(),
+            VersionLayoutStore(),
+            _accessContext,
+            [guard]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            delete.Execute("definition-published", CancellationToken.None));
+
+        Assert.Equal("definition-published", guard.SeenDefinitionId);
+        Assert.NotNull(await definitions.FindByIdAsync("definition-published"));
+    }
+
+    [Fact]
     public async Task FindByWorkflowDefinitionId_returns_latest_modified_draft()
     {
         var createDraft = CreateCommand();
@@ -303,6 +328,17 @@ public class GroundworkWorkflowDefinitionCommandTests
     {
         Assert.NotEqual(default, entity.CreatedAt);
         Assert.Equal(entity.CreatedAt, entity.LastModifiedAt);
+    }
+
+    private sealed class VetoingDeletionGuard : IWorkflowDefinitionPermanentDeletionGuard
+    {
+        public string? SeenDefinitionId { get; private set; }
+
+        public Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default)
+        {
+            SeenDefinitionId = definitionId;
+            throw new InvalidOperationException("Definition is still published.");
+        }
     }
 
     private sealed class SequentialIdentityGenerator : IIdentityGenerator

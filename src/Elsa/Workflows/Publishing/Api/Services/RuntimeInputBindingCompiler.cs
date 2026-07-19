@@ -17,7 +17,9 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// <see cref="WorkflowExecutableCompiler"/> (W30b, #418) so binding compilation is independently
 /// unit-testable and can evolve without touching activity-tree compilation.
 /// </summary>
-public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnownTypeRegistry)
+public sealed class RuntimeInputBindingCompiler(
+    IWellKnownTypeRegistry wellKnownTypeRegistry,
+    ValueConversionPlanResolver? conversionPlanResolver = null)
 {
     private const string LiteralExpressionType = "Literal";
     private const string ObjectExpressionType = "Object";
@@ -27,13 +29,15 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
+    private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
+
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentState state)
     {
         ArgumentNullException.ThrowIfNull(state);
         var owner = ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType);
         var authored = ValuePolicyCombiner.FromAuthoredStorage(state.StorageDriverType, state.IsSensitive == true);
         var effective = ValuePolicyCombiner.Combine(owner, authored, $"Input '{inputDefinition.ReferenceKey}' on activity node '{nodeId}'");
-        return Compile(nodeId, inputDefinition, state.Value, ValuePolicyCombiner.ToProtectionPolicy(effective));
+        return Compile(nodeId, inputDefinition, state.Value, ValuePolicyCombiner.ToProtectionPolicy(effective), state.Conversion);
     }
 
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentValue value) =>
@@ -41,7 +45,8 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             nodeId,
             inputDefinition,
             value,
-            ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType)));
+            ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType)),
+            conversion: null);
 
     /// <summary>
     /// Preserves an omitted optional argument as a canonical absent literal. Only nullable CLR targets
@@ -53,7 +58,7 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         var inputType = ResolveInputType(inputDefinition);
         var targetType = ToValueTypeDescriptor(inputDefinition);
         var policy = ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType));
-        if (!AcceptsNull(inputDefinition, inputType))
+        if (!AcceptsNull(inputDefinition))
         {
             throw new ArgumentException(
                 $"VF-ACT-003: Optional input '{inputDefinition.ReferenceKey}' with non-nullable type alias '{inputDefinition.Type.Alias}' " +
@@ -74,17 +79,18 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         string nodeId,
         InputDefinition inputDefinition,
         ArgumentValue value,
-        ValueProtectionPolicy effectivePolicy)
+        ValueProtectionPolicy effectivePolicy,
+        AuthoredValueConversionRequest? conversion)
     {
         if (string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileLiteralInput(nodeId, inputDefinition, value, effectivePolicy);
+            return CompileLiteralInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
         // Studio's object editor serializes arrays and objects as JSON under the "Object" syntax. The value is
         // authored data, not an executable expression, so preserve it as a durable literal. This is particularly
         // important for publish-time trigger metadata such as HttpEndpoint.SupportedMethods, which must be known
         // before a workflow instance exists.
         if (string.Equals(value.ExpressionType, ObjectExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileObjectInput(nodeId, inputDefinition, value, effectivePolicy);
+            return CompileObjectInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
         if (string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileVariableInput(nodeId, inputDefinition, value, effectivePolicy);
@@ -93,7 +99,7 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             return CompileWorkflowRequestInput(nodeId, inputDefinition, value, effectivePolicy);
 
         if (string.Equals(value.ExpressionType, ActivityResultExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileActivityResultInput(nodeId, inputDefinition, value, effectivePolicy);
+            return CompileActivityResultInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
         if (string.Equals(value.ExpressionType, DefaultExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileDefaultInput(nodeId, inputDefinition, effectivePolicy);
@@ -135,7 +141,12 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             metadata: BuildInputMetadata(inputDefinition));
     }
 
-    private static RuntimeInputBinding CompileActivityResultInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, ValueProtectionPolicy effectivePolicy)
+    private static RuntimeInputBinding CompileActivityResultInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy effectivePolicy,
+        AuthoredValueConversionRequest? conversion)
     {
         var payload = RequireObjectPayload(nodeId, inputDefinition, value, ActivityResultExpressionType);
         var producerNodeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerNodeId");
@@ -151,7 +162,8 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             effectivePolicy: effectivePolicy,
             source: RuntimeInputBindingSource.ActivityResult,
             activityResult: new RuntimeActivityResultReference(producerNodeId, projectionKey, producerScopeId, isOptional),
-            metadata: BuildInputMetadata(inputDefinition));
+            metadata: BuildInputMetadata(inputDefinition),
+            conversionRequest: AuthoredValueConversionMapper.ToRuntimeRequest(conversion));
     }
 
     private RuntimeInputBinding CompileDefaultInput(string nodeId, InputDefinition inputDefinition, ValueProtectionPolicy effectivePolicy)
@@ -162,10 +174,10 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         var defaultSyntax = inputDefinition.DefaultSyntax;
         if (string.IsNullOrWhiteSpace(defaultSyntax) ||
             string.Equals(defaultSyntax, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileLiteralInput(nodeId, inputDefinition, new ArgumentValue(inputDefinition.DefaultValue.Value, LiteralExpressionType), effectivePolicy);
+            return CompileLiteralInput(nodeId, inputDefinition, new ArgumentValue(inputDefinition.DefaultValue.Value, LiteralExpressionType), effectivePolicy, conversion: null);
 
         if (string.Equals(defaultSyntax, ObjectExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileObjectInput(nodeId, inputDefinition, new ArgumentValue(inputDefinition.DefaultValue.Value, ObjectExpressionType), effectivePolicy);
+            return CompileObjectInput(nodeId, inputDefinition, new ArgumentValue(inputDefinition.DefaultValue.Value, ObjectExpressionType), effectivePolicy, conversion: null);
 
         throw new ArgumentException(
             $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' default syntax '{defaultSyntax}' is executable. Canonical activity defaults must be pinned literals.");
@@ -180,8 +192,16 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
         return reference;
     }
 
-    private RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, ValueProtectionPolicy policy)
+    private RuntimeInputBinding CompileLiteralInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy policy,
+        AuthoredValueConversionRequest? conversion)
     {
+        if (AuthoredValueConversionMapper.IsExplicitFormattedContent(conversion))
+            return CompileFormattedLiteralInput(nodeId, inputDefinition, value, policy, conversion!);
+
         var inputType = ResolveInputType(inputDefinition);
         object? converted;
         try
@@ -204,10 +224,56 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             literal: converted is null
                 ? ValueEnvelope.Null(targetType, policy)
                 : ValueEnvelope.Inline(targetType, literal, policy),
-            metadata: BuildInputMetadata(inputDefinition));
+            metadata: BuildInputMetadata(inputDefinition),
+            conversionPlan: resolvedConversionPlanResolver.Resolve(
+                targetType,
+                ValueRepresentationDefaults.Infer(targetType),
+                targetType,
+                AuthoredValueConversionMapper.Mode(conversion),
+                AuthoredValueConversionMapper.Profile(conversion),
+                AuthoredValueConversionMapper.Limits(conversion),
+                AuthoredValueConversionMapper.Options(conversion)));
     }
 
-    private RuntimeInputBinding CompileObjectInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, ValueProtectionPolicy policy)
+    private RuntimeInputBinding CompileFormattedLiteralInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy policy,
+        AuthoredValueConversionRequest conversion)
+    {
+        var inputType = ResolveInputType(inputDefinition);
+        var raw = ExtractLiteralContent(value.Value);
+        ValidateNull(inputDefinition, inputType, raw, nodeId);
+        var sourceType = new ValueTypeDescriptor("String");
+        var targetType = ToValueTypeDescriptor(inputDefinition);
+        var literal = raw is null
+            ? ValueEnvelope.Null(sourceType, policy)
+            : ValueEnvelope.Inline(sourceType, JsonSerializer.SerializeToElement(raw), policy);
+
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: targetType,
+            effectivePolicy: policy,
+            source: RuntimeInputBindingSource.Literal,
+            literal: literal,
+            metadata: BuildInputMetadata(inputDefinition),
+            conversionPlan: resolvedConversionPlanResolver.Resolve(
+                sourceType,
+                ValueRepresentation.FormattedContent,
+                targetType,
+                AuthoredValueConversionMapper.Mode(conversion),
+                AuthoredValueConversionMapper.Profile(conversion),
+                AuthoredValueConversionMapper.Limits(conversion),
+                AuthoredValueConversionMapper.Options(conversion)));
+    }
+
+    private RuntimeInputBinding CompileObjectInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy policy,
+        AuthoredValueConversionRequest? conversion)
     {
         var inputType = ResolveInputType(inputDefinition);
         object? converted;
@@ -243,7 +309,15 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
                 literal: converted is null
                     ? ValueEnvelope.Null(targetType, policy)
                     : ValueEnvelope.Inline(targetType, literal, policy),
-                metadata: BuildInputMetadata(inputDefinition));
+                metadata: BuildInputMetadata(inputDefinition),
+                conversionPlan: resolvedConversionPlanResolver.Resolve(
+                    targetType,
+                    ValueRepresentationDefaults.Infer(targetType),
+                    targetType,
+                    AuthoredValueConversionMapper.Mode(conversion),
+                    AuthoredValueConversionMapper.Profile(conversion),
+                    AuthoredValueConversionMapper.Limits(conversion),
+                    AuthoredValueConversionMapper.Options(conversion)));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
@@ -401,13 +475,12 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
     private static ValueTypeDescriptor ToValueTypeDescriptor(InputDefinition inputDefinition) =>
         new(inputDefinition.Type.Alias, inputDefinition.Type.CollectionKind);
 
-    private static bool AcceptsNull(InputDefinition inputDefinition, Type inputType) =>
-        inputDefinition.IsNullable ??
-        (Nullable.GetUnderlyingType(inputType) is not null || !inputType.IsValueType);
+    private static bool AcceptsNull(InputDefinition inputDefinition) =>
+        inputDefinition.IsNullable;
 
     private static void ValidateNull(InputDefinition inputDefinition, Type inputType, object? value, string nodeId)
     {
-        if (value is null && !AcceptsNull(inputDefinition, inputType))
+        if (value is null && !AcceptsNull(inputDefinition))
         {
             throw new ArgumentException(
                 $"VF-ACT-004: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not accept null.");
@@ -444,5 +517,21 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             return JsonSerializer.SerializeToElement(value).Deserialize(nullableTargetType);
 
         return Convert.ChangeType(value, nullableTargetType, CultureInfo.InvariantCulture);
+    }
+
+    private static string? ExtractLiteralContent(object? value)
+    {
+        if (value is null)
+            return null;
+
+        if (value is JsonElement jsonElement)
+        {
+            if (jsonElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+                return null;
+
+            return jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.GetRawText();
+        }
+
+        return value is string text ? text : JsonSerializer.Serialize(value);
     }
 }

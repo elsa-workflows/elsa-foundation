@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Expressions.Api.Models;
 
@@ -47,6 +48,10 @@ public sealed record VariableTypeDescriptorView(
     string Alias,
     string DisplayName,
     string? Category,
-    string? DefaultEditor);
+    string? DefaultEditor,
+    IReadOnlyCollection<CollectionKind> SupportedCollectionKinds,
+    bool SupportsNull,
+    bool SupportsDurability,
+    IReadOnlyCollection<string> CompatibleStorageDriverKeys);
 
 public sealed record VariableTypeDescriptorsResponse(IReadOnlyCollection<VariableTypeDescriptorView> Items);

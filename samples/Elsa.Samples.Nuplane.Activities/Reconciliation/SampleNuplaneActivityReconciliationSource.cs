@@ -30,6 +30,7 @@ public sealed class SampleNuplaneActivityReconciliationSource : IActivityReconci
                 StorageDriverType: null,
                 DisplayName: "Recipient",
                 Category: null,
+                IsNullable: true,
                 IsRequired: false)
         ],
         Outputs: [],

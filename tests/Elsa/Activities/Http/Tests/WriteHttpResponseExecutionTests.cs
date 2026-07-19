@@ -115,6 +115,7 @@ public sealed class WriteHttpResponseExecutionTests
             key,
             ValueType(type),
             isRequired: false,
+            isNullable: true,
             hasDefault: false,
             defaultValue: null,
             ActivityValuePolicy.Default);

@@ -24,6 +24,10 @@ public sealed class ActivityVersionDiffTests
         { "input renamed", Contract(inputs: [Input("value", name: "Before")]), Contract(inputs: [Input("value", name: "After")]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
         { "input type changed", Contract(inputs: [Input("value")]), Contract(inputs: [Input("value", alias: "number")]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
         { "optional input becomes required", Contract(inputs: [Input("value")]), Contract(inputs: [Input("value", required: true)]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
+        { "input nullability tightened", Contract(inputs: [Input("value", nullable: true)]), Contract(inputs: [Input("value")]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
+        { "input nullability relaxed", Contract(inputs: [Input("value")]), Contract(inputs: [Input("value", nullable: true)]), ActivityVersionCompatibility.Compatible, ActivityVersionBump.Minor },
+        { "output nullability tightened", Contract(outputs: [Output("value", nullable: true)]), Contract(outputs: [Output("value")]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
+        { "output nullability relaxed", Contract(outputs: [Output("value")]), Contract(outputs: [Output("value", nullable: true)]), ActivityVersionCompatibility.Compatible, ActivityVersionBump.Minor },
         { "default added", Contract(inputs: [Input("value")]), Contract(inputs: [Input("value", @default: Default("1"))]), ActivityVersionCompatibility.Compatible, ActivityVersionBump.Minor },
         { "default removed", Contract(inputs: [Input("value", @default: Default("1"))]), Contract(inputs: [Input("value")]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
         { "default changed", Contract(inputs: [Input("value", @default: Default("1"))]), Contract(inputs: [Input("value", @default: Default("2"))]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
@@ -43,6 +47,19 @@ public sealed class ActivityVersionDiffTests
 
         Assert.Equal(compatibility, result.Compatibility);
         Assert.Equal(bump, result.RequiredBump);
+    }
+
+    [Fact]
+    public async Task Nullability_changes_include_exact_member_projections()
+    {
+        var result = await new ActivityVersionDiffer().DiffAsync(Request(
+            Contract(inputs: [Input("value", nullable: true)]),
+            Contract(inputs: [Input("value")])));
+
+        var change = Assert.Single(result.Changes);
+        Assert.Equal("NullabilityChanged", change.Kind);
+        Assert.True(change.Before!.Value.GetProperty("isNullable").GetBoolean());
+        Assert.False(change.After!.Value.GetProperty("isNullable").GetBoolean());
     }
 
     [Fact]
@@ -100,6 +117,19 @@ public sealed class ActivityVersionDiffTests
         Assert.Equal(ActivityVersionBump.Minor, result.RequiredBump);
         Assert.Equal(ActivityVersionCompatibility.Compatible, result.Compatibility);
         Assert.Contains(result.Changes, x => x.Kind == "ImplementationChanged");
+    }
+
+    [Fact]
+    public async Task Output_source_representation_change_is_a_breaking_behavior_change()
+    {
+        var result = await new ActivityVersionDiffer().DiffAsync(Request(
+            Contract(outputs: [Output("payload", sourceRepresentation: ValueRepresentation.TextValue)]),
+            Contract(outputs: [Output("payload", sourceRepresentation: ValueRepresentation.FormattedContent)])));
+
+        Assert.True(result.BehaviorChanged);
+        Assert.Equal(ActivityVersionCompatibility.Breaking, result.Compatibility);
+        Assert.Equal(ActivityVersionBump.Major, result.RequiredBump);
+        Assert.Contains(result.Changes, x => x.Kind == "SourceRepresentationChanged");
     }
 
     [Fact]
@@ -227,17 +257,23 @@ public sealed class ActivityVersionDiffTests
         ActivityInputDefault? @default = null,
         string alias = "string",
         string? name = null,
-        string? displayName = null) => new(
+        string? displayName = null,
+        bool nullable = false) => new(
         key,
         name ?? key,
         new(alias, CollectionKind.Single),
         required,
+        nullable,
         @default,
         "elsa.json",
         DisplayName: displayName);
 
-    private static ActivityOutputContract Output(string key, bool required = false) =>
-        new(key, key, new("string", CollectionKind.Single), required, "elsa.json");
+    private static ActivityOutputContract Output(
+        string key,
+        bool required = false,
+        bool nullable = false,
+        ValueRepresentation? sourceRepresentation = null) =>
+        new(key, key, new("string", CollectionKind.Single), required, nullable, "elsa.json", SourceRepresentation: sourceRepresentation);
 
     private static ActivityOutcomeContract Outcome(string key, bool emitted = false) => new(key, key, emitted);
 

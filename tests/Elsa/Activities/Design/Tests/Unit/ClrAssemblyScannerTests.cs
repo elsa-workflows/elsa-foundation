@@ -77,7 +77,7 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "45A2C289FF070C8D4DFBB6D3384979D246479B44318D885844E00D24941F2E95" },
-        { typeof(HttpEndpoint), "DCB65DF73D91EA0C4F0E36A41287AB6499BF8FE024F4D64801FA9F1020AA56AB" }
+        { typeof(HttpEndpoint), "9C7FF54497567D475F1C36089F883F2D5D861FD9FAB8C70D0B3A379CAF215386" }
     };
 
     [Theory]
@@ -541,6 +541,17 @@ public sealed class ClrAssemblyScannerTests
         Assert.Contains("Failed", portNames);
         Assert.Contains("Timeout", portNames);
         Assert.Equal(5, portNames.Count);
+    }
+
+    [Fact]
+    public void SendHttpRequest_ResponseBody_IsDiscoveredAsFormattedContent()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(SendHttpRequest).FullName);
+        var responseBody = model.Outputs.Single(output => output.ReferenceKey == "ResponseBody");
+
+        Assert.Equal(ValueRepresentation.FormattedContent, responseBody.SourceRepresentation);
     }
 
     [Fact]
