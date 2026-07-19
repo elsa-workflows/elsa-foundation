@@ -12,6 +12,7 @@ import { dispatchAiAction, findAiAction, getCreateInitialState, getTotalPages } 
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
 import { CreateWorkflowDialog } from "./CreateWorkflowDialog";
+import { WorkflowFolderNavigation, type WorkflowFolderSelection, selectedFolderId } from "./WorkflowFolderNavigation";
 
 export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointContext; ai: StudioAiContributionApi; onOpen(id: string): void }) {
   const [search, setSearch] = useState("");
@@ -30,6 +31,8 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const [creating, setCreating] = useState(false);
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const [folderCapabilityAvailable, setFolderCapabilityAvailable] = useState(false);
+  const [folderSelection, setFolderSelection] = useState<WorkflowFolderSelection>("all");
   const selectVisibleRef = useRef<HTMLInputElement | null>(null);
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
   const continuationToken = nextContinuationTokens[page];
@@ -47,7 +50,9 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
         state: listState,
         page,
         pageSize,
-        continuationToken
+        continuationToken,
+        folderId: folderCapabilityAvailable ? selectedFolderId(folderSelection) : null,
+        unfiled: folderCapabilityAvailable && folderSelection === "unfiled"
       });
       if (response.isPaged) {
         setDefinitions(response.definitions);
@@ -75,7 +80,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
       setError(e instanceof Error ? e.message : String(e));
       setState("failed");
     }
-  }, [context, search, listState, page, pageSize, continuationToken]);
+  }, [context, search, listState, page, pageSize, continuationToken, folderCapabilityAvailable, folderSelection]);
 
   useEffect(() => {
     void load();
@@ -113,10 +118,12 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
     setError("");
     setStatus("");
     try {
+      const folderId = folderCapabilityAvailable ? selectedFolderId(folderSelection) : null;
       const details = await createDefinition(context, {
         name: createDraft.name.trim(),
         description: createDraft.description.trim() || null,
-        initialState: getCreateInitialState(createDraft, catalog)
+        initialState: getCreateInitialState(createDraft, catalog),
+        ...(folderId ? { folderId } : {})
       });
       setCreateDraft(null);
       onOpen(details.definition.id);
@@ -182,6 +189,13 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
     setNextContinuationTokens({});
   };
 
+  const changeFolder = (nextFolder: WorkflowFolderSelection) => {
+    setFolderSelection(nextFolder);
+    setPage(1);
+    setNextContinuationTokens({});
+    clearSelection();
+  };
+
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
     if (!(await getDialogs().confirm({ message: `Delete workflow definition "${definition.name}"? You can restore it from the Deleted view.`, confirmLabel: "Delete", tone: "danger" }))) return;
     setStatus("");
@@ -225,6 +239,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
 
   return (
     <>
+      <WorkflowFolderNavigation context={context} selection={folderSelection} onSelect={changeFolder} onAvailable={setFolderCapabilityAvailable} />
       <div className="wf-toolbar">
         <div className="wf-segmented" role="tablist" aria-label="Definition state">
           <button type="button" className={listState === "active" ? "active" : ""} aria-selected={listState === "active"} onClick={() => changeListState("active")}>Active</button>

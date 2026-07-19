@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
-import { listDefinitions } from "../api/workflowDesign";
+import { createWorkflowFolder, listDefinitions, listWorkflowFolders } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { preflightPublication, preflightPublicationSnapshot, startWorkflowDraftTestRun } from "../api/publishing";
 import { getExecutable, getExecutableInputSources, listExecutables, runExecutable } from "../api/runtime";
@@ -106,6 +106,57 @@ describe("canonical domain clients", () => {
       "/design/workflows/definition-pages?state=all&search=Definition&pageSize=5&continuationToken=opaque-current-page"
     );
     expect(getJson).not.toHaveBeenCalledWith(expect.stringContaining("/design/workflows/definitions?"));
+  });
+
+  it("uses the advertised folder root for direct children and never invents a host path", async () => {
+    const folderCapabilities = {
+      capabilities: [{
+        id: "elsa.api.workflow-design",
+        contractVersion: "1",
+        links: [{ rel: "workflow-folders", href: "design/workflows/folders" }]
+      }]
+    };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? folderCapabilities : { items: [] });
+    const postJson = vi.fn(async () => ({ id: "folder-a", name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" }));
+    const context = createContext({ getJson, postJson });
+
+    await listWorkflowFolders(context, { parentId: "folder-parent" });
+    await createWorkflowFolder(context, { name: "Operations", parentId: "folder-parent" });
+
+    expect(getJson).toHaveBeenCalledWith("/design/workflows/folders?pageSize=100&parentId=folder-parent");
+    expect(postJson).toHaveBeenCalledWith("/design/workflows/folders", { name: "Operations", parentId: "folder-parent" });
+  });
+
+  it("sends direct-folder and Unfiled selectors only through the paged relation", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities"
+      ? pagedDefinitionCapabilities
+      : { items: [], nextContinuationToken: null });
+    const context = createContext({ getJson });
+
+    await listDefinitions(context, { search: "", page: 1, pageSize: 10, folderId: "folder/a" });
+    await listDefinitions(context, { search: "", page: 1, pageSize: 10, unfiled: true });
+
+    expect(getJson).toHaveBeenCalledWith("/design/workflows/definition-pages?state=active&pageSize=10&folderId=folder%2Fa");
+    expect(getJson).toHaveBeenCalledWith("/design/workflows/definition-pages?state=active&pageSize=10&unfiled=true");
+  });
+
+  it("does not probe a folder endpoint when the relation is absent", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : { items: [] });
+    const context = createContext({ getJson });
+
+    expect(await listWorkflowFolders(context)).toBeNull();
+    expect(getJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the opaque folder continuation available to a lazy caller", async () => {
+    const folderCapabilities = { capabilities: [{ id: "elsa.api.workflow-design", contractVersion: "1", links: [{ rel: "workflow-folders", href: "design/workflows/folders" }] }] };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? folderCapabilities : { items: [{ id: "folder-2" }], nextContinuationToken: null });
+    const context = createContext({ getJson });
+
+    const page = await listWorkflowFolders(context, { parentId: "folder-parent", continuationToken: "opaque-next" });
+
+    expect(page?.items).toEqual([{ id: "folder-2" }]);
+    expect(getJson).toHaveBeenCalledWith("/design/workflows/folders?pageSize=100&parentId=folder-parent&continuationToken=opaque-next");
   });
 
   it("uses canonical Activity, Publishing, and Runtime links without probing alternates", async () => {
