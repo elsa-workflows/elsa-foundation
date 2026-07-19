@@ -1,9 +1,9 @@
 # Feature Specification: In-memory live-drain EnqueueSchedulerWork delivery (Immediate mode)
 
-**Feature Branch**: `worktree-agent-a456304a41c9336d5`
+**Feature Branch**: `claude/elsa-engine-performance-bd4eee`
 **Created**: 2026-07-19
-**Program**: Runtime Execution Seam (ADR 0031, being ratified in parallel)
-**Work unit**: WU-2 (follows WU-1: work-item ack folded into the checkpoint commit UoW)
+**Program**: Runtime Execution Seam (ADR 0031, accepted 2026-07-19)
+**Work unit**: WU-2 (follows WU-1 / spec 105: work-item ack folded into the checkpoint commit UoW)
 **Input**: The ratified architecture plan for the Runtime Execution Seam, ADR 0031 decisions (a) `IWorkflowSchedulerWorkQueue.EnqueueAsync` is idempotent by work-item identity and (b) single-writer-per-execution is the parallelism ceiling, and the coalescing overlay precedent (E3-6 / RT-10).
 
 ## Why (measured)
