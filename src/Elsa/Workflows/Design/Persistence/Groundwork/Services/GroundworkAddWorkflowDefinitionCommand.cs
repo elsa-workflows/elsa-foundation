@@ -4,11 +4,8 @@ using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
-using Elsa.Primitives.Exceptions;
-using System.Text.Json;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
@@ -34,14 +31,8 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
         IReadOnlyCollection<DesignMetadataRecord> layout,
         CancellationToken cancellation)
     {
-        var access = accessContextAccessor.Current;
-        access.EnsureTenantScope(workflowDefinition.TenantId);
-        access.EnsureTenantScope(draft.TenantId);
-        if (access.Scope is { } scope)
-        {
-            workflowDefinition.TenantId ??= scope.Value;
-            draft.TenantId ??= scope.Value;
-        }
+        accessContextAccessor.Current.EnsureTenantScope(workflowDefinition.TenantId);
+        accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
 
         var now = clock.UtcNow;
         GroundworkEntityTimestamps.StampAdded(workflowDefinition, now);
@@ -53,7 +44,7 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
             WorkflowsDesignStorageManifest.SchemaVersion,
             workflowDefinition,
             GroundworkDesignJson.Options,
-            access);
+            accessContextAccessor.Current);
 
         var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
             store,
@@ -61,67 +52,11 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
             accessContextAccessor);
         var draftSave = draftDocuments.ToSaveRequest(draft, layout.ToArray());
 
-        var scopeKinds = workflowDefinition.FolderId is null
-            ? new[]
-            {
+        await store.SaveAllAsync(
+            DocumentCommitScope.Of(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind
-            }
-            : new[]
-            {
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-                WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind
-            };
-        try
-        {
-            await using var unit = await store.BeginAsync(DocumentCommitScope.Of(scopeKinds), cancellation);
-            DocumentEnvelope? folderEnvelope = null;
-            WorkflowFolder? folderFence = null;
-            if (workflowDefinition.FolderId is { } folderId)
-            {
-                var folderDocument = await unit.LoadAsync(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind, folderId, cancellation);
-                if (folderDocument is null)
-                    throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
-                var folder = JsonSerializer.Deserialize<GroundworkDocument<WorkflowFolder>>(
-                    folderDocument.ContentJson,
-                    GroundworkDesignJson.Options)?.Entity
-                    ?? throw new InvalidOperationException("The workflow-folder document is empty.");
-                try
-                {
-                    access.EnsureTenantScope(folder.TenantId);
-                }
-                catch (InvalidOperationException)
-                {
-                    throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
-                }
-                folderEnvelope = folderDocument;
-                folderFence = folder;
-            }
-
-            var definitionResult = await unit.SaveAsync(definitionSave, cancellation);
-            var draftResult = await unit.SaveAsync(draftSave, cancellation);
-            if (definitionResult.Status != DocumentStoreWriteStatus.Saved || draftResult.Status != DocumentStoreWriteStatus.Saved)
-                throw new InvalidOperationException("Workflow-definition creation could not be committed.");
-            if (folderFence is not null)
-            {
-                var fence = await unit.SaveAsync(GroundworkDocumentWriter.ToTenantScopedSaveRequest(
-                    WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
-                    WorkflowsDesignStorageManifest.WorkflowFolderCollection,
-                    WorkflowsDesignStorageManifest.SchemaVersion,
-                    folderFence,
-                    GroundworkDesignJson.Options,
-                    access) with
-                { ExpectedVersion = folderEnvelope!.Version }, cancellation);
-                if (fence.Status != DocumentStoreWriteStatus.Saved)
-                    throw new WorkflowFolderRestructureConflictException();
-            }
-            await unit.CommitAsync(cancellation);
-        }
-        catch (DocumentAtomicWriteException exception) when (workflowDefinition.FolderId is not null && exception.Status is
-            DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.IdentityConflict or DocumentStoreWriteStatus.NotFound)
-        {
-            throw new WorkflowFolderRestructureConflictException(exception);
-        }
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind),
+            [definitionSave, draftSave],
+            cancellation);
     }
 }

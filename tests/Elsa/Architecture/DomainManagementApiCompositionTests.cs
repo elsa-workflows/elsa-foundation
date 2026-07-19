@@ -26,19 +26,9 @@ using Elsa.Expressions.Api.Requests;
 using Elsa.Mediator;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api;
-using Elsa.Workflows.Design.Api.Commands;
-using Elsa.Workflows.Design.Api.Handlers;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
-using Elsa.Workflows.Design.Core.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Filters;
-using Elsa.Workflows.Design.Persistence.Core.Models;
-using Elsa.Workflows.Design.Persistence.Core.Services;
-using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -118,9 +108,6 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Equal(
             ExpectedCapabilities.Where(x => x != "elsa.api.expressions"),
             capabilities.Capabilities.Select(x => x.Id).Order(StringComparer.Ordinal));
-        Assert.DoesNotContain(
-            capabilities.Capabilities.SelectMany(capability => capability.Links),
-            link => link.Rel == "workflow-definitions-page");
     }
 
     [Fact]
@@ -134,157 +121,6 @@ public sealed class DomainManagementApiCompositionTests
         Assert.NotNull(diagnostics);
         Assert.Empty(diagnostics.Items);
         Assert.Empty(diagnostics.Sets);
-    }
-
-    [Fact]
-    public async Task Workflow_definition_page_is_capability_discovered_and_preserves_the_public_http_contract()
-    {
-        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false, includePaging: true);
-
-        var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
-        var relation = Assert.Single(
-            capabilities!.Capabilities.SelectMany(capability => capability.Links),
-            link => link.Rel == "workflow-definitions-page");
-        Assert.Equal("design/workflows/definitions/page", relation.Href);
-
-        var page = await host.Client.GetFromJsonAsync<WorkflowDefinitionPageView>(
-            "/design/workflows/definitions/page?pageSize=1&search=definition-42&state=deleted");
-        var item = Assert.Single(page!.Items);
-        Assert.Equal("definition-42", item.Id);
-        Assert.NotNull(item.DeletedAt);
-        Assert.Equal("draft-42", item.DraftId);
-        Assert.Equal("version-42", item.LatestVersionId);
-        Assert.Equal("2.3.4", item.LatestVersion);
-        Assert.Equal(7, item.VersionCount);
-        Assert.Equal("next-http-token", page.NextContinuationToken);
-
-        using var malformed = await host.Client.GetAsync(
-            "/design/workflows/definitions/page?continuationToken=malformed");
-        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
-        Assert.Equal("application/problem+json", malformed.Content.Headers.ContentType?.MediaType);
-
-        using var mismatched = await host.Client.GetAsync(
-            "/design/workflows/definitions/page?search=other&continuationToken=context-token");
-        Assert.Equal(HttpStatusCode.BadRequest, mismatched.StatusCode);
-        Assert.Equal("application/problem+json", mismatched.Content.Headers.ContentType?.MediaType);
-
-        using var legacy = await host.Client.GetAsync("/design/workflows/definitions?state=all");
-        legacy.EnsureSuccessStatusCode();
-        using var legacyJson = await JsonDocument.ParseAsync(await legacy.Content.ReadAsStreamAsync());
-        Assert.Equal(["items"], legacyJson.RootElement.EnumerateObject().Select(property => property.Name));
-    }
-
-    [Fact]
-    public async Task Workflow_folder_routes_are_capability_discovered_and_use_the_public_page_contract()
-    {
-        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false, includePaging: true, includeFolders: true);
-        var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
-        Assert.Contains(capabilities!.Capabilities.SelectMany(x => x.Links), link => link.Rel == "workflow-folders");
-
-        var page = await host.Client.GetFromJsonAsync<WorkflowFolderListView>("/design/workflows/folders?pageSize=1");
-        Assert.Equal("folder-1", Assert.Single(page!.Items).Id);
-        Assert.Equal("folder-token", page.NextContinuationToken);
-        var detail = await host.Client.GetFromJsonAsync<WorkflowFolderDetailsView>("/design/workflows/folders/folder-1");
-        Assert.Equal("folder-1", detail!.Folder.Id);
-
-        using var created = await host.Client.PostAsJsonAsync("/design/workflows/folders", new { name = "Created" });
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-
-        using var malformed = await host.Client.GetAsync("/design/workflows/folders?continuationToken=malformed");
-        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
-
-        using var unknown = await host.Client.GetAsync("/design/workflows/folders/missing");
-        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
-
-        using var duplicate = await host.Client.PostAsJsonAsync("/design/workflows/folders", new { name = "Duplicate" });
-        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
-
-        using var missingParent = await host.Client.PostAsJsonAsync("/design/workflows/folders", new { name = "Child", parentId = "missing" });
-        Assert.Equal(HttpStatusCode.NotFound, missingParent.StatusCode);
-
-        var folderDefinitions = await host.Client.GetFromJsonAsync<WorkflowDefinitionPageView>(
-            "/design/workflows/definitions/page?folderId=folder-1&pageSize=13&search=orders&state=all");
-        var folderDefinition = Assert.Single(folderDefinitions!.Items);
-        Assert.Equal("folder-1", folderDefinition.FolderId);
-        Assert.Equal(
-            [("folder-1", "Orders")],
-            folderDefinition.FolderBreadcrumb!.Select(folder => (folder.Id, folder.Name)));
-
-        var unfiledDefinitions = await host.Client.GetFromJsonAsync<WorkflowDefinitionPageView>(
-            "/design/workflows/definitions/page?unfiled=true");
-        var unfiledDefinition = Assert.Single(unfiledDefinitions!.Items);
-        Assert.Null(unfiledDefinition.FolderId);
-        Assert.Empty(unfiledDefinition.FolderBreadcrumb!);
-
-        using var unknownFolderDefinitions = await host.Client.GetAsync(
-            "/design/workflows/definitions/page?folderId=missing");
-        Assert.Equal(HttpStatusCode.NotFound, unknownFolderDefinitions.StatusCode);
-
-        using var mutuallyExclusiveSelectors = await host.Client.GetAsync(
-            "/design/workflows/definitions/page?folderId=folder-1&unfiled=true");
-        Assert.Equal(HttpStatusCode.BadRequest, mutuallyExclusiveSelectors.StatusCode);
-
-        using var definitionCreated = await host.Client.PostAsJsonAsync(
-            "/design/workflows/definitions",
-            new { name = "Filed workflow", folderId = "folder-1" });
-        definitionCreated.EnsureSuccessStatusCode();
-        var createdDefinition = await definitionCreated.Content.ReadFromJsonAsync<WorkflowDefinitionDetailsView>();
-        Assert.Equal("folder-1", createdDefinition!.Definition.FolderId);
-
-        var persistedDefinition = await host.Client.GetFromJsonAsync<WorkflowDefinitionDetailsView>(
-            $"/design/workflows/definitions/{createdDefinition.Definition.Id}");
-        Assert.Equal("folder-1", persistedDefinition!.Definition.FolderId);
-        using var persistedDefinitionJson = await host.Client.GetAsync(
-            $"/design/workflows/definitions/{createdDefinition.Definition.Id}");
-        Assert.DoesNotContain(
-            "\"folderBreadcrumb\"",
-            await persistedDefinitionJson.Content.ReadAsStringAsync(),
-            StringComparison.Ordinal);
-
-        using var unexpected = await host.Client.PostAsJsonAsync("/design/workflows/folders", new { name = "Unexpected" });
-        Assert.Equal(HttpStatusCode.InternalServerError, unexpected.StatusCode);
-        Assert.DoesNotContain("provider-secret", await unexpected.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Workflow_folder_routes_and_capability_are_omitted_when_the_folder_store_is_unavailable()
-    {
-        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false, includePaging: true);
-
-        var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
-        Assert.DoesNotContain(capabilities!.Capabilities.SelectMany(x => x.Links), link => link.Rel == "workflow-folders");
-
-        using var omitted = await host.Client.SendAsync(new HttpRequestMessage(HttpMethod.Options, "/design/workflows/folders"));
-        Assert.Equal(HttpStatusCode.NotFound, omitted.StatusCode);
-    }
-
-    [Fact]
-    public async Task Workflow_definition_move_is_capability_discovered_and_maps_the_public_success_and_failure_contract()
-    {
-        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false, includePaging: true, includeFolders: true);
-        var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
-        Assert.Contains(capabilities!.Capabilities.SelectMany(x => x.Links), link =>
-            link.Rel == "workflow-definition-folder-move" && link.Href == "design/workflows/definitions/move");
-
-        using var success = await host.Client.PostAsJsonAsync(
-            "/design/workflows/definitions/move", new { definitionIds = new[] { "one", "two" }, folderId = "folder-1" });
-        Assert.Equal(HttpStatusCode.NoContent, success.StatusCode);
-
-        using var invalid = await host.Client.PostAsJsonAsync(
-            "/design/workflows/definitions/move", new { definitionIds = new[] { "one", "one" }, folderId = (string?)null });
-        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
-
-        using var omittedDestination = await host.Client.PostAsJsonAsync(
-            "/design/workflows/definitions/move", new { definitionIds = new[] { "one" } });
-        Assert.Equal(HttpStatusCode.BadRequest, omittedDestination.StatusCode);
-
-        using var missing = await host.Client.PostAsJsonAsync(
-            "/design/workflows/definitions/move", new { definitionIds = new[] { "missing" }, folderId = (string?)null });
-        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
-
-        using var conflict = await host.Client.PostAsJsonAsync(
-            "/design/workflows/definitions/move", new { definitionIds = new[] { "conflict" }, folderId = (string?)null });
-        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
     }
 
     [Fact]
@@ -438,7 +274,7 @@ public sealed class DomainManagementApiCompositionTests
 
         public HttpClient Client { get; } = client;
 
-        public static async Task<CustomManagementHost> StartAsync(bool includeExpressions, bool includePaging = false, bool includeFolders = false)
+        public static async Task<CustomManagementHost> StartAsync(bool includeExpressions)
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
@@ -468,36 +304,7 @@ public sealed class DomainManagementApiCompositionTests
                 endpointTypes.Add("Elsa.Expressions.Api.Endpoints.ListExpressionDescriptors");
             }
 
-            if (includePaging)
-            {
-                builder.Services.AddSingleton<IWorkflowDefinitionPageStore, HttpWorkflowDefinitionPageStore>();
-                builder.Services.AddSingleton<IWorkflowDefinitionListProjectionStore, HttpWorkflowDefinitionProjectionStore>();
-                endpointTypes.Add("Elsa.Workflows.Design.Api.Endpoints.Definitions.Page");
-            }
-            if (includeFolders)
-            {
-                builder.Services.AddSingleton<IWorkflowFolderStore, HttpWorkflowFolderStore>();
-                builder.Services.AddSingleton<IIdentityGenerator, HttpIdentityGenerator>();
-                builder.Services.AddSingleton<HttpWorkflowDefinitionRepository>();
-                builder.Services.AddSingleton<IAddWorkflowDefinitionCommand>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
-                builder.Services.AddSingleton<IWorkflowDefinitionStore>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
-                builder.Services.AddSingleton<IWorkflowDefinitionDraftStore>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
-                builder.Services.AddSingleton<IWorkflowDefinitionVersionStore>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
-                builder.Services.AddSingleton<IMoveWorkflowDefinitionsCommand, HttpMoveWorkflowDefinitionsCommand>();
-                builder.Services.AddSingleton<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
-                builder.Services.AddSingleton<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
-                endpointTypes.UnionWith([
-                    "Elsa.Workflows.Design.Api.Endpoints.Definitions.Add",
-                    "Elsa.Workflows.Design.Api.Endpoints.Definitions.Get",
-                    "Elsa.Workflows.Design.Api.Endpoints.Definitions.Move",
-                    "Elsa.Workflows.Design.Api.Endpoints.Folders.List",
-                    "Elsa.Workflows.Design.Api.Endpoints.Folders.Get",
-                    "Elsa.Workflows.Design.Api.Endpoints.Folders.Create"]);
-            }
-
-            builder.Services.AddSingleton<JourneyRequestSender>();
-            builder.Services.AddSingleton<IRequestSender>(services => services.GetRequiredService<JourneyRequestSender>());
-            builder.Services.AddSingleton<ICommandSender>(services => services.GetRequiredService<JourneyRequestSender>());
+            builder.Services.AddSingleton<IRequestSender, JourneyRequestSender>();
             builder.Services.AddFastEndpoints(options =>
             {
                 options.Assemblies = assemblies.ToArray();
@@ -536,20 +343,12 @@ public sealed class DomainManagementApiCompositionTests
         }
     }
 
-    private sealed class JourneyRequestSender(IServiceProvider services) : IRequestSender, ICommandSender
+    private sealed class JourneyRequestSender(IServiceProvider services) : IRequestSender
     {
         public async Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
             if (request is ListExpressionDescriptors expressionDescriptors)
                 return await HandleExpressionDescriptors<T>(expressionDescriptors, cancellationToken);
-            if (request is ListWorkflowDefinitionPage page)
-                return await HandleWorkflowDefinitionPage<T>(page, cancellationToken);
-            if (request is ListWorkflowFolders folders)
-                return await HandleWorkflowFolders<T>(folders, cancellationToken);
-            if (request is GetWorkflowFolder folder)
-                return await HandleWorkflowFolder<T>(folder, cancellationToken);
-            if (request is Elsa.Workflows.Design.Api.Requests.GetDefinition definition)
-                return await HandleWorkflowDefinition<T>(definition, cancellationToken);
             if (request is GetActivityAuthoringCapabilities authoringCapabilities)
             {
                 var handler = services.GetRequiredService<
@@ -574,44 +373,6 @@ public sealed class DomainManagementApiCompositionTests
             return (T)response;
         }
 
-        public async Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull
-        {
-            if (command is CreateWorkflowFolder folder)
-            {
-                var handler = services.GetRequiredService<Elsa.Mediator.Core.Contracts.ICommandHandler<CreateWorkflowFolder, WorkflowFolderView>>();
-                return (T)(object)await handler.Handle(folder, cancellationToken);
-            }
-            if (command is Elsa.Workflows.Design.Api.Commands.AddDefinition definition)
-            {
-                var handler = services.GetRequiredService<
-                    Elsa.Mediator.Core.Contracts.ICommandHandler<
-                        Elsa.Workflows.Design.Api.Commands.AddDefinition,
-                        WorkflowDefinitionDetailsView>>();
-                return (T)(object)await handler.Handle(definition, cancellationToken);
-            }
-            throw new InvalidOperationException($"Unexpected command '{command.GetType().Name}'.");
-        }
-
-        public async Task Send(Elsa.Mediator.Core.Contracts.ICommand command, CancellationToken cancellationToken = default)
-        {
-            if (command is MoveWorkflowDefinitions move)
-            {
-                var handler = services.GetRequiredService<Elsa.Mediator.Core.Contracts.ICommandHandler<MoveWorkflowDefinitions>>();
-                await handler.Handle(move, cancellationToken);
-                return;
-            }
-            throw new InvalidOperationException($"Unexpected command '{command.GetType().Name}'.");
-        }
-
-        private async Task<T> HandleWorkflowDefinitionPage<T>(
-            ListWorkflowDefinitionPage request,
-            CancellationToken cancellationToken) where T : notnull
-        {
-            var handler = services.GetRequiredService<
-                IRequestHandler<ListWorkflowDefinitionPage, WorkflowDefinitionPageView>>();
-            return (T)(object)await handler.Handle(request, cancellationToken);
-        }
-
         private async Task<T> HandleExpressionDescriptors<T>(
             ListExpressionDescriptors request,
             CancellationToken cancellationToken) where T : notnull
@@ -619,197 +380,5 @@ public sealed class DomainManagementApiCompositionTests
             var handler = services.GetRequiredService<IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>>();
             return (T)(object)await handler.Handle(request, cancellationToken);
         }
-
-        private async Task<T> HandleWorkflowFolders<T>(ListWorkflowFolders request, CancellationToken cancellationToken) where T : notnull
-        {
-            var handler = services.GetRequiredService<IRequestHandler<ListWorkflowFolders, WorkflowFolderListView>>();
-            return (T)(object)await handler.Handle(request, cancellationToken);
-        }
-
-        private async Task<T> HandleWorkflowFolder<T>(GetWorkflowFolder request, CancellationToken cancellationToken) where T : notnull
-        {
-            var handler = services.GetRequiredService<IRequestHandler<GetWorkflowFolder, WorkflowFolderDetailsView>>();
-            return (T)(object)await handler.Handle(request, cancellationToken);
-        }
-
-        private async Task<T> HandleWorkflowDefinition<T>(
-            Elsa.Workflows.Design.Api.Requests.GetDefinition request,
-            CancellationToken cancellationToken) where T : notnull
-        {
-            var handler = services.GetRequiredService<
-                IRequestHandler<Elsa.Workflows.Design.Api.Requests.GetDefinition, WorkflowDefinitionDetailsView>>();
-            return (T)(object)await handler.Handle(request, cancellationToken);
-        }
-    }
-
-    private sealed class HttpWorkflowDefinitionPageStore : IWorkflowDefinitionPageStore
-    {
-        public bool IsAvailable => true;
-
-        public Task<WorkflowDefinitionPage> QueryPageAsync(
-            WorkflowDefinitionPageQuery query,
-            CancellationToken cancellationToken = default)
-        {
-            if (query.ContinuationToken is "malformed" or "context-token")
-                throw new ArgumentException("The continuation token is invalid for this query.", nameof(query.ContinuationToken));
-
-            if (query.FolderId is not null || query.Unfiled == true)
-            {
-                if (query.FolderId is not null)
-                {
-                    Assert.Equal(13, query.PageSize);
-                    Assert.Equal("orders", query.SearchTerm);
-                    Assert.Equal(WorkflowDefinitionPageState.All, query.State);
-                }
-                var definition = new WorkflowDefinition
-                {
-                    Id = query.Unfiled == true ? "unfiled-definition" : "folder-definition",
-                    Name = "Orders",
-                    CreatedAt = DateTimeOffset.UnixEpoch,
-                    LastModifiedAt = DateTimeOffset.UnixEpoch,
-                    FolderId = query.Unfiled == true ? null : query.FolderId
-                };
-                return Task.FromResult(new WorkflowDefinitionPage([definition], null));
-            }
-
-            Assert.Equal(1, query.PageSize);
-            Assert.Equal("definition-42", query.SearchTerm);
-            Assert.Equal(WorkflowDefinitionPageState.Deleted, query.State);
-            return Task.FromResult(new WorkflowDefinitionPage(
-                [
-                    new WorkflowDefinition
-                    {
-                        Id = "definition-42",
-                        Name = "Orders",
-                        Description = "Order workflow",
-                        CreatedAt = DateTimeOffset.UnixEpoch,
-                        LastModifiedAt = DateTimeOffset.UnixEpoch,
-                        DeletedAt = DateTimeOffset.UnixEpoch
-                    }
-                ],
-                "next-http-token"));
-        }
-    }
-
-    private sealed class HttpWorkflowDefinitionProjectionStore : IWorkflowDefinitionListProjectionStore
-    {
-        public Task<IReadOnlyList<WorkflowDefinitionListProjection>> ListByDefinitionIdsAsync(
-            IReadOnlyCollection<string> workflowDefinitionIds,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<WorkflowDefinitionListProjection>>(
-                [new("definition-42", "draft-42", "version-42", "2.3.4", 7)]);
-    }
-
-    private sealed class HttpWorkflowFolderStore : IWorkflowFolderStore
-    {
-        private static readonly WorkflowFolder Folder = new() { Id = "folder-1", Name = "Orders", NormalizedName = "ORDERS", ParentKey = WorkflowFolder.RootParentKey };
-        public bool IsAvailable => true;
-        public Task<WorkflowFolderPage> ListDirectChildrenAsync(WorkflowFolderPageRequest request, CancellationToken cancellationToken = default)
-        {
-            if (request.ContinuationToken == "malformed")
-                throw new ArgumentException("The continuation token is invalid for this query.", nameof(request.ContinuationToken));
-            return Task.FromResult(new WorkflowFolderPage([Folder], "folder-token"));
-        }
-        public Task<WorkflowFolderDetails?> FindWithAncestorsAsync(string folderId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<WorkflowFolderDetails?>(folderId == Folder.Id ? new WorkflowFolderDetails(Folder, []) : null);
-        public Task<WorkflowFolder> CreateAsync(WorkflowFolder folder, CancellationToken cancellationToken = default)
-        {
-            if (folder.NormalizedName == "DUPLICATE")
-                throw new Elsa.Workflows.Design.Persistence.Core.Exceptions.WorkflowFolderSiblingConflictException();
-            if (folder.ParentFolderId == "missing")
-                throw Elsa.Primitives.Exceptions.EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folder.ParentFolderId);
-            if (folder.NormalizedName == "UNEXPECTED")
-                throw new InvalidOperationException("provider-secret");
-            return Task.FromResult(folder);
-        }
-    }
-
-    private sealed class HttpIdentityGenerator : IIdentityGenerator
-    {
-        private int _next;
-        public string Generate() => $"http-id-{Interlocked.Increment(ref _next)}";
-    }
-
-    private sealed class HttpMoveWorkflowDefinitionsCommand : IMoveWorkflowDefinitionsCommand
-    {
-        public Task Execute(IReadOnlyCollection<string> definitionIds, string? folderId, CancellationToken cancellationToken = default)
-        {
-            if (definitionIds.Contains("missing", StringComparer.Ordinal))
-                throw Elsa.Primitives.Exceptions.EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), "missing");
-            if (definitionIds.Contains("conflict", StringComparer.Ordinal))
-                throw new Elsa.Workflows.Design.Persistence.Core.Exceptions.WorkflowDefinitionFolderMoveConflictException();
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class HttpWorkflowDefinitionRepository :
-        IAddWorkflowDefinitionCommand,
-        IWorkflowDefinitionStore,
-        IWorkflowDefinitionDraftStore,
-        IWorkflowDefinitionVersionStore
-    {
-        private WorkflowDefinition? _definition;
-        private WorkflowDefinitionDraft? _draft;
-        private IReadOnlyCollection<DesignMetadataRecord> _layout = [];
-
-        public Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellation) =>
-            Execute(workflowDefinition, draft, [], cancellation);
-
-        public Task Execute(
-            WorkflowDefinition workflowDefinition,
-            WorkflowDefinitionDraft draft,
-            IReadOnlyCollection<DesignMetadataRecord> layout,
-            CancellationToken cancellation)
-        {
-            _definition = workflowDefinition;
-            _draft = draft;
-            _layout = layout;
-            return Task.CompletedTask;
-        }
-
-        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) =>
-            Task.FromResult(_definition is not null && _definition.Id == id
-                ? _definition
-                : throw Elsa.Primitives.Exceptions.EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), id));
-
-        public async Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) =>
-            await GetAsync(id, cancellationToken);
-
-        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<WorkflowDefinition>>(_definition is null ? [] : [_definition]);
-
-        Task<WorkflowDefinitionDraft?> IWorkflowDefinitionDraftStore.FindByIdAsync(string draftId, CancellationToken cancellationToken) =>
-            Task.FromResult(_draft?.Id == draftId ? _draft : null);
-
-        public Task<WorkflowDefinitionDraft?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(_draft?.WorkflowDefinitionId == workflowDefinitionId ? _draft : null);
-
-        public Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<WorkflowDefinitionDraft>>(
-                _draft?.WorkflowDefinitionId == workflowDefinitionId ? [_draft] : []);
-
-        public Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyCollection<DesignMetadataRecord>>(_draft?.Id == draftId ? _layout : []);
-
-        public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default) =>
-            _draft?.Id == draftId ? new DraftWithLayout(_draft, await FindLayoutByDraftIdAsync(draftId, cancellationToken)) : null;
-
-        Task<WorkflowDefinitionVersion> IWorkflowDefinitionVersionStore.GetAsync(string versionId, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        Task<WorkflowDefinitionVersion?> IWorkflowDefinitionVersionStore.FindByIdAsync(string versionId, CancellationToken cancellationToken) =>
-            Task.FromResult<WorkflowDefinitionVersion?>(null);
-
-        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<WorkflowDefinitionVersion?>(null);
-
-        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<WorkflowDefinitionVersion>>([]);
-
-        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) =>
-            Task.FromResult(false);
     }
 }

@@ -27,7 +27,6 @@ public sealed class WorkflowDefinitionLifecycleContractTests
     {
         { "Definitions.List", "GET", "design/workflows/definitions" },
         { "Definitions.Add", "POST", "design/workflows/definitions" },
-        { "Definitions.Move", "POST", "design/workflows/definitions/move" },
         { "Definitions.Get", "GET", "design/workflows/definitions/{definitionId}" },
         { "Definitions.UpdateMetadata", "PATCH", "design/workflows/definitions/{definitionId}" },
         { "Definitions.SoftDelete", "DELETE", "design/workflows/definitions/{definitionId}" },

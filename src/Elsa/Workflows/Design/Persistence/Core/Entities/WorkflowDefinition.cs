@@ -10,12 +10,6 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 /// </summary>
 public sealed class WorkflowDefinition : TenantEntity, IWorkflowDefinition
 {
-    /// <summary>
-    /// Optional organizational placement. This is mutable persistence metadata; it is deliberately
-    /// not part of <see cref="IWorkflowDefinition"/> or authored workflow state.
-    /// </summary>
-    public string? FolderId { get; set; }
-
     public string Name { get; set; } = string.Empty;
 
     public string? Description { get; set; }
@@ -61,9 +55,6 @@ public sealed class WorkflowDefinition : TenantEntity, IWorkflowDefinition
         if (source is WorkflowDefinition entity)
         {
             definition.DeletedReason = entity.DeletedReason;
-            // Reconciliation reads an existing persistence entity before applying source content.
-            // Preserve the server-owned placement in that path; new source imports remain Unfiled.
-            definition.FolderId = entity.FolderId;
             definition.IsSourceOwned = entity.IsSourceOwned;
         }
 

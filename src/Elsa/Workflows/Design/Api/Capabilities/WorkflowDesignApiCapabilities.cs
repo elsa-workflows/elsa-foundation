@@ -2,8 +2,6 @@ using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
-using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Api.Capabilities;
 
@@ -26,11 +24,7 @@ public static class WorkflowDesignApiCapabilities
 /// <summary>Advertises only authoring operations backed by services in the active shell.</summary>
 public sealed class WorkflowDesignOperationalCapabilitySource(
     ScopedVariableAuthoringContract? scopedVariables = null,
-    IEnumerable<IActivityInputOptionsProvider>? inputOptionsProviders = null,
-    IWorkflowDefinitionPageStore? pageStore = null,
-    IWorkflowFolderStore? folderStore = null,
-    IMoveWorkflowDefinitionsCommand? moveDefinitions = null,
-    IRestructureWorkflowFoldersCommand? restructureFolders = null) : IApiCapabilitySource
+    IEnumerable<IActivityInputOptionsProvider>? inputOptionsProviders = null) : IApiCapabilitySource
 {
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
         CancellationToken cancellationToken = default)
@@ -43,20 +37,6 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
                 "activity-input-options",
                 "design/workflows/activities/{activityVersionId}/inputs/{inputName}/options",
                 templated: true));
-        if (pageStore?.IsAvailable == true)
-            links.Add(new("workflow-definitions-page", "design/workflows/definitions/page"));
-        // Folder selection is only useful when the companion bounded definition route can apply
-        // folderId/unfiled server-side; never advertise a tree that Studio cannot browse through.
-        if (folderStore?.IsAvailable == true && pageStore?.IsAvailable == true)
-            links.Add(new("workflow-folders", "design/workflows/folders"));
-        if (moveDefinitions is not null && folderStore?.IsAvailable == true && pageStore?.IsAvailable == true)
-            links.Add(new("workflow-definition-folder-move", "design/workflows/definitions/move"));
-        if (restructureFolders is not null && folderStore?.IsAvailable == true && pageStore?.IsAvailable == true)
-        {
-            links.Add(new("workflow-folder-rename", "design/workflows/folders/{folderId}/rename", templated: true));
-            links.Add(new("workflow-folder-move", "design/workflows/folders/{folderId}/move", templated: true));
-            links.Add(new("workflow-folder-delete-empty", "design/workflows/folders/{folderId}", templated: true));
-        }
 
         IReadOnlyCollection<ApiCapabilityDeclaration> declarations = links.Count == 0
             ? []

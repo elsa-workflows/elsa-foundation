@@ -1,7 +1,6 @@
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using PersistenceWorkflowDefinition = Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition;
 
 namespace Elsa.Workflows.Design.Api.Projections;
 
@@ -19,17 +18,6 @@ public static class WorkflowViewProjections
             definition.CreatedAt,
             definition.LastModifiedAt,
             definition.DeletedAt);
-
-    /// <summary>Projects the current persistence definition, including server-owned placement metadata.</summary>
-    public static WorkflowDefinitionView ToView(this PersistenceWorkflowDefinition definition) =>
-        new(
-            definition.Id,
-            definition.Name,
-            definition.Description,
-            definition.CreatedAt,
-            definition.LastModifiedAt,
-            definition.DeletedAt,
-            FolderId: definition.FolderId);
 
     public static WorkflowDefinitionStateView ToStateView(this WorkflowDefinitionState state) =>
         new(
