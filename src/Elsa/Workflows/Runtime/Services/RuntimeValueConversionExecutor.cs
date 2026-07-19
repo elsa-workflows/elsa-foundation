@@ -44,7 +44,7 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
             ValueConversionOperation.NumericWidening => ConvertNumeric(inline, plan),
             ValueConversionOperation.RecursiveCollection => ConvertCollection(inline, plan, depth: 1),
             ValueConversionOperation.CanonicalAny => CanonicalizeAny(inline, plan),
-            ValueConversionOperation.Profile => throw Reject(plan, "pinned conversion profiles are not available in this runtime slice"),
+            ValueConversionOperation.Profile => ConvertProfile(inline, plan),
             _ => throw Reject(plan, $"the pinned operation '{plan.Operation}' is unsupported")
         };
 
@@ -53,9 +53,9 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
 
     private static void ValidatePlan(ValueConversionPlan plan)
     {
-        if (plan.Mode is ValueConversionMode.Json or ValueConversionMode.Xml or ValueConversionMode.Profile ||
-            plan.Operation == ValueConversionOperation.Profile)
-            throw Reject(plan, "pinned conversion profiles are not available in this runtime slice");
+        if (plan.Mode is ValueConversionMode.Xml ||
+            plan.Operation == ValueConversionOperation.Profile && !IsJsonProfile(plan))
+            throw Reject(plan, "the pinned conversion profile is not available in this runtime slice");
 
         switch (plan.Operation)
         {
@@ -77,9 +77,12 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
         if (plan.SourceRepresentation == ValueRepresentation.TransientResource)
             throw Reject(plan, "transient resources cannot cross a durable conversion boundary");
 
-        if (plan.SourceRepresentation is ValueRepresentation.FormattedContent or ValueRepresentation.DurableReference &&
+        if (plan.SourceRepresentation == ValueRepresentation.DurableReference &&
             plan.Operation is not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility)
             throw Reject(plan, "the source representation requires a dedicated pinned profile or external-reference conversion");
+        if (plan.SourceRepresentation == ValueRepresentation.FormattedContent &&
+            plan.Operation is not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility and not ValueConversionOperation.Profile)
+            throw Reject(plan, "formatted content requires a dedicated pinned profile conversion");
     }
 
     private static JsonElement ConvertNumeric(JsonElement value, ValueConversionPlan plan)
@@ -128,6 +131,63 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
         return document.RootElement.Clone();
     }
 
+    private static JsonElement ConvertProfile(JsonElement value, ValueConversionPlan plan)
+    {
+        if (!IsJsonProfile(plan))
+            throw Reject(plan, "the pinned conversion profile is not available in this runtime slice");
+        if (plan.SourceRepresentation != ValueRepresentation.FormattedContent)
+            throw Reject(plan, "JSON conversion requires a formatted-content source representation");
+
+        var json = value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : value.GetRawText();
+        if (Encoding.UTF8.GetByteCount(json) > plan.Limits.MaxPayloadBytes)
+            throw Reject(plan, $"maximum payload size '{plan.Limits.MaxPayloadBytes}' bytes was exceeded");
+
+        using var document = ParseJsonContent(json, plan);
+        var root = document.RootElement;
+        var nodeCount = CountJsonNodes(root, plan, depth: 1);
+        if (nodeCount > plan.Limits.MaxCollectionItems)
+            throw Reject(plan, $"maximum JSON node count '{plan.Limits.MaxCollectionItems}' was exceeded");
+        if (ValueConversionCompatibility.IsJsonObjectTarget(plan.TargetType) && root.ValueKind != JsonValueKind.Object)
+            throw Reject(plan, "JSON object conversion requires a JSON object root value");
+        if (!ValueConversionCompatibility.IsCanonicalAnyTarget(plan.TargetType) &&
+            !ValueConversionCompatibility.IsJsonObjectTarget(plan.TargetType))
+            throw Reject(plan, "JSON conversion supports only Any and JsonObject targets in this runtime slice");
+
+        return CanonicalizeAny(root, plan);
+    }
+
+    private static JsonDocument ParseJsonContent(string json, ValueConversionPlan plan)
+    {
+        try
+        {
+            return JsonDocument.Parse(json, new JsonDocumentOptions
+            {
+                AllowTrailingCommas = false,
+                CommentHandling = JsonCommentHandling.Disallow,
+                MaxDepth = plan.Limits.MaxDepth
+            });
+        }
+        catch (JsonException exception)
+        {
+            throw Reject(plan, $"malformed JSON content: {exception.Message}");
+        }
+    }
+
+    private static int CountJsonNodes(JsonElement value, ValueConversionPlan plan, int depth)
+    {
+        if (depth > plan.Limits.MaxDepth)
+            throw Reject(plan, $"maximum conversion depth '{plan.Limits.MaxDepth}' was exceeded");
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.Object => 1 + value.EnumerateObject().Sum(property => CountJsonNodes(property.Value, plan, depth + 1)),
+            JsonValueKind.Array => 1 + value.EnumerateArray().Sum(item => CountJsonNodes(item, plan, depth + 1)),
+            _ => 1
+        };
+    }
+
     private static void WriteCanonicalJson(Utf8JsonWriter writer, JsonElement value, ValueConversionPlan plan, int depth)
     {
         if (depth > plan.Limits.MaxDepth)
@@ -167,6 +227,9 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
         if (Encoding.UTF8.GetByteCount(value.GetRawText()) > plan.Limits.MaxPayloadBytes)
             throw Reject(plan, $"maximum payload size '{plan.Limits.MaxPayloadBytes}' bytes was exceeded");
     }
+
+    private static bool IsJsonProfile(ValueConversionPlan plan) =>
+        plan.Profile is { Id: "elsa.json", Version: "1" };
 
     private static RuntimeValueConversionException Reject(ValueConversionPlan plan, string reason) => new(plan, reason);
 }

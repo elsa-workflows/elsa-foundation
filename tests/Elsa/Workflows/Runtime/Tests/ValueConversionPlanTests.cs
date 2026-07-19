@@ -148,6 +148,98 @@ public sealed class ValueConversionPlanTests
     }
 
     [Fact]
+    public void Json_profile_decodes_formatted_object_content_to_canonical_any()
+    {
+        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var converted = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(
+                new ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement("{\"z\":1,\"customer\":{\"name\":\"Ada\"}}"),
+                ValueProtectionPolicy.InstanceInline),
+            plan);
+
+        Assert.Equal("{\"customer\":{\"name\":\"Ada\"},\"z\":1}", converted.InlineValue!.Value.GetRawText());
+    }
+
+    [Fact]
+    public void Json_profile_decodes_formatted_array_content_to_canonical_any()
+    {
+        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"));
+        var converted = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(
+                new ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement("[{\"id\":2},{\"id\":3}]"),
+                ValueProtectionPolicy.InstanceInline),
+            plan);
+
+        Assert.Equal(2, converted.InlineValue!.Value.EnumerateArray().First().GetProperty("id").GetInt32());
+    }
+
+    [Fact]
+    public void Json_profile_requires_object_shape_for_json_object_targets()
+    {
+        var plan = JsonPlan(new ValueTypeDescriptor("JsonObject"));
+
+        var exception = Assert.Throws<RuntimeValueConversionException>(() => new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(
+                new ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement("[1,2]"),
+                ValueProtectionPolicy.InstanceInline),
+            plan));
+
+        Assert.Contains("JSON object root", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Explicit_json_reports_malformed_formatted_content()
+    {
+        var plan = JsonPlan(new ValueTypeDescriptor("Elsa.Any"), ValueConversionMode.Json);
+
+        var exception = Assert.Throws<RuntimeValueConversionException>(() => new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(
+                new ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement("{not-json"),
+                ValueProtectionPolicy.InstanceInline),
+            plan));
+
+        Assert.Contains("malformed JSON", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Text_value_to_any_remains_a_json_string_under_auto_without_json_sniffing()
+    {
+        var sourceType = new ValueTypeDescriptor("String");
+        var targetType = new ValueTypeDescriptor("Elsa.Any");
+        var plan = Plan(sourceType, targetType, ValueRepresentation.TextValue, ValueConversionOperation.CanonicalAny);
+
+        var converted = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(sourceType, JsonSerializer.SerializeToElement("{\"name\":\"Ada\"}"), ValueProtectionPolicy.InstanceInline),
+            plan);
+
+        Assert.Equal(JsonValueKind.String, converted.InlineValue!.Value.ValueKind);
+        Assert.Equal("{\"name\":\"Ada\"}", converted.InlineValue.Value.GetString());
+    }
+
+    [Fact]
+    public void Json_profile_enforces_payload_depth_and_node_limits()
+    {
+        var smallPayload = JsonPlan(new ValueTypeDescriptor("Elsa.Any"), limits: new ValueConversionLimits(8, 10, 4));
+        var shallow = JsonPlan(new ValueTypeDescriptor("Elsa.Any"), limits: new ValueConversionLimits(1, 10, 1_024));
+        var fewNodes = JsonPlan(new ValueTypeDescriptor("Elsa.Any"), limits: new ValueConversionLimits(8, 2, 1_024));
+        var executor = new RuntimeValueConversionExecutor();
+
+        Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            ValueEnvelope.Inline(new ValueTypeDescriptor("String"), JsonSerializer.SerializeToElement("{\"name\":\"Ada\"}"), ValueProtectionPolicy.InstanceInline),
+            smallPayload));
+        Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            ValueEnvelope.Inline(new ValueTypeDescriptor("String"), JsonSerializer.SerializeToElement("{\"nested\":{\"name\":\"Ada\"}}"), ValueProtectionPolicy.InstanceInline),
+            shallow));
+        Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            ValueEnvelope.Inline(new ValueTypeDescriptor("String"), JsonSerializer.SerializeToElement("{\"a\":1,\"b\":2}"), ValueProtectionPolicy.InstanceInline),
+            fewNodes));
+    }
+
+    [Fact]
     public void Identity_conversion_preserves_an_external_reference_without_materializing_it()
     {
         var type = new ValueTypeDescriptor("String");
@@ -220,5 +312,20 @@ public sealed class ValueConversionPlanTests
             operation,
             profile: null,
             limits: ValueConversionLimits.Default,
+            options: null);
+
+    private static ValueConversionPlan JsonPlan(
+        ValueTypeDescriptor targetType,
+        ValueConversionMode mode = ValueConversionMode.Auto,
+        ValueConversionLimits? limits = null) =>
+        new(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.FormattedContent,
+            new ValueTypeDescriptor("String"),
+            targetType,
+            mode,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.json", "1"),
+            limits: limits ?? ValueConversionLimits.Default,
             options: null);
 }

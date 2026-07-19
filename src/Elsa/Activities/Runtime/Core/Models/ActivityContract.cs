@@ -87,16 +87,7 @@ public sealed class ActivityContract
             inputs = Inputs.Values
                 .OrderBy(x => x.Key, StringComparer.Ordinal)
                 .Select(BuildInputFingerprintProjection),
-            result = new
-            {
-                Result.Type,
-                Result.IsRequired,
-                Result.Policy,
-                resultSourceRepresentation = Result.HasExplicitSourceRepresentation ? Result.SourceRepresentation : (ValueRepresentation?)null,
-                projections = Result.Projections.Values
-                    .OrderBy(x => x.Key, StringComparer.Ordinal)
-                    .Select(BuildResultProjectionFingerprintProjection)
-            },
+            result = BuildResultFingerprintProjection(),
             outcomes = Outcomes.Order(StringComparer.Ordinal),
             activation = Activation
         };
@@ -127,6 +118,24 @@ public sealed class ActivityContract
         return projection;
     }
 
+    private IReadOnlyDictionary<string, object?> BuildResultFingerprintProjection()
+    {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [nameof(Result.Type)] = Result.Type,
+            [nameof(Result.IsRequired)] = Result.IsRequired,
+            [nameof(Result.Policy)] = Result.Policy,
+            ["projections"] = Result.Projections.Values
+                .OrderBy(x => x.Key, StringComparer.Ordinal)
+                .Select(BuildResultProjectionFingerprintProjection)
+        };
+
+        if (Result.SourceRepresentation.HasValue)
+            result[nameof(Result.SourceRepresentation)] = Result.SourceRepresentation;
+
+        return result;
+    }
+
     private static IReadOnlyDictionary<string, object?> BuildResultProjectionFingerprintProjection(ActivityResultProjectionContract projection)
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -138,7 +147,7 @@ public sealed class ActivityContract
             [nameof(projection.Policy)] = projection.Policy
         };
 
-        if (projection.HasExplicitSourceRepresentation)
+        if (projection.SourceRepresentation.HasValue)
             result[nameof(projection.SourceRepresentation)] = projection.SourceRepresentation;
 
         return result;
@@ -247,16 +256,15 @@ public sealed class ActivityResultContract
         Type = type;
         IsRequired = isRequired;
         Policy = policy;
-        SourceRepresentation = sourceRepresentation ?? ValueRepresentationDefaults.Infer(type);
-        HasExplicitSourceRepresentation = sourceRepresentation.HasValue;
+        SourceRepresentation = sourceRepresentation;
         Projections = projectionArray.ToDictionary(x => x.Key, StringComparer.Ordinal);
     }
 
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
     public ActivityValuePolicy Policy { get; }
-    public ValueRepresentation SourceRepresentation { get; }
-    internal bool HasExplicitSourceRepresentation { get; }
+    public ValueRepresentation? SourceRepresentation { get; }
+    public ValueRepresentation EffectiveSourceRepresentation => SourceRepresentation ?? ValueRepresentationDefaults.Infer(Type);
     public IReadOnlyDictionary<string, ActivityResultProjectionContract> Projections { get; }
 }
 
@@ -280,8 +288,7 @@ public sealed class ActivityResultProjectionContract
         Type = type;
         IsRequired = isRequired;
         Policy = policy;
-        SourceRepresentation = sourceRepresentation ?? ValueRepresentationDefaults.Infer(type);
-        HasExplicitSourceRepresentation = sourceRepresentation.HasValue;
+        SourceRepresentation = sourceRepresentation;
     }
 
     public string Key { get; }
@@ -289,8 +296,8 @@ public sealed class ActivityResultProjectionContract
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
     public ActivityValuePolicy Policy { get; }
-    public ValueRepresentation SourceRepresentation { get; }
-    internal bool HasExplicitSourceRepresentation { get; }
+    public ValueRepresentation? SourceRepresentation { get; }
+    public ValueRepresentation EffectiveSourceRepresentation => SourceRepresentation ?? ValueRepresentationDefaults.Infer(Type);
 }
 
 public sealed record ActivityActivationRequirement

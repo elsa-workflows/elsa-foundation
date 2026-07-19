@@ -54,12 +54,10 @@ public sealed class ValueConversionPlanResolverTests
     }
 
     [Fact]
-    public void Explicit_profiles_require_a_declared_formatted_source_and_an_available_runtime_capable_pinned_version()
+    public void Explicit_json_profile_requires_declared_formatted_content_and_pins_the_builtin_version()
     {
         var rawText = Assert.Throws<ValueConversionPublicationException>(() =>
             resolver.Resolve(Type("String"), ValueRepresentation.TextValue, Type("Customer"), ValueConversionMode.Json));
-        var unavailableJson = Assert.Throws<ValueConversionPublicationException>(() =>
-            resolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("Customer"), ValueConversionMode.Json));
         var unknownProfile = Assert.Throws<ValueConversionPublicationException>(() =>
             resolver.Resolve(
                 Type("String"),
@@ -67,10 +65,16 @@ public sealed class ValueConversionPlanResolverTests
                 Type("Customer"),
                 ValueConversionMode.Profile,
                 new ValueConversionProfileReference("partner.json", "8")));
+        var explicitJson = resolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("Elsa.Any"), ValueConversionMode.Json);
+        var autoJson = resolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("JsonObject"));
 
         Assert.Contains("not format-sniffed", rawText.Message, StringComparison.Ordinal);
-        Assert.Contains("not available", unavailableJson.Message, StringComparison.Ordinal);
         Assert.Contains("not available", unknownProfile.Message, StringComparison.Ordinal);
+        Assert.Equal(ValueConversionOperation.Profile, explicitJson.Operation);
+        Assert.Equal("elsa.json", explicitJson.Profile!.Id);
+        Assert.Equal(ValueConversionMode.Json, explicitJson.Mode);
+        Assert.Equal(ValueConversionOperation.Profile, autoJson.Operation);
+        Assert.Equal("JsonObject", autoJson.TargetType.Alias);
     }
 
     [Fact]

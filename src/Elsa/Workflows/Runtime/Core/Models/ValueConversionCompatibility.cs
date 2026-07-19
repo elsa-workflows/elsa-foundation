@@ -64,6 +64,10 @@ public static class ValueConversionCompatibility
          StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "Any") ||
          StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "JsonNode"));
 
+    public static bool IsJsonObjectTarget(ValueTypeDescriptor target) =>
+        target.CollectionKind == CollectionKind.Single &&
+        StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "JsonObject");
+
     public static bool IsSafeCollectionShapeConversion(CollectionKind source, CollectionKind target) =>
         source == target ||
         (source is CollectionKind.Array or CollectionKind.List && target is CollectionKind.Array or CollectionKind.List);

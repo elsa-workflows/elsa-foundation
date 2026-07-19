@@ -68,7 +68,7 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
                 $"VF-COER-001: Activity result input '{binding.InputName}' on consumer node '{consumer.ExecutableNodeId}' " +
                 $"references producer node '{producer.ExecutableNodeId}', which has no pinned activity result contract.");
         var (sourceType, sourceRepresentation) = StringComparer.Ordinal.Equals(reference.ProjectionKey, "$result")
-            ? (result.Type, result.SourceRepresentation)
+            ? (result.Type, result.EffectiveSourceRepresentation)
             : ResolveProjectionContract(binding, consumer, reference, producer, result);
         var plan = conversionPlanResolver.Resolve(
             sourceType,
@@ -101,7 +101,7 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
                 $"VF-COER-001: Activity result input '{binding.InputName}' on consumer node '{consumer.ExecutableNodeId}' " +
                 $"references unknown result projection '{reference.ProjectionKey}' on producer node '{producer.ExecutableNodeId}'.");
 
-        return (projection.Type, projection.SourceRepresentation);
+        return (projection.Type, projection.EffectiveSourceRepresentation);
     }
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)
