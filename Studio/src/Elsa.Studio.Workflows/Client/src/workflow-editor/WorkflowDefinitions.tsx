@@ -34,6 +34,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const [folderCapabilityAvailable, setFolderCapabilityAvailable] = useState(false);
   const [folderSelection, setFolderSelection] = useState<WorkflowFolderSelection>("all");
   const selectVisibleRef = useRef<HTMLInputElement | null>(null);
+  const loadGenerationRef = useRef(0);
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
   const continuationToken = nextContinuationTokens[page];
   const suggestMetadataAction = findAiAction(ai, "weaver.workflows.suggest-create-metadata");
@@ -42,6 +43,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const allVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCount === visibleDefinitionIds.length;
 
   const load = useCallback(async () => {
+    const generation = ++loadGenerationRef.current;
     setState("loading");
     setError("");
     try {
@@ -54,6 +56,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
         folderId: folderCapabilityAvailable ? selectedFolderId(folderSelection) : null,
         unfiled: folderCapabilityAvailable && folderSelection === "unfiled"
       });
+      if (generation !== loadGenerationRef.current) return;
       if (response.isPaged) {
         setDefinitions(response.definitions);
         setUsesCursorPaging(true);
@@ -77,6 +80,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
       }
       setState("ready");
     } catch (e) {
+      if (generation !== loadGenerationRef.current) return;
       setError(e instanceof Error ? e.message : String(e));
       setState("failed");
     }

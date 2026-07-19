@@ -3118,6 +3118,73 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).not.toContain("Folder A");
     await unmount();
   });
+
+  it("keeps definitions, cursor state, and errors on the latest folder when older page requests finish later", async () => {
+    const folderA = { id: "folder-a", parentId: null, name: "Folder A", normalizedName: "folder a", createdAt: "", lastModifiedAt: "" };
+    const folderB = { id: "folder-b", parentId: null, name: "Folder B", normalizedName: "folder b", createdAt: "", lastModifiedAt: "" };
+    let aRequestCount = 0;
+    let bRequestCount = 0;
+    let resolveA1: ((value: Response) => void) | undefined;
+    let resolveB1: ((value: Response) => void) | undefined;
+    let resolveA2: ((value: Response) => void) | undefined;
+    let resolveB2: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-a")) return response({ folder: folderA, ancestors: [] });
+      if (url.includes("/folders/folder-b")) return response({ folder: folderB, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folderA, folderB], nextContinuationToken: null });
+      if (url.includes("definition-pages") && url.includes("folderId=folder-a")) {
+        aRequestCount += 1;
+        return new Promise<Response>(resolve => {
+          if (aRequestCount === 1) resolveA1 = resolve;
+          else resolveA2 = resolve;
+        });
+      }
+      if (url.includes("definition-pages") && url.includes("folderId=folder-b")) {
+        bRequestCount += 1;
+        return new Promise<Response>(resolve => {
+          if (bRequestCount === 1) resolveB1 = resolve;
+          else resolveB2 = resolve;
+        });
+      }
+      if (url.includes("definition-pages")) return response({ items: [definition({ name: "All workflow" })], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Folder A");
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-a']"));
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-b']"));
+    await vi.waitFor(() => expect(resolveA1).toBeTypeOf("function"));
+    await vi.waitFor(() => expect(resolveB1).toBeTypeOf("function"));
+    resolveB1?.(response({ items: [definition({ name: "Newest B workflow" })], nextContinuationToken: null }));
+    await waitForText(container, "Newest B workflow");
+    expect(buttonByText(container, "Next")?.hasAttribute("disabled")).toBe(true);
+    resolveA1?.(response({ items: [definition({ name: "Stale A workflow" })], nextContinuationToken: "stale-a-next" }));
+    await flushPromises();
+    expect(container.textContent).toContain("Newest B workflow");
+    expect(container.textContent).not.toContain("Stale A workflow");
+    expect(buttonByText(container, "Next")?.hasAttribute("disabled")).toBe(true);
+
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-a']"));
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-b']"));
+    await vi.waitFor(() => expect(resolveA2).toBeTypeOf("function"));
+    await vi.waitFor(() => expect(resolveB2).toBeTypeOf("function"));
+    resolveB2?.(response({ items: [definition({ name: "Latest B workflow" })], nextContinuationToken: null }));
+    await waitForText(container, "Latest B workflow");
+    resolveA2?.(response("Stale A failure", 500));
+    await flushPromises();
+    expect(container.textContent).toContain("Latest B workflow");
+    expect(container.textContent).not.toContain("Stale A failure");
+    expect(container.textContent).not.toContain("Couldn't load workflow definitions");
+    expect(buttonByText(container, "Next")?.hasAttribute("disabled")).toBe(true);
+    await unmount();
+  });
 });
 
 function testApi(): ElsaStudioModuleApi {
