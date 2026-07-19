@@ -22,13 +22,14 @@ export function WfEmptyState({ icon, title, description, action }: { icon?: Reac
   );
 }
 
-export function WfErrorCard({ message, title = "Something went wrong" }: { message?: string; title?: string }) {
+export function WfErrorCard({ message, title = "Something went wrong", action }: { message?: string; title?: string; action?: React.ReactNode }) {
   return (
     <div className="wf-error-card" role="alert">
       <AlertCircle size={18} />
       <div className="wf-error-card-body">
         <strong>{title}</strong>
         <span>{message || "Please try again, or check that the Elsa server is reachable."}</span>
+        {action ? <div>{action}</div> : null}
       </div>
     </div>
   );

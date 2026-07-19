@@ -32,6 +32,13 @@ export interface WorkflowDefinitionSummary {
   versionCount: number;
   /** Organizational placement, intentionally separate from the authored workflow state. */
   folderId?: string | null;
+  /** Root-to-containing-folder projection for result navigation; IDs are opaque. */
+  folderBreadcrumb?: WorkflowFolderBreadcrumbItem[];
+}
+
+export interface WorkflowFolderBreadcrumbItem {
+  id: string;
+  name: string;
 }
 
 export interface WorkflowFolder {

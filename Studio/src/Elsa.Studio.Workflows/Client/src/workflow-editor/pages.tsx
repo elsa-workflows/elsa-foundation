@@ -1,6 +1,7 @@
 import React, { lazy, useCallback, useEffect, useState } from "react";
 import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
+import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 
 const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const WorkflowDefinitions = lazy(() => import("./WorkflowDefinitions").then(module => ({ default: module.WorkflowDefinitions })));
@@ -35,8 +36,8 @@ export function WorkflowManagementPage({
   }, []);
 
   const openDefinition = (id: string | null) => {
-    const url = id ? `/workflows/definitions?definition=${encodeURIComponent(id)}` : "/workflows/definitions";
-    window.history.pushState({}, "", url);
+    const url = updateWorkflowDefinitionIdInUrl(new URL(window.location.href), id);
+    window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
