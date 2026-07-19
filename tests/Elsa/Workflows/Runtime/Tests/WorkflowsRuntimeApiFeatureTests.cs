@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -13,6 +15,17 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class WorkflowsRuntimeApiFeatureTests
 {
+    [Fact]
+    public void Registers_value_payload_reader_through_its_feature_contract_only()
+    {
+        var services = new ServiceCollection();
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionValuePayloadReader));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(ActivityExecutionValuePayloadReader));
+    }
+
     [Fact]
     public void RegistersRuntimeExecutionServicesAndRequestHandlers()
     {

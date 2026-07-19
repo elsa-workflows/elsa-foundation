@@ -78,41 +78,21 @@ public sealed class HashMismatchTests
     }
 
     [Fact]
-    public async Task SameVersionClrNullabilityMetadataEnrichment_SkipsLegacyPersistedRow()
+    public async Task SameVersionDifferentInputNullability_ThrowsHashMismatch()
     {
         var store = new InMemoryReconcilerHarness.CatalogStore();
 
         await InMemoryReconcilerHarness.BuildReconciler(
             store,
-            Source(Model(inputs: [Input(isNullable: null)]))).Reconcile(CancellationToken.None);
-        var persisted = Assert.Single(store.Versions);
-        var legacyHash = persisted.Hash;
-
-        await InMemoryReconcilerHarness.BuildReconciler(
-            store,
-            Source(Model(inputs: [Input(isNullable: false)])),
-            DuplicateHandling.Throw).Reconcile(CancellationToken.None);
-
-        Assert.Same(persisted, Assert.Single(store.Versions));
-        Assert.Equal(legacyHash, persisted.Hash);
-        Assert.Null(Assert.Single(persisted.Inputs).IsNullable);
-    }
-
-    [Fact]
-    public async Task SameVersionClrNullabilityMetadataEnrichmentWithOtherContentChange_ThrowsHashMismatch()
-    {
-        var store = new InMemoryReconcilerHarness.CatalogStore();
-
-        await InMemoryReconcilerHarness.BuildReconciler(
-            store,
-            Source(Model("first", inputs: [Input(isNullable: null)]))).Reconcile(CancellationToken.None);
+            Source(Model(inputs: [Input(isNullable: false)]))).Reconcile(CancellationToken.None);
 
         await Assert.ThrowsAsync<ActivityVersionHashMismatchException>(
             () => InMemoryReconcilerHarness.BuildReconciler(
                 store,
-                Source(Model("second", inputs: [Input(isNullable: false)]))).Reconcile(CancellationToken.None));
+                Source(Model(inputs: [Input(isNullable: true)]))).Reconcile(CancellationToken.None));
 
-        Assert.Single(store.Versions);
+        var persisted = Assert.Single(store.Versions);
+        Assert.False(Assert.Single(persisted.Inputs).IsNullable);
     }
 
     [Fact]
@@ -191,15 +171,13 @@ public sealed class HashMismatchTests
             Outputs: [],
             DesignFacets: []);
 
-    private static InputDefinition Input(bool? isNullable) =>
+    private static InputDefinition Input(bool isNullable) =>
         new(
             "message",
             "Message",
             new TypeReference("String"),
             StorageDriverType: null,
             DisplayName: "Message",
-            Category: null)
-        {
-            IsNullable = isNullable
-        };
+            Category: null,
+            IsNullable: isNullable);
 }

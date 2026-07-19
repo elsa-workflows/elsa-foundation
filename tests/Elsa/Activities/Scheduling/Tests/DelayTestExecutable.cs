@@ -34,6 +34,7 @@ internal static class DelayTestExecutable
                 nameof(Delay.Duration),
                 new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(TimeSpan))),
                 false,
+                false,
                 true,
                 JsonSerializer.SerializeToElement(TimeSpan.Zero),
                 ActivityValuePolicy.Default)],

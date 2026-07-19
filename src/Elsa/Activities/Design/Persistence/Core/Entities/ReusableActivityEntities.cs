@@ -16,6 +16,12 @@ public sealed class ActivityDefinitionAuthoringState : TenantEntity
     public ActivityDefinitionForkOrigin? ForkedFrom { get; init; }
 
     public string? HeadVersionId { get; set; }
+
+    /// <summary>
+    /// Exact immutable version offered for new direct selection. This is an explicit product decision,
+    /// independent of publication head and version ordering.
+    /// </summary>
+    public string? RecommendedVersionId { get; set; }
 }
 
 public sealed class ActivityDefinitionDraft : TenantEntity
@@ -26,11 +32,18 @@ public sealed class ActivityDefinitionDraft : TenantEntity
 
     public string? SourceVersionId { get; init; }
 
+    /// <summary>
+    /// Optional, non-unique author-facing label. This is presentation metadata and deliberately lives
+    /// outside <see cref="State"/> so providers cannot treat it as behavior.
+    /// </summary>
+    public string? PresentationLabel { get; set; }
+
     public ActivityDefinitionDraftStatus Status { get; set; } = ActivityDefinitionDraftStatus.Active;
 
     public ActivityDefinitionDraftState State { get; set; } = null!;
 
     public string? PublishedVersionId { get; set; }
+
 }
 
 public sealed class ActivityDefinitionDraftLayout : TenantEntity
@@ -144,6 +157,8 @@ public sealed class ActivityDependencyEdge : TenantEntity
     public int ChildIndex { get; init; }
 
     public ICollection<ActivityNodeOrigin> NodeOrigin { get; init; } = [];
+
+    public ICollection<ActivityContractMemberUsage> MemberUsage { get; init; } = [];
 }
 
 /// <summary>Single rebuildable mixed-owner reverse dependency snapshot.</summary>

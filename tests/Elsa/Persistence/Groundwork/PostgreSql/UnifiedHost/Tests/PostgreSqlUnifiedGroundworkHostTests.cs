@@ -97,7 +97,8 @@ public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixtur
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
 
         await using var provider = await BuildHostAsync();
-        var preferences = provider.GetRequiredService<IStudioPreferenceStore>();
+        await using var scope = provider.CreateAsyncScope();
+        var preferences = scope.ServiceProvider.GetRequiredService<IStudioPreferenceStore>();
         var key = new StudioPreferenceKey("user-1", "tenant-1", "studio-1", "dashboard");
         using var value = JsonDocument.Parse("{\"refreshIntervalMinutes\":5}");
 

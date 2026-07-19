@@ -42,6 +42,18 @@ public sealed class RuntimeInMemoryActivityExecutionHierarchyStore(IActivityExec
                 activityExecutionId));
     }
 
+    public ValueTask<ActivityExecutionAttemptNavigation?> FindAttemptNavigationAsync(
+        string workflowExecutionId,
+        string activityExecutionId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+            return ValueTask.FromResult(ActivityExecutionHierarchyProjector.FindAttemptNavigation(
+                _records.Values.Where(x => StringComparer.Ordinal.Equals(x.WorkflowExecutionId, workflowExecutionId)).ToArray(),
+                activityExecutionId));
+    }
+
     public ValueTask<ActivityExecutionLayout?> FindLayoutAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

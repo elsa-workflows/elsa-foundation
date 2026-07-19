@@ -535,9 +535,11 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 
 ### `IActivityExecutionHierarchyStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement read/write surface for checkpoint-committed activity execution hierarchy and composite-boundary layout.
-- **Signature:** write `ActivityExecutionHierarchyRecord`; read cursor-paged descendants, boundary metadata, and execution layout by workflow/activity execution identity.
-- **Usage:** preserves one workflow execution while making reusable composite boundaries navigable. Inspection clients can click through a graph activity into its full descendant execution graph and layout without loading authored Design documents. Records are checkpoint-gated and use ordinary activity execution identities/scopes; there is no special “custom activity” scope and no child workflow identity.
+- **Signature:** write `ActivityExecutionHierarchyRecord`; read cursor-paged descendants, boundary metadata, pinned execution layout, and previous/next attempt navigation by workflow/activity execution identity.
+- **Usage:** preserves one workflow execution while making reusable composite boundaries navigable. Inspection clients can click through a graph activity into its full descendant execution graph and complete pinned structural layout, including authored nodes that did not execute, without loading authored Design documents. Boundary lifecycle remains separate from descendant aggregate state. Records are checkpoint-gated and use ordinary activity execution identities/scopes; there is no special “custom activity” scope and no child workflow identity.
 - **Default implementation:** `RuntimeInMemoryActivityExecutionHierarchyStore`; Groundwork replaces it for durable hosts. Opaque page cursors are encoded by `IActivityExecutionHierarchyCursorCodec`.
+
+Cursor failures carry the cursor class, boundary/query/access binding results, and a recoverable restart action. Authorization-profile changes invalidate issued cursors but do not alter committed hierarchy history.
 
 `ExecuteWorkflow` remains a separate explicit operation for starting another workflow. It does not use the reusable activity template/hierarchy boundary to disguise a child workflow as an activity.
 

@@ -13,6 +13,8 @@ public static class PublishingGroundworkStorageManifest
     public const string PublicationPolicyDocumentKind = "publishingPublicationPolicy";
     public const string ProjectionIntentDocumentKind = "publishingProjectionIntent";
     public const string SnapshotReviewDocumentKind = "publishingSnapshotReview";
+    public const string ActivityPublicationReceiptDocumentKind = "publishingActivityPublicationReceipt";
+    public const string ActivityDraftTestRunDocumentKind = "publishingActivityDraftTestRun";
     public const string ByDefinitionIndex = "by-definition";
     public const string BySlotIndex = "by-slot";
     public const string ByPublicationIndex = "by-publication";
@@ -28,6 +30,7 @@ public static class PublishingGroundworkStorageManifest
     public const string PublicationIdField = "publicationId";
     public const string ActivePublicationIdField = "slot.activePublicationId";
     public const string ExpiresAtField = "expiresAt";
+    public const string ReceiptExpiresAtField = "receiptExpiresAt";
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-publishing"),
@@ -44,6 +47,16 @@ public static class PublishingGroundworkStorageManifest
                 SnapshotReviewDocumentKind,
                 "Publication snapshot review",
                 [DateTime(ByExpiresAtIndex, ExpiresAtField)],
+                [Query(
+                    DeleteExpiredQuery,
+                    ByExpiresAtIndex,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+                    QuerySortSupport.Ascending)]),
+            Unit(ActivityPublicationReceiptDocumentKind, "Activity publication receipt", [], []),
+            Unit(
+                ActivityDraftTestRunDocumentKind,
+                "Activity draft Test Run receipt",
+                [DateTime(ByExpiresAtIndex, ReceiptExpiresAtField)],
                 [Query(
                     DeleteExpiredQuery,
                     ByExpiresAtIndex,

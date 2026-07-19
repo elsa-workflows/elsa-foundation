@@ -5,8 +5,10 @@ using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting.Services;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Persistence.EFCore.Sqlite;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -61,6 +63,11 @@ public sealed class MigrationSmokeTests
         Assert.False(TableExists(connection, "WorkflowDefinitionDraftValidations"));
         // Sanity: a surviving table is present, so the assertion above is meaningful.
         Assert.True(TableExists(connection, "WorkflowDefinitionDrafts"));
+        Assert.True(ColumnExists(connection, "WorkflowDefinitionVersions", "SourceDraftId"));
+        var sourceDraftId = ctx.Model
+            .FindEntityType(typeof(WorkflowDefinitionVersion))!
+            .FindProperty(nameof(WorkflowDefinitionVersion.SourceDraftId))!;
+        Assert.Equal(PropertySaveBehavior.Throw, sourceDraftId.GetAfterSaveBehavior());
     }
 
     [Fact]
@@ -126,6 +133,14 @@ public sealed class MigrationSmokeTests
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
+        return Convert.ToInt64(command.ExecuteScalar()) > 0;
+    }
+
+    private static bool ColumnExists(SqliteConnection connection, string tableName, string columnName)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{tableName}') WHERE name = $name;";
+        command.Parameters.AddWithValue("$name", columnName);
         return Convert.ToInt64(command.ExecuteScalar()) > 0;
     }
 }

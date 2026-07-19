@@ -467,7 +467,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         if (value.Presence == ValuePresence.Absent && input.IsRequired)
             throw new InvalidOperationException($"VF-ACT-003: Required input '{input.Key}' on executable node '{nodeId}' cannot materialize as absent.");
 
-        if (value.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull && input.IsNullable is false)
+        if (value.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull && !input.IsNullable)
             throw new InvalidOperationException($"VF-ACT-004: Input '{input.Key}' on executable node '{nodeId}' does not accept null or absence.");
     }
 

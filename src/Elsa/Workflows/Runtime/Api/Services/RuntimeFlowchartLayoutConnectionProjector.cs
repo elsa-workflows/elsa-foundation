@@ -15,14 +15,14 @@ internal static class RuntimeFlowchartLayoutConnectionProjector
 
     public static IReadOnlyList<ActivityExecutionLayoutConnection> Project(
         WorkflowExecutable executable,
-        ExecutableLayoutBoundarySegment segment)
+        IReadOnlyCollection<ExecutableActivityLayoutRecord> boundaryNodes)
     {
-        var nodeIdMap = BuildNodeIdMap(executable, segment.Records);
+        var nodeIdMap = BuildNodeIdMap(executable, boundaryNodes);
         if (nodeIdMap.Count == 0)
             return [];
 
         var result = new List<ActivityExecutionLayoutConnection>();
-        foreach (var record in segment.Records)
+        foreach (var record in boundaryNodes)
         {
             if (!executable.NodesById.TryGetValue(record.ExecutableNodeId, out var node) ||
                 node.Structure is not { } structure ||
@@ -38,7 +38,7 @@ internal static class RuntimeFlowchartLayoutConnectionProjector
 
     private static IReadOnlyDictionary<string, string> BuildNodeIdMap(
         WorkflowExecutable executable,
-        IReadOnlyList<ExecutableActivityLayoutRecord> records)
+        IReadOnlyCollection<ExecutableActivityLayoutRecord> records)
     {
         var candidates = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var record in records)

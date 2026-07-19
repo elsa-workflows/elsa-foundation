@@ -388,7 +388,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
 
         var snapshot = await new RuntimeActivityInputMaterializer(_resolver)
             .MaterializeSnapshotAsync(
-                NewConsumerNode(binding, isRequired: false),
+                NewConsumerNode(binding, isRequired: false, isNullable: true),
                 "consumer",
                 NewContext(),
                 DateTimeOffset.UnixEpoch);
@@ -548,6 +548,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     private static ExecutableNode NewConsumerNode(
         RuntimeInputBinding binding,
         bool isRequired = true,
+        bool isNullable = false,
         ValueTypeDescriptor? inputType = null,
         ActivityValuePolicy? inputPolicy = null)
     {
@@ -557,7 +558,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             "1.0.0",
             "test",
             descriptor,
-            [new ActivityInputContract("customer-id", "Customer ID", inputType ?? StringType, isRequired, false, null, inputPolicy ?? ActivityValuePolicy.Default)],
+            [new ActivityInputContract("customer-id", "Customer ID", inputType ?? StringType, isRequired, isNullable, false, null, inputPolicy ?? ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/consumer"));

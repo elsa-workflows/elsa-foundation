@@ -714,7 +714,7 @@ public sealed class ValueDurabilityPolicyTests
         ValueProtectionPolicy effectivePolicy,
         ActivityValuePolicy contractPolicy,
         bool isRequired = true,
-        bool? isNullable = null)
+        bool isNullable = false)
     {
         var binding = new RuntimeInputBinding(
             "message",
@@ -730,7 +730,7 @@ public sealed class ValueDurabilityPolicyTests
         RuntimeInputBinding binding,
         ActivityValuePolicy contractPolicy,
         bool isRequired = true,
-        bool? isNullable = null,
+        bool isNullable = false,
         ValueTypeDescriptor? inputType = null)
     {
         using var descriptor = JsonDocument.Parse("""{"type":"test"}""");
@@ -739,7 +739,7 @@ public sealed class ValueDurabilityPolicyTests
             "1.0.0",
             "test",
             descriptor.RootElement,
-            [new ActivityInputContract("message", "Message", inputType ?? StringType, isRequired, false, null, contractPolicy) { IsNullable = isNullable }],
+            [new ActivityInputContract("message", "Message", inputType ?? StringType, isRequired, isNullable, false, null, contractPolicy)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/activity"));

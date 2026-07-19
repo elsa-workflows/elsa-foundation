@@ -25,9 +25,10 @@ public interface IActivityProvider
 {
     string ProviderKey { get; }
     IReadOnlySet<string> SupportedManifestSchemas { get; }
+    ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; }
 
     ValueTask<ActivityContractProposal> ProposeContractAsync(
-        ActivityProviderManifest manifest,
+        ActivityProviderContractProposalRequest request,
         CancellationToken cancellationToken);
 
     ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(
@@ -46,6 +47,8 @@ Typed executable compilation is a separate `IActivityTemplateCompiler` contract 
 Rules:
 
 - Contract proposals never mutate the authoritative draft contract.
+- Provider authoring metadata is structured, schema-specific, and validated against the provider's supported schema set at registration.
+- Proposals contain typed member changes rather than a replacement contract and are bound to the exact draft revision, provider key/schema, and canonical manifest fingerprint before invocation and again before apply.
 - Validation and compilation are deterministic for the same canonical request, provider fingerprint, and dependency set.
 - Providers return results/diagnostics and do not persist versions, templates, edges, heads, or Source References.
 - Infrastructure failures are wrapped as provider-scoped domain failures before leaving the provider feature.
@@ -106,7 +109,7 @@ The first provider's opaque payload is documented so its own API/Studio consumer
     {
       "referenceKey": "running-total",
       "name": "RunningTotal",
-      "type": { "alias": "decimal", "collectionKind": "None" },
+      "type": { "alias": "Decimal", "collectionKind": "Single" },
       "storageDriverKey": "elsa.json",
       "initialValue": {
         "syntax": "Literal",

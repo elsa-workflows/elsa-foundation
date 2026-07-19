@@ -295,6 +295,7 @@ public sealed class WorkflowExecutableCompiler(
                 input.StorageDriverKey,
                 input.DisplayName ?? input.Name,
                 input.Category,
+                input.IsNullable,
                 Description: input.Description,
                 Order: input.Order,
                 UiHint: input.UiHint,

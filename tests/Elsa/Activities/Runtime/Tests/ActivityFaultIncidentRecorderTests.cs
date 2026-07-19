@@ -295,7 +295,7 @@ public sealed class ActivityFaultIncidentRecorderTests
             "1.0.0",
             "test",
             descriptor.RootElement,
-            [new ActivityInputContract("message", "Message", new ValueTypeDescriptor("String"), true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("message", "Message", new ValueTypeDescriptor("String"), true, false, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/activity"));

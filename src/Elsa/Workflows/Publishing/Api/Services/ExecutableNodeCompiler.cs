@@ -50,7 +50,7 @@ public sealed class ExecutableNodeCompiler(
             activityVersion.ConsumerSchemaVersion,
             activityVersion.DescriptorPayload);
         var clrActivityType = ResolveClrActivityType(descriptor);
-        var inputDefinitions = NormalizeLegacyClrInputNullability(activityVersion.Inputs, clrActivityType);
+        var inputDefinitions = activityVersion.Inputs.ToArray();
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
             ?? throw new ArgumentException($"Activity version '{activityVersion.Id}' did not include its activity definition.");
         var activityType = clrActivityType is null
@@ -98,7 +98,7 @@ public sealed class ExecutableNodeCompiler(
             activityVersion.ConsumerSchemaVersion,
             activityVersion.DescriptorPayload);
         var clrActivityType = ResolveClrActivityType(descriptor);
-        var inputDefinitions = NormalizeLegacyClrInputNullability(activityVersion.Inputs, clrActivityType);
+        var inputDefinitions = activityVersion.Inputs.ToArray();
 
         var inputDefinitionsByReferenceKey = inputDefinitions.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
@@ -224,6 +224,7 @@ public sealed class ExecutableNodeCompiler(
                     StorageDriverType: null,
                     DisplayName: input.Key,
                     Category: null,
+                    IsNullable: false,
                     IsRequired: true),
                 authoredInputs[input.Key].Value),
             StringComparer.Ordinal);
@@ -298,12 +299,10 @@ public sealed class ExecutableNodeCompiler(
                 input.Name,
                 new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind),
                 input.IsRequired,
+                input.IsNullable,
                 input.DefaultValue.HasValue,
                 input.DefaultValue,
-                CompileActivityPolicy(input.StorageDriverType, state, $"Input '{input.ReferenceKey}' on activity node '{activity.NodeId}'"))
-            {
-                IsNullable = input.IsNullable
-            };
+                CompileActivityPolicy(input.StorageDriverType, state, $"Input '{input.ReferenceKey}' on activity node '{activity.NodeId}'"));
         });
         var outputDefinitions = activityVersion.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
         var outputStates = activity.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
@@ -358,46 +357,6 @@ public sealed class ExecutableNodeCompiler(
         ValueTypeDescriptor sourceType) =>
         outputDefinition?.SourceRepresentation ??
         (attribute.HasSourceRepresentation ? attribute.SourceRepresentation : ValueRepresentationDefaults.Infer(sourceType));
-
-    private static IReadOnlyCollection<InputDefinition> NormalizeLegacyClrInputNullability(
-        IEnumerable<InputDefinition> inputDefinitions,
-        Type? clrActivityType)
-    {
-        var inputs = inputDefinitions as IReadOnlyCollection<InputDefinition> ?? inputDefinitions.ToArray();
-        if (clrActivityType is null || inputs.All(input => input.IsNullable.HasValue))
-            return inputs;
-
-        var propertiesByKey = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
-        foreach (var property in clrActivityType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            var attribute = FindActivityInputAttribute(property);
-            if (attribute is null)
-                continue;
-
-            var key = attribute.Key ?? property.Name;
-            ArgumentException.ThrowIfNullOrWhiteSpace(key);
-            if (!propertiesByKey.TryAdd(key, property))
-                throw new ArgumentException($"Activity '{clrActivityType.FullName}' declares duplicate input key '{key}'.");
-        }
-
-        var nullabilityContext = new NullabilityInfoContext();
-        return inputs
-            .Select(input =>
-            {
-                if (input.IsNullable.HasValue)
-                    return input;
-
-                if (!propertiesByKey.TryGetValue(input.ReferenceKey, out var property))
-                {
-                    throw new ArgumentException(
-                        $"VF-ACT-003: Legacy CLR input '{input.ReferenceKey}' on activity '{clrActivityType.FullName}' has unknown nullability " +
-                        "and does not match an annotated public activity property by stable key.");
-                }
-
-                return input with { IsNullable = IsNullable(property, nullabilityContext) };
-            })
-            .ToArray();
-    }
 
     private static ActivityInputAttribute? FindActivityInputAttribute(PropertyInfo property)
     {
@@ -529,7 +488,8 @@ public sealed class ExecutableNodeCompiler(
                     variable.Type,
                     variable.StorageDriverType,
                     variable.Name,
-                    Category: null),
+                    Category: null,
+                    IsNullable: true),
                 variable.Default);
             if (initialBinding.Source != RuntimeInputBindingSource.Literal)
                 throw new ArgumentException($"Variable '{variable.ReferenceKey}' on activity node '{nodeId}' requires a persistable literal initial binding.");

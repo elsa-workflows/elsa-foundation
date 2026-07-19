@@ -84,9 +84,7 @@ public sealed record ActivityGraphManifest(
             writer.WritePropertyName("type");
             writer.WriteStartObject();
             writer.WriteString("alias", variable.Type.Alias);
-            writer.WriteString("collectionKind", variable.Type.CollectionKind == CollectionKind.Single
-                ? "None"
-                : variable.Type.CollectionKind.ToString());
+            writer.WriteString("collectionKind", variable.Type.CollectionKind.ToString());
             writer.WriteEndObject();
             writer.WriteEndObject();
         }
@@ -213,10 +211,8 @@ public sealed record ActivityGraphManifest(
         if (alias is null || collectionKindValue is null)
             return null;
 
-        if (string.Equals(collectionKindValue, "None", StringComparison.OrdinalIgnoreCase))
-            return new(alias, CollectionKind.Single);
-
-        if (!Enum.TryParse<CollectionKind>(collectionKindValue, true, out var collectionKind))
+        if (!Enum.TryParse<CollectionKind>(collectionKindValue, false, out var collectionKind) ||
+            !StringComparer.Ordinal.Equals(collectionKind.ToString(), collectionKindValue))
         {
             findings.Add(new(
                 "activity.graph.manifest.collection-kind-invalid",

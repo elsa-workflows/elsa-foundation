@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Requests;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
@@ -66,18 +67,54 @@ namespace Elsa.Activities.Design.Api.Endpoints
         where TRequest : IRequest<TResponse>
         where TResponse : notnull
     {
-        public override async Task HandleAsync(TRequest request, CancellationToken cancellationToken)
+        public override Task HandleAsync(TRequest request, CancellationToken cancellationToken) =>
+            ActivityAuthoringRequestExecution.ExecuteAsync(
+                HttpContext,
+                logger,
+                typeof(TRequest),
+                () => sender.Send(request, cancellationToken),
+                response => Send.OkAsync(response, cancellationToken),
+                cancellationToken);
+    }
+
+    internal abstract class ActivityAuthoringRequestWithoutRequestEndpoint<TRequest, TResponse>(
+        IRequestSender sender,
+        ILogger logger) : ElsaEndpointWithoutRequest<TResponse>
+        where TRequest : IRequest<TResponse>
+        where TResponse : notnull
+    {
+        protected abstract TRequest CreateRequest();
+
+        public override Task HandleAsync(CancellationToken cancellationToken) =>
+            ActivityAuthoringRequestExecution.ExecuteAsync(
+                HttpContext,
+                logger,
+                typeof(TRequest),
+                () => sender.Send(CreateRequest(), cancellationToken),
+                response => Send.OkAsync(response, cancellationToken),
+                cancellationToken);
+    }
+
+    internal static class ActivityAuthoringRequestExecution
+    {
+        public static async Task ExecuteAsync<TResponse>(
+            HttpContext httpContext,
+            ILogger logger,
+            Type requestType,
+            Func<Task<TResponse>> sendRequest,
+            Func<TResponse, Task> sendResponse,
+            CancellationToken cancellationToken)
         {
             try
             {
-                await Send.OkAsync(await sender.Send(request, cancellationToken), cancellationToken);
+                await sendResponse(await sendRequest());
             }
             catch (ActivityAuthoringException exception)
             {
                 if (exception.StatusCode >= StatusCodes.Status500InternalServerError)
-                    logger.LogError(exception, "Internal activity authoring request failure for {RequestType}", typeof(TRequest));
-                var problem = ActivityProblemDetails.From(exception, HttpContext);
-                await WriteProblemAsync(problem, problem.Status, cancellationToken);
+                    logger.LogError(exception, "Internal activity authoring request failure for {RequestType}", requestType);
+                var problem = ActivityProblemDetails.From(exception, httpContext);
+                await WriteProblemAsync(httpContext, problem, problem.Status, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -85,16 +122,20 @@ namespace Elsa.Activities.Design.Api.Endpoints
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Unexpected activity authoring request failure for {RequestType}", typeof(TRequest));
-                await WriteProblemAsync(ActivityProblemDetails.Unexpected(HttpContext), 500, cancellationToken);
+                logger.LogError(exception, "Unexpected activity authoring request failure for {RequestType}", requestType);
+                await WriteProblemAsync(httpContext, ActivityProblemDetails.Unexpected(httpContext), 500, cancellationToken);
             }
         }
 
-        private async Task WriteProblemAsync(ActivityProblemDetailsView problem, int statusCode, CancellationToken cancellationToken)
+        private static async Task WriteProblemAsync(
+            HttpContext httpContext,
+            ActivityProblemDetailsView problem,
+            int statusCode,
+            CancellationToken cancellationToken)
         {
-            HttpContext.Response.StatusCode = statusCode;
-            HttpContext.Response.ContentType = "application/problem+json";
-            await HttpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
+            httpContext.Response.StatusCode = statusCode;
+            httpContext.Response.ContentType = "application/problem+json";
+            await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
         }
     }
 }
@@ -102,10 +143,10 @@ namespace Elsa.Activities.Design.Api.Endpoints
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions
 {
     internal sealed class Add(ICommandSender sender, ILogger<Add> logger)
-        : ActivityAuthoringCommandEndpoint<CreateReusableActivityDefinition, ReusableActivityDefinitionDetailsView>(sender, logger)
+        : ActivityAuthoringCommandEndpoint<CreateReusableActivityDefinition, ReusableActivityDefinitionMutationView>(sender, logger)
     {
         protected override int SuccessStatusCode => 201;
-        protected override string GetLocation(ReusableActivityDefinitionDetailsView response) =>
+        protected override string GetLocation(ReusableActivityDefinitionMutationView response) =>
             $"/{RouteConstants.GetRoute($"definitions/{response.Definition.DefinitionId}")}";
 
         public override void Configure()
@@ -115,22 +156,18 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         }
     }
 
-    internal sealed class Fork(ICommandSender sender, ILogger<Fork> logger)
-        : ActivityAuthoringCommandEndpoint<ForkReusableActivityDefinition, ReusableActivityDefinitionDetailsView>(sender, logger)
+    internal sealed class PreviewFork(ICommandSender sender, ILogger<PreviewFork> logger)
+        : ActivityAuthoringCommandEndpoint<PreviewReusableActivityFork, ActivityForkPreviewView>(sender, logger)
     {
-        protected override int SuccessStatusCode => 201;
-        protected override string GetLocation(ReusableActivityDefinitionDetailsView response) =>
-            $"/{RouteConstants.GetRoute($"definitions/{response.Definition.DefinitionId}")}";
-
         public override void Configure()
         {
-            Post(RouteConstants.GetRoute("definitions/{definitionId}/forks"));
+            Post(RouteConstants.GetRoute("definitions/{definitionId}/fork-previews"));
             ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }
 
     internal sealed class List(IRequestSender sender, ILogger<List> logger)
-        : ActivityAuthoringRequestEndpoint<ListReusableActivityDefinitions, IReadOnlyList<ActivityDefinitionIdentityView>>(sender, logger)
+        : ActivityAuthoringRequestEndpoint<ListReusableActivityDefinitions, ActivityManagementPageView<ReusableActivityDefinitionManagementView>>(sender, logger)
     {
         public override void Configure()
         {
@@ -140,7 +177,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
     }
 
     internal sealed class Get(IRequestSender sender, ILogger<Get> logger)
-        : ActivityAuthoringRequestEndpoint<GetReusableActivityDefinition, ReusableActivityDefinitionDetailsView>(sender, logger)
+        : ActivityAuthoringRequestEndpoint<GetReusableActivityDefinition, ReusableActivityDefinitionManagementView>(sender, logger)
     {
         public override void Configure()
         {
@@ -150,7 +187,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
     }
 
     internal sealed class Update(ICommandSender sender, ILogger<Update> logger)
-        : ActivityAuthoringCommandEndpoint<UpdateReusableActivityDefinition, ReusableActivityDefinitionDetailsView>(sender, logger)
+        : ActivityAuthoringCommandEndpoint<UpdateReusableActivityDefinition, ActivityDefinitionIdentityView>(sender, logger)
     {
         public override void Configure()
         {
@@ -159,8 +196,28 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
         }
     }
 
+    internal sealed class Recommendation(ICommandSender sender, ILogger<Recommendation> logger)
+        : ActivityAuthoringCommandEndpoint<SetRecommendedReusableActivityVersion, ActivityDefinitionRecommendationView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Put(RouteConstants.GetRoute("definitions/{definitionId}/recommendation"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class Picker(IRequestSender sender, ILogger<Picker> logger)
+        : ActivityAuthoringRequestEndpoint<ListRecommendedActivityDefinitions, RecommendedActivityDefinitionPageView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Get(RouteConstants.GetRoute("definitions/picker"));
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
+        }
+    }
+
     internal sealed class ListDrafts(IRequestSender sender, ILogger<ListDrafts> logger)
-        : ActivityAuthoringRequestEndpoint<ListReusableActivityDrafts, IReadOnlyList<ReusableActivityDraftSummaryView>>(sender, logger)
+        : ActivityAuthoringRequestEndpoint<ListReusableActivityDrafts, ActivityManagementPageView<ReusableActivityDraftManagementView>>(sender, logger)
     {
         public override void Configure()
         {
@@ -184,13 +241,55 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions
     }
 
     internal sealed class ListVersions(IRequestSender sender, ILogger<ListVersions> logger)
-        : ActivityAuthoringRequestEndpoint<ListReusableActivityVersions, IReadOnlyList<ReusableActivityVersionSummaryView>>(sender, logger)
+        : ActivityAuthoringRequestEndpoint<ListReusableActivityVersions, ActivityManagementPageView<ReusableActivityVersionManagementView>>(sender, logger)
     {
         public override void Configure()
         {
             Get(RouteConstants.GetRoute("definitions/{definitionId}/versions"));
             ConfigurePermissions(PermissionNames.ActivityDesignRead);
         }
+    }
+}
+
+namespace Elsa.Activities.Design.Api.Endpoints.Forks
+{
+    internal sealed class Apply(ICommandSender sender, ILogger<Apply> logger)
+        : ActivityAuthoringCommandEndpoint<ApplyReusableActivityFork, ActivityForkReceiptView>(sender, logger)
+    {
+        protected override int SuccessStatusCode => 201;
+        protected override string GetLocation(ActivityForkReceiptView response) =>
+            $"/{RouteConstants.GetRoute($"definitions/{response.Definition.DefinitionId}")}";
+
+        public override void Configure()
+        {
+            Post(RouteConstants.GetRoute("fork-candidates/{candidateId}/apply"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class GetStatus(IRequestSender sender, ILogger<GetStatus> logger)
+        : ActivityAuthoringRequestEndpoint<GetReusableActivityForkStatus, ActivityForkReceiptView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Get(RouteConstants.GetRoute("forks/{idempotencyKey}"));
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
+        }
+    }
+}
+
+namespace Elsa.Activities.Design.Api.Endpoints.AuthoringCapabilities
+{
+    internal sealed class Get(IRequestSender sender, ILogger<Get> logger)
+        : ActivityAuthoringRequestWithoutRequestEndpoint<GetActivityAuthoringCapabilities, ActivityAuthoringCapabilitiesView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Get(RouteConstants.GetRoute("authoring-capabilities"));
+            ConfigurePermissions(PermissionNames.ActivityDesignRead);
+        }
+
+        protected override GetActivityAuthoringCapabilities CreateRequest() => new();
     }
 }
 
@@ -216,6 +315,30 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         }
     }
 
+    internal sealed class UpdatePresentation(ICommandSender sender, ILogger<UpdatePresentation> logger)
+        : ActivityAuthoringCommandEndpoint<UpdateReusableActivityDraftPresentation, ReusableActivityDraftView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Patch(RouteConstants.GetRoute("drafts/{draftId}/presentation"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class ConflictCopy(ICommandSender sender, ILogger<ConflictCopy> logger)
+        : ActivityAuthoringCommandEndpoint<CreateReusableActivityDraftConflictCopy, ReusableActivityDraftView>(sender, logger)
+    {
+        protected override int SuccessStatusCode => 201;
+        protected override string GetLocation(ReusableActivityDraftView response) =>
+            $"/{RouteConstants.GetRoute($"drafts/{response.DraftId}")}";
+
+        public override void Configure()
+        {
+            Post(RouteConstants.GetRoute("drafts/{draftId}/conflict-copies"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
     internal sealed class Validate(ICommandSender sender, ILogger<Validate> logger)
         : ActivityAuthoringCommandEndpoint<ValidateReusableActivityDraft, ActivityDraftValidationView>(sender, logger)
     {
@@ -236,6 +359,26 @@ namespace Elsa.Activities.Design.Api.Endpoints.Drafts
         public override void Configure()
         {
             Post(RouteConstants.GetRoute("drafts/{draftId}/migrate-provider"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class ProposeContract(IRequestSender sender, ILogger<ProposeContract> logger)
+        : ActivityAuthoringRequestEndpoint<ProposeReusableActivityContract, ActivityContractProposalView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Post(RouteConstants.GetRoute("drafts/{draftId}/contract-proposals"));
+            ConfigurePermissions(PermissionNames.ActivityDesignManage);
+        }
+    }
+
+    internal sealed class ApplyContractProposal(ICommandSender sender, ILogger<ApplyContractProposal> logger)
+        : ActivityAuthoringCommandEndpoint<ApplyReusableActivityContractProposal, ReusableActivityDraftView>(sender, logger)
+    {
+        public override void Configure()
+        {
+            Post(RouteConstants.GetRoute("drafts/{draftId}/contract-proposals/apply"));
             ConfigurePermissions(PermissionNames.ActivityDesignManage);
         }
     }

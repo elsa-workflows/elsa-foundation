@@ -147,7 +147,8 @@ public sealed class DispatchWorkflowDesignTests
                     new TypeReference("String"),
                     null,
                     "Workflow definition",
-                    null)
+                    null,
+                    false)
             ]
         };
         var childExecutable = Executable("child-artifact", "content-owner", DispatchNode("child-root", "unused"));

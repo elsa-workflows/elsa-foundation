@@ -136,7 +136,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         var valueType = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
         var contract = new ActivityContract(
             "test/typed-resume", "1.0.0", "typed-resume", descriptor,
-            [new ActivityInputContract("text", "Text", valueType, true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("text", "Text", valueType, true, false, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new Elsa.Primitives.Models.ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("typed-resume", "test/typed-resume"));

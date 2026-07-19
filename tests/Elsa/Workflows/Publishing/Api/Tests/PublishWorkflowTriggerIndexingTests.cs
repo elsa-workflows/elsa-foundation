@@ -424,7 +424,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         new(name, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Object"), null, null, null, null);
 
     private static InputDefinition Definition(string name, string type) =>
-        new(name, name, new TypeReference(type), null, name, null);
+        new(name, name, new TypeReference(type), null, name, null, false);
 
     private sealed class StubTriggerProvider(string stimulusType, string stimulusHash) : IActivityTriggerStimulusProvider
     {

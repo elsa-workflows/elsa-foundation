@@ -16,6 +16,7 @@ Stable Activity Catalog identity and lineage.
 | `ContentAuthority` | `ActivityContentAuthority` | Immutable authority for the lineage. |
 | `ForkedFrom` | `ActivityDefinitionForkOrigin?` | Exact source-owned definition/version used to create this independent lineage; audit provenance only. |
 | `HeadVersionId` | string? | Latest successfully published version under the definition lock; not a runtime selector. |
+| `RecommendedVersionId` | string? | Exact active immutable version offered for new direct selection; never inferred from head or SemVer ordering. |
 | `Category` | string | Mutable picker grouping metadata. |
 | `DisplayName` | string | Mutable presentation metadata. |
 | `Description` | string? | Mutable presentation metadata. |
@@ -23,10 +24,16 @@ Stable Activity Catalog identity and lineage.
 
 Invariants:
 
-- `(TenantId, ActivityTypeKey)` is unique.
+- `(TenantId, ActivityTypeKey)` is unique. Normal authoring generates the key from the display name
+  plus the new definition identity unless an advanced author supplies a pre-creation override. The
+  server normalizes and validates an override against its advertised prefix, pattern, maximum length,
+  and collision scope; collisions fail without suffixing. The persisted key is immutable thereafter.
 - Changing display metadata does not create a version and does not affect behavior hashes.
 - `HeadVersionId` changes only inside successful publication.
 - Exact version resolution never uses `HeadVersionId`; it exists for authoring concurrency and convenience reads.
+- The first successful publication establishes `RecommendedVersionId` when no publication existed. Later publication, reconciliation, or restoration never moves or re-establishes it implicitly.
+- An authorized recommendation change binds the exact head, current recommendation, target identity, and target lifecycle. Only an active version in the same definition can be recommended.
+- Retiring or revoking the recommended version atomically replaces it with an exact active sibling or records an explicit no-recommendation decision.
 - A source-owned definition cannot be mutated through general authoring commands.
 - Fork provenance never changes content authority and never makes the new definition part of the source definition's version lineage.
 
@@ -54,6 +61,28 @@ Immutable provenance recorded only when a definition is created by the explicit 
 
 The origin does not create shared mutable lineage, implicit upgrade behavior, or cross-tenant access. Later source-version visibility changes do not erase the retained audit fact.
 
+### 1.3.1 `ActivityForkCandidate`
+
+Bounded durable review reservation keyed by a server-derived hash of tenant, stable actor identity,
+and the caller's bounded preview idempotency key. It stores the signed public candidate identity,
+normalized request/access fingerprints, exact source facts including lifecycle, reserved server-generated definition,
+authoring, draft, and layout material, safe migration diagnostics, `ExpiresAt`, `RetainUntil`, and
+`Reserved`/`Applied` state.
+
+Saving is an exact compare-or-return operation under the reservation lock: same scoped key and same
+normalized material returns the first reservation; changed material conflicts; an expired retained
+reservation rejects replacement. Concurrent retries therefore converge without making definition
+or draft identities client-generated. Only the atomic apply commit may transition `Reserved` to
+`Applied`. A bounded retention query deletes candidates after `RetainUntil`.
+
+### 1.3.2 `ActivityForkReceipt`
+
+Append-only, self-contained terminal proof keyed by tenant, stable actor identity, and apply
+idempotency key. It binds the internal and signed public candidate identities, request/access
+fingerprints, actor/access profile, exact applied definition and draft projections, and `AppliedAt`.
+No update path exists. Because the receipt contains the complete safe result required by status
+reconciliation, candidate retention never erases terminal outcome evidence.
+
 ### 1.4 `ActivityDefinitionDraft`
 
 Mutable authoring aggregate header.
@@ -66,16 +95,28 @@ Mutable authoring aggregate header.
 | `Revision` | long | Monotonic optimistic revision; every successful mutation increments it once. |
 | `SourceVersionId` | string? | Immutable lineage to the version cloned or migrated from. |
 | `Status` | enum | `Active`, `Published`, or `Discarded`. |
+| `PresentationLabel` | string? | Optional non-unique author-facing label; the server-generated draft identity remains authoritative. |
 | `State` | `ActivityDefinitionDraftState` | Complete desired authoring document. |
 | `CreatedAt`, `UpdatedAt` | timestamps | Audit facts. |
 
 Invariants:
 
 - Multiple active drafts may share a `DefinitionId`.
+- Draft labels are optional and need not be unique within a definition; creating or autosaving a
+  draft never requires the author to invent a unique name. A label is not identity, lineage,
+  provider source, or behavior-hash input.
 - `SourceVersionId` never changes after draft creation.
-- Full-state update requires `ExpectedRevision == Revision`; stale updates return a conflict and write nothing.
+- Full-state update and presentation-label update both require `ExpectedRevision == Revision` and
+  participate in the same autosave revision stream. A successful mutation increments `Revision`
+  exactly once and updates the sibling layout revision atomically, including a label-only change.
+  Stale updates return a conflict and write nothing.
 - Only `Active` drafts can be updated or published.
 - Successful publication records the published version identity and marks the draft `Published`; rejected publication leaves it active and unchanged.
+- Conflict-copy recovery requires the exact current source revision and atomically creates a new
+  active draft at revision `1` from the submitted complete contract, provider, layout, and optional
+  presentation label. The copy inherits definition, tenant, immutable `SourceVersionId`, and
+  provider-neutral internal options; it receives a server-generated draft identity and never
+  overwrites or merges the source draft.
 
 ### 1.5 `ActivityDefinitionDraftState`
 
@@ -114,6 +155,47 @@ Derived sibling record for the latest validated draft revision.
 
 Publication always revalidates inside its atomic transition; a stored clean validation from an older revision is never sufficient.
 
+### 1.8 Bounded temporal management projections
+
+Definition, draft, and version management collections return
+`ActivityManagementPageView<T>` rather than unbounded relationship arrays.
+
+| Field | Shape | Rules |
+|---|---|---|
+| `Items` | ordered list | Compact authorization-filtered management views only. |
+| `Count` | integer | Number of items in this response. |
+| `TotalCount` | long | Exact count within the same authorized query snapshot; never a global count. |
+| `HasMore` | bool | Whether the same bound snapshot has another page. |
+| `Continuation` | string? | Opaque scope/query/authorization-bound continuation, null on the terminal page. |
+| `Snapshot` | `{SnapshotId, AsOf}` | Stable sequence-derived identity and timestamp for the management snapshot. |
+
+`ReusableActivityDefinitionManagementView` contains only `Definition`, a bounded `Lifecycle`
+summary, typed `Actions`, and `UpdatedAt`; definition detail never embeds draft or version arrays.
+Drafts and versions are paged through their advertised capability relations.
+
+Action availability is represented as ordered `ActivityActionAvailabilityView` entries:
+`{Action, Allowed, UnavailableCode}`. `UnavailableCode` is null when allowed and otherwise carries a
+stable privacy-safe reason code. The projection is a convenience for rendering; every mutation
+rechecks authorization, authority, lifecycle, provider capability, and optimistic preconditions.
+
+Catalog definition, draft, and version lists read provider-queryable safe summaries rather than
+scanning or deserializing authoring aggregates. Each summary revision uses a durable monotonic
+sequence interval `[ValidFromSequence, ValidToSequenceExclusive)`, with `long.MaxValue` denoting
+the current open interval. One mutation batch advances the scope watermark once and atomically
+commits the authoritative documents, closed prior summary revisions, new summary revisions, the
+snapshot marker, and the watermark compare-and-swap.
+
+The projections contain only list-safe facts: identities, tenant/global visibility, presentation
+metadata, authority, status/lifecycle, provider/schema keys, head/recommendation references, counts,
+normalized search text, and deterministic sort keys. Provider payloads, graph source, compiled
+descriptors, contract defaults, and other protected authoring content are never projected.
+
+List queries bind to one exact sequence and apply tenant visibility, temporal interval, search,
+filters, deterministic ordering, offset paging, and exact total count in the selected Groundwork
+provider. Hidden rows therefore affect neither items nor totals. A retention operation may remove
+closed revisions and advances `RetainedFromSequence` atomically; reads below that floor return a
+stable snapshot-expired diagnostic and never restart at the current snapshot.
+
 ## 2. Public contract and provider source
 
 ### 2.1 `ActivityContract`
@@ -126,6 +208,16 @@ Publication always revalidates inside its atomic transition; a stored clean vali
 | `ContractSchemaVersion` | string | Platform public-contract schema, independent of provider schema. |
 
 The contract is authoritative. Providers validate or compile against it; they do not own it.
+Every mutable contract ingress is admitted through the activated provider-neutral type capability
+catalog. A capability records the stable alias, canonical collection kinds, default editor and
+presentation facts, null support, durability support, and compatible storage-driver keys.
+Compatible drivers are the intersection of descriptor declarations and Runtime's activated durable
+driver registry, projected through the Publishing bridge.
+Unavailable facts are rejected with structured diagnostics. Immutable historical contracts retain
+and return their exact stored facts even if a capability is later unavailable.
+The pre-release mutable authoring contract is a clean break: it has no legacy type-alias fallback,
+compatibility ingress, or workflow-definition-as-activity representation. Historical immutability
+applies only to versions successfully published under this contract.
 
 ### 2.2 `ActivityInputContract`
 
@@ -134,7 +226,8 @@ The contract is authoritative. Providers validate or compile against it; they do
 | `ReferenceKey` | string | Stable identity used for binding and diffing. |
 | `Name` | string | Current author-facing name. |
 | `Type` | `TypeReference` | Alias-based provider-neutral type. |
-| `IsRequired` | bool | Absence fails when no default applies; explicit null is validated against the type separately. |
+| `IsRequired` | bool | Absence fails when no default applies. Independent from `IsNullable`. |
+| `IsNullable` | bool | Explicitly permits a present null value. Required on every canonical mutable and immutable wire shape and allowed only when the selected type capability has `SupportsNull`. |
 | `Default` | `ActivityInputDefault?` | Caller-side binding template. |
 | `StorageDriverKey` | string | Stable durability driver key; public boundary defaults to durable-required. |
 | `Durability` | enum | `Required` in the first slice; future stronger policies may be additive. |
@@ -151,7 +244,7 @@ The consuming workflow artifact stores the compiled binding. Defaults are applie
 
 ### 2.4 `ActivityOutputContract`
 
-Same stable identity, name, type, storage-driver, durability, requiredness, and presentation principles as inputs. A required output must be assigned and durably captured before successful boundary completion.
+Same stable identity, name, type, explicit nullability, storage-driver, durability, requiredness, and presentation principles as inputs. `IsRequired` means the implementation must produce the output; `IsNullable` independently determines whether the produced value may be null. A required output must be assigned and durably captured before successful boundary completion.
 
 ### 2.5 `ActivityOutcomeContract`
 
@@ -171,6 +264,19 @@ Same stable identity, name, type, storage-driver, durability, requiredness, and 
 | `Payload` | opaque JSON | Stored and round-tripped by Design without universal deserialization. |
 
 Old provider schemas remain immutable. A provider migration clones a version into a new draft and deterministically transforms the clone; it never rewrites a version.
+
+### 2.7 Provider authoring capabilities and contract proposals
+
+Each provider declares structured authoring metadata for every supported manifest schema: whether
+the schema is authorable, exact migration sources, and required public outcomes. Registry activation
+fails when this metadata is missing, duplicated, or inconsistent with the supported schema set.
+
+A contract proposal is a read-only result bound to one exact draft revision, provider key/schema,
+and canonical manifest fingerprint. It contains ordered, typed member changes and safe diagnostics,
+not a replacement contract or opaque manifest. Applying explicitly selected changes reloads and
+recomputes that exact proposal, validates its fingerprint and the resulting capability-catalog
+contract, then atomically changes only the contract and draft/layout revision. Any stale binding or
+proposal fails without writing.
 
 ## 3. Immutable publication models
 
@@ -286,7 +392,7 @@ The sidecar never contributes to the template or workflow artifact behavior hash
 |---|---|---|
 | `ChangeId` | string | Deterministic within the comparison. |
 | `Area` | enum | Contract, default, outcome, durability, provider, implementation, dependency, or presentation. |
-| `Kind` | stable string | Added, removed, renamed, type-changed, requiredness-changed, default-changed, and similar stable classifications. |
+| `Kind` | stable string | Added, removed, renamed, type-changed, requiredness-changed, nullability-changed, default-changed, and similar stable classifications. |
 | `Subject` | contract/dependency subject | Includes member kind and stable reference key when applicable. |
 | `Before`, `After` | safe projections | Public contract facts only; no protected provider payloads. |
 | `Impact` | enum | Nonbehavioral, additive, or breaking. |
@@ -425,4 +531,9 @@ No descendant work is scheduled before entry commits; no parent continuation obs
 - A global definition may reference only global versions.
 - Exact identifiers never bypass tenancy.
 - Authoring authority, lifecycle administration, structure inspection, and sensitive-value inspection are distinct authorization decisions.
+- Management items, lifecycle counts, `TotalCount`, and action availability are projected only
+  after visibility and authorization filtering. They never reveal pre-authorization inventory.
+- A `404` reports absence in the caller's authorized scope without confirming hidden existence. A
+  `403` reports an operation or tenant-reference denial with a generic privacy-safe body; neither
+  response includes hidden names, identifiers, counts, action maps, or provider facts.
 - Error and diagnostic projections never include opaque provider payloads, compiled descriptor payloads, captured sensitive values, or unauthorized cross-tenant identities.

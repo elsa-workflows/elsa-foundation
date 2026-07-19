@@ -46,6 +46,25 @@ public sealed class WorkflowInstanceListContractTests
         Assert.Equal(1, RuntimeApiCapabilities.StaticDeclaration.ContractMajorVersion);
     }
 
+    [Fact]
+    public void Runtime_capability_advertises_every_reusable_boundary_inspection_relation()
+    {
+        var links = RuntimeApiCapabilities.StaticDeclaration.Links.ToDictionary(link => link.Rel, StringComparer.Ordinal);
+
+        string[] relations =
+        [
+            "activity-execution-boundary-detail",
+            "activity-execution-descendants",
+            "activity-execution-layout",
+            "activity-execution-attempt-lineage",
+            "activity-execution-bookmarks",
+            "activity-execution-incidents",
+            "activity-execution-value-evidence",
+            "activity-execution-value-payload"
+        ];
+        Assert.All(relations, relation => Assert.True(links[relation].Templated));
+    }
+
     [Theory]
     [InlineData("runtime/workflows/instances", "LegacyArray")]
     [InlineData("runtime/workflows/instances/page", "Paged")]

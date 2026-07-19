@@ -18,7 +18,11 @@ public sealed class ListVariableTypeDescriptorsRequestHandler(IVariableTypeDescr
                 descriptor.Alias,
                 descriptor.DisplayName,
                 descriptor.Category,
-                descriptor.DefaultEditor))
+                descriptor.DefaultEditor,
+                descriptor.SupportedCollectionKinds.Order().ToArray(),
+                descriptor.SupportsNull,
+                descriptor.SupportsDurability,
+                descriptor.CompatibleStorageDriverKeys.Order(StringComparer.Ordinal).ToArray()))
             .ToArray();
         return Task.FromResult(new VariableTypeDescriptorsResponse(descriptors));
     }

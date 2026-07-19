@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Core.Models;
 using System.Text.Json.Serialization;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
@@ -95,6 +96,14 @@ public enum AuthoredWorkflowIntrinsicKind
 public sealed record ActivityChildProjection(
     string Name,
     IEnumerable<ActivityNode> Activities
+);
+
+/// <summary>
+/// Disclosure-safe public-contract usage contributed by an activity-owned structure for one child.
+/// </summary>
+public sealed record ActivityChildContractMemberUsage(
+    string NodeId,
+    IReadOnlyCollection<ActivityContractMemberUsage> MemberUsage
 );
 
 /// <summary>

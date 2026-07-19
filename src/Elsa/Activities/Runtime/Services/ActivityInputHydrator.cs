@@ -75,14 +75,14 @@ public sealed class ActivityInputHydrator
     {
         if (envelope.Presence == ValuePresence.Absent)
         {
-            if (input.IsRequired || input.IsNullable is false || !AcceptsNull(property))
+            if (input.IsRequired || !input.IsNullable || !AcceptsNull(property))
                 throw new InvalidOperationException($"Activity input '{input.Key}' does not accept absence.");
             return null;
         }
 
         if (envelope.Presence == ValuePresence.ExplicitNull)
         {
-            if (input.IsNullable is false || !AcceptsNull(property))
+            if (!input.IsNullable || !AcceptsNull(property))
                 throw new InvalidOperationException($"Activity input '{input.Key}' does not accept null.");
             return null;
         }

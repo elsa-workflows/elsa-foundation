@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
@@ -43,6 +44,11 @@ public sealed class ActivityUpgradePlanTests
         Assert.Null(plan.Steps[1].ResultingDiff);
         Assert.Contains(plan.ExpectedSnapshots, x => x.Kind == "ActivityDraft" && x.Revision == 7 && x.HeadVersionId == "head-activity-child");
         Assert.Contains(plan.ExpectedSnapshots, x => x.Kind == "WorkflowDefinition" && x.Id == "workflow-parent" && x.HeadVersionId == "head-workflow-parent");
+        Assert.All(plan.Steps, x => Assert.False(string.IsNullOrWhiteSpace(x.StageId)));
+        Assert.Equal(plan.Steps.Select(x => x.StageId), plan.Stages.Select(x => x.StageId));
+        Assert.Equal(Request().Roots, plan.Binding!.Roots);
+        Assert.Equal(Request().AccessProfileFingerprint, plan.Binding.AccessProfileFingerprint);
+        Assert.Contains(plan.Binding.SelectedClosure, x => x.Kind == "WorkflowDraft" && x.DraftId == "draft-parent");
         Assert.Same(plan, await store.FindAsync(plan.PlanId));
     }
 
@@ -54,14 +60,17 @@ public sealed class ActivityUpgradePlanTests
             "head-activity-child",
             null,
             [new("occurrence-activity-child", "old", "new")],
-            Path(
+            [Path(
                 Reference("ActivityVersion", "activity-child", version: "version-child"),
-                Reference("ActivityVersion", "dependency", version: "old")));
+                Reference("ActivityVersion", "dependency", version: "old"))]);
         var request = Request() with { Roots = [new("ActivityVersion", "version-child")] };
 
         var plan = await Planner(new([owner], []), new PlanStore()).PlanAsync(request);
 
-        Assert.Single(plan.Steps);
+        var step = Assert.Single(plan.Steps);
+        Assert.Equal(ActivityUpgradeAction.CloneActivityVersion, step.Action);
+        Assert.Equal("ActivityDraft", step.Target.Kind);
+        Assert.Equal("version-child", step.Target.SourceVersionId);
     }
 
     [Fact]
@@ -91,7 +100,7 @@ public sealed class ActivityUpgradePlanTests
 
         var plan = await Planner(new([parent], []), new PlanStore()).PlanAsync(Request());
 
-        Assert.Equal(ActivityUpgradePlanStatus.Blocked, plan.Status);
+        Assert.Equal(ActivityUpgradePlanStatus.AwaitingPublication, plan.Status);
         var diagnostic = Assert.Single(plan.Diagnostics);
         Assert.Equal("activity.upgrade.requires-published-version", diagnostic.Code);
         Assert.Equal("step-child", diagnostic.Metadata!["requiredStepId"]);
@@ -120,7 +129,65 @@ public sealed class ActivityUpgradePlanTests
 
         var plan = await Planner(new([], [later, earlier]), new PlanStore()).PlanAsync(Request());
 
-        Assert.Equal(["/a", "/z"], plan.Diagnostics.Select(x => x.Location!.JsonPointer));
+        Assert.Equal(
+            ["/a", "/z"],
+            plan.Diagnostics.Where(x => x.Code == "activity.test").Select(x => x.Location!.JsonPointer));
+    }
+
+    [Fact]
+    public async Task Planner_blocks_every_stage_when_any_global_error_diagnostic_exists()
+    {
+        var owner = Owner("ActivityDraft", "activity-child", "draft-child", 7, Path(
+            Reference("ActivityDraft", "activity-child", draft: "draft-child"),
+            Reference("ActivityVersion", "dependency", version: "old")));
+        var plan = await Planner(
+            new([owner], [Diagnostic("/global")]),
+            new PlanStore()).PlanAsync(Request());
+
+        Assert.Equal(ActivityUpgradePlanStatus.Blocked, plan.Status);
+        var mutations = new RecordingMutationStore();
+        var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () =>
+            await new ApplyActivityUpgradePlanCommand(
+                    new PlanStore(plan),
+                    new ReceiptStore(),
+                    mutations,
+                    new Clock(Now))
+                .ApplyAsync(new(plan.PlanId, plan.Stages[0].StageId, "operation")));
+
+        Assert.Equal("activity.upgrade.plan-blocked", exception.ErrorCode);
+        Assert.Equal(0, mutations.Calls);
+    }
+
+    [Fact]
+    public async Task Planner_unions_prerequisites_from_every_repeated_diamond_owner_path()
+    {
+        var left = Owner("ActivityDraft", "left", "draft-left", 1, Path(
+            Reference("ActivityDraft", "left", draft: "draft-left"),
+            Reference("ActivityVersion", "dependency", version: "old")));
+        var right = Owner("ActivityDraft", "right", "draft-right", 1, Path(
+            Reference("ActivityDraft", "right", draft: "draft-right"),
+            Reference("ActivityVersion", "dependency", version: "old")));
+        var parentReference = Reference("WorkflowDraft", "parent", draft: "draft-parent", revision: 1);
+        var parent = new ActivityUpgradeOwnerSnapshot(
+            parentReference,
+            "head-parent",
+            null,
+            [new("parent-occurrence", "old", "new")],
+            [
+                [parentReference, left.Owner, Reference("ActivityVersion", "dependency", version: "old")],
+                [parentReference, right.Owner, Reference("ActivityVersion", "dependency", version: "old")]
+            ]);
+
+        var plan = await Planner(new([parent, left, right], []), new PlanStore()).PlanAsync(Request());
+
+        var leftStep = plan.Steps.Single(x => x.Target.DefinitionId == "left");
+        var rightStep = plan.Steps.Single(x => x.Target.DefinitionId == "right");
+        var parentStep = plan.Steps.Single(x => x.Target.DefinitionId == "parent");
+        Assert.Equal(
+            new[] { leftStep.StepId, rightStep.StepId }.Order(StringComparer.Ordinal),
+            parentStep.DependsOnStepIds);
+        Assert.Contains(plan.Binding!.SelectedClosure, x => x.DraftId == "draft-left");
+        Assert.Contains(plan.Binding.SelectedClosure, x => x.DraftId == "draft-right");
     }
 
     [Fact]
@@ -153,7 +220,7 @@ public sealed class ActivityUpgradePlanTests
             "base",
             null,
             [new("node", "old", "new")],
-            [ownerReference, newReference],
+            [[ownerReference, newReference]],
             DiffCandidate: request);
         var builder = new ActivityUpgradeDiffBuilder(
             new CandidateCompiler(candidate),
@@ -180,46 +247,46 @@ public sealed class ActivityUpgradePlanTests
     }
 
     [Fact]
-    public async Task Apply_rejects_a_selection_that_is_not_dependency_closed_before_mutation()
+    public async Task Apply_rejects_a_stage_with_unapplied_prerequisites_before_mutation()
     {
         var plan = ReadyPlan();
         var plans = new PlanStore(plan);
         var mutations = new RecordingMutationStore();
-        var command = new ApplyActivityUpgradePlanCommand(plans, mutations, new Clock(Now));
+        var command = new ApplyActivityUpgradePlanCommand(plans, new ReceiptStore(), mutations, new Clock(Now));
 
         var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () =>
-            await command.ApplyAsync(new(plan.PlanId, ["step-parent"])));
+            await command.ApplyAsync(new(plan.PlanId, "stage-parent", "operation-1")));
 
         Assert.Equal(422, exception.StatusCode);
-        Assert.Equal("activity.upgrade.selection-not-closed", exception.ErrorCode);
+        Assert.Equal("activity.upgrade.stage-prerequisite", exception.ErrorCode);
         Assert.Equal(0, mutations.Calls);
     }
 
     [Fact]
-    public async Task Apply_passes_one_bottom_up_atomic_batch_and_never_mutates_published_material()
+    public async Task Apply_passes_one_bottom_up_atomic_stage_and_never_mutates_published_material()
     {
         var plan = ReadyPlan();
         var published = new Dictionary<string, string>(StringComparer.Ordinal) { ["activity-v1"] = "immutable", ["workflow-v1"] = "immutable" };
         var mutations = new RecordingMutationStore(published);
-        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), mutations, new Clock(Now));
+        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), new ReceiptStore(), mutations, new Clock(Now));
 
-        var result = await command.ApplyAsync(new(plan.PlanId));
+        var result = await command.ApplyAsync(new(plan.PlanId, "stage-child", "operation-1"));
 
         Assert.Equal(ActivityUpgradePlanStatus.Applied, result.Status);
-        Assert.Equal(["step-child", "step-parent"], mutations.SelectedStepIds);
+        Assert.Equal(["step-child"], mutations.SelectedStepIds);
         Assert.Equal("immutable", published["activity-v1"]);
         Assert.Equal("immutable", published["workflow-v1"]);
     }
 
     [Fact]
-    public async Task Apply_rejects_an_explicit_empty_selection_instead_of_expanding_it_to_all_steps()
+    public async Task Apply_rejects_an_empty_idempotency_key()
     {
         var mutations = new RecordingMutationStore();
         var plan = ReadyPlan();
-        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), mutations, new Clock(Now));
+        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), new ReceiptStore(), mutations, new Clock(Now));
 
         var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () =>
-            await command.ApplyAsync(new(plan.PlanId, [])));
+            await command.ApplyAsync(new(plan.PlanId, "stage-child", "")));
 
         Assert.Equal(400, exception.StatusCode);
         Assert.Equal("activity.request.invalid", exception.ErrorCode);
@@ -227,17 +294,17 @@ public sealed class ActivityUpgradePlanTests
     }
 
     [Fact]
-    public async Task Apply_handler_exposes_an_explicit_empty_selection_as_the_canonical_request_error()
+    public async Task Apply_handler_exposes_an_empty_idempotency_key_as_the_canonical_request_error()
     {
         var plan = ReadyPlan();
         var store = new PlanStore(plan);
         var handler = new ApplyActivityUpgradePlanHandler(
-            new ApplyActivityUpgradePlanCommand(store, new RecordingMutationStore(), new Clock(Now)),
+            new ApplyActivityUpgradePlanCommand(store, new ReceiptStore(), new RecordingMutationStore(), new Clock(Now)),
             store,
             new AuthoringContext(null));
 
         var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
-            handler.Handle(new(plan.PlanId, []), default));
+            handler.Handle(new(plan.PlanId, "stage-child", ""), default));
 
         Assert.Equal(400, exception.StatusCode);
         Assert.Equal("activity.request.invalid", exception.ErrorCode);
@@ -248,9 +315,9 @@ public sealed class ActivityUpgradePlanTests
     {
         var plan = ReadyPlan();
         var mutations = new RecordingMutationStore { FailStale = true };
-        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), mutations, new Clock(Now));
+        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), new ReceiptStore(), mutations, new Clock(Now));
 
-        var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () => await command.ApplyAsync(new(plan.PlanId)));
+        var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () => await command.ApplyAsync(new(plan.PlanId, "stage-child", "operation-1")));
 
         Assert.Equal(409, exception.StatusCode);
         Assert.Equal("activity.upgrade.stale-plan", exception.ErrorCode);
@@ -262,9 +329,9 @@ public sealed class ActivityUpgradePlanTests
     {
         var plan = ReadyPlan() with { ExpiresAt = Now };
         var mutations = new RecordingMutationStore();
-        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), mutations, new Clock(Now));
+        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), new ReceiptStore(), mutations, new Clock(Now));
 
-        var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () => await command.ApplyAsync(new(plan.PlanId)));
+        var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () => await command.ApplyAsync(new(plan.PlanId, "stage-child", "operation-1")));
 
         Assert.Equal(410, exception.StatusCode);
         Assert.Equal(0, mutations.Calls);
@@ -275,15 +342,214 @@ public sealed class ActivityUpgradePlanTests
     {
         var appliedAt = Now.AddMinutes(-2);
         var drafts = new[] { new ActivityUpgradeAppliedDraft("WorkflowDraft", "draft-w", "workflow", 6, false) };
-        var plan = ReadyPlan() with { Status = ActivityUpgradePlanStatus.Applied, AppliedAt = appliedAt, AppliedDrafts = drafts };
+        var plan = ReadyPlan();
+        var result = new ActivityUpgradeApplyResult(plan.PlanId, ActivityUpgradePlanStatus.Applied, appliedAt, drafts, [], "receipt", "stage-child");
+        var receipts = new ReceiptStore(new ActivityUpgradeApplyReceipt(
+            "receipt",
+            plan.PlanId,
+            "stage-child",
+            ActivityUpgradeApplyIdentity.HashIdempotencyKey("operation-1"),
+            ActivityUpgradeApplyIdentity.CreateRequestFingerprint(plan.PlanId, "stage-child"),
+            null,
+            plan.Binding!.AccessProfileFingerprint,
+            ActivityUpgradeApplyReceiptStatus.Applied,
+            appliedAt,
+            appliedAt,
+            2,
+            result));
         var mutations = new RecordingMutationStore();
-        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), mutations, new Clock(Now));
+        var command = new ApplyActivityUpgradePlanCommand(new PlanStore(plan), receipts, mutations, new Clock(Now));
 
-        var result = await command.ApplyAsync(new(plan.PlanId));
+        var replay = await command.ApplyAsync(new(plan.PlanId, "stage-child", "operation-1"));
 
-        Assert.Equal(appliedAt, result.AppliedAt);
-        Assert.Equal(drafts, result.Drafts);
+        Assert.Equal(appliedAt, replay.AppliedAt);
+        Assert.Equal(drafts, replay.Drafts);
         Assert.Equal(0, mutations.Calls);
+    }
+
+    [Fact]
+    public async Task Preparing_receipt_requires_status_reconciliation_before_retry()
+    {
+        var plan = ReadyPlan();
+        var key = "operation-1";
+        var receipt = new ActivityUpgradeApplyReceipt(
+            "receipt",
+            plan.PlanId,
+            "stage-child",
+            ActivityUpgradeApplyIdentity.HashIdempotencyKey(key),
+            ActivityUpgradeApplyIdentity.CreateRequestFingerprint(plan.PlanId, "stage-child"),
+            null,
+            plan.Binding!.AccessProfileFingerprint,
+            ActivityUpgradeApplyReceiptStatus.Preparing,
+            Now,
+            Now,
+            1,
+            LeaseExpiresAt: Now.AddMinutes(1));
+        var mutations = new RecordingMutationStore();
+        var command = new ApplyActivityUpgradePlanCommand(
+            new PlanStore(plan),
+            new ReceiptStore(receipt),
+            mutations,
+            new Clock(Now));
+
+        var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () =>
+            await command.ApplyAsync(new(plan.PlanId, "stage-child", key)));
+
+        Assert.Equal("activity.upgrade.outcome-unknown", exception.ErrorCode);
+        Assert.Equal("receipt", Assert.Single(exception.Diagnostics).Metadata!["receiptId"]);
+        Assert.Equal(0, mutations.Calls);
+    }
+
+    [Fact]
+    public async Task Expired_preparing_receipt_is_reclaimed_by_revision_and_applied_once()
+    {
+        var plan = ReadyPlan();
+        var key = "operation-1";
+        var receipt = new ActivityUpgradeApplyReceipt(
+            "receipt",
+            plan.PlanId,
+            "stage-child",
+            ActivityUpgradeApplyIdentity.HashIdempotencyKey(key),
+            ActivityUpgradeApplyIdentity.CreateRequestFingerprint(plan.PlanId, "stage-child"),
+            null,
+            plan.Binding!.AccessProfileFingerprint,
+            ActivityUpgradeApplyReceiptStatus.Preparing,
+            Now.AddMinutes(-5),
+            Now.AddMinutes(-5),
+            1,
+            LeaseExpiresAt: Now.AddMinutes(-1));
+        var receipts = new ReceiptStore(receipt);
+        var mutations = new RecordingMutationStore();
+
+        var result = await new ApplyActivityUpgradePlanCommand(
+                new PlanStore(plan),
+                receipts,
+                mutations,
+                new Clock(Now))
+            .ApplyAsync(new(plan.PlanId, "stage-child", key));
+
+        Assert.Equal(ActivityUpgradePlanStatus.Applied, result.Status);
+        Assert.Equal(1, mutations.Calls);
+        var reclaimed = await receipts.FindAsync(receipt.ReceiptId);
+        Assert.Equal(2, reclaimed!.Revision);
+        Assert.True(reclaimed.LeaseExpiresAt > Now);
+    }
+
+    [Fact]
+    public async Task Reusing_an_idempotency_key_for_another_stage_is_rejected()
+    {
+        var plan = ReadyPlan();
+        var key = "operation-1";
+        var receipt = new ActivityUpgradeApplyReceipt(
+            "receipt",
+            plan.PlanId,
+            "stage-parent",
+            ActivityUpgradeApplyIdentity.HashIdempotencyKey(key),
+            ActivityUpgradeApplyIdentity.CreateRequestFingerprint(plan.PlanId, "stage-parent"),
+            null,
+            plan.Binding!.AccessProfileFingerprint,
+            ActivityUpgradeApplyReceiptStatus.Preparing,
+            Now,
+            Now,
+            1);
+        var command = new ApplyActivityUpgradePlanCommand(
+            new PlanStore(plan),
+            new ReceiptStore(receipt),
+            new RecordingMutationStore(),
+            new Clock(Now));
+
+        var exception = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(async () =>
+            await command.ApplyAsync(new(plan.PlanId, "stage-child", key)));
+
+        Assert.Equal("activity.upgrade.idempotency-conflict", exception.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Refresh_uses_the_version_published_from_the_exact_handoff_draft()
+    {
+        var predecessor = ReadyPlan();
+        var result = new ActivityUpgradeApplyResult(
+            predecessor.PlanId,
+            ActivityUpgradePlanStatus.AwaitingPublication,
+            Now,
+            [new("ActivityDraft", "draft-new", "activity", 1, true, "child-v1")],
+            [],
+            "receipt",
+            "stage-child",
+            [new("ActivityDraft", "draft-new", "activity", 1, "child-v1", ["stage-parent"])]);
+        var receipt = new ActivityUpgradeApplyReceipt(
+            "receipt",
+            predecessor.PlanId,
+            "stage-child",
+            "key",
+            "request",
+            null,
+            predecessor.Binding!.AccessProfileFingerprint,
+            ActivityUpgradeApplyReceiptStatus.Applied,
+            Now,
+            Now,
+            2,
+            result);
+        var parent = Owner("WorkflowDraft", "workflow-parent", "draft-parent", 11, Path(
+            Reference("WorkflowDraft", "workflow-parent", draft: "draft-parent"),
+            Reference("ActivityVersion", "activity", version: "child-v1"))) with
+        {
+            DirectReplacements = [new("node", "child-v1", "child-v2")]
+        };
+        var store = new PlanStore(predecessor);
+        var planner = Planner(
+            new([parent], []),
+            store,
+            receipts: new ReceiptStore(receipt),
+            resolver: new PublishedDraftResolver(new ActivityUpgradePublishedDraft("ActivityVersion", "draft-new", "activity", "child-v2")));
+
+        var successor = await planner.RefreshAsync(new(
+            predecessor.PlanId,
+            [new(receipt.ReceiptId, [new("draft-new", "child-v2")])],
+            null,
+            predecessor.Binding.AccessProfileFingerprint));
+
+        Assert.Equal(predecessor.PlanId, successor.PredecessorPlanId);
+        Assert.Equal(new ActivityVersionReplacement("child-v1", "child-v2"), Assert.Single(successor.Replacements));
+        var linked = await store.FindAsync(predecessor.PlanId);
+        Assert.Equal(ActivityUpgradePlanStatus.Superseded, linked!.Status);
+        Assert.Equal(successor.PlanId, linked.SuccessorPlanId);
+    }
+
+    [Fact]
+    public async Task Refresh_cumulatively_advances_successors_for_separately_published_siblings()
+    {
+        var predecessor = ReadyPlan();
+        var receiptA = PublicationReceipt(predecessor, "receipt-a", "draft-a", "activity-a", "a-v1", "stage-a");
+        var receiptB = PublicationReceipt(predecessor, "receipt-b", "draft-b", "activity-b", "b-v1", "stage-b");
+        var owner = Owner("WorkflowDraft", "workflow-parent", "draft-parent", 11, Path(
+            Reference("WorkflowDraft", "workflow-parent", draft: "draft-parent"),
+            Reference("ActivityVersion", "activity-a", version: "a-v1")));
+        var store = new PlanStore(predecessor);
+        var planner = Planner(
+            new([owner], []),
+            store,
+            receipts: new ReceiptStore(receiptA, receiptB),
+            resolver: new PublishedDraftResolver(
+                new("ActivityVersion", "draft-a", "activity-a", "a-v2"),
+                new("ActivityVersion", "draft-b", "activity-b", "b-v2")));
+
+        var first = await planner.RefreshAsync(new(
+            predecessor.PlanId,
+            [new(receiptA.ReceiptId, [new("draft-a", "a-v2")])],
+            null,
+            predecessor.Binding!.AccessProfileFingerprint));
+        var advanced = await planner.RefreshAsync(new(
+            predecessor.PlanId,
+            [new(receiptB.ReceiptId, [new("draft-b", "b-v2")])],
+            null,
+            predecessor.Binding.AccessProfileFingerprint));
+
+        Assert.Equal(first.PlanId, advanced.PredecessorPlanId);
+        Assert.Equal(
+            [new ActivityVersionReplacement("a-v1", "a-v2"), new("b-v1", "b-v2")],
+            advanced.Replacements);
+        Assert.Equal(advanced.PlanId, (await store.FindAsync(first.PlanId))!.SuccessorPlanId);
     }
 
     [Fact]
@@ -294,6 +560,38 @@ public sealed class ActivityUpgradePlanTests
         var plan = await Planner(new([], []), new PlanStore()).PlanAsync(request);
 
         Assert.Equal("tenant-a", plan.TenantId);
+    }
+
+    [Fact]
+    public async Task Planner_omits_owners_and_diagnostics_outside_the_authorized_access_profile()
+    {
+        var hidden = Owner(
+            "WorkflowDraft",
+            "hidden-definition",
+            "hidden-draft",
+            3,
+            Path(
+                Reference("WorkflowDraft", "hidden-definition", draft: "hidden-draft"),
+                Reference("ActivityVersion", "dependency", version: "old")));
+        var diagnostic = new ActivityDiagnostic(
+            "activity.upgrade.owner-unavailable",
+            ActivityDiagnosticSeverity.Error,
+            "hidden",
+            new("WorkflowDraft", "unrequested-hidden-draft", "unrequested-hidden-definition"));
+        var planner = Planner(
+            new([hidden], [diagnostic]),
+            new PlanStore(),
+            authorization: new Authorization(canRead: _ => false));
+        var request = Request() with { Roots = [new("WorkflowDraft", "hidden-draft")] };
+
+        var plan = await planner.PlanAsync(request);
+
+        Assert.Empty(plan.Steps);
+        Assert.Equal(ActivityUpgradePlanStatus.Blocked, plan.Status);
+        Assert.DoesNotContain("unrequested-hidden", JsonSerializer.Serialize(plan), StringComparison.Ordinal);
+        var rootDiagnostic = Assert.Single(plan.Diagnostics);
+        Assert.Equal("activity.upgrade.root-not-affected", rootDiagnostic.Code);
+        Assert.Equal("hidden-draft", rootDiagnostic.Subject.Id);
     }
 
     [Fact]
@@ -308,7 +606,30 @@ public sealed class ActivityUpgradePlanTests
         var readException = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
             new GetActivityUpgradePlanHandler(store, publications, context).Handle(new(plan.PlanId), default));
         var applyException = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
-            new ApplyActivityUpgradePlanHandler(applier, store, context).Handle(new(plan.PlanId), default));
+            new ApplyActivityUpgradePlanHandler(applier, store, context).Handle(new(plan.PlanId, "stage-child", "operation-1"), default));
+
+        Assert.Equal("activity.upgrade.plan-not-found", readException.ErrorCode);
+        Assert.Equal("activity.upgrade.plan-not-found", applyException.ErrorCode);
+        Assert.Equal(0, applier.Calls);
+    }
+
+    [Fact]
+    public async Task Read_and_apply_hide_a_plan_after_the_access_profile_changes()
+    {
+        var plan = ReadyPlan();
+        var store = new PlanStore(plan);
+        var context = new AuthoringContext(null, "global/read-only");
+        var applier = new RecordingApplier();
+        var publications = new PublicationStore(
+            Publication("old", "dependency", "hash-old"),
+            Publication("new", "dependency", "hash-new"));
+
+        var readException = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            new GetActivityUpgradePlanHandler(store, publications, context).Handle(new(plan.PlanId), default));
+        var applyException = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
+            new ApplyActivityUpgradePlanHandler(applier, store, context).Handle(
+                new(plan.PlanId, "stage-child", "operation-1"),
+                default));
 
         Assert.Equal("activity.upgrade.plan-not-found", readException.ErrorCode);
         Assert.Equal("activity.upgrade.plan-not-found", applyException.ErrorCode);
@@ -365,14 +686,26 @@ public sealed class ActivityUpgradePlanTests
     private static ActivityUpgradePlanner Planner(
         ActivityUpgradeDiscovery discovery,
         IActivityUpgradePlanStore store,
-        IActivityUpgradeDiffBuilder? diffBuilder = null) =>
-        new(new Discovery(discovery), store, diffBuilder ?? new DiffBuilder(), new Ids(), new Clock(Now));
+        IActivityUpgradeDiffBuilder? diffBuilder = null,
+        IActivityUpgradeApplyReceiptStore? receipts = null,
+        IActivityUpgradePublishedDraftResolver? resolver = null,
+        IActivityDependencyAuthorizationContext? authorization = null) =>
+        new(
+            new Discovery(discovery),
+            store,
+            receipts ?? new ReceiptStore(),
+            resolver ?? new PublishedDraftResolver(),
+            diffBuilder ?? new DiffBuilder(),
+            authorization ?? new Authorization(),
+            new Ids(),
+            new Clock(Now));
 
     private static ActivityUpgradePlanRequest Request() => new(
         [new("old", "new")],
         [new("WorkflowDraft", "draft-parent")],
         true,
-        false);
+        false,
+        AccessProfileFingerprint: ActivityAccessProfileFingerprint.Create("global/manage"));
 
     private static ActivityUpgradeOwnerSnapshot Owner(
         string kind,
@@ -384,7 +717,7 @@ public sealed class ActivityUpgradePlanTests
         $"head-{definition}",
         null,
         [new($"occurrence-{definition}", "old", "new")],
-        path);
+        [path]);
 
     private static ActivityDefinitionReference Reference(
         string kind,
@@ -402,7 +735,7 @@ public sealed class ActivityUpgradePlanTests
         "activity.test",
         ActivityDiagnosticSeverity.Error,
         "Test diagnostic.",
-        new("ActivityDraft", "draft-a"),
+        new("WorkflowDraft", "draft-parent"),
         new(JsonPointer: pointer),
         Metadata: new Dictionary<string, string>());
 
@@ -426,19 +759,63 @@ public sealed class ActivityUpgradePlanTests
         PublishedAt = Now
     };
 
+    private static ActivityUpgradeApplyReceipt PublicationReceipt(
+        ActivityUpgradePlan plan,
+        string receiptId,
+        string draftId,
+        string definitionId,
+        string sourceVersionId,
+        string stageId)
+    {
+        var result = new ActivityUpgradeApplyResult(
+            plan.PlanId,
+            ActivityUpgradePlanStatus.AwaitingPublication,
+            Now,
+            [new("ActivityDraft", draftId, definitionId, 1, true, sourceVersionId)],
+            [],
+            receiptId,
+            stageId,
+            [new("ActivityDraft", draftId, definitionId, 1, sourceVersionId, ["stage-parent"])]);
+        return new(
+            receiptId,
+            plan.PlanId,
+            stageId,
+            $"key-{receiptId}",
+            $"request-{receiptId}",
+            null,
+            plan.Binding!.AccessProfileFingerprint,
+            ActivityUpgradeApplyReceiptStatus.Applied,
+            Now,
+            Now,
+            2,
+            result);
+    }
+
     private static ActivityUpgradePlan ReadyPlan()
     {
         var child = new ActivityUpgradeStep(
             "step-child", 10, new("ActivityDraft", "activity", "draft-a", 3), ActivityUpgradeAction.UpdateDraft,
-            [], [new("node-a", "old", "new")], 3, "activity-head", null, []);
+            [], [new("node-a", "old", "new")], 3, "activity-head", null, [], "stage-child");
         var parent = new ActivityUpgradeStep(
             "step-parent", 20, new("WorkflowDraft", "workflow", "draft-w", 5), ActivityUpgradeAction.UpdateDraft,
-            [child.StepId], [new("node-w", "old", "new")], 5, "workflow-head", null, []);
+            [child.StepId], [new("node-w", "old", "new")], 5, "workflow-head", null, [], "stage-parent");
         return new(
             "plan-1", Now.AddMinutes(-1), Now.AddMinutes(29), ActivityUpgradePlanStatus.Ready,
             [new("old", "new")],
             [new("ActivityDraft", "draft-a", 3, "activity", "activity-head"), new("WorkflowDraft", "draft-w", 5, "workflow", "workflow-head")],
-            [child, parent], []);
+            [child, parent],
+            [],
+            Binding: new(
+                [new("WorkflowDraft", "draft-w")],
+                true,
+                false,
+                ActivityAccessProfileFingerprint.Create("global/manage"),
+                []),
+            Stages:
+            [
+                new("stage-child", 10, ActivityUpgradeStageStatus.Ready, ["step-child"], []),
+                new("stage-parent", 20, ActivityUpgradeStageStatus.Ready, ["step-parent"], ["stage-child"])
+            ]);
     }
 
     private sealed class Discovery(ActivityUpgradeDiscovery result) : IActivityUpgradeDiscoverySource
@@ -499,10 +876,25 @@ public sealed class ActivityUpgradePlanTests
 
     private sealed class PlanStore : IActivityUpgradePlanStore
     {
-        private ActivityUpgradePlan? _plan;
-        public PlanStore(ActivityUpgradePlan? plan = null) => _plan = plan;
-        public Task<ActivityUpgradePlan?> FindAsync(string planId, CancellationToken cancellationToken = default) => Task.FromResult(_plan?.PlanId == planId ? _plan : null);
-        public Task SaveAsync(ActivityUpgradePlan plan, CancellationToken cancellationToken = default) { _plan = plan; return Task.CompletedTask; }
+        private readonly Dictionary<string, ActivityUpgradePlan> _plans = new(StringComparer.Ordinal);
+        public PlanStore(ActivityUpgradePlan? plan = null)
+        {
+            if (plan is not null)
+                _plans.Add(plan.PlanId, plan);
+        }
+        public Task<ActivityUpgradePlan?> FindAsync(string planId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_plans.GetValueOrDefault(planId));
+        public Task SaveAsync(ActivityUpgradePlan plan, CancellationToken cancellationToken = default)
+        {
+            _plans[plan.PlanId] = plan;
+            return Task.CompletedTask;
+        }
+        public Task LinkSuccessorAsync(string planId, string successorPlanId, CancellationToken cancellationToken = default)
+        {
+            if (_plans.TryGetValue(planId, out var plan))
+                _plans[planId] = plan with { Status = ActivityUpgradePlanStatus.Superseded, SuccessorPlanId = successorPlanId };
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class RecordingMutationStore(IReadOnlyDictionary<string, string>? published = null) : IActivityUpgradePlanMutationStore
@@ -512,7 +904,12 @@ public sealed class ActivityUpgradePlanTests
         public List<string> Drafts { get; } = [];
         public IReadOnlyList<string> SelectedStepIds { get; private set; } = [];
 
-        public ValueTask<ActivityUpgradeApplyResult> ApplyAsync(ActivityUpgradePlan plan, IReadOnlyList<ActivityUpgradeStep> selectedSteps, DateTimeOffset appliedAt, CancellationToken cancellationToken = default)
+        public ValueTask<ActivityUpgradeApplyResult> ApplyAsync(
+            ActivityUpgradePlan plan,
+            IReadOnlyList<ActivityUpgradeStep> selectedSteps,
+            ActivityUpgradeApplyReceipt receipt,
+            DateTimeOffset appliedAt,
+            CancellationToken cancellationToken = default)
         {
             Calls++;
             if (FailStale)
@@ -520,8 +917,92 @@ public sealed class ActivityUpgradePlanTests
             SelectedStepIds = selectedSteps.Select(x => x.StepId).ToArray();
             Drafts.AddRange(selectedSteps.Select(x => x.Target.DraftId!));
             Assert.All(published ?? new Dictionary<string, string>(), x => Assert.Equal("immutable", x.Value));
-            return ValueTask.FromResult(new ActivityUpgradeApplyResult(plan.PlanId, ActivityUpgradePlanStatus.Applied, appliedAt, [], []));
+            return ValueTask.FromResult(new ActivityUpgradeApplyResult(
+                plan.PlanId,
+                ActivityUpgradePlanStatus.Applied,
+                appliedAt,
+                [],
+                [],
+                receipt.ReceiptId,
+                receipt.StageId));
         }
+    }
+
+    private sealed class ReceiptStore(params ActivityUpgradeApplyReceipt[] receipts) : IActivityUpgradeApplyReceiptStore
+    {
+        private readonly Dictionary<string, ActivityUpgradeApplyReceipt> _receipts =
+            receipts.ToDictionary(x => x.ReceiptId, StringComparer.Ordinal);
+
+        public Task<ActivityUpgradeApplyReceipt?> FindAsync(string receiptId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_receipts.GetValueOrDefault(receiptId));
+
+        public Task<ActivityUpgradeApplyReceipt?> FindByIdempotencyKeyAsync(
+            string planId,
+            string idempotencyKeyHash,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(_receipts.Values.SingleOrDefault(x =>
+                StringComparer.Ordinal.Equals(x.PlanId, planId) &&
+                StringComparer.Ordinal.Equals(x.IdempotencyKeyHash, idempotencyKeyHash)));
+
+        public Task<bool> TryCreateAsync(ActivityUpgradeApplyReceipt receipt, CancellationToken cancellationToken = default)
+        {
+            if (_receipts.ContainsKey(receipt.ReceiptId))
+                return Task.FromResult(false);
+            _receipts.Add(receipt.ReceiptId, receipt);
+            return Task.FromResult(true);
+        }
+
+        public Task<ActivityUpgradeApplyReceipt?> TryReclaimAsync(
+            ActivityUpgradeApplyReceipt receipt,
+            DateTimeOffset reclaimedAt,
+            DateTimeOffset leaseExpiresAt,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_receipts.TryGetValue(receipt.ReceiptId, out var current) ||
+                current.Status != ActivityUpgradeApplyReceiptStatus.Preparing ||
+                current.Revision != receipt.Revision ||
+                current.LeaseExpiresAt > reclaimedAt)
+                return Task.FromResult<ActivityUpgradeApplyReceipt?>(null);
+            var reclaimed = current with
+            {
+                UpdatedAt = reclaimedAt,
+                Revision = current.Revision + 1,
+                LeaseExpiresAt = leaseExpiresAt
+            };
+            _receipts[receipt.ReceiptId] = reclaimed;
+            return Task.FromResult<ActivityUpgradeApplyReceipt?>(reclaimed);
+        }
+
+        public Task RejectAsync(
+            ActivityUpgradeApplyReceipt receipt,
+            int statusCode,
+            string errorCode,
+            IReadOnlyList<ActivityDiagnostic> diagnostics,
+            DateTimeOffset rejectedAt,
+            CancellationToken cancellationToken = default)
+        {
+            _receipts[receipt.ReceiptId] = receipt with
+            {
+                Status = ActivityUpgradeApplyReceiptStatus.Rejected,
+                UpdatedAt = rejectedAt,
+                Revision = receipt.Revision + 1,
+                Diagnostics = diagnostics,
+                RejectionStatusCode = statusCode,
+                RejectionCode = errorCode
+            };
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class PublishedDraftResolver(params ActivityUpgradePublishedDraft[] publications) : IActivityUpgradePublishedDraftResolver
+    {
+        public ValueTask<ActivityUpgradePublishedDraft?> ResolveAsync(
+            string publishedVersionId,
+            string expectedKind,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(publications.SingleOrDefault(x =>
+                StringComparer.Ordinal.Equals(x.PublishedVersionId, publishedVersionId) &&
+                StringComparer.Ordinal.Equals(x.Kind, expectedKind)));
     }
 
     private sealed class RecordingApplier : IActivityUpgradePlanApplier
@@ -535,9 +1016,10 @@ public sealed class ActivityUpgradePlanTests
         }
     }
 
-    private sealed class AuthoringContext(string? tenantId) : IActivityAuthoringContext
+    private sealed class AuthoringContext(string? tenantId, string? authorizationProfile = null) : IActivityAuthoringContext
     {
         public string? TenantId { get; } = tenantId;
+        public string AuthorizationProfile => authorizationProfile ?? $"{TenantId ?? "global"}/manage";
         public bool CanAuthorProvider(string providerKey) => true;
         public bool CanReadProviderPayload(string providerKey) => true;
     }
@@ -551,5 +1033,15 @@ public sealed class ActivityUpgradePlanTests
     private sealed class Clock(DateTimeOffset now) : ISystemClock
     {
         public DateTimeOffset UtcNow => now;
+    }
+
+    private sealed class Authorization(
+        string? tenantId = null,
+        Func<ActivityDefinitionReference, bool>? canRead = null) : IActivityDependencyAuthorizationContext
+    {
+        public string? TenantId => tenantId;
+        public string AuthorizationProfile => "global/manage";
+        public bool CanRead(ActivityDefinitionReference reference) =>
+            canRead?.Invoke(reference) ?? StringComparer.Ordinal.Equals(reference.TenantId, tenantId);
     }
 }

@@ -1,27 +1,31 @@
-using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
-public sealed record ActivityExecutionBookmarkSummary(
+public sealed record ActivityExecutionBookmarkIdentity(
     string BookmarkId,
-    string ResumeTargetId,
+    string WorkflowExecutionId,
+    string ActivityExecutionId,
+    string ResumeTargetId);
+
+public sealed record ActivityExecutionBookmarkSummary(
+    ActivityExecutionBookmarkIdentity Identity,
     string StimulusType,
     string StimulusHash,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? ExpiresAt,
-    IReadOnlyDictionary<string, string> Metadata,
-    JsonElement? Payload = null)
+    DateTimeOffset? ExpiresAt)
 {
-    public static ActivityExecutionBookmarkSummary From(BookmarkState bookmark, JsonElement? payload = null) =>
+    public static ActivityExecutionBookmarkSummary From(BookmarkState bookmark) =>
         new(
-            BookmarkId: bookmark.BookmarkId,
-            ResumeTargetId: bookmark.ResumeTargetId,
+            Identity: new(
+                bookmark.BookmarkId,
+                bookmark.WorkflowExecutionId,
+                bookmark.ActivityExecutionId,
+                bookmark.ResumeTargetId),
             StimulusType: bookmark.StimulusType,
             StimulusHash: bookmark.StimulusHash,
             CreatedAt: bookmark.CreatedAt,
-            ExpiresAt: bookmark.ExpiresAt,
-            Metadata: bookmark.Metadata,
-            Payload: payload?.Clone());
+            ExpiresAt: bookmark.ExpiresAt);
 }
 
 public sealed record ActivityExecutionIncidentSummary(
@@ -34,7 +38,8 @@ public sealed record ActivityExecutionIncidentSummary(
     DateTimeOffset CreatedAt,
     DateTimeOffset? ResolvedAt,
     bool IsBlocking,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    ActivityExecutionIncidentCausation? Causation = null)
 {
     public static ActivityExecutionIncidentSummary From(IncidentState incident) =>
         new(
@@ -47,5 +52,26 @@ public sealed record ActivityExecutionIncidentSummary(
             CreatedAt: incident.CreatedAt,
             ResolvedAt: incident.ResolvedAt,
             IsBlocking: incident.IsBlocking,
-            Metadata: incident.Metadata);
+            Metadata: incident.Metadata,
+            Causation: ActivityExecutionIncidentCausation.From(incident.Metadata));
+}
+
+public sealed record ActivityExecutionIncidentCausation(
+    string IncidentId,
+    string ActivityExecutionId,
+    string? ExecutableNodeId,
+    string Kind)
+{
+    public static ActivityExecutionIncidentCausation? From(IReadOnlyDictionary<string, string> metadata)
+    {
+        if (!metadata.TryGetValue(RuntimeMetadataKeys.CausalIncidentId, out var incidentId) ||
+            !metadata.TryGetValue(RuntimeMetadataKeys.CausalActivityExecutionId, out var activityExecutionId) ||
+            !metadata.TryGetValue(RuntimeMetadataKeys.CausationKind, out var kind) ||
+            string.IsNullOrWhiteSpace(incidentId) ||
+            string.IsNullOrWhiteSpace(activityExecutionId) ||
+            string.IsNullOrWhiteSpace(kind))
+            return null;
+        metadata.TryGetValue(RuntimeMetadataKeys.CausalExecutableNodeId, out var executableNodeId);
+        return new(incidentId, activityExecutionId, executableNodeId, kind);
+    }
 }

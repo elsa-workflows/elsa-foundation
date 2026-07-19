@@ -31,13 +31,11 @@ public sealed record ActivityInputDescriptorView(
     string? Category,
     bool IsBrowsable,
     bool IsRequired,
+    bool IsNullable,
     string? UiHint,
     JsonElement? DefaultValue,
     string? DefaultSyntax,
-    JsonElement? UiSpecifications)
-{
-    public bool? IsNullable { get; init; }
-}
+    JsonElement? UiSpecifications);
 
 public sealed record ActivityOutputDescriptorView(
     string Name,

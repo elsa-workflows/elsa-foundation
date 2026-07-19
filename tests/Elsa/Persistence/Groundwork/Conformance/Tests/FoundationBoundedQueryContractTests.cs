@@ -222,7 +222,7 @@ public sealed class FoundationBoundedQueryContractTests
         ISecretRepository otherTenant = new GroundworkSecretRepository(
             otherTenantClient.DocumentStore,
             otherTenantClient.BoundedDocumentStore);
-        await otherTenant.SaveAsync(Secret("payments.alpha", "Tenant B Payments API"));
+        await otherTenant.SaveAsync(Secret("payments.alpha", "Tenant B Payments API", tenantId: "tenant-b"));
 
         Assert.Single((await otherTenant.ListPageAsync("tenant-b", Request(skip: 0))).Items);
         Assert.Equal(2, (await repository.ListPageAsync("tenant-a", Request(skip: 0))).TotalCount);
@@ -556,8 +556,10 @@ public sealed class FoundationBoundedQueryContractTests
         string storeName = SecretStoreNames.Encrypted,
         SecretStatus status = SecretStatus.Active,
         DateTimeOffset? expiresAt = null,
-        string scope = "finance") => new()
+        string scope = "finance",
+        string tenantId = "tenant-a") => new()
     {
+        TenantId = tenantId,
         Name = name,
         DisplayName = displayName,
         TypeName = SecretTypeNames.Text,

@@ -8,4 +8,6 @@ public sealed record PublishActivityDraft(
     [property: JsonIgnore] string DraftId,
     long ExpectedDraftRevision,
     string? ExpectedDefinitionHeadVersionId,
-    string Version) : IRequest<PublishedActivityDefinitionView>;
+    string Version,
+    string ReviewToken,
+    string IdempotencyKey) : IRequest<ActivityPublicationReceiptView>;

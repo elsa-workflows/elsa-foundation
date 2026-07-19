@@ -521,11 +521,9 @@ preserve ordering and idempotency but are not allowed to weaken the canonical ch
    requiredness, nullability, defaults, policies, result projections, outcomes, and activation
    requirements remain compatible. Incompatible changes require a new contract version and artifact
    identity.
-9. `WorkflowExecutable` v6 is the first format that permits explicit activity-input nullability.
-   The deterministic v5-to-v6 upcaster preserves a missing nullable member as `unknown` so the legacy
-   contract fingerprint remains valid; it must not infer a value from mutable CLR or Design state.
-   During a rolling deployment, v5 workers reject v6 executables at the version gate, while v6
-   workers accept both v5 legacy contracts and v6 explicit-nullability contracts.
+9. `WorkflowExecutable` v6 is the clean baseline for explicit activity-input nullability. Nullability
+   is required in every pinned input contract; v5 executables are rejected and installations carrying
+   them must reset Runtime and Publishing persistence and republish workflows.
 
 ## Explicitly removed or non-persisted concepts
 

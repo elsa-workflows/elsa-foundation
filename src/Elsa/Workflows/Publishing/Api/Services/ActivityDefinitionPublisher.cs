@@ -1,17 +1,24 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Constants;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Runtime.Contracts;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Versioning;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Api.Contracts;
+using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Services;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
@@ -19,7 +26,14 @@ public sealed record PublishActivityDefinitionRequest(
     string DraftId,
     long ExpectedDraftRevision,
     string? ExpectedDefinitionHeadVersionId,
-    string Version);
+    string Version,
+    string ReviewToken = "",
+    string IdempotencyKey = "");
+
+public sealed record PreflightActivityDefinitionPublicationRequest(
+    string DraftId,
+    long ExpectedDraftRevision,
+    string? ExpectedDefinitionHeadVersionId);
 
 public sealed record PublishActivityDefinitionResult(
     ActivityPublicationResult Publication,
@@ -32,8 +46,16 @@ public sealed record PublishActivityDefinitionResult(
 
 public interface IActivityDefinitionPublisher
 {
-    Task<PublishActivityDefinitionResult> PublishAsync(
+    Task<ActivityPublicationPreflightView> PreflightAsync(
+        PreflightActivityDefinitionPublicationRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<ActivityPublicationReceipt> PublishReviewedAsync(
         PublishActivityDefinitionRequest request,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<ActivityPublicationReceipt> GetReceiptAsync(
+        string idempotencyKey,
         CancellationToken cancellationToken = default);
 }
 
@@ -64,19 +86,327 @@ public sealed class ActivityDefinitionPublisher(
     IActivityVersionDiffer differ,
     IActivityTemplateCompiler compiler,
     IActivityPublishingAuthorizationContext authorization,
-    ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commitCommand,
+    ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commitCommand,
     IDistributedLockProvider lockProvider,
     IIdentityGenerator identityGenerator,
-    TimeProvider timeProvider) : IActivityDefinitionPublisher
+    TimeProvider timeProvider,
+    IActivityPublicationReceiptStore? receiptStore = null,
+    IEnumerable<IActivityActivationStrategy>? activityActivationStrategies = null,
+    IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null) : IActivityDefinitionPublisher
 {
-    public async Task<PublishActivityDefinitionResult> PublishAsync(
+    private readonly IActivityPublicationReceiptStore _receiptStore =
+        receiptStore ?? new InMemoryActivityPublicationReceiptStore();
+    private readonly ActivityPublicationReviewPolicy _reviewPolicy =
+        new(activityActivationStrategies, storageDrivers);
+
+    public async Task<ActivityPublicationPreflightView> PreflightAsync(
+        PreflightActivityDefinitionPublicationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var draft = await draftStore.FindAsync(request.DraftId, cancellationToken)
+                    ?? throw Reject("activity.draft.not-found", "Activity draft was not found.", [], true);
+        EnsureAuthorized(draft.TenantId);
+        await using var lockHandle = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(draft.DefinitionId),
+            null,
+            cancellationToken);
+
+        draft = await draftStore.FindAsync(request.DraftId, cancellationToken)
+                ?? throw Reject("activity.draft.not-found", "Activity draft was not found.", [], true);
+        EnsureAuthorized(draft.TenantId);
+        var definition = await definitions.GetAsync(draft.DefinitionId, cancellationToken);
+        EnsureAuthorized(definition.TenantId);
+        var authoring = await authoringStore.FindAsync(definition.Id, cancellationToken)
+                        ?? throw Reject(
+                            "activity.definition.authoring-not-found",
+                            "Activity definition authoring state was not found.",
+                            [],
+                            true);
+        EnsureAuthorized(authoring.TenantId);
+        EnsureExpectedState(
+            new(
+                request.DraftId,
+                request.ExpectedDraftRevision,
+                request.ExpectedDefinitionHeadVersionId,
+                "0.0.0"),
+            draft,
+            authoring);
+
+        var layout = await layoutStore.FindDraftLayoutAsync(draft.Id, cancellationToken)
+                     ?? throw Reject(
+                         "activity.draft.layout-not-found",
+                         "The draft layout was not found.",
+                         [],
+                         true);
+        EnsureAuthorized(layout.TenantId);
+        if (layout.Revision != draft.Revision)
+            throw Reject(
+                "activity.draft.stale-layout",
+                "The draft layout does not match the expected draft revision.",
+                [],
+                true);
+
+        var validation = await validator.ValidateAsync(
+            new(definition.Id, draft.Id, draft.Revision, draft.State),
+            cancellationToken);
+        var head = authoring.HeadVersionId is null
+            ? null
+            : await publicationStore.FindAsync(authoring.HeadVersionId, cancellationToken)
+              ?? throw Reject(
+                  "activity.definition.head-invalid",
+                  "The current definition head publication was not found.",
+                  [],
+                  true);
+        var provisionalVersion = ActivityPublicationReviewPolicy.ProvisionalVersion(head?.Version);
+        var candidateVersionId = ActivityPublicationReviewPolicy.StableCandidateVersionId(
+            definition.Id,
+            draft.Id,
+            draft.Revision);
+        var compilation = await compiler.CompileAsync(
+            new(
+                definition,
+                draft,
+                candidateVersionId,
+                provisionalVersion,
+                ComputeLayoutBytes(layout.Records)),
+            cancellationToken);
+        var diff = compilation.Template is null
+            ? null
+            : await ComputeDiffAsync(
+                head,
+                candidateVersionId,
+                provisionalVersion,
+                draft,
+                layout,
+                compilation,
+                cancellationToken);
+        var requiredBump = diff?.RequiredBump ?? ActivityVersionBump.None;
+        var existingVersions = await publicationStore.ListByDefinitionAsync(definition.Id, cancellationToken);
+        var validVersions = ActivityPublicationReviewPolicy.AvailableVersionChoices(
+            head?.Version,
+            requiredBump,
+            existingVersions);
+        var minimumVersion = ActivityPublicationReviewPolicy.MinimumVersion(
+            head?.Version,
+            requiredBump);
+        var diagnostics = validation.Diagnostics
+            .Concat(compilation.Diagnostics)
+            .Concat(_reviewPolicy.ReadinessDiagnostics(draft, compilation.Template))
+            .ToArray();
+        var orderedDiagnostics = ActivityDiagnosticOrderer.Order(diagnostics);
+        var provider = new ActivityPublicationCapabilityReadinessView(
+            "Provider",
+            draft.State.Provider.ProviderKey,
+            draft.State.Provider.SchemaVersion,
+            compilation.Template is null ? "Unavailable" : "Available",
+            compilation.Template is null ? [] : [draft.State.Provider.SchemaVersion]);
+        var storage = _reviewPolicy.StorageReadiness(compilation.Template);
+        var runtime = _reviewPolicy.RuntimeReadiness(compilation.Template);
+        var dependencies = compilation.DirectDependencies
+            .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
+            .Select(x => new ActivityPublicationDependencyEvidenceView(
+                x.DefinitionId,
+                x.VersionId,
+                x.Version,
+                x.TemplateHash,
+                x.OccurrenceId))
+            .ToArray();
+        var impactFirst = diff?.Changes
+            .OrderBy(ActivityPublicationReviewPolicy.ImpactRank)
+            .ThenBy(x => x.ChangeId, StringComparer.Ordinal)
+            .ToArray() ?? [];
+        var isPublishable =
+            compilation.Template is not null &&
+            orderedDiagnostics.All(x => x.Severity != ActivityDiagnosticSeverity.Error);
+        var reviewToken = ActivityPublicationReviewPolicy.ReviewToken(
+            draft,
+            authoring.HeadVersionId,
+            compilation.Template,
+            diff,
+            requiredBump,
+            validVersions,
+            dependencies,
+            provider,
+            storage,
+            runtime,
+            orderedDiagnostics);
+
+        return new(
+            draft.Id,
+            draft.Revision,
+            definition.Id,
+            authoring.HeadVersionId,
+            head is not null,
+            reviewToken,
+            isPublishable,
+            minimumVersion,
+            validVersions,
+            diff,
+            impactFirst,
+            dependencies,
+            provider,
+            storage,
+            runtime,
+            orderedDiagnostics);
+    }
+
+    public async Task<ActivityPublicationReceipt> PublishReviewedAsync(
+        PublishActivityDefinitionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateReviewedRequest(request);
+        var fingerprint = RequestFingerprint(request);
+        var existing = await _receiptStore.FindAsync(
+            authorization.TenantId,
+            request.IdempotencyKey,
+            cancellationToken);
+        if (existing is not null)
+        {
+            EnsureAuthorized(existing.TenantId);
+            return Replay(existing, fingerprint);
+        }
+
+        try
+        {
+            var preflight = await PreflightAsync(
+                new(
+                    request.DraftId,
+                    request.ExpectedDraftRevision,
+                    request.ExpectedDefinitionHeadVersionId),
+                cancellationToken);
+            if (!StringComparer.Ordinal.Equals(preflight.ReviewToken, request.ReviewToken))
+                throw Reject(
+                    "activity.publication.review-stale",
+                    "The reviewed publication binding is stale.",
+                    [new(
+                        "activity.publication.review-stale",
+                        ActivityDiagnosticSeverity.Error,
+                        "The draft, definition head, or authoritative publication evidence changed after review.",
+                        new(
+                            "ActivityDraft",
+                            request.DraftId,
+                            preflight.DefinitionId,
+                            Revision: request.ExpectedDraftRevision),
+                        Remediation: "Run publication preflight again and review the current evidence.",
+                        Metadata: new Dictionary<string, string>(StringComparer.Ordinal))],
+                    true);
+            if (!ActivityPublicationReviewPolicy.IsVersionAtLeast(
+                    request.Version,
+                    preflight.MinimumVersion))
+                throw Reject(
+                    "activity.publication.invalid",
+                    "The requested exact version is below the reviewed minimum.",
+                    [new(
+                        "activity.version.bump-insufficient",
+                        ActivityDiagnosticSeverity.Error,
+                        $"Version {request.Version} is below the reviewed minimum {preflight.MinimumVersion}.",
+                        new(
+                            "ActivityDraft",
+                            request.DraftId,
+                            preflight.DefinitionId,
+                            Revision: request.ExpectedDraftRevision),
+                        Remediation: $"Publish as {preflight.MinimumVersion} or a higher unique semantic version.",
+                        Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["requestedVersion"] = request.Version,
+                            ["minimumVersion"] = preflight.MinimumVersion
+                        })]);
+            if (!preflight.IsPublishable)
+                throw Reject(
+                    "activity.publication.invalid",
+                    "The reviewed activity publication is not ready.",
+                    preflight.Diagnostics);
+
+            await PublishCoreAsync(request, cancellationToken);
+            return await GetReceiptAsync(request.IdempotencyKey, cancellationToken);
+        }
+        catch (ActivityPublicationRejectedException exception)
+        {
+            var concurrentlyCompleted = await _receiptStore.FindAsync(
+                authorization.TenantId,
+                request.IdempotencyKey,
+                cancellationToken);
+            if (concurrentlyCompleted is not null)
+            {
+                EnsureAuthorized(concurrentlyCompleted.TenantId);
+                return Replay(concurrentlyCompleted, fingerprint);
+            }
+            var status = exception.ErrorCode switch
+            {
+                "activity.publication.conflict" => ActivityPublicationReceiptStatus.OutcomeUnknown,
+                var code when code.Contains("stale", StringComparison.Ordinal) =>
+                    ActivityPublicationReceiptStatus.Stale,
+                _ => ActivityPublicationReceiptStatus.Rejected
+            };
+            await StoreTerminalReceiptAsync(request, fingerprint, status, exception.ErrorCode, exception.Diagnostics, cancellationToken);
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            var concurrentlyCompleted = await _receiptStore.FindAsync(
+                authorization.TenantId,
+                request.IdempotencyKey,
+                CancellationToken.None);
+            if (concurrentlyCompleted is not null)
+            {
+                EnsureAuthorized(concurrentlyCompleted.TenantId);
+                return Replay(concurrentlyCompleted, fingerprint);
+            }
+            await StoreTerminalReceiptAsync(
+                request,
+                fingerprint,
+                ActivityPublicationReceiptStatus.Failed,
+                "activity.operation.failed",
+                [],
+                cancellationToken);
+            throw;
+        }
+    }
+
+    public async ValueTask<ActivityPublicationReceipt> GetReceiptAsync(
+        string idempotencyKey,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+        var receipt = await _receiptStore.FindAsync(
+            authorization.TenantId,
+            idempotencyKey,
+            cancellationToken);
+        if (receipt is null)
+            return new(
+                authorization.TenantId,
+                idempotencyKey,
+                "",
+                ActivityPublicationReceiptStatus.OutcomeUnknown,
+                "",
+                0,
+                null,
+                "",
+                "",
+                null,
+                "activity.publication.outcome-unknown",
+                [],
+                timeProvider.GetUtcNow());
+
+        EnsureAuthorized(receipt.TenantId);
+        return receipt;
+    }
+
+    private async Task<PublishActivityDefinitionResult> PublishCoreAsync(
         PublishActivityDefinitionRequest request,
         CancellationToken cancellationToken = default)
     {
         var draft = await draftStore.FindAsync(request.DraftId, cancellationToken)
                     ?? throw Reject("activity.draft.not-found", "Activity draft was not found.", [], true);
         EnsureAuthorized(draft.TenantId);
-        await using var lockHandle = await lockProvider.AcquireLockAsync(DefinitionLockKey(draft.DefinitionId), null, cancellationToken);
+        await using var lockHandle = await lockProvider.AcquireLockAsync(
+            ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(draft.DefinitionId),
+            null,
+            cancellationToken);
 
         draft = await draftStore.FindAsync(request.DraftId, cancellationToken)
                 ?? throw Reject("activity.draft.not-found", "Activity draft was not found.", [], true);
@@ -130,6 +460,53 @@ public sealed class ActivityDefinitionPublisher(
         var semVerDiagnostic = ValidateRequestedBump(head?.Version, requestedVersion, diff?.RequiredBump ?? ActivityVersionBump.None, draft);
         if (semVerDiagnostic is not null)
             throw Reject("activity.publication.invalid", "The requested activity version is insufficient.", [semVerDiagnostic]);
+        var readinessDiagnostics = _reviewPolicy.ReadinessDiagnostics(draft, compilation.Template).ToArray();
+
+        var requiredBump = diff?.RequiredBump ?? ActivityVersionBump.None;
+        var validVersions = ActivityPublicationReviewPolicy.AvailableVersionChoices(
+            head?.Version,
+            requiredBump,
+            existingVersions);
+        var dependencies = compilation.DirectDependencies
+            .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
+            .Select(x => new ActivityPublicationDependencyEvidenceView(
+                x.DefinitionId,
+                x.VersionId,
+                x.Version,
+                x.TemplateHash,
+                x.OccurrenceId))
+            .ToArray();
+        var provider = new ActivityPublicationCapabilityReadinessView(
+            "Provider",
+            draft.State.Provider.ProviderKey,
+            draft.State.Provider.SchemaVersion,
+            "Available",
+            [draft.State.Provider.SchemaVersion]);
+        var diagnostics = ActivityDiagnosticOrderer.Order(
+            validation.Diagnostics.Concat(compilation.Diagnostics).Concat(readinessDiagnostics));
+        var currentReviewToken = ActivityPublicationReviewPolicy.ReviewToken(
+            draft,
+            authoring.HeadVersionId,
+            compilation.Template,
+            diff,
+            requiredBump,
+            validVersions,
+            dependencies,
+            provider,
+            _reviewPolicy.StorageReadiness(compilation.Template),
+            _reviewPolicy.RuntimeReadiness(compilation.Template),
+            diagnostics);
+        if (!StringComparer.Ordinal.Equals(currentReviewToken, request.ReviewToken))
+            throw Reject(
+                "activity.publication.review-stale",
+                "The reviewed publication binding is stale.",
+                [],
+                true);
+        if (readinessDiagnostics.Length > 0)
+            throw Reject(
+                "activity.publication.invalid",
+                "Activity publication runtime readiness checks failed.",
+                readinessDiagnostics);
 
         var now = timeProvider.GetUtcNow();
         var sourceReferenceId = NewId("activity-source-ref");
@@ -175,14 +552,38 @@ public sealed class ActivityDefinitionPublisher(
             ChildSlotName = dependency.ChildSlotName,
             ChildIndex = dependency.ChildIndex,
             NodeOrigin = dependency.NodeOrigin.ToArray(),
+            MemberUsage = dependency.MemberUsage.ToArray(),
             CreatedAt = now,
             LastModifiedAt = now
         }).ToArray();
+        var receipt = new ActivityPublicationReceipt(
+            authorization.TenantId,
+            request.IdempotencyKey,
+            RequestFingerprint(request),
+            ActivityPublicationReceiptStatus.Applied,
+            draft.Id,
+            request.ExpectedDraftRevision,
+            request.ExpectedDefinitionHeadVersionId,
+            request.ReviewToken,
+            request.Version,
+            new(
+                definition.Id,
+                versionId,
+                draft.Id,
+                request.Version,
+                compilation.Template.TemplateId,
+                compilation.Template.TemplateHash,
+                sourceReferenceId,
+                now),
+            null,
+            [],
+            now);
 
         ActivityPublicationResult committed;
         try
         {
             committed = await commitCommand.ExecuteAsync(new(
+                authorization.TenantId,
                 new(
                     draft.Id,
                     request.ExpectedDraftRevision,
@@ -193,7 +594,8 @@ public sealed class ActivityDefinitionPublisher(
                     versionLayout,
                     edges),
                 compilation.Template,
-                sourceReference), cancellationToken);
+                sourceReference,
+                receipt), cancellationToken);
         }
         catch (InvalidOperationException exception)
         {
@@ -513,13 +915,91 @@ public sealed class ActivityDefinitionPublisher(
             ? number
             : null;
 
+    private static void ValidateReviewedRequest(PublishActivityDefinitionRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.DraftId) ||
+            request.ExpectedDraftRevision <= 0 ||
+            string.IsNullOrWhiteSpace(request.Version) ||
+            string.IsNullOrWhiteSpace(request.ReviewToken) ||
+            string.IsNullOrWhiteSpace(request.IdempotencyKey) ||
+            request.IdempotencyKey.Length > 200 ||
+            request.ExpectedDefinitionHeadVersionId is not null &&
+            string.IsNullOrWhiteSpace(request.ExpectedDefinitionHeadVersionId) ||
+            !SemVer.TryParse(request.Version, out _))
+            throw Reject(
+                "activity.request.invalid",
+                "The reviewed publication request is malformed.",
+                []);
+    }
+
+    private static ActivityPublicationReceipt Replay(
+        ActivityPublicationReceipt receipt,
+        string fingerprint)
+    {
+        if (!StringComparer.Ordinal.Equals(receipt.RequestFingerprint, fingerprint))
+            throw Reject(
+                "activity.publication.idempotency-conflict",
+                "The idempotency key is already bound to another publication request.",
+                [],
+                true);
+        if (receipt.Status == ActivityPublicationReceiptStatus.Applied)
+            return receipt;
+        throw Reject(
+            receipt.ErrorCode ?? "activity.publication.outcome-unknown",
+            "The idempotent publication request already has a terminal receipt.",
+            receipt.Diagnostics,
+            receipt.Status is ActivityPublicationReceiptStatus.Stale or
+                ActivityPublicationReceiptStatus.OutcomeUnknown);
+    }
+
+    private static string RequestFingerprint(PublishActivityDefinitionRequest request) =>
+        ActivityPublicationRequestFingerprint.Compute(
+            request.DraftId,
+            request.ExpectedDraftRevision,
+            request.ExpectedDefinitionHeadVersionId,
+            request.Version,
+            request.ReviewToken);
+
+    private async ValueTask StoreTerminalReceiptAsync(
+        PublishActivityDefinitionRequest request,
+        string fingerprint,
+        ActivityPublicationReceiptStatus status,
+        string errorCode,
+        IReadOnlyList<ActivityDiagnostic> diagnostics,
+        CancellationToken cancellationToken)
+    {
+        var receipt = new ActivityPublicationReceipt(
+            authorization.TenantId,
+            request.IdempotencyKey,
+            fingerprint,
+            status,
+            request.DraftId,
+            request.ExpectedDraftRevision,
+            request.ExpectedDefinitionHeadVersionId,
+            request.ReviewToken,
+            request.Version,
+            null,
+            errorCode,
+            ActivityDiagnosticOrderer.Order(diagnostics),
+            timeProvider.GetUtcNow());
+        if (await _receiptStore.TryCreateAsync(receipt, cancellationToken))
+            return;
+        var existing = await _receiptStore.FindAsync(
+            authorization.TenantId,
+            request.IdempotencyKey,
+            cancellationToken);
+        if (existing is not null && !StringComparer.Ordinal.Equals(existing.RequestFingerprint, fingerprint))
+            throw Reject(
+                "activity.publication.idempotency-conflict",
+                "The idempotency key is already bound to another publication request.",
+                [],
+                true);
+    }
+
     private string NewId(string prefix) => $"{prefix}-{identityGenerator.Generate()}";
 
     private static long ComputeLayoutBytes(IEnumerable<ActivityLayoutRecord> records) => records.Sum(x =>
         (long)Encoding.UTF8.GetByteCount(x.NodeId) + Encoding.UTF8.GetByteCount(x.Data.GetRawText()));
-
-    private static string DefinitionLockKey(string definitionId) =>
-        $"elsa:activities:design:publication:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(definitionId)))}";
 
     private static ActivityPublicationRejectedException Reject(
         string code,

@@ -24,6 +24,15 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : [];
     }
 
+    public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.ProjectChildContractMemberUsage(activity)
+            : [];
+    }
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         ArgumentNullException.ThrowIfNull(activity);

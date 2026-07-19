@@ -8,6 +8,8 @@ using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Persistence.Groundwork.SqlServer.DependencyInjection;
 
@@ -40,7 +42,9 @@ public static class SqlServerGroundworkDocumentStoreRegistration
             autoApplyOnStartup,
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             serviceProvider.GetRequiredService<GroundworkStoreSessionSource>(),
-            serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SqlServerGroundworkDocumentStoreInitializer>>()));
+            // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
+            serviceProvider.GetService<ILogger<SqlServerGroundworkDocumentStoreInitializer>>()
+            ?? NullLogger<SqlServerGroundworkDocumentStoreInitializer>.Instance));
         services.AddHostedService(serviceProvider =>
             serviceProvider.GetRequiredService<SqlServerGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(serviceProvider =>

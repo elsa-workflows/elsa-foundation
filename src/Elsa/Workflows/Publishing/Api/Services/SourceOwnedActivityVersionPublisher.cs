@@ -126,6 +126,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
             DefinitionId = definition.Id,
             ContentAuthority = new(ActivityContentAuthorityKind.ProviderSource, version.ProviderKey, version.SourceId),
             HeadVersionId = version.Id,
+            RecommendedVersionId = version.Id,
             CreatedAt = now,
             LastModifiedAt = now
         };
@@ -156,6 +157,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
             input.Name,
             input.Type,
             input.IsRequired,
+            input.IsNullable,
             input.DefaultValue is { } value ? new(input.DefaultSyntax ?? "Literal", value) : null,
             WellKnownRuntimeDurableValueStorageDrivers.Json,
             DisplayName: input.DisplayName,
@@ -169,6 +171,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
             output.Name,
             output.Type,
             output.IsRequired,
+            output.IsNullable,
             WellKnownRuntimeDurableValueStorageDrivers.Json,
             DisplayName: output.DisplayName,
             Description: output.Description,

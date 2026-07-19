@@ -25,7 +25,8 @@ public sealed partial class EndpointSecurityTests
         ("Expressions", "src/Elsa/Expressions/Api/Endpoints", [nameof(PermissionNames.ExpressionsRead)]),
         ("Publishing", "src/Elsa/Workflows/Publishing/Api/Endpoints", [nameof(PermissionNames.WorkflowPublishingRead), nameof(PermissionNames.WorkflowPublishingManage)]),
         ("Runtime", "src/Elsa/Workflows/Runtime/Api/Endpoints", [nameof(PermissionNames.WorkflowRuntimeRead), nameof(PermissionNames.WorkflowRuntimeExecute), nameof(PermissionNames.WorkflowRuntimeManage)]),
-        ("API Capabilities", "src/Elsa/Api/Capabilities/Endpoints", [nameof(PermissionNames.ApiCapabilitiesRead)])
+        ("API Capabilities", "src/Elsa/Api/Capabilities/Endpoints", [nameof(PermissionNames.ApiCapabilitiesRead)]),
+        ("Elsa 3 Import", "src/Elsa3/Activities/Design/Import/Endpoints", [nameof(PermissionNames.Elsa3ImportRead), nameof(PermissionNames.Elsa3ImportManage)])
     ];
 
     [Fact]
@@ -43,7 +44,9 @@ public sealed partial class EndpointSecurityTests
             [nameof(PermissionNames.WorkflowRuntimeRead)] = "workflow-runtime.read",
             [nameof(PermissionNames.WorkflowRuntimeExecute)] = "workflow-runtime.execute",
             [nameof(PermissionNames.WorkflowRuntimeManage)] = "workflow-runtime.manage",
-            [nameof(PermissionNames.ApiCapabilitiesRead)] = "api-capabilities.read"
+            [nameof(PermissionNames.ApiCapabilitiesRead)] = "api-capabilities.read",
+            [nameof(PermissionNames.Elsa3ImportRead)] = "elsa3-import.read",
+            [nameof(PermissionNames.Elsa3ImportManage)] = "elsa3-import.manage"
         };
         var actual = typeof(PermissionNames)
             .GetFields(BindingFlags.Public | BindingFlags.Static)

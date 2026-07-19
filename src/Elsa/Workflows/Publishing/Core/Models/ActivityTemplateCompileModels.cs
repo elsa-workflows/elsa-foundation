@@ -38,7 +38,11 @@ public sealed record ActivityTemplateDependencyDeclaration(
     IReadOnlyList<ActivityNodeOrigin> NodeOrigin,
     string? ParentOccurrenceId = null,
     string ChildSlotName = "activity-graph",
-    int ChildIndex = 0);
+    int ChildIndex = 0,
+    IReadOnlyList<ActivityContractMemberUsage>? MemberUsage = null)
+{
+    public IReadOnlyList<ActivityContractMemberUsage> MemberUsage { get; init; } = MemberUsage ?? [];
+}
 
 public sealed record ActivityTemplateDependencyDiscovery(
     IReadOnlyList<ActivityTemplateDependencyDeclaration> Dependencies,

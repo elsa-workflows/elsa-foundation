@@ -1,3 +1,5 @@
+using Elsa.Primitives.Models;
+
 namespace Elsa.Expressions.Core.Models;
 
 /// <summary>
@@ -10,4 +12,13 @@ namespace Elsa.Expressions.Core.Models;
 /// <param name="DisplayName">Picker label.</param>
 /// <param name="Category">Grouping key (e.g. "Primitives", "Http").</param>
 /// <param name="DefaultEditor">Open hint for the default-value editor (e.g. <c>text</c>, <c>checkbox</c>, <c>number</c>, <c>date</c>).</param>
-public sealed record TypeDescriptor(string Alias, Type ClrType, string DisplayName, string Category, string DefaultEditor);
+public sealed record TypeDescriptor(
+    string Alias,
+    Type ClrType,
+    string DisplayName,
+    string Category,
+    string DefaultEditor,
+    IReadOnlySet<CollectionKind> SupportedCollectionKinds,
+    bool SupportsNull,
+    bool SupportsDurability,
+    IReadOnlySet<string> CompatibleStorageDriverKeys);

@@ -72,6 +72,32 @@ public static class ActivityExecutionHierarchyProjector
         return record is null ? null : TryBuildBoundary(record.Item, workflowRecords);
     }
 
+    public static ActivityExecutionAttemptNavigation? FindAttemptNavigation(
+        IReadOnlyCollection<ActivityExecutionHierarchyRecord> workflowRecords,
+        string activityExecutionId)
+    {
+        var current = workflowRecords
+            .Select(x => x.Item)
+            .FirstOrDefault(x => StringComparer.Ordinal.Equals(x.ActivityExecutionId, activityExecutionId));
+        if (current?.Attempt is not { } lineage)
+            return null;
+
+        var attempts = workflowRecords
+            .Select(x => x.Item)
+            .Where(x => x.Attempt is not null &&
+                        StringComparer.Ordinal.Equals(
+                            x.Attempt.FirstAttemptActivityExecutionId,
+                            lineage.FirstAttemptActivityExecutionId))
+            .OrderBy(x => x.Attempt!.AttemptNumber)
+            .ThenBy(x => x.ExecutionSequence)
+            .ThenBy(x => x.ActivityExecutionId, StringComparer.Ordinal)
+            .ToArray();
+        var index = Array.FindIndex(attempts, x => StringComparer.Ordinal.Equals(x.ActivityExecutionId, activityExecutionId));
+        if (index < 0)
+            return null;
+        return new(lineage, index + 1 < attempts.Length ? attempts[index + 1].ActivityExecutionId : null, attempts.Length);
+    }
+
     public static ActivityExecutionHierarchyRoot? FindRoot(
         IReadOnlyCollection<ActivityExecutionHierarchyRecord> workflowRecords,
         string workflowExecutionId,
@@ -153,7 +179,8 @@ public static class ActivityExecutionHierarchyProjector
             directCount,
             descendants.LongLength,
             Aggregate(descendants),
-            item.Metadata.ContainsKey("activity.sourceReferenceId"));
+            item.Metadata.ContainsKey("activity.sourceReferenceId"),
+            item.ExecutableNodeId);
     }
 
     private static ActivityExecutionHierarchyAggregate Aggregate(IReadOnlyCollection<ActivityExecutionHierarchyItem> items)

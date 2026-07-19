@@ -502,14 +502,12 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                     candidate.Property.Name,
                     ValueType(candidate.Property.PropertyType),
                     candidate.Property.IsDefined(typeof(RequiredAttribute), inherit: true),
+                    IsNullable(candidate.Property),
                     hasDefault,
                     hasDefault
                         ? JsonSerializer.SerializeToElement(ParseDefault(candidate.Property.PropertyType, attribute.DefaultValue!))
                         : null,
-                    ActivityValuePolicy.Default)
-                {
-                    IsNullable = IsNullable(candidate.Property)
-                };
+                    ActivityValuePolicy.Default);
             })
             .ToArray();
         var resultType = activityType.GetInterfaces()

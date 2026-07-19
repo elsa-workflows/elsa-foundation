@@ -157,7 +157,13 @@ public sealed class ValueConversionPlanResolverTests
         var outputCompiler = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]), resolver);
         var captures = outputCompiler.CompileBoundaryOutputs(
             "writer",
-            [new ActivityOutputContract("result", "Result", new TypeReference("UInt32"), true, "elsa.json")],
+            [new ActivityOutputContract(
+                "result",
+                "Result",
+                new TypeReference("UInt32"),
+                IsRequired: true,
+                IsNullable: false,
+                StorageDriverKey: "elsa.json")],
             [new ArgumentState(
                 "result",
                 new ArgumentValue("total", "Variable"),
@@ -215,7 +221,14 @@ public sealed class ValueConversionPlanResolverTests
 
         var captures = outputCompiler.CompileBoundaryOutputs(
             "writer",
-            [new ActivityOutputContract("result", "Result", new TypeReference("String"), true, "elsa.json", SourceRepresentation: ValueRepresentation.FormattedContent)],
+            [new ActivityOutputContract(
+                "result",
+                "Result",
+                new TypeReference("String"),
+                IsRequired: true,
+                IsNullable: false,
+                StorageDriverKey: "elsa.json",
+                SourceRepresentation: ValueRepresentation.FormattedContent)],
             [new ArgumentState(
                 "result",
                 new ArgumentValue("customer", "Variable"),
@@ -239,7 +252,13 @@ public sealed class ValueConversionPlanResolverTests
 
         var exception = Assert.Throws<ArgumentException>(() => outputCompiler.CompileBoundaryOutputs(
             "reader",
-            [new ActivityOutputContract("stream", "Stream", new TypeReference("Stream"), true, "elsa.json")],
+            [new ActivityOutputContract(
+                "stream",
+                "Stream",
+                new TypeReference("Stream"),
+                IsRequired: true,
+                IsNullable: false,
+                StorageDriverKey: "elsa.json")],
             [new ArgumentState("stream", new ArgumentValue("payload", "Variable"), null, null, null, null)],
             [new VariableDefinition("payload", "Payload", new TypeReference("Stream"), null, null)]));
 
@@ -267,7 +286,13 @@ public sealed class ValueConversionPlanResolverTests
     private static ValueTypeDescriptor Type(string alias, CollectionKind kind = CollectionKind.Single) => new(alias, kind);
 
     private static InputDefinition Input(string alias) => new(
-        "value", "Value", new TypeReference(alias), "elsa.json", "Value", null);
+        "value",
+        "Value",
+        new TypeReference(alias),
+        StorageDriverType: "elsa.json",
+        DisplayName: "Value",
+        Category: null,
+        IsNullable: false);
 
     private static RuntimeInputBinding Binding(ValueConversionPlan? plan) => new(
         "value",

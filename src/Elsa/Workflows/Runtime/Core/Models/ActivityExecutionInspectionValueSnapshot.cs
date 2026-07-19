@@ -16,7 +16,8 @@ public sealed record ActivityExecutionInspectionValueSnapshot(
     string? EvaluationId = null,
     string? Phase = null,
     long? Sequence = null,
-    RuntimeInputEvaluationFailure? Failure = null)
+    RuntimeInputEvaluationFailure? Failure = null,
+    string? EvidenceId = null)
 {
     public static ActivityExecutionInspectionValueSnapshot FromDecision(
         string name,
@@ -46,7 +47,8 @@ public sealed record ActivityExecutionInspectionValueSnapshot(
             EvaluationId: evaluationId,
             Phase: phase,
             Sequence: sequence,
-            Failure: failure);
+            Failure: failure,
+            EvidenceId: null);
 }
 
 public sealed record RuntimeInputEvaluationFailure(string Code, string Message, string? IncidentId = null);

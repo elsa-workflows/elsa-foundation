@@ -23,14 +23,33 @@ public sealed record ActivityUpgradePlanView(
     IReadOnlyList<ActivityUpgradeReplacementView> Replacements,
     IReadOnlyList<ActivityUpgradeExpectedSnapshot> ExpectedSnapshots,
     IReadOnlyList<ActivityUpgradeStep> Steps,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+    IReadOnlyList<ActivityUpgradeStage> Stages,
+    ActivityUpgradePlanBinding? Binding,
+    IReadOnlyList<ActivityDiagnostic> Diagnostics,
+    string? PredecessorPlanId,
+    string? SuccessorPlanId);
 
 public sealed record ActivityUpgradeApplyResultView(
     string PlanId,
     string Status,
     DateTimeOffset AppliedAt,
     IReadOnlyList<ActivityUpgradeAppliedDraft> Drafts,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+    IReadOnlyList<ActivityDiagnostic> Diagnostics,
+    string? ReceiptId,
+    string? StageId,
+    IReadOnlyList<ActivityUpgradePublicationHandoff> AwaitingPublications);
+
+public sealed record ActivityUpgradeApplyReceiptView(
+    string ReceiptId,
+    string PlanId,
+    string StageId,
+    string Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    ActivityUpgradeApplyResultView? Result,
+    IReadOnlyList<ActivityDiagnostic> Diagnostics,
+    int? RejectionStatusCode,
+    string? RejectionCode);
 
 public static class ActivityUpgradeViewMappings
 {
@@ -55,7 +74,11 @@ public static class ActivityUpgradeViewMappings
             replacements,
             plan.ExpectedSnapshots,
             plan.Steps.Select(x => x with { Diagnostics = ActivityDiagnosticOrderer.Order(x.Diagnostics) }).ToArray(),
-            ActivityDiagnosticOrderer.Order(plan.Diagnostics));
+            plan.Stages,
+            plan.Binding,
+            ActivityDiagnosticOrderer.Order(plan.Diagnostics),
+            plan.PredecessorPlanId,
+            plan.SuccessorPlanId);
     }
 
     public static ActivityUpgradeApplyResultView ToView(this ActivityUpgradeApplyResult result) => new(
@@ -63,7 +86,22 @@ public static class ActivityUpgradeViewMappings
         result.Status.ToString(),
         result.AppliedAt,
         result.Drafts,
-        ActivityDiagnosticOrderer.Order(result.Diagnostics));
+        ActivityDiagnosticOrderer.Order(result.Diagnostics),
+        result.ReceiptId,
+        result.StageId,
+        result.AwaitingPublications);
+
+    public static ActivityUpgradeApplyReceiptView ToView(this ActivityUpgradeApplyReceipt receipt) => new(
+        receipt.ReceiptId,
+        receipt.PlanId,
+        receipt.StageId,
+        receipt.Status.ToString(),
+        receipt.CreatedAt,
+        receipt.UpdatedAt,
+        receipt.Result?.ToView(),
+        ActivityDiagnosticOrderer.Order(receipt.Diagnostics),
+        receipt.RejectionStatusCode,
+        receipt.RejectionCode);
 
     private static async Task<ActivityDefinitionVersionPublication> RequiredAsync(
         string versionId,

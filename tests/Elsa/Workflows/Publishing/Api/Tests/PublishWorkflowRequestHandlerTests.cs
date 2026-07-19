@@ -781,7 +781,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
-        ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]);
+        ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null, false)]);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey) =>
         ActivityVersion(id, activityTypeKey, []);

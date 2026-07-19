@@ -58,7 +58,7 @@ public sealed class RuntimeInputBindingCompiler(
         var inputType = ResolveInputType(inputDefinition);
         var targetType = ToValueTypeDescriptor(inputDefinition);
         var policy = ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType));
-        if (!AcceptsNull(inputDefinition, inputType))
+        if (!AcceptsNull(inputDefinition))
         {
             throw new ArgumentException(
                 $"VF-ACT-003: Optional input '{inputDefinition.ReferenceKey}' with non-nullable type alias '{inputDefinition.Type.Alias}' " +
@@ -475,13 +475,12 @@ public sealed class RuntimeInputBindingCompiler(
     private static ValueTypeDescriptor ToValueTypeDescriptor(InputDefinition inputDefinition) =>
         new(inputDefinition.Type.Alias, inputDefinition.Type.CollectionKind);
 
-    private static bool AcceptsNull(InputDefinition inputDefinition, Type inputType) =>
-        inputDefinition.IsNullable ??
-        (Nullable.GetUnderlyingType(inputType) is not null || !inputType.IsValueType);
+    private static bool AcceptsNull(InputDefinition inputDefinition) =>
+        inputDefinition.IsNullable;
 
     private static void ValidateNull(InputDefinition inputDefinition, Type inputType, object? value, string nodeId)
     {
-        if (value is null && !AcceptsNull(inputDefinition, inputType))
+        if (value is null && !AcceptsNull(inputDefinition))
         {
             throw new ArgumentException(
                 $"VF-ACT-004: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not accept null.");

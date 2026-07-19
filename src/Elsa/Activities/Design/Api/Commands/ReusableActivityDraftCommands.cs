@@ -13,49 +13,78 @@ public interface IActivityAuthoringContext
 {
     string? TenantId { get; }
 
+    string ActorId => AuthorizationProfile;
+
+    string AuthorizationProfile { get; }
+
     bool CanAuthorProvider(string providerKey);
 
     bool CanReadProviderPayload(string providerKey);
+
+    bool CanManageActivityDefinitions => false;
 }
 
 public sealed record CreateReusableActivityDefinition(
-    string ActivityTypeKey,
     string Category,
     string DisplayName,
     string? Description,
     ActivityProviderManifest Provider,
     ActivityContractView Contract,
-    IReadOnlyList<ActivityLayoutRecord> Layout) : ICommand<ReusableActivityDefinitionDetailsView>;
+    IReadOnlyList<ActivityLayoutRecord> Layout,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ActivityTypeKey = null) : ICommand<ReusableActivityDefinitionMutationView>;
 
-public sealed record ForkReusableActivityDefinition(
+public sealed record PreviewReusableActivityFork(
     [property: JsonIgnore] string DefinitionId,
+    string IdempotencyKey,
     string SourceVersionId,
-    string ActivityTypeKey,
     string Category,
     string DisplayName,
     string? Description,
     string TargetProviderKey,
-    string TargetProviderSchemaVersion) : ICommand<ReusableActivityDefinitionDetailsView>;
+    string TargetProviderSchemaVersion) : ICommand<ActivityForkPreviewView>;
+
+public sealed record ApplyReusableActivityFork(
+    [property: JsonIgnore] string CandidateId,
+    string RequestFingerprint,
+    string IdempotencyKey) : ICommand<ActivityForkReceiptView>;
+
+public sealed record GetReusableActivityForkStatus(
+    [property: JsonIgnore] string IdempotencyKey) : IRequest<ActivityForkReceiptView>;
 
 public sealed record UpdateReusableActivityDefinition(
     [property: JsonIgnore] string DefinitionId,
     string Category,
     string DisplayName,
-    string? Description) : ICommand<ReusableActivityDefinitionDetailsView>;
+    string? Description) : ICommand<ActivityDefinitionIdentityView>;
 
 public sealed record CreateReusableActivityDraft(
     [property: JsonIgnore] string DefinitionId,
     string? SourceVersionId,
     ActivityProviderManifest? Provider = null,
     ActivityContractView? Contract = null,
-    IReadOnlyList<ActivityLayoutRecord>? Layout = null) : ICommand<ReusableActivityDraftView>;
+    IReadOnlyList<ActivityLayoutRecord>? Layout = null,
+    string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>;
+
+public sealed record UpdateReusableActivityDraftPresentation(
+    [property: JsonIgnore] string DraftId,
+    long ExpectedRevision,
+    string? PresentationLabel) : ICommand<ReusableActivityDraftView>;
+
+public sealed record CreateReusableActivityDraftConflictCopy(
+    [property: JsonIgnore] string DraftId,
+    long ExpectedSourceRevision,
+    ActivityContractView Contract,
+    ActivityProviderManifest Provider,
+    IReadOnlyList<ActivityLayoutRecord> Layout,
+    string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>;
 
 public sealed record ReplaceReusableActivityDraft(
     [property: JsonIgnore] string DraftId,
     long ExpectedRevision,
     ActivityContractView Contract,
     ActivityProviderManifest Provider,
-    IReadOnlyList<ActivityLayoutRecord> Layout) : ICommand<ReusableActivityDraftView>;
+    IReadOnlyList<ActivityLayoutRecord> Layout,
+    string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>;
 
 public sealed record DiscardReusableActivityDraft([property: JsonIgnore] string DraftId, long ExpectedRevision) : ICommand;
 
@@ -67,14 +96,50 @@ public sealed record MigrateReusableActivityDraft(
     string TargetProviderKey,
     string TargetSchemaVersion) : ICommand<ReusableActivityDraftView>;
 
-public sealed record ListReusableActivityDefinitions : IRequest<IReadOnlyList<ActivityDefinitionIdentityView>>;
+public sealed record ProposeReusableActivityContract(
+    [property: JsonIgnore] string DraftId,
+    long ExpectedRevision,
+    string ExpectedProviderKey,
+    string ExpectedProviderSchemaVersion,
+    string ExpectedManifestFingerprint) : IRequest<ActivityContractProposalView>;
 
-public sealed record GetReusableActivityDefinition(string DefinitionId) : IRequest<ReusableActivityDefinitionDetailsView>;
+public sealed record ApplyReusableActivityContractProposal(
+    [property: JsonIgnore] string DraftId,
+    long ExpectedRevision,
+    string ExpectedProviderKey,
+    string ExpectedProviderSchemaVersion,
+    string ExpectedManifestFingerprint,
+    string ProposalFingerprint,
+    IReadOnlyList<string> SelectedChangeIds) : ICommand<ReusableActivityDraftView>;
 
-public sealed record ListReusableActivityDrafts(string DefinitionId) : IRequest<IReadOnlyList<ReusableActivityDraftSummaryView>>;
+public sealed record ListReusableActivityDefinitions(
+    int Limit = 25,
+    string? Cursor = null,
+    string? Search = null,
+    string? Authority = null,
+    string? ProviderKey = null,
+    string Sort = "identity-asc") : IRequest<ActivityManagementPageView<ReusableActivityDefinitionManagementView>>;
+
+public sealed record GetReusableActivityDefinition(string DefinitionId) : IRequest<ReusableActivityDefinitionManagementView>;
+
+public sealed record ListReusableActivityDrafts(
+    string DefinitionId,
+    int Limit = 25,
+    string? Cursor = null,
+    string? Search = null,
+    string? ProviderKey = null,
+    string? Status = null,
+    string Sort = "identity-asc") : IRequest<ActivityManagementPageView<ReusableActivityDraftManagementView>>;
 
 public sealed record GetReusableActivityDraft(string DraftId) : IRequest<ReusableActivityDraftView>;
 
-public sealed record ListReusableActivityVersions(string DefinitionId) : IRequest<IReadOnlyList<ReusableActivityVersionSummaryView>>;
+public sealed record ListReusableActivityVersions(
+    string DefinitionId,
+    int Limit = 25,
+    string? Cursor = null,
+    string? Search = null,
+    string? ProviderKey = null,
+    string? Lifecycle = null,
+    string Sort = "identity-asc") : IRequest<ActivityManagementPageView<ReusableActivityVersionManagementView>>;
 
 public sealed record GetReusableActivityVersion(string VersionId) : IRequest<ReusableActivityVersionView>;

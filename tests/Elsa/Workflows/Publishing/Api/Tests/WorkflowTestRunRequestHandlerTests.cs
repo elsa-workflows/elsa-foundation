@@ -561,7 +561,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TestActivityAliases.ForActivityVersionId(id))),
-            Inputs = [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]
+            Inputs = [new InputDefinition(inputName, inputName, inputType, null, inputName, null, false)]
         };
 
     private static IActivityStructureService ActivityStructureService()

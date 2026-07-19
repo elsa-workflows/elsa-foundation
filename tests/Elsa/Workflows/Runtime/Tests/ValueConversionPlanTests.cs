@@ -428,7 +428,7 @@ public sealed class ValueConversionPlanTests
             "1",
             "test",
             descriptor,
-            [new ActivityInputContract("count", "Count", targetType, true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("count", "Count", targetType, true, false, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/activity"));

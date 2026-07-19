@@ -24,6 +24,7 @@ public sealed class ReusableActivityFoundationalContractTests
                     "Order",
                     new TypeReference("acme.orders.order"),
                     true,
+                    false,
                     new ActivityInputDefault("Literal", Json("{}")),
                     "elsa.json")
             ],
@@ -33,14 +34,62 @@ public sealed class ReusableActivityFoundationalContractTests
                     "Total",
                     new TypeReference("decimal"),
                     true,
+                    true,
                     "elsa.json")
             ],
             [new ActivityOutcomeContract("done", "Done", true)]);
 
         Assert.Equal("order", contract.Inputs.Single().ReferenceKey);
         Assert.Equal("elsa.json", contract.Inputs.Single().StorageDriverKey);
+        Assert.False(contract.Inputs.Single().IsNullable);
+        Assert.True(contract.Outputs.Single().IsNullable);
+        Assert.True(contract.Inputs.Single().IsRequired);
+        Assert.True(contract.Outputs.Single().IsRequired);
         Assert.Equal(ActivityBoundaryDurability.Required, contract.Outputs.Single().Durability);
         Assert.Equal("done", contract.Outcomes.Single().ReferenceKey);
+    }
+
+    [Fact]
+    public void Draft_and_immutable_version_serialization_preserve_exact_member_nullability()
+    {
+        var contract = new ActivityContract(
+            "1",
+            [new("input", "Input", new("String"), true, true, null, "elsa.json")],
+            [new("output", "Output", new("String"), true, false, "elsa.json")],
+            []);
+        var provider = new ActivityProviderManifest("elsa.activity-graph", "1", Json("{}"));
+        var draftState = new ActivityDefinitionDraftState(contract, provider, new Dictionary<string, string>());
+        var version = new ActivityDefinitionVersionPublication
+        {
+            Id = "publication-1",
+            DefinitionVersionId = "version-1",
+            DefinitionId = "definition-1",
+            Version = "1.0.0",
+            ActivityTypeKey = "elsa.user.example.definition-1",
+            Contract = contract,
+            Provider = provider,
+            TemplateId = "template-1",
+            TemplateHash = "sha256-template",
+            SourceReferenceId = "source-1",
+            ProviderFingerprint = "provider/1",
+            DirectDependencyCount = 0,
+            ClosedTemplateCount = 1,
+            RuntimeRequirements = [],
+            PublishedAt = DateTimeOffset.UnixEpoch
+        };
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+
+        var restoredDraft = JsonSerializer.Deserialize<ActivityDefinitionDraftState>(
+            JsonSerializer.Serialize(draftState, options),
+            options)!;
+        var restoredVersion = JsonSerializer.Deserialize<ActivityDefinitionVersionPublication>(
+            JsonSerializer.Serialize(version, options),
+            options)!;
+
+        Assert.True(Assert.Single(restoredDraft.Contract.Inputs).IsNullable);
+        Assert.False(Assert.Single(restoredDraft.Contract.Outputs).IsNullable);
+        Assert.True(Assert.Single(restoredVersion.Contract.Inputs).IsNullable);
+        Assert.False(Assert.Single(restoredVersion.Contract.Outputs).IsNullable);
     }
 
     [Fact]
@@ -55,6 +104,7 @@ public sealed class ReusableActivityFoundationalContractTests
                     "Payload",
                     new TypeReference("String"),
                     true,
+                    false,
                     "elsa.json",
                     SourceRepresentation: ValueRepresentation.FormattedContent)
             ],
@@ -121,13 +171,13 @@ public sealed class ReusableActivityFoundationalContractTests
     }
 
     [Fact]
-    public void AtomicPublicationPort_CanCloseOverArtifactTypesWithoutRuntimeDependency()
+    public void AtomicPublicationPort_CanCloseOverArtifactAndReceiptTypesWithoutRuntimeOrPublishingDependency()
     {
-        var contract = typeof(ICommitActivityPublicationCommand<,>);
+        var contract = typeof(ICommitActivityPublicationCommand<,,>);
         var designCoreReferences = typeof(IActivityProvider).Assembly.GetReferencedAssemblies();
-        var persistenceCoreReferences = typeof(ICommitActivityPublicationCommand<,>).Assembly.GetReferencedAssemblies();
+        var persistenceCoreReferences = typeof(ICommitActivityPublicationCommand<,,>).Assembly.GetReferencedAssemblies();
 
-        Assert.Equal(2, contract.GetGenericArguments().Length);
+        Assert.Equal(3, contract.GetGenericArguments().Length);
         Assert.DoesNotContain(designCoreReferences, x => x.Name!.Contains("Workflows.Runtime", StringComparison.Ordinal));
         Assert.DoesNotContain(designCoreReferences, x => x.Name!.Contains("Publishing", StringComparison.Ordinal));
         Assert.DoesNotContain(persistenceCoreReferences, x => x.Name!.Contains("Workflows.Runtime", StringComparison.Ordinal));

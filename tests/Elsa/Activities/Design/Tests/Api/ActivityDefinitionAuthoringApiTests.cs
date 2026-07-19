@@ -19,19 +19,28 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
     public static TheoryData<string, string, string> Routes => new()
     {
+        { "AuthoringCapabilities.Get", "GET", "design/activities/authoring-capabilities" },
         { "Definitions.Add", "POST", "design/activities/definitions" },
-        { "Definitions.Fork", "POST", "design/activities/definitions/{definitionId}/forks" },
+        { "Definitions.PreviewFork", "POST", "design/activities/definitions/{definitionId}/fork-previews" },
+        { "Forks.Apply", "POST", "design/activities/fork-candidates/{candidateId}/apply" },
+        { "Forks.GetStatus", "GET", "design/activities/forks/{idempotencyKey}" },
         { "Definitions.List", "GET", "design/activities/definitions" },
         { "Definitions.Get", "GET", "design/activities/definitions/{definitionId}" },
         { "Definitions.Update", "PATCH", "design/activities/definitions/{definitionId}" },
+        { "Definitions.Recommendation", "PUT", "design/activities/definitions/{definitionId}/recommendation" },
+        { "Definitions.Picker", "GET", "design/activities/definitions/picker" },
         { "Definitions.AddDraft", "POST", "design/activities/definitions/{definitionId}/drafts" },
         { "Definitions.ListDrafts", "GET", "design/activities/definitions/{definitionId}/drafts" },
         { "Definitions.ListVersions", "GET", "design/activities/definitions/{definitionId}/versions" },
         { "Drafts.Get", "GET", "design/activities/drafts/{draftId}" },
         { "Drafts.Replace", "PUT", "design/activities/drafts/{draftId}" },
+        { "Drafts.UpdatePresentation", "PATCH", "design/activities/drafts/{draftId}/presentation" },
+        { "Drafts.ConflictCopy", "POST", "design/activities/drafts/{draftId}/conflict-copies" },
         { "Drafts.Discard", "DELETE", "design/activities/drafts/{draftId}" },
         { "Drafts.Validate", "POST", "design/activities/drafts/{draftId}/validate" },
         { "Drafts.MigrateProvider", "POST", "design/activities/drafts/{draftId}/migrate-provider" },
+        { "Drafts.ProposeContract", "POST", "design/activities/drafts/{draftId}/contract-proposals" },
+        { "Drafts.ApplyContractProposal", "POST", "design/activities/drafts/{draftId}/contract-proposals/apply" },
         { "Drafts.Diff", "POST", "design/activities/drafts/{draftId}/diff" },
         { "Versions.Diff", "GET", "design/activities/versions/{fromVersionId}/diff/{toVersionId}" },
         { "Versions.Dependencies", "GET", "design/activities/versions/{versionId}/dependencies" },
@@ -41,8 +50,33 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "Versions.Revoke", "POST", "design/activities/versions/{versionId}/revoke" },
         { "UpgradePlans.Create", "POST", "design/activities/upgrade-plans" },
         { "UpgradePlans.Get", "GET", "design/activities/upgrade-plans/{planId}" },
-        { "UpgradePlans.Apply", "POST", "design/activities/upgrade-plans/{planId}/apply" }
+        { "UpgradePlans.Apply", "POST", "design/activities/upgrade-plans/{planId}/apply" },
+        { "UpgradePlans.GetReceipt", "GET", "design/activities/upgrade-plans/{planId}/receipts/{receiptId}" },
+        { "UpgradePlans.Refresh", "POST", "design/activities/upgrade-plans/{planId}/refresh" }
     };
+
+    [Fact]
+    public void Activity_design_capability_advertises_management_authoring_picker_and_recommendation_relations()
+    {
+        var links = Elsa.Activities.Design.Api.Capabilities.ActivityDesignApiCapabilities.StaticDeclaration.Links;
+
+        Assert.Contains(links, x => x.Rel == "recommended-activity-definitions" && x.Href == "design/activities/definitions/picker" && !x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-recommendation" && x.Href == "design/activities/definitions/{definitionId}/recommendation" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-authoring-capabilities" && x.Href == "design/activities/authoring-capabilities" && !x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definitions" && x.Href == "design/activities/definitions" && !x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition" && x.Href == "design/activities/definitions/{definitionId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-drafts" && x.Href == "design/activities/definitions/{definitionId}/drafts" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-draft" && x.Href == "design/activities/drafts/{draftId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-draft-validation" && x.Href == "design/activities/drafts/{draftId}/validate" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-draft-contract-proposals" && x.Href == "design/activities/drafts/{draftId}/contract-proposals" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-draft-contract-proposals-apply" && x.Href == "design/activities/drafts/{draftId}/contract-proposals/apply" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-versions" && x.Href == "design/activities/definitions/{definitionId}/versions" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-version" && x.Href == "design/activities/versions/{versionId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-version-diff" && x.Href == "design/activities/versions/{fromVersionId}/diff/{toVersionId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-fork-preview" && x.Href == "design/activities/definitions/{definitionId}/fork-previews" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-fork-apply" && x.Href == "design/activities/fork-candidates/{candidateId}/apply" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-fork-status" && x.Href == "design/activities/forks/{idempotencyKey}" && x.Templated);
+    }
 
     [Theory]
     [MemberData(nameof(Routes))]
@@ -59,7 +93,8 @@ public sealed class ActivityDefinitionAuthoringApiTests
     {
         object[] requests =
         [
-            new ForkReusableActivityDefinition("definition-route", "source-version", "activity.type", "Category", "Display", null, "provider", "1"),
+            new PreviewReusableActivityFork("definition-route", "preview-operation", "source-version", "Category", "Display", null, "provider", "1"),
+            new ApplyReusableActivityFork("candidate-route", "sha256:request", "fork-operation"),
             new CreateReusableActivityDraft("definition-route", null),
             new ReplaceReusableActivityDraft(
                 "draft-route",
@@ -67,17 +102,35 @@ public sealed class ActivityDefinitionAuthoringApiTests
                 new("1", [], [], []),
                 new("provider", "1", Json("{}")),
                 []),
+            new UpdateReusableActivityDraftPresentation("draft-route", 3, "Review candidate"),
+            new CreateReusableActivityDraftConflictCopy(
+                "draft-route",
+                3,
+                new("1", [], [], []),
+                new("provider", "1", Json("{}")),
+                [],
+                "Recovered local work"),
             new DiscardReusableActivityDraft("draft-route", 3),
             new ValidateReusableActivityDraft("draft-route", 3),
             new MigrateReusableActivityDraft("draft-route", 3, "provider", "2"),
+            new ProposeReusableActivityContract("draft-route", 3, "provider", "1", "sha256:manifest"),
+            new ApplyReusableActivityContractProposal("draft-route", 3, "provider", "1", "sha256:manifest", "sha256:proposal", ["change-1"]),
             new RetireReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Active, "reason"),
             new RestoreReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Retired, "reason"),
             new RevokeReusableActivityVersion("version-route", ActivityDefinitionVersionLifecycle.Active, "reason"),
+            new SetRecommendedReusableActivityVersion(
+                "definition-route",
+                "version-head",
+                "version-current",
+                "version-target",
+                ActivityDefinitionVersionLifecycle.Active,
+                "reason"),
             new PreviewActivityDraftDiff("draft-route", 3, "base-version"),
-            new ApplyActivityUpgradePlan("plan-route", ["step-1"])
+            new ApplyActivityUpgradePlan("plan-route", "stage-1", "operation-1")
         ];
 
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
         foreach (var request in requests)
         {
             var json = JsonSerializer.Serialize(request, request.GetType(), options);
@@ -91,28 +144,53 @@ public sealed class ActivityDefinitionAuthoringApiTests
             "{\"expectedRevision\":3,\"baseVersionId\":\"base-version\"}",
             JsonSerializer.Serialize(new PreviewActivityDraftDiff("draft-route", 3, "base-version"), options));
         Assert.Equal(
-            "{\"selectedStepIds\":[\"step-1\"]}",
-            JsonSerializer.Serialize(new ApplyActivityUpgradePlan("plan-route", ["step-1"]), options));
+            "{\"stageId\":\"stage-1\",\"idempotencyKey\":\"operation-1\"}",
+            JsonSerializer.Serialize(new ApplyActivityUpgradePlan("plan-route", "stage-1", "operation-1"), options));
+        Assert.Equal(
+            "{\"expectedDefinitionHeadVersionId\":\"version-head\",\"expectedRecommendedVersionId\":\"version-current\",\"recommendedVersionId\":\"version-target\",\"expectedRecommendedVersionLifecycle\":\"Active\",\"reason\":\"reason\"}",
+            JsonSerializer.Serialize(new SetRecommendedReusableActivityVersion(
+                "definition-route",
+                "version-head",
+                "version-current",
+                "version-target",
+                ActivityDefinitionVersionLifecycle.Active,
+                "reason"), options));
     }
 
     [Fact]
-    public void Create_request_uses_the_contract_shape_and_accepts_opaque_provider_payload()
+    public void Create_request_accepts_an_optional_activity_type_key_and_opaque_provider_payload()
     {
         var request = new CreateReusableActivityDefinition(
-            "acme.orders.calculate-total",
             "Orders",
             "Calculate order total",
             null,
             new("elsa.activity-graph", "1", Json("{\"secret\":42}")),
             new("1", [], [], [new("done", "Done", true)]),
+            [],
+            "elsa.user.calculate-order-total.custom");
+
+        var json = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Contains("\"activityTypeKey\":\"elsa.user.calculate-order-total.custom\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"providerKey\":\"elsa.activity-graph\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"payload\":{\"secret\":42}", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenantId", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Create_request_omits_activity_type_key_when_server_generation_is_requested()
+    {
+        var request = new CreateReusableActivityDefinition(
+            "Orders",
+            "Calculate order total",
+            null,
+            new("elsa.activity-graph", "1", Json("{}")),
+            new("1", [], [], []),
             []);
 
         var json = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Contains("\"activityTypeKey\":\"acme.orders.calculate-total\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"providerKey\":\"elsa.activity-graph\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"payload\":{\"secret\":42}", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("tenantId", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("activityTypeKey", json, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -135,17 +213,16 @@ public sealed class ActivityDefinitionAuthoringApiTests
     [Fact]
     public void Unauthorized_provider_projection_omits_payload_instead_of_leaking_or_fabricating_it()
     {
-        var view = new ActivityProviderManifestView("elsa.activity-graph", "1", null);
+        var view = new ActivityProviderManifestView("elsa.activity-graph", "1", "sha256:test", null);
 
         var json = JsonSerializer.Serialize(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Equal("{\"providerKey\":\"elsa.activity-graph\",\"schemaVersion\":\"1\"}", json);
+        Assert.Equal("{\"providerKey\":\"elsa.activity-graph\",\"schemaVersion\":\"1\",\"manifestFingerprint\":\"sha256:test\"}", json);
     }
 
     [Theory]
-    [InlineData("None")]
     [InlineData("Single")]
-    public void Scalar_type_reference_input_accepts_wire_name_and_single_alias(string collectionKind)
+    public void Scalar_type_reference_input_accepts_canonical_wire_name(string collectionKind)
     {
         var json = $$"""
             {
@@ -155,6 +232,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
                 "name": "Order",
                 "type": { "alias": "acme.order", "collectionKind": "{{collectionKind}}" },
                 "isRequired": true,
+                "isNullable": true,
                 "default": null,
                 "storageDriverKey": "elsa.json"
               }],
@@ -165,22 +243,48 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
         var view = JsonSerializer.Deserialize<ActivityContractView>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Equal(CollectionKind.Single, Assert.Single(view!.ToDomain().Inputs).Type.CollectionKind);
+        var input = Assert.Single(view!.ToDomain().Inputs);
+        Assert.Equal(CollectionKind.Single, input.Type.CollectionKind);
+        Assert.True(input.IsNullable);
     }
 
     [Fact]
-    public void Scalar_type_reference_response_always_emits_canonical_none_wire_name()
+    public void Mutable_contract_wire_shape_requires_explicit_nullability()
+    {
+        const string json = """
+            {
+              "contractSchemaVersion": "1",
+              "inputs": [{
+                "referenceKey": "order",
+                "name": "Order",
+                "type": { "alias": "acme.order", "collectionKind": "Single" },
+                "isRequired": true,
+                "default": null,
+                "storageDriverKey": "elsa.json"
+              }],
+              "outputs": [],
+              "outcomes": []
+            }
+            """;
+
+        Assert.Throws<JsonException>(() =>
+            JsonSerializer.Deserialize<ActivityContractView>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    }
+
+    [Fact]
+    public void Scalar_type_reference_response_always_emits_canonical_single_wire_name()
     {
         var domain = new ActivityContract(
             "1",
-            [new("order", "Order", new("acme.order", CollectionKind.Single), true, null, "elsa.json")],
+            [new("order", "Order", new("acme.order", CollectionKind.Single), true, false, null, "elsa.json")],
             [],
             []);
 
         var json = JsonSerializer.Serialize(domain.ToView(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Contains("\"collectionKind\":\"None\"", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"collectionKind\":\"Single\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"collectionKind\":\"Single\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"isNullable\":false", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"collectionKind\":\"None\"", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -201,6 +305,31 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Assert.Contains("\"errorCode\":\"activity.draft.stale-revision\"", json, StringComparison.Ordinal);
         Assert.Contains("\"diagnostics\":[]", json, StringComparison.Ordinal);
         Assert.DoesNotContain("providerManifest", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Problem_details_projects_typed_conflict_copy_recovery_without_internal_state()
+    {
+        var context = new DefaultHttpContext { TraceIdentifier = "trace-1" };
+        context.Request.Path = "/design/activities/drafts/draft-1";
+        var problem = ActivityProblemDetails.From(new ActivityAuthoringException(
+            409,
+            "activity.draft.stale-revision",
+            "Activity draft revision is stale",
+            "The draft changed after the submitted revision was read.",
+            recovery: new(
+                8,
+                "activity-draft-conflict-copies",
+                "design/activities/drafts/draft-1/conflict-copies",
+                "review-current-revision-and-create-conflict-copy")), context);
+
+        var json = JsonSerializer.Serialize(problem, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Contains("\"currentRevision\":8", json, StringComparison.Ordinal);
+        Assert.Contains("\"relation\":\"activity-draft-conflict-copies\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"instruction\":\"review-current-revision-and-create-conflict-copy\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("provider", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("layout", json, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

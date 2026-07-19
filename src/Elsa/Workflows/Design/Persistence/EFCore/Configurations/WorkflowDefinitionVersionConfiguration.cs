@@ -17,6 +17,7 @@ internal sealed class WorkflowDefinitionVersionConfiguration : IEntityTypeConfig
         builder.Property(x => x.Version).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.SemVerSortKey).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.DefinitionId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        builder.Property(x => x.SourceDraftId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.StateSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.SourceCreatedAt).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
 

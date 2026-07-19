@@ -6,6 +6,7 @@ namespace Elsa.Activities.Design.Core.Services;
 /// <summary>Runs provider-neutral contract checks followed by the exact provider/schema validator.</summary>
 public sealed class ActivityDraftValidator(
     IActivityProviderRegistry providers,
+    ActivityContractAuthoringValidator contractAuthoringValidator,
     TimeProvider timeProvider) : IActivityDraftValidator
 {
     public async ValueTask<ActivityDraftValidation> ValidateAsync(
@@ -18,11 +19,27 @@ public sealed class ActivityDraftValidator(
             request.DefinitionId,
             Revision: request.Revision);
         var diagnostics = ValidateContract(request.State.Contract, subject).ToList();
+        diagnostics.AddRange(contractAuthoringValidator.Validate(request.State.Contract, subject));
 
         try
         {
             var provider = providers.Resolve(request.State.Provider.ProviderKey, request.State.Provider.SchemaVersion);
-            diagnostics.AddRange(await provider.ValidateAsync(request.State.Provider, request.State.Contract, cancellationToken));
+            if (provider.AuthoringCapabilities.ManifestSchemas.All(x =>
+                    !StringComparer.Ordinal.Equals(x.SchemaVersion, request.State.Provider.SchemaVersion) || !x.IsAuthorable))
+                diagnostics.Add(new(
+                    "activity.provider.schema-not-authorable",
+                    ActivityDiagnosticSeverity.Error,
+                    "The exact provider schema is retained for historical reads but is not available for mutable authoring or publication.",
+                    subject,
+                    new(request.State.Provider.ProviderKey),
+                    "Migrate the draft to an authorable provider schema before publishing.",
+                    new Dictionary<string, string>
+                    {
+                        ["providerKey"] = request.State.Provider.ProviderKey,
+                        ["schemaVersion"] = request.State.Provider.SchemaVersion
+                    }));
+            else
+                diagnostics.AddRange(await provider.ValidateAsync(request.State.Provider, request.State.Contract, cancellationToken));
         }
         catch (InvalidOperationException)
         {

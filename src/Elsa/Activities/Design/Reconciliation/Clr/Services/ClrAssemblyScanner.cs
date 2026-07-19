@@ -144,15 +144,13 @@ public sealed class ClrAssemblyScanner(
                 StorageDriverType: null,
                 DisplayName: property.Name,
                 Category: metadata.Category,
+                IsNullable: IsNullable(property),
                 Order: metadata.Order,
                 UiHint: metadata.UiHint,
                 UISpecifications: metadata.UiSpecifications,
                 IsRequired: HasRequired(property),
                 DefaultValue: metadata.DefaultValue,
-                DefaultSyntax: metadata.DefaultSyntax)
-            {
-                IsNullable = IsNullable(property)
-            });
+                DefaultSyntax: metadata.DefaultSyntax));
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -176,6 +174,7 @@ public sealed class ClrAssemblyScanner(
                     StorageDriverType: null,
                     DisplayName: property.Name,
                     Category: null,
+                    IsNullable: IsNullable(property),
                     IsRequired: !HasNamedArgument(attribute, nameof(OutputAttribute.IsRequired)) ||
                                 ReadNamedBoolArgument(attribute, nameof(OutputAttribute.IsRequired)),
                     SourceRepresentation: sourceRepresentation));

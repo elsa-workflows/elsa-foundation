@@ -660,6 +660,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                 nameof(StallingActivity.Duration),
                 RuntimeValueType(typeof(TimeSpan)),
                 isRequired: false,
+                isNullable: false,
                 hasDefault: true,
                 JsonSerializer.SerializeToElement(TimeSpan.FromMinutes(1)),
                 ActivityValuePolicy.Default)
@@ -993,7 +994,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             new ActivityActivationRequirement(ClrConstruction.DescriptorType, TypeAliasConvention.CanonicalAlias(typeof(HttpEndpoint))));
 
     private static ActivityInputContract HttpEndpointInputContract(string key, Type type, bool isRequired = false) =>
-        new(key, key, RuntimeValueType(type), isRequired, hasDefault: false, defaultValue: null, ActivityValuePolicy.Default);
+        new(key, key, RuntimeValueType(type), isRequired, isNullable: !isRequired, hasDefault: false, defaultValue: null, ActivityValuePolicy.Default);
 
     private static ActivityResultProjectionContract HttpEndpointProjection(string key, string path, Type type, bool isRequired) =>
         new(key, path, RuntimeValueType(type), isRequired, ActivityValuePolicy.Default);
@@ -1048,6 +1049,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             key,
             RuntimeValueType(type),
             isRequired: false,
+            isNullable: true,
             hasDefault: false,
             defaultValue: null,
             ActivityValuePolicy.Default);

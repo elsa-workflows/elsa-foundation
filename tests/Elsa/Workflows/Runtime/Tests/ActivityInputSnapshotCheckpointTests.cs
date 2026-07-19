@@ -127,6 +127,7 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
             input.Key,
             StringType,
             isRequired: true,
+            isNullable: false,
             hasDefault: false,
             defaultValue: null,
             ActivityValuePolicy.Default));

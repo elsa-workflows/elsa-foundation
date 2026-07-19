@@ -210,8 +210,10 @@ description: "Dependency-ordered implementation tasks for reusable activity defi
 - [X] T080 [US6] Complete exact clone, independent source-owned fork provenance, and provider migration commands in `src/Elsa/Activities/Design/Api/Commands/ReusableActivityDraftCommands.cs`
 - [X] T081 [US6] Implement optimistic retire/restore/revoke version commands and selection policy in `src/Elsa/Activities/Design/Api/Commands/ActivityVersionLifecycleCommands.cs`
 - [X] T082 [US6] Add lifecycle endpoints and stable lifecycle conflict mappings in `src/Elsa/Activities/Design/Api/Endpoints/ActivityVersionLifecycleEndpoints.cs`
-- [X] T083 [US6] Implement synthetic wrapper compilation and expiring Source Reference creation in `src/Elsa/Workflows/Publishing/Api/Services/ActivityDraftTestRunPublisher.cs`
+- [X] T083 [US6] Implement synthetic wrapper compilation and expiring Source Reference creation in `src/Elsa/Workflows/Publishing/Api/Services/ActivityDraftTestRunService.cs`
 - [X] T084 [US6] Add draft test-run request/view/endpoint and normal Runtime dispatch in `src/Elsa/Workflows/Publishing/Api/Endpoints/ActivityDraftTestRunEndpoint.cs`
+- [X] T084a [US6] Add durable exact-revision Test Run receipts, same-key dispatch idempotency, status lookup by identity/key, Runtime reconciliation, and explicit expiry/evidence facts
+- [X] T084b [US6] Add policy-advertised idempotent cancellation plus full-host accepted, completion, fault, cancellation, ambiguous acknowledgement, authorization, and expiry coverage
 - [X] T085 [US6] Extend reference-derived cleanup to activity-template and test-run references in `src/Elsa/Workflows/Runtime/Services/WorkflowExecutableReferenceGarbageCollector.cs`
 - [X] T086 [US6] Persist version lifecycle, fork provenance, migrated drafts, and test-run references in `src/Elsa/Activities/Design/Persistence/Groundwork/Services/GroundworkReusableActivityStores.cs`
 - [X] T087 [US6] Map every authoring/publication/lifecycle failure to shared RFC 7807 plus ordered safe diagnostics in `src/Elsa/Api/FastEndpoints/Configurators/ProblemDetailsFastEndpointConfigurator.cs` and `src/Elsa/Activities/Design/Api/Models/ActivityProblemDetails.cs`

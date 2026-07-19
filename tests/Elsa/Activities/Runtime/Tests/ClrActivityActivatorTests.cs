@@ -104,7 +104,7 @@ public sealed class ClrActivityActivatorTests
             "1.0.0",
             "test",
             JsonSerializer.SerializeToElement(new { }),
-            [new ActivityInputContract("message", "Message", StringType, false, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("message", "Message", StringType, false, true, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/optional-initializer"));
@@ -138,7 +138,7 @@ public sealed class ClrActivityActivatorTests
             "1.0.0",
             "test",
             JsonSerializer.SerializeToElement(new { }),
-            [new ActivityInputContract("message", "Message", StringType, true, false, null, ActivityValuePolicy.Default) { IsNullable = true }],
+            [new ActivityInputContract("message", "Message", StringType, true, true, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/required-nullable"));
@@ -166,7 +166,7 @@ public sealed class ClrActivityActivatorTests
             "1.0.0",
             "test",
             JsonSerializer.SerializeToElement(new { }),
-            [new ActivityInputContract("message", "Message", StringType, false, false, null, ActivityValuePolicy.Default) { IsNullable = false }],
+            [new ActivityInputContract("message", "Message", StringType, false, false, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/pinned-non-nullable"));
@@ -194,7 +194,7 @@ public sealed class ClrActivityActivatorTests
             "1.0.0",
             "test",
             JsonSerializer.SerializeToElement(new { }),
-            [new ActivityInputContract("inheritedKey", "Value", StringType, false, false, null, ActivityValuePolicy.Default) { IsNullable = false }],
+            [new ActivityInputContract("inheritedKey", "Value", StringType, false, false, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/hidden-input"));
@@ -226,7 +226,7 @@ public sealed class ClrActivityActivatorTests
             "1.0.0",
             "test",
             JsonSerializer.SerializeToElement(new { }),
-            [new ActivityInputContract("value", "Value", Int32Type, false, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("value", "Value", Int32Type, false, false, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/optional-int32"));
@@ -256,7 +256,7 @@ public sealed class ClrActivityActivatorTests
             "1.0.0",
             "test",
             JsonSerializer.SerializeToElement(new { }),
-            [new ActivityInputContract("message", "Message", StringType, false, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("message", "Message", StringType, false, false, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/optional-non-nullable-reference"));
@@ -331,7 +331,7 @@ public sealed class ClrActivityActivatorTests
             "1.0.0",
             typeof(ClrActivityDescriptor).FullName!,
             descriptor,
-            [new ActivityInputContract("message", "Message", StringType, true, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("message", "Message", StringType, true, false, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, "constructor-injection"));

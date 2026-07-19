@@ -14,99 +14,37 @@ namespace Elsa.Activities.Design.Tests;
 public sealed class ActivityContractCompatibilityTests
 {
     [Fact]
-    public void AdditiveNullabilityMetadata_PreservesEstablishedPublicSignatures()
+    public void DesignInputNullability_IsARequiredPartOfThePublicSignature()
     {
-        Assert.Contains(typeof(InputDefinition).GetConstructors(), constructor =>
-            constructor.GetParameters().Length == 16);
+        var constructor = Assert.Single(typeof(InputDefinition).GetConstructors());
+        var parameters = constructor.GetParameters();
+
+        Assert.Equal(17, parameters.Length);
+        var nullability = Assert.Single(parameters, parameter => parameter.Name == nameof(InputDefinition.IsNullable));
+        Assert.Equal(typeof(bool), nullability.ParameterType);
+        Assert.False(nullability.HasDefaultValue);
         Assert.Contains(typeof(InputDefinition).GetMethods(), method =>
-            method.Name == "Deconstruct" && method.GetParameters().Length == 16);
-        Assert.Contains(typeof(ActivityInputContract).GetConstructors(), constructor =>
-            constructor.GetParameters().Length == 8);
+            method.Name == "Deconstruct" && method.GetParameters().Length == 17);
     }
 
     [Fact]
-    public void PreNullabilityContractJson_PreservesItsCapturedSchemaFingerprint()
+    public void RuntimeInputNullability_IsARequiredPartOfThePublicSignature()
     {
-        const string json =
-            """
-            {
-              "activityTypeKey": "test/activity",
-              "contractVersion": "1.0.0",
-              "schemaFingerprint": "sha256:d5e16c02a4ea7eb05c9869468b94d3edbb5c37718a03c55204e18bd1b3f567c8",
-              "descriptorKind": "test",
-              "descriptorPayload": {},
-              "inputs": {
-                "message": {
-                  "key": "message",
-                  "name": "Message",
-                  "type": {
-                    "alias": "String",
-                    "collectionKind": 0,
-                    "schema": null,
-                    "schemaVersion": null
-                  },
-                  "isRequired": false,
-                  "hasDefault": false,
-                  "defaultValue": null,
-                  "policy": {
-                    "isPersistable": true,
-                    "isSensitive": false,
-                    "requiresEncryption": false,
-                    "redactionMode": null,
-                    "lifecycle": 0,
-                    "storage": 0,
-                    "storageProfile": null,
-                    "retentionPolicy": null
-                  },
-                  "editorMetadata": {}
-                }
-              },
-              "result": {
-                "type": {
-                  "alias": "Unit",
-                  "collectionKind": 0,
-                  "schema": null,
-                  "schemaVersion": null
-                },
-                "isRequired": false,
-                "policy": {
-                  "isPersistable": true,
-                  "isSensitive": false,
-                  "requiresEncryption": false,
-                  "redactionMode": null,
-                  "lifecycle": 0,
-                  "storage": 0,
-                  "storageProfile": null,
-                  "retentionPolicy": null
-                },
-                "projections": {}
-              },
-              "outcomes": ["Done"],
-              "activation": {
-                "descriptorKind": "test",
-                "capability": "test/activity"
-              }
-            }
-            """;
+        var constructor = Assert.Single(typeof(ActivityInputContract).GetConstructors());
+        var nullability = Assert.Single(constructor.GetParameters(), parameter =>
+            StringComparer.OrdinalIgnoreCase.Equals(parameter.Name, nameof(ActivityInputContract.IsNullable)));
 
-        var contract = JsonSerializer.Deserialize<ActivityContract>(
-            json,
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
-
-        Assert.NotNull(contract);
-        Assert.Null(contract.Inputs["message"].IsNullable);
-        Assert.Equal("sha256:d5e16c02a4ea7eb05c9869468b94d3edbb5c37718a03c55204e18bd1b3f567c8", contract.SchemaFingerprint);
+        Assert.Equal(typeof(bool), nullability.ParameterType);
+        Assert.False(nullability.HasDefaultValue);
+        Assert.Null(typeof(ActivityInputContract).GetProperty(nameof(ActivityInputContract.IsNullable))!.SetMethod);
     }
 
     [Fact]
     public void ExplicitNullabilityValues_AreBehaviorallyHashed()
     {
-        var legacyUnknown = NullabilityContract(null);
         var nullable = NullabilityContract(true);
         var nonNullable = NullabilityContract(false);
 
-        Assert.NotEqual(legacyUnknown.SchemaFingerprint, nullable.SchemaFingerprint);
-        Assert.NotEqual(legacyUnknown.SchemaFingerprint, nonNullable.SchemaFingerprint);
         Assert.NotEqual(nullable.SchemaFingerprint, nonNullable.SchemaFingerprint);
     }
 
@@ -202,7 +140,7 @@ public sealed class ActivityContractCompatibilityTests
             outcomes: ["completed", "declined"],
             activation: new ActivityActivationRequirement("clr", "Payments.ChargeCard"));
 
-    private static ActivityContract NullabilityContract(bool? isNullable) =>
+    private static ActivityContract NullabilityContract(bool isNullable) =>
         new(
             activityTypeKey: "test/activity",
             contractVersion: "1.0.0",
@@ -215,12 +153,10 @@ public sealed class ActivityContractCompatibilityTests
                     "Message",
                     new ValueTypeDescriptor("String"),
                     isRequired: false,
+                    isNullable,
                     hasDefault: false,
                     defaultValue: null,
                     ActivityValuePolicy.Default)
-                {
-                    IsNullable = isNullable
-                }
             ],
             result: new ActivityResultContract(
                 new ValueTypeDescriptor("Unit"),
@@ -236,6 +172,7 @@ public sealed class ActivityContractCompatibilityTests
             name,
             type,
             isRequired: true,
+            isNullable: false,
             hasDefault: false,
             defaultValue: null,
             ActivityValuePolicy.Default);

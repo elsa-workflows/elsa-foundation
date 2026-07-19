@@ -10,6 +10,7 @@ using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.MongoDb.Unified;
 using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -59,7 +60,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     }
 
     [Fact]
-    public void Unified_feature_registers_the_six_provider_families_without_selecting_identity()
+    public void Unified_feature_registers_the_seven_provider_families_without_selecting_identity()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -77,7 +78,8 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
             typeof(IExecutionPlacementStore),
             typeof(IWorkflowDefinitionStore),
             typeof(IActivityDefinitionStore),
-            typeof(IPublicationRecordStore));
+            typeof(IPublicationRecordStore),
+            typeof(IStudioPreferenceStore));
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IUserStore));
         AssertRegistrationDiagnosticsAreSanitized(services, RegistrationSecret, ConnectionString);
     }
@@ -153,7 +155,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     }
 
     [Fact]
-    public async Task Unified_shell_standalone_composes_the_six_provider_families_into_one_exact_MongoDB_target()
+    public async Task Unified_shell_standalone_composes_the_seven_provider_families_into_one_exact_MongoDB_target()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -175,6 +177,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
             [
                 "elsa-activities-design",
                 "elsa-secrets",
+                "elsa-studio-preferences",
                 "elsa-workflows-design",
                 "elsa-workflows-publishing",
                 "elsa-workflows-runtime",

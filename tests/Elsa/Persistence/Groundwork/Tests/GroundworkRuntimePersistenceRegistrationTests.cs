@@ -380,13 +380,54 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+        var exception = await Assert.ThrowsAsync<SqliteGroundworkPersistenceException>(
             () => provider.InitializeGroundworkStoreAsync());
 
+        Assert.Equal(SqliteGroundworkPersistenceOperation.Initialize, exception.Operation);
+        Assert.NotNull(exception.InnerException);
         Assert.Contains("connection details were suppressed", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(connectionString, exception.ToString(), StringComparison.Ordinal);
         Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
+    }
+
+    [Fact]
+    public async Task Sqlite_Session_Open_Wraps_Provider_Failure_And_Cleans_Up()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-session-open-{Guid.NewGuid():N}");
+        var databasePath = Path.Combine(directory, "groundwork.db");
+        Directory.CreateDirectory(directory);
+        var connectionString = $"Data Source={databasePath};Pooling=False";
+        try
+        {
+            var services = new ServiceCollection();
+            new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
+            await using var provider = services.BuildServiceProvider();
+
+            await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
+            await provider.InitializeGroundworkStoreAsync();
+
+            Directory.Delete(directory, recursive: true);
+            await File.WriteAllTextAsync(directory, "blocks the database directory");
+
+            var exception = await Assert.ThrowsAsync<SqliteGroundworkPersistenceException>(
+                () => provider.GetRequiredService<GroundworkStoreSessionSource>()
+                    .OpenAsync(GroundworkTestAccess.DefaultScoped)
+                    .AsTask());
+
+            Assert.Equal(SqliteGroundworkPersistenceOperation.OpenSession, exception.Operation);
+            Assert.NotNull(exception.InnerException);
+            Assert.DoesNotContain(connectionString, exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (File.Exists(databasePath))
+                File.Delete(databasePath);
+            if (File.Exists(directory))
+                File.Delete(directory);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact] // Running startup twice is a no-op: the admitted provider factory is published exactly once.

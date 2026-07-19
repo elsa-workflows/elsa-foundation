@@ -45,10 +45,10 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Fact]
-    public void WorkflowExecutable_Uses_The_V5_To_V6_Compatibility_Window()
+    public void WorkflowExecutable_Uses_A_Clean_V6_Baseline()
     {
         Assert.Equal(6, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
-        Assert.Equal(5, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        Assert.Equal(6, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
     }
 
     // --- Read path: current version round-trips ---
@@ -140,32 +140,6 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
             "1",
             contentJson)));
         Assert.False(Serializer.IsCurrentVersion(Envelope("2", contentJson)));
-    }
-
-    [Fact]
-    public void WorkflowExecutableV5ToV6Upcaster_preserves_legacy_unknown_and_explicit_nullability()
-    {
-        var content = JsonNode.Parse("""
-            {
-              "executable": {
-                "rootActivity": {
-                  "activityContract": {
-                    "inputs": {
-                      "legacy": { "isRequired": false },
-                      "explicit": { "isRequired": true, "isNullable": false }
-                    }
-                  }
-                }
-              }
-            }
-            """)!.AsObject();
-
-        var result = new WorkflowExecutableDocumentV5ToV6Upcaster().Upcast(content);
-        var inputs = Assert.IsType<JsonObject>(result["executable"]!["rootActivity"]!["activityContract"]!["inputs"]);
-
-        Assert.Same(content, result);
-        Assert.False(inputs["legacy"]!.AsObject().ContainsKey("isNullable"));
-        Assert.False(inputs["explicit"]!["isNullable"]!.GetValue<bool>());
     }
 
     [Fact]

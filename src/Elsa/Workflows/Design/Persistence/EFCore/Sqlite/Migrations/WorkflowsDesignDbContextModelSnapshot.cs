@@ -158,6 +158,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                     b.Property<string>("SourceCreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SourceDraftId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("StateSource")
                         .HasMaxLength(-1)
                         .HasColumnType("TEXT");

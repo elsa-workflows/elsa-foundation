@@ -395,12 +395,10 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                         "to",
                         new ValueTypeDescriptor("System.String"),
                         isRequired: true,
+                        isNullable: false,
                         hasDefault: false,
                         defaultValue: null,
                         ActivityValuePolicy.Default)
-                    {
-                        IsNullable = false
-                    }
                 ],
                 new ActivityResultContract(
                     new ValueTypeDescriptor("Unit"),

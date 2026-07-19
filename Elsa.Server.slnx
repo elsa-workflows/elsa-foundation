@@ -341,6 +341,7 @@
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Design/Persistence/" />
   <Folder Name="/tests/Elsa/Activities/Design/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Activities/Design/Persistence/Groundwork/TemporalProjectionTests/Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests.csproj" />
     <Project Path="tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Runtime/">

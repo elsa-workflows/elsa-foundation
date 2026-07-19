@@ -31,28 +31,41 @@ public sealed class ActivityExecutionLayoutReader(
         var sourceReference = await FindExecutedReferenceAsync(workflow, cancellationToken);
         var sourceReferenceId = sourceReference?.SourceReferenceId ?? string.Empty;
         var segment = sourceReference?.LayoutSidecar.BoundarySegments.FirstOrDefault(x => OriginsEqual(x.BoundaryOrigin, boundary.InvocationOrigin));
-        if (segment is null)
-            return ActivityExecutionLayoutView.From(new(
-                workflowExecutionId,
-                activityExecutionId,
-                executable.Identity.ArtifactId,
-                sourceReferenceId,
-                ActivityExecutionLayoutSelection.Automatic,
-                boundary.InvocationOrigin,
-                boundary.TemplateHash,
-                [],
-                [],
-                []));
-
-        var nodes = segment.Records.Where(x => executable.NodesById.ContainsKey(x.ExecutableNodeId)).ToArray();
-        var connections = RuntimeFlowchartLayoutConnectionProjector.Project(executable, segment);
+        var layoutRecords = segment?.Records ?? [];
+        var layoutByNodeId = layoutRecords
+            .Where(x => executable.NodesById.ContainsKey(x.ExecutableNodeId))
+            .ToDictionary(x => x.ExecutableNodeId, StringComparer.Ordinal);
+        var structuralNodes = ReadBoundaryNodes(executable, boundary)
+            .OrderBy(x => x.ExecutableNodeId, StringComparer.Ordinal)
+            .ToArray();
+        var nodes = structuralNodes
+            .Select(node =>
+            {
+                layoutByNodeId.TryGetValue(node.ExecutableNodeId, out var layout);
+                return new ExecutableActivityLayoutRecord(
+                    layout?.TemplateNodeId ?? node.Metadata.GetValueOrDefault("activity.templateNodeId") ?? node.AuthoredActivityId,
+                    node.AuthoredActivityId,
+                    node.ExecutableNodeId,
+                    layout?.X ?? 0,
+                    layout?.Y ?? 0,
+                    layout?.Width,
+                    layout?.Height,
+                    layout?.AdditionalProperties,
+                    node.ActivityType,
+                    node.ActivityTypeVersion,
+                    layout is not null);
+            })
+            .ToArray();
+        if (nodes.Length == 0)
+            nodes = layoutRecords.Where(x => executable.NodesById.ContainsKey(x.ExecutableNodeId)).ToArray();
+        var connections = RuntimeFlowchartLayoutConnectionProjector.Project(executable, nodes);
         var nested = await ReadNestedBoundariesAsync(workflowExecutionId, activityExecutionId, cancellationToken);
         return ActivityExecutionLayoutView.From(new(
             workflowExecutionId,
             activityExecutionId,
             executable.Identity.ArtifactId,
             sourceReferenceId,
-            ActivityExecutionLayoutSelection.ExecutedReference,
+            segment is null ? ActivityExecutionLayoutSelection.Automatic : ActivityExecutionLayoutSelection.ExecutedReference,
             boundary.InvocationOrigin,
             boundary.TemplateHash,
             nodes,
@@ -103,4 +116,55 @@ public sealed class ActivityExecutionLayoutReader(
     private static bool OriginsEqual(ActivityInvocationOrigin left, ActivityInvocationOrigin right) =>
         left.Segments.Count == right.Segments.Count &&
         left.Segments.Zip(right.Segments).All(x => x.First.Kind == x.Second.Kind && StringComparer.Ordinal.Equals(x.First.Id, x.Second.Id));
+
+    private static IReadOnlyList<ExecutableNode> ReadBoundaryNodes(
+        WorkflowExecutable executable,
+        ActivityExecutionBoundary boundary)
+    {
+        if (string.IsNullOrWhiteSpace(boundary.ExecutableNodeId) ||
+            !executable.NodesById.TryGetValue(boundary.ExecutableNodeId, out var root) ||
+            !NodeMatchesOrigin(root, boundary.InvocationOrigin))
+            return executable.Nodes.Where(x => NodeMatchesOrigin(x, boundary.InvocationOrigin)).ToArray();
+
+        var result = new List<ExecutableNode>();
+        var pending = new Stack<(ExecutableNode Node, bool IsRoot)>();
+        pending.Push((root, true));
+        while (pending.TryPop(out var current))
+        {
+            result.Add(current.Node);
+            if (!current.IsRoot && IsReusableBoundary(current.Node))
+                continue;
+
+            foreach (var child in current.Node.ChildSlots.SelectMany(x => x.Activities).Reverse())
+                pending.Push((child, false));
+        }
+        return result;
+    }
+
+    private static bool NodeMatchesOrigin(ExecutableNode node, ActivityInvocationOrigin boundaryOrigin)
+    {
+        if (!node.Metadata.TryGetValue("activity.invocationOrigin", out var encoded))
+            return false;
+        try
+        {
+            var segments = System.Text.Json.JsonSerializer.Deserialize<ActivityInvocationOriginSegment[]>(encoded);
+            if (segments is null)
+                return false;
+
+            return OriginsEqual(new(segments), boundaryOrigin);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsReusableBoundary(ExecutableNode node) =>
+        HasValue(node.Metadata, "activity.definitionId") &&
+        HasValue(node.Metadata, "activity.definitionVersionId") &&
+        HasValue(node.Metadata, "activity.version") &&
+        HasValue(node.Metadata, "activity.templateHash");
+
+    private static bool HasValue(IReadOnlyDictionary<string, string> metadata, string key) =>
+        metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value);
 }

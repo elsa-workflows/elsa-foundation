@@ -212,7 +212,7 @@ public sealed class ActivityVersionDiffApiTests
         new("1", inputs ?? [], [], []);
 
     private static ActivityInputContract Input(string key) =>
-        new(key, key, new("string", Elsa.Primitives.Models.CollectionKind.Single), false, null, "elsa.json");
+        new(key, key, new("string", Elsa.Primitives.Models.CollectionKind.Single), false, false, null, "elsa.json");
 
     private static ActivityProviderManifest Manifest() => new("elsa.activity-graph", "1", Json("{}"));
 
@@ -236,6 +236,7 @@ public sealed class ActivityVersionDiffApiTests
     private sealed class TestAuthoringContext : IActivityAuthoringContext
     {
         public string? TenantId => "tenant-a";
+        public string AuthorizationProfile => "tenant-a/read";
         public bool CanAuthorProvider(string providerKey) => true;
         public bool CanReadProviderPayload(string providerKey) => false;
     }
