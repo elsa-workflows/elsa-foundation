@@ -5596,6 +5596,30 @@ button.wf-reference-select {
 .wf-folder-tree-row:hover,
 .wf-folder-tree-row:focus-visible,
 .wf-folder-tree-row[aria-selected="true"] { background: var(--wf-accent-soft); outline: none; }
+.wf-folder-tree-item:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
+}
+.wf-folder-tree-item[aria-selected="true"] > .wf-folder-tree-folder {
+  background: var(--wf-accent-soft);
+  border-radius: var(--wf-radius-sm);
+}
+.wf-folder-load-more {
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--wf-radius-sm);
+  background: transparent;
+  color: var(--wf-accent);
+  text-align: left;
+}
+.wf-folder-load-more:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
+}
+.wf-folder-load-more[aria-disabled="true"] { color: var(--wf-muted-text); }
+.wf-folder-loading,
+.wf-folder-load-error { display: grid; gap: 5px; padding: 6px 8px; color: var(--wf-muted-text); }
 .wf-folder-breadcrumb { min-height: 30px; margin-bottom: 8px; color: var(--wf-muted-text); font-size: var(--wf-text-sm); }
 .wf-folder-breadcrumb button { padding: 0; border: 0; background: transparent; color: var(--wf-accent); font: inherit; }
 .wf-folder-breadcrumb span { margin-left: 6px; }
