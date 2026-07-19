@@ -7,7 +7,8 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 internal sealed record GroundworkWorkflowDefinitionDocument(
     string Collection,
     WorkflowDefinition Entity,
-    string MarkerProjection);
+    string MarkerProjection,
+    string ControlledProjection = "|");
 
 internal static class GroundworkWorkflowDefinitionDocuments
 {
@@ -21,7 +22,10 @@ internal static class GroundworkWorkflowDefinitionDocuments
             {
                 MarkerProjection = string.IsNullOrEmpty(document.MarkerProjection)
                     ? GroundworkWorkflowDefinitionTagStore.MarkerProjection([])
-                    : document.MarkerProjection
+                    : document.MarkerProjection,
+                ControlledProjection = string.IsNullOrEmpty(document.ControlledProjection)
+                    ? GroundworkWorkflowDefinitionTagStore.ControlledProjection([])
+                    : document.ControlledProjection
             };
 
         throw new InvalidOperationException(
@@ -31,7 +35,8 @@ internal static class GroundworkWorkflowDefinitionDocuments
     public static SaveDocumentRequest Save(
         WorkflowDefinition entity,
         string markerProjection,
-        long? expectedVersion = null) =>
+        long? expectedVersion = null,
+        string? controlledProjection = null) =>
         new(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             entity.Id,
@@ -40,7 +45,8 @@ internal static class GroundworkWorkflowDefinitionDocuments
                 new GroundworkWorkflowDefinitionDocument(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
                     entity,
-                    markerProjection),
+                    markerProjection,
+                    controlledProjection ?? GroundworkWorkflowDefinitionTagStore.ControlledProjection([])),
                 GroundworkDesignJson.Options),
             expectedVersion);
 }

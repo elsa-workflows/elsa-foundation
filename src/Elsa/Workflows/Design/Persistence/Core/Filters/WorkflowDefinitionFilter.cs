@@ -50,14 +50,20 @@ public class WorkflowDefinitionFilter
     public IReadOnlyCollection<WorkflowDefinitionMarkerTagClause>? MarkerTagClauses { get; set; }
 
     /// <summary>
+    /// Filters logical workflow definitions by effective single-valued controlled assignments.
+    /// Values are stable catalog identities; persistence never compares display text.
+    /// </summary>
+    public IReadOnlyCollection<WorkflowDefinitionControlledTagClause>? ControlledTagClauses { get; set; }
+
+    /// <summary>
     /// Projects this filter onto the closed, provider-neutral <see cref="Query{TEntity}"/> spec. This is
     /// the shape every persistence provider can translate.
     /// </summary>
     public Query<WorkflowDefinition> ToQuery()
     {
-        if (MarkerTagClauses is { Count: > 0 })
+        if (MarkerTagClauses is { Count: > 0 } || ControlledTagClauses is { Count: > 0 })
             throw new NotSupportedException(
-                "Marker tag clauses require a workflow-definition store with native marker projection query support.");
+                "Tag clauses require a workflow-definition store with native tag projection query support.");
 
         var query = Query<WorkflowDefinition>.All();
 

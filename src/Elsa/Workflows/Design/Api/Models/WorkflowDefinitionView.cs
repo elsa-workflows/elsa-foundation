@@ -11,11 +11,15 @@ public sealed record WorkflowDefinitionView(
     string? LatestVersionId = null,
     string? LatestVersion = null,
     int VersionCount = 0,
-    IReadOnlyCollection<WorkflowDefinitionMarkerTagView>? MarkerTags = null
+    IReadOnlyCollection<WorkflowDefinitionMarkerTagView>? MarkerTags = null,
+    IReadOnlyCollection<WorkflowDefinitionTagChipView>? TagChips = null,
+    WorkflowDefinitionControlledTagGroupKeyView? Group = null
 );
 
 public sealed record WorkflowDefinitionListView(
     IReadOnlyCollection<WorkflowDefinitionView> Items,
     int Page,
     int PageSize,
-    int TotalCount);
+    int TotalCount,
+    IReadOnlyCollection<WorkflowDefinitionControlledTagFacetView>? ControlledTagFacets = null,
+    IReadOnlyCollection<WorkflowDefinitionControlledTagGroupView>? ControlledTagGroups = null);

@@ -1,6 +1,7 @@
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
+using Elsa.Workflows.Design.Api.Services;
 using Elsa.Tagging.Core.Contracts;
 using Elsa.Tagging.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
@@ -141,6 +142,123 @@ public sealed class WorkflowDefinitionProjectionTests
         Assert.Equal("#ef4444", marker.Color);
     }
 
+    [Fact]
+    public async Task Definition_list_parses_controlled_any_of_and_none_of_clauses()
+    {
+        var fixture = new ProjectionFixture(1);
+
+        _ = await fixture.CreateHandler().Handle(
+            new ListDefinitions(
+                null,
+                null,
+                null,
+                null,
+                ControlledTagClauses:
+                [
+                    "tag-environment:anyOf:value-development,value-production",
+                    "tag-region:noneOf:value-retired"
+                ]),
+            CancellationToken.None);
+
+        Assert.Collection(
+            fixture.LastPageQuery!.Filter.ControlledTagClauses!,
+            anyOf =>
+            {
+                Assert.Equal("tag-environment", anyOf.TagDefinitionId);
+                Assert.Equal(WorkflowDefinitionControlledTagOperator.AnyOf, anyOf.Operator);
+                Assert.Equal(["value-development", "value-production"], anyOf.ControlledValueIds);
+            },
+            noneOf =>
+            {
+                Assert.Equal("tag-region", noneOf.TagDefinitionId);
+                Assert.Equal(WorkflowDefinitionControlledTagOperator.NoneOf, noneOf.Operator);
+                Assert.Equal(["value-retired"], noneOf.ControlledValueIds);
+            });
+    }
+
+    [Fact]
+    public async Task Controlled_queries_require_durable_controlled_value_persistence()
+    {
+        var handler = new ProjectionFixture(1).CreateHandlerWithoutControlledValuePersistence();
+
+        await Assert.ThrowsAsync<WorkflowDefinitionTaggingUnavailableException>(() =>
+            handler.Handle(
+                new ListDefinitions(
+                    null,
+                    null,
+                    null,
+                    null,
+                    ControlledTagClauses: ["tag-environment:exists"]),
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Controlled_facets_remove_only_their_own_clause_and_grouping_pages_across_value_and_untagged_groups()
+    {
+        var definitions = new[]
+        {
+            new WorkflowDefinition { Id = "development", Name = "Development" },
+            new WorkflowDefinition { Id = "production", Name = "Production" },
+            new WorkflowDefinition { Id = "untagged", Name = "Untagged" },
+            new WorkflowDefinition { Id = "conflicted", Name = "Conflicted" }
+        };
+        var tagSets = new Dictionary<string, WorkflowDefinitionTagSet>(StringComparer.Ordinal)
+        {
+            ["development"] = TagSet("development", Assertion("value-development", "manual")),
+            ["production"] = TagSet("production", Assertion("value-production", "manual")),
+            ["untagged"] = TagSet("untagged"),
+            ["conflicted"] = TagSet(
+                "conflicted",
+                Assertion("value-development", "source"),
+                Assertion("value-production", "manual"))
+        };
+        var services = new ServiceCollection()
+            .AddSingleton<IWorkflowDefinitionStore>(new SemanticDefinitionStore(definitions, tagSets))
+            .AddSingleton<IWorkflowDefinitionListProjectionStore>(new CountingProjectionStore())
+            .AddSingleton<IWorkflowDefinitionTagStore>(new SemanticTagStore(tagSets))
+            .AddSingleton<ITagDefinitionStore>(new CountingTagDefinitionStore())
+            .AddSingleton<IControlledTagValueStore>(new CountingControlledTagValueStore())
+            .AddSingleton<ITagDefinitionCatalogPersistence, DurableCatalogPersistence>()
+            .AddSingleton<IControlledTagValueCatalogPersistence, DurableControlledValuePersistence>()
+            .BuildServiceProvider();
+        var handler = ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
+
+        var result = await handler.Handle(
+            new ListDefinitions(
+                null,
+                null,
+                null,
+                null,
+                PageSize: 2,
+                ControlledTagClauses: ["tag-environment:noneOf:value-development"],
+                ControlledTagFacets: ["tag-environment"],
+                GroupByControlledTagDefinitionId: "tag-environment"),
+            CancellationToken.None);
+
+        var items = result.Items.ToArray();
+        Assert.Equal(["production", "untagged"], items.Select(item => item.Id));
+        Assert.Equal(
+            [("Value", "value-production"), ("Untagged", null)],
+            items.Select(item => (item.Group!.Kind, item.Group.ControlledValueId)));
+        var productionChip = Assert.Single(items[0].TagChips!);
+        Assert.Equal("value-production", productionChip.ControlledValueId);
+        Assert.Equal("Production", productionChip.ControlledValueDisplayName);
+        Assert.Equal("#22c55e", productionChip.ControlledValueColor);
+
+        var facet = Assert.Single(result.ControlledTagFacets!);
+        Assert.Equal(
+            [("value-development", 2), ("value-production", 2)],
+            facet.Values.Select(value => (value.ControlledValueId, value.Count)));
+        Assert.Equal(
+            [
+                ("Value", "value-development", 0),
+                ("Value", "value-production", 1),
+                ("Untagged", null, 1),
+                ("Conflicted", null, 0)
+            ],
+            result.ControlledTagGroups!.Select(group => (group.Kind, group.ControlledValueId, group.Count)));
+    }
+
     [Theory]
     [InlineData("tag-priority")]
     [InlineData(":exists")]
@@ -197,7 +315,7 @@ public sealed class WorkflowDefinitionProjectionTests
             CancellationToken.None)).Items.ToArray();
 
         Assert.Equal(definitionCount, result.Length);
-            Assert.InRange(fixture.TotalReadCount, 1, 5);
+        Assert.InRange(fixture.TotalReadCount, 1, 5);
         foreach (var view in result)
         {
             var ordinal = int.Parse(view.Id["definition-".Length..]);
@@ -239,6 +357,7 @@ public sealed class WorkflowDefinitionProjectionTests
         private readonly CountingProjectionStore _projections;
         private readonly CountingTagStore _tags = new();
         private readonly CountingTagDefinitionStore _tagDefinitions = new();
+        private readonly CountingControlledTagValueStore _controlledTagValues = new();
 
         public ProjectionFixture(int count)
         {
@@ -272,7 +391,9 @@ public sealed class WorkflowDefinitionProjectionTests
                 .AddSingleton<IWorkflowDefinitionListProjectionStore>(_projections)
                 .AddSingleton<IWorkflowDefinitionTagStore>(_tags)
                 .AddSingleton<ITagDefinitionStore>(_tagDefinitions)
+                .AddSingleton<IControlledTagValueStore>(_controlledTagValues)
                 .AddSingleton<ITagDefinitionCatalogPersistence, DurableCatalogPersistence>()
+                .AddSingleton<IControlledTagValueCatalogPersistence, DurableControlledValuePersistence>()
                 .BuildServiceProvider();
             return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
         }
@@ -285,9 +406,23 @@ public sealed class WorkflowDefinitionProjectionTests
                 .BuildServiceProvider();
             return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
         }
+
+        public ListDefinitionsRequestHandler CreateHandlerWithoutControlledValuePersistence()
+        {
+            var services = new ServiceCollection()
+                .AddSingleton<IWorkflowDefinitionStore>(_definitions)
+                .AddSingleton<IWorkflowDefinitionListProjectionStore>(_projections)
+                .AddSingleton<IWorkflowDefinitionTagStore>(_tags)
+                .AddSingleton<ITagDefinitionStore>(_tagDefinitions)
+                .AddSingleton<IControlledTagValueStore>(_controlledTagValues)
+                .AddSingleton<ITagDefinitionCatalogPersistence, DurableCatalogPersistence>()
+                .BuildServiceProvider();
+            return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
+        }
     }
 
     private sealed class DurableCatalogPersistence : ITagDefinitionCatalogPersistence;
+    private sealed class DurableControlledValuePersistence : IControlledTagValueCatalogPersistence;
 
     private sealed class CountingDefinitionStore(IReadOnlyList<WorkflowDefinition> definitions) : IWorkflowDefinitionStore
     {
@@ -384,25 +519,34 @@ public sealed class WorkflowDefinitionProjectionTests
 
     private sealed class CountingTagDefinitionStore : ITagDefinitionStore
     {
-        private readonly TagDefinition _definition = new()
-        {
-            Id = "tag-priority",
-            CanonicalKey = "priority",
-            DisplayName = "Priority",
-            Color = "#ef4444"
-        };
+        private readonly TagDefinition[] _definitions =
+        [
+            new()
+            {
+                Id = "tag-priority",
+                CanonicalKey = "priority",
+                DisplayName = "Priority",
+                Color = "#ef4444"
+            },
+            Controlled("tag-environment"),
+            Controlled("tag-region")
+        ];
 
         public int ReadCount { get; private set; }
 
         public ValueTask<TagDefinition?> FindByCanonicalKeyAsync(
             string canonicalKey,
             CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<TagDefinition?>(_definition);
+            ValueTask.FromResult<TagDefinition?>(_definitions.SingleOrDefault(
+                definition => definition.CanonicalKey == canonicalKey));
 
         public ValueTask<TagDefinitionRevisionedRecord?> FindWithRevisionAsync(
             string tagDefinitionId,
             CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<TagDefinitionRevisionedRecord?>(new(_definition, "tag:1"));
+            ValueTask.FromResult(
+                _definitions.SingleOrDefault(definition => definition.Id == tagDefinitionId) is { } definition
+                    ? new TagDefinitionRevisionedRecord(definition, "tag:1")
+                    : null);
 
         public ValueTask<IReadOnlyList<TagDefinition>> ListByIdsAsync(
             IReadOnlyCollection<string> tagDefinitionIds,
@@ -410,7 +554,9 @@ public sealed class WorkflowDefinitionProjectionTests
         {
             ReadCount++;
             return ValueTask.FromResult<IReadOnlyList<TagDefinition>>(
-                tagDefinitionIds.Contains(_definition.Id, StringComparer.Ordinal) ? [_definition] : []);
+                _definitions
+                    .Where(definition => tagDefinitionIds.Contains(definition.Id, StringComparer.Ordinal))
+                    .ToArray());
         }
 
         public ValueTask<IReadOnlyList<TagDefinition>> ListAsync(
@@ -418,7 +564,7 @@ public sealed class WorkflowDefinitionProjectionTests
             CancellationToken cancellationToken = default)
         {
             ReadCount++;
-            return ValueTask.FromResult<IReadOnlyList<TagDefinition>>([_definition]);
+            return ValueTask.FromResult<IReadOnlyList<TagDefinition>>(_definitions);
         }
 
         public ValueTask<bool> TryAddAsync(
@@ -431,5 +577,152 @@ public sealed class WorkflowDefinitionProjectionTests
             string expectedRevision,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        private static TagDefinition Controlled(string id) => new()
+        {
+            Id = id,
+            CanonicalKey = id,
+            DisplayName = id,
+            ValueMode = TagValueMode.Controlled,
+            Cardinality = TagCardinality.Single
+        };
     }
+
+    private sealed class CountingControlledTagValueStore : IControlledTagValueStore
+    {
+        private readonly ControlledTagValue[] _values =
+        [
+            Value("value-development", "tag-environment"),
+            Value("value-production", "tag-environment"),
+            Value("value-retired", "tag-region")
+        ];
+
+        public ValueTask<ControlledTagValue?> FindByCanonicalKeyAsync(string tagDefinitionId, string canonicalKey, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ControlledTagValue?>(_values.SingleOrDefault(
+                value => value.TagDefinitionId == tagDefinitionId
+                         && value.CanonicalKey == canonicalKey));
+
+        public ValueTask<ControlledTagValueRevisionedRecord?> FindWithRevisionAsync(string controlledTagValueId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(
+                _values.SingleOrDefault(value => value.Id == controlledTagValueId) is { } value
+                    ? new ControlledTagValueRevisionedRecord(value, "value:1")
+                    : null);
+
+        public ValueTask<IReadOnlyList<ControlledTagValueRevisionedRecord>> ListWithRevisionsAsync(ControlledTagValueListRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<ControlledTagValueRevisionedRecord>>(
+                _values
+                    .Where(value => value.TagDefinitionId == request.TagDefinitionId)
+                    .OrderBy(value => value.SortOrder)
+                    .ThenBy(value => value.DisplayName, StringComparer.OrdinalIgnoreCase)
+                    .Select(value => new ControlledTagValueRevisionedRecord(value, "value:1"))
+                    .ToArray());
+
+        public ValueTask<bool> TryAddAsync(ControlledTagValue value, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<TagDefinitionSaveResult> SaveWithRevisionAsync(ControlledTagValue value, string expectedRevision, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        private static ControlledTagValue Value(string id, string tagDefinitionId) => new()
+        {
+            Id = id,
+            TagDefinitionId = tagDefinitionId,
+            CanonicalKey = id,
+            DisplayName = id == "value-development" ? "Development"
+                : id == "value-production" ? "Production"
+                : "Retired",
+            Color = id == "value-production" ? "#22c55e" : null,
+            SortOrder = id == "value-development" ? 10 : 20
+        };
+    }
+
+    private sealed class SemanticTagStore(
+        IReadOnlyDictionary<string, WorkflowDefinitionTagSet> tagSets) : IWorkflowDefinitionTagStore
+    {
+        public Task<WorkflowDefinitionTagSet> GetAsync(
+            string workflowDefinitionId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(tagSets.GetValueOrDefault(workflowDefinitionId) ?? TagSet(workflowDefinitionId));
+
+        public Task<IReadOnlyCollection<WorkflowDefinitionTagSet>> ListByDefinitionIdsAsync(
+            IReadOnlyCollection<string> workflowDefinitionIds,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyCollection<WorkflowDefinitionTagSet>>(
+                workflowDefinitionIds.Select(id => tagSets.GetValueOrDefault(id) ?? TagSet(id)).ToArray());
+
+        public Task<WorkflowDefinitionTagReplaceResult> ReplaceManualAsync(
+            ReplaceWorkflowDefinitionManualTags request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class SemanticDefinitionStore(
+        IReadOnlyCollection<WorkflowDefinition> definitions,
+        IReadOnlyDictionary<string, WorkflowDefinitionTagSet> tagSets) : IWorkflowDefinitionStore
+    {
+        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(definitions.Single(definition => definition.Id == id));
+
+        public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(definitions.SingleOrDefault(definition => definition.Id == id));
+
+        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(
+            WorkflowDefinitionFilter filter,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<WorkflowDefinition>>(definitions.ToArray());
+
+        public Task<WorkflowDefinitionPage> ListPageAsync(
+            WorkflowDefinitionListQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            IEnumerable<WorkflowDefinition> matching = definitions;
+            foreach (var clause in query.Filter.ControlledTagClauses ?? [])
+            {
+                matching = matching.Where(definition =>
+                {
+                    var tagSet = tagSets.GetValueOrDefault(definition.Id) ?? TagSet(definition.Id);
+                    var effective = WorkflowDefinitionTagEffectiveReducer.ReduceControlled(
+                        clause.TagDefinitionId,
+                        tagSet.Assertions);
+                    var requested = clause.ControlledValueIds ?? [];
+                    return clause.Operator switch
+                    {
+                        WorkflowDefinitionControlledTagOperator.Exists =>
+                            effective.State != WorkflowDefinitionTagEffectiveState.Untagged,
+                        WorkflowDefinitionControlledTagOperator.Missing =>
+                            effective.State == WorkflowDefinitionTagEffectiveState.Untagged,
+                        WorkflowDefinitionControlledTagOperator.AnyOf =>
+                            effective.ControlledValueIds.Intersect(requested, StringComparer.Ordinal).Any(),
+                        WorkflowDefinitionControlledTagOperator.NoneOf =>
+                            !effective.ControlledValueIds.Intersect(requested, StringComparer.Ordinal).Any(),
+                        WorkflowDefinitionControlledTagOperator.Conflicted =>
+                            effective.State == WorkflowDefinitionTagEffectiveState.Conflicted,
+                        WorkflowDefinitionControlledTagOperator.NotConflicted =>
+                            effective.State != WorkflowDefinitionTagEffectiveState.Conflicted,
+                        _ => false
+                    };
+                });
+            }
+
+            var ordered = matching
+                .OrderBy(definition => definition.Name, StringComparer.Ordinal)
+                .ThenBy(definition => definition.Id, StringComparer.Ordinal)
+                .ToArray();
+            return Task.FromResult(new WorkflowDefinitionPage(
+                ordered.Skip(query.Skip).Take(query.PageSize).ToArray(),
+                ordered.Length));
+        }
+    }
+
+    private static WorkflowDefinitionTagSet TagSet(
+        string workflowDefinitionId,
+        params WorkflowDefinitionTagAssertion[] assertions) =>
+        new(
+            workflowDefinitionId,
+            null,
+            WorkflowDefinitionTagRevision.Initial,
+            assertions);
+
+    private static WorkflowDefinitionTagAssertion Assertion(string valueId, string origin) =>
+        new("tag-environment", origin, origin, valueId);
 }

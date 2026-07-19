@@ -26,3 +26,32 @@ public sealed record TagDefinitionAuditValues(
         definition.Color,
         definition.Status);
 }
+
+/// <summary>Append-only controlled-value change record. Assignment changes remain target-domain facts.</summary>
+public sealed record ControlledTagValueAuditRecord(
+    string Id,
+    string ControlledTagValueId,
+    string TagDefinitionId,
+    string CanonicalKey,
+    string Operation,
+    DateTimeOffset OccurredAt,
+    string? TenantId,
+    string Actor,
+    string CorrelationId,
+    ControlledTagValueAuditValues? Before,
+    ControlledTagValueAuditValues After);
+
+public sealed record ControlledTagValueAuditValues(
+    string DisplayName,
+    string? Description,
+    string? Color,
+    TagDefinitionStatus Status,
+    int SortOrder)
+{
+    public static ControlledTagValueAuditValues From(ControlledTagValue value) => new(
+        value.DisplayName,
+        value.Description,
+        value.Color,
+        value.Status,
+        value.SortOrder);
+}

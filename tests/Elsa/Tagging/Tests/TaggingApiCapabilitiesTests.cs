@@ -23,9 +23,16 @@ public sealed class TaggingApiCapabilitiesTests
 
         Assert.Equal("elsa.api.tagging", capability.CapabilityId);
         Assert.Equal(1, capability.ContractMajorVersion);
-        var link = Assert.Single(capability.Links);
-        Assert.Equal("tag-definitions", link.Rel);
-        Assert.Equal("tagging/definitions", link.Href);
+        Assert.Contains(
+            capability.Links,
+            link => link.Rel == "tag-definitions"
+                    && link.Href == "tagging/definitions"
+                    && !link.Templated);
+        Assert.Contains(
+            capability.Links,
+            link => link.Rel == "tag-definition-values"
+                    && link.Href == "tagging/definitions/{tagDefinitionId}/values"
+                    && link.Templated);
     }
 
     [Fact]
@@ -33,7 +40,13 @@ public sealed class TaggingApiCapabilitiesTests
     {
         Assert.Empty(await new TaggingOperationalCapabilitySource().GetCapabilitiesAsync());
 
-        var advertised = await new TaggingOperationalCapabilitySource(new DurableCatalogPersistence()).GetCapabilitiesAsync();
+        var markerOnly = await new TaggingOperationalCapabilitySource(new DurableCatalogPersistence()).GetCapabilitiesAsync();
+        var markerCapability = Assert.Single(markerOnly);
+        Assert.DoesNotContain(markerCapability.Links, link => link.Rel == "tag-definition-values");
+
+        var advertised = await new TaggingOperationalCapabilitySource(
+            new DurableCatalogPersistence(),
+            new DurableControlledValuePersistence()).GetCapabilitiesAsync();
 
         Assert.Equal(TaggingApiCapabilities.StaticDeclaration, Assert.Single(advertised));
     }
@@ -108,6 +121,26 @@ public sealed class TaggingApiCapabilitiesTests
     }
 
     [Fact]
+    public async Task Controlled_value_endpoint_fails_closed_with_only_definition_catalog_persistence()
+    {
+        var endpoint = CreateEndpoint(
+            "Elsa.Tagging.Api.Endpoints.Definitions.CreateValue",
+            new ThrowingControlledTagValueManager(),
+            new DurableCatalogPersistence(),
+            null!,
+            new AtomicControlledValues());
+
+        var exception = await Assert.ThrowsAsync<ValidationFailureException>(() =>
+            HandleAsync(endpoint, new CreateControlledTagValueApiRequest
+            {
+                TagDefinitionId = "tag-environment",
+                CanonicalKey = "production"
+            }));
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, exception.StatusCode);
+    }
+
+    [Fact]
     public async Task Update_maps_validation_failures_to_bad_request()
     {
         var endpoint = CreateEndpoint(
@@ -131,7 +164,32 @@ public sealed class TaggingApiCapabilitiesTests
         string? ifMatch = null,
         bool durable = true)
     {
-        var endpointType = typeof(CreateTagDefinitionApiRequest).Assembly.GetType(endpointTypeName, throwOnError: true)!;
+        var dependencies = durable
+            ? new object[] { manager, new DurableCatalogPersistence() }
+            : [manager, null!];
+        Action<DefaultHttpContext> configureContext = context =>
+        {
+            context.Response.Body = new MemoryStream();
+            if (ifMatch is not null)
+                context.Request.Headers.IfMatch = ifMatch;
+        };
+        return CreateEndpoint(endpointTypeName, configureContext, dependencies);
+    }
+
+    private static BaseEndpoint CreateEndpoint(string endpointTypeName, params object[] dependencies) =>
+        CreateEndpoint(
+            endpointTypeName,
+            context => context.Response.Body = new MemoryStream(),
+            dependencies);
+
+    private static BaseEndpoint CreateEndpoint(
+        string endpointTypeName,
+        Action<DefaultHttpContext> configureContext,
+        object[] dependencies)
+    {
+        var endpointType = typeof(CreateTagDefinitionApiRequest).Assembly.GetType(
+            endpointTypeName,
+            throwOnError: true)!;
         var create = typeof(Factory).GetMethods()
             .Single(method => method.Name == nameof(Factory.Create)
                               && method.IsGenericMethodDefinition
@@ -139,15 +197,6 @@ public sealed class TaggingApiCapabilitiesTests
                               && first.ParameterType == typeof(Action<DefaultHttpContext>)
                               && rest.ParameterType == typeof(object[]))
             .MakeGenericMethod(endpointType);
-        Action<DefaultHttpContext> configureContext = context =>
-        {
-            context.Response.Body = new MemoryStream();
-            if (ifMatch is not null)
-                context.Request.Headers.IfMatch = ifMatch;
-        };
-        var dependencies = durable
-            ? new object[] { manager, new DurableCatalogPersistence() }
-            : [manager, null!];
         return (BaseEndpoint)create.Invoke(null, [configureContext, dependencies])!;
     }
 
@@ -178,5 +227,49 @@ public sealed class TaggingApiCapabilitiesTests
             CancellationToken cancellationToken = default) => ValueTask.FromException<TagDefinitionRevisionedRecord>(exception);
     }
 
+    private sealed class ThrowingControlledTagValueManager : IControlledTagValueManager
+    {
+        public ValueTask<ControlledTagValue> CreateAsync(
+            CreateControlledTagValueRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Must not be called.");
+
+        public ValueTask<IReadOnlyList<ControlledTagValueRevisionedRecord>> ListWithRevisionsAsync(
+            ControlledTagValueListRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Must not be called.");
+
+        public ValueTask<ControlledTagValueRevisionedRecord?> FindWithRevisionAsync(
+            string controlledTagValueId,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Must not be called.");
+
+        public ValueTask<ControlledTagValueRevisionedRecord> UpdateAsync(
+            string controlledTagValueId,
+            UpdateControlledTagValueRequest request,
+            string expectedRevision,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Must not be called.");
+    }
+
+    private sealed class AtomicControlledValues : IControlledTagValueAtomicChangeStore
+    {
+        public ValueTask<ControlledTagValueCreateResult> TryAddWithinLimitAndAppendAuditAsync(
+            ControlledTagValue value,
+            ControlledTagValueAuditRecord audit,
+            int expectedCount,
+            int maximumCount,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Must not be called.");
+
+        public ValueTask<TagDefinitionSaveResult> SaveWithRevisionAndAppendAuditAsync(
+            ControlledTagValue value,
+            string expectedRevision,
+            ControlledTagValueAuditRecord audit,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Must not be called.");
+    }
+
     private sealed class DurableCatalogPersistence : ITagDefinitionCatalogPersistence;
+    private sealed class DurableControlledValuePersistence : IControlledTagValueCatalogPersistence;
 }

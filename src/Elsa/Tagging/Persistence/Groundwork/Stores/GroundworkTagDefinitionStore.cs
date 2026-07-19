@@ -75,7 +75,7 @@ public sealed class GroundworkTagDefinitionStore(
             : [];
         const int pageSize = 250;
         var records = new List<TagDefinitionRevisionedRecord>();
-        for (var skip = 0;; skip += pageSize)
+        for (var skip = 0; ; skip += pageSize)
         {
             var query = new DocumentQuery(
                 TaggingStorageManifest.TagDefinitionDocumentKind,
@@ -185,6 +185,7 @@ public sealed class GroundworkTagDefinitionStore(
     private static SaveDocumentRequest SaveDefinition(TagDefinition definition, long expectedVersion)
     {
         TagDefinitionConstraints.ValidateCanonicalKey(definition.CanonicalKey, isHostProvisioning: true);
+        TagDefinitionConstraints.ValidateValueSemantics(definition.ValueMode, definition.Cardinality);
         TagDefinitionConstraints.ValidateMutableFields(definition.DisplayName, definition.Description, definition.Color);
         var document = new TagDefinitionDocument(definition.Id, definition.CanonicalKey, definition.Status.ToString().ToLowerInvariant(), definition);
         return new(

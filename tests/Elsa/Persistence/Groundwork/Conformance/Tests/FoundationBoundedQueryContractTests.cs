@@ -473,8 +473,16 @@ public sealed class FoundationBoundedQueryContractTests
         var catalog = new GroundworkTagDefinitionStore(
             client.DocumentStore,
             physicalBounded);
+        var controlledValues = new GroundworkControlledTagValueStore(
+            client.DocumentStore,
+            physicalBounded);
         var priority = Tag("tag-priority", "risk.priority", "Priority");
         Assert.True(await catalog.TryAddAsync(priority));
+        Assert.True(await controlledValues.TryAddAsync(ControlledValue(
+            "value-production-a",
+            "tag-environment",
+            "production",
+            "Tenant A Production")));
         var priorityRevision = Assert.IsType<TagDefinitionRevisionedRecord>(
             await catalog.FindWithRevisionAsync(priority.Id));
         priority.DisplayName = "Priority Updated";
@@ -542,11 +550,24 @@ public sealed class FoundationBoundedQueryContractTests
             var tenantBCatalog = new GroundworkTagDefinitionStore(
                 tenantB.DocumentStore,
                 tenantB.BoundedDocumentStore);
+            var tenantBControlledValues = new GroundworkControlledTagValueStore(
+                tenantB.DocumentStore,
+                tenantB.BoundedDocumentStore);
             var tenantBPriority = Tag("tag-priority-b", "risk.priority", "Tenant B Priority");
             Assert.True(await tenantBCatalog.TryAddAsync(tenantBPriority));
+            Assert.True(await tenantBControlledValues.TryAddAsync(ControlledValue(
+                "value-production-b",
+                "tag-environment",
+                "production",
+                "Tenant B Production")));
             Assert.Equal(
                 tenantBPriority.Id,
                 (await tenantBCatalog.FindByCanonicalKeyAsync("risk.priority"))!.Id);
+            Assert.Equal(
+                "value-production-b",
+                (await tenantBControlledValues.FindByCanonicalKeyAsync(
+                    "tag-environment",
+                    "production"))!.Id);
             var tenantBTags = new GroundworkWorkflowDefinitionTagStore(
                 tenantB.DocumentStore,
                 Accessor("tenant-b"),
@@ -571,13 +592,96 @@ public sealed class FoundationBoundedQueryContractTests
             priority.Id,
             (await catalog.FindByCanonicalKeyAsync("risk.priority"))!.Id);
         Assert.Equal(
+            "value-production-a",
+            (await controlledValues.FindByCanonicalKeyAsync(
+                "tag-environment",
+                "production"))!.Id);
+        Assert.Equal(
             ["tag-priority"],
             (await tags.GetAsync("definition-tagged"))
                 .Assertions.Select(assertion => assertion.TagDefinitionId));
 
         var definitions = new GroundworkWorkflowDefinitionStore(
             client.DocumentStore,
-            physicalBounded);
+            bounded);
+        var controlled = await tags.ReplaceManualAsync(new(
+            "definition-tagged",
+            "tenant-a",
+            saved.TagSet.Revision,
+            [],
+            "author",
+            "controlled-correlation",
+            ControlledValues: [new("tag-environment", "value-production")]));
+        Assert.Equal(WorkflowDefinitionTagReplaceStatus.Saved, controlled.Status);
+        var controlledPage = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter
+            {
+                ControlledTagClauses =
+                [
+                    new WorkflowDefinitionControlledTagClause(
+                        "tag-environment",
+                        WorkflowDefinitionControlledTagOperator.AnyOf,
+                        ["value-production"])
+                ]
+            },
+            WorkflowDefinitionLifecycleScope.Active,
+            PageSize: 10));
+        Assert.Equal(["definition-tagged"], controlledPage.Items.Select(item => item.Id));
+        var controlledObservation = bounded.Observations[^1];
+        Assert.Equal(WorkflowsDesignStorageManifest.SearchPageByNameQuery, controlledObservation.Query.QueryIdentity);
+        Assert.InRange(controlledObservation.MaterializedDocuments, 0, 1);
+
+        async Task<WorkflowDefinitionPage> ControlledPageAsync(
+            params WorkflowDefinitionControlledTagClause[] clauses) =>
+            await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+                new WorkflowDefinitionFilter { ControlledTagClauses = clauses },
+                WorkflowDefinitionLifecycleScope.Active,
+                PageSize: 1));
+
+        var disjunctiveDevelopmentFacet = await ControlledPageAsync(
+            new WorkflowDefinitionControlledTagClause(
+                "tag-environment",
+                WorkflowDefinitionControlledTagOperator.AnyOf,
+                ["value-development"]));
+        var disjunctiveProductionFacet = await ControlledPageAsync(
+            new WorkflowDefinitionControlledTagClause(
+                "tag-environment",
+                WorkflowDefinitionControlledTagOperator.AnyOf,
+                ["value-production"]));
+        var productionGroup = await ControlledPageAsync(
+            new WorkflowDefinitionControlledTagClause(
+                "tag-environment",
+                WorkflowDefinitionControlledTagOperator.AnyOf,
+                ["value-production"]),
+            new WorkflowDefinitionControlledTagClause(
+                "tag-environment",
+                WorkflowDefinitionControlledTagOperator.NotConflicted));
+        var untaggedGroup = await ControlledPageAsync(
+            new WorkflowDefinitionControlledTagClause(
+                "tag-environment",
+                WorkflowDefinitionControlledTagOperator.Missing));
+        var conflictedGroup = await ControlledPageAsync(
+            new WorkflowDefinitionControlledTagClause(
+                "tag-environment",
+                WorkflowDefinitionControlledTagOperator.Conflicted));
+
+        Assert.Equal(0, disjunctiveDevelopmentFacet.TotalCount);
+        Assert.Equal(1, disjunctiveProductionFacet.TotalCount);
+        Assert.Equal(1, productionGroup.TotalCount);
+        Assert.Equal(0, untaggedGroup.TotalCount);
+        Assert.Equal(0, conflictedGroup.TotalCount);
+        Assert.Equal(
+            controlledPage.TotalCount,
+            productionGroup.TotalCount + untaggedGroup.TotalCount + conflictedGroup.TotalCount);
+        Assert.All(
+            bounded.Observations.TakeLast(5),
+            observation =>
+            {
+                Assert.Equal(
+                    WorkflowsDesignStorageManifest.SearchPageByNameQuery,
+                    observation.Query.QueryIdentity);
+                Assert.InRange(observation.MaterializedDocuments, 0, 1);
+            });
         var definition = await definitions.GetAsync("definition-tagged");
         definition.DeletedAt = Now;
         await new GroundworkSaveWorkflowDefinitionCommand(
@@ -1046,6 +1150,20 @@ public sealed class FoundationBoundedQueryContractTests
         CreatedAt = Now
     };
 
+    private static ControlledTagValue ControlledValue(
+        string id,
+        string tagDefinitionId,
+        string canonicalKey,
+        string displayName) => new()
+        {
+            Id = id,
+            TagDefinitionId = tagDefinitionId,
+            CanonicalKey = canonicalKey,
+            DisplayName = displayName,
+            Status = TagDefinitionStatus.Active,
+            CreatedAt = Now
+        };
+
     private sealed class FixedClock : ISystemClock
     {
         public DateTimeOffset UtcNow => Now;
@@ -1119,14 +1237,14 @@ public sealed class FoundationBoundedQueryContractTests
         SecretStatus status = SecretStatus.Active,
         DateTimeOffset? expiresAt = null,
         string scope = "finance") => new()
-    {
-        Name = name,
-        DisplayName = displayName,
-        TypeName = SecretTypeNames.Text,
-        StoreName = storeName,
-        Scope = scope,
-        Status = status,
-        Versions =
+        {
+            Name = name,
+            DisplayName = displayName,
+            TypeName = SecretTypeNames.Text,
+            StoreName = storeName,
+            Scope = scope,
+            Status = status,
+            Versions =
         [
             new SecretVersion
             {
@@ -1136,7 +1254,7 @@ public sealed class FoundationBoundedQueryContractTests
                 Payload = SecretPayload.FromValue("value")
             }
         ]
-    };
+        };
 
     private sealed class RecordingBoundedDocumentStore(IBoundedDocumentStore inner) : IBoundedDocumentStore
     {

@@ -47,6 +47,40 @@ public interface ITagDefinitionAuditStore
     ValueTask AppendAsync(TagDefinitionAuditRecord record, CancellationToken cancellationToken = default);
 }
 
+public interface IControlledTagValueStore
+{
+    ValueTask<ControlledTagValue?> FindByCanonicalKeyAsync(string tagDefinitionId, string canonicalKey, CancellationToken cancellationToken = default);
+    ValueTask<ControlledTagValueRevisionedRecord?> FindWithRevisionAsync(string controlledTagValueId, CancellationToken cancellationToken = default);
+    async ValueTask<IReadOnlyList<ControlledTagValue>> ListByIdsAsync(
+        IReadOnlyCollection<string> controlledTagValueIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(controlledTagValueIds);
+        if (controlledTagValueIds.Count > 100)
+            throw new ArgumentOutOfRangeException(
+                nameof(controlledTagValueIds),
+                "At most 100 controlled tag values can be resolved at once.");
+
+        var values = new List<ControlledTagValue>(controlledTagValueIds.Count);
+        foreach (var controlledTagValueId in controlledTagValueIds.Distinct(StringComparer.Ordinal))
+        {
+            var record = await FindWithRevisionAsync(controlledTagValueId, cancellationToken);
+            if (record is not null)
+                values.Add(record.Value);
+        }
+
+        return values;
+    }
+    ValueTask<IReadOnlyList<ControlledTagValueRevisionedRecord>> ListWithRevisionsAsync(ControlledTagValueListRequest request, CancellationToken cancellationToken = default);
+    ValueTask<bool> TryAddAsync(ControlledTagValue value, CancellationToken cancellationToken = default);
+    ValueTask<TagDefinitionSaveResult> SaveWithRevisionAsync(ControlledTagValue value, string expectedRevision, CancellationToken cancellationToken = default);
+}
+
+public interface IControlledTagValueAuditStore
+{
+    ValueTask AppendAsync(ControlledTagValueAuditRecord record, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Commits a catalog mutation and its immutable audit fact as one persistence operation.</summary>
 public interface ITagDefinitionAtomicChangeStore
 {
@@ -62,6 +96,18 @@ public interface ITagDefinitionAtomicChangeStore
         CancellationToken cancellationToken = default);
 }
 
+public interface IControlledTagValueAtomicChangeStore
+{
+    ValueTask<ControlledTagValueCreateResult> TryAddWithinLimitAndAppendAuditAsync(
+        ControlledTagValue value,
+        ControlledTagValueAuditRecord audit,
+        int expectedCount,
+        int maximumCount,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<TagDefinitionSaveResult> SaveWithRevisionAndAppendAuditAsync(ControlledTagValue value, string expectedRevision, ControlledTagValueAuditRecord audit, CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Marks a tag catalog persistence provider that is durable and safe to expose through the authoring API.
 /// </summary>
@@ -70,6 +116,14 @@ public interface ITagDefinitionAtomicChangeStore
 /// isolated tests and local composition, but must not make a tenant catalog discoverable to clients.
 /// </remarks>
 public interface ITagDefinitionCatalogPersistence
+{
+}
+
+/// <summary>
+/// Marks a durable tag catalog provider whose controlled-value mutations are committed atomically
+/// with their audit records and catalog cardinality guard.
+/// </summary>
+public interface IControlledTagValueCatalogPersistence
 {
 }
 
@@ -91,8 +145,24 @@ public interface ITagDefinitionManager
     ValueTask<TagDefinitionRevisionedRecord> UpdateAsync(string tagDefinitionId, UpdateTagDefinitionRequest request, string expectedRevision, CancellationToken cancellationToken = default);
 }
 
+public interface IControlledTagValueManager
+{
+    ValueTask<ControlledTagValue> CreateAsync(CreateControlledTagValueRequest request, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyList<ControlledTagValueRevisionedRecord>> ListWithRevisionsAsync(ControlledTagValueListRequest request, CancellationToken cancellationToken = default);
+    ValueTask<ControlledTagValueRevisionedRecord?> FindWithRevisionAsync(string controlledTagValueId, CancellationToken cancellationToken = default);
+    ValueTask<ControlledTagValueRevisionedRecord> UpdateAsync(string controlledTagValueId, UpdateControlledTagValueRequest request, string expectedRevision, CancellationToken cancellationToken = default);
+}
+
 public sealed record TagDefinitionRevisionedRecord(TagDefinition Definition, string Revision);
+public sealed record ControlledTagValueRevisionedRecord(ControlledTagValue Value, string Revision);
 public sealed record TagDefinitionSaveResult(TagDefinitionSaveStatus Status, string? Revision = null);
+
+public enum ControlledTagValueCreateResult
+{
+    Created,
+    Conflict,
+    LimitReached
+}
 
 public enum TagDefinitionSaveStatus
 {

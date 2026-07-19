@@ -13,7 +13,7 @@ public sealed class TaggingGroundworkStorageManifestSource : IGroundworkStorageM
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity,
             TaggingStorageManifest.Create(),
-            [typeof(ITagDefinitionStore), typeof(ITagDefinitionAuditStore)],
+            [typeof(ITagDefinitionStore), typeof(ITagDefinitionAuditStore), typeof(IControlledTagValueStore), typeof(IControlledTagValueAuditStore)],
             [], [], ["tag-definition-catalog", "tag-definition-audit"]));
     }
 }

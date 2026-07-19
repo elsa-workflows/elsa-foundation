@@ -25,6 +25,23 @@ public class TagDefinitionManagerTests
         Assert.Equal("Contains PII", tag.DisplayName);
         Assert.Equal(TagDefinitionStatus.Active, tag.Status);
         Assert.Equal(TagDefinitionEligibility.WorkflowDefinition, tag.Eligibility);
+        Assert.Equal(TagValueMode.Marker, tag.ValueMode);
+        Assert.Equal(TagCardinality.Single, tag.Cardinality);
+    }
+
+    [Theory]
+    [InlineData(TagValueMode.Controlled, TagCardinality.Multiple)]
+    [InlineData(TagValueMode.FreeText, TagCardinality.Single)]
+    public async Task Rejects_tag_semantics_not_supported_by_this_catalog_slice(TagValueMode valueMode, TagCardinality cardinality)
+    {
+        var manager = new DefaultTagDefinitionManager(new InMemoryStore(), new InMemoryAuditStore(), new TestAuditContext(), TimeProvider.System);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => manager.CreateAsync(new CreateTagDefinitionRequest
+        {
+            CanonicalKey = "environment",
+            ValueMode = valueMode,
+            Cardinality = cardinality
+        }).AsTask());
     }
 
     [Fact]

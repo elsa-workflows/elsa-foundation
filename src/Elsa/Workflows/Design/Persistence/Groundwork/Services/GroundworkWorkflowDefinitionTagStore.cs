@@ -122,6 +122,7 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
                 request.WorkflowDefinitionId,
                 request.TenantId,
                 string.Empty,
+                string.Empty,
                 [],
                 timeProvider.GetUtcNow())
             : Deserialize(existingEnvelope);
@@ -134,14 +135,47 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
+        var controlledValues = (request.ControlledValues ?? [])
+            .Select(value =>
+            {
+                value.Validate();
+                ValidateControlledValue(value);
+                return value;
+            })
+            .Distinct()
+            .OrderBy(value => value.TagDefinitionId, StringComparer.Ordinal)
+            .ThenBy(value => value.ControlledValueId, StringComparer.Ordinal)
+            .ToArray();
+        if (controlledValues.GroupBy(value => value.TagDefinitionId, StringComparer.Ordinal)
+            .Any(group => group.Select(value => value.ControlledValueId).Distinct(StringComparer.Ordinal).Skip(1).Any()))
+            throw new ArgumentException("A single-valued controlled tag can have only one manual value.", nameof(request.ControlledValues));
         if (tagDefinitionIds.Length > 64)
             throw new ArgumentOutOfRangeException(nameof(request.TagDefinitionIds), "At most 64 marker tags can be assigned to one workflow definition.");
-        var markerProjection = MarkerProjection(tagDefinitionIds);
+        var retainedAssertions = existing.Assertions
+            .Where(assertion => !StringComparer.Ordinal.Equals(assertion.OriginKind, WorkflowDefinitionTagOriginKinds.Manual))
+            .ToArray();
+        var assertions = retainedAssertions
+            .Concat(tagDefinitionIds.Select(WorkflowDefinitionTagAssertion.Manual))
+            .Concat(controlledValues.Select(WorkflowDefinitionTagAssertion.Manual))
+            .OrderBy(assertion => assertion.TagDefinitionId, StringComparer.Ordinal)
+            .ThenBy(assertion => assertion.ControlledValueId, StringComparer.Ordinal)
+            .ThenBy(assertion => assertion.OriginKind, StringComparer.Ordinal)
+            .ToArray();
+        var markerProjection = MarkerProjection(assertions
+            .Where(assertion => assertion.ControlledValueId is null)
+            .Select(assertion => assertion.TagDefinitionId)
+            .Distinct(StringComparer.Ordinal));
+        var controlledProjection = ControlledProjection(assertions
+            .Where(assertion => assertion.ControlledValueId is not null)
+            .Select(assertion => new WorkflowDefinitionControlledTagValue(assertion.TagDefinitionId, assertion.ControlledValueId!)));
         if (markerProjection.Length > WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionLength)
             throw new ArgumentOutOfRangeException(
                 nameof(request.TagDefinitionIds),
                 $"The encoded marker assignment cannot exceed {WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionLength} characters.");
-        var assertions = tagDefinitionIds.Select(WorkflowDefinitionTagAssertion.Manual).ToArray();
+        if (controlledProjection.Length > WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionLength)
+            throw new ArgumentOutOfRangeException(
+                nameof(request.ControlledValues),
+                $"The encoded controlled assignment cannot exceed {WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionLength} characters.");
         var nextVersion = expectedVersion + 1;
         var nextRevision = WorkflowDefinitionTagRevision.FromVersion(nextVersion);
         var now = timeProvider.GetUtcNow();
@@ -150,13 +184,23 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
             request.WorkflowDefinitionId,
             request.TenantId,
             markerProjection,
+            controlledProjection,
             assertions,
             now);
         var beforeIds = existing.Assertions
-            .Where(x => StringComparer.Ordinal.Equals(x.OriginKind, WorkflowDefinitionTagOriginKinds.Manual))
+            .Where(x => StringComparer.Ordinal.Equals(x.OriginKind, WorkflowDefinitionTagOriginKinds.Manual)
+                && x.ControlledValueId is null)
             .Select(x => x.TagDefinitionId)
             .ToHashSet(StringComparer.Ordinal);
         var afterIds = tagDefinitionIds.ToHashSet(StringComparer.Ordinal);
+        var beforeControlledValueIds = existing.Assertions
+            .Select(assertion => assertion.ControlledValueId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .ToHashSet(StringComparer.Ordinal);
+        var afterControlledValueIds = controlledValues
+            .Select(value => value.ControlledValueId)
+            .ToHashSet(StringComparer.Ordinal);
         var audit = new WorkflowDefinitionTagAuditDocument(
             WorkflowsDesignStorageManifest.WorkflowDefinitionTagAuditCollection,
             new(
@@ -171,7 +215,9 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
                 nextRevision,
                 afterIds.Except(beforeIds, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
                 beforeIds.Except(afterIds, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
-                now));
+                now,
+                afterControlledValueIds.Except(beforeControlledValueIds, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                beforeControlledValueIds.Except(afterControlledValueIds, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
 
         try
         {
@@ -184,7 +230,8 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
                     GroundworkWorkflowDefinitionDocuments.Save(
                         workflowDefinitionDocument.Entity,
                         markerProjection,
-                        workflowDefinitionEnvelope.Version),
+                        workflowDefinitionEnvelope.Version,
+                        controlledProjection),
                     Save(
                         WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetDocumentKind,
                         request.WorkflowDefinitionId,
@@ -254,11 +301,55 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
         return ids.Length == 0 ? "|" : $"|{string.Join('|', ids)}|";
     }
 
+    public static string ControlledProjection(IEnumerable<WorkflowDefinitionControlledTagValue> controlledValues)
+    {
+        var values = controlledValues
+            .GroupBy(value => value.TagDefinitionId, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .SelectMany(group =>
+            {
+                var valueIds = group
+                    .Select(value => value.ControlledValueId)
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray();
+                var tokens = valueIds.Select(valueId => $"{group.Key}={valueId}").ToList();
+                if (valueIds.Length > 1)
+                    tokens.Add($"{group.Key}={WorkflowDefinitionTagEffectiveReducer.ConflictProjectionValue}");
+                return tokens;
+            })
+            .ToArray();
+        return values.Length == 0 ? "|" : $"|{string.Join('|', values)}|";
+    }
+
+    public static string ControlledProjectionToken(string tagDefinitionId, string controlledValueId)
+    {
+        ValidateTagDefinitionId(tagDefinitionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(controlledValueId);
+        if (controlledValueId.Contains('|', StringComparison.Ordinal) || controlledValueId.Contains('=', StringComparison.Ordinal))
+            throw new ArgumentException("Controlled value identities cannot contain projection delimiters.", nameof(controlledValueId));
+        if (StringComparer.Ordinal.Equals(
+                controlledValueId,
+                WorkflowDefinitionTagEffectiveReducer.ConflictProjectionValue))
+            throw new ArgumentException("The controlled value identity is reserved.", nameof(controlledValueId));
+        return $"|{tagDefinitionId}={controlledValueId}|";
+    }
+
+    public static string ControlledConflictProjectionToken(string tagDefinitionId)
+    {
+        ValidateTagDefinitionId(tagDefinitionId);
+        return $"|{tagDefinitionId}={WorkflowDefinitionTagEffectiveReducer.ConflictProjectionValue}|";
+    }
+
+    private static void ValidateControlledValue(WorkflowDefinitionControlledTagValue controlledValue) =>
+        _ = ControlledProjectionToken(controlledValue.TagDefinitionId, controlledValue.ControlledValueId);
+
     private sealed record WorkflowDefinitionTagSetDocument(
         string Collection,
         string WorkflowDefinitionId,
         string? TenantId,
         string MarkerProjection,
+        string ControlledProjection,
         IReadOnlyCollection<WorkflowDefinitionTagAssertion> Assertions,
         DateTimeOffset LastModifiedAt);
 

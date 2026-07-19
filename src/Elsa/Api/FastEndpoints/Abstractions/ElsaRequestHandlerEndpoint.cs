@@ -23,6 +23,10 @@ public abstract class ElsaRequestHandlerEndpoint<TRequest, TResponse>(IRequestSe
         {
             ThrowError(e, 400);
         }
+        catch (ServiceUnavailableException e)
+        {
+            ThrowError(e.Message, 503);
+        }
         catch (OperationCanceledException)
         {
             throw;
