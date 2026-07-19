@@ -1,5 +1,6 @@
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -7,6 +8,7 @@ using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,8 +28,15 @@ public sealed class WorkflowInstancesRequestHandlerTests
     private ListWorkflowInstancesRequestHandler NewListInstanceHandler(IWorkflowExecutionStateStore? workflowStore = null) =>
         new(workflowStore ?? _workflowStore, _activityStore, _incidentStore, AllowAll);
 
-    private GetWorkflowInstanceRequestHandler NewGetInstanceHandler() =>
-        new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy(), AllowAll);
+    private GetWorkflowInstanceRequestHandler NewGetInstanceHandler(RuntimeCheckpointCadenceInspector? cadenceInspector = null) =>
+        new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy(), AllowAll,
+            cadenceInspector ?? ImmediateCadenceInspector());
+
+    private static RuntimeCheckpointCadenceInspector ImmediateCadenceInspector() =>
+        new([]);
+
+    private static RuntimeCheckpointCadenceInspector CoalescedCadenceInspector(int maxSegmentCheckpoints) =>
+        new([new CoalescingRuntimeCheckpointPersistenceOptions { MaxSegmentCheckpoints = maxSegmentCheckpoints }]);
 
     private async Task SeedWorkflowInstancesAsync(int count)
     {
@@ -322,6 +331,34 @@ public sealed class WorkflowInstancesRequestHandlerTests
         Assert.Equal("Faulted", result.Instance.Instance.Status);
         Assert.Equal(["activity-1", "activity-2"], result.Instance.Activities.Select(activity => activity.ActivityExecutionId));
         Assert.Equal("incident-1", Assert.Single(result.Instance.Incidents).IncidentId);
+    }
+
+    [Fact]
+    public async Task GetWorkflowInstance_OnImmediateHost_ReportsActivityLevelInspection()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
+        var handler = NewGetInstanceHandler(ImmediateCadenceInspector());
+
+        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+
+        Assert.NotNull(result.Instance);
+        Assert.Equal("Immediate", result.Instance.CheckpointCadence);
+        Assert.Null(result.Instance.MaxSegmentCheckpoints);
+        Assert.Equal("activity-level", result.Instance.InspectionGranularity);
+    }
+
+    [Fact]
+    public async Task GetWorkflowInstance_OnCoalescedHost_ReportsBoundaryLevelInspectionWithTheCap()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
+        var handler = NewGetInstanceHandler(CoalescedCadenceInspector(32));
+
+        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+
+        Assert.NotNull(result.Instance);
+        Assert.Equal("Coalesced", result.Instance.CheckpointCadence);
+        Assert.Equal(32, result.Instance.MaxSegmentCheckpoints);
+        Assert.Equal("boundary-level", result.Instance.InspectionGranularity);
     }
 
     [Fact]

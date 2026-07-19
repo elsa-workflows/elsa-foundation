@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -248,7 +249,8 @@ public sealed class RuntimeStartCommandSchedulingTests
                 incidentStore,
                 durableValueStore,
                 new DefaultRuntimePayloadCapturePolicy(),
-                authorization)
+                authorization,
+                new RuntimeCheckpointCadenceInspector([]))
             .Handle(new GetWorkflowInstance("wfexec-1"), CancellationToken.None);
         var summary = Assert.Single(list.Items);
         Assert.Equal("version-2", summary.DefinitionVersionId);

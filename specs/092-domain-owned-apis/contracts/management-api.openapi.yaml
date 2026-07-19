@@ -1637,6 +1637,10 @@ components:
             state:
               type: object
               additionalProperties: true
+            # Host-configuration-derived checkpoint cadence + implied inspection granularity (ADR 0032 R3).
+            checkpointCadence: { type: string, enum: [Immediate, Coalesced] }
+            maxSegmentCheckpoints: { type: [integer, 'null'], minimum: 1 }
+            inspectionGranularity: { type: string, enum: [activity-level, boundary-level] }
     WorkflowFolder:
       type: object
       required: [id, name, normalizedName, createdAt, lastModifiedAt]
