@@ -116,6 +116,35 @@ describe("canonical domain clients", () => {
     expect(getJson).not.toHaveBeenCalledWith(expect.stringContaining("/design/workflows/definitions?"));
   });
 
+  it("preserves the optional opaque folder breadcrumb projected by the bounded page", async () => {
+    const item = {
+      id: "definition-1",
+      name: "Definition 1",
+      createdAt: "2026-07-13T00:00:00Z",
+      lastModifiedAt: "2026-07-13T00:00:00Z",
+      versionCount: 0,
+      folderId: "folder-leaf",
+      folderBreadcrumb: [
+        { id: "folder-root", name: "Platform" },
+        { id: "folder-leaf", name: "Operations" }
+      ]
+    };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities"
+      ? pagedDefinitionCapabilities
+      : { items: [item], nextContinuationToken: null });
+
+    const result = await listDefinitions(createContext({ getJson }), {
+      search: "",
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(result.definitions[0].folderBreadcrumb).toEqual([
+      { id: "folder-root", name: "Platform" },
+      { id: "folder-leaf", name: "Operations" }
+    ]);
+  });
+
   it("uses the advertised folder root for direct children and never invents a host path", async () => {
     const folderCapabilities = {
       capabilities: [{

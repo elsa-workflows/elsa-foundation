@@ -5746,6 +5746,31 @@ button.wf-reference-select {
 .wf-folder-breadcrumb { min-height: 30px; margin-bottom: 8px; color: var(--wf-muted-text); font-size: var(--wf-text-sm); }
 .wf-folder-breadcrumb button { padding: 0; border: 0; background: transparent; color: var(--wf-accent); font: inherit; }
 .wf-folder-breadcrumb span { margin-left: 6px; }
+.wf-result-folder-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  color: var(--wf-muted-text);
+  font-size: var(--wf-text-xs);
+}
+.wf-result-folder-breadcrumb span { display: inline-flex; align-items: center; gap: 4px; }
+.wf-result-folder-breadcrumb button {
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--wf-accent);
+  font: inherit;
+  padding: 0 2px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.wf-result-folder-breadcrumb button:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
+}
 .wf-folder-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .wf-folder-actions button {
   display: inline-flex;

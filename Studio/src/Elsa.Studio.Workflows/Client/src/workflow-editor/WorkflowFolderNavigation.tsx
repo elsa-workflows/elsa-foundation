@@ -117,7 +117,10 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       onAvailable(enabled);
       if (enabled) void loadFolderPage();
     }).catch(() => {
-      if (!cancelled) setError("Couldn't inspect workflow folder support. Refresh the page to retry.");
+      if (cancelled) return;
+      setAvailable(false);
+      onAvailable(false);
+      setError("Couldn't inspect workflow folder support. Refresh the page to retry.");
     });
     return () => { cancelled = true; };
   }, [context, loadFolderPage, onAvailable]);

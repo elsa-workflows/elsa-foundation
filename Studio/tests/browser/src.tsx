@@ -231,9 +231,9 @@ function FolderRestructureFixture() {
   const capabilityAbsent = searchParams.get("capabilities") === "absent";
   const continuationPaging = searchParams.get("paging") === "continuation";
   const rejectedOperation = searchParams.get("failure");
-  const definition = useCallback((id: string, name: string, folderId: string | null = null) => ({
+  const definition = useCallback((id: string, name: string, folderId: string | null = null, folderBreadcrumb?: { id: string; name: string }[]) => ({
     id, name, description: "Browser workflow", createdAt: "2026-07-19T00:00:00Z", lastModifiedAt: "2026-07-19T00:00:00Z",
-    latestVersion: "1.0.0", versionCount: 1, draftId: null, deletedAt: null, folderId
+    latestVersion: "1.0.0", versionCount: 1, draftId: null, deletedAt: null, folderId, ...(folderBreadcrumb ? { folderBreadcrumb } : {})
   }), []);
   const findFolder = useCallback((id: string) => foldersRef.current.find(folder => folder.id === id), []);
   const ancestorsOf = useCallback((folder: NonNullable<ReturnType<typeof findFolder>>) => {
@@ -291,6 +291,10 @@ function FolderRestructureFixture() {
           return folder ? { folder, ancestors: ancestorsOf(folder) } : null;
         }
         if (url.startsWith("/browser/restructure/definition-pages")) {
+          (window as Window & { browseRequests?: string[] }).browseRequests = [
+            ...((window as Window & { browseRequests?: string[] }).browseRequests ?? []),
+            url
+          ];
           const query = new URL(url, window.location.origin).searchParams;
           const folderId = query.get("folderId");
           const items = folderId === "folder-operations"
@@ -301,7 +305,10 @@ function FolderRestructureFixture() {
                 ? [definition("definition-archive", "Archive workflow", folderId)]
                 : folderId === "folder-empty"
                   ? []
-                  : [definition("definition-all", "All workflow")];
+                  : [definition("definition-all", "All workflow", "folder-operations", [
+                    { id: "folder-platform", name: "Platform" },
+                    { id: "folder-operations", name: "Operations" }
+                  ])];
           return { items, nextContinuationToken: null };
         }
         throw new Error(`Unexpected browser fixture request: ${url}`);
