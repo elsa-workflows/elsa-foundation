@@ -134,6 +134,61 @@ public sealed class RuntimeDrainStepSingleTransactionTests
         Assert.Equal(1, poison!.FailureCount); // poisoned exactly once
     }
 
+    // QA defect fix: a handler whose FIRST checkpoint commit lands (and durably consumes the item) but which THEN throws
+    // must surface a Faulted result with poison recorded exactly once — not a spurious claim-lost from the fault path
+    // trying to CompleteClaimAsync an already-consumed claim.
+    [Fact]
+    public async Task DrainStep_WhenHandlerFaultsAfterConsumingCommit_FaultsAndPoisonsWithoutClaimLost()
+    {
+        var queue = new CountingWorkQueue(new InMemoryWorkflowSchedulerWorkQueue());
+        var accessor = new RuntimeConsumedSchedulerWorkClaimAccessor();
+        var store = NewStore(queue);
+        var committer = NewCommitter(store, accessor);
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var drainer = NewDrainer(queue, [new CommitThenThrowHandler(committer)], accessor, poisonStore);
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        // No RuntimeSchedulerWorkClaimLostException may escape: the drain must complete with a Faulted item result.
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.True(result.StoppedOnFault);
+        var item = Assert.Single(result.Items);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, item.Status);
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))); // consumed by the commit
+        Assert.Equal(1, queue.ConsumeClaimedCalls);
+        Assert.Equal(0, queue.CompleteClaimCalls); // no second ack attempted against the consumed claim
+        var poison = await poisonStore.FindAsync(WorkflowExecutionId, "work-1");
+        Assert.NotNull(poison);
+        Assert.Equal(1, poison!.FailureCount); // poisoned exactly once (#412 bounded delivery)
+    }
+
+    // QA property pin: the consumed-claim scope resets per dispatch. Item A's dispatch consumes durably; item B's dispatch
+    // produces no commit and must therefore take the legacy CompleteClaimAsync path. If WasConsumedDurably leaked from A
+    // to B, B would skip its ack and its item would redeliver forever after the visibility timeout.
+    [Fact]
+    public async Task DrainSteps_ConsumedFlagDoesNotLeakAcrossSequentialDispatches()
+    {
+        var queue = new CountingWorkQueue(new InMemoryWorkflowSchedulerWorkQueue());
+        var accessor = new RuntimeConsumedSchedulerWorkClaimAccessor();
+        var store = NewStore(queue);
+        var committer = NewCommitter(store, accessor);
+        // work-1 → committing handler (atomic consume); work-2 → no-commit handler (must legacy-ack).
+        var drainer = NewDrainer(
+            queue,
+            [new FirstItemOnlyCommittingHandler(committer), new NoCommitHandler()],
+            accessor);
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.Equal(2, result.DrainedCount);
+        Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        Assert.Equal(1, queue.ConsumeClaimedCalls);  // item A: consumed inside its commit
+        Assert.Equal(1, queue.CompleteClaimCalls);   // item B: legacy ack — the flag did not leak
+    }
+
     // (d) Coalesced mode: consumed work items fold correctly across a segment (union, no loss or duplication).
     [Fact]
     public void Fold_UnionsConsumedSchedulerWorkItemsAcrossSegment()
@@ -234,25 +289,50 @@ public sealed class RuntimeDrainStepSingleTransactionTests
             new(new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate, "test"));
     }
 
+    private static RuntimeCheckpointCommit NewHandlerCommit(RuntimeSchedulerWorkItem workItem) =>
+        new(
+            CommitId: $"commit:{workItem.WorkItemId}",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: $"checkpoint:{workItem.WorkItemId}",
+                Name: RuntimeCheckpointNames.PostCommitIntentRecorded,
+                WorkflowExecutionId: workItem.WorkflowExecutionId,
+                OccurredAt: workItem.RecordedAt,
+                ActivityExecutionIds: [],
+                Metadata: new Dictionary<string, string>()),
+            StateChanges: EmptyChangeSet(),
+            PostCommitIntents: [],
+            Metadata: new Dictionary<string, string>());
+
     private sealed class CommittingHandler(RuntimeCheckpointCommitter committer) : IWorkflowSchedulerWorkHandler
     {
         public string Name => nameof(CommittingHandler);
         public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
 
         public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
-            await committer.CommitAsync(new RuntimeCheckpointCommit(
-                CommitId: $"commit:{workItem.WorkItemId}",
-                Checkpoint: new RuntimeCheckpoint(
-                    CheckpointId: $"checkpoint:{workItem.WorkItemId}",
-                    Name: RuntimeCheckpointNames.PostCommitIntentRecorded,
-                    WorkflowExecutionId: workItem.WorkflowExecutionId,
-                    OccurredAt: workItem.RecordedAt,
-                    ActivityExecutionIds: [],
-                    Metadata: new Dictionary<string, string>()),
-                StateChanges: new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []),
-                PostCommitIntents: [],
-                Metadata: new Dictionary<string, string>()),
-                cancellationToken);
+            await committer.CommitAsync(NewHandlerCommit(workItem), cancellationToken);
+    }
+
+    /// <summary>Commits a checkpoint (which durably consumes the claimed item), then throws — the fault-after-commit case.</summary>
+    private sealed class CommitThenThrowHandler(RuntimeCheckpointCommitter committer) : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(CommitThenThrowHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            await committer.CommitAsync(NewHandlerCommit(workItem), cancellationToken);
+            throw new InvalidOperationException("boom after commit");
+        }
+    }
+
+    /// <summary>Handles only work-1 (with a consuming commit) so a later no-commit handler takes work-2.</summary>
+    private sealed class FirstItemOnlyCommittingHandler(RuntimeCheckpointCommitter committer) : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(FirstItemOnlyCommittingHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => StringComparer.Ordinal.Equals(workItem.WorkItemId, "work-1");
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            await committer.CommitAsync(NewHandlerCommit(workItem), cancellationToken);
     }
 
     private sealed class NoCommitHandler : IWorkflowSchedulerWorkHandler

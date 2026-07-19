@@ -248,7 +248,13 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // deterministically-poisoning handler would hot-loop (redeliver forever). Ack-on-fault makes poison delivery
             // bounded. (A process crash — as opposed to a handler fault — never reaches this line, so the item stays
             // queued for idempotent re-drive, which is exactly the redrive-safety this unit adds.)
-            await AckAsync(workItem, renewal?.Current, cancellationToken);
+            // WU-1 / spec 105: when an earlier checkpoint commit in THIS dispatch already consumed the item durably (a
+            // multi-commit handler faulting after its first commit landed), the item is already gone from the queue —
+            // poison delivery stays bounded without a second acknowledgement. A CompleteClaimAsync here would fail its
+            // fence against the consumed claim and throw a spurious claim-lost out of this catch, skipping poison
+            // recording entirely. Skip the ack but still record poison and return the Faulted result.
+            if (_consumedWorkClaimAccessor?.WasConsumedDurably != true)
+                await AckAsync(workItem, renewal?.Current, cancellationToken);
 
             await HandleHandlerCrashAsync(workItem, handlerName, faultInfo, cancellationToken);
 
