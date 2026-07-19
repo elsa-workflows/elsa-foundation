@@ -34,6 +34,10 @@ public sealed class GroundworkWorkflowDefinitionPageStoreTests
                 WorkflowsDesignStorageManifest.WorkflowDefinitionIdField
             ],
             route.SortFields!.Select(field => field.Path));
+        var search = Assert.Single(unit.PhysicalStorage.BoundedQueries, query =>
+            query.Identity == WorkflowsDesignStorageManifest.SearchWorkflowDefinitionsQuery);
+        Assert.Equal(BoundedQueryExecutionClass.Ordinary, search.ExecutionClass);
+        Assert.Equal(QueryPagingSupport.Cursor, search.PagingSupport);
     }
 
     [Fact]
@@ -125,7 +129,9 @@ public sealed class GroundworkWorkflowDefinitionPageStoreTests
 
     private static Task SaveAsync(IDocumentStore documentStore, WorkflowDefinition definition)
     {
-        var document = new { Collection = WorkflowsDesignStorageManifest.WorkflowDefinitionCollection, Entity = definition, SearchId = definition.Id };
+        var document = new GroundworkDocument<WorkflowDefinition>(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+            definition);
         return documentStore.SaveAsync(new SaveDocumentRequest(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             definition.Id,

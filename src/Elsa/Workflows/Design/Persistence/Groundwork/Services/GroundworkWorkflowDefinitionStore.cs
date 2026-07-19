@@ -68,7 +68,9 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
             result = await BoundedStore.QueryAsync(
                 new DocumentQuery(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-                    WorkflowsDesignStorageManifest.PageWorkflowDefinitionsQuery,
+                    string.IsNullOrWhiteSpace(query.SearchTerm)
+                        ? WorkflowsDesignStorageManifest.PageWorkflowDefinitionsQuery
+                        : WorkflowsDesignStorageManifest.SearchWorkflowDefinitionsQuery,
                     BuildPageClauses(query),
                     [
                         new DocumentQueryOrder(
@@ -134,7 +136,7 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
             clauses.Add(DocumentQueryClause.AnyOf(
                 DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionNameField, query.SearchTerm),
                 DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, query.SearchTerm),
-                DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionSearchIdField, query.SearchTerm)));
+                DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, query.SearchTerm)));
         }
 
         return clauses;

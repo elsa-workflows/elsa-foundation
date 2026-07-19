@@ -23,7 +23,13 @@ public sealed class GroundworkSaveWorkflowDefinitionCommand(
         await store.SaveAllAsync(
             DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind),
             [
-                GroundworkWorkflowDefinitionDocumentWriter.ToSaveRequest(definition, accessContextAccessor.Current)
+                GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                    WorkflowsDesignStorageManifest.SchemaVersion,
+                    definition,
+                    GroundworkDesignJson.Options,
+                    accessContextAccessor.Current)
             ],
             cancellationToken);
     }

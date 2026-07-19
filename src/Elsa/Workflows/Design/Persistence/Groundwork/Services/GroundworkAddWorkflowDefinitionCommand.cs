@@ -38,7 +38,13 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
         GroundworkEntityTimestamps.StampAdded(workflowDefinition, now);
         GroundworkEntityTimestamps.StampAdded(draft, now);
 
-        var definitionSave = GroundworkWorkflowDefinitionDocumentWriter.ToSaveRequest(workflowDefinition, accessContextAccessor.Current);
+        var definitionSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            workflowDefinition,
+            GroundworkDesignJson.Options,
+            accessContextAccessor.Current);
 
         var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
             store,
