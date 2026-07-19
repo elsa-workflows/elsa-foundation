@@ -2,11 +2,20 @@ import type { StudioRuntimeSettings, StudioWorkflowRuntimeSettings } from "../sd
 
 export interface StudioRuntimeConfig {
   backendBaseUrl?: string;
+  hostId?: string;
   // The backend host management key is deliberately NOT part of the browser runtime config (ADR 0037 / #248): it is a
   // server-side-only Studio setting the management bridge attaches on Studio→backend calls. Browser code must never
   // carry a host management key, so there is no field for it here — new frontend code cannot depend on one.
   auth?: StudioAuthRuntimeConfig;
   workflows?: StudioWorkflowRuntimeSettings;
+  attention?: { hostApiEnabled?: boolean };
+  dashboard?: StudioDashboardRuntimeSettings;
+}
+
+export interface StudioDashboardRuntimeSettings {
+  defaultRefreshIntervalMs?: number;
+  widgetTimeoutMs?: number;
+  pinnedWidgetIds?: string[];
 }
 
 /**
@@ -46,6 +55,13 @@ export function getStudioRuntimeConfig(): StudioRuntimeConfig {
 
 export function getStudioRuntimeSettings(config: StudioRuntimeConfig): StudioRuntimeSettings {
   return {
-    workflows: config.workflows
+    hostId: config.hostId ?? "default",
+    workflows: config.workflows,
+    attention: config.attention,
+    dashboard: {
+      defaultRefreshIntervalMs: config.dashboard?.defaultRefreshIntervalMs ?? 300_000,
+      widgetTimeoutMs: config.dashboard?.widgetTimeoutMs ?? 10_000,
+      pinnedWidgetIds: config.dashboard?.pinnedWidgetIds ?? []
+    }
   };
 }

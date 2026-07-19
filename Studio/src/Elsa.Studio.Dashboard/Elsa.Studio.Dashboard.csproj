@@ -1,19 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <StaticWebAssetBasePath>_content/Elsa.Studio.Samples.Dashboard</StaticWebAssetBasePath>
+    <StaticWebAssetBasePath>_content/Elsa.Studio.Dashboard</StaticWebAssetBasePath>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
-  </ItemGroup>
-
+  <ItemGroup><ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" /></ItemGroup>
 </Project>

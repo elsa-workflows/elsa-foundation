@@ -16,8 +16,7 @@ import {
   PackagePlus,
   PackageSearch,
   RefreshCw,
-  Search,
-  ShieldCheck
+  Search
 } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
@@ -38,15 +37,9 @@ import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeStoreCapabilities } from "./themes/themeStoreApi";
 import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
-import {
-  checkingHostHealth,
-  getHealthErrorMessage,
-  labelForBackendHealth,
-  labelForHostStatus,
-  useHostHealth,
-  type HostHealthStatus
-} from "./hooks/useHostHealth";
+import { getHealthErrorMessage } from "./hooks/useHostHealth";
 import { DialogHost } from "./ui/dialog/DialogHost";
+import { registerBuiltInSettingEditors } from "./ui/shared";
 import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
@@ -87,7 +80,6 @@ const navIconColors = {
 } as const;
 
 const builtInNavigation: StudioNavigationContribution[] = [
-  { id: "dashboard", label: "Dashboard", path: "/dashboard", order: 0, iconColor: navIconColors.dashboard },
   { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 40, iconColor: navIconColors.extensionBuilder },
   { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: navIconColors.modules },
   { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: navIconColors.feeds },
@@ -229,6 +221,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
           backendHttp: backendContext.http,
           runtime: getStudioRuntimeSettings(runtimeConfig)
         });
+        registerBuiltInSettingEditors(registry);
 
         for (const diagnostic of manifest.diagnostics) {
           registry.diagnostics.add(diagnostic);
@@ -296,12 +289,11 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     );
   }
 
-  const dashboardPath = isDashboardPath(path);
   const themeBuilderPath = themeCapabilities.managementEnabled && path === "/theme-builder";
-  const activeRoute = dashboardPath ? undefined : findRouteForPath(routes, path);
+  const activeRoute = findRouteForPath(routes, path);
   const ActiveComponent = activeRoute?.component;
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
-  const pageTitle = dashboardPath ? "Dashboard" : navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? owningFeatureArea?.title ?? "Studio";
+  const pageTitle = navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? owningFeatureArea?.title ?? "Studio";
 
   return (
     <ThemeProvider storeContext={shellContext}>
@@ -315,7 +307,6 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         assistantAction={<AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
       >
-        {dashboardPath ? <Dashboard api={api!} /> : null}
         {path === "/extension-builder" ? <ExtensionBuilderPage api={api!} /> : null}
         {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
         {themeBuilderPath ? <ThemeBuilderPage api={api!} /> : null}
@@ -323,7 +314,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         {path === "/diagnostics" ? <Diagnostics api={api!} /> : null}
         {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
         {ActiveComponent ? <ActiveComponent navigate={navigateTo} /> : null}
-        {!ActiveComponent && !dashboardPath && path !== "/extension-builder" && path !== "/modules" && !themeBuilderPath && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" ? (
+        {!ActiveComponent && path !== "/extension-builder" && path !== "/modules" && !themeBuilderPath && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" ? (
           <div className="empty-state">
             {owningFeatureArea
               ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
@@ -746,120 +737,6 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   );
 }
 
-export function Dashboard({ api }: { api: ElsaStudioModuleApi }) {
-  const widgets = api.dashboardWidgets.list().sort(compareOrderedContributions);
-
-  return (
-    <section className="dashboard-view">
-      <HostHealthStrip api={api} />
-
-      <div className="section-header">
-        <div>
-          <h2>Dashboard</h2>
-          <p>Runtime widgets contributed through the Studio SDK.</p>
-        </div>
-      </div>
-
-      <div className="widget-grid">
-        {widgets.length === 0 ? (
-          <div className="empty-state">
-            <LayoutDashboard size={22} />
-            <span>No dashboard widgets are registered.</span>
-          </div>
-        ) : null}
-        {widgets.map(widget => {
-          const Widget = widget.component;
-          return <Widget key={widget.id} />;
-        })}
-      </div>
-    </section>
-  );
-}
-
-function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
-  const [now, setNow] = useState(() => Date.now());
-  // Host-health polling lives in useHostHealth: it preserves the exponential backoff, tab-hidden pause,
-  // refetch-on-return, and modules-changed re-check that the strip previously hand-rolled.
-  const { data, isFetching, dataUpdatedAt, refetch } = useHostHealth(api);
-  const studio = data?.studio ?? checkingHostHealth("Checking Studio host.");
-  // Privileged host-management availability comes from the Studio management bridge (ADR 0037) — no direct browser
-  // probe of backend host-control endpoints. This optional integration stays out of global health when it is available,
-  // unconfigured, or unknown; only explicit configured failures warrant a dashboard tile.
-  const backend = data?.backend;
-  const backendFailure = backend && (backend.kind === "unauthorized" || backend.kind === "unreachable" || backend.kind === "degraded")
-    ? backend
-    : null;
-  const lastChecked = data && dataUpdatedAt ? new Date(dataUpdatedAt) : null;
-  const refreshing = isFetching;
-
-  // Keep the "updated Ns ago" label ticking without re-running health checks.
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 5000);
-    return () => clearInterval(id);
-  }, []);
-
-  const unavailableHosts = [studio, backendFailure].filter(host => host?.status === "unavailable").length;
-  const attention = studio.attention + (backendFailure?.attention ?? 0) + unavailableHosts;
-  const attentionStatus: HostHealthStatus = studio.status === "checking"
-    ? "checking"
-    : attention === 0
-      ? "ok"
-      : "attention";
-
-  return (
-    <div className="host-health">
-      <div className="host-health-strip" aria-label="Host health">
-        <HostHealthTile title="Studio host" value={labelForHostStatus(studio.status)} detail={studio.detail} status={studio.status} icon={<ShieldCheck size={18} />} />
-        {backendFailure ? <HostHealthTile title="Privileged host management" value={labelForBackendHealth(backendFailure.kind)} detail={backendFailure.detail} status={backendFailure.status} icon={<Activity size={18} />} /> : null}
-        <HostHealthTile title="Attention" value={attentionStatus === "checking" ? "Checking" : String(attention)} detail={attention === 0 ? "No host issues reported." : "Review Modules or Extension Builder for host-management issues."} status={attentionStatus} icon={<Gauge size={18} />} />
-      </div>
-      <div className="host-health-meta">
-        <span className="host-health-updated">{formatCheckedAgo(lastChecked, now)}</span>
-        <button type="button" className="host-health-refresh" onClick={() => void refetch()} disabled={refreshing}>
-          <RefreshCw size={13} className={refreshing ? "is-spinning" : undefined} aria-hidden="true" />
-          {refreshing ? "Checking…" : "Refresh"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function HostHealthTile({
-  title,
-  value,
-  detail,
-  status,
-  icon
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  status: HostHealthStatus;
-  icon: React.ReactNode;
-}) {
-  return (
-    <div className="host-health-tile" data-status={status}>
-      <span className="host-health-icon" aria-hidden="true">{icon}</span>
-      <span className="host-health-title">{title}</span>
-      <strong>{value}</strong>
-      <span className="host-health-detail">{detail}</span>
-    </div>
-  );
-}
-
-function formatCheckedAgo(at: Date | null, now: number): string {
-  if (!at) return "Checking…";
-
-  const seconds = Math.max(0, Math.round((now - at.getTime()) / 1000));
-  if (seconds < 5) return "Updated just now";
-  if (seconds < 60) return `Updated ${seconds}s ago`;
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `Updated ${minutes}m ago`;
-
-  return `Updated ${Math.floor(minutes / 60)}h ago`;
-}
-
 export function Diagnostics({ api }: { api: ElsaStudioModuleApi }) {
   const widgets = api.diagnosticsWidgets.list().sort(compareOrderedContributions);
 
@@ -1067,7 +944,7 @@ export function isDashboardPath(path: string) {
 
 export function getStudioNavigation(moduleNavigation: StudioNavigationContribution[], options: { includeThemeBuilder?: boolean } = {}) {
   const hostNavigation = options.includeThemeBuilder ? [...builtInNavigation, themeBuilderNavigation] : builtInNavigation;
-  return [...hostNavigation, ...moduleNavigation.filter(item => !isDashboardPath(item.path))]
+  return [...hostNavigation, ...moduleNavigation]
     .filter((item, index, items) => items.findIndex(candidate => candidate.id === item.id) === index)
     .sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
 }

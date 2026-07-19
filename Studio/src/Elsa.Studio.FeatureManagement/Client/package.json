@@ -6,5 +6,8 @@
   "scripts": {
     "build": "vite build",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@elsa-workflows/studio-ui": "workspace:*"
   }
 }

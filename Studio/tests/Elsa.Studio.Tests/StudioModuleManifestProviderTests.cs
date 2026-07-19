@@ -11,10 +11,12 @@ using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.ExpressionEditors.JavaScript;
 using Elsa.Studio.ExpressionEditors.Liquid;
 using Elsa.Studio.FeatureManagement;
-using Elsa.Studio.Samples.Dashboard;
+using Elsa.Studio.Attention;
+using Elsa.Studio.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
 using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
+using Elsa.Studio.Workflows.Dashboard;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -38,7 +40,9 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.ExpressionEditors.Liquid");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.Dashboard");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Dashboard");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Attention");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows.Dashboard");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
         Assert.Contains(response.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
@@ -231,7 +235,7 @@ public sealed class StudioModuleManifestProviderTests
             [
                 "ConsoleStream",
                 "FeatureManagement",
-                "DashboardSample",
+                "DashboardStudio",
                 "StudioApi"
             ]);
 
@@ -304,6 +308,8 @@ public sealed class StudioModuleManifestProviderTests
             typeof(WeaverWorkflowsStudioFeature),
             typeof(WorkflowsStudioFeature),
             typeof(DashboardStudioFeature),
+            typeof(AttentionStudioFeature),
+            typeof(WorkflowsDashboardStudioFeature),
             typeof(WeatherForecastStudioFeature)));
 
         // Pin the host/SDK version so these tests are independent of the ambient build version.

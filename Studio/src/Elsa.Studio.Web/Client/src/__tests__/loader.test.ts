@@ -84,7 +84,7 @@ describe("studio module loader", () => {
         sdkVersion: "1.0.0",
         importModule: async () => ({
           register(moduleApi) {
-            moduleApi.dashboardWidgets.add({ id: "future-widget", title: "Future", component: () => null });
+            moduleApi.dashboardWidgets.add({ id: "future.widget", moduleId: "future", title: "Future", defaultVisible: true, defaultSize: "small", supportedSizes: ["small"], component: () => null });
           }
         })
       }

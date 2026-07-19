@@ -18,3 +18,22 @@ if (dom?.window) {
     });
   }
 }
+
+if (typeof globalThis.ResizeObserver === "undefined") {
+  class TestResizeObserver {
+    observe(): void {
+    }
+
+    unobserve(): void {
+    }
+
+    disconnect(): void {
+    }
+  }
+
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    value: TestResizeObserver,
+    writable: true,
+    configurable: true
+  });
+}

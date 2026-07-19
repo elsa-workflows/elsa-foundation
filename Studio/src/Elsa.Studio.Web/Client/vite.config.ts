@@ -21,6 +21,9 @@ export default defineConfig({
     }
   },
   test: {
+    alias: {
+      "@elsa-workflows/studio-sdk": resolve(__dirname, "src/sdk/index.ts")
+    },
     environment: "jsdom",
     setupFiles: [resolve(__dirname, "../../../vitest.setup.ts")],
     // Full-page jsdom renders (extension builder, module management) normally finish in well

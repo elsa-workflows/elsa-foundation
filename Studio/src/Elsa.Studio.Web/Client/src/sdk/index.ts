@@ -211,11 +211,50 @@ export interface StudioNavigationContribution {
   parentId?: string;
 }
 
-export interface StudioDashboardWidgetContribution {
+export type StudioDashboardWidgetSize = "small" | "medium" | "wide" | "full";
+
+export interface StudioDashboardWidgetLoadContext<TSettings> {
+  settings: TSettings;
+  signal: AbortSignal;
+}
+
+export interface StudioDashboardWidgetSettings<TSettings> {
+  schemaVersion: number;
+  defaults: TSettings;
+  descriptors: StudioSettingDescriptor[];
+  validate(value: unknown): TSettings | null;
+  migrate?(value: unknown, fromVersion: number): TSettings | null;
+}
+
+export interface StudioDashboardWidgetBodyProps<TSnapshot, TSettings> {
+  snapshot: TSnapshot | undefined;
+  settings: TSettings;
+  size: StudioDashboardWidgetSize;
+}
+
+export interface StudioDashboardWidgetEmptyState {
+  title?: string;
+  description?: string;
+}
+
+export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSettings = unknown> {
   id: string;
+  moduleId: string;
   title: string;
+  description?: string;
   order?: number;
-  component: ComponentType;
+  defaultVisible: boolean;
+  defaultSize: StudioDashboardWidgetSize;
+  supportedSizes: StudioDashboardWidgetSize[];
+  permissions?: string[];
+  minimumRefreshIntervalMs?: number;
+  cacheLifetimeMs?: number;
+  timeoutMs?: number;
+  settings?: StudioDashboardWidgetSettings<TSettings>;
+  load?(context: StudioDashboardWidgetLoadContext<TSettings>): Promise<TSnapshot>;
+  isEmpty?(snapshot: TSnapshot | undefined, settings: TSettings): boolean;
+  emptyState?: StudioDashboardWidgetEmptyState;
+  component: ComponentType<StudioDashboardWidgetBodyProps<TSnapshot, TSettings>>;
 }
 
 export type StudioDiagnosticsWidgetMode = "snapshot" | "live";
@@ -1107,6 +1146,10 @@ export interface StudioContributionRegistry<T> {
   compose(options?: StudioContributionListOptions<T>): StudioContributionComposition<T>[];
 }
 
+export interface StudioDashboardWidgetRegistry extends Omit<StudioContributionRegistry<StudioDashboardWidgetContribution>, "add"> {
+  add<TSnapshot = unknown, TSettings = unknown>(contribution: StudioDashboardWidgetContribution<TSnapshot, TSettings>): void;
+}
+
 export interface StudioAiPromptDispatcher {
   dispatchPrompt(request: StudioAiPromptRequest): void;
   onPrompt(listener: (request: StudioAiPromptRequest) => void): () => void;
@@ -1137,7 +1180,16 @@ export interface StudioWorkflowRuntimeSettings {
 }
 
 export interface StudioRuntimeSettings {
+  hostId?: string;
   workflows?: StudioWorkflowRuntimeSettings;
+  attention?: {
+    hostApiEnabled?: boolean;
+  };
+  dashboard?: {
+    defaultRefreshIntervalMs?: number;
+    widgetTimeoutMs?: number;
+    pinnedWidgetIds?: string[];
+  };
 }
 
 export interface ElsaStudioModuleApi {
@@ -1147,7 +1199,7 @@ export interface ElsaStudioModuleApi {
   readonly featureAreas: StudioContributionRegistry<StudioFeatureAreaContribution>;
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
-  readonly dashboardWidgets: StudioContributionRegistry<StudioDashboardWidgetContribution>;
+  readonly dashboardWidgets: StudioDashboardWidgetRegistry;
   readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
@@ -1205,6 +1257,12 @@ export function createContributionRegistry<T>(options: CreateStudioContributionR
       return composeContributions(contributions, slot, options, listOptions);
     }
   };
+}
+
+export function createDashboardWidgetRegistry(): StudioDashboardWidgetRegistry {
+  // Widget snapshot/settings types are contribution-local. The registry stores them opaquely and the
+  // Dashboard host invokes each contribution through its own paired loader/body contract.
+  return createContributionRegistry<StudioDashboardWidgetContribution>({ slot: studioSlots.dashboardWidgets }) as unknown as StudioDashboardWidgetRegistry;
 }
 
 export function createAiContributionApi(): StudioAiContributionApi {
