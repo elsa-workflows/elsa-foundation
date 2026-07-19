@@ -29,7 +29,8 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
     IEnumerable<IActivityInputOptionsProvider>? inputOptionsProviders = null,
     IWorkflowDefinitionPageStore? pageStore = null,
     IWorkflowFolderStore? folderStore = null,
-    IMoveWorkflowDefinitionsCommand? moveDefinitions = null) : IApiCapabilitySource
+    IMoveWorkflowDefinitionsCommand? moveDefinitions = null,
+    IRestructureWorkflowFoldersCommand? restructureFolders = null) : IApiCapabilitySource
 {
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
         CancellationToken cancellationToken = default)
@@ -50,6 +51,12 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
             links.Add(new("workflow-folders", "design/workflows/folders"));
         if (moveDefinitions is not null && folderStore?.IsAvailable == true && pageStore?.IsAvailable == true)
             links.Add(new("workflow-definition-folder-move", "design/workflows/definitions/move"));
+        if (restructureFolders is not null && folderStore?.IsAvailable == true && pageStore?.IsAvailable == true)
+        {
+            links.Add(new("workflow-folder-rename", "design/workflows/folders/{folderId}/rename", templated: true));
+            links.Add(new("workflow-folder-move", "design/workflows/folders/{folderId}/move", templated: true));
+            links.Add(new("workflow-folder-delete-empty", "design/workflows/folders/{folderId}", templated: true));
+        }
 
         IReadOnlyCollection<ApiCapabilityDeclaration> declarations = links.Count == 0
             ? []

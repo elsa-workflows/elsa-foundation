@@ -56,6 +56,20 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
     }
 
     [Fact]
+    public async Task Folder_restructure_relations_require_the_atomic_command_and_are_templated()
+    {
+        var capabilities = await new WorkflowDesignOperationalCapabilitySource(
+            pageStore: new StubPagedStore(), folderStore: new StubFolderStore(), restructureFolders: new StubRestructureCommand()).GetCapabilitiesAsync();
+
+        var links = capabilities.SelectMany(x => x.Links).Where(link => link.Rel.StartsWith("workflow-folder-", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(3, links.Length);
+        Assert.All(links, link => Assert.True(link.Templated));
+        Assert.Contains(links, link => link.Rel == "workflow-folder-rename" && link.Href == "design/workflows/folders/{folderId}/rename");
+        Assert.Contains(links, link => link.Rel == "workflow-folder-move" && link.Href == "design/workflows/folders/{folderId}/move");
+        Assert.Contains(links, link => link.Rel == "workflow-folder-delete-empty" && link.Href == "design/workflows/folders/{folderId}");
+    }
+
+    [Fact]
     public async Task Paged_handler_composes_lifecycle_search_page_size_and_continuation()
     {
         var pageStore = new StubPagedStore
@@ -159,5 +173,12 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
     private sealed class StubMoveCommand : IMoveWorkflowDefinitionsCommand
     {
         public Task Execute(IReadOnlyCollection<string> definitionIds, string? folderId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class StubRestructureCommand : IRestructureWorkflowFoldersCommand
+    {
+        public Task<WorkflowFolder> RenameAsync(string folderId, string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowFolder> MoveAsync(string folderId, string? parentId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task DeleteEmptyAsync(string folderId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

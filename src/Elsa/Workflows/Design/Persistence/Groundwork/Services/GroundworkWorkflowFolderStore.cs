@@ -104,7 +104,7 @@ public sealed class GroundworkWorkflowFolderStore(
             await using var unit = await store.BeginAsync(
                 DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind),
                 cancellationToken);
-            await ValidateParentAsync(unit, folder, cancellationToken);
+            var parentFences = await ValidateParentAsync(unit, folder, cancellationToken);
             GroundworkEntityTimestamps.StampAdded(folder, clock.UtcNow);
             var save = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
                 WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
@@ -118,19 +118,34 @@ public sealed class GroundworkWorkflowFolderStore(
                 throw new WorkflowFolderSiblingConflictException();
             if (result.Status != DocumentStoreWriteStatus.Saved)
                 throw new InvalidOperationException($"Workflow-folder create failed with write status '{result.Status}'.");
+            // A parent is a structural CAS anchor.  Touching it makes a concurrent empty-delete or
+            // hierarchy rewrite retry instead of committing a child beneath a removed/stale node.
+            foreach (var (envelope, parent) in parentFences)
+            {
+                var fence = await unit.SaveAsync(GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+                    WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
+                    WorkflowsDesignStorageManifest.WorkflowFolderCollection,
+                    WorkflowsDesignStorageManifest.SchemaVersion,
+                    parent,
+                    GroundworkDesignJson.Options,
+                    access) with { ExpectedVersion = envelope.Version }, cancellationToken);
+                if (fence.Status != DocumentStoreWriteStatus.Saved)
+                    throw new WorkflowFolderSiblingConflictException();
+            }
             await unit.CommitAsync(cancellationToken);
             return folder;
         }
-        catch (DocumentAtomicWriteException exception) when (exception.Status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.IdentityConflict)
+        catch (DocumentAtomicWriteException exception) when (exception.Status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.IdentityConflict or DocumentStoreWriteStatus.NotFound)
         {
             throw new WorkflowFolderSiblingConflictException(exception);
         }
     }
 
-    private static async Task ValidateParentAsync(IDocumentUnitOfWork unit, WorkflowFolder folder, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<(DocumentEnvelope Envelope, WorkflowFolder Folder)>> ValidateParentAsync(IDocumentUnitOfWork unit, WorkflowFolder folder, CancellationToken cancellationToken)
     {
         var parentId = folder.ParentFolderId;
         var depth = 1;
+        var fences = new List<(DocumentEnvelope Envelope, WorkflowFolder Folder)>();
         while (parentId is not null)
         {
             var envelope = await unit.LoadAsync(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind, parentId, cancellationToken)
@@ -138,10 +153,12 @@ public sealed class GroundworkWorkflowFolderStore(
             var parent = ReadFolder(envelope);
             if (!string.Equals(parent.TenantId, folder.TenantId, StringComparison.Ordinal))
                 throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), parentId);
+            fences.Add((envelope, parent));
             parentId = parent.ParentFolderId;
             if (++depth > WorkflowFolderNames.MaximumDepth)
                 throw new ArgumentOutOfRangeException(nameof(folder.ParentFolderId), "Workflow-folder depth cannot exceed 16.");
         }
+        return fences;
     }
 
     private static WorkflowFolder ReadFolder(DocumentEnvelope envelope)

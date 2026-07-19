@@ -271,6 +271,86 @@ public sealed class WorkflowFolderProviderContractTests
 
     [Theory]
     [MemberData(nameof(Providers))]
+    public async Task Restructure_operations_preserve_tree_identity_and_reject_invalid_or_non_empty_changes_on_every_provider(string providerKey)
+    {
+        await using var driver = await InitializeAsync(providerKey);
+        const string tenant = "tenant-a";
+        await using (var client = await driver.OpenPhysicalClientAsync(Access(tenant)))
+        {
+            var access = GroundworkTestAccess.AccessContext(tenant);
+            var folders = Store(client, tenant);
+            await folders.CreateAsync(Folder("parent-a", "Parent A"));
+            await folders.CreateAsync(Folder("parent-b", "Parent B"));
+            await folders.CreateAsync(Folder("moving", "Moving"));
+            await folders.CreateAsync(Folder("child", "Child", "moving"));
+            await folders.CreateAsync(Folder("collision", "Renamed", "parent-b"));
+            var command = new GroundworkRestructureWorkflowFoldersCommand(
+                client.DocumentStore, access, new Clock(), client.BoundedDocumentStore);
+
+            var renamed = await command.RenameAsync("moving", "Renamed");
+            Assert.Equal("RENAMED", renamed.NormalizedName);
+            await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.MoveAsync("moving", "parent-b"));
+            var moved = await command.MoveAsync("moving", "parent-a");
+            Assert.Equal("parent-a", moved.ParentFolderId);
+            await Assert.ThrowsAsync<ArgumentException>(() => command.MoveAsync("parent-a", "child"));
+            await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.DeleteEmptyAsync("parent-a"));
+
+            await new GroundworkSaveWorkflowDefinitionCommand(client.DocumentStore, new Clock(), access).Execute(new WorkflowDefinition
+            {
+                Id = "soft-deleted", Name = "Soft deleted", TenantId = tenant, FolderId = "child", DeletedAt = DateTimeOffset.UnixEpoch
+            });
+            await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.DeleteEmptyAsync("child"));
+        }
+
+        // A separate client proves opaque IDs and hierarchy survive a physical-provider restart/reopen.
+        await using var reopened = await driver.OpenPhysicalClientAsync(Access(tenant));
+        var persisted = await Store(reopened, tenant).FindWithAncestorsAsync("child");
+        Assert.NotNull(persisted);
+        Assert.Equal(["parent-a", "moving"], persisted!.Ancestors.Select(folder => folder.Id));
+
+        await using var foreign = await driver.OpenPhysicalClientAsync(Access("tenant-b"));
+        var foreignCommand = new GroundworkRestructureWorkflowFoldersCommand(
+            foreign.DocumentStore, GroundworkTestAccess.AccessContext("tenant-b"), new Clock(), foreign.BoundedDocumentStore);
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => foreignCommand.MoveAsync("moving", null));
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Concurrent_rename_and_move_fence_the_same_folder_on_every_provider(string providerKey)
+    {
+        await using var driver = await InitializeAsync(providerKey);
+        const string tenant = "tenant-a";
+        await using (var seed = await driver.OpenPhysicalClientAsync(Access(tenant)))
+        {
+            var folders = Store(seed, tenant);
+            await folders.CreateAsync(Folder("parent", "Parent"));
+            await folders.CreateAsync(Folder("moving", "Moving"));
+        }
+
+        await using var first = await driver.OpenPhysicalClientAsync(Access(tenant));
+        await using var second = await driver.OpenPhysicalClientAsync(Access(tenant));
+        var barrier = new SharedUnitOfWorkLoadBarrier(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind, "moving");
+        var firstCommand = new GroundworkRestructureWorkflowFoldersCommand(
+            new UnitOfWorkLoadBarrierDocumentStore(first.DocumentStore, barrier),
+            GroundworkTestAccess.AccessContext(tenant), new Clock(), first.BoundedDocumentStore);
+        var secondCommand = new GroundworkRestructureWorkflowFoldersCommand(
+            new UnitOfWorkLoadBarrierDocumentStore(second.DocumentStore, barrier),
+            GroundworkTestAccess.AccessContext(tenant), new Clock(), second.BoundedDocumentStore);
+
+        var outcomes = await Task.WhenAll(
+            RestructureOutcomeAsync(async () => await firstCommand.RenameAsync("moving", "Renamed")),
+            RestructureOutcomeAsync(async () => await secondCommand.MoveAsync("moving", "parent")));
+
+        Assert.Single(outcomes, outcome => outcome is null);
+        Assert.Single(outcomes, outcome => outcome is WorkflowFolderRestructureConflictException);
+        await using var verifier = await driver.OpenPhysicalClientAsync(Access(tenant));
+        var result = (await Store(verifier, tenant).FindWithAncestorsAsync("moving"))!.Folder;
+        Assert.True(result.ParentFolderId is null || result.ParentFolderId == "parent");
+        Assert.True(result.NormalizedName is "MOVING" or "RENAMED");
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
     public async Task Concurrent_two_definition_moves_select_one_atomic_winner_on_transaction_capable_providers(string providerKey)
     {
         await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
@@ -410,6 +490,12 @@ public sealed class WorkflowFolderProviderContractTests
         {
             return exception;
         }
+    }
+
+    private static async Task<Exception?> RestructureOutcomeAsync(Func<Task> operation)
+    {
+        try { await operation(); return null; }
+        catch (Exception exception) { return exception; }
     }
 
     private static Task SaveLegacyDefinitionAsync(IDocumentStore store, WorkflowDefinition definition)
