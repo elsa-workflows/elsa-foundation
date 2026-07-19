@@ -100,6 +100,40 @@ public sealed class ValueConversionPlanResolverTests
     }
 
     [Fact]
+    public void Xml_profile_pins_registered_typed_aliases_and_rejects_any_projection()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(CustomerContract), "Acme.Customer");
+        var typedResolver = new ValueConversionPlanResolver(wellKnownTypeRegistry: registry);
+
+        var explicitXml = typedResolver.Resolve(
+            Type("String"),
+            ValueRepresentation.FormattedContent,
+            Type("Acme.Customer"),
+            ValueConversionMode.Xml);
+        var namedProfile = typedResolver.Resolve(
+            Type("String"),
+            ValueRepresentation.FormattedContent,
+            Type("Acme.Customer"),
+            ValueConversionMode.Profile,
+            new ValueConversionProfileReference("elsa.xml", "1"));
+        var anyProjection = Assert.Throws<ValueConversionPublicationException>(() =>
+            typedResolver.Resolve(
+                Type("String"),
+                ValueRepresentation.FormattedContent,
+                Type("Elsa.Any"),
+                ValueConversionMode.Xml));
+
+        Assert.Equal(ValueConversionOperation.Profile, explicitXml.Operation);
+        Assert.Equal("elsa.xml", explicitXml.Profile!.Id);
+        Assert.Equal("1", explicitXml.Profile.Version);
+        Assert.Equal(ValueConversionMode.Xml, explicitXml.Mode);
+        Assert.Equal("elsa.xml", namedProfile.Profile!.Id);
+        Assert.Equal(ValueConversionMode.Profile, namedProfile.Mode);
+        Assert.Contains("XML has no universal canonical Any projection", anyProjection.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Transient_values_cannot_be_pinned_across_a_durable_binding()
     {
         var exception = Assert.Throws<ValueConversionPublicationException>(() =>

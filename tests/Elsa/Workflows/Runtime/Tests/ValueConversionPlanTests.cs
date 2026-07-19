@@ -299,6 +299,85 @@ public sealed class ValueConversionPlanTests
     }
 
     [Fact]
+    public void Xml_profile_converts_formatted_content_to_registered_typed_alias()
+    {
+        var plan = XmlPlan(new ValueTypeDescriptor("Acme.Customer"));
+
+        var converted = TypedExecutor().Convert(
+            XmlSource("""
+            <customer loyaltyPoints="42">
+              <name>Ada</name>
+              <address>
+                <city>Brussels</city>
+              </address>
+              <orders>
+                <order>
+                  <id>A-1</id>
+                  <total>19.5</total>
+                </order>
+              </orders>
+            </customer>
+            """),
+            plan);
+
+        Assert.Equal("Ada", converted.InlineValue!.Value.GetProperty("name").GetString());
+        Assert.Equal(42, converted.InlineValue.Value.GetProperty("loyaltyPoints").GetInt64());
+        Assert.Equal("Brussels", converted.InlineValue.Value.GetProperty("address").GetProperty("city").GetString());
+        Assert.Equal("A-1", converted.InlineValue.Value.GetProperty("orders")[0].GetProperty("id").GetString());
+        Assert.Equal(19.5m, converted.InlineValue.Value.GetProperty("orders")[0].GetProperty("total").GetDecimal());
+    }
+
+    [Fact]
+    public void Xml_profile_reports_unknown_ambiguous_and_missing_members()
+    {
+        var executor = TypedExecutor();
+        var plan = XmlPlan(new ValueTypeDescriptor("Acme.Customer"));
+
+        var unknown = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            XmlSource("<customer loyaltyPoints=\"42\"><name>Ada</name><legacy>true</legacy></customer>"),
+            plan));
+        var ambiguous = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            XmlSource("<customer loyaltyPoints=\"42\"><name>Ada</name><loyaltyPoints>43</loyaltyPoints></customer>"),
+            plan));
+        var missing = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            XmlSource("<customer loyaltyPoints=\"42\" />"),
+            plan));
+
+        Assert.Contains("XML element 'legacy' at '$'", unknown.Message, StringComparison.Ordinal);
+        Assert.Contains("ambiguous XML mappings for member 'loyaltyPoints' at '$'", ambiguous.Message, StringComparison.Ordinal);
+        Assert.Contains("missing required XML member 'name' at '$'", missing.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Xml_profile_disables_dtd_entities_and_external_resources()
+    {
+        var plan = XmlPlan(new ValueTypeDescriptor("Acme.Customer"));
+
+        var exception = Assert.Throws<RuntimeValueConversionException>(() => TypedExecutor().Convert(
+            XmlSource("""
+            <!DOCTYPE customer [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+            <customer loyaltyPoints="42">
+              <name>&xxe;</name>
+            </customer>
+            """),
+            plan));
+
+        Assert.Contains("malformed or unsafe XML content", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Xml_profile_rejects_any_targets_without_a_named_xml_to_json_profile()
+    {
+        var plan = XmlPlan(new ValueTypeDescriptor("Elsa.Any"));
+
+        var exception = Assert.Throws<RuntimeValueConversionException>(() => new RuntimeValueConversionExecutor().Convert(
+            XmlSource("<customer><name>Ada</name></customer>"),
+            plan));
+
+        Assert.Contains("XML has no universal canonical Any projection", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Identity_conversion_preserves_an_external_reference_without_materializing_it()
     {
         var type = new ValueTypeDescriptor("String");
@@ -390,10 +469,28 @@ public sealed class ValueConversionPlanTests
             limits: limits ?? ValueConversionLimits.Default,
             options: null);
 
+    private static ValueConversionPlan XmlPlan(ValueTypeDescriptor targetType, ValueConversionMode mode = ValueConversionMode.Xml) =>
+        new(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.FormattedContent,
+            new ValueTypeDescriptor("String"),
+            targetType,
+            mode,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.xml", "1"),
+            limits: ValueConversionLimits.Default,
+            options: null);
+
     private static ValueEnvelope JsonSource(string json) =>
         ValueEnvelope.Inline(
             new ValueTypeDescriptor("String"),
             JsonSerializer.SerializeToElement(json),
+            ValueProtectionPolicy.InstanceInline);
+
+    private static ValueEnvelope XmlSource(string xml) =>
+        ValueEnvelope.Inline(
+            new ValueTypeDescriptor("String"),
+            JsonSerializer.SerializeToElement(xml),
             ValueProtectionPolicy.InstanceInline);
 
     private static RuntimeValueConversionExecutor TypedExecutor() => new(new TestTypeRegistry(

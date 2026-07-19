@@ -121,6 +121,9 @@ public sealed class ValueConversionPlanResolver(
         if (StringComparer.Ordinal.Equals(pinnedProfile.Id, "elsa.json") && !IsJsonProfileTarget(targetType))
             throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile,
                 "JSON conversion requires Any, JsonObject, or a registered typed target alias.");
+        if (StringComparer.Ordinal.Equals(pinnedProfile.Id, "elsa.xml") && !IsXmlProfileTarget(targetType))
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile,
+                "XML conversion requires a registered typed target alias; XML has no universal canonical Any projection.");
 
         return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.Profile, pinnedProfile, limits, options);
     }
@@ -129,6 +132,8 @@ public sealed class ValueConversionPlanResolver(
         ValueConversionCompatibility.IsCanonicalAnyTarget(targetType) ||
         ValueConversionCompatibility.IsJsonObjectTarget(targetType) ||
         IsRegisteredTypedAlias(targetType);
+
+    private bool IsXmlProfileTarget(ValueTypeDescriptor targetType) => IsRegisteredTypedAlias(targetType);
 
     private bool IsRegisteredTypedAlias(ValueTypeDescriptor targetType)
     {
@@ -212,6 +217,10 @@ public sealed class BuiltInValueConversionProfileRegistry : IValueConversionProf
             [("elsa.json", "1")] = new(
                 new ValueConversionProfileReference("elsa.json", "1"),
                 new HashSet<ValueRepresentation> { ValueRepresentation.FormattedContent, ValueRepresentation.StructuredValue },
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "*" }),
+            [("elsa.xml", "1")] = new(
+                new ValueConversionProfileReference("elsa.xml", "1"),
+                new HashSet<ValueRepresentation> { ValueRepresentation.FormattedContent },
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "*" })
         };
 
