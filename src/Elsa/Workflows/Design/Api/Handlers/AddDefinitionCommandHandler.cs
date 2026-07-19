@@ -30,12 +30,14 @@ public sealed class AddDefinitionCommandHandler(
                 record.AdditionalProperties))
             .ToArray();
 
+        var persistenceDefinition = WorkflowDefinition.From(definition);
+        persistenceDefinition.FolderId = string.IsNullOrWhiteSpace(command.FolderId) ? null : command.FolderId;
         await addCommand.Execute(
-            WorkflowDefinition.From(definition),
+            persistenceDefinition,
             draftEntity,
             layout,
             cancellationToken);
 
-        return new WorkflowDefinitionDetailsView(definition.ToView(), WorkflowDraftView.From(draftEntity, layout), Versions: []);
+        return new WorkflowDefinitionDetailsView(persistenceDefinition.ToView(), WorkflowDraftView.From(draftEntity, layout), Versions: []);
     }
 }

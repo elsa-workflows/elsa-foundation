@@ -7,6 +7,7 @@ public sealed record AddDefinition(
     string Name,
     string? Description,
     WorkflowDefinitionStateView? InitialState = null,
-    IReadOnlyCollection<WorkflowDefinitionLayoutRecordView>? Layout = null)
+    IReadOnlyCollection<WorkflowDefinitionLayoutRecordView>? Layout = null,
+    string? FolderId = null)
 
 : ICommand<WorkflowDefinitionDetailsView>;

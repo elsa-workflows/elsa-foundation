@@ -17,5 +17,8 @@ internal sealed class WorkflowDefinitionConfiguration : IEntityTypeConfiguration
 
         builder.HasIndex(x => x.Name).HasDatabaseName($"IX_{nameof(WorkflowDefinition)}_{nameof(WorkflowDefinition.Name)}");
         builder.HasIndex(x => x.DeletedAt).HasDatabaseName($"IX_{nameof(WorkflowDefinition)}_{nameof(WorkflowDefinition.DeletedAt)}");
+        // Folder placement is Groundwork-only durable metadata in this transition; do not grow the
+        // legacy EF schema or migrations merely because the persistence entity carries the optional field.
+        builder.Ignore(x => x.FolderId);
     }
 }

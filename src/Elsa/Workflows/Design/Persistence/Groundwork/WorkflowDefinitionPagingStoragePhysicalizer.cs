@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
@@ -16,6 +17,7 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
     private const string DeletedAtColumn = "deleted_at";
     private const string NameColumn = "name";
     private const string DescriptionColumn = "description";
+    private const string FolderIdColumn = "folder_id";
 
     private static readonly IReadOnlySet<PortableQueryOperation> Lifecycle =
         new HashSet<PortableQueryOperation>
@@ -53,6 +55,16 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
             IndexValueKind.String,
             isUnique: false,
             MissingValueBehavior.Excluded);
+        var folderAllBrowseIndex = new LogicalIndexDeclaration(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionFolderAllBrowseOrderIndex,
+            [
+                new IndexField(WorkflowsDesignStorageManifest.WorkflowDefinitionFolderIdField, IndexValueKind.Keyword),
+                new IndexField(WorkflowsDesignStorageManifest.WorkflowDefinitionLastModifiedAtField, IndexValueKind.String),
+                new IndexField(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, IndexValueKind.Keyword)
+            ],
+            IndexValueKind.String,
+            isUnique: false,
+            MissingValueBehavior.IncludedAsNull);
         var envelope = new DocumentEnvelopeDefinition();
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             TableName,
@@ -60,9 +72,18 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
                 Projected(CollectionColumn, WorkflowsDesignStorageManifest.CollectionField, PortablePhysicalType.String),
                 Projected(LastModifiedAtColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionLastModifiedAtField, PortablePhysicalType.String, 40),
                 Projected(DefinitionIdColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, PortablePhysicalType.String),
-                Projected(DeletedAtColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, PortablePhysicalType.String),
+                Projected(
+                    DeletedAtColumn,
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField,
+                    PortablePhysicalType.String,
+                    40),
                 Projected(NameColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionNameField, PortablePhysicalType.String),
-                Projected(DescriptionColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, PortablePhysicalType.String)
+                Projected(DescriptionColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, PortablePhysicalType.String),
+                Projected(
+                    FolderIdColumn,
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionFolderIdField,
+                    PortablePhysicalType.String,
+                    WorkflowFolderNames.MaximumIdentifierLength)
             ],
             envelope,
             [
@@ -79,7 +100,17 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(LastModifiedAtColumn, 1, PhysicalSortDirection.Descending),
                         new PhysicalIndexColumnDefinition(DefinitionIdColumn, 2),
                         new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
-                    ])
+                    ]),
+                new PhysicalIndexDefinition(
+                    folderAllBrowseIndex.Identity,
+                    [
+                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                        new PhysicalIndexColumnDefinition(FolderIdColumn, 1),
+                        new PhysicalIndexColumnDefinition(LastModifiedAtColumn, 2, PhysicalSortDirection.Descending),
+                        new PhysicalIndexColumnDefinition(DefinitionIdColumn, 3),
+                        new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 4)
+                    ],
+                    missingValueBehavior: MissingValueBehavior.IncludedAsNull)
             ]);
         var browseQuery = new BoundedQueryDeclaration(
             WorkflowsDesignStorageManifest.PageWorkflowDefinitionsQuery,
@@ -104,7 +135,8 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
             ],
             residualPredicateFields:
             [
-                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, IndexValueKind.String, Lifecycle)
+                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, IndexValueKind.String, Lifecycle),
+                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionFolderIdField, IndexValueKind.String, Lifecycle)
             ]);
         // Substring matching is finite and provider-materialization-bounded, but MongoDB cannot certify its
         // case-insensitive regex semantics as an indexed B-tree operation. Keep the no-search browse route
@@ -136,8 +168,17 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
                 Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, IndexValueKind.String, Lifecycle),
                 Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionNameField, IndexValueKind.String, Contains),
                 Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, IndexValueKind.String, Contains),
-                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, IndexValueKind.String, Contains)
+                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, IndexValueKind.String, Contains),
+                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionFolderIdField, IndexValueKind.String, Lifecycle)
             ]);
+        var folderBrowseQuery = FolderBrowseQuery(
+            WorkflowsDesignStorageManifest.PageWorkflowDefinitionsByFolderQuery,
+            folderAllBrowseIndex,
+            includeLifecycleFilter: true);
+        var folderAllBrowseQuery = FolderBrowseQuery(
+            WorkflowsDesignStorageManifest.PageAllWorkflowDefinitionsByFolderQuery,
+            folderAllBrowseIndex,
+            includeLifecycleFilter: false);
 
         return unit with
         {
@@ -145,8 +186,11 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(definition),
                 storage.LogicalIndexes
-                    .Where(index => !StringComparer.Ordinal.Equals(index.Identity, browseIndex.Identity))
+                    .Where(index =>
+                        !StringComparer.Ordinal.Equals(index.Identity, browseIndex.Identity) &&
+                        !StringComparer.Ordinal.Equals(index.Identity, folderAllBrowseIndex.Identity))
                     .Append(browseIndex)
+                    .Append(folderAllBrowseIndex)
                     .ToArray(),
                 storage.BoundedQueries
                     .Where(query => !StringComparer.Ordinal.Equals(
@@ -154,9 +198,17 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
                         WorkflowsDesignStorageManifest.PageWorkflowDefinitionsQuery) &&
                         !StringComparer.Ordinal.Equals(
                             query.Identity,
-                            WorkflowsDesignStorageManifest.SearchWorkflowDefinitionsQuery))
+                            WorkflowsDesignStorageManifest.SearchWorkflowDefinitionsQuery) &&
+                        !StringComparer.Ordinal.Equals(
+                            query.Identity,
+                            WorkflowsDesignStorageManifest.PageWorkflowDefinitionsByFolderQuery) &&
+                        !StringComparer.Ordinal.Equals(
+                            query.Identity,
+                            WorkflowsDesignStorageManifest.PageAllWorkflowDefinitionsByFolderQuery))
                     .Append(browseQuery)
                     .Append(searchQuery)
+                    .Append(folderBrowseQuery)
+                    .Append(folderAllBrowseQuery)
                     .ToArray(),
                 storage.NameOverrides,
                 storage.BoundedMutations)
@@ -175,6 +227,47 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
             Length: type == PortablePhysicalType.String
                 ? length ?? LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength
                 : null);
+
+    private static BoundedQueryDeclaration FolderBrowseQuery(
+        string identity,
+        LogicalIndexDeclaration index,
+        bool includeLifecycleFilter)
+    {
+        var predicates = new List<BoundedQueryPredicateField>
+        {
+            new(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionFolderIdField,
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+        };
+        // FolderId remains the leading native index predicate and the requested chronology is covered
+        // by the remaining key columns. DeletedAt is intentionally admitted as a provider-side residual:
+        // a deleted query needs "not null", which cannot constrain the second index prefix by equality,
+        // while deriving a new discriminator would misclassify legacy canonical JSON during projection.
+        return new BoundedQueryDeclaration(
+            identity,
+            index.Identity,
+            new HashSet<PortableQueryOperation>
+            {
+                PortableQueryOperation.Equal,
+                PortableQueryOperation.NotEqual
+            },
+            QuerySortSupport.Descending,
+            QueryPagingSupport.Cursor,
+            BoundedQueryExecutionClass.ScaleBearing,
+            sortFields:
+            [
+                new BoundedQuerySortField(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionLastModifiedAtField,
+                    PhysicalSortDirection.Descending),
+                new BoundedQuerySortField(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionIdField,
+                    PhysicalSortDirection.Ascending)
+            ],
+            predicateFields: predicates,
+            residualPredicateFields: includeLifecycleFilter
+                ? [Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, IndexValueKind.String, Lifecycle)]
+                : []);
+    }
 
     private static BoundedQueryResidualPredicateField Residual(
         string path,
