@@ -12,7 +12,11 @@ using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Secrets.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -81,6 +85,29 @@ public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixtur
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>());
+        Assert.NotNull(provider.GetRequiredService<IStudioPreferenceStore>());
+        Assert.NotNull(provider.GetRequiredService<ISecretRepository>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowRunHealthDataSource>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowPortfolioDataSource>());
+    }
+
+    [SkippableFact]
+    public async Task Studio_preferences_round_trip_with_cas_on_postgresql()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+
+        await using var provider = await BuildHostAsync();
+        var preferences = provider.GetRequiredService<IStudioPreferenceStore>();
+        var key = new StudioPreferenceKey("user-1", "tenant-1", "studio-1", "dashboard");
+        using var value = JsonDocument.Parse("{\"refreshIntervalMinutes\":5}");
+
+        var created = await preferences.WriteAsync(key, new(1, value.RootElement.Clone()), StudioPreferenceWriteCondition.MustNotExist, DateTimeOffset.UtcNow);
+        var stale = await preferences.WriteAsync(key, new(1, value.RootElement.Clone()), StudioPreferenceWriteCondition.MustNotExist, DateTimeOffset.UtcNow);
+
+        Assert.Equal(StudioPreferenceStoreWriteStatus.Saved, created.Status);
+        Assert.Equal("rev-1", created.Document!.Revision);
+        Assert.Equal(StudioPreferenceStoreWriteStatus.Conflict, stale.Status);
+        Assert.Equal("rev-1", (await preferences.FindAsync(key))!.Revision);
     }
 
     [SkippableFact]

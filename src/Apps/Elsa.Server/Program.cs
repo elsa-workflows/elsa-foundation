@@ -48,7 +48,14 @@ using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
+using Elsa.Attention.Api;
+using Elsa.Modularity.Attention;
+using Elsa.Secrets.Attention;
+using Elsa.Studio.Preferences.Api;
+using Elsa.Studio.Preferences.Core;
+using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Api;
@@ -56,6 +63,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Tracing;
 using Nuplane;
 using Nuplane.Admin;
@@ -252,8 +260,16 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(ApiSecurityFeature).Assembly,
+            typeof(AttentionApiFeature).Assembly,
+            typeof(StudioPreferencesFeature).Assembly,
+            typeof(StudioPreferencesApiFeature).Assembly,
+            typeof(StudioPreferencesGroundworkPersistenceFeature).Assembly,
+            typeof(WorkflowsDashboardFeature).Assembly,
 
             typeof(ModularityApiFeature).Assembly,
+            typeof(ModularityAttentionFeature).Assembly,
+            typeof(SecretsAttentionFeature).Assembly,
+            typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(SqliteStructuredLogsPersistenceShellFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,

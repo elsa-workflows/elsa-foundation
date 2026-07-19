@@ -13,38 +13,41 @@ public sealed class GroundworkSecretRepository(
     private IBoundedDocumentStore BoundedStore => boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
         "Secret queries require an admitted bounded document-store runtime.");
 
-    public async ValueTask<Secret?> FindAsync(string normalizedName, CancellationToken cancellationToken = default)
+    public async ValueTask<Secret?> FindAsync(string tenantId, string normalizedName, CancellationToken cancellationToken = default)
     {
+        ValidateTenantId(tenantId);
         SecretNameConstraints.Validate(normalizedName);
 
         var envelope = await store.LoadAsync(
             SecretsStorageManifest.SecretDocumentKind,
-            normalizedName,
+            DocumentId(tenantId, normalizedName),
             cancellationToken);
 
-        return envelope is null ? null : Map(envelope);
+        return envelope is null ? null : Map(envelope, tenantId);
     }
 
-    public async ValueTask<SecretRevisionedRecord?> FindWithRevisionAsync(string normalizedName, CancellationToken cancellationToken = default)
+    public async ValueTask<SecretRevisionedRecord?> FindWithRevisionAsync(string tenantId, string normalizedName, CancellationToken cancellationToken = default)
     {
+        ValidateTenantId(tenantId);
         SecretNameConstraints.Validate(normalizedName);
 
         var envelope = await store.LoadAsync(
             SecretsStorageManifest.SecretDocumentKind,
-            normalizedName,
+            DocumentId(tenantId, normalizedName),
             cancellationToken);
 
-        return envelope is null ? null : new SecretRevisionedRecord(Map(envelope), SecretRevisionMapper.Revision(envelope));
+        return envelope is null ? null : new SecretRevisionedRecord(Map(envelope, tenantId), SecretRevisionMapper.Revision(envelope));
     }
 
-    public async ValueTask<SecretRepositoryPage> ListPageAsync(SecretRepositoryListRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<SecretRepositoryPage> ListPageAsync(string tenantId, SecretRepositoryListRequest request, CancellationToken cancellationToken = default)
     {
+        ValidateTenantId(tenantId);
         ArgumentNullException.ThrowIfNull(request);
         if (IsContradictory(request))
             return new SecretRepositoryPage([], 0);
 
-        var result = await BoundedStore.QueryAsync(ListQuery(request), cancellationToken);
-        return new SecretRepositoryPage(result.Documents.Select(Map).ToArray(), result.TotalCount);
+        var result = await BoundedStore.QueryAsync(ListQuery(tenantId, request), cancellationToken);
+        return new SecretRepositoryPage(result.Documents.Select(document => Map(document, tenantId)).ToArray(), result.TotalCount);
     }
 
     public async ValueTask<bool> TryAddAsync(Secret secret, CancellationToken cancellationToken = default)
@@ -71,9 +74,9 @@ public sealed class GroundworkSecretRepository(
         return SecretRevisionMapper.ToResult(result);
     }
 
-    private static DocumentQuery ListQuery(SecretRepositoryListRequest request)
+    private static DocumentQuery ListQuery(string tenantId, SecretRepositoryListRequest request)
     {
-        var clauses = new List<DocumentQueryClause>();
+        var clauses = new List<DocumentQueryClause> { Equal(SecretsStorageManifest.TenantIdField, tenantId) };
         if (request.Search is not null)
         {
             var searchKey = SearchKey(request.Search);
@@ -159,6 +162,7 @@ public sealed class GroundworkSecretRepository(
     private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(Secret secret, long? expectedVersion, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(secret);
+        ValidateTenantId(secret.TenantId);
         SecretNameConstraints.Validate(secret.Name);
 
         var document = SecretDocument.FromSecret(secret);
@@ -167,15 +171,28 @@ public sealed class GroundworkSecretRepository(
         return await store.SaveAsync(
             new SaveDocumentRequest(
                 SecretsStorageManifest.SecretDocumentKind,
-                secret.Name,
+                DocumentId(secret.TenantId, secret.Name),
                 SecretsStorageManifest.SchemaVersion,
                 content,
                 expectedVersion),
             cancellationToken);
     }
 
-    private static Secret Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<SecretDocument>(envelope.ContentJson, SecretsGroundworkJson.Options)!.Secret;
+    internal static Secret Map(DocumentEnvelope envelope, string tenantId)
+    {
+        var document = Deserialize(envelope.ContentJson);
+        if (!string.IsNullOrWhiteSpace(document.TenantId) &&
+            !string.IsNullOrWhiteSpace(document.Secret.TenantId) &&
+            !string.Equals(document.TenantId, document.Secret.TenantId, StringComparison.Ordinal))
+            throw new InvalidOperationException("Secret document contains conflicting tenant identities.");
+        var persistedTenant = string.IsNullOrWhiteSpace(document.TenantId)
+            ? document.Secret.TenantId
+            : document.TenantId;
+        if (!string.Equals(persistedTenant, tenantId, StringComparison.Ordinal))
+            throw new InvalidOperationException("Secret document tenant does not match its storage identity.");
+        document.Secret.TenantId = tenantId;
+        return document.Secret;
+    }
 
     private static bool IsContradictory(SecretRepositoryListRequest request) =>
         request.Status is not null && request.Status == request.ExcludedStatus ||
@@ -202,7 +219,17 @@ public sealed class GroundworkSecretRepository(
             value,
             PortableStringComparisonPolicy.UnicodeOrdinalIgnoreCase).LookupKey;
 
-    private sealed record SecretDocument(
+    internal static string DocumentId(string tenantId, string name) => $"{tenantId.Length}:{tenantId}{name}";
+
+    private static void ValidateTenantId(string tenantId) => ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+
+    internal static SecretDocument Deserialize(string contentJson) =>
+        JsonSerializer.Deserialize<SecretDocument>(contentJson, SecretsGroundworkJson.Options)
+        ?? throw new InvalidOperationException("Secret document content is invalid.");
+
+    internal sealed record SecretDocument(
+        string Collection,
+        string? TenantId,
         string NormalizedName,
         string NameSearchKey,
         string DisplayNameSearchKey,
@@ -220,6 +247,8 @@ public sealed class GroundworkSecretRepository(
                 .Where(version => version.Status == SecretStatus.Active)
                 .ToArray();
             return new SecretDocument(
+                SecretsStorageManifest.SecretCollection,
+                secret.TenantId,
                 secret.Name,
                 SearchKey(secret.Name),
                 SearchKey(secret.DisplayName),

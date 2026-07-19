@@ -5,5 +5,6 @@ public sealed record SecretOperationAuditRecord(
     string SecretName,
     string Outcome,
     DateTimeOffset Timestamp,
+    string TenantId,
     string? ActorId = null,
     string? Reason = null);

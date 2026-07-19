@@ -137,6 +137,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             resolved.Source,
             resolved.Dispatch,
             partition,
+            requiredScope,
             dispatchOptions,
             cancellationToken);
     }
@@ -336,13 +337,14 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutableSourceProvenance? pinnedSource,
         WorkflowDispatchRecord? retainedDispatch,
         WorkflowExecutionPartition partition,
+        WorkflowExecutableReferenceScope requiredScope,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var requestedAt = _timeProvider.GetUtcNow();
         var enqueuedAt = retainedDispatch?.CreatedAt ?? requestedAt;
-        var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource, retainedDispatch);
+        var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource, retainedDispatch, requiredScope);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: pinnedIdentity,
             requestedArtifactId: request.ArtifactId,
@@ -407,7 +409,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableIdentity identity,
         WorkflowExecutableSourceProvenance? source,
-        WorkflowDispatchRecord? retainedDispatch)
+        WorkflowDispatchRecord? retainedDispatch,
+        WorkflowExecutableReferenceScope requiredScope)
     {
         var metadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         // Diagnostic breadcrumb only — never read back or matched, so it is safe for this value to track the type name.
@@ -415,6 +418,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         metadata["runtime.artifactId"] = identity.ArtifactId;
         metadata["runtime.artifactVersion"] = source?.ArtifactVersion ?? identity.ArtifactVersion;
         metadata["runtime.artifactHash"] = identity.ArtifactHash;
+        metadata[RuntimeMetadataKeys.WorkflowExecutionOrigin] = requiredScope.ToString();
         if (source?.SourceReferenceId is { } sourceReferenceId)
             metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
         if (retainedDispatch is not null)

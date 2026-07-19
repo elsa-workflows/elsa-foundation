@@ -15,6 +15,7 @@ public static class GroundworkSecretsStoreRegistration
 
         services.RemoveAll<ISecretRepository>();
         services.AddScoped<ISecretRepository, GroundworkSecretRepository>();
+        services.TryAddScoped<ILegacySecretTenantBackfill, LegacySecretTenantBackfill>();
         return services;
     }
 }

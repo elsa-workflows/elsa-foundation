@@ -7,7 +7,7 @@ public sealed class ElsaServerConfigurationTests
     [Fact]
     public void Server_environment_variables_override_shell_json_and_command_line_remains_last()
     {
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
         var shellDefaults = program.IndexOf("AddJsonFile(\"shells.json\"", StringComparison.Ordinal);
         var shellEnvironmentOverlay = program.IndexOf("AddJsonFile($\"shells.{builder.Environment.EnvironmentName}.json\"", StringComparison.Ordinal);
         var environmentVariables = program.IndexOf(".AddEnvironmentVariables()", shellEnvironmentOverlay, StringComparison.Ordinal);
@@ -24,7 +24,7 @@ public sealed class ElsaServerConfigurationTests
     private static string FindRepoRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
             directory = directory.Parent;
 
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");

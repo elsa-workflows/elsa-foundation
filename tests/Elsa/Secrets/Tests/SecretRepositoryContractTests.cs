@@ -9,6 +9,7 @@ namespace Elsa.Secrets.Tests;
 
 public sealed class SecretRepositoryContractTests
 {
+    private const string TenantId = "tenant-a";
     private static readonly DateTimeOffset Now = new(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
 
     public static TheoryData<string, Func<ISecretRepository>> RepositoryFactories { get; } = new()
@@ -26,7 +27,7 @@ public sealed class SecretRepositoryContractTests
 
         await repository.SaveAsync(secret);
 
-        Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync(secret.Name))!.Status);
+        Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync(TenantId, secret.Name))!.Status);
     }
 
     [Theory]
@@ -40,7 +41,7 @@ public sealed class SecretRepositoryContractTests
 
         Assert.Equal(
             SecretStatus.Deleted,
-            Assert.Single((await repository.ListPageAsync(new SecretRepositoryListRequest())).Items).Status);
+            Assert.Single((await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest())).Items).Status);
     }
 
     [Theory]
@@ -70,7 +71,7 @@ public sealed class SecretRepositoryContractTests
         deleted.Status = SecretStatus.Deleted;
         await repository.SaveAsync(deleted);
 
-        var page = await repository.ListPageAsync(new SecretRepositoryListRequest(
+        var page = await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest(
             search: "PAYMENTS",
             typeName: SecretTypeNames.Text,
             typeNames: [SecretTypeNames.Text, SecretTypeNames.RsaKey],
@@ -110,7 +111,7 @@ public sealed class SecretRepositoryContractTests
         inactiveRoot.Status = SecretStatus.Revoked;
         await repository.SaveAsync(inactiveRoot);
 
-        var page = await repository.ListPageAsync(new SecretRepositoryListRequest(
+        var page = await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest(
             activeOnly: true,
             now: Now,
             take: 20));
@@ -132,7 +133,7 @@ public sealed class SecretRepositoryContractTests
         await repository.SaveAsync(ActiveSecret("a"));
         await repository.SaveAsync(ActiveSecret("b"));
 
-        var page = await repository.ListPageAsync(new SecretRepositoryListRequest(skip: 1, take: 1));
+        var page = await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest(skip: 1, take: 1));
 
         Assert.Equal(3, page.TotalCount);
         Assert.Equal("b", Assert.Single(page.Items).Name);
@@ -185,6 +186,7 @@ public sealed class SecretRepositoryContractTests
         DateTimeOffset? expiresAt = null,
         IList<SecretVersion>? versions = null) => new()
     {
+        TenantId = TenantId,
         Name = name,
         DisplayName = displayName ?? name,
         TypeName = SecretTypeNames.Text,
