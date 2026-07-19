@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listWorkflowFolders } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
@@ -36,22 +36,21 @@ export function useWorkflowFolderTree({ context, unavailableMessage, onPageLoade
   const contextRef = useRef(context);
   const contextGeneration = useRef(0);
 
-  // Update this during render so a response from the previous context cannot
-  // commit in the small interval before effects run.
-  if (contextRef.current !== context) {
+  useLayoutEffect(() => {
     contextRef.current = context;
     contextGeneration.current += 1;
     inFlightGenerations.current = {};
     loadedPageCounts.current = {};
-  }
-
-  useEffect(() => {
     setRoots([]);
     setChildren({});
     setContinuations({});
     setLoadedKeys(new Set());
     setLoadingKeys(new Set());
     setLoadFailures({});
+    return () => {
+      contextGeneration.current += 1;
+      inFlightGenerations.current = {};
+    };
   }, [context]);
 
   const loadPage = useCallback(async (
