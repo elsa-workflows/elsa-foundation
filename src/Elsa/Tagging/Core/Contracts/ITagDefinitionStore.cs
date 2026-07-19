@@ -6,6 +6,23 @@ public interface ITagDefinitionStore
 {
     ValueTask<TagDefinition?> FindByCanonicalKeyAsync(string canonicalKey, CancellationToken cancellationToken = default);
     ValueTask<TagDefinitionRevisionedRecord?> FindWithRevisionAsync(string tagDefinitionId, CancellationToken cancellationToken = default);
+    async ValueTask<IReadOnlyList<TagDefinition>> ListByIdsAsync(
+        IReadOnlyCollection<string> tagDefinitionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(tagDefinitionIds);
+        if (tagDefinitionIds.Count > 100)
+            throw new ArgumentOutOfRangeException(nameof(tagDefinitionIds), "At most 100 tag definitions can be resolved at once.");
+
+        var definitions = new List<TagDefinition>(tagDefinitionIds.Count);
+        foreach (var tagDefinitionId in tagDefinitionIds.Distinct(StringComparer.Ordinal))
+        {
+            var record = await FindWithRevisionAsync(tagDefinitionId, cancellationToken);
+            if (record is not null)
+                definitions.Add(record.Definition);
+        }
+        return definitions;
+    }
     ValueTask<IReadOnlyList<TagDefinition>> ListAsync(TagDefinitionListRequest request, CancellationToken cancellationToken = default);
     async ValueTask<IReadOnlyList<TagDefinitionRevisionedRecord>> ListWithRevisionsAsync(
         TagDefinitionListRequest request,
@@ -30,10 +47,26 @@ public interface ITagDefinitionAuditStore
     ValueTask AppendAsync(TagDefinitionAuditRecord record, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Commits a catalog mutation and its immutable audit fact as one persistence operation.</summary>
+public interface ITagDefinitionAtomicChangeStore
+{
+    ValueTask<bool> TryAddAndAppendAuditAsync(
+        TagDefinition definition,
+        TagDefinitionAuditRecord audit,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<TagDefinitionSaveResult> SaveWithRevisionAndAppendAuditAsync(
+        TagDefinition definition,
+        string expectedRevision,
+        TagDefinitionAuditRecord audit,
+        CancellationToken cancellationToken = default);
+}
+
 public interface ITagDefinitionAuditContext
 {
     string Actor { get; }
     string CorrelationId { get; }
+    string? TenantId => null;
 }
 
 public interface ITagDefinitionManager

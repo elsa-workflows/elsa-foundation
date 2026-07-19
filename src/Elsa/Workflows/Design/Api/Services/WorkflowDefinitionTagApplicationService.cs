@@ -52,17 +52,22 @@ public sealed class WorkflowDefinitionTagApplicationService(
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
+        var before = await tagStore.GetAsync(workflowDefinitionId, cancellationToken);
+        var beforeIds = before.Assertions
+            .Select(assertion => assertion.TagDefinitionId)
+            .ToHashSet(StringComparer.Ordinal);
+        var catalogDefinitions = await catalog.ListByIdsAsync(distinctIds, cancellationToken);
+        var catalogDefinitionsById = catalogDefinitions.ToDictionary(definition => definition.Id, StringComparer.Ordinal);
         foreach (var tagDefinitionId in distinctIds)
         {
-            var definitionRecord = await catalog.FindWithRevisionAsync(tagDefinitionId, cancellationToken)
+            var definitionRecord = catalogDefinitionsById.GetValueOrDefault(tagDefinitionId)
                 ?? throw new ArgumentException($"Tag definition '{tagDefinitionId}' was not found.", nameof(tagDefinitionIds));
-            if (definitionRecord.Definition.Status != TagDefinitionStatus.Active)
+            if (definitionRecord.Status != TagDefinitionStatus.Active && !beforeIds.Contains(tagDefinitionId))
                 throw new ArgumentException($"Tag definition '{tagDefinitionId}' is retired.", nameof(tagDefinitionIds));
-            if (!definitionRecord.Definition.Eligibility.HasFlag(TagDefinitionEligibility.WorkflowDefinition))
+            if (!definitionRecord.Eligibility.HasFlag(TagDefinitionEligibility.WorkflowDefinition))
                 throw new ArgumentException($"Tag definition '{tagDefinitionId}' cannot target workflow definitions.", nameof(tagDefinitionIds));
         }
 
-        var before = await tagStore.GetAsync(workflowDefinitionId, cancellationToken);
         var result = await tagStore.ReplaceManualAsync(new(
             workflowDefinitionId,
             definition.TenantId,
@@ -73,7 +78,6 @@ public sealed class WorkflowDefinitionTagApplicationService(
         if (result.Status != WorkflowDefinitionTagReplaceStatus.Saved || result.TagSet is null)
             return result;
 
-        var beforeIds = before.Assertions.Select(x => x.TagDefinitionId).ToHashSet(StringComparer.Ordinal);
         var afterIds = result.TagSet.Assertions.Select(x => x.TagDefinitionId).ToHashSet(StringComparer.Ordinal);
         await eventPublisher.Publish(new WorkflowDefinitionTagsChanged(
             workflowDefinitionId,

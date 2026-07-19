@@ -64,8 +64,12 @@ public class TagDefinitionManagerTests
 
         var record = Assert.Single(audit.Records);
         Assert.Equal("test-author", record.Actor);
+        Assert.Equal("tenant-a", record.TenantId);
         Assert.Equal("test-correlation", record.CorrelationId);
         Assert.Equal("created", record.Operation);
+        Assert.Null(record.Before);
+        Assert.Equal("risk.pii", record.After.DisplayName);
+        Assert.Equal(TagDefinitionStatus.Active, record.After.Status);
     }
 
     [Fact]
@@ -110,6 +114,33 @@ public class TagDefinitionManagerTests
             "2");
         Assert.Null(cleared.Definition.Description);
         Assert.Null(cleared.Definition.Color);
+    }
+
+    [Fact]
+    public async Task Records_semantic_before_and_after_values_for_catalog_updates()
+    {
+        var audit = new InMemoryAuditStore();
+        var manager = new DefaultTagDefinitionManager(new InMemoryStore(), audit, new TestAuditContext(), TimeProvider.System);
+        var created = await manager.CreateAsync(new CreateTagDefinitionRequest
+        {
+            CanonicalKey = "risk.pii",
+            DisplayName = "Contains PII",
+            Description = "Sensitive"
+        });
+
+        await manager.UpdateAsync(created.Id, new UpdateTagDefinitionRequest
+        {
+            DisplayName = "Personal data",
+            Description = null,
+            Status = TagDefinitionStatus.Retired
+        }, "1");
+
+        var record = audit.Records.Single(record => record.Operation == "updated");
+        Assert.Equal("Contains PII", record.Before!.DisplayName);
+        Assert.Equal("Sensitive", record.Before.Description);
+        Assert.Equal("Personal data", record.After.DisplayName);
+        Assert.Null(record.After.Description);
+        Assert.Equal(TagDefinitionStatus.Retired, record.After.Status);
     }
 
     [Theory]
@@ -182,5 +213,6 @@ public class TagDefinitionManagerTests
     {
         public string Actor => "test-author";
         public string CorrelationId => "test-correlation";
+        public string? TenantId => "tenant-a";
     }
 }

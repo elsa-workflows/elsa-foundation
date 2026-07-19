@@ -8,7 +8,8 @@ public sealed class DefaultTagDefinitionManager(
     ITagDefinitionStore store,
     ITagDefinitionAuditStore auditStore,
     ITagDefinitionAuditContext auditContext,
-    TimeProvider timeProvider) : ITagDefinitionManager
+    TimeProvider timeProvider,
+    ITagDefinitionAtomicChangeStore? atomicChangeStore = null) : ITagDefinitionManager
 {
     public async ValueTask<TagDefinition> CreateAsync(CreateTagDefinitionRequest request, CancellationToken cancellationToken = default)
     {
@@ -27,17 +28,15 @@ public sealed class DefaultTagDefinitionManager(
             CreatedAt = now
         };
 
-        if (!await store.TryAddAsync(definition, cancellationToken))
+        var audit = Audit(definition, "created", now, before: null);
+        var created = atomicChangeStore is not null
+            ? await atomicChangeStore.TryAddAndAppendAuditAsync(definition, audit, cancellationToken)
+            : await store.TryAddAsync(definition, cancellationToken);
+        if (!created)
             throw new InvalidOperationException($"A tag definition with canonical key '{definition.CanonicalKey}' already exists.");
 
-        await auditStore.AppendAsync(new TagDefinitionAuditRecord(
-            ShortIdentityGenerator.Generate(now),
-            definition.Id,
-            definition.CanonicalKey,
-            "created",
-            now,
-            auditContext.Actor,
-            auditContext.CorrelationId), cancellationToken);
+        if (atomicChangeStore is null)
+            await auditStore.AppendAsync(audit, cancellationToken);
         return definition;
     }
 
@@ -75,6 +74,7 @@ public sealed class DefaultTagDefinitionManager(
         var loaded = await FindWithRevisionAsync(tagDefinitionId, cancellationToken)
             ?? throw new InvalidOperationException($"Tag definition '{tagDefinitionId}' was not found.");
         var definition = loaded.Definition;
+        var before = TagDefinitionAuditValues.From(definition);
         var displayName = request.HasDisplayName
             ? request.DisplayName?.Trim() ?? string.Empty
             : definition.DisplayName;
@@ -90,20 +90,33 @@ public sealed class DefaultTagDefinitionManager(
             : definition.Status;
         definition.UpdatedAt = timeProvider.GetUtcNow();
 
-        var save = await store.SaveWithRevisionAsync(definition, expectedRevision, cancellationToken);
+        var audit = Audit(definition, "updated", definition.UpdatedAt.Value, before);
+        var save = atomicChangeStore is not null
+            ? await atomicChangeStore.SaveWithRevisionAndAppendAuditAsync(definition, expectedRevision, audit, cancellationToken)
+            : await store.SaveWithRevisionAsync(definition, expectedRevision, cancellationToken);
         if (save.Status == TagDefinitionSaveStatus.NotFound)
             throw new InvalidOperationException($"Tag definition '{tagDefinitionId}' was not found.");
         if (save.Status != TagDefinitionSaveStatus.Saved || save.Revision is null)
             throw new TagDefinitionConflictException(tagDefinitionId);
 
-        await auditStore.AppendAsync(new TagDefinitionAuditRecord(
-            ShortIdentityGenerator.Generate(definition.UpdatedAt.Value),
-            definition.Id,
-            definition.CanonicalKey,
-            "updated",
-            definition.UpdatedAt.Value,
-            auditContext.Actor,
-            auditContext.CorrelationId), cancellationToken);
+        if (atomicChangeStore is null)
+            await auditStore.AppendAsync(audit, cancellationToken);
         return new TagDefinitionRevisionedRecord(definition, save.Revision);
     }
+
+    private TagDefinitionAuditRecord Audit(
+        TagDefinition definition,
+        string operation,
+        DateTimeOffset occurredAt,
+        TagDefinitionAuditValues? before) => new(
+        ShortIdentityGenerator.Generate(occurredAt),
+        definition.Id,
+        definition.CanonicalKey,
+        operation,
+        occurredAt,
+        auditContext.TenantId,
+        auditContext.Actor,
+        auditContext.CorrelationId,
+        before,
+        TagDefinitionAuditValues.From(definition));
 }

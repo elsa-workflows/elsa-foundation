@@ -55,6 +55,10 @@ public class WorkflowDefinitionFilter
     /// </summary>
     public Query<WorkflowDefinition> ToQuery()
     {
+        if (MarkerTagClauses is { Count: > 0 })
+            throw new NotSupportedException(
+                "Marker tag clauses require a workflow-definition store with native marker projection query support.");
+
         var query = Query<WorkflowDefinition>.All();
 
         if (Id != null) query.And(x => x.Id, QueryOp.Equal, Id);

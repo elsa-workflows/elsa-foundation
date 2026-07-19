@@ -64,7 +64,7 @@ public static class TaggingStorageManifest
         var findByIdRoute = new BoundedQueryDeclaration(
             FindByIdQuery,
             idIndex.Identity,
-            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In },
             QuerySortSupport.None,
             QueryPagingSupport.Offset,
             BoundedQueryExecutionClass.ScaleBearing,
@@ -72,7 +72,11 @@ public static class TaggingStorageManifest
             supportsTotalCount: true,
             sortFields: [],
             predicateFields: null,
-            residualPredicateFields: [new BoundedQueryResidualPredicateField(TagDefinitionIdField, IndexValueKind.Keyword, new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }, isRequired: true)]);
+            residualPredicateFields: [new BoundedQueryResidualPredicateField(
+                TagDefinitionIdField,
+                IndexValueKind.Keyword,
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In },
+                isRequired: true)]);
         var definitions = new StorageUnit(
             new StorageUnitIdentity(TagDefinitionDocumentKind),
             "Tag definition",

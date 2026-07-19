@@ -16,6 +16,7 @@ public static class GroundworkTaggingStoreRegistration
         services.AddScoped<GroundworkTagDefinitionStore>();
         services.AddScoped<ITagDefinitionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkTagDefinitionStore>());
         services.AddScoped<ITagDefinitionAuditStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkTagDefinitionStore>());
+        services.AddScoped<ITagDefinitionAtomicChangeStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkTagDefinitionStore>());
         return services;
     }
 }

@@ -49,6 +49,24 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
     }
 
     [Fact]
+    public async Task Replace_retains_an_already_assigned_retired_catalog_value_but_does_not_add_one()
+    {
+        var tags = new FakeTagStore
+        {
+            Current = new("workflow-1", "tenant-a", WorkflowDefinitionTagRevision.Initial, [WorkflowDefinitionTagAssertion.Manual("tag-a")])
+        };
+        var service = CreateService(tags, new CapturingPublisher(), Catalog(Retired("tag-a")));
+
+        var result = await service.ReplaceAsync(
+            "workflow-1",
+            WorkflowDefinitionTagRevision.Initial,
+            ["tag-a"]);
+
+        Assert.Equal(WorkflowDefinitionTagReplaceStatus.Saved, result.Status);
+        Assert.True(tags.Saved);
+    }
+
+    [Fact]
     public async Task Conflict_does_not_publish()
     {
         var tags = new FakeTagStore { Conflict = true };
@@ -142,7 +160,7 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
         public bool Conflict { get; init; }
         public bool Saved { get; private set; }
         public ReplaceWorkflowDefinitionManualTags? LastRequest { get; private set; }
-        public WorkflowDefinitionTagSet Current { get; private set; } =
+        public WorkflowDefinitionTagSet Current { get; set; } =
             new("workflow-1", "tenant-a", WorkflowDefinitionTagRevision.Initial, []);
 
         public Task<WorkflowDefinitionTagSet> GetAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>

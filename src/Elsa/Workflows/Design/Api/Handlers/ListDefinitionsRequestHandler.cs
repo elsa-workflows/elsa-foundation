@@ -19,13 +19,19 @@ public sealed class ListDefinitionsRequestHandler(
 {
     public async Task<WorkflowDefinitionListView> Handle(ListDefinitions request, CancellationToken cancellationToken)
     {
+        var markerTagClauses = ParseMarkerTagClauses(request.MarkerTagClauses);
+        if (markerTagClauses.Count > 0 && (tagStore is null || tagDefinitionStore is null))
+            throw new ArgumentException(
+                "Marker tag filters are unavailable because workflow-definition tagging is not active in this shell.",
+                nameof(request.MarkerTagClauses));
+
         var filter = new WorkflowDefinitionFilter
         {
             Id = request.Id,
             Description = request.Description,
             Name = request.Name,
             SearchTerm = request.SearchTerm,
-            MarkerTagClauses = ParseMarkerTagClauses(request.MarkerTagClauses)
+            MarkerTagClauses = markerTagClauses
         };
 
         var listQuery = new WorkflowDefinitionListQuery(
@@ -46,11 +52,14 @@ public sealed class ListDefinitionsRequestHandler(
             : await tagStore.ListByDefinitionIdsAsync(
                 definitions.Select(definition => definition.Id).ToArray(),
                 cancellationToken);
+        var tagDefinitionIds = tagSets
+            .SelectMany(tagSet => tagSet.Assertions)
+            .Select(assertion => assertion.TagDefinitionId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         var tagDefinitions = tagDefinitionStore is null
             ? []
-            : await tagDefinitionStore.ListAsync(
-                new TagDefinitionListRequest { ActiveOnly = false },
-                cancellationToken);
+            : await ResolveMarkerTagsAsync(tagDefinitionStore, tagDefinitionIds, cancellationToken);
         var projectionsByDefinitionId = projections.ToDictionary(
             projection => projection.WorkflowDefinitionId,
             StringComparer.Ordinal);
@@ -92,6 +101,17 @@ public sealed class ListDefinitionsRequestHandler(
                 markerTags);
         }).ToArray();
         return new WorkflowDefinitionListView(items, request.Page, request.PageSize, page.TotalCount);
+    }
+
+    private static async Task<IReadOnlyList<TagDefinition>> ResolveMarkerTagsAsync(
+        ITagDefinitionStore store,
+        IReadOnlyCollection<string> tagDefinitionIds,
+        CancellationToken cancellationToken)
+    {
+        var definitions = new List<TagDefinition>(tagDefinitionIds.Count);
+        foreach (var batch in tagDefinitionIds.Chunk(100))
+            definitions.AddRange(await store.ListByIdsAsync(batch, cancellationToken));
+        return definitions;
     }
 
     private static WorkflowDefinitionLifecycleScope ParseScope(string? state) => state?.ToLowerInvariant() switch

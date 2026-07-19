@@ -154,6 +154,36 @@ public sealed class WorkflowDefinitionProjectionTests
             CancellationToken.None));
     }
 
+    [Fact]
+    public async Task Definition_list_rejects_marker_filters_when_tagging_is_not_active()
+    {
+        var fixture = new ProjectionFixture(1);
+        var handler = fixture.CreateHandlerWithoutTags();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
+            new ListDefinitions(null, null, null, null, MarkerTagClauses: ["tag-priority:exists"]),
+            CancellationToken.None));
+
+        Assert.Contains("not active", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, fixture.DefinitionReadCount);
+    }
+
+    [Fact]
+    public void Provider_neutral_query_fails_closed_for_marker_filters()
+    {
+        var filter = new WorkflowDefinitionFilter
+        {
+            MarkerTagClauses =
+            [
+                new WorkflowDefinitionMarkerTagClause(
+                    "tag-priority",
+                    WorkflowDefinitionMarkerTagOperator.Exists)
+            ]
+        };
+
+        Assert.Throws<NotSupportedException>(() => filter.ToQuery());
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(25)]
@@ -232,6 +262,7 @@ public sealed class WorkflowDefinitionProjectionTests
 
         public int TotalReadCount =>
             _definitions.ReadCount + _projections.ReadCount + _tags.ReadCount + _tagDefinitions.ReadCount;
+        public int DefinitionReadCount => _definitions.ReadCount;
         public WorkflowDefinitionListQuery? LastPageQuery => _definitions.LastPageQuery;
 
         public ListDefinitionsRequestHandler CreateHandler()
@@ -241,6 +272,15 @@ public sealed class WorkflowDefinitionProjectionTests
                 .AddSingleton<IWorkflowDefinitionListProjectionStore>(_projections)
                 .AddSingleton<IWorkflowDefinitionTagStore>(_tags)
                 .AddSingleton<ITagDefinitionStore>(_tagDefinitions)
+                .BuildServiceProvider();
+            return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
+        }
+
+        public ListDefinitionsRequestHandler CreateHandlerWithoutTags()
+        {
+            var services = new ServiceCollection()
+                .AddSingleton<IWorkflowDefinitionStore>(_definitions)
+                .AddSingleton<IWorkflowDefinitionListProjectionStore>(_projections)
                 .BuildServiceProvider();
             return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
         }
@@ -360,6 +400,15 @@ public sealed class WorkflowDefinitionProjectionTests
             string tagDefinitionId,
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<TagDefinitionRevisionedRecord?>(new(_definition, "tag:1"));
+
+        public ValueTask<IReadOnlyList<TagDefinition>> ListByIdsAsync(
+            IReadOnlyCollection<string> tagDefinitionIds,
+            CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            return ValueTask.FromResult<IReadOnlyList<TagDefinition>>(
+                tagDefinitionIds.Contains(_definition.Id, StringComparer.Ordinal) ? [_definition] : []);
+        }
 
         public ValueTask<IReadOnlyList<TagDefinition>> ListAsync(
             TagDefinitionListRequest request,

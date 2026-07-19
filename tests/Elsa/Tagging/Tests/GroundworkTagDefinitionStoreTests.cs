@@ -41,9 +41,37 @@ public sealed class GroundworkTagDefinitionStoreTests
         stale.Definition.DisplayName = "Stale";
         Assert.Equal(TagDefinitionSaveStatus.Conflict, (await store.SaveWithRevisionAsync(stale.Definition, stale.Revision)).Status);
 
-        var audit = new TagDefinitionAuditRecord("audit-1", definition.Id, definition.CanonicalKey, "updated", DateTimeOffset.UtcNow, "author", "correlation");
+        var audit = Audit("audit-1", definition);
         await store.AppendAsync(audit);
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.AppendAsync(audit).AsTask());
+    }
+
+    [Fact]
+    public async Task Does_not_persist_a_catalog_change_when_its_append_only_audit_already_exists()
+    {
+        var store = new GroundworkTagDefinitionStore(new InMemoryDocumentStore(TaggingStorageManifest.Create()));
+        var first = Definition("risk.pii");
+        var duplicateAudit = Audit("audit-1", first);
+        await store.AppendAsync(duplicateAudit);
+
+        var created = await store.TryAddAndAppendAuditAsync(first, duplicateAudit);
+
+        Assert.False(created);
+        Assert.Null(await store.FindByCanonicalKeyAsync(first.CanonicalKey));
+    }
+
+    [Fact]
+    public async Task Lists_and_resolves_catalog_ids_beyond_one_bounded_catalog_page()
+    {
+        var store = new GroundworkTagDefinitionStore(new InMemoryDocumentStore(TaggingStorageManifest.Create()));
+        for (var index = 0; index <= 250; index++)
+            Assert.True(await store.TryAddAsync(Definition($"ops.tag-{index:D3}")));
+
+        var catalog = await store.ListAsync(new TagDefinitionListRequest { ActiveOnly = false });
+        var definitions = await store.ListByIdsAsync(["ops.tag-250-id"]);
+
+        Assert.Equal(251, catalog.Count);
+        Assert.Equal("ops.tag-250", Assert.Single(definitions).CanonicalKey);
     }
 
     private static TagDefinition Definition(string canonicalKey, TagDefinitionStatus status = TagDefinitionStatus.Active) => new()
@@ -54,4 +82,16 @@ public sealed class GroundworkTagDefinitionStoreTests
         Status = status,
         CreatedAt = DateTimeOffset.UtcNow
     };
+
+    private static TagDefinitionAuditRecord Audit(string id, TagDefinition definition) => new(
+        id,
+        definition.Id,
+        definition.CanonicalKey,
+        "updated",
+        DateTimeOffset.UtcNow,
+        "tenant-a",
+        "author",
+        "correlation",
+        new TagDefinitionAuditValues("Before", null, null, TagDefinitionStatus.Active),
+        new TagDefinitionAuditValues(definition.DisplayName, definition.Description, definition.Color, definition.Status));
 }
