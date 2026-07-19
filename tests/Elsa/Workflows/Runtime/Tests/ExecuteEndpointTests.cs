@@ -1,4 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -20,6 +21,35 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// </summary>
 public sealed class ExecuteEndpointTests
 {
+    // The drain is synchronous to quiescence (ADR 0031): by the time the endpoint responds the run has already
+    // reached completion, a fault, or a durable suspension. A Rejected dispatch is a state conflict (409); every
+    // other outcome (Accepted, AcceptedButFaulted, Duplicate, Deferred) returns 200 with the outcome in the body —
+    // never 202, which would falsely advertise an async hand-off.
+    [Theory]
+    [InlineData(WorkflowExecutionCommandDispatchStatus.Accepted, StatusCodes.Status200OK)]
+    [InlineData(WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted, StatusCodes.Status200OK)]
+    [InlineData(WorkflowExecutionCommandDispatchStatus.Duplicate, StatusCodes.Status200OK)]
+    [InlineData(WorkflowExecutionCommandDispatchStatus.Deferred, StatusCodes.Status200OK)]
+    [InlineData(WorkflowExecutionCommandDispatchStatus.Rejected, StatusCodes.Status409Conflict)]
+    public async Task DispatchStatus_maps_to_honest_status_code(WorkflowExecutionCommandDispatchStatus status, int expectedStatusCode)
+    {
+        var view = new WorkflowExecutionStartDispatchView(
+            WorkflowExecutionId: "wf-exec-1",
+            ArtifactId: "artifact-1",
+            ArtifactVersion: "1.0.0",
+            ArtifactHash: "hash-1",
+            CommandDispatchStatus: status.ToString(),
+            EnvelopeId: "envelope-1",
+            AgentId: "agent-1",
+            AgentProviderName: "in-process",
+            Reason: status == WorkflowExecutionCommandDispatchStatus.Accepted ? null : "reason");
+        var endpoint = CreateEndpoint(new ReturningRequestSender(view));
+
+        await HandleAsync(endpoint, new ExecuteWorkflow("artifact-1"));
+
+        Assert.Equal(expectedStatusCode, endpoint.HttpContext.Response.StatusCode);
+    }
+
     [Theory]
     [InlineData("someOtherParam")]
     [InlineData("artifactId")]
@@ -114,5 +144,12 @@ public sealed class ExecuteEndpointTests
         public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default)
             where T : notnull =>
             throw exception;
+    }
+
+    private sealed class ReturningRequestSender(WorkflowExecutionStartDispatchView view) : IRequestSender
+    {
+        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default)
+            where T : notnull =>
+            Task.FromResult((T)(object)view);
     }
 }

@@ -10,6 +10,20 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints;
 
+/// <summary>
+/// <c>POST runtime/workflows/executables/{artifactId}/execute</c> — starts a published workflow by artifact id.
+/// The call is <b>synchronous to quiescence</b>: the in-process actor drains the run inline before the response is
+/// written (ADR 0031 sticky single-writer drain), so by the time the caller receives a response the workflow has
+/// already reached its first stopping point — completion, fault, or a durable suspension. The response is therefore
+/// not an async hand-off acknowledgement; its <see cref="WorkflowExecutionStartDispatchView.CommandDispatchStatus"/>
+/// reflects the actual drain outcome. Status-code mapping honours this: a <c>Rejected</c> dispatch maps to
+/// <c>409 Conflict</c> (a state conflict — retired/unpublished/expired reference or a rejected command), and every
+/// other outcome (<c>Accepted</c>, <c>AcceptedButFaulted</c>, <c>Duplicate</c>, <c>Deferred</c>) maps to
+/// <c>200 OK</c> — the drain ran and the returned status describes what happened. <c>AcceptedButFaulted</c> in
+/// particular still carries a 200 body: the dispatch and drain completed, but the workflow ended the turn faulted,
+/// which callers detect by inspecting <c>CommandDispatchStatus</c> rather than the HTTP code.
+/// <c>GET runtime/workflows/instances/{workflowExecutionId}</c> remains the polling surface for subsequent state.
+/// </summary>
 internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, WorkflowExecutionStartDispatchView>
 {
     private readonly IRequestSender _requestSender;
@@ -33,7 +47,12 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
         {
             var result = await _requestSender.Send(req, ct);
             var dispatchStatus = Enum.Parse<WorkflowExecutionCommandDispatchStatus>(result.CommandDispatchStatus);
-            var statusCode = dispatchStatus == WorkflowExecutionCommandDispatchStatus.Rejected ? 409 : 202;
+
+            // The drain is synchronous to quiescence (ADR 0031), so the run has already reached completion, fault, or a
+            // durable suspension by the time we respond. 200 honestly reports "handled, here is the outcome" — a 202
+            // "Accepted" would falsely advertise an async hand-off. A Rejected dispatch is a state conflict (409); every
+            // other outcome (Accepted, AcceptedButFaulted, Duplicate, Deferred) is 200 with the outcome in the body.
+            var statusCode = dispatchStatus == WorkflowExecutionCommandDispatchStatus.Rejected ? 409 : 200;
             await Send.ResponseAsync(result, statusCode, ct);
         }
         catch (WorkflowExecutableNotFoundException e)
