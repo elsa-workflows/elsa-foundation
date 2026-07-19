@@ -1,6 +1,7 @@
 {
   "collection": "checkpointCommit",
   "commitId": "commit-1",
+  "consumedSchedulerWorkItemIds": [],
   "fingerprint": "6710ac8ead11c6e67787fdce82a91839e77ec1c9830081142549be2ae6bfbdbf",
   "occurredAt": "1970-01-01T00:00:00\u002B00:00",
   "pendingPostCommitWorkIds": [],

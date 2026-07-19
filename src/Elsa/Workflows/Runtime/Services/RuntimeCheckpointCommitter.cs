@@ -14,6 +14,8 @@ public sealed class RuntimeCheckpointCommitter
     private readonly IWorkflowEngineTracer _tracer;
     private readonly IReadOnlyCollection<IRuntimeCheckpointCommitEnricher> _enrichers;
     private readonly IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> _intentHandlerContributions;
+    private readonly IRuntimeConsumedSchedulerWorkClaimAccessor? _consumedWorkClaimAccessor;
+    private readonly IRuntimeCoalescingSessionAccessor? _coalescingSessionAccessor;
 
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
@@ -47,7 +49,9 @@ public sealed class RuntimeCheckpointCommitter
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
         IWorkflowEngineTracer? tracer,
         IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers,
-        IEnumerable<RuntimePostCommitIntentHandlerContribution> intentHandlerContributions)
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> intentHandlerContributions,
+        IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor = null)
     {
         ArgumentNullException.ThrowIfNull(persistencePolicy);
         ArgumentNullException.ThrowIfNull(checkpointCommitStore);
@@ -65,6 +69,8 @@ public sealed class RuntimeCheckpointCommitter
             .Select(item => item.Enricher)
             .ToArray();
         _intentHandlerContributions = intentHandlerContributions.ToArray();
+        _consumedWorkClaimAccessor = consumedWorkClaimAccessor;
+        _coalescingSessionAccessor = coalescingSessionAccessor;
     }
 
     public async ValueTask<RuntimeCheckpointCommitResult> CommitAsync(
@@ -114,9 +120,20 @@ public sealed class RuntimeCheckpointCommitter
         // Fold post-commit intents into the applied change set so the provider persists them atomically with
         // the rest of the checkpoint through its uniform apply path, then verify the provider acknowledged them.
         var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit, _intentHandlerContributions);
-        var commitToPersist = postCommitOutbox.Count == 0
+
+        // WU-1 / spec 105: fold the claimed scheduler work item's fence-checked delete into this same commit so the
+        // drainer can skip its separate acknowledgement. Suppressed while a coalescing session owns the execution — the
+        // session's overlay queue + AdvanceInnerQueueAsync stay authoritative on durable queue advance in that mode.
+        var consumedWorkItems = ResolveConsumedWorkItems(commit);
+
+        var stateChanges = commit.StateChanges;
+        if (postCommitOutbox.Count > 0)
+            stateChanges = stateChanges.WithPostCommitOutbox(postCommitOutbox);
+        if (consumedWorkItems.Count > 0)
+            stateChanges = stateChanges.WithConsumedSchedulerWorkItems(consumedWorkItems);
+        var commitToPersist = ReferenceEquals(stateChanges, commit.StateChanges)
             ? commit
-            : commit with { StateChanges = commit.StateChanges.WithPostCommitOutbox(postCommitOutbox) };
+            : commit with { StateChanges = stateChanges };
 
         var storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
 
@@ -127,12 +144,41 @@ public sealed class RuntimeCheckpointCommitter
                 $"{postCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
                 "post-commit outbox item it is handed.");
 
+        if (storeResult.ConsumedSchedulerWorkItemIds.Count != consumedWorkItems.Count)
+            throw new InvalidOperationException(
+                $"Checkpoint commit store consumed {storeResult.ConsumedSchedulerWorkItemIds.Count} scheduler work item(s) " +
+                $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
+                $"{consumedWorkItems.Count}. The claimed work item's acknowledgement would be silently dropped; the store must " +
+                "delete every consumed scheduler work item it is handed inside the same unit-of-work.");
+
+        // The store durably deleted the claimed item(s), so the drainer must not issue a second acknowledgement.
+        foreach (var workItemId in storeResult.ConsumedSchedulerWorkItemIds)
+            _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
+
         return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
     }
 
     private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
         checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
         StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
+
+    private IReadOnlyCollection<ConsumedSchedulerWorkItem> ResolveConsumedWorkItems(RuntimeCheckpointCommit commit)
+    {
+        if (_consumedWorkClaimAccessor is not { PendingConsume: { } pending, WasConsumedDurably: false })
+            return [];
+
+        // Consume-once per dispatch: WasConsumedDurably guards against a multi-commit handler (e.g. InvokeActivity)
+        // re-attaching an already-deleted item, which would fail the fence as claim-lost.
+        if (!StringComparer.Ordinal.Equals(pending.WorkflowExecutionId, commit.WorkflowExecutionId))
+            return [];
+
+        // Coalesced mode owns durable queue advance through the overlay; do not fold a durable delete that would
+        // double-delete against RuntimeCoalescingSession.AdvanceInnerQueueAsync.
+        if (_coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId))
+            return [];
+
+        return [pending];
+    }
 
     private RuntimeCheckpointCommit AttachExpectedFence(RuntimeCheckpointCommit commit)
     {

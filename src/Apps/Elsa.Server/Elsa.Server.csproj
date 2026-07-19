@@ -124,6 +124,13 @@
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
+		<!--
+			Engine self-instrumentation (MS-9): swaps the no-op IWorkflowEngineTracer for the ActivitySource-backed
+			tracer so the runtime emits drain/dispatch/activity/checkpoint spans on the Elsa.Workflows.Runtime source.
+			Its assembly must be in the CShells catalog so the WorkflowsRuntimeTracing feature is enablable via shells.json;
+			the host-local OpenTelemetryEngineTracingBridge feature then forwards those spans into the OTel ingestion store.
+		-->
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Tracing\Elsa.Workflows.Runtime.Tracing.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
