@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -66,15 +67,12 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
             ?? throw new ArgumentException(
                 $"VF-COER-001: Activity result input '{binding.InputName}' on consumer node '{consumer.ExecutableNodeId}' " +
                 $"references producer node '{producer.ExecutableNodeId}', which has no pinned activity result contract.");
-        var sourceType = StringComparer.Ordinal.Equals(reference.ProjectionKey, "$result")
-            ? result.Type
-            : result.Projections.GetValueOrDefault(reference.ProjectionKey)?.Type
-              ?? throw new ArgumentException(
-                  $"VF-COER-001: Activity result input '{binding.InputName}' on consumer node '{consumer.ExecutableNodeId}' " +
-                  $"references unknown result projection '{reference.ProjectionKey}' on producer node '{producer.ExecutableNodeId}'.");
+        var (sourceType, sourceRepresentation) = StringComparer.Ordinal.Equals(reference.ProjectionKey, "$result")
+            ? (result.Type, result.SourceRepresentation)
+            : ResolveProjectionContract(binding, consumer, reference, producer, result);
         var plan = conversionPlanResolver.Resolve(
             sourceType,
-            ValueRepresentationDefaults.Infer(sourceType),
+            sourceRepresentation,
             binding.TargetType);
 
         return new RuntimeInputBinding(
@@ -89,6 +87,21 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
             binding.Expression,
             binding.Metadata,
             plan);
+    }
+
+    private static (ValueTypeDescriptor Type, ValueRepresentation Representation) ResolveProjectionContract(
+        RuntimeInputBinding binding,
+        ExecutableNode consumer,
+        RuntimeActivityResultReference reference,
+        ExecutableNode producer,
+        ActivityResultContract result)
+    {
+        if (!result.Projections.TryGetValue(reference.ProjectionKey, out var projection))
+            throw new ArgumentException(
+                $"VF-COER-001: Activity result input '{binding.InputName}' on consumer node '{consumer.ExecutableNodeId}' " +
+                $"references unknown result projection '{reference.ProjectionKey}' on producer node '{producer.ExecutableNodeId}'.");
+
+        return (projection.Type, projection.SourceRepresentation);
     }
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)

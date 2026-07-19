@@ -36,6 +36,18 @@ public sealed class ActivityResultConversionPlanLinkerTests
     }
 
     [Fact]
+    public void Link_uses_the_declared_projection_source_representation()
+    {
+        var linked = new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver()).Link(
+            Tree(Producer("String", ValueRepresentation.FormattedContent), Consumer("String")));
+
+        var binding = NodeById(linked, "consumer").InputBindings["value"];
+
+        Assert.Equal(ValueConversionOperation.Identity, binding.ConversionPlan!.Operation);
+        Assert.Equal(ValueRepresentation.FormattedContent, binding.ConversionPlan.SourceRepresentation);
+    }
+
+    [Fact]
     public void Linked_plan_fingerprint_is_part_of_the_executable_hash()
     {
         var linked = new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver()).Link(
@@ -63,7 +75,7 @@ public sealed class ActivityResultConversionPlanLinkerTests
         new Dictionary<string, string>(),
         [new ExecutableChildSlot("activities", [producer, consumer])]);
 
-    private static ExecutableNode Producer(string projectionAlias) => new(
+    private static ExecutableNode Producer(string projectionAlias, ValueRepresentation sourceRepresentation = ValueRepresentation.TypedValue) => new(
         "producer",
         "producer",
         "test.producer",
@@ -72,7 +84,7 @@ public sealed class ActivityResultConversionPlanLinkerTests
         new Dictionary<string, RuntimeInputBinding>(),
         new Dictionary<string, RuntimeOutputCapture>(),
         new Dictionary<string, string>(),
-        activityContract: Contract(projectionAlias));
+        activityContract: Contract(projectionAlias, sourceRepresentation));
 
     private static ExecutableNode Consumer(string targetAlias) => new(
         "consumer",
@@ -92,7 +104,7 @@ public sealed class ActivityResultConversionPlanLinkerTests
         new Dictionary<string, RuntimeOutputCapture>(),
         new Dictionary<string, string>());
 
-    private static ActivityContract Contract(string projectionAlias)
+    private static ActivityContract Contract(string projectionAlias, ValueRepresentation sourceRepresentation)
     {
         var projectionType = Type(projectionAlias);
         return new ActivityContract(
@@ -105,7 +117,7 @@ public sealed class ActivityResultConversionPlanLinkerTests
                 Type("Test.ProducerResult"),
                 isRequired: true,
                 ActivityValuePolicy.Default,
-                [new ActivityResultProjectionContract("value", "value", projectionType, true, ActivityValuePolicy.Default)]),
+                [new ActivityResultProjectionContract("value", "value", projectionType, true, ActivityValuePolicy.Default, sourceRepresentation)]),
             ["Done"],
             new ActivityActivationRequirement("test.producer", "test"));
     }

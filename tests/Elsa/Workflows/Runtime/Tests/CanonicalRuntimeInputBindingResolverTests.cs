@@ -58,8 +58,8 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     [Fact]
     public async Task Direct_result_conversion_preserves_the_pinned_source_contract_until_materialization()
     {
-        var sourceType = new ValueTypeDescriptor("UInt32");
-        var targetType = new ValueTypeDescriptor("Int64");
+        var sourceType = new ValueTypeDescriptor("System.UInt32");
+        var targetType = new ValueTypeDescriptor("System.Int64");
         var plan = new ValueConversionPlan(
             ValueConversionPlan.CurrentSchemaVersion,
             ValueRepresentation.TypedValue,

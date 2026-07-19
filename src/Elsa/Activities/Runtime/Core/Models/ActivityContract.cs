@@ -210,7 +210,8 @@ public sealed class ActivityResultContract
         ValueTypeDescriptor type,
         bool isRequired,
         ActivityValuePolicy policy,
-        IEnumerable<ActivityResultProjectionContract> projections)
+        IEnumerable<ActivityResultProjectionContract> projections,
+        ValueRepresentation? sourceRepresentation = null)
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(policy);
@@ -227,12 +228,14 @@ public sealed class ActivityResultContract
         Type = type;
         IsRequired = isRequired;
         Policy = policy;
+        SourceRepresentation = sourceRepresentation ?? ValueRepresentationDefaults.Infer(type);
         Projections = projectionArray.ToDictionary(x => x.Key, StringComparer.Ordinal);
     }
 
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
     public ActivityValuePolicy Policy { get; }
+    public ValueRepresentation SourceRepresentation { get; }
     public IReadOnlyDictionary<string, ActivityResultProjectionContract> Projections { get; }
 }
 
@@ -243,7 +246,8 @@ public sealed class ActivityResultProjectionContract
         string path,
         ValueTypeDescriptor type,
         bool isRequired,
-        ActivityValuePolicy policy)
+        ActivityValuePolicy policy,
+        ValueRepresentation? sourceRepresentation = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -255,6 +259,7 @@ public sealed class ActivityResultProjectionContract
         Type = type;
         IsRequired = isRequired;
         Policy = policy;
+        SourceRepresentation = sourceRepresentation ?? ValueRepresentationDefaults.Infer(type);
     }
 
     public string Key { get; }
@@ -262,6 +267,7 @@ public sealed class ActivityResultProjectionContract
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
     public ActivityValuePolicy Policy { get; }
+    public ValueRepresentation SourceRepresentation { get; }
 }
 
 public sealed record ActivityActivationRequirement

@@ -29,6 +29,7 @@ public sealed class ValueConversionPlanResolverTests
         Assert.Equal(ValueConversionOperation.Identity, resolver.Resolve(Type("String"), ValueRepresentation.TextValue, Type("String")).Operation);
         Assert.Equal(ValueConversionOperation.NullableCompatibility, resolver.Resolve(Type("Int32"), ValueRepresentation.TypedValue, Type("Int32?")).Operation);
         Assert.Equal(ValueConversionOperation.NumericWidening, resolver.Resolve(Type("UInt32"), ValueRepresentation.TypedValue, Type("Int64")).Operation);
+        Assert.Equal(ValueConversionOperation.NumericWidening, resolver.Resolve(Type("System.UInt32"), ValueRepresentation.TypedValue, Type("System.Int64")).Operation);
         Assert.Equal(ValueConversionOperation.RecursiveCollection, resolver.Resolve(Type("UInt16", CollectionKind.List), ValueRepresentation.TypedValue, Type("Int32", CollectionKind.List)).Operation);
         Assert.Equal(ValueConversionOperation.RecursiveCollection, resolver.Resolve(Type("UInt16", CollectionKind.Array), ValueRepresentation.TypedValue, Type("Int32", CollectionKind.List)).Operation);
         Assert.Equal(ValueConversionOperation.CanonicalAny, resolver.Resolve(Type("Customer"), ValueRepresentation.TypedValue, Type("Elsa.Any")).Operation);
@@ -53,10 +54,12 @@ public sealed class ValueConversionPlanResolverTests
     }
 
     [Fact]
-    public void Explicit_profiles_require_a_declared_formatted_source_and_an_available_pinned_version()
+    public void Explicit_profiles_require_a_declared_formatted_source_and_an_available_runtime_capable_pinned_version()
     {
         var rawText = Assert.Throws<ValueConversionPublicationException>(() =>
             resolver.Resolve(Type("String"), ValueRepresentation.TextValue, Type("Customer"), ValueConversionMode.Json));
+        var unavailableJson = Assert.Throws<ValueConversionPublicationException>(() =>
+            resolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("Customer"), ValueConversionMode.Json));
         var unknownProfile = Assert.Throws<ValueConversionPublicationException>(() =>
             resolver.Resolve(
                 Type("String"),
@@ -66,9 +69,8 @@ public sealed class ValueConversionPlanResolverTests
                 new ValueConversionProfileReference("partner.json", "8")));
 
         Assert.Contains("not format-sniffed", rawText.Message, StringComparison.Ordinal);
+        Assert.Contains("not available", unavailableJson.Message, StringComparison.Ordinal);
         Assert.Contains("not available", unknownProfile.Message, StringComparison.Ordinal);
-        Assert.Equal("elsa.json", resolver.Resolve(
-            Type("String"), ValueRepresentation.FormattedContent, Type("Customer"), ValueConversionMode.Json).Profile!.Id);
     }
 
     [Fact]

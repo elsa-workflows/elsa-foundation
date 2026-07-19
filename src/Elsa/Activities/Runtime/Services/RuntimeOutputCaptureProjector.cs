@@ -62,7 +62,7 @@ public sealed class RuntimeOutputCaptureProjector
             if (projected.Presence == ValuePresence.Absent)
                 continue;
 
-            var value = capture.ConversionPlan is null or { Operation: ValueConversionOperation.Identity }
+            var value = capture.ConversionPlan is null
                 ? StringComparer.Ordinal.Equals(projectionContract.Path, "$")
                     ? transition.Result
                     : projected.Presence == ValuePresence.ExplicitNull

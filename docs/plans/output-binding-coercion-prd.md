@@ -1,8 +1,8 @@
 # PRD: Typed Output Binding Coercion
 
-**Status:** Proposed  
-**Date:** 2026-07-18  
-**Related decision:** [ADR 0046](../adr/0046-output-binding-coercion-uses-pinned-value-representations.md)  
+**Status:** Proposed
+**Date:** 2026-07-18
+**Related decision:** [ADR 0046](../adr/0046-output-binding-coercion-uses-pinned-value-representations.md)
 **Related terminology:** [Elsa glossary](../glossary/elsa.md)
 
 ## Summary

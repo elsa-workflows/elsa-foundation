@@ -80,7 +80,7 @@ public sealed class RuntimeOutputCaptureCompiler(
             var targetType = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
             var conversionPlan = resolvedConversionPlanResolver.Resolve(
                 sourceType,
-                ValueRepresentationDefaults.Infer(sourceType),
+                definition.SourceRepresentation ?? ValueRepresentationDefaults.Infer(sourceType),
                 targetType);
             var type = new RuntimeValueTypeDescriptor(
                 variable.Type.Alias,

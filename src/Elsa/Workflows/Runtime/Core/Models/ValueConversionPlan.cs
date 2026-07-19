@@ -106,6 +106,8 @@ public sealed record ValueConversionPlan
             throw new ArgumentException("A profile conversion operation requires a pinned profile identity.", nameof(profile));
         if (operation != ValueConversionOperation.Profile && profile is not null)
             throw new ArgumentException("Only a profile conversion operation may pin a profile identity.", nameof(profile));
+        if (operation == ValueConversionOperation.Identity && !ValueConversionCompatibility.SameType(sourceType, targetType))
+            throw new ArgumentException("An identity conversion plan requires matching source and target contracts.", nameof(targetType));
 
         JsonElement pinnedOptions = options?.Clone() ?? JsonSerializer.SerializeToElement(new { });
         if (pinnedOptions.ValueKind != JsonValueKind.Object)

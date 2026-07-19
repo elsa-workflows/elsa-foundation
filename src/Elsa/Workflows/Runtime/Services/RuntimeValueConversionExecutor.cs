@@ -21,7 +21,7 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
 
         ValidatePlan(plan);
         ValidateRepresentation(plan);
-        if (!SameType(source.Type, plan.SourceType))
+        if (!ValueConversionCompatibility.SameType(source.Type, plan.SourceType))
             throw Reject(plan, $"runtime source contract '{source.Type.Alias} ({source.Type.CollectionKind})' does not match the pinned source contract");
 
         if (source.ExternalReference is not null && plan.Operation is not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility)
@@ -59,15 +59,15 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
 
         switch (plan.Operation)
         {
-            case ValueConversionOperation.Identity when !SameType(plan.SourceType, plan.TargetType):
+            case ValueConversionOperation.Identity when !ValueConversionCompatibility.SameType(plan.SourceType, plan.TargetType):
                 throw Reject(plan, "identity conversion requires matching source and target contracts");
-            case ValueConversionOperation.NullableCompatibility when !IsNullableCompatibility(plan.SourceType, plan.TargetType):
+            case ValueConversionOperation.NullableCompatibility when !ValueConversionCompatibility.IsNullableCompatibility(plan.SourceType, plan.TargetType):
                 throw Reject(plan, "nullable compatibility requires matching source and target contracts");
-            case ValueConversionOperation.NumericWidening when !CanSafelyWiden(plan.SourceType, plan.TargetType):
+            case ValueConversionOperation.NumericWidening when !ValueConversionCompatibility.IsSafeNumericWidening(plan.SourceType, plan.TargetType):
                 throw Reject(plan, "numeric conversion is not a safe widening");
-            case ValueConversionOperation.RecursiveCollection when !CanRecursivelyWiden(plan.SourceType, plan.TargetType):
+            case ValueConversionOperation.RecursiveCollection when !ValueConversionCompatibility.CanRecursivelyWidenCollection(plan.SourceType, plan.TargetType):
                 throw Reject(plan, "recursive collection conversion does not have a safe element widening");
-            case ValueConversionOperation.CanonicalAny when !IsAny(plan.TargetType):
+            case ValueConversionOperation.CanonicalAny when !ValueConversionCompatibility.IsCanonicalAnyTarget(plan.TargetType):
                 throw Reject(plan, "canonical dynamic projection requires the Elsa.Any target contract");
         }
     }
@@ -103,7 +103,7 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
 
         // The plan has only one element contract. It therefore supports identity and numeric element
         // widening here; nested collection shape is represented by the JSON payload but is not inferred.
-        if (CanSafelyWidenElement(plan.SourceType, plan.TargetType) && values.Any(item => item.ValueKind != JsonValueKind.Number))
+        if (ValueConversionCompatibility.CanSafelyWidenElement(plan.SourceType, plan.TargetType) && values.Any(item => item.ValueKind != JsonValueKind.Number))
             throw Reject(plan, "recursive numeric widening requires every collection element to be a JSON number");
 
         using var stream = new MemoryStream();
@@ -167,85 +167,6 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
         if (Encoding.UTF8.GetByteCount(value.GetRawText()) > plan.Limits.MaxPayloadBytes)
             throw Reject(plan, $"maximum payload size '{plan.Limits.MaxPayloadBytes}' bytes was exceeded");
     }
-
-    private static bool CanRecursivelyWiden(ValueTypeDescriptor source, ValueTypeDescriptor target) =>
-        source.CollectionKind != CollectionKind.Single &&
-        target.CollectionKind != CollectionKind.Single &&
-        IsSafeCollectionShapeConversion(source.CollectionKind, target.CollectionKind) &&
-        (SameElementType(source, target) || IsNullableElementCompatibility(source, target) || CanSafelyWidenElement(source, target));
-
-    private static bool CanSafelyWiden(ValueTypeDescriptor source, ValueTypeDescriptor target) =>
-        source.CollectionKind == CollectionKind.Single &&
-        target.CollectionKind == CollectionKind.Single &&
-        CanSafelyWidenElement(source, target);
-
-    private static bool CanSafelyWidenElement(ValueTypeDescriptor source, ValueTypeDescriptor target)
-    {
-        if (IsNullable(source.Alias) && !IsNullable(target.Alias))
-            return false;
-
-        var sourceAlias = NormalizeAlias(source.Alias);
-        var targetAlias = NormalizeAlias(target.Alias);
-        return sourceAlias switch
-        {
-            "SByte" => targetAlias is "Int16" or "Int32" or "Int64" or "Decimal",
-            "Byte" => targetAlias is "Int16" or "UInt16" or "Int32" or "UInt32" or "Int64" or "UInt64" or "Decimal",
-            "Int16" => targetAlias is "Int32" or "Int64" or "Decimal",
-            "UInt16" => targetAlias is "Int32" or "UInt32" or "Int64" or "UInt64" or "Decimal",
-            "Int32" => targetAlias is "Int64" or "Decimal",
-            "UInt32" => targetAlias is "Int64" or "UInt64" or "Decimal",
-            "Int64" => targetAlias is "Decimal",
-            "UInt64" => targetAlias is "Decimal",
-            "Single" => targetAlias == "Double",
-            _ => false
-        };
-    }
-
-    private static bool SameType(ValueTypeDescriptor left, ValueTypeDescriptor right) =>
-        StringComparer.OrdinalIgnoreCase.Equals(left.Alias, right.Alias) &&
-        left.CollectionKind == right.CollectionKind &&
-        left.SchemaVersion == right.SchemaVersion &&
-        SameJson(left.Schema, right.Schema);
-
-    private static bool SameElementType(ValueTypeDescriptor left, ValueTypeDescriptor right) =>
-        StringComparer.OrdinalIgnoreCase.Equals(left.Alias, right.Alias) &&
-        left.SchemaVersion == right.SchemaVersion &&
-        SameJson(left.Schema, right.Schema);
-
-    private static bool IsAny(ValueTypeDescriptor type) =>
-        type.CollectionKind == CollectionKind.Single &&
-        (StringComparer.OrdinalIgnoreCase.Equals(type.Alias, "Elsa.Any") ||
-         StringComparer.OrdinalIgnoreCase.Equals(type.Alias, "Any") ||
-         StringComparer.OrdinalIgnoreCase.Equals(type.Alias, "JsonNode"));
-
-    private static bool IsNullableCompatibility(ValueTypeDescriptor source, ValueTypeDescriptor target) =>
-        source.CollectionKind == target.CollectionKind &&
-        IsNullableElementCompatibility(source, target);
-
-    private static bool IsNullableElementCompatibility(ValueTypeDescriptor source, ValueTypeDescriptor target) =>
-        StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(source.Alias), TrimNullableSuffix(NormalizeAlias(target.Alias))) &&
-        target.Alias.EndsWith("?", StringComparison.Ordinal) &&
-        source.SchemaVersion == target.SchemaVersion &&
-        SameJson(source.Schema, target.Schema);
-
-    private static bool IsSafeCollectionShapeConversion(CollectionKind source, CollectionKind target) =>
-        source == target ||
-        (source is CollectionKind.Array or CollectionKind.List && target is CollectionKind.Array or CollectionKind.List);
-
-    private static bool SameJson(JsonElement? left, JsonElement? right) =>
-        left.HasValue == right.HasValue && (!left.HasValue || JsonElement.DeepEquals(left.Value, right!.Value));
-
-    private static string NormalizeAlias(string alias)
-    {
-        var normalized = alias.StartsWith("System.", StringComparison.Ordinal)
-            ? alias["System.".Length..]
-            : alias;
-        return TrimNullableSuffix(normalized);
-    }
-
-    private static string TrimNullableSuffix(string alias) => alias.EndsWith("?", StringComparison.Ordinal) ? alias[..^1] : alias;
-
-    private static bool IsNullable(string alias) => alias.EndsWith("?", StringComparison.Ordinal);
 
     private static RuntimeValueConversionException Reject(ValueConversionPlan plan, string reason) => new(plan, reason);
 }

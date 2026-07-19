@@ -161,7 +161,8 @@ public sealed record ActivityOutputContract(
     string? Category = null,
     float Order = 0,
     string? UiHint = null,
-    JsonElement? UiSpecifications = null);
+    JsonElement? UiSpecifications = null,
+    ValueRepresentation? SourceRepresentation = null);
 
 public sealed record ActivityOutcomeContract(
     string ReferenceKey,
