@@ -1,19 +1,18 @@
 import { ChevronDown, ChevronRight, Folder, FolderPen, FolderPlus, Menu, Move, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, listWorkflowFolders, workflowFoldersPath } from "../api/workflowDesign";
+import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, workflowFoldersPath } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 import { getDialogs } from "./dialogs";
 import { useDialogFocus } from "./useDialogFocus";
 import { MoveWorkflowFolderDialog, RenameWorkflowFolderDialog } from "./WorkflowFolderMutationDialogs";
+import { useWorkflowFolderTree, workflowFolderRootKey } from "./useWorkflowFolderTree";
 
 export type WorkflowFolderSelection = "all" | "unfiled" | { id: string };
 
 export function selectedFolderId(selection: WorkflowFolderSelection) {
   return typeof selection === "object" ? selection.id : null;
 }
-
-const rootKey = "root";
 
 export function WorkflowFolderNavigation({ context, selection, onSelect, onAvailable, onFoldersMutated, refreshKey = 0 }: {
   context: StudioEndpointContext;
@@ -25,12 +24,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   refreshKey?: number;
 }) {
   const [available, setAvailable] = useState<boolean | null>(null);
-  const [roots, setRoots] = useState<WorkflowFolder[]>([]);
-  const [children, setChildren] = useState<Record<string, WorkflowFolder[]>>({});
-  const [continuations, setContinuations] = useState<Record<string, string | null>>({});
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [loadingKeys, setLoadingKeys] = useState<Set<string>>(() => new Set());
-  const [loadFailures, setLoadFailures] = useState<Record<string, string>>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [crumbs, setCrumbs] = useState<WorkflowFolder[]>([]);
   const [breadcrumbState, setBreadcrumbState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
@@ -43,70 +37,11 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const [status, setStatus] = useState("");
   const [pendingChildFocusId, setPendingChildFocusId] = useState<string | null>(null);
   const keyboardExpansionIntents = useRef(new Set<string>());
-  const inFlightGenerations = useRef<Record<string, number>>({});
-  const loadedPageCounts = useRef<Record<string, number>>({});
-  const nextLoadGeneration = useRef(0);
   const appliedRefreshKey = useRef(refreshKey);
   const folderPickerButtonRef = useRef<HTMLButtonElement>(null);
   const renameButtonRef = useRef<HTMLButtonElement>(null);
   const moveButtonRef = useRef<HTMLButtonElement>(null);
-
-  const loadFolderPage = useCallback(async (parentId?: string, continuationToken?: string | null, append = false, force = false) => {
-    const key = parentId ?? rootKey;
-    if (inFlightGenerations.current[key] && !force) return false;
-    const generation = ++nextLoadGeneration.current;
-    inFlightGenerations.current[key] = generation;
-    setLoadingKeys(current => new Set(current).add(key));
-    setLoadFailures(current => {
-      const next = { ...current };
-      delete next[key];
-      return next;
-    });
-    try {
-      const pageCount = force ? loadedPageCounts.current[key] ?? 1 : 1;
-      const items: WorkflowFolder[] = [];
-      let nextToken = force ? undefined : continuationToken;
-      let nextContinuationToken: string | null = null;
-      let loadedPages = 0;
-      for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
-        const page = await listWorkflowFolders(context, { parentId, continuationToken: nextToken });
-        if (inFlightGenerations.current[key] !== generation) return false;
-        if (!page) return false;
-        items.push(...page.items);
-        nextContinuationToken = page.nextContinuationToken;
-        loadedPages += 1;
-        if (!force || !nextContinuationToken) break;
-        nextToken = nextContinuationToken;
-      }
-      if (parentId) {
-        setChildren(current => ({
-          ...current,
-          [parentId]: append ? [...(current[parentId] ?? []), ...items] : items
-        }));
-      } else {
-        setRoots(current => append ? [...current, ...items] : items);
-      }
-      loadedPageCounts.current[key] = append ? (loadedPageCounts.current[key] ?? 1) + loadedPages : loadedPages;
-      setContinuations(current => ({ ...current, [key]: nextContinuationToken }));
-      return true;
-    } catch (caught) {
-      if (inFlightGenerations.current[key] !== generation) return false;
-      setLoadFailures(current => ({
-        ...current,
-        [key]: caught instanceof Error ? caught.message : "Couldn't load folders."
-      }));
-      return false;
-    } finally {
-      if (inFlightGenerations.current[key] === generation) {
-        delete inFlightGenerations.current[key];
-        setLoadingKeys(current => {
-          const next = new Set(current);
-          next.delete(key);
-          return next;
-        });
-      }
-    }
-  }, [context]);
+  const { roots, children, continuations, loadingKeys, loadFailures, loadPage: loadFolderPage } = useWorkflowFolderTree({ context });
 
   useEffect(() => {
     let cancelled = false;
@@ -137,8 +72,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     if (refreshKey === appliedRefreshKey.current) return;
     appliedRefreshKey.current = refreshKey;
     if (!available) return;
-    void loadFolderPage(undefined, undefined, false, true);
-    for (const folderId of expanded) void loadFolderPage(folderId, undefined, false, true);
+    void loadFolderPage(undefined, undefined, { force: true });
+    for (const folderId of expanded) void loadFolderPage(folderId, undefined, { force: true });
   }, [available, expanded, loadFolderPage, refreshKey]);
 
   useEffect(() => {
@@ -195,7 +130,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     if (!name) return;
     try {
       await createWorkflowFolder(context, { name, parentId });
-      await loadFolderPage(parentId ?? undefined, undefined, false, true);
+      await loadFolderPage(parentId ?? undefined, undefined, { force: true });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Couldn't create the folder.");
     }
@@ -206,8 +141,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
 
   const refreshAfterStructureChange = async (nextSelection?: WorkflowFolderSelection) => {
     await Promise.all([
-      loadFolderPage(undefined, undefined, false, true),
-      ...Array.from(expanded, folderId => loadFolderPage(folderId, undefined, false, true))
+      loadFolderPage(undefined, undefined, { force: true }),
+      ...Array.from(expanded, folderId => loadFolderPage(folderId, undefined, { force: true }))
     ]);
     setLocalRefreshKey(current => current + 1);
     await onFoldersMutated?.(nextSelection);
@@ -270,8 +205,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     onToggle: toggle,
     onSelect: select,
     onLoadMore: async (parentId?: string) => {
-      const key = parentId ?? rootKey;
-      if (await loadFolderPage(parentId, continuations[key], true)) {
+      const key = parentId ?? workflowFolderRootKey;
+      if (await loadFolderPage(parentId, continuations[key], { append: true })) {
         setFocusedKey(parentId ? `folder:${parentId}` : "all");
       }
     },
@@ -456,7 +391,7 @@ function FolderTree(props: FolderTreeProps) {
   );
 
   const actionRow = (parentId: string | undefined, kind: "load-more" | "retry", label: string, announcement?: string) => {
-    const parentKey = parentId ?? rootKey;
+    const parentKey = parentId ?? workflowFolderRootKey;
     const key = `${kind}:${parentKey}`;
     const loading = loadingKeys.has(parentKey);
     return (
@@ -485,7 +420,7 @@ function FolderTree(props: FolderTreeProps) {
   };
 
   const folderRows = (items: WorkflowFolder[], level: number, parentId?: string): ReactNode => {
-    const parentKey = parentId ?? rootKey;
+    const parentKey = parentId ?? workflowFolderRootKey;
     const loading = loadingKeys.has(parentKey);
     return <>
       {items.map(folder => {
@@ -555,7 +490,7 @@ function FolderTree(props: FolderTreeProps) {
       ref={treeRef}
       role="tree"
       aria-label="Workflow folders"
-      aria-busy={loadingKeys.has(rootKey)}
+      aria-busy={loadingKeys.has(workflowFolderRootKey)}
       className="wf-folder-tree"
       onKeyDown={onKeyDown}
       onPointerDown={() => {

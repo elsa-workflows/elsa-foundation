@@ -1,9 +1,10 @@
 import { ChevronDown, ChevronRight, Folder, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getWorkflowFolder, listWorkflowFolders, moveWorkflowFolder, renameWorkflowFolder } from "../api/workflowDesign";
+import { getWorkflowFolder, moveWorkflowFolder, renameWorkflowFolder } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 import { useDialogFocus } from "./useDialogFocus";
+import { useWorkflowFolderTree, workflowFolderRootKey } from "./useWorkflowFolderTree";
 
 export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed }: {
   context: StudioEndpointContext;
@@ -59,15 +60,9 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
 }) {
   const titleId = useId();
   const ref = useRef<HTMLElement>(null);
-  const pendingKeys = useRef(new Set<string>());
   const classificationGenerations = useRef<Record<string, number>>({});
-  const [roots, setRoots] = useState<WorkflowFolder[]>([]);
-  const [children, setChildren] = useState<Record<string, WorkflowFolder[]>>({});
-  const [continuations, setContinuations] = useState<Record<string, string | null>>({});
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [eligibility, setEligibility] = useState<Record<string, Eligibility>>({});
-  const [loadingKeys, setLoadingKeys] = useState<Set<string>>(() => new Set());
-  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
   const [destinationId, setDestinationId] = useState<string | null>(folder.parentId ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,26 +91,11 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
     }));
   }, [context, folder.id]);
 
-  const loadPage = useCallback(async (parentId?: string, token?: string | null, append = false) => {
-    const key = parentId ?? "root";
-    if (pendingKeys.current.has(key)) return;
-    pendingKeys.current.add(key);
-    setLoadingKeys(current => new Set(current).add(key));
-    setLoadErrors(current => { const next = { ...current }; delete next[key]; return next; });
-    try {
-      const page = await listWorkflowFolders(context, { parentId, continuationToken: token });
-      if (!page) throw new Error("Workflow folders are unavailable.");
-      if (parentId) setChildren(current => ({ ...current, [parentId]: append ? [...(current[parentId] ?? []), ...page.items] : page.items }));
-      else setRoots(current => append ? [...current, ...page.items] : page.items);
-      setContinuations(current => ({ ...current, [key]: page.nextContinuationToken }));
-      await classify(page.items);
-    } catch (caught) {
-      setLoadErrors(current => ({ ...current, [key]: caught instanceof Error ? caught.message : "Couldn't load destinations." }));
-    } finally {
-      pendingKeys.current.delete(key);
-      setLoadingKeys(current => { const next = new Set(current); next.delete(key); return next; });
-    }
-  }, [classify, context]);
+  const { roots, children, continuations, loadedKeys, loadingKeys, loadFailures: loadErrors, loadPage } = useWorkflowFolderTree({
+    context,
+    unavailableMessage: "Workflow folders are unavailable.",
+    onPageLoaded: classify
+  });
 
   useEffect(() => { void loadPage(); }, [loadPage]);
 
@@ -125,7 +105,7 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
       return;
     }
     setExpanded(current => new Set(current).add(candidate.id));
-    if (!(candidate.id in children)) await loadPage(candidate.id);
+    if (!loadedKeys.has(candidate.id)) await loadPage(candidate.id);
   };
 
   const submit = async (event: FormEvent) => {
@@ -145,10 +125,10 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
   };
 
   const controls = (parentId?: string) => {
-    const key = parentId ?? "root";
+    const key = parentId ?? workflowFolderRootKey;
     if (loadingKeys.has(key)) return <p role="status" className="wf-folder-loading"><LoaderCircle size={14} /> Loading folders…</p>;
     if (loadErrors[key]) return <p role="alert" className="wf-folder-load-error">{loadErrors[key]} <button type="button" onClick={() => void loadPage(parentId)}>Retry loading folders</button></p>;
-    if (continuations[key]) return <button type="button" className="wf-folder-load-more" onClick={() => void loadPage(parentId, continuations[key], true)}>Load more folders</button>;
+    if (continuations[key]) return <button type="button" className="wf-folder-load-more" onClick={() => void loadPage(parentId, continuations[key], { append: true })}>Load more folders</button>;
     return null;
   };
 
