@@ -5,6 +5,7 @@ using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.ConsoleStream;
+using Elsa.Studio.Core.Attributes;
 using Elsa.Studio.Core.Models;
 using Elsa.Studio.Diagnostics.OpenTelemetry;
 using Elsa.Studio.Diagnostics.StructuredLogs;
@@ -17,8 +18,11 @@ using Elsa.Studio.Samples.WeatherForecast;
 using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
 using Elsa.Studio.Workflows.Dashboard;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Studio.Tests;
 
@@ -176,6 +180,55 @@ public sealed class StudioModuleManifestProviderTests
     }
 
     [Fact]
+    public async Task GetModules_ListsEveryEmittedStylesheetInNumericOrder()
+    {
+        // Vite cssCodeSplit builds emit module.css, module2.css, … — the manifest must link them all,
+        // in emission order, and ignore unrelated assets.
+        var provider = CreateProvider(webAssets: new Dictionary<string, string[]>
+        {
+            ["_content/Elsa.Studio.Workflows/studio/modules/workflows"] =
+                ["module3.css", "module.css", "module10.css", "module2.css", "module.js", "chunk-abc.js", "styles.txt"]
+        });
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
+        Assert.Equal(
+        [
+            $"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.css?v={module.Version}",
+            $"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module2.css?v={module.Version}",
+            $"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module3.css?v={module.Version}",
+            $"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module10.css?v={module.Version}"
+        ], module.Styles);
+    }
+
+    [Fact]
+    public async Task GetModules_FallsBackToConventionalStylesheetWhenAssetsCannotBeEnumerated()
+    {
+        // A web host environment is registered but the module's asset directory is not served from it.
+        var provider = CreateProvider(webAssets: new Dictionary<string, string[]>());
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
+        Assert.Equal([$"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.css?v={module.Version}"], module.Styles);
+    }
+
+    [Fact]
+    public async Task GetModules_OmitsStylesForModulesWithoutStylesheets()
+    {
+        var provider = CreateProvider(extraFeatureTypes: [typeof(StylelessStudioFeature)]);
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var module = Assert.Single(response.Modules, x => x.Id == typeof(StylelessStudioFeature).Assembly.GetName().Name);
+        Assert.Empty(module.Styles);
+    }
+
+    [StudioModule("tests/styleless", "Styleless", "1.0.0", HasStyles = false)]
+    private sealed class StylelessStudioFeature;
+
+    [Fact]
     public async Task GetModules_FiltersDisabledModulesAndReportsDiagnostic()
     {
         var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Samples.WeatherForecast"));
@@ -291,14 +344,23 @@ public sealed class StudioModuleManifestProviderTests
             x.Status == StudioModuleDiagnosticStatuses.Disabled);
     }
 
-    private static ServiceProvider CreateProvider(Action<StudioApiOptions>? configure = null, IReadOnlyList<string>? shellFeatures = null)
+    private static ServiceProvider CreateProvider(
+        Action<StudioApiOptions>? configure = null,
+        IReadOnlyList<string>? shellFeatures = null,
+        IReadOnlyDictionary<string, string[]>? webAssets = null,
+        Type[]? extraFeatureTypes = null)
     {
         var services = new ServiceCollection();
         services.AddElsaStudioApi();
 
+        if (webAssets is not null)
+            services.AddSingleton<IWebHostEnvironment>(new FakeWebHostEnvironment(webAssets));
+
         // Register a fake runtime feature catalog that surfaces all feature types so the
         // StudioModuleManifestProvider discovers [StudioModule] attributes via reflection.
         services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog(
+        [
+            .. extraFeatureTypes ?? [],
             typeof(ConsoleStreamStudioFeature),
             typeof(DiagnosticsOpenTelemetryStudioFeature),
             typeof(DiagnosticsStructuredLogsStudioFeature),
@@ -310,7 +372,8 @@ public sealed class StudioModuleManifestProviderTests
             typeof(DashboardStudioFeature),
             typeof(AttentionStudioFeature),
             typeof(WorkflowsDashboardStudioFeature),
-            typeof(WeatherForecastStudioFeature)));
+            typeof(WeatherForecastStudioFeature)
+        ]));
 
         // Pin the host/SDK version so these tests are independent of the ambient build version.
         // StudioApiOptions defaults HostVersion/SdkVersion to the Studio API assembly's informational
@@ -368,5 +431,52 @@ public sealed class StudioModuleManifestProviderTests
 
         public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(_snapshot);
+    }
+
+    /// <summary>
+    /// Web host environment whose web root serves the supplied directory-path → file-names map,
+    /// mimicking how static web assets expose module bundles under <c>_content/…</c>.
+    /// </summary>
+    private sealed class FakeWebHostEnvironment(IReadOnlyDictionary<string, string[]> webAssets) : IWebHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "Tests";
+        public string EnvironmentName { get; set; } = "Development";
+        public string ContentRootPath { get; set; } = "/";
+        public string WebRootPath { get; set; } = "/wwwroot";
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+        public IFileProvider WebRootFileProvider { get; set; } = new FakeFileProvider(webAssets);
+    }
+
+    private sealed class FakeFileProvider(IReadOnlyDictionary<string, string[]> directories) : IFileProvider
+    {
+        public IDirectoryContents GetDirectoryContents(string subpath) =>
+            directories.TryGetValue(subpath.Trim('/'), out var files)
+                ? new FakeDirectoryContents(files)
+                : NotFoundDirectoryContents.Singleton;
+
+        public IFileInfo GetFileInfo(string subpath) => new NotFoundFileInfo(subpath);
+
+        public IChangeToken Watch(string filter) => NullChangeToken.Singleton;
+    }
+
+    private sealed class FakeDirectoryContents(string[] files) : IDirectoryContents
+    {
+        public bool Exists => true;
+
+        public IEnumerator<IFileInfo> GetEnumerator() => files.Select(IFileInfo (name) => new FakeFileInfo(name)).GetEnumerator();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    private sealed class FakeFileInfo(string name) : IFileInfo
+    {
+        public bool Exists => true;
+        public long Length => 0;
+        public string? PhysicalPath => null;
+        public string Name => name;
+        public DateTimeOffset LastModified => DateTimeOffset.UnixEpoch;
+        public bool IsDirectory => false;
+
+        public Stream CreateReadStream() => Stream.Null;
     }
 }
