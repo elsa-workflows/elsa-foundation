@@ -117,7 +117,8 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
             provider.GetRequiredService<IIncidentStateStore>(),
             provider.GetRequiredService<IDurableValueStateStore>(),
             provider.GetRequiredService<IRuntimePayloadCapturePolicy>(),
-            new AllowAllActivityExecutionInspectionAuthorizationContext());
+            new AllowAllActivityExecutionInspectionAuthorizationContext(),
+            new Elsa.Workflows.Runtime.Api.Coalescing.RuntimeCheckpointCadenceInspector([]));
         var response = await readHandler.Handle(new GetWorkflowInstance(workflowExecutionId), CancellationToken.None);
 
         Assert.NotNull(response.Instance);

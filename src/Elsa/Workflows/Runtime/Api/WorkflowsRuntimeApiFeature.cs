@@ -4,6 +4,7 @@ using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Api.Capabilities;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -47,6 +48,9 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         // API-only wiring: the FastEndpoints request handlers this feature's endpoints dispatch through.
         services.AddRequestHandlersFrom(GetType().Assembly);
         services.TryAddScoped<IActivityExecutionInspectionAuthorizationContext, HttpContextActivityExecutionInspectionAuthorizationContext>();
+        // Resolves the host's effective checkpoint cadence for the instance detail view (ADR 0032 R3). Reads the
+        // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.
+        services.TryAddScoped<RuntimeCheckpointCadenceInspector>();
         services.TryAddScoped<ActivityExecutionHierarchyReader>();
         services.TryAddScoped<ActivityExecutionLayoutReader>();
         services.TryAddScoped<IActivityExecutionValuePayloadReader, ActivityExecutionValuePayloadReader>();

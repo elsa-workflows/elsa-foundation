@@ -69,11 +69,23 @@ public sealed record WorkflowInstanceSummaryView(
             state.PinnedSource?.SourceVersion);
 }
 
+/// <summary>
+/// Instance detail read model. Beyond the per-instance projections it also surfaces two host-configuration-derived
+/// checkpoint-cadence properties (ADR 0032 R3): <paramref name="CheckpointCadence"/>
+/// (<c>Immediate</c>/<c>Coalesced</c>, with <paramref name="MaxSegmentCheckpoints"/> when Coalesced) and the
+/// <paramref name="InspectionGranularity"/> that cadence implies (<c>activity-level</c> vs <c>boundary-level</c>). They
+/// let an inspection consumer know whether per-activity evidence is exact or folded to a coalesced boundary, rather than
+/// assuming activity-level fidelity. See <see cref="Coalescing.RuntimeCheckpointCadenceInspector"/> for the host-vs-run
+/// projection limitation.
+/// </summary>
 public sealed record WorkflowInstanceDetailsView(
     WorkflowInstanceSummaryView Instance,
     IReadOnlyCollection<ActivityExecutionInspectionSummaryView> Activities,
     IReadOnlyCollection<IncidentStateView> Incidents,
     IReadOnlyDictionary<string, WorkflowOutputView> Outputs,
+    string CheckpointCadence,
+    int? MaxSegmentCheckpoints,
+    string InspectionGranularity,
     string? ActivityNextContinuationToken = null);
 
 /// <summary>
