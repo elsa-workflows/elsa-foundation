@@ -224,6 +224,35 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Equal(HttpStatusCode.NotFound, omitted.StatusCode);
     }
 
+    [Fact]
+    public async Task Workflow_definition_move_is_capability_discovered_and_maps_the_public_success_and_failure_contract()
+    {
+        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false, includePaging: true, includeFolders: true);
+        var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
+        Assert.Contains(capabilities!.Capabilities.SelectMany(x => x.Links), link =>
+            link.Rel == "workflow-definition-folder-move" && link.Href == "design/workflows/definitions/move");
+
+        using var success = await host.Client.PostAsJsonAsync(
+            "/design/workflows/definitions/move", new { definitionIds = new[] { "one", "two" }, folderId = "folder-1" });
+        Assert.Equal(HttpStatusCode.NoContent, success.StatusCode);
+
+        using var invalid = await host.Client.PostAsJsonAsync(
+            "/design/workflows/definitions/move", new { definitionIds = new[] { "one", "one" }, folderId = (string?)null });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        using var omittedDestination = await host.Client.PostAsJsonAsync(
+            "/design/workflows/definitions/move", new { definitionIds = new[] { "one" } });
+        Assert.Equal(HttpStatusCode.BadRequest, omittedDestination.StatusCode);
+
+        using var missing = await host.Client.PostAsJsonAsync(
+            "/design/workflows/definitions/move", new { definitionIds = new[] { "missing" }, folderId = (string?)null });
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+
+        using var conflict = await host.Client.PostAsJsonAsync(
+            "/design/workflows/definitions/move", new { definitionIds = new[] { "conflict" }, folderId = (string?)null });
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+    }
+
     private sealed class CustomManagementHost(WebApplication app, HttpClient client) : IAsyncDisposable
     {
         private static readonly string[] CommonEndpointTypes =
@@ -283,11 +312,13 @@ public sealed class DomainManagementApiCompositionTests
                 builder.Services.AddSingleton<IWorkflowDefinitionStore>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
                 builder.Services.AddSingleton<IWorkflowDefinitionDraftStore>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
                 builder.Services.AddSingleton<IWorkflowDefinitionVersionStore>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
+                builder.Services.AddSingleton<IMoveWorkflowDefinitionsCommand, HttpMoveWorkflowDefinitionsCommand>();
                 builder.Services.AddSingleton<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
                 builder.Services.AddSingleton<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
                 endpointTypes.UnionWith([
                     "Elsa.Workflows.Design.Api.Endpoints.Definitions.Add",
                     "Elsa.Workflows.Design.Api.Endpoints.Definitions.Get",
+                    "Elsa.Workflows.Design.Api.Endpoints.Definitions.Move",
                     "Elsa.Workflows.Design.Api.Endpoints.Folders.List",
                     "Elsa.Workflows.Design.Api.Endpoints.Folders.Get",
                     "Elsa.Workflows.Design.Api.Endpoints.Folders.Create"]);
@@ -374,7 +405,16 @@ public sealed class DomainManagementApiCompositionTests
             throw new InvalidOperationException($"Unexpected command '{command.GetType().Name}'.");
         }
 
-        public Task Send(Elsa.Mediator.Core.Contracts.ICommand command, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public async Task Send(Elsa.Mediator.Core.Contracts.ICommand command, CancellationToken cancellationToken = default)
+        {
+            if (command is MoveWorkflowDefinitions move)
+            {
+                var handler = services.GetRequiredService<Elsa.Mediator.Core.Contracts.ICommandHandler<MoveWorkflowDefinitions>>();
+                await handler.Handle(move, cancellationToken);
+                return;
+            }
+            throw new InvalidOperationException($"Unexpected command '{command.GetType().Name}'.");
+        }
 
         private async Task<T> HandleWorkflowDefinitionPage<T>(
             ListWorkflowDefinitionPage request,
@@ -492,6 +532,18 @@ public sealed class DomainManagementApiCompositionTests
     {
         private int _next;
         public string Generate() => $"http-id-{Interlocked.Increment(ref _next)}";
+    }
+
+    private sealed class HttpMoveWorkflowDefinitionsCommand : IMoveWorkflowDefinitionsCommand
+    {
+        public Task Execute(IReadOnlyCollection<string> definitionIds, string? folderId, CancellationToken cancellationToken = default)
+        {
+            if (definitionIds.Contains("missing", StringComparer.Ordinal))
+                throw Elsa.Primitives.Exceptions.EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), "missing");
+            if (definitionIds.Contains("conflict", StringComparer.Ordinal))
+                throw new Elsa.Workflows.Design.Persistence.Core.Exceptions.WorkflowDefinitionFolderMoveConflictException();
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class HttpWorkflowDefinitionRepository :

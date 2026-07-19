@@ -3,6 +3,7 @@ using Elsa.Api.Capabilities.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Api.Capabilities;
 
@@ -27,7 +28,8 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
     ScopedVariableAuthoringContract? scopedVariables = null,
     IEnumerable<IActivityInputOptionsProvider>? inputOptionsProviders = null,
     IWorkflowDefinitionPageStore? pageStore = null,
-    IWorkflowFolderStore? folderStore = null) : IApiCapabilitySource
+    IWorkflowFolderStore? folderStore = null,
+    IMoveWorkflowDefinitionsCommand? moveDefinitions = null) : IApiCapabilitySource
 {
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
         CancellationToken cancellationToken = default)
@@ -46,6 +48,8 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
         // folderId/unfiled server-side; never advertise a tree that Studio cannot browse through.
         if (folderStore?.IsAvailable == true && pageStore?.IsAvailable == true)
             links.Add(new("workflow-folders", "design/workflows/folders"));
+        if (moveDefinitions is not null && folderStore?.IsAvailable == true && pageStore?.IsAvailable == true)
+            links.Add(new("workflow-definition-folder-move", "design/workflows/definitions/move"));
 
         IReadOnlyCollection<ApiCapabilityDeclaration> declarations = links.Count == 0
             ? []

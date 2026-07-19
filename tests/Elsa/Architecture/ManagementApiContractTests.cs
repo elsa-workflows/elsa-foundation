@@ -16,6 +16,7 @@ public class ManagementApiContractTests
         "/design/activities/catalog",
         "/design/workflows/activities/{activityVersionId}/inputs/{inputName}/options",
         "/design/workflows/definitions",
+        "/design/workflows/definitions/move",
         "/design/workflows/definitions/page",
         "/design/workflows/definitions/{definitionId}",
         "/design/workflows/definitions/{definitionId}/permanent",
@@ -67,6 +68,7 @@ public class ManagementApiContractTests
         "ExecutableProvenance",
         "ExecutableSourceReference",
         "ExpressionDescriptor",
+        "MoveWorkflowDefinitionsRequest",
         "Problem",
         "Publication",
         "PublicationIntent",
@@ -148,6 +150,12 @@ public class ManagementApiContractTests
             GetMapping(GetMapping(paths, "/design/workflows/definitions"), "post"),
             "responses");
         Assert.Contains(new YamlScalarNode("404"), definitionCreateResponses.Children.Keys);
+
+        var moveResponses = GetMapping(GetMapping(paths, "/design/workflows/definitions/move"), "post");
+        Assert.Equal("moveWorkflowDefinitionsToFolder", GetScalar(moveResponses, "operationId"));
+        Assert.Equal(
+            ["204", "400", "401", "403", "404", "409"],
+            GetMapping(moveResponses, "responses").Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
     }
 
     private static async Task<ContractInventory> LoadContractAsync()

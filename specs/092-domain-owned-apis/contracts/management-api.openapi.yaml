@@ -123,6 +123,31 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /design/workflows/definitions/move:
+    post:
+      tags: [Workflow Design]
+      operationId: moveWorkflowDefinitionsToFolder
+      description: Optional capability relation `workflow-definition-folder-move`; atomically changes only server-owned folder placement for every selected logical definition.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveWorkflowDefinitionsRequest'
+      responses:
+        '204':
+          description: Every selected definition was moved to the requested folder, or to Unfiled.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /design/workflows/folders:
     get:
       tags: [Workflow Design]
@@ -1141,6 +1166,16 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         description: { type: [string, 'null'] }
+    MoveWorkflowDefinitionsRequest:
+      type: object
+      required: [definitionIds, folderId]
+      properties:
+        definitionIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+        folderId: { type: [string, 'null'], maxLength: 64 }
     WorkflowDraft:
       type: object
       required: [id, definitionId, state, layout]

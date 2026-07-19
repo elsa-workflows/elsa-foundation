@@ -14,8 +14,10 @@ using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Core.Scoping;
 using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Conformance.Tests;
@@ -234,6 +236,121 @@ public sealed class WorkflowFolderProviderContractTests
             CancellationToken.None));
     }
 
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Definition_folder_moves_are_atomic_tenant_scoped_and_preserve_lifecycle_placement_on_every_provider(string providerKey)
+    {
+        await using var driver = await InitializeAsync(providerKey);
+        const string tenantA = "tenant-a";
+        await using var client = await driver.OpenPhysicalClientAsync(Access(tenantA));
+        var folders = Store(client, tenantA);
+        var destination = await folders.CreateAsync(Folder("destination", "Destination"));
+        var clock = new Clock();
+        var access = GroundworkTestAccess.AccessContext(tenantA);
+        var save = new GroundworkSaveWorkflowDefinitionCommand(client.DocumentStore, clock, access);
+        await save.Execute(new WorkflowDefinition { Id = "one", Name = "One", TenantId = tenantA, FolderId = "before" });
+        await save.Execute(new WorkflowDefinition { Id = "two", Name = "Two", TenantId = tenantA, FolderId = "before", DeletedAt = DateTimeOffset.UnixEpoch });
+
+        var move = new GroundworkMoveWorkflowDefinitionsCommand(client.DocumentStore, clock, access);
+        await move.Execute(["one", "two"], destination.Id);
+
+        var definitions = new GroundworkWorkflowDefinitionStore(client.DocumentStore);
+        Assert.Equal(destination.Id, (await definitions.GetAsync("one")).FolderId);
+        var deleted = await definitions.GetAsync("two");
+        Assert.Equal(destination.Id, deleted.FolderId);
+        Assert.Equal(DateTimeOffset.UnixEpoch, deleted.DeletedAt);
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => move.Execute(["one", "missing"], null));
+        Assert.Equal(destination.Id, (await definitions.GetAsync("one")).FolderId);
+
+        await using var foreign = await driver.OpenPhysicalClientAsync(Access("tenant-b"));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            new GroundworkMoveWorkflowDefinitionsCommand(foreign.DocumentStore, clock, GroundworkTestAccess.AccessContext("tenant-b"))
+                .Execute(["one"], null));
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Concurrent_two_definition_moves_select_one_atomic_winner_on_transaction_capable_providers(string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        var required =
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients |
+            GroundworkTopologyCapabilities.MultiDocumentTransactions;
+        Skip.IfNot(
+            (driver.Descriptor.Topology.Capabilities & required) == required,
+            $"{providerKey} does not advertise independent clients plus multi-document transactions.");
+        await driver.InitializeAsync();
+        await driver.ResetPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]);
+
+        const string tenant = "tenant-a";
+        await using (var seedClient = await driver.OpenPhysicalClientAsync(Access(tenant)))
+        {
+            var access = GroundworkTestAccess.AccessContext(tenant);
+            var clock = new Clock();
+            var folders = Store(seedClient, tenant);
+            await folders.CreateAsync(Folder("destination-a", "Destination A"));
+            await folders.CreateAsync(Folder("destination-b", "Destination B"));
+            var save = new GroundworkSaveWorkflowDefinitionCommand(seedClient.DocumentStore, clock, access);
+            await save.Execute(new WorkflowDefinition
+            {
+                Id = "one",
+                Name = "One",
+                Description = "Preserve one",
+                TenantId = tenant,
+                FolderId = "before",
+                DeletedReason = "keep-reason"
+            });
+            await save.Execute(new WorkflowDefinition
+            {
+                Id = "two",
+                Name = "Two",
+                Description = "Preserve two",
+                TenantId = tenant,
+                FolderId = "before",
+                DeletedAt = DateTimeOffset.UnixEpoch
+            });
+        }
+
+        await using var firstClient = await driver.OpenPhysicalClientAsync(Access(tenant));
+        await using var secondClient = await driver.OpenPhysicalClientAsync(Access(tenant));
+        Assert.Equal(TransactionBoundary.CrossUnitAtomic, firstClient.DocumentStore.TransactionBoundary);
+        Assert.Equal(TransactionBoundary.CrossUnitAtomic, secondClient.DocumentStore.TransactionBoundary);
+        var barrier = new SharedUnitOfWorkLoadBarrier(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            "one");
+        var accessContext = GroundworkTestAccess.AccessContext(tenant);
+        var firstMove = new GroundworkMoveWorkflowDefinitionsCommand(
+            new UnitOfWorkLoadBarrierDocumentStore(firstClient.DocumentStore, barrier),
+            new Clock(),
+            accessContext);
+        var secondMove = new GroundworkMoveWorkflowDefinitionsCommand(
+            new UnitOfWorkLoadBarrierDocumentStore(secondClient.DocumentStore, barrier),
+            new Clock(),
+            accessContext);
+
+        var outcomes = await Task.WhenAll(
+            MoveOutcomeAsync(firstMove, "destination-a"),
+            MoveOutcomeAsync(secondMove, "destination-b"));
+
+        Assert.Single(outcomes, outcome => outcome is null);
+        Assert.Single(outcomes, outcome => outcome is WorkflowDefinitionFolderMoveConflictException);
+
+        await using var verifierClient = await driver.OpenPhysicalClientAsync(Access(tenant));
+        var verifier = new GroundworkWorkflowDefinitionStore(verifierClient.DocumentStore);
+        var first = await verifier.GetAsync("one");
+        var second = await verifier.GetAsync("two");
+        Assert.Equal(first.FolderId, second.FolderId);
+        Assert.Contains(first.FolderId, new[] { "destination-a", "destination-b" });
+        Assert.Equal("One", first.Name);
+        Assert.Equal("Preserve one", first.Description);
+        Assert.Equal("keep-reason", first.DeletedReason);
+        Assert.Equal("Two", second.Name);
+        Assert.Equal("Preserve two", second.Description);
+        Assert.Equal(DateTimeOffset.UnixEpoch, second.DeletedAt);
+    }
+
     private static async Task<GroundworkProviderDriver> InitializeAsync(string providerKey)
     {
         var driver = GroundworkProviderDriverFactory.Create(providerKey);
@@ -280,6 +397,21 @@ public sealed class WorkflowFolderProviderContractTests
         }
     }
 
+    private static async Task<Exception?> MoveOutcomeAsync(
+        GroundworkMoveWorkflowDefinitionsCommand command,
+        string destination)
+    {
+        try
+        {
+            await command.Execute(["one", "two"], destination);
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
+    }
+
     private static Task SaveLegacyDefinitionAsync(IDocumentStore store, WorkflowDefinition definition)
     {
         var document = new GroundworkDocument<WorkflowDefinition>(
@@ -297,6 +429,120 @@ public sealed class WorkflowFolderProviderContractTests
     private sealed class Clock : ISystemClock
     {
         public DateTimeOffset UtcNow => DateTimeOffset.UnixEpoch;
+    }
+
+    private sealed class SharedUnitOfWorkLoadBarrier(string documentKind, string id)
+    {
+        private readonly TaskCompletionSource _allArrived =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _arrivals;
+
+        public async Task WaitAsync(
+            string observedDocumentKind,
+            string observedId,
+            CancellationToken cancellationToken)
+        {
+            if (!StringComparer.Ordinal.Equals(documentKind, observedDocumentKind) ||
+                !StringComparer.Ordinal.Equals(id, observedId))
+                return;
+
+            if (Interlocked.Increment(ref _arrivals) == 2)
+                _allArrived.TrySetResult();
+
+            await _allArrived.Task.WaitAsync(cancellationToken);
+        }
+    }
+
+    private sealed class UnitOfWorkLoadBarrierDocumentStore(
+        IDocumentStore inner,
+        SharedUnitOfWorkLoadBarrier barrier) : IDocumentStore
+    {
+        public DocumentStoreAccess Access => inner.Access;
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+
+        public Task<DocumentStoreWriteResult> SaveAsync(
+            SaveDocumentRequest request,
+            CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(
+            DeleteDocumentRequest request,
+            CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
+            DocumentStoreQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(
+            PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+
+        public Task<IDocumentUnitOfWork> BeginAsync(
+            DocumentCommitScope scope,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IDocumentUnitOfWork>(
+                new LoadBarrierDocumentUnitOfWork(inner, scope, barrier));
+    }
+
+    private sealed class LoadBarrierDocumentUnitOfWork(
+        IDocumentStore store,
+        DocumentCommitScope scope,
+        SharedUnitOfWorkLoadBarrier barrier) : IDocumentUnitOfWork
+    {
+        private IDocumentUnitOfWork? _inner;
+
+        public async Task<DocumentStoreWriteResult> SaveAsync(
+            SaveDocumentRequest request,
+            CancellationToken cancellationToken = default) =>
+            await (await InnerAsync(cancellationToken)).SaveAsync(request, cancellationToken);
+
+        public async Task<DocumentStoreWriteResult> DeleteAsync(
+            DeleteDocumentRequest request,
+            CancellationToken cancellationToken = default) =>
+            await (await InnerAsync(cancellationToken)).DeleteAsync(request, cancellationToken);
+
+        public async Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default)
+        {
+            // Delay the physical transaction until the first write. This lets both independent
+            // clients observe the same native provider versions before either writer acquires a
+            // provider transaction, while all writes still commit through a real atomic UoW.
+            var envelope = await store.LoadAsync(documentKind, id, cancellationToken);
+            await barrier.WaitAsync(documentKind, id, cancellationToken);
+            return envelope;
+        }
+
+        public async Task CommitAsync(CancellationToken cancellationToken = default) =>
+            await (await InnerAsync(cancellationToken)).CommitAsync(cancellationToken);
+
+        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
+            _inner?.RollbackAsync(cancellationToken) ?? Task.CompletedTask;
+
+        public ValueTask DisposeAsync() => _inner?.DisposeAsync() ?? ValueTask.CompletedTask;
+
+        private async Task<IDocumentUnitOfWork> InnerAsync(CancellationToken cancellationToken) =>
+            _inner ??= await store.BeginAsync(scope, cancellationToken);
     }
 
     private sealed class RecordingBoundedDocumentStore(IBoundedDocumentStore inner) : IBoundedDocumentStore
