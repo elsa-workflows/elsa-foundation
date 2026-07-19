@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
-import { listDefinitions } from "../api/workflowDesign";
+import {
+  createWorkflowFolder,
+  deleteEmptyWorkflowFolder,
+  getWorkflowFolderMutationSupport,
+  listDefinitions,
+  listWorkflowFolders,
+  moveWorkflowFolder,
+  renameWorkflowFolder
+} from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { preflightPublication, preflightPublicationSnapshot, startWorkflowDraftTestRun } from "../api/publishing";
 import { getActivityExecutionDescendants, getActivityExecutionLayout, getExecutable, getExecutableInputSources, listExecutables, runExecutable } from "../api/runtime";
@@ -46,6 +54,17 @@ const capabilities = {
   ]
 };
 
+const pagedDefinitionCapabilities = {
+  capabilities: [{
+    id: "elsa.api.workflow-design",
+    contractVersion: "1",
+    links: [
+      { rel: "workflow-definitions", href: "design/workflows/definitions" },
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" }
+    ]
+  }]
+};
+
 describe("canonical domain clients", () => {
   it("normalizes the unpaged Design items response for Studio paging", async () => {
     const items = Array.from({ length: 12 }, (_, index) => ({
@@ -63,6 +82,156 @@ describe("canonical domain clients", () => {
     expect(result.definitions.map(item => item.id)).toEqual(["definition-6", "definition-7", "definition-8", "definition-9", "definition-10"]);
     expect(result).toMatchObject({ page: 2, pageSize: 5, totalCount: 12 });
     expect(getJson).toHaveBeenLastCalledWith("/design/workflows/definitions?state=all&search=Definition");
+  });
+
+  it("uses the advertised bounded definition page without downloading the legacy collection", async () => {
+    const items = Array.from({ length: 5 }, (_, index) => ({
+      id: `definition-${index + 1}`,
+      name: `Definition ${index + 1}`,
+      createdAt: "2026-07-13T00:00:00Z",
+      lastModifiedAt: "2026-07-13T00:00:00Z",
+      versionCount: 0
+    }));
+    const getJson = vi.fn(async (url: string) => url === "/capabilities"
+      ? pagedDefinitionCapabilities
+      : { items, nextContinuationToken: "opaque-next-page" });
+    const context = createContext({ getJson });
+
+    const result = await listDefinitions(context, {
+      search: "Definition",
+      state: "all",
+      page: 2,
+      pageSize: 5,
+      continuationToken: "opaque-current-page"
+    });
+
+    expect(result).toMatchObject({
+      definitions: items,
+      page: 2,
+      pageSize: 5,
+      nextContinuationToken: "opaque-next-page",
+      isPaged: true
+    });
+    expect(getJson).toHaveBeenLastCalledWith(
+      "/design/workflows/definition-pages?state=all&search=Definition&pageSize=5&continuationToken=opaque-current-page"
+    );
+    expect(getJson).not.toHaveBeenCalledWith(expect.stringContaining("/design/workflows/definitions?"));
+  });
+
+  it("preserves the optional opaque folder breadcrumb projected by the bounded page", async () => {
+    const item = {
+      id: "definition-1",
+      name: "Definition 1",
+      createdAt: "2026-07-13T00:00:00Z",
+      lastModifiedAt: "2026-07-13T00:00:00Z",
+      versionCount: 0,
+      folderId: "folder-leaf",
+      folderBreadcrumb: [
+        { id: "folder-root", name: "Platform" },
+        { id: "folder-leaf", name: "Operations" }
+      ]
+    };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities"
+      ? pagedDefinitionCapabilities
+      : { items: [item], nextContinuationToken: null });
+
+    const result = await listDefinitions(createContext({ getJson }), {
+      search: "",
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(result.definitions[0].folderBreadcrumb).toEqual([
+      { id: "folder-root", name: "Platform" },
+      { id: "folder-leaf", name: "Operations" }
+    ]);
+  });
+
+  it("uses the advertised folder root for direct children and never invents a host path", async () => {
+    const folderCapabilities = {
+      capabilities: [{
+        id: "elsa.api.workflow-design",
+        contractVersion: "1",
+        links: [{ rel: "workflow-folders", href: "design/workflows/folders" }]
+      }]
+    };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? folderCapabilities : { items: [] });
+    const postJson = vi.fn(async () => ({ id: "folder-a", name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" }));
+    const context = createContext({ getJson, postJson });
+
+    await listWorkflowFolders(context, { parentId: "folder-parent" });
+    await createWorkflowFolder(context, { name: "Operations", parentId: "folder-parent" });
+
+    expect(getJson).toHaveBeenCalledWith("/design/workflows/folders?pageSize=100&parentId=folder-parent");
+    expect(postJson).toHaveBeenCalledWith("/design/workflows/folders", { name: "Operations", parentId: "folder-parent" });
+  });
+
+  it("sends direct-folder and Unfiled selectors only through the paged relation", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities"
+      ? pagedDefinitionCapabilities
+      : { items: [], nextContinuationToken: null });
+    const context = createContext({ getJson });
+
+    await listDefinitions(context, { search: "", page: 1, pageSize: 10, folderId: "folder/a" });
+    await listDefinitions(context, { search: "", page: 1, pageSize: 10, unfiled: true });
+
+    expect(getJson).toHaveBeenCalledWith("/design/workflows/definition-pages?state=active&pageSize=10&folderId=folder%2Fa");
+    expect(getJson).toHaveBeenCalledWith("/design/workflows/definition-pages?state=active&pageSize=10&unfiled=true");
+  });
+
+  it("does not probe a folder endpoint when the relation is absent", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : { items: [] });
+    const context = createContext({ getJson });
+
+    expect(await listWorkflowFolders(context)).toBeNull();
+    expect(getJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the opaque folder continuation available to a lazy caller", async () => {
+    const folderCapabilities = { capabilities: [{ id: "elsa.api.workflow-design", contractVersion: "1", links: [{ rel: "workflow-folders", href: "design/workflows/folders" }] }] };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? folderCapabilities : { items: [{ id: "folder-2" }], nextContinuationToken: null });
+    const context = createContext({ getJson });
+
+    const page = await listWorkflowFolders(context, { parentId: "folder-parent", continuationToken: "opaque-next" });
+
+    expect(page?.items).toEqual([{ id: "folder-2" }]);
+    expect(getJson).toHaveBeenCalledWith("/design/workflows/folders?pageSize=100&parentId=folder-parent&continuationToken=opaque-next");
+  });
+
+  it("uses only advertised folder mutation templates and sends the exact mutation contracts", async () => {
+    const folderCapabilities = {
+      capabilities: [{
+        id: "elsa.api.workflow-design",
+        contractVersion: "1",
+        links: [
+          { rel: "workflow-folder-rename", href: "design/workflows/folders/{folderId}/rename", templated: true },
+          { rel: "workflow-folder-move", href: "design/workflows/folders/{folderId}/move", templated: true },
+          { rel: "workflow-folder-delete-empty", href: "design/workflows/folders/{folderId}", templated: true }
+        ]
+      }]
+    };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? folderCapabilities : {});
+    const postJson = vi.fn(async () => ({}));
+    const deleteJson = vi.fn(async () => ({}));
+    const context = createContext({ getJson, postJson, deleteJson });
+
+    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: true, move: true, deleteEmpty: true });
+    await renameWorkflowFolder(context, "folder/a", "Operations");
+    await moveWorkflowFolder(context, "folder/a", null);
+    await deleteEmptyWorkflowFolder(context, "folder/a");
+
+    expect(postJson).toHaveBeenCalledWith("/design/workflows/folders/folder%2Fa/rename", { name: "Operations" });
+    expect(postJson).toHaveBeenCalledWith("/design/workflows/folders/folder%2Fa/move", { parentId: null });
+    expect(deleteJson).toHaveBeenCalledWith("/design/workflows/folders/folder%2Fa");
+    expect(getJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports absent folder mutation relations without probing guessed endpoints", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const context = createContext({ getJson });
+
+    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: false, move: false, deleteEmpty: false });
+    expect(getJson).toHaveBeenCalledTimes(1);
   });
 
   it("uses canonical Activity, Publishing, and Runtime links without probing alternates", async () => {
