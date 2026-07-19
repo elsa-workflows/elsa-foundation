@@ -73,13 +73,17 @@ public static class SecretsStorageManifest
                 new PhysicalIndexDefinition(
                     nameIndex.Identity,
                     [
-                        new PhysicalIndexColumnDefinition(TenantIdField, 0),
-                        new PhysicalIndexColumnDefinition(NormalizedNameField, 1)
+                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                        new PhysicalIndexColumnDefinition(TenantIdField, 1),
+                        new PhysicalIndexColumnDefinition(NormalizedNameField, 2)
                     ],
                     isUnique: true),
                 new PhysicalIndexDefinition(
                     collectionIndex.Identity,
-                    [new PhysicalIndexColumnDefinition(CollectionField, 0)])
+                    [
+                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                        new PhysicalIndexColumnDefinition(CollectionField, 1)
+                    ])
             ]);
         var listRoute = FilterRoute(
             ListFilteredQuery,
@@ -156,7 +160,6 @@ public static class SecretsStorageManifest
     {
         var residuals = new List<BoundedQueryResidualPredicateField>
         {
-            Residual(TenantIdField, IndexValueKind.Keyword, PortableQueryOperation.Equal),
             Residual(
                 TypeNameLookupKeyField,
                 IndexValueKind.Keyword,
@@ -212,7 +215,12 @@ public static class SecretsStorageManifest
             [
                 new BoundedQuerySortField(NormalizedNameField, PhysicalSortDirection.Ascending)
             ],
-            predicateFields: null,
+            predicateFields:
+            [
+                new BoundedQueryPredicateField(
+                    TenantIdField,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+            ],
             residualPredicateFields: residuals);
     }
 

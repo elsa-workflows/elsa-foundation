@@ -185,6 +185,7 @@ public class UnifiedGroundworkHostTests
         var secret = new Secret
         {
             Id = "secret-1",
+            TenantId = "tenant-1",
             Name = "payments.api",
             DisplayName = "Payments API",
             TypeName = SecretTypeNames.Text,

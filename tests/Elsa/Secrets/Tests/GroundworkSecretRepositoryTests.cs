@@ -188,6 +188,9 @@ public sealed class GroundworkSecretRepositoryTests
         Assert.Equal(QueryPagingSupport.Offset, query.PagingSupport);
         Assert.True(query.SupportsDisjunction);
         Assert.True(query.SupportsTotalCount);
+        Assert.Equal(
+            SecretsStorageManifest.TenantIdField,
+            Assert.Single(query.PredicateFields).Path);
         Assert.Contains(
             query.ResidualPredicateFields,
             field =>
@@ -203,7 +206,9 @@ public sealed class GroundworkSecretRepositoryTests
             storage.BoundedQueries,
             candidate => candidate.Identity == SecretsStorageManifest.SearchFilteredQuery);
         Assert.Equal(BoundedQueryExecutionClass.Ordinary, search.ExecutionClass);
-        Assert.Empty(search.PredicateFields);
+        Assert.Equal(
+            SecretsStorageManifest.TenantIdField,
+            Assert.Single(search.PredicateFields).Path);
         Assert.Contains(
             search.ResidualPredicateFields,
             field =>
