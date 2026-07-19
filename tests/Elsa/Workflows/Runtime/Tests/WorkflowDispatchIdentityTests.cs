@@ -55,6 +55,16 @@ public sealed class WorkflowDispatchIdentityTests
             RuntimePostCommitOutboxIdentity.Create(
                 compactedBoth[..reservedSeparator],
                 compactedBoth[(reservedSeparator + 1)..]));
+
+        var ambiguousCommitPrefix = new string('a', 100);
+        var ambiguousIntentSuffix = new string('z', RuntimePostCommitOutboxIdentity.MaximumLength);
+        Assert.NotEqual(
+            RuntimePostCommitOutboxIdentity.Create(
+                $"{ambiguousCommitPrefix}:b",
+                ambiguousIntentSuffix),
+            RuntimePostCommitOutboxIdentity.Create(
+                ambiguousCommitPrefix,
+                $"b:{ambiguousIntentSuffix}"));
     }
 
     [Fact]

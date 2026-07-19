@@ -1,7 +1,5 @@
 using System.Text.Json.Serialization;
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -14,6 +12,7 @@ public static class RuntimePostCommitOutboxIdentity
 {
     public const int MaximumLength = 450;
     private const string DigestPrefix = "outbox:sha256:v1:";
+    private const string ProjectionDigestPrefix = "outbox:projection:sha256:v1:";
 
     public static string Create(string commitId, string intentId)
     {
@@ -25,14 +24,19 @@ public static class RuntimePostCommitOutboxIdentity
             !candidate.StartsWith(DigestPrefix, StringComparison.Ordinal))
             return candidate;
 
-        candidate = $"{DigestPrefix}{Digest(commitId)}:{intentId}";
+        candidate = $"{DigestPrefix}{RuntimeIdentityDigest.Compute("elsa.outbox.commit", "v1", commitId)}:{intentId}";
         return candidate.Length <= MaximumLength
             ? candidate
-            : $"{DigestPrefix}{Digest($"{commitId}:{intentId}")}";
+            : $"{DigestPrefix}{RuntimeIdentityDigest.Compute("elsa.outbox.identity", "v1", commitId, intentId)}";
     }
 
-    private static string Digest(string value) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    public static string CreateProjectionValue(string outboxItemId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        return outboxItemId.Length <= MaximumLength
+            ? outboxItemId
+            : $"{ProjectionDigestPrefix}{RuntimeIdentityDigest.Compute("elsa.outbox.projection", "v1", outboxItemId)}";
+    }
 }
 
 /// <summary>
