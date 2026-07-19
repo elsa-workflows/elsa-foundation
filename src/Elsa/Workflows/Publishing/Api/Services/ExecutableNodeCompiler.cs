@@ -323,7 +323,8 @@ public sealed class ExecutableNodeCompiler(
                     attribute.Path ?? JsonNamingPolicy.CamelCase.ConvertName(candidate.Property.Name),
                     new ValueTypeDescriptor(type.Alias, type.CollectionKind),
                     attribute.IsRequired,
-                    CompileActivityPolicy(outputDefinition?.StorageDriverType, outputState, $"Result projection '{key}' on activity node '{activity.NodeId}'"));
+                    CompileActivityPolicy(outputDefinition?.StorageDriverType, outputState, $"Result projection '{key}' on activity node '{activity.NodeId}'"),
+                    ValueRepresentationDefaults.Infer(new ValueTypeDescriptor(type.Alias, type.CollectionKind)));
             })
             .ToArray();
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
@@ -345,7 +346,8 @@ public sealed class ExecutableNodeCompiler(
                 new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind),
                 isRequired: true,
                 resultPolicy,
-                projections),
+                projections,
+                ValueRepresentationDefaults.Infer(new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind))),
             outcomes,
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)));
     }

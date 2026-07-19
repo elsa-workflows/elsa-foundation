@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -40,6 +41,30 @@ public sealed class ReusableActivityFoundationalContractTests
         Assert.Equal("elsa.json", contract.Inputs.Single().StorageDriverKey);
         Assert.Equal(ActivityBoundaryDurability.Required, contract.Outputs.Single().Durability);
         Assert.Equal("done", contract.Outcomes.Single().ReferenceKey);
+    }
+
+    [Fact]
+    public void PublicContractView_RoundTripsOutputSourceRepresentation()
+    {
+        var contract = new ActivityContract(
+            "1",
+            [],
+            [
+                new ActivityOutputContract(
+                    "payload",
+                    "Payload",
+                    new TypeReference("String"),
+                    true,
+                    "elsa.json",
+                    SourceRepresentation: ValueRepresentation.FormattedContent)
+            ],
+            []);
+
+        var view = contract.ToView();
+        var roundTripped = view.ToDomain();
+
+        Assert.Equal(ValueRepresentation.FormattedContent, view.Outputs.Single().SourceRepresentation);
+        Assert.Equal(ValueRepresentation.FormattedContent, roundTripped.Outputs.Single().SourceRepresentation);
     }
 
     [Fact]

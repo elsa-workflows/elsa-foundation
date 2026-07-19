@@ -68,7 +68,8 @@ public static class ActivityContractViewMappings
             x.Category,
             x.Order,
             x.UiHint,
-            Clone(x.UiSpecifications))).ToArray(),
+            Clone(x.UiSpecifications),
+            x.SourceRepresentation)).ToArray(),
         view.Outputs.Select(x => new ActivityOutputContract(
             x.ReferenceKey,
             x.Name,
