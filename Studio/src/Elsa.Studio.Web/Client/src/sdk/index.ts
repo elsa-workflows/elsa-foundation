@@ -211,11 +211,50 @@ export interface StudioNavigationContribution {
   parentId?: string;
 }
 
-export interface StudioDashboardWidgetContribution {
+export type StudioDashboardWidgetSize = "small" | "medium" | "wide" | "full";
+
+export interface StudioDashboardWidgetLoadContext<TSettings> {
+  settings: TSettings;
+  signal: AbortSignal;
+}
+
+export interface StudioDashboardWidgetSettings<TSettings> {
+  schemaVersion: number;
+  defaults: TSettings;
+  descriptors: StudioSettingDescriptor[];
+  validate(value: unknown): TSettings | null;
+  migrate?(value: unknown, fromVersion: number): TSettings | null;
+}
+
+export interface StudioDashboardWidgetBodyProps<TSnapshot, TSettings> {
+  snapshot: TSnapshot | undefined;
+  settings: TSettings;
+  size: StudioDashboardWidgetSize;
+}
+
+export interface StudioDashboardWidgetEmptyState {
+  title?: string;
+  description?: string;
+}
+
+export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSettings = unknown> {
   id: string;
+  moduleId: string;
   title: string;
+  description?: string;
   order?: number;
-  component: ComponentType;
+  defaultVisible: boolean;
+  defaultSize: StudioDashboardWidgetSize;
+  supportedSizes: StudioDashboardWidgetSize[];
+  permissions?: string[];
+  minimumRefreshIntervalMs?: number;
+  cacheLifetimeMs?: number;
+  timeoutMs?: number;
+  settings?: StudioDashboardWidgetSettings<TSettings>;
+  load?(context: StudioDashboardWidgetLoadContext<TSettings>): Promise<TSnapshot>;
+  isEmpty?(snapshot: TSnapshot | undefined, settings: TSettings): boolean;
+  emptyState?: StudioDashboardWidgetEmptyState;
+  component: ComponentType<StudioDashboardWidgetBodyProps<TSnapshot, TSettings>>;
 }
 
 export type StudioDiagnosticsWidgetMode = "snapshot" | "live";
@@ -1107,6 +1146,10 @@ export interface StudioContributionRegistry<T> {
   compose(options?: StudioContributionListOptions<T>): StudioContributionComposition<T>[];
 }
 
+export interface StudioDashboardWidgetRegistry extends Omit<StudioContributionRegistry<StudioDashboardWidgetContribution>, "add"> {
+  add<TSnapshot = unknown, TSettings = unknown>(contribution: StudioDashboardWidgetContribution<TSnapshot, TSettings>): void;
+}
+
 export interface StudioAiPromptDispatcher {
   dispatchPrompt(request: StudioAiPromptRequest): void;
   onPrompt(listener: (request: StudioAiPromptRequest) => void): () => void;
@@ -1136,8 +1179,132 @@ export interface StudioWorkflowRuntimeSettings {
   autosaveEnabledByDefault?: boolean;
 }
 
+export interface StudioActivityDefinitionRecoverySettings {
+  enabled?: boolean;
+  ttlMinutes?: number;
+}
+
+export interface StudioActivityDefinitionRuntimeSettings {
+  localRecovery?: StudioActivityDefinitionRecoverySettings;
+}
+
+export interface StudioRuntimeIdentity {
+  subject?: string | null;
+  tenantId?: string | null;
+}
+
 export interface StudioRuntimeSettings {
+  hostId?: string;
   workflows?: StudioWorkflowRuntimeSettings;
+  activityDefinitions?: StudioActivityDefinitionRuntimeSettings;
+  identity?: StudioRuntimeIdentity;
+  attention?: {
+    hostApiEnabled?: boolean;
+  };
+  dashboard?: {
+    defaultRefreshIntervalMs?: number;
+    widgetTimeoutMs?: number;
+    pinnedWidgetIds?: string[];
+  };
+}
+
+export const studioNavigationRequestedEvent = "elsa:studio-navigation-requested";
+
+export interface StudioNavigationRequest {
+  fromPath: string;
+  toPath: string;
+}
+
+export function requestStudioNavigation(fromPath: string, toPath: string) {
+  if (typeof window === "undefined") return true;
+  return window.dispatchEvent(new CustomEvent<StudioNavigationRequest>(studioNavigationRequestedEvent, {
+    cancelable: true,
+    detail: { fromPath, toPath }
+  }));
+}
+
+export interface StudioActivityDefinitionLayoutRecord {
+  nodeId: string;
+  data: unknown;
+}
+
+export interface StudioActivityDefinitionImplementationState {
+  payload: unknown;
+  layout: StudioActivityDefinitionLayoutRecord[];
+}
+
+export type StudioActivityDiagnosticSeverity = "Error" | "Warning" | "Info";
+
+export interface StudioActivityDiagnosticSubject {
+  kind: string;
+  id: string;
+  definitionId?: string | null;
+  versionId?: string | null;
+  revision?: number | null;
+}
+
+export interface StudioActivityDependencyPathItem {
+  definitionId: string;
+  versionId: string;
+  version: string;
+  templateHash: string;
+}
+
+export interface StudioActivityNodeOrigin {
+  kind: string;
+  id: string;
+}
+
+export interface StudioActivityDiagnosticLocation {
+  providerKey?: string | null;
+  jsonPointer?: string | null;
+  referenceKey?: string | null;
+  nodeOrigin?: StudioActivityNodeOrigin[] | null;
+  dependencyPath?: StudioActivityDependencyPathItem[] | null;
+}
+
+export interface StudioActivityDiagnostic {
+  code: string;
+  severity: StudioActivityDiagnosticSeverity;
+  message: string;
+  subject: StudioActivityDiagnosticSubject;
+  location?: StudioActivityDiagnosticLocation | null;
+  remediation?: string | null;
+  metadata: Record<string, string>;
+}
+
+export type StudioActivityDiagnosticFocusResult =
+  | { kind: "focused"; announcement: string }
+  | { kind: "unsupported"; announcement: string };
+
+export interface StudioActivityDiagnosticFocusRequest {
+  location: StudioActivityDiagnosticLocation;
+  subject: StudioActivityDiagnosticSubject;
+  editorElement: HTMLElement;
+}
+
+export interface StudioActivityDefinitionImplementationEditorProps {
+  context: StudioEndpointContext;
+  definitionId: string;
+  draftId: string;
+  revision: number;
+  providerKey: string;
+  providerSchemaVersion: string;
+  manifestFingerprint: string;
+  value: StudioActivityDefinitionImplementationState;
+  readOnly: boolean;
+  onChange(value: StudioActivityDefinitionImplementationState): void;
+}
+
+export interface StudioActivityDefinitionImplementationEditorContribution {
+  id: string;
+  providerKey: string;
+  providerSchemaVersion: string;
+  createInitialImplementation(): StudioActivityDefinitionImplementationState;
+  focusDiagnosticLocation?(
+    request: StudioActivityDiagnosticFocusRequest
+  ): StudioActivityDiagnosticFocusResult | Promise<StudioActivityDiagnosticFocusResult>;
+  component: ComponentType<StudioActivityDefinitionImplementationEditorProps>;
 }
 
 export interface ElsaStudioModuleApi {
@@ -1147,11 +1314,11 @@ export interface ElsaStudioModuleApi {
   readonly featureAreas: StudioContributionRegistry<StudioFeatureAreaContribution>;
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
-  readonly dashboardWidgets: StudioContributionRegistry<StudioDashboardWidgetContribution>;
+  readonly dashboardWidgets: StudioDashboardWidgetRegistry;
   readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
-  readonly activityEditors: StudioContributionRegistry<unknown>;
+  readonly activityEditors: StudioContributionRegistry<StudioActivityDefinitionImplementationEditorContribution>;
   readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
   readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
   /** Available on hosts that support the workflow run-input editor Slot. */
@@ -1205,6 +1372,12 @@ export function createContributionRegistry<T>(options: CreateStudioContributionR
       return composeContributions(contributions, slot, options, listOptions);
     }
   };
+}
+
+export function createDashboardWidgetRegistry(): StudioDashboardWidgetRegistry {
+  // Widget snapshot/settings types are contribution-local. The registry stores them opaquely and the
+  // Dashboard host invokes each contribution through its own paired loader/body contract.
+  return createContributionRegistry<StudioDashboardWidgetContribution>({ slot: studioSlots.dashboardWidgets }) as unknown as StudioDashboardWidgetRegistry;
 }
 
 export function createAiContributionApi(): StudioAiContributionApi {

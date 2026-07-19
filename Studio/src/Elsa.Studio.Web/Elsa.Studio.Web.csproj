@@ -38,14 +38,16 @@
     <ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Diagnostics.OpenTelemetry\Elsa.Studio.Diagnostics.OpenTelemetry.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Diagnostics.StructuredLogs\Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.Dashboard\Elsa.Studio.Dashboard.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.Attention\Elsa.Studio.Attention.csproj" />
     <ProjectReference Include="..\Elsa.Studio.ExpressionEditors.JavaScript\Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
     <ProjectReference Include="..\Elsa.Studio.ExpressionEditors.Liquid\Elsa.Studio.ExpressionEditors.Liquid.csproj" />
     <ProjectReference Include="..\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
-    <ProjectReference Include="..\Elsa.Studio.Samples.Dashboard\Elsa.Studio.Samples.Dashboard.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Weaver.Core\Elsa.Studio.Weaver.Core.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Weaver.Workflows\Elsa.Studio.Weaver.Workflows.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Workflows\Elsa.Studio.Workflows.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.Workflows.Dashboard\Elsa.Studio.Workflows.Dashboard.csproj" />
   </ItemGroup>
 
 </Project>

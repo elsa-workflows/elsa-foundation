@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getActivityExecutionInspection } from "../api/runtime";
+import { getActivityExecutionDescendants, getActivityExecutionInspection, getActivityExecutionLayout } from "../api/runtime";
 import {
   WorkflowActivityExecutionDetails,
   WorkflowIncidentList,
@@ -25,7 +25,20 @@ import { flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNod
 
 vi.mock("../api/runtime", async importOriginal => ({
   ...(await importOriginal<typeof import("../api/runtime")>()),
-  getActivityExecutionInspection: vi.fn()
+  getActivityExecutionInspection: vi.fn(),
+  getActivityExecutionDescendants: vi.fn(),
+  getActivityExecutionLayout: vi.fn()
+}));
+
+vi.mock("../workflow-editor/ReusableBoundaryInspector", () => ({
+  ReusableBoundaryInspector: ({ inspection }: { inspection: ActivityExecutionInspection }) => (
+    <section>
+      <h4>Boundary lifecycle</h4>
+      <span>{inspection.boundary?.definitionVersionId}</span>
+      <h4>Descendant aggregate</h4>
+      <span>Pinned historical layout</span>
+    </section>
+  )
 }));
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -40,6 +53,8 @@ afterEach(() => {
   restoreClipboard?.();
   restoreClipboard = null;
   vi.mocked(getActivityExecutionInspection).mockReset();
+  vi.mocked(getActivityExecutionDescendants).mockReset();
+  vi.mocked(getActivityExecutionLayout).mockReset();
 });
 
 function render(ui: React.ReactElement) {
@@ -170,6 +185,42 @@ function inspection(valueSnapshots: ActivityExecutionInspection["valueSnapshots"
 }
 
 describe("WorkflowActivityExecutionDetails", () => {
+  it("defers reusable Boundary inspection to its independently lazy Runtime Evidence chunk", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue({
+      ...inspection([]),
+      boundary: {
+        kind: "ReusableActivity",
+        definitionId: "invoice-definition",
+        definitionVersionId: "invoice-version-2",
+        version: "2.0.0",
+        templateHash: "sha256:invoice-v2",
+        invocationOrigin: [{ kind: "TemplateBoundary", id: "invoice-version-2" }],
+        executionScopeId: "scope-invoice",
+        hasChildren: true,
+        directChildCount: 1,
+        committedDescendantCount: 2,
+        aggregate: {
+          status: "Completed",
+          total: 2,
+          scheduled: 0,
+          running: 0,
+          suspended: 0,
+          completed: 2,
+          faulted: 0,
+          cancelled: 0,
+          blockingIncidentCount: 0,
+          retryCount: 0,
+          lastExecutionSequence: 3
+        },
+        layoutAvailable: true
+      }
+    });
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Loading reusable boundary inspector"));
+    expect(getActivityExecutionInspection).toHaveBeenCalledWith(context, "wf-1", "ae-1", expect.any(AbortSignal));
+  });
+
   it("loads and renders diagnostic snapshots for selected execution inputs and outputs", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([
       {
@@ -201,7 +252,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
     await waitFor(() => expect(container.textContent).toContain("Hello at runtime"));
-    expect(getActivityExecutionInspection).toHaveBeenCalledWith(context, "wf-1", "ae-1");
+    expect(getActivityExecutionInspection).toHaveBeenCalledWith(context, "wf-1", "ae-1", expect.any(AbortSignal));
     expect(container.textContent).toContain("Inputs");
     expect(container.textContent).toContain("Outputs");
     expect(container.textContent).toContain("Message");

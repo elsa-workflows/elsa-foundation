@@ -3,12 +3,13 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, type ElsaStudioModuleApi, type StudioContributionRegistry, type StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache, createEnumWorkflowRunInputEditorContribution, isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource, type WorkflowDesignerPanelContext } from "../module";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
 import { createDraftSnapshotId, insertSequenceNodeAfter } from "../workflow-editor/editorHelpers";
 import { ValidationPanel } from "../workflow-editor/editorPanels";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
+import { createActivityDefinitionRecoveryStore } from "../activityDefinitionRecovery";
 
 afterEach(() => {
   clearApiCapabilityCache();
@@ -16,6 +17,7 @@ afterEach(() => {
   window.localStorage.removeItem?.(workflowInspectorCollapsedStorageKey);
   window.localStorage.removeItem?.(workflowInspectorWidthStorageKey);
   window.localStorage.removeItem?.(workflowSidePanelMaximizedStorageKey);
+  window.localStorage.clear();
 });
 
 describe("workflows module", () => {
@@ -87,13 +89,17 @@ describe("workflows module", () => {
     ]);
     expect(api.navigation.list()).toEqual([
       expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
-      expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-definitions", label: "Workflow Definitions", path: "/workflows/definitions", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-activity-definitions", label: "Activity Definitions", path: "/workflows/activity-definitions", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-runs", label: "Runs", path: "/workflows/instances", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-runtime diagnostics", label: "Runtime Diagnostics", path: "/workflows/runtime-diagnostics", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-activity availability", label: "Activity Availability", path: "/workflows/activity-availability", parentId: "workflows" })
     ]);
     expect(api.routes.list()).toEqual([
+      expect.objectContaining({ id: "workflows-elsa3-import", path: "/workflows/activity-definitions/import-elsa3" }),
+      expect.objectContaining({ id: "workflows-activity-upgrades", path: "/workflows/activity-definitions/upgrades" }),
+      expect.objectContaining({ id: "workflows-activity-definitions", path: "/workflows/activity-definitions" }),
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables" }),
       expect.objectContaining({ id: "workflows-executable-inspector", label: "Executable Inspector", path: "/workflows/executables/:artifactId" }),
@@ -107,6 +113,33 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "elsa.object-expression-editor", createDefaultValue: expect.any(Function) }),
       expect.objectContaining({ id: "studio.workflows.input-reference", createDefaultValue: expect.any(Function) })
     ]);
+  });
+
+  it("clears Activity Definition recovery on logout without mounting the editor route", () => {
+    const api = testApi();
+    api.runtime.identity = { tenantId: "tenant-1", subject: "author-1" };
+    const store = createActivityDefinitionRecoveryStore({ enabled: true }, api.runtime.identity)!;
+    store.write({
+      draftId: "draft-1",
+      definitionId: "definition-1",
+      tenantId: "tenant-1",
+      revision: 2,
+      sourceVersionId: null,
+      status: "active",
+      contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] },
+      provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: "sha256:test", payload: { local: true } },
+      layout: [],
+      validation: null,
+      createdAt: "2026-07-17T10:00:00Z",
+      updatedAt: "2026-07-17T10:00:00Z",
+      presentationLabel: null
+    });
+
+    register(api);
+    expect(window.localStorage.length).toBe(1);
+    window.dispatchEvent(new Event(authSessionEndedEvent));
+
+    expect(window.localStorage.length).toBe(0);
   });
 
   it("announces while the workflow definitions route loads on demand", async () => {
@@ -985,7 +1018,7 @@ describe("workflows module", () => {
       if (url.includes("/activities")) return response({ activities: [
         activity({
           activityVersionId: "write-line-v1",
-          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.NativeWriteLine",
           category: "Primitives",
           displayName: "Write Line",
           description: "Writes a line to the console."
@@ -1028,7 +1061,7 @@ describe("workflows module", () => {
 
     expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-root");
     expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-v1");
-    expect(container.querySelector(".wf-inspector")?.textContent).toContain("Elsa.Activities.Primitives.Activities.WriteLine");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("Elsa.Activities.Primitives.Activities.NativeWriteLine");
 
     await unmount();
   });
@@ -2330,7 +2363,8 @@ describe("workflows module", () => {
     await waitForText(container, "Add activity");
     await click(buttonByText(container, "Add activity"));
     await click(optionByText(container, "Write Line"));
-    await click(buttonByText(container, "Write Line"));
+    await click(Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-activity"))
+      .find(button => button.textContent?.includes("Write Line")) ?? null);
     await click(buttonByText(container, "Run"));
     await waitForText(container, "Provide the workflow inputs for this run.");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")).toBe(false);
@@ -3292,12 +3326,13 @@ describe("workflows module", () => {
     expect(move).not.toBeNull();
     move?.focus();
     await click(move);
-    await waitForText(dialog(container), "Operations");
-    expect(dialog(container).textContent).toContain("Unfiled");
-    expect(dialog(container).textContent).not.toContain("All workflows");
-    expect(dialog(container).querySelector("[role='tree']")).toBeNull();
-    await click(dialog(container).querySelector<HTMLInputElement>("input[data-folder-id='folder-root']"));
-    const submit = buttonByText(dialog(container), "Move");
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Operations");
+    expect(moveDialog.textContent).toContain("Unfiled");
+    expect(moveDialog.textContent).not.toContain("All workflows");
+    expect(moveDialog.querySelector("[role='tree']")).toBeNull();
+    await click(moveDialog.querySelector<HTMLInputElement>("input[data-folder-id='folder-root']"));
+    const submit = buttonByText(moveDialog, "Move");
     await click(submit);
     await click(submit);
     await vi.waitFor(() => expect(moveRequest).toEqual({ definitionIds: ["definition-1", "definition-2"], folderId: "folder-root" }));
@@ -3332,11 +3367,12 @@ describe("workflows module", () => {
     await waitForText(container, "Hello World");
     await click(checkboxByLabel(container, "Select workflow definition Hello World"));
     await click(buttonByText(container, "Move to folder"));
-    await waitForText(dialog(container), "Operations");
-    const destination = dialog(container).querySelector<HTMLInputElement>("input[data-folder-id='folder-root']");
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Operations");
+    const destination = moveDialog.querySelector<HTMLInputElement>("input[data-folder-id='folder-root']");
     await click(destination);
-    await click(buttonByText(dialog(container), "Move"));
-    await waitForText(dialog(container), "Couldn't move the selected workflow definitions");
+    await click(buttonByText(moveDialog, "Move"));
+    await waitForText(moveDialog, "Couldn't move the selected workflow definitions");
     expect(destination?.checked).toBe(true);
     expect(container.querySelector(".wf-selection-bar")?.textContent).toContain("1 selected");
     expect(dialog(container)).not.toBeNull();
@@ -3363,11 +3399,12 @@ describe("workflows module", () => {
     await waitForText(container, "Hello World");
     await click(checkboxByLabel(container, "Select workflow definition Hello World"));
     await click(buttonByText(container, "Move to folder"));
-    await waitForText(dialog(container), "Operations");
-    const destination = dialog(container).querySelector<HTMLInputElement>("input[data-folder-id='folder-root']");
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Operations");
+    const destination = moveDialog.querySelector<HTMLInputElement>("input[data-folder-id='folder-root']");
     await click(destination);
-    await click(buttonByText(dialog(container), "Move"));
-    await waitForText(dialog(container), `Move rejected with ${status}.`);
+    await click(buttonByText(moveDialog, "Move"));
+    await waitForText(moveDialog, `Move rejected with ${status}.`);
     expect(destination?.checked).toBe(true);
     expect(container.querySelector(".wf-selection-bar")?.textContent).toContain("1 selected");
     await unmount();
@@ -3394,9 +3431,10 @@ describe("workflows module", () => {
     await waitForText(container, "Hello World");
     await click(checkboxByLabel(container, "Select workflow definition Hello World"));
     await click(buttonByText(container, "Move to folder"));
-    await waitForText(dialog(container), "Unfiled");
-    expect(dialog(container).querySelector<HTMLInputElement>("input[data-destination='unfiled']")?.checked).toBe(true);
-    await click(buttonByText(dialog(container), "Move"));
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Unfiled");
+    expect(moveDialog.querySelector<HTMLInputElement>("input[data-destination='unfiled']")?.checked).toBe(true);
+    await click(buttonByText(moveDialog, "Move"));
     await vi.waitFor(() => expect(moveRequest).toEqual({ definitionIds: ["definition-1"], folderId: null }));
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
     await waitForText(container, "Moved 1 workflow definition");
@@ -3428,13 +3466,14 @@ describe("workflows module", () => {
     await waitForText(container, "Hello World");
     await click(checkboxByLabel(container, "Select workflow definition Hello World"));
     await click(buttonByText(container, "Move to folder"));
-    await waitForText(dialog(container), "Operations");
-    expect(dialog(container).querySelector("input[data-folder-id='folder-child']")).toBeNull();
-    await click(buttonByLabel(dialog(container), "Expand Operations"));
-    await waitForText(dialog(container), "Retry loading folders");
-    expect(dialog(container).querySelector("input[data-folder-id='folder-child']")).toBeNull();
-    await click(buttonByText(dialog(container), "Retry loading folders"));
-    await waitForText(dialog(container), "Support");
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Operations");
+    expect(moveDialog.querySelector("input[data-folder-id='folder-child']")).toBeNull();
+    await click(buttonByLabel(moveDialog, "Expand Operations"));
+    await waitForText(moveDialog, "Retry loading folders");
+    expect(moveDialog.querySelector("input[data-folder-id='folder-child']")).toBeNull();
+    await click(buttonByText(moveDialog, "Retry loading folders"));
+    await waitForText(moveDialog, "Support");
     expect(childAttempts).toBe(2);
     await unmount();
   });
@@ -4141,6 +4180,7 @@ function testApi(): ElsaStudioModuleApi {
     featureAreas: featureAreaRegistry(navigation, routes),
     navigation,
     routes,
+    activityEditors: registry(),
     propertyEditors: registry(),
     expressionEditors: registry(),
     workflowRunInputEditors: registry(),
@@ -4182,7 +4222,7 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
       });
       for (const item of featureArea.nav.items ?? []) {
         navigation.add({
-          id: `${featureArea.id}-${item.title.toLowerCase()}`,
+          id: item.id ?? `${featureArea.id}-${item.title.toLowerCase()}`,
           label: item.title,
           path: item.path,
           parentId: featureArea.id,
@@ -4257,10 +4297,12 @@ async function renderRegisteredRoute(
     });
   }
   const fetchWithoutCapabilities = globalThis.fetch;
-  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
-    (typeof input === "object" && input && "url" in input ? String(input.url) : String(input)).includes("/capabilities")
-      ? response(capabilities)
-      : fetchWithoutCapabilities(input, init)));
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "object" && input && "url" in input ? String(input.url) : String(input);
+    if (url.includes("/capabilities")) return response(capabilities);
+    if (url.includes("/design/activities/definitions/picker")) return response(recommendedActivityPicker());
+    return fetchWithoutCapabilities(input, init);
+  }));
   window.history.replaceState({}, "", path);
   const api = testApi();
   configureApi?.(api);
@@ -4385,6 +4427,7 @@ function capabilityDocument() {
         contractVersion: "1",
         links: [
           { rel: "activity-catalog", href: "design/activities/catalog" },
+          { rel: "recommended-activity-definitions", href: "design/activities/definitions/picker" },
           { rel: "activity-availability", href: "design/activities/availability/settings" },
           { rel: "activity-availability-diagnostics", href: "design/activities/availability/diagnostics" }
         ]
@@ -4829,6 +4872,37 @@ function activity(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function recommendedActivityPicker() {
+  const candidates = [
+    ["activity-1", "Elsa.Activities.Activity"],
+    ["write-line-v1", "Elsa.Activities.Primitives.Activities.WriteLine"],
+    ["write-line-v1", "Elsa.Activities.WriteLine"],
+    ["write-lines-v1", "Elsa.Activities.Primitives.Activities.WriteLines"],
+    ["send-email-v1", "Elsa.Activities.SendEmail"],
+    ["flowchart-v1", "Elsa.Activities.Flowchart"],
+    ["flowchart-v1", "Elsa.Activities.Flowchart.Activities.Flowchart"],
+    ["sequence-v1", "Elsa.Activities.Sequence"],
+    ["sequence-v1", "Elsa.Activities.Sequence.Activities.Sequence"],
+    ["activity-flowchart-v1", "Elsa.Activities.Flowchart.Activities.Flowchart"],
+    ["run-javascript-v1", runJavaScriptTypeKey]
+  ] as const;
+  return {
+    items: candidates.map(([versionId, activityTypeKey], index) => ({
+      definitionId: `test-definition-${index}`,
+      activityTypeKey,
+      tenantId: null,
+      category: "Tests",
+      displayName: activityTypeKey.split(".").at(-1),
+      description: null,
+      versionId,
+      version: "1.0.0",
+      isAvailable: true,
+      unavailableReason: null
+    })),
+    nextOffset: null
+  };
+}
+
 function catalogActivity(descriptor: ReturnType<typeof writeLineDescriptor>) {
   const activityVersionId = `${descriptor.name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase()}-v1`;
   return activity({
@@ -5028,6 +5102,11 @@ function dialog(container: HTMLElement) {
   const element = container.querySelector<HTMLElement>(".wf-dialog");
   if (!element) throw new Error("Dialog not found");
   return element;
+}
+
+async function waitForDialog(container: HTMLElement) {
+  await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).not.toBeNull());
+  return dialog(container);
 }
 
 function optionByText(container: HTMLElement, text: string) {

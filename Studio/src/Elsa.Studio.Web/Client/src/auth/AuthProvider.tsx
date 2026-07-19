@@ -1,6 +1,6 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AuthContext } from "./AuthContext";
-import { anonymousAuthSession, unknownAuthSession, type AuthCapabilities, type AuthProviderProps, type AuthSession, type LoginOptions } from "./types";
+import { anonymousAuthSession, authSessionEndedEvent, unknownAuthSession, type AuthCapabilities, type AuthProviderProps, type AuthSession, type LoginOptions } from "./types";
 
 export function AuthProvider({ manager, children }: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession>(() => manager.getSession() ?? unknownAuthSession);
@@ -87,6 +87,7 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
       return;
     }
 
+    window.dispatchEvent(new Event(authSessionEndedEvent));
     setSession(manager.getSession());
     setCapabilities(null);
   }, [manager, shouldCommit]);
@@ -114,6 +115,18 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
     logout,
     refresh
   }), [capabilities, login, logout, refresh, session]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function AnonymousAuthProvider({ children }: { children: React.ReactNode }) {
+  const value = useMemo(() => ({
+    session: anonymousAuthSession,
+    capabilities: null,
+    login: async () => undefined,
+    logout: async () => undefined,
+    refresh: async () => anonymousAuthSession
+  }), []);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -18,9 +18,15 @@ public sealed class StudioRuntimeScriptTests
             {
                 ["Studio:BackendBaseUrl"] = "https://backend.example/",
                 ["Studio:BackendServerBaseUrl"] = "http://elsa-server:8080",
+                ["Studio:HostId"] = "studio-primary",
+                ["Studio:Dashboard:DefaultRefreshIntervalMinutes"] = "15",
+                ["Studio:Dashboard:WidgetTimeoutSeconds"] = "12",
+                ["Studio:Dashboard:PinnedWidgetIds:0"] = "attention.queue",
                 // Configured server-side — the bridge needs it — but it must never leak into the browser script.
                 ["Studio:BackendModuleManagementApiKey"] = ManagementKey,
-                ["Studio:Auth:Enabled"] = "true"
+                ["Studio:Auth:Enabled"] = "true",
+                ["Studio:ActivityDefinitions:LocalRecovery:Enabled"] = "true",
+                ["Studio:ActivityDefinitions:LocalRecovery:TtlMinutes"] = "90"
             })
             .Build();
 
@@ -53,5 +59,23 @@ public sealed class StudioRuntimeScriptTests
         Assert.Contains("https://backend.example/", script);
         Assert.DoesNotContain("http://elsa-server:8080", script);
         Assert.Contains("\"enabled\":true", script);
+        Assert.Contains("activityDefinitions", script);
+        Assert.Contains("localRecovery", script);
+        Assert.Contains("\"ttlMinutes\":90", script);
+        Assert.Contains("\"hostId\":\"studio-primary\"", script);
+        Assert.Contains("\"defaultRefreshIntervalMs\":900000", script);
+        Assert.Contains("\"widgetTimeoutMs\":12000", script);
+        Assert.Contains("\"pinnedWidgetIds\":[\"attention.queue\"]", script);
+    }
+
+    [Fact]
+    public void RuntimeScriptUsesStableDashboardDefaultsWhenConfigurationIsAbsent()
+    {
+        var script = StudioRuntimeScript.Render(new ConfigurationBuilder().Build());
+
+        Assert.Contains("\"hostId\":\"default\"", script);
+        Assert.Contains("\"defaultRefreshIntervalMs\":300000", script);
+        Assert.Contains("\"widgetTimeoutMs\":10000", script);
+        Assert.Contains("\"pinnedWidgetIds\":[]", script);
     }
 }

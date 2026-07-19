@@ -121,6 +121,42 @@ describe("workflow adapter", () => {
     });
   });
 
+  it("persists only the exact version ID while deriving reusable canvas facts from the catalog", () => {
+    const reusable: ActivityCatalogItem = {
+      ...writeLine,
+      activityVersionId: "invoice-version-2",
+      version: "2.0.0",
+      activityDefinitionId: "invoice-definition",
+      activityDefinitionVersionId: "invoice-version-2",
+      activityDefinitionVersion: "2.0.0"
+    };
+
+    const activity = createActivityNode(reusable, "invoice");
+    const canvas = buildCanvas({
+      owner: flowchartRoot([activity]),
+      slot: {
+        id: "activities",
+        label: "Activities",
+        property: "activities",
+        cardinality: "many",
+        mode: "flowchart",
+        activities: [activity]
+      }
+    }, [reusable], []);
+
+    expect(activity).toEqual({
+      activityVersionId: "invoice-version-2",
+      nodeId: "invoice",
+      inputs: [],
+      outputs: [],
+      structure: null
+    });
+    expect(canvas.nodes[0]?.data).toMatchObject({
+      icon: "reusable",
+      activityDefinitionVersion: "2.0.0"
+    });
+  });
+
   it("returns facet-declared single child slots when the payload value is null", () => {
     const activity = createActivityNode(forEachActivity, "foreach");
 

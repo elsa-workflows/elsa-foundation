@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, Package, Plus, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
@@ -13,12 +13,16 @@ import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
 import { CreateWorkflowDialog } from "./CreateWorkflowDialog";
 import { WorkflowFolderNavigation, type WorkflowFolderSelection, selectedFolderId } from "./WorkflowFolderNavigation";
-import { MoveWorkflowDefinitionsDialog } from "./MoveWorkflowDefinitionsDialog";
 import {
   parseWorkflowDefinitionBrowseLocation,
   updateWorkflowDefinitionBrowseUrl,
   type WorkflowDefinitionBrowseLocation
 } from "./workflowDefinitionBrowseLocation";
+import "./workflowFolders.css";
+
+const MoveWorkflowDefinitionsDialog = lazy(() =>
+  import("./MoveWorkflowDefinitionsDialog").then(module => ({ default: module.MoveWorkflowDefinitionsDialog }))
+);
 
 export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointContext; ai: StudioAiContributionApi; onOpen(id: string): void }) {
   const [browseLocation, setBrowseLocation] = useState(() => parseWorkflowDefinitionBrowseLocation(window.location.search));
@@ -518,12 +522,14 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
         />
       ) : null}
       {moveDialogOpen ? (
-        <MoveWorkflowDefinitionsDialog
-          context={context}
-          definitionIds={[...selectedDefinitionIds]}
-          onClose={() => setMoveDialogOpen(false)}
-          onMoved={movedDefinitions}
-        />
+        <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading move dialog…</div>}>
+          <MoveWorkflowDefinitionsDialog
+            context={context}
+            definitionIds={[...selectedDefinitionIds]}
+            onClose={() => setMoveDialogOpen(false)}
+            onMoved={movedDefinitions}
+          />
+        </Suspense>
       ) : null}
     </>
   );

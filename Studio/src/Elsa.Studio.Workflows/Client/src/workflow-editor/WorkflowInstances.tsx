@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
@@ -42,6 +42,10 @@ import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMod
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 
 const runHistoryPageSizes = [10, 25, 50, 100] as const;
+const ReusableBoundaryInspector = lazy(async () => {
+  const module = await import("./ReusableBoundaryInspector");
+  return { default: module.ReusableBoundaryInspector };
+});
 
 interface RunHistoryFilters {
   status: string;
@@ -359,11 +363,12 @@ interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
   executableGraph: ExecutableActivityGraph | null;
 }
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], workflowExecutionId, navigate }: {
+export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], workflowExecutionId, initialActivityExecutionId = null, navigate }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
   expressionEditors?: StudioExpressionEditorContribution[];
   workflowExecutionId: string;
+  initialActivityExecutionId?: string | null;
   navigate(path: string): void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
@@ -433,15 +438,21 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
         activityCatalog: catalog,
         executableGraph
       });
-      setSelectedEvidenceId(null);
+      const initialEvidence = resolveInitialActivityEvidenceId(
+        details.activities,
+        initialActivityExecutionId);
+      setSelectedEvidenceId(initialEvidence);
       setFrames([]);
       setState("ready");
+      if (initialEvidence) {
+        requestAnimationFrame(() => requestAnimationFrame(() => focusSelectedCanvasActivity(initialEvidence)));
+      }
     } catch (e) {
       setData(null);
       setError(formatWorkflowRunLoadError(e, workflowExecutionId));
       setState("failed");
     }
-  }, [context, workflowExecutionId]);
+  }, [context, initialActivityExecutionId, workflowExecutionId]);
 
   useEffect(() => {
     void load();
@@ -556,6 +567,16 @@ export function projectPinnedExecutable(
     state: { rootActivity: (executableGraph ?? buildExecutableActivityGraph(executable.rootActivity, catalog)).root },
     layout: executable.chosenReference?.layout ?? []
   };
+}
+
+export function resolveInitialActivityEvidenceId(
+  activities: ReadonlyArray<{ activityExecutionId: string }>,
+  requestedActivityExecutionId: string | null
+) {
+  return requestedActivityExecutionId &&
+    activities.some(activity => activity.activityExecutionId === requestedActivityExecutionId)
+    ? requestedActivityExecutionId
+    : null;
 }
 
 function sourceAccessFromError(error: unknown) {
@@ -963,16 +984,16 @@ export function WorkflowActivityExecutionDetails({
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
     const activityExecutionId = selectedActivityExecutionId;
     setInspectionState({ activityExecutionId, status: "loading", inspection: null, error: "" });
 
-    getActivityExecutionInspection(context, selectedWorkflowExecutionId, activityExecutionId).then(
+    getActivityExecutionInspection(context, selectedWorkflowExecutionId, activityExecutionId, controller.signal).then(
       inspection => {
-        if (!cancelled) setInspectionState({ activityExecutionId, status: "ready", inspection, error: "" });
+        if (!controller.signal.aborted) setInspectionState({ activityExecutionId, status: "ready", inspection, error: "" });
       },
       error => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setInspectionState({
             activityExecutionId,
             status: "failed",
@@ -983,9 +1004,7 @@ export function WorkflowActivityExecutionDetails({
       }
     );
 
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [context, selectedActivityExecutionId, selectedWorkflowExecutionId]);
 
   if (!activity) {
@@ -1060,6 +1079,11 @@ export function WorkflowActivityExecutionDetails({
 
         {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </section>
+      {inspectionState.status === "ready" && inspectionState.inspection?.boundary ? (
+        <Suspense fallback={<section className="wf-instance-section" role="status">Loading reusable boundary inspector...</section>}>
+          <ReusableBoundaryInspector context={context} inspection={inspectionState.inspection} />
+        </Suspense>
+      ) : null}
       <WorkflowActivityInputEvidence
         state={inspectionState}
         declarations={declaredInputs}

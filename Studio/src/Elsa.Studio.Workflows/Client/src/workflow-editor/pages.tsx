@@ -145,6 +145,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
   navigate(path: string): void;
 }) {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
+  const initialActivityExecutionId = new URLSearchParams(window.location.search).get("activityExecutionId");
 
   return (
     <WorkflowsPageFrame
@@ -158,7 +159,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
