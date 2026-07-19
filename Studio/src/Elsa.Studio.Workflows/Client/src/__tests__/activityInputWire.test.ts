@@ -10,9 +10,40 @@ describe("activity input wire adapter", () => {
     const node = wire.rootActivity!;
 
     expect(node.inputs).toEqual([
-      { referenceKey: "Text", value: { value: "Hello World!", expressionType: "Literal" } }
+      { referenceKey: "text", value: { value: "Hello World!", expressionType: "Literal" } }
     ]);
     expect("text" in node).toBe(false);
+  });
+
+  it("carries the in-memory referenceKey onto the wire verbatim, whatever its shape", () => {
+    const state = stateOf(writeLine("write-one", {
+      "customer-id": wrapped("42", "Literal"),
+      URL: wrapped("https://example.com", "Literal")
+    }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    expect(node.inputs).toEqual([
+      { referenceKey: "customer-id", value: { value: "42", expressionType: "Literal" } },
+      { referenceKey: "URL", value: { value: "https://example.com", expressionType: "Literal" } }
+    ]);
+
+    const restored = expandStateFromWire(canonicalizeStateForWire(state)).rootActivity as ActivityNode & Record<string, { expression: { value: unknown } }>;
+    expect(restored["customer-id"].expression.value).toBe("42");
+    expect(restored["URL"].expression.value).toBe("https://example.com");
+  });
+
+  it("overlays a template-seeded default with the edited top-level value under the same referenceKey", () => {
+    const node: ActivityNode = {
+      ...writeLine("write-one", { text: wrapped("edited", "Literal") }),
+      inputs: [{ referenceKey: "text", value: { value: "seeded default", expressionType: "Literal" } }]
+    };
+
+    const wire = canonicalizeStateForWire(stateOf(node)).rootActivity!;
+
+    expect(wire.inputs).toEqual([
+      { referenceKey: "text", value: { value: "edited", expressionType: "Literal" } }
+    ]);
   });
 
   it("preserves the authored expression syntax instead of forcing Literal", () => {
@@ -21,7 +52,7 @@ describe("activity input wire adapter", () => {
     const node = canonicalizeStateForWire(state).rootActivity!;
 
     expect(node.inputs).toEqual([
-      { referenceKey: "Text", value: { value: "user.name", expressionType: "JavaScript" } }
+      { referenceKey: "text", value: { value: "user.name", expressionType: "JavaScript" } }
     ]);
   });
 
@@ -31,7 +62,7 @@ describe("activity input wire adapter", () => {
 
     const wire = canonicalizeStateForWire(state);
     expect(wire.rootActivity?.inputs).toEqual([
-      { referenceKey: "Text", value: { value: reference, expressionType: "Input" } }
+      { referenceKey: "text", value: { value: reference, expressionType: "Input" } }
     ]);
 
     const expanded = expandStateFromWire(wire).rootActivity as ActivityNode & {
@@ -46,8 +77,8 @@ describe("activity input wire adapter", () => {
     const node = canonicalizeStateForWire(state).rootActivity!;
 
     expect(node.inputs).toEqual([
-      { referenceKey: "Count", value: { value: "42", expressionType: "Literal" } },
-      { referenceKey: "Enabled", value: { value: "true", expressionType: "Literal" } }
+      { referenceKey: "count", value: { value: "42", expressionType: "Literal" } },
+      { referenceKey: "enabled", value: { value: "true", expressionType: "Literal" } }
     ]);
   });
 
@@ -62,8 +93,8 @@ describe("activity input wire adapter", () => {
     // A scalar literal converter can't turn the JSON string form of a list/object into ICollection<T> or a
     // complex type, so structured literal values ride the "Object" expression instead of "Literal".
     expect(node.inputs).toEqual([
-      { referenceKey: "Lines", value: { value: '["Hello","world"]', expressionType: "Object" } },
-      { referenceKey: "Config", value: { value: '{"enabled":true}', expressionType: "Object" } }
+      { referenceKey: "lines", value: { value: '["Hello","world"]', expressionType: "Object" } },
+      { referenceKey: "config", value: { value: '{"enabled":true}', expressionType: "Object" } }
     ]);
   });
 
@@ -81,7 +112,7 @@ describe("activity input wire adapter", () => {
     const nested = (wire.structure!.payload.activities as ActivityNode[])[0];
 
     expect(nested.inputs).toEqual([
-      { referenceKey: "Text", value: { value: "nested", expressionType: "Literal" } }
+      { referenceKey: "text", value: { value: "nested", expressionType: "Literal" } }
     ]);
   });
 
@@ -99,7 +130,7 @@ describe("activity input wire adapter", () => {
     const nested = wire.structure!.payload.body as ActivityNode;
 
     expect(nested.inputs).toEqual([
-      { referenceKey: "Text", value: { value: "Item X", expressionType: "Literal" } }
+      { referenceKey: "text", value: { value: "Item X", expressionType: "Literal" } }
     ]);
     expect("text" in nested).toBe(false);
   });

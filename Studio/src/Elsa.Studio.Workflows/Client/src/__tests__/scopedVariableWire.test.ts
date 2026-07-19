@@ -122,11 +122,11 @@ describe("Variable expression wire round-trip", () => {
     const writer = activitiesOf(canonicalizeStateForWire(state()))[0];
     const inputs = writer.inputs as Array<{ referenceKey: string; value: { value: unknown; expressionType: string } }>;
 
-    const variableArg = inputs.find(input => input.referenceKey === "Source");
+    const variableArg = inputs.find(input => input.referenceKey === "source");
     expect(variableArg?.value.expressionType).toBe("Variable");
     expect(variableArg?.value.value).toEqual(reference); // object preserved, not JSON-stringified
 
-    const literalArg = inputs.find(input => input.referenceKey === "Text");
+    const literalArg = inputs.find(input => input.referenceKey === "text");
     expect(literalArg?.value.value).toBe("hi");
   });
 

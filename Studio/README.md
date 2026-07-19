@@ -4,12 +4,14 @@ Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. T
 
 For a current map of the host, shell, modules, routing, API boundaries, and authentication flow, see the [architecture tour](docs/architecture-tour.md).
 
-The first slice intentionally proves the extension boundary only:
+The host is composed from independently enabled Studio capabilities:
 
 - `Elsa.Studio.Core` defines manifests, diagnostics, and the manifest collection event.
 - `Elsa.Studio.Api` exposes `GET /_elsa/studio/modules`.
 - `Elsa.Studio.Web` hosts the root-mounted Vite shell.
-- `Elsa.Studio.Samples.Dashboard` contributes a frontend-only dashboard module.
+- `Elsa.Studio.Dashboard` owns `/dashboard`, the Dashboard Widget slot, host-owned frames, loading, refresh, layout, and scoped preferences.
+- `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.
+- `Elsa.Studio.Workflows.Dashboard` contributes workflow portfolio and run-health widgets.
 - `Elsa.Studio.Samples.WeatherForecast` contributes a frontend route and deterministic sample endpoint.
 - `Elsa.Studio.ConsoleStream` demonstrates a backend-scoped console stream module.
 
@@ -27,7 +29,9 @@ Studio is a modular monolith built on [CShells](https://www.cshells.io/). Each m
         "Features": {
           "StudioApi": {},
           "ConsoleStream": {},
-          "DashboardSample": {},
+          "DashboardStudio": {},
+          "AttentionStudio": {},
+          "WorkflowsDashboardStudio": {},
           "WeatherForecastSample": {}
         },
         "Configuration": {
@@ -49,7 +53,9 @@ Features ship in:
 |---|---|---|
 | `StudioApi` | `Elsa.Studio.Api` | `IWebShellFeature` |
 | `ConsoleStream` | `Elsa.Studio.ConsoleStream` | `IWebShellFeature` |
-| `DashboardSample` | `Elsa.Studio.Samples.Dashboard` | `IShellFeature` |
+| `DashboardStudio` | `Elsa.Studio.Dashboard` | `IShellFeature` |
+| `AttentionStudio` | `Elsa.Studio.Attention` | `IShellFeature` |
+| `WorkflowsDashboardStudio` | `Elsa.Studio.Workflows.Dashboard` | `IShellFeature` |
 | `WeatherForecastSample` | `Elsa.Studio.Samples.WeatherForecast` | `IWebShellFeature` |
 
 ## Build
@@ -128,6 +134,8 @@ Preview builds (`4.0.0-preview.<n>`) publish to the elsa-4 feedz.io npm feed on 
 (the build context must be the repo root):
 
 ```bash
+pnpm install --frozen-lockfile
+pnpm build
 docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 docker run --rm -p 8080:8080 \
   -e Studio__BackendBaseUrl=https://your-elsa-server:443 \

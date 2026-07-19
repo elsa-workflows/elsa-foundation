@@ -26,7 +26,7 @@ describe("extension builder page", () => {
         : {}
     }));
 
-    await flushPromises();
+    await waitForText(container, "You do not have Extension Builder capabilities");
 
     expect(container.textContent).toContain("You do not have Extension Builder capabilities");
     expect(container.textContent).toContain("GetCapabilities");
@@ -1461,7 +1461,7 @@ function bridgeStatusResult(status: string, detail: string) {
 
 function defaultBridgeDetail(status: string) {
   switch (status) {
-    case "unconfigured": return "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.";
+    case "unconfigured": return "Privileged host management is not configured on the Studio host. Set Studio:BackendServerBaseUrl (or Studio:BackendBaseUrl for a shared URL) and Studio:BackendModuleManagementApiKey to enable Extension Builder.";
     case "unreachable": return "The privileged host-management surface could not be reached.";
     case "unauthorized": return "The backend rejected the Studio management credential.";
     case "degraded": return "The privileged host-management surface is degraded.";

@@ -118,3 +118,15 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
+export function AnonymousAuthProvider({ children }: { children: React.ReactNode }) {
+  const value = useMemo(() => ({
+    session: anonymousAuthSession,
+    capabilities: null,
+    login: async () => undefined,
+    logout: async () => undefined,
+    refresh: async () => anonymousAuthSession
+  }), []);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}

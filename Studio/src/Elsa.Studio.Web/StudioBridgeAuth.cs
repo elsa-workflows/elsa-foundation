@@ -124,7 +124,7 @@ internal static class StudioBridgeAuth
         // enabled, an authenticated backend session is required. This mirrors how `auth.enabled` is derived for the
         // browser runtime config in Program.cs.
         var authEnabled = configuration.GetValue(AuthEnabledConfigurationKey, defaultValue: false);
-        var backendBaseUrl = configuration[StudioBackendManagementOptions.BackendBaseUrlConfigurationKey];
+        var backendBaseUrl = StudioBackendManagementOptions.ResolveServerBaseUrl(configuration);
 
         // Named client the handler uses to introspect the browser bearer. Short timeout so an unauthenticated request
         // to a slow backend still resolves quickly.
@@ -251,7 +251,7 @@ internal sealed class StudioBridgeAuthHandler(
 
         if (string.IsNullOrWhiteSpace(Options.BackendBaseUrl))
         {
-            Logger.LogWarning("Studio:Auth:Enabled is true but Studio:BackendBaseUrl is not configured; the bridge cannot validate the browser bearer.");
+            Logger.LogWarning("Studio:Auth:Enabled is true but Studio:BackendServerBaseUrl or Studio:BackendBaseUrl is not configured; the bridge cannot validate the browser bearer.");
             return AuthenticateResult.Fail("Studio cannot validate the user session because no backend base URL is configured.");
         }
 

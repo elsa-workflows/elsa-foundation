@@ -54,7 +54,8 @@ export function defineModuleConfig({
       }
     },
     test: {
-      environment: "jsdom"
+      environment: "jsdom",
+      setupFiles: [resolve(__dirname, "vitest.setup.ts")]
     }
   });
 }

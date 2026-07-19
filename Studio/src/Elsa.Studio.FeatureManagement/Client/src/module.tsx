@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
+import { registerBuiltInSettingEditors, selectSettingEditor } from "@elsa-workflows/studio-ui";
 import type {
   ElsaStudioModuleApi,
   StudioSettingDescriptor,
-  StudioSettingEditorContribution,
-  StudioSettingEditorProps
+  StudioSettingDescriptor
 } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
@@ -115,57 +115,7 @@ export function register(api: ElsaStudioModuleApi) {
   });
 }
 
-export function registerBuiltInSettingEditors(api: ElsaStudioModuleApi) {
-  api.settingEditors.add({
-    id: "select",
-    order: 10,
-    supports: setting => (setting.options?.length ?? 0) > 0 || includesHint(setting, "select"),
-    component: SelectSettingEditor
-  });
-  api.settingEditors.add({
-    id: "boolean",
-    order: 20,
-    supports: setting => normalizeType(setting.jsonType) === "boolean",
-    component: BooleanSettingEditor
-  });
-  api.settingEditors.add({
-    id: "number",
-    order: 30,
-    supports: setting => ["integer", "number"].includes(normalizeType(setting.jsonType)),
-    component: NumberSettingEditor
-  });
-  api.settingEditors.add({
-    id: "json",
-    order: 40,
-    supports: setting => ["object", "array"].includes(normalizeType(setting.jsonType)) || includesHint(setting, "json") || includesHint(setting, "textarea"),
-    component: JsonSettingEditor
-  });
-  api.settingEditors.add({
-    id: "secret",
-    order: 50,
-    supports: setting => setting.secret || setting.sensitive,
-    component: SecretSettingEditor
-  });
-  api.settingEditors.add({
-    id: "text",
-    order: 100,
-    supports: () => true,
-    component: TextSettingEditor
-  });
-}
-
-export function selectSettingEditor(api: ElsaStudioModuleApi, setting: StudioSettingDescriptor): StudioSettingEditorContribution {
-  const editor = api.settingEditors
-    .list()
-    .filter(contribution => contribution.supports(setting))
-    .sort((a, b) => (a.order ?? 500) - (b.order ?? 500))[0];
-
-  if (!editor) {
-    throw new Error(`No setting editor is registered for '${setting.name}'.`);
-  }
-
-  return editor;
-}
+export { registerBuiltInSettingEditors, selectSettingEditor };
 
 export function createApplyPayload(revision: string, features: DraftFeature[]) {
   return {
@@ -1103,82 +1053,6 @@ function SettingField({ setting, children }: { setting: StudioSettingDescriptor;
   );
 }
 
-function BooleanSettingEditor({ value, disabled, onChange }: StudioSettingEditorProps) {
-  return (
-    <input
-      type="checkbox"
-      className="feature-management-setting-switch-input"
-      checked={Boolean(value)}
-      disabled={disabled}
-      onChange={event => onChange(event.target.checked)}
-    />
-  );
-}
-
-function TextSettingEditor({ value, disabled, onChange }: StudioSettingEditorProps) {
-  return <input type="text" value={toInputValue(value)} disabled={disabled} onChange={event => onChange(event.target.value)} />;
-}
-
-function SecretSettingEditor({ value, disabled, onChange }: StudioSettingEditorProps) {
-  return <input type="password" value={toInputValue(value)} disabled={disabled} onChange={event => onChange(event.target.value)} />;
-}
-
-function NumberSettingEditor({ setting, value, disabled, onChange }: StudioSettingEditorProps) {
-  return (
-    <input
-      type="number"
-      value={toInputValue(value)}
-      disabled={disabled}
-      onChange={event => onChange(normalizeType(setting.jsonType) === "integer"
-        ? Number.parseInt(event.target.value || "0", 10)
-        : Number.parseFloat(event.target.value || "0"))}
-    />
-  );
-}
-
-function SelectSettingEditor({ setting, value, disabled, onChange }: StudioSettingEditorProps) {
-  const selected = JSON.stringify(value ?? "");
-  return (
-    <select value={selected} disabled={disabled} onChange={event => {
-      const option = setting.options.find(candidate => JSON.stringify(candidate.value) === event.target.value);
-      onChange(option?.value ?? "");
-    }}>
-      {!setting.required ? <option value={JSON.stringify("")}>Empty</option> : null}
-      {setting.options.map(option => (
-        <option key={`${setting.name}-${JSON.stringify(option.value)}`} value={JSON.stringify(option.value)}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function JsonSettingEditor({ setting, value, disabled, onChange }: StudioSettingEditorProps) {
-  const [text, setText] = useState(toJsonText(value, setting));
-  const [invalid, setInvalid] = useState(false);
-
-  useEffect(() => {
-    setText(toJsonText(value, setting));
-    setInvalid(false);
-  }, [setting.name, value]);
-
-  return (
-    <>
-      <textarea value={text} disabled={disabled} rows={5} onChange={event => {
-        const next = event.target.value;
-        setText(next);
-        try {
-          onChange(JSON.parse(next || defaultJsonText(setting)));
-          setInvalid(false);
-        } catch {
-          setInvalid(true);
-        }
-      }} />
-      {invalid ? <small className="feature-management-setting-error">Invalid JSON</small> : null}
-    </>
-  );
-}
-
 // Coerce the wire dependency list into FeatureDependency objects. Tolerates a legacy `string[]` payload (treated as
 // mandatory) so an older backend still cascades correctly.
 function normalizeDependencies(raw: unknown): FeatureDependency[] {
@@ -1245,22 +1119,6 @@ function defaultSettingValue(setting: StudioSettingDescriptor) {
   if (jsonType === "array") return [];
   if (jsonType === "object") return {};
   return "";
-}
-
-function toInputValue(value: unknown) {
-  return value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
-}
-
-function toJsonText(value: unknown, setting: StudioSettingDescriptor) {
-  if (value == null || value === "") {
-    return defaultJsonText(setting);
-  }
-
-  return JSON.stringify(value, null, 2);
-}
-
-function defaultJsonText(setting: StudioSettingDescriptor) {
-  return normalizeType(setting.jsonType) === "array" ? "[]" : "{}";
 }
 
 function getCategoryFilters(features: DraftFeature[]): CategoryFilterItem[] {
@@ -1348,10 +1206,6 @@ function getSettingGroups(settings: StudioSettingDescriptor[]): SettingGroupItem
   }
 
   return Array.from(groups.values());
-}
-
-function includesHint(setting: StudioSettingDescriptor, value: string) {
-  return (setting.uiHint ?? "").toLowerCase().includes(value);
 }
 
 function normalizeType(value?: string | null) {

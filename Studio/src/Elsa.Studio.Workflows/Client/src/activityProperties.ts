@@ -20,8 +20,14 @@ export function camelize(value: string) {
   return trimmed ? trimmed.charAt(0).toLowerCase() + trimmed.slice(1) : value;
 }
 
+/**
+ * The in-memory property key for an authored input is the catalog's stable `referenceKey`, verbatim —
+ * the same key the backend validates against (it may be any casing or shape: "text", "URL",
+ * "customer-id"). The camelized display name is only a fallback for descriptors without one.
+ */
 export function getInputPropertyName(descriptor: StudioActivityInputDescriptor) {
-  return camelize(descriptor.name);
+  const referenceKey = descriptor.referenceKey?.trim();
+  return referenceKey ? referenceKey : camelize(descriptor.name);
 }
 
 export function readInputValue(activity: ActivityNode, descriptor: StudioActivityInputDescriptor) {

@@ -1,6 +1,6 @@
 export { createAuthProviderManager, AuthConfigurationError } from "./AuthProviderManager";
 export { createBackendAuthProviderManager } from "./backend";
-export { AuthProvider } from "./AuthProvider";
+export { AnonymousAuthProvider, AuthProvider } from "./AuthProvider";
 export { useAuthSession } from "./useAuthSession";
 export { usePermissions } from "./usePermissions";
 export { useAuthCapabilities } from "./useAuthCapabilities";

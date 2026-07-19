@@ -19,13 +19,21 @@ internal static class StudioRuntimeScript
     public static Dictionary<string, object?> BuildRuntimeConfig(IConfiguration configuration) =>
         new()
         {
-            ["backendBaseUrl"] = configuration["Studio:BackendBaseUrl"] ?? string.Empty,
+            // This is the browser-facing URL. Server-side calls use Studio:BackendServerBaseUrl when supplied, with
+            // Studio:BackendBaseUrl as the backwards-compatible single-host fallback.
+            ["backendBaseUrl"] = configuration[StudioBackendManagementOptions.BackendBaseUrlConfigurationKey] ?? string.Empty,
+            ["hostId"] = configuration["Studio:HostId"] ?? "default",
             // Surface the user-auth seam so the shell can attach real bearer tokens (and 401-refresh-retry) against the
             // backend identity endpoints. Omitted endpoints fall back to the SDK defaults (`/_elsa/identity/token`);
             // when Enabled is false the shell keeps booting anonymously.
             ["auth"] = BuildAuthRuntimeConfig(configuration),
             ["workflows"] = BuildWorkflowsRuntimeConfig(configuration),
-            ["activityDefinitions"] = BuildActivityDefinitionsRuntimeConfig(configuration)
+            ["activityDefinitions"] = BuildActivityDefinitionsRuntimeConfig(configuration),
+            ["attention"] = new Dictionary<string, object?>
+            {
+                ["hostApiEnabled"] = configuration.GetValue("Studio:Attention:HostApiEnabled", defaultValue: false)
+            },
+            ["dashboard"] = BuildDashboardRuntimeConfig(configuration)
         };
 
     /// <summary>Renders the full <c>/studio-runtime.js</c> body.</summary>
@@ -66,5 +74,15 @@ internal static class StudioRuntimeScript
                 ["enabled"] = configuration.GetValue("Studio:ActivityDefinitions:LocalRecovery:Enabled", defaultValue: false),
                 ["ttlMinutes"] = configuration.GetValue("Studio:ActivityDefinitions:LocalRecovery:TtlMinutes", defaultValue: 1440)
             }
+        };
+
+    private static Dictionary<string, object?> BuildDashboardRuntimeConfig(IConfiguration configuration) =>
+        new()
+        {
+            ["defaultRefreshIntervalMs"] = (long)TimeSpan.FromMinutes(
+                configuration.GetValue("Studio:Dashboard:DefaultRefreshIntervalMinutes", 5)).TotalMilliseconds,
+            ["widgetTimeoutMs"] = (long)TimeSpan.FromSeconds(
+                configuration.GetValue("Studio:Dashboard:WidgetTimeoutSeconds", 10)).TotalMilliseconds,
+            ["pinnedWidgetIds"] = configuration.GetSection("Studio:Dashboard:PinnedWidgetIds").Get<string[]>() ?? []
         };
 }

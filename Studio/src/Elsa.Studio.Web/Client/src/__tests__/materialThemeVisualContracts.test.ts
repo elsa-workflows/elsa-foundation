@@ -64,12 +64,18 @@ function ruleBody(source: string, selector: string) {
 }
 
 describe("material theme visual contracts", () => {
-  it.each(["stone", "brass-instrument"])("keeps %s texture off content-bearing surfaces", theme => {
+  it("keeps brass-instrument texture off content-bearing surfaces", () => {
     for (const surfaceToken of contentSurfaceTokens) {
-      expect(themeToken(theme, surfaceToken), surfaceToken).not.toContain("var(--studio-material-texture)");
+      expect(themeToken("brass-instrument", surfaceToken), surfaceToken).not.toContain("var(--studio-material-texture)");
     }
 
-    expect(themeToken(theme, "--studio-material-body-bg")).toContain("var(--studio-material-texture)");
+    expect(themeToken("brass-instrument", "--studio-material-body-bg")).toContain("var(--studio-material-texture)");
+  });
+
+  it("keeps the stone slate texture on all material surfaces", () => {
+    for (const surfaceToken of [...contentSurfaceTokens, "--studio-material-body-bg"]) {
+      expect(themeToken("stone", surfaceToken), surfaceToken).toContain("var(--studio-material-texture)");
+    }
   });
 
   it("keeps Brass Instrument secondary text and control edges legible", () => {

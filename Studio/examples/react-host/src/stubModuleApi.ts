@@ -1,6 +1,7 @@
 import {
   createAiContributionApi,
   createContributionRegistry,
+  createDashboardWidgetRegistry,
   createDialogController,
   createEndpointContext,
   studioSlots,
@@ -48,7 +49,7 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
     featureAreas,
     navigation,
     routes,
-    dashboardWidgets: createContributionRegistry({ slot: studioSlots.dashboardWidgets }),
+    dashboardWidgets: createDashboardWidgetRegistry(),
     diagnosticsWidgets: createContributionRegistry({ slot: studioSlots.diagnosticsWidgets }),
     panels: createContributionRegistry({ slot: studioSlots.panels }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),

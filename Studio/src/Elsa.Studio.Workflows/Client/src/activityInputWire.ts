@@ -7,11 +7,14 @@ import { normalizeFlowchartStartNode } from "./flowchartStartNode";
  *
  * Two concerns live here:
  *
- * 1. Activity input values. The editors keep them as top-level camelCase properties on the activity
- *    node (e.g. `activity.text = { typeName, expression: { type, value } }`). The backend `ActivityNode`
- *    model carries authored values in an `inputs` array of `ArgumentState { referenceKey, value }`;
- *    anything else is dropped on deserialization. {@link canonicalizeStateForWire} folds the top-level
- *    wrapped properties into `inputs`; {@link expandStateFromWire} reverses it on load.
+ * 1. Activity input values. The editors keep them as top-level properties on the activity node, keyed
+ *    by the input's catalog `referenceKey` verbatim (e.g. `activity.text = { typeName, expression:
+ *    { type, value } }` for WriteLine's `referenceKey: "text"`). The backend `ActivityNode` model
+ *    carries authored values in an `inputs` array of `ArgumentState { referenceKey, value }`; anything
+ *    else is dropped on deserialization. {@link canonicalizeStateForWire} folds the top-level wrapped
+ *    properties into `inputs`; {@link expandStateFromWire} reverses it on load. Keys ride both
+ *    directions untransformed — the referenceKey is an opaque contract identifier, not a naming
+ *    convention.
  *
  * 2. Argument collections — the workflow-level `variables`/`inputs`/`outputs` and container-scoped
  *    variables. The typed-argument-model contract carries each argument's type as
@@ -20,6 +23,8 @@ import { normalizeFlowchartStartNode } from "./flowchartStartNode";
  *    still hold `typeInformation`/`isArray`, so old and new documents round-trip identically.
  */
 
+// Authored input properties share the node object with these structural fields. A referenceKey equal
+// to one of them would be misread as structure; the backend treats these names as reserved.
 const structuralKeys = new Set(["nodeId", "activityVersionId", "inputs", "outputs", "structure"]);
 
 interface WrappedInputValue {
@@ -147,27 +152,32 @@ function readWireStorageDriver(value: unknown): string | null {
 }
 
 function canonicalizeActivityNode(node: ActivityNode): ActivityNode {
-  const collected: WireArgumentState[] = [];
-  const extras: Record<string, unknown> = {};
+  // Seed from any pre-existing wire-shaped inputs (e.g. template-seeded defaults on a freshly dropped
+  // node), then overlay the top-level authored properties — an edited value wins over its seeded
+  // default under the same referenceKey. Keyed by referenceKey, so the transform is idempotent.
+  const inputs = new Map<string, unknown>();
+  for (const existing of Array.isArray(node.inputs) ? node.inputs : []) {
+    if (isRecord(existing) && typeof existing.referenceKey === "string") inputs.set(existing.referenceKey, existing);
+  }
 
+  const extras: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node)) {
     if (structuralKeys.has(key)) continue;
     if (isWrappedInputValue(value)) {
-      collected.push({
-        referenceKey: pascalize(key),
+      inputs.set(key, {
+        referenceKey: key,
         value: toWireArgument(value.expression)
-      });
+      } satisfies WireArgumentState);
     } else {
       extras[key] = value;
     }
   }
 
-  const existingInputs = Array.isArray(node.inputs) ? node.inputs : [];
   return {
     ...extras,
     nodeId: node.nodeId,
     activityVersionId: node.activityVersionId,
-    inputs: [...existingInputs, ...collected],
+    inputs: [...inputs.values()],
     outputs: Array.isArray(node.outputs) ? node.outputs : [],
     structure: node.structure
   };
@@ -180,7 +190,7 @@ function expandActivityNode(node: ActivityNode): ActivityNode {
   for (const argument of inputs) {
     if (!isRecord(argument) || typeof argument.referenceKey !== "string") continue;
     const argumentValue = isRecord(argument.value) ? argument.value : {};
-    expanded[camelize(argument.referenceKey)] = {
+    expanded[argument.referenceKey] = {
       typeName: "",
       expression: {
         type: typeof argumentValue.expressionType === "string" ? argumentValue.expressionType : "Literal",
@@ -190,15 +200,6 @@ function expandActivityNode(node: ActivityNode): ActivityNode {
   }
 
   return { ...node, ...expanded, inputs: [] };
-}
-
-// Reverses camelize ("text" -> "Text", "uRL" -> "URL"). The backend ReferenceKey is PascalCase.
-function pascalize(value: string): string {
-  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
-}
-
-function camelize(value: string): string {
-  return value ? value.charAt(0).toLowerCase() + value.slice(1) : value;
 }
 
 // Resolves an expression to the backend's ArgumentValue { value, expressionType }. Most expressions keep

@@ -261,30 +261,33 @@ html[data-theme="stone"] {
     linear-gradient(0deg, color-mix(in srgb, black 24%, transparent), transparent 46%),
     linear-gradient(color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #8bdfff 3%, transparent) 1px, transparent 1px),
+    var(--studio-material-texture),
     linear-gradient(160deg, #1b2429, #0c1113 72%);
   --studio-material-panel-bg-strong:
     linear-gradient(180deg, color-mix(in srgb, white 20%, transparent), transparent 32%),
     linear-gradient(0deg, color-mix(in srgb, black 28%, transparent), transparent 48%),
     linear-gradient(color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #8bdfff 3%, transparent) 1px, transparent 1px),
+    var(--studio-material-texture),
     linear-gradient(160deg, #263137, #0e1315 70%);
   --studio-material-panel-bg-soft:
     linear-gradient(180deg, color-mix(in srgb, white 15%, transparent), transparent 34%),
     linear-gradient(0deg, color-mix(in srgb, black 18%, transparent), transparent 48%),
-    linear-gradient(color-mix(in srgb, #8bdfff 3%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #8bdfff 2%, transparent) 1px, transparent 1px),
+    var(--studio-material-texture),
     linear-gradient(160deg, #242e34, #12191c 70%);
-  --studio-material-panel-bg-size: auto, auto, 36px 36px, 36px 36px, auto;
-  /* Content slabs stay matte so grain does not compete with dense text. */
+  --studio-material-panel-bg-size: auto, auto, 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
+  /* Flat dense-row fill: grain grid + texture + slate base, bevel + shadow dropped. */
   --studio-material-row-bg:
     linear-gradient(color-mix(in srgb, white 4%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, white 3%, transparent) 1px, transparent 1px),
+    var(--studio-material-texture),
     linear-gradient(160deg, #1c242a, #141b1f 72%);
-  --studio-material-row-bg-size: 36px 36px, 36px 36px, auto;
+  --studio-material-row-bg-size: 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
   /* Recessed well: darker sunken slate for search/filter inputs. */
   --studio-material-well-bg:
+    var(--studio-material-texture),
     linear-gradient(160deg, #0e1316, #0a0e10 72%);
-  --studio-material-well-bg-size: auto;
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
   --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 46%, transparent),
     inset 0 0 0 1px color-mix(in srgb, black 26%, transparent);
   --studio-material-body-bg:
@@ -297,13 +300,15 @@ html[data-theme="stone"] {
     radial-gradient(circle at 28% 22%, color-mix(in srgb, white 6%, transparent), transparent 18rem),
     linear-gradient(color-mix(in srgb, #8bdfff 5%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
+    var(--studio-material-texture),
     linear-gradient(160deg, #10161a, #050708 70%);
-  --studio-material-content-bg-size: auto, 32px 32px, 32px 32px, auto;
+  --studio-material-content-bg-size: auto, 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
   --studio-material-canvas-bg:
     linear-gradient(color-mix(in srgb, white 6%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
+    var(--studio-material-texture),
     linear-gradient(160deg, #12191d, #050809 72%);
-  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, auto;
+  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
   --studio-material-node-bg:
     linear-gradient(180deg, color-mix(in srgb, white 18%, transparent), transparent 36%),
     linear-gradient(0deg, color-mix(in srgb, black 22%, transparent), transparent 50%),

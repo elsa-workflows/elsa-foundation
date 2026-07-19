@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -20,7 +21,11 @@ export default defineConfig({
     }
   },
   test: {
+    alias: {
+      "@elsa-workflows/studio-sdk": resolve(__dirname, "src/sdk/index.ts")
+    },
     environment: "jsdom",
+    setupFiles: [resolve(__dirname, "../../../vitest.setup.ts")],
     // Full-page jsdom renders (extension builder, module management) normally finish in well
     // under a second, but parallel workers on a loaded machine can slow them 10x+ past the
     // default 5s. Individual tests never legitimately take this long; this only delays failure

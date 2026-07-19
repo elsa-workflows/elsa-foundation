@@ -2,6 +2,7 @@ import {
   createEndpointContext,
   createAiContributionApi,
   createContributionRegistry,
+  createDashboardWidgetRegistry,
   studioSlots,
   type ElsaStudioHostContext,
   type ElsaStudioModuleApi,
@@ -45,7 +46,7 @@ export function createStudioRegistry(
     featureAreas,
     navigation,
     routes,
-    dashboardWidgets: createContributionRegistry({ slot: studioSlots.dashboardWidgets }),
+    dashboardWidgets: createDashboardWidgetRegistry(),
     diagnosticsWidgets: createContributionRegistry<StudioDiagnosticsWidgetContribution>({ slot: studioSlots.diagnosticsWidgets }),
     panels: createContributionRegistry({ slot: studioSlots.panels }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),
@@ -76,7 +77,11 @@ export function createStudioRegistry(
 
 function createBackendContext(host: ElsaStudioHostContext, options: CreateStudioRegistryOptions) {
   const backend = createEndpointContext(options.backendBaseUrl ?? host.baseUrl);
-  return options.backendHttp ? { ...backend, http: options.backendHttp } : backend;
+  return {
+    ...backend,
+    ...(options.backendHttp && { http: options.backendHttp }),
+    ...(host.accessTokenFactory && { accessTokenFactory: host.accessTokenFactory })
+  };
 }
 
 function createFeatureAreaRegistry(

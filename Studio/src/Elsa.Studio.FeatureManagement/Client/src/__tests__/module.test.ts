@@ -16,7 +16,7 @@ import {
 } from "../module";
 
 describe("feature management module", () => {
-  it("registers navigation, route, and built-in setting editors", () => {
+  it("registers navigation, route, and shared setting editors", () => {
     const api = stubApi();
 
     register(api);
@@ -401,6 +401,7 @@ describe("feature management module", () => {
         features: [feature("RuntimeA", true, {}, ["Runtime"])]
       })
     });
+    registerBuiltInSettingEditors(api);
     register(api);
     const { container, unmount } = await renderFeatureManagementPage();
     const selectedCard = container.querySelector(".feature-management-card.selected");

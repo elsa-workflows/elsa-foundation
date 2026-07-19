@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { createStudioAuthManager, createStudioEndpointContext, StudioAuthBoundary } from "../app/auth/studioAuth";
-import type { AuthProviderManager, AuthSession, StudioModulesResponse } from "../sdk";
+import { useAuthSession, type AuthProviderManager, type AuthSession, type StudioModulesResponse } from "../sdk";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -19,7 +19,7 @@ describe("studio auth mounting", () => {
     const { container, unmount } = await renderApp();
 
     expect(createStudioAuthManager({}, "https://studio.example")).toBeNull();
-    expect(container.textContent).toContain("Dashboard");
+    expect(container.textContent).toContain("Elsa Studio");
     expect(container.textContent).not.toContain("Signing in");
 
     // Every request the shell issued must be unauthenticated.
@@ -29,6 +29,20 @@ describe("studio auth mounting", () => {
     }
 
     await unmount();
+  });
+
+  it("provides an explicit anonymous session when authentication is disabled", () => {
+    function SessionProbe() {
+      const session = useAuthSession();
+      return <span>{session.status}:{session.roles.length}:{session.permissions.length}</span>;
+    }
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    flushSync(() => root.render(<StudioAuthBoundary manager={null}><SessionProbe /></StudioAuthBoundary>));
+
+    expect(container.textContent).toBe("anonymous:0:0");
+    flushSync(() => root.unmount());
   });
 
   it("gates the shell behind RequireAuth while the session is anonymous, then reveals it once authenticated", async () => {
@@ -67,10 +81,13 @@ describe("studio auth mounting", () => {
 
     const { container, flush, unmount } = renderBoundary(manager);
 
-    await flush();
-    await flush();
-
-    expect(container.textContent).toContain("Unable to sign in");
+    // The error UI needs two settled rejections (initialize, then the login the anonymous
+    // session triggers), each followed by a passive-effect/render cycle whose scheduling
+    // races a fixed flush count — poll instead of counting flushes.
+    await vi.waitFor(async () => {
+      await flush();
+      expect(container.textContent).toContain("Unable to sign in");
+    });
     expect(container.textContent).toContain("authentication service may be unavailable");
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
 
@@ -79,9 +96,10 @@ describe("studio auth mounting", () => {
     expect(retryButton).toBeDefined();
 
     flushSync(() => retryButton?.click());
-    await flush();
-
-    expect(manager.login).toHaveBeenCalledTimes(2);
+    await vi.waitFor(async () => {
+      await flush();
+      expect(manager.login).toHaveBeenCalledTimes(2);
+    });
     expect(container.textContent).toContain("Signing in");
 
     await unmount();

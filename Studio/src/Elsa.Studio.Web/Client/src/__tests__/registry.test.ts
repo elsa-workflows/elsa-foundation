@@ -69,6 +69,24 @@ describe("studio registry", () => {
     expect(api.ai.tools.slot.id).toBe(studioSlotIds.aiTools);
   });
 
+  it("registers host-framed Dashboard Widgets with loaders, sizes, permissions, and settings", () => {
+    const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") });
+    api.dashboardWidgets.add({
+      id: "workflows.run-health",
+      moduleId: "Elsa.Studio.Workflows.Dashboard",
+      title: "Workflow run health",
+      defaultVisible: true,
+      defaultSize: "wide",
+      supportedSizes: ["medium", "wide", "full"],
+      permissions: ["workflows:read"],
+      settings: { schemaVersion: 1, defaults: { range: "7d" }, descriptors: [], validate: value => value as { range: string } },
+      load: async ({ settings }) => ({ range: (settings as { range: string }).range, total: 12 }),
+      component: () => null
+    });
+
+    expect(api.dashboardWidgets.list()[0]).toMatchObject({ moduleId: "Elsa.Studio.Workflows.Dashboard", defaultSize: "wide", permissions: ["workflows:read"] });
+  });
+
   it("supports module-owned nested Slots", () => {
     const weatherCardsSlot = defineStudioSlot({
       id: "weather.dashboard.cards",

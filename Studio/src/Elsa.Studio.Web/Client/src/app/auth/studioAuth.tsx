@@ -1,6 +1,7 @@
 import React from "react";
 import {
   AuthProvider,
+  AnonymousAuthProvider,
   RequireAuth,
   createAuthenticatedHttpClient,
   createBackendAuthProviderManager,
@@ -8,7 +9,7 @@ import {
   createSignalRAccessTokenFactory,
   type AuthProviderManager,
   type StudioEndpointContext
-} from "../../sdk";
+} from "@elsa-workflows/studio-sdk";
 import { isStudioAuthEnabled, type StudioRuntimeConfig } from "../runtime";
 import elsaLogo from "../../assets/images/icon.png";
 
@@ -43,7 +44,7 @@ export function StudioAuthBoundary({
   children: React.ReactNode;
 }) {
   if (!manager) {
-    return <>{children}</>;
+    return <AnonymousAuthProvider>{children}</AnonymousAuthProvider>;
   }
 
   return (

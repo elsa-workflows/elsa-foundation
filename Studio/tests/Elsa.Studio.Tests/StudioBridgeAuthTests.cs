@@ -92,6 +92,19 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task UsesDedicatedServerBaseUrlToValidateBearerWhenConfigured()
+    {
+        var backendServerBaseUrl = "http://elsa-server:8080";
+        var client = await StartGatedHostAsync(authEnabled: true, backendServerBaseUrl: backendServerBaseUrl);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", ValidBearer);
+
+        var response = await client.PostAsync("/gated", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(backendServerBaseUrl, _backendStub?.LastRequestUri?.GetLeftPart(UriPartial.Authority));
+    }
+
+    [Fact]
     public async Task RejectsRequestWithInvalidBearerHeaderWhenAuthEnabled()
     {
         var client = await StartGatedHostAsync(authEnabled: true);
@@ -464,6 +477,7 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
     private async Task<HttpClient> StartGatedHostAsync(
         bool authEnabled,
         string? backendBaseUrl = BackendBaseUrl,
+        string? backendServerBaseUrl = null,
         int? sessionCacheSeconds = null,
         int? sessionCacheMaxEntries = null,
         TimeProvider? timeProvider = null)
@@ -472,6 +486,7 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         {
             ["Studio:Auth:Enabled"] = authEnabled ? "true" : "false",
             [StudioBackendManagementOptions.BackendBaseUrlConfigurationKey] = backendBaseUrl,
+            [StudioBackendManagementOptions.BackendServerBaseUrlConfigurationKey] = backendServerBaseUrl,
             [StudioBridgeAuth.SessionCacheSecondsConfigurationKey] = sessionCacheSeconds?.ToString(),
             [StudioBridgeAuth.SessionCacheMaxEntriesConfigurationKey] = sessionCacheMaxEntries?.ToString()
         };
@@ -546,6 +561,8 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
             get { lock (_gate) return _introspectionsByBearer.Values.Sum(); }
         }
 
+        public Uri? LastRequestUri { get; private set; }
+
         public int IntrospectionCountFor(string bearer)
         {
             lock (_gate) return _introspectionsByBearer.GetValueOrDefault(bearer);
@@ -568,6 +585,7 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            LastRequestUri = request.RequestUri;
             var forwarded = request.Headers.Authorization?.Parameter;
             Func<HttpResponseMessage>? overrideResponse;
             string json;

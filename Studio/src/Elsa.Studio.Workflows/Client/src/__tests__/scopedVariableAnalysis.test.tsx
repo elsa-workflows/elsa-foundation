@@ -91,7 +91,7 @@ describe("scoped-variable analysis capability gating", () => {
     expect(path).toBe("/design/workflows/scoped-variables/analyze");
     expect(body.nodeId).toBe("root");
     expect(body.state.rootActivity.inputs).toEqual([
-      { referenceKey: "Text", value: { value: "live draft", expressionType: "Literal" } }
+      { referenceKey: "text", value: { value: "live draft", expressionType: "Literal" } }
     ]);
     expect(body.state.rootActivity).not.toHaveProperty("text");
   });
