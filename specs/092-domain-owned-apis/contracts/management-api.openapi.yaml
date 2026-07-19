@@ -1243,7 +1243,7 @@ components:
           minItems: 1
           uniqueItems: true
           items: { type: string, minLength: 1 }
-        folderId: { type: [string, 'null'], maxLength: 64 }
+        folderId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
     WorkflowDraft:
       type: object
       required: [id, definitionId, state, layout]
@@ -1683,7 +1683,7 @@ components:
       type: object
       required: [parentId]
       properties:
-        parentId: { type: [string, 'null'], maxLength: 64 }
+        parentId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
     RuntimeDiagnosticsSettings:
       type: object
       additionalProperties: true
