@@ -61,12 +61,24 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             definitionId));
 
+        var tagSet = await store.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetDocumentKind,
+            definitionId,
+            cancellationToken);
+        if (tagSet is not null)
+        {
+            deletes.Add(GroundworkDocumentWriter.ToDeleteRequest(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetDocumentKind,
+                definitionId));
+        }
+
         await store.DeleteAllAsync(
             DocumentCommitScope.Of(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
                 WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind),
+                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
+                WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetDocumentKind),
             deletes,
             cancellationToken);
     }

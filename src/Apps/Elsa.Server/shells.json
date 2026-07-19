@@ -142,6 +142,8 @@
           "Secrets": {},
           "SecretsApi": {},
           "SecretsGroundworkPersistence": {},
+          "TaggingApi": {},
+          "TaggingGroundworkPersistence": {},
           "Serialization": {},
           "Tasks": {},
           "WeatherForecastSample": {},

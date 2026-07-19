@@ -295,6 +295,8 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         var expected = comparison.Values.SingleOrDefault();
         if (comparison.Operator == QueryComparisonOperator.NotEqual && expected is null)
             return actual is not null;
+        if (comparison.Operator == QueryComparisonOperator.NotContains && (actual is null || expected is null))
+            return actual is null && expected is not null;
         if (comparison.Operator != QueryComparisonOperator.Equal && (actual is null || expected is null))
             return false;
         var order = StringComparer.Ordinal.Compare(
@@ -305,6 +307,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             QueryComparisonOperator.Equal => order == 0,
             QueryComparisonOperator.NotEqual => order != 0,
             QueryComparisonOperator.Contains => actual!.Contains(expected!, StringComparison.OrdinalIgnoreCase),
+            QueryComparisonOperator.NotContains => !actual!.Contains(expected!, StringComparison.OrdinalIgnoreCase),
             QueryComparisonOperator.StartsWith => actual!.StartsWith(expected!, StringComparison.Ordinal),
             QueryComparisonOperator.GreaterThan => order > 0,
             QueryComparisonOperator.GreaterThanOrEqual => order >= 0,

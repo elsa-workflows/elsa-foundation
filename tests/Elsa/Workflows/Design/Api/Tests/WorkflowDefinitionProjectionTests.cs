@@ -1,6 +1,8 @@
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
+using Elsa.Tagging.Core.Contracts;
+using Elsa.Tagging.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -30,7 +32,7 @@ public sealed class WorkflowDefinitionProjectionTests
         Assert.Equal(3, result.PageSize);
         Assert.Equal(25, result.TotalCount);
         Assert.Equal(["definition-12", "definition-13", "definition-14"], result.Items.Select(item => item.Id));
-        Assert.Equal(2, fixture.TotalReadCount);
+        Assert.Equal(4, fixture.TotalReadCount);
     }
 
     [Theory]
@@ -107,6 +109,81 @@ public sealed class WorkflowDefinitionProjectionTests
         Assert.Equal("needle", fixture.LastPageQuery!.Filter.SearchTerm);
     }
 
+    [Fact]
+    public async Task Definition_list_parses_marker_clauses_and_returns_catalog_backed_chips()
+    {
+        var fixture = new ProjectionFixture(1);
+
+        var result = await fixture.CreateHandler().Handle(
+            new ListDefinitions(
+                null,
+                null,
+                null,
+                null,
+                MarkerTagClauses: ["tag-priority:exists", "tag-review:missing"]),
+            CancellationToken.None);
+
+        Assert.Collection(
+            fixture.LastPageQuery!.Filter.MarkerTagClauses!,
+            clause =>
+            {
+                Assert.Equal("tag-priority", clause.TagDefinitionId);
+                Assert.Equal(WorkflowDefinitionMarkerTagOperator.Exists, clause.Operator);
+            },
+            clause =>
+            {
+                Assert.Equal("tag-review", clause.TagDefinitionId);
+                Assert.Equal(WorkflowDefinitionMarkerTagOperator.Missing, clause.Operator);
+            });
+        var marker = Assert.Single(Assert.Single(result.Items).MarkerTags!);
+        Assert.Equal("tag-priority", marker.TagDefinitionId);
+        Assert.Equal("Priority", marker.DisplayName);
+        Assert.Equal("#ef4444", marker.Color);
+    }
+
+    [Theory]
+    [InlineData("tag-priority")]
+    [InlineData(":exists")]
+    [InlineData("tag-priority:any")]
+    public async Task Definition_list_rejects_invalid_marker_clauses(string value)
+    {
+        var handler = new ProjectionFixture(1).CreateHandler();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
+            new ListDefinitions(null, null, null, null, MarkerTagClauses: [value]),
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Definition_list_rejects_marker_filters_when_tagging_is_not_active()
+    {
+        var fixture = new ProjectionFixture(1);
+        var handler = fixture.CreateHandlerWithoutTags();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
+            new ListDefinitions(null, null, null, null, MarkerTagClauses: ["tag-priority:exists"]),
+            CancellationToken.None));
+
+        Assert.Contains("not active", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, fixture.DefinitionReadCount);
+    }
+
+    [Fact]
+    public void Provider_neutral_query_fails_closed_for_marker_filters()
+    {
+        var filter = new WorkflowDefinitionFilter
+        {
+            MarkerTagClauses =
+            [
+                new WorkflowDefinitionMarkerTagClause(
+                    "tag-priority",
+                    WorkflowDefinitionMarkerTagOperator.Exists)
+            ]
+        };
+
+        Assert.Throws<NotSupportedException>(() => filter.ToQuery());
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(25)]
@@ -120,7 +197,7 @@ public sealed class WorkflowDefinitionProjectionTests
             CancellationToken.None)).Items.ToArray();
 
         Assert.Equal(definitionCount, result.Length);
-        Assert.InRange(fixture.TotalReadCount, 1, 3);
+            Assert.InRange(fixture.TotalReadCount, 1, 5);
         foreach (var view in result)
         {
             var ordinal = int.Parse(view.Id["definition-".Length..]);
@@ -145,7 +222,7 @@ public sealed class WorkflowDefinitionProjectionTests
             CancellationToken.None);
 
         Assert.Equal(expectedCount, result.Items.Count);
-        Assert.InRange(fixture.TotalReadCount, 1, 3);
+        Assert.InRange(fixture.TotalReadCount, 1, 5);
     }
 
     private static T RequiredProperty<T>(WorkflowDefinitionView view, string name) =>
@@ -160,6 +237,8 @@ public sealed class WorkflowDefinitionProjectionTests
     {
         private readonly CountingDefinitionStore _definitions;
         private readonly CountingProjectionStore _projections;
+        private readonly CountingTagStore _tags = new();
+        private readonly CountingTagDefinitionStore _tagDefinitions = new();
 
         public ProjectionFixture(int count)
         {
@@ -181,10 +260,24 @@ public sealed class WorkflowDefinitionProjectionTests
             _projections = new CountingProjectionStore();
         }
 
-        public int TotalReadCount => _definitions.ReadCount + _projections.ReadCount;
+        public int TotalReadCount =>
+            _definitions.ReadCount + _projections.ReadCount + _tags.ReadCount + _tagDefinitions.ReadCount;
+        public int DefinitionReadCount => _definitions.ReadCount;
         public WorkflowDefinitionListQuery? LastPageQuery => _definitions.LastPageQuery;
 
         public ListDefinitionsRequestHandler CreateHandler()
+        {
+            var services = new ServiceCollection()
+                .AddSingleton<IWorkflowDefinitionStore>(_definitions)
+                .AddSingleton<IWorkflowDefinitionListProjectionStore>(_projections)
+                .AddSingleton<IWorkflowDefinitionTagStore>(_tags)
+                .AddSingleton<ITagDefinitionStore>(_tagDefinitions)
+                .AddSingleton<ITagDefinitionCatalogPersistence, DurableCatalogPersistence>()
+                .BuildServiceProvider();
+            return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
+        }
+
+        public ListDefinitionsRequestHandler CreateHandlerWithoutTags()
         {
             var services = new ServiceCollection()
                 .AddSingleton<IWorkflowDefinitionStore>(_definitions)
@@ -193,6 +286,8 @@ public sealed class WorkflowDefinitionProjectionTests
             return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
         }
     }
+
+    private sealed class DurableCatalogPersistence : ITagDefinitionCatalogPersistence;
 
     private sealed class CountingDefinitionStore(IReadOnlyList<WorkflowDefinition> definitions) : IWorkflowDefinitionStore
     {
@@ -255,5 +350,86 @@ public sealed class WorkflowDefinitionProjectionTests
                 .ToArray();
             return Task.FromResult(projections);
         }
+    }
+
+    private sealed class CountingTagStore : IWorkflowDefinitionTagStore
+    {
+        public int ReadCount { get; private set; }
+
+        public Task<WorkflowDefinitionTagSet> GetAsync(
+            string workflowDefinitionId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WorkflowDefinitionTagSet(
+                workflowDefinitionId,
+                null,
+                WorkflowDefinitionTagRevision.Initial,
+                [WorkflowDefinitionTagAssertion.Manual("tag-priority")]));
+
+        public async Task<IReadOnlyCollection<WorkflowDefinitionTagSet>> ListByDefinitionIdsAsync(
+            IReadOnlyCollection<string> workflowDefinitionIds,
+            CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            var results = new List<WorkflowDefinitionTagSet>();
+            foreach (var id in workflowDefinitionIds)
+                results.Add(await GetAsync(id, cancellationToken));
+            return results;
+        }
+
+        public Task<WorkflowDefinitionTagReplaceResult> ReplaceManualAsync(
+            ReplaceWorkflowDefinitionManualTags request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class CountingTagDefinitionStore : ITagDefinitionStore
+    {
+        private readonly TagDefinition _definition = new()
+        {
+            Id = "tag-priority",
+            CanonicalKey = "priority",
+            DisplayName = "Priority",
+            Color = "#ef4444"
+        };
+
+        public int ReadCount { get; private set; }
+
+        public ValueTask<TagDefinition?> FindByCanonicalKeyAsync(
+            string canonicalKey,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<TagDefinition?>(_definition);
+
+        public ValueTask<TagDefinitionRevisionedRecord?> FindWithRevisionAsync(
+            string tagDefinitionId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<TagDefinitionRevisionedRecord?>(new(_definition, "tag:1"));
+
+        public ValueTask<IReadOnlyList<TagDefinition>> ListByIdsAsync(
+            IReadOnlyCollection<string> tagDefinitionIds,
+            CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            return ValueTask.FromResult<IReadOnlyList<TagDefinition>>(
+                tagDefinitionIds.Contains(_definition.Id, StringComparer.Ordinal) ? [_definition] : []);
+        }
+
+        public ValueTask<IReadOnlyList<TagDefinition>> ListAsync(
+            TagDefinitionListRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            return ValueTask.FromResult<IReadOnlyList<TagDefinition>>([_definition]);
+        }
+
+        public ValueTask<bool> TryAddAsync(
+            TagDefinition definition,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<TagDefinitionSaveResult> SaveWithRevisionAsync(
+            TagDefinition definition,
+            string expectedRevision,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

@@ -19,19 +19,22 @@ public sealed class GroundworkSaveWorkflowDefinitionCommand(
     {
         WorkflowDefinitionConstraints.Validate(definition);
         accessContextAccessor.Current.EnsureTenantScope(definition.TenantId);
-        var existing = await new GroundworkWorkflowDefinitionStore(store).FindByIdAsync(definition.Id, cancellationToken);
-        GroundworkEntityTimestamps.StampSaved(definition, existing, clock.UtcNow);
+        var existingEnvelope = await store.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            definition.Id,
+            cancellationToken);
+        var existingDocument = existingEnvelope is null
+            ? null
+            : GroundworkWorkflowDefinitionDocuments.Deserialize(existingEnvelope);
+        GroundworkEntityTimestamps.StampSaved(definition, existingDocument?.Entity, clock.UtcNow);
 
         await store.SaveAllAsync(
             DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind),
             [
-                GroundworkDocumentWriter.ToTenantScopedSaveRequest(
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
-                    WorkflowsDesignStorageManifest.SchemaVersion,
+                GroundworkWorkflowDefinitionDocuments.Save(
                     definition,
-                    GroundworkDesignJson.Options,
-                    accessContextAccessor.Current)
+                    existingDocument?.MarkerProjection ?? GroundworkWorkflowDefinitionTagStore.MarkerProjection([]),
+                    existingEnvelope?.Version)
             ],
             cancellationToken);
     }

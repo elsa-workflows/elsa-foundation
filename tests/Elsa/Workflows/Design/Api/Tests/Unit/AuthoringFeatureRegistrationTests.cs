@@ -15,5 +15,7 @@ public sealed class AuthoringFeatureRegistrationTests
 
         Assert.Contains(services, x => x.ServiceType == typeof(ActivityInputOptionsAuthoringService));
         Assert.Contains(services, x => x.ServiceType == typeof(IActivityInputOptionsProviderResolver));
+        Assert.Contains(services, x => x.ServiceType == typeof(WorkflowDefinitionTagApplicationService));
+        Assert.Contains(services, x => x.ServiceType == typeof(IWorkflowDefinitionTagAuthorizationContext));
     }
 }

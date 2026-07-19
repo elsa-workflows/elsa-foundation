@@ -47,6 +47,9 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.RemoveAll<IWorkflowDefinitionListProjectionStore>();
         services.AddScoped<IWorkflowDefinitionListProjectionStore, GroundworkWorkflowDefinitionListProjectionStore>();
 
+        services.RemoveAll<IWorkflowDefinitionTagStore>();
+        services.AddScoped<IWorkflowDefinitionTagStore, GroundworkWorkflowDefinitionTagStore>();
+
         services.RemoveAll<IWorkflowDefinitionVersionLayoutStore>();
         services.AddScoped<IWorkflowDefinitionVersionLayoutStore, GroundworkWorkflowDefinitionVersionLayoutStore>();
 
@@ -84,6 +87,7 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.AddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>();
 
         services.TryAddScoped<IIdentityGenerator, ShortIdentityGenerator>();
+        services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();

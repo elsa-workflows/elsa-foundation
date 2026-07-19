@@ -17,6 +17,7 @@
           "ApiCapabilities": {},
           "Secrets": {},
           "SecretsApi": {},
+          "TaggingApi": {},
           "WorkflowsDesignApi": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphRuntime": {},

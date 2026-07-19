@@ -8,10 +8,18 @@ using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Primitives.Contracts;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.Services;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.Groundwork;
 using Elsa.Secrets.Persistence.Groundwork.Stores;
+using Elsa.Tagging.Core.Models;
+using Elsa.Tagging.Core.Contracts;
+using Elsa.Tagging.Persistence.Groundwork;
+using Elsa.Tagging.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
@@ -323,7 +331,8 @@ public sealed class FoundationBoundedQueryContractTests
 
         await SaveWorkflowDefinitionAsync(
             client.DocumentStore,
-            new WorkflowDefinition { Id = "invoice-active", Name = "Invoice Case" });
+            new WorkflowDefinition { Id = "invoice-active", Name = "Invoice Case" },
+            ["tag-priority"]);
         await SaveWorkflowDefinitionAsync(
             client.DocumentStore,
             new WorkflowDefinition { Id = "invoice-deleted", Name = "Invoice Deleted", DeletedAt = Now });
@@ -343,10 +352,58 @@ public sealed class FoundationBoundedQueryContractTests
             Page: 1,
             PageSize: 10));
         var legacy = await definitions.ListAsync(new WorkflowDefinitionFilter { Id = "invoice-active" });
+        var markerExists = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter
+            {
+                Id = "invoice-active",
+                MarkerTagClauses =
+                [
+                    new WorkflowDefinitionMarkerTagClause(
+                        "tag-priority",
+                        WorkflowDefinitionMarkerTagOperator.Exists)
+                ]
+            },
+            WorkflowDefinitionLifecycleScope.Active,
+            PageSize: 10));
+        var markerMissing = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter
+            {
+                Id = "invoice-deleted",
+                MarkerTagClauses =
+                [
+                    new WorkflowDefinitionMarkerTagClause(
+                        "tag-priority",
+                        WorkflowDefinitionMarkerTagOperator.Missing)
+                ]
+            },
+            WorkflowDefinitionLifecycleScope.Deleted,
+            PageSize: 10));
 
         Assert.Equal(["invoice-active"], mixedCaseSearch.Items.Select(definition => definition.Id));
         Assert.Equal(["invoice-deleted"], deleted.Items.Select(definition => definition.Id));
         Assert.Equal(["invoice-active"], legacy.Select(definition => definition.Id));
+        Assert.Equal(["invoice-active"], markerExists.Items.Select(definition => definition.Id));
+        Assert.Equal(1, markerExists.TotalCount);
+        Assert.Equal(["invoice-deleted"], markerMissing.Items.Select(definition => definition.Id));
+        Assert.Equal(1, markerMissing.TotalCount);
+        Assert.All(
+            bounded.Observations.TakeLast(2),
+            observation =>
+            {
+                Assert.Equal(WorkflowsDesignStorageManifest.SearchPageByNameQuery, observation.Query.QueryIdentity);
+                Assert.InRange(observation.MaterializedDocuments, 0, 1);
+                Assert.Equal(1, observation.TotalCount);
+            });
+        Assert.Contains(
+            bounded.Observations[^2].Query.Clauses,
+            clause => clause.Comparisons.Any(comparison =>
+                comparison.Operator == QueryComparisonOperator.Contains
+                && comparison.Path == WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionField));
+        Assert.Contains(
+            bounded.Observations[^1].Query.Clauses,
+            clause => clause.Comparisons.Any(comparison =>
+                comparison.Operator == QueryComparisonOperator.NotContains
+                && comparison.Path == WorkflowsDesignStorageManifest.WorkflowDefinitionMarkerProjectionField));
 
         await using (var otherTenant = await driver.OpenPhysicalClientAsync(Access("tenant-b")))
         {
@@ -376,6 +433,186 @@ public sealed class FoundationBoundedQueryContractTests
                 WorkflowDefinitionSortDirection.Asc,
                 Page: 1,
                 PageSize: 1))).TotalCount);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_tags_preserve_revision_tenant_lifecycle_and_bounded_contracts(
+        string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients |
+            GroundworkTopologyCapabilities.MultiDocumentTransactions);
+        await driver.ResetPhysicalAsync(
+        [
+            new WorkflowsDesignGroundworkStorageManifestSource(),
+            new TaggingGroundworkStorageManifestSource()
+        ]);
+
+        await using var client = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        var physicalBounded = client.BoundedDocumentStore
+            ?? throw new InvalidOperationException("The provider did not expose a bounded-query runtime.");
+        var access = Accessor("tenant-a");
+        await SaveWorkflowDefinitionAsync(
+            client.DocumentStore,
+            new WorkflowDefinition
+            {
+                Id = "definition-tagged",
+                TenantId = "tenant-a",
+                Name = "Tagged"
+            });
+        var bounded = Record(client);
+        var tags = new GroundworkWorkflowDefinitionTagStore(
+            client.DocumentStore,
+            access,
+            TimeProvider.System,
+            bounded);
+        var catalog = new GroundworkTagDefinitionStore(
+            client.DocumentStore,
+            physicalBounded);
+        var priority = Tag("tag-priority", "risk.priority", "Priority");
+        Assert.True(await catalog.TryAddAsync(priority));
+        var priorityRevision = Assert.IsType<TagDefinitionRevisionedRecord>(
+            await catalog.FindWithRevisionAsync(priority.Id));
+        priority.DisplayName = "Priority Updated";
+        Assert.Equal(
+            TagDefinitionSaveStatus.Saved,
+            (await catalog.SaveWithRevisionAsync(priority, priorityRevision.Revision)).Status);
+        priority.DisplayName = "Stale Priority";
+        Assert.Equal(
+            TagDefinitionSaveStatus.Conflict,
+            (await catalog.SaveWithRevisionAsync(priority, priorityRevision.Revision)).Status);
+        Assert.Equal(
+            "Priority Updated",
+            (await catalog.FindWithRevisionAsync(priority.Id))!.Definition.DisplayName);
+
+        var saved = await tags.ReplaceManualAsync(new(
+            "definition-tagged",
+            "tenant-a",
+            WorkflowDefinitionTagRevision.Initial,
+            ["tag-priority"],
+            "author",
+            "correlation"));
+
+        Assert.Equal(WorkflowDefinitionTagReplaceStatus.Saved, saved.Status);
+        var stale = await tags.ReplaceManualAsync(new(
+            "definition-tagged",
+            "tenant-a",
+            WorkflowDefinitionTagRevision.Initial,
+            ["tag-stale"],
+            "stale-author",
+            "stale-correlation"));
+        Assert.Equal(WorkflowDefinitionTagReplaceStatus.Conflict, stale.Status);
+        Assert.Equal(saved.TagSet!.Revision, stale.CurrentRevision);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tags.ReplaceManualAsync(new(
+            "definition-tagged",
+            "tenant-b",
+            saved.TagSet.Revision,
+            ["tag-cross-tenant"],
+            "cross-tenant-author",
+            "cross-tenant-correlation")));
+
+        var tagSets = await tags.ListByDefinitionIdsAsync(
+            ["definition-tagged", "definition-missing"]);
+
+        Assert.Equal(
+            ["tag-priority"],
+            tagSets.Single(tagSet => tagSet.WorkflowDefinitionId == "definition-tagged")
+                .Assertions.Select(assertion => assertion.TagDefinitionId));
+        Assert.Empty(tagSets.Single(tagSet => tagSet.WorkflowDefinitionId == "definition-missing").Assertions);
+        var observation = Assert.Single(bounded.Observations);
+        Assert.Equal(
+            WorkflowsDesignStorageManifest.FindWorkflowDefinitionTagSetsByDefinitionIdsQuery,
+            observation.Query.QueryIdentity);
+        Assert.InRange(observation.MaterializedDocuments, 0, 1);
+
+        await using (var tenantB = await driver.OpenPhysicalClientAsync(Access("tenant-b")))
+        {
+            await SaveWorkflowDefinitionAsync(
+                tenantB.DocumentStore,
+                new WorkflowDefinition
+                {
+                    Id = "definition-tagged",
+                    TenantId = "tenant-b",
+                    Name = "Tenant B Tagged"
+                });
+            var tenantBCatalog = new GroundworkTagDefinitionStore(
+                tenantB.DocumentStore,
+                tenantB.BoundedDocumentStore);
+            var tenantBPriority = Tag("tag-priority-b", "risk.priority", "Tenant B Priority");
+            Assert.True(await tenantBCatalog.TryAddAsync(tenantBPriority));
+            Assert.Equal(
+                tenantBPriority.Id,
+                (await tenantBCatalog.FindByCanonicalKeyAsync("risk.priority"))!.Id);
+            var tenantBTags = new GroundworkWorkflowDefinitionTagStore(
+                tenantB.DocumentStore,
+                Accessor("tenant-b"),
+                TimeProvider.System,
+                tenantB.BoundedDocumentStore);
+            Assert.Equal(
+                WorkflowDefinitionTagReplaceStatus.Saved,
+                (await tenantBTags.ReplaceManualAsync(new(
+                    "definition-tagged",
+                    "tenant-b",
+                    WorkflowDefinitionTagRevision.Initial,
+                    [tenantBPriority.Id],
+                    "tenant-b-author",
+                    "tenant-b-correlation"))).Status);
+            Assert.Equal(
+                [tenantBPriority.Id],
+                (await tenantBTags.GetAsync("definition-tagged"))
+                    .Assertions.Select(assertion => assertion.TagDefinitionId));
+        }
+
+        Assert.Equal(
+            priority.Id,
+            (await catalog.FindByCanonicalKeyAsync("risk.priority"))!.Id);
+        Assert.Equal(
+            ["tag-priority"],
+            (await tags.GetAsync("definition-tagged"))
+                .Assertions.Select(assertion => assertion.TagDefinitionId));
+
+        var definitions = new GroundworkWorkflowDefinitionStore(
+            client.DocumentStore,
+            physicalBounded);
+        var definition = await definitions.GetAsync("definition-tagged");
+        definition.DeletedAt = Now;
+        await new GroundworkSaveWorkflowDefinitionCommand(
+            client.DocumentStore,
+            new FixedClock(),
+            access).Execute(definition);
+        var payloads = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+        var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
+            client.DocumentStore,
+            payloads,
+            definitions,
+            new GroundworkWorkflowDefinitionDraftStore(
+                client.DocumentStore,
+                physicalBounded,
+                payloads,
+                access),
+            new GroundworkWorkflowDefinitionVersionStore(
+                client.DocumentStore,
+                definitions,
+                payloads,
+                physicalBounded),
+            new GroundworkWorkflowDefinitionVersionLayoutStore(
+                client.DocumentStore,
+                physicalBounded),
+            access);
+
+        await delete.Execute("definition-tagged");
+
+        Assert.Null(await definitions.FindByIdAsync("definition-tagged"));
+        Assert.Null(await client.DocumentStore.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetDocumentKind,
+            "definition-tagged"));
+        Assert.Equal(
+            WorkflowDefinitionTagRevision.Initial,
+            (await tags.GetAsync("definition-tagged")).Revision);
     }
 
     [Theory]
@@ -752,16 +989,28 @@ public sealed class FoundationBoundedQueryContractTests
     private static DocumentStoreAccess Access(string scope) =>
         DocumentStoreAccess.Scoped(new StorageScope(scope));
 
-    private static async Task SaveWorkflowDefinitionAsync(IDocumentStore store, WorkflowDefinition definition) =>
+    private static async Task SaveWorkflowDefinitionAsync(
+        IDocumentStore store,
+        WorkflowDefinition definition,
+        IReadOnlyCollection<string>? markerTagDefinitionIds = null) =>
         _ = await store.SaveAsync(new SaveDocumentRequest(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             definition.Id,
             WorkflowsDesignStorageManifest.SchemaVersion,
-            JsonSerializer.Serialize(
-                new GroundworkDocument<WorkflowDefinition>(
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
-                    definition),
-                GroundworkDesignJson.Options)));
+            markerTagDefinitionIds is null
+                ? JsonSerializer.Serialize(
+                    new GroundworkDocument<WorkflowDefinition>(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                        definition),
+                    GroundworkDesignJson.Options)
+                : JsonSerializer.Serialize(
+                    new
+                    {
+                        collection = WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                        entity = definition,
+                        markerProjection = GroundworkWorkflowDefinitionTagStore.MarkerProjection(markerTagDefinitionIds)
+                    },
+                    GroundworkDesignJson.Options)));
 
     private static FixedAccessContextAccessor Accessor(string scope) =>
         new(PersistenceAccessContext.Scoped(new PersistenceScope(scope)));
@@ -786,6 +1035,21 @@ public sealed class FoundationBoundedQueryContractTests
         Ownership: ResourceOwnership.Foundation,
         RoleIds: new HashSet<string>(),
         DirectPermissions: new HashSet<string>());
+
+    private static TagDefinition Tag(string id, string canonicalKey, string displayName) => new()
+    {
+        Id = id,
+        CanonicalKey = canonicalKey,
+        DisplayName = displayName,
+        Eligibility = TagDefinitionEligibility.WorkflowDefinition,
+        Status = TagDefinitionStatus.Active,
+        CreatedAt = Now
+    };
+
+    private sealed class FixedClock : ISystemClock
+    {
+        public DateTimeOffset UtcNow => Now;
+    }
 
     private static ClaimMappingRule ClaimMapping(
         int index,

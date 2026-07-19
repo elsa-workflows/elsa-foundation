@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork;
 /// </summary>
 public static class WorkflowsDesignStorageManifest
 {
-    public const string SchemaVersion = "1.1.0";
+    public const string SchemaVersion = "1.2.0";
 
     public const string ByCollectionIndex = "by-collection";
     public const string CollectionField = "collection";
@@ -52,6 +52,8 @@ public static class WorkflowsDesignStorageManifest
     public const string WorkflowDefinitionDeletedAtField = "entity.deletedAt";
     public const string WorkflowDefinitionCreatedAtField = "entity.createdAt";
     public const string WorkflowDefinitionLastModifiedAtField = "entity.lastModifiedAt";
+    public const string WorkflowDefinitionMarkerProjectionField = "markerProjection";
+    public const int WorkflowDefinitionMarkerProjectionLength = 4_000;
 
     public const string WorkflowDefinitionDocumentKind = "workflowDefinition";
 
@@ -73,6 +75,14 @@ public static class WorkflowsDesignStorageManifest
     /// <summary>Constant partition value stamped on every workflow-definition-version-layout document (see <see cref="ByCollectionIndex"/>).</summary>
     public const string WorkflowDefinitionVersionLayoutCollection = "workflowDefinitionVersionLayout";
 
+    public const string WorkflowDefinitionTagSetDocumentKind = "workflowDefinitionTagSet";
+    public const string WorkflowDefinitionTagSetCollection = "workflowDefinitionTagSet";
+    public const string WorkflowDefinitionTagSetWorkflowDefinitionIdField = "workflowDefinitionId";
+    public const string WorkflowDefinitionTagSetByWorkflowDefinitionIdIndex = "workflow-definition-tag-set-by-workflow-definition-id";
+    public const string FindWorkflowDefinitionTagSetsByDefinitionIdsQuery = "find-workflow-definition-tag-sets-by-definition-ids";
+    public const string WorkflowDefinitionTagAuditDocumentKind = "workflowDefinitionTagAudit";
+    public const string WorkflowDefinitionTagAuditCollection = "workflowDefinitionTagAudit";
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-design"),
         new StorageManifestOwner("elsa.workflows.design"),
@@ -93,6 +103,12 @@ public static class WorkflowsDesignStorageManifest
                 WorkflowDefinitionVersionLayoutDocumentKind,
                 "Workflow definition version layout",
                 [Keyword(ByCollectionIndex, CollectionField)],
+                [Query(ListAllQuery, ByCollectionIndex)]),
+            WorkflowDefinitionTagSetUnit(),
+            Unit(
+                WorkflowDefinitionTagAuditDocumentKind,
+                "Workflow definition tag audit",
+                [Keyword(ByCollectionIndex, CollectionField)],
                 [Query(ListAllQuery, ByCollectionIndex)])
         ],
         new HashSet<string> { "optimistic-concurrency" },
@@ -103,7 +119,7 @@ public static class WorkflowsDesignStorageManifest
     /// deliberately ordinary because substring predicates can scan; no-search routes stay scale-bearing.
     /// </summary>
     public static string PageQueryIdentity(WorkflowDefinitionListQuery query) =>
-        (!string.IsNullOrWhiteSpace(query.Filter.SearchTerm), query.SortBy, query.SortDirection) switch
+        (!string.IsNullOrWhiteSpace(query.Filter.SearchTerm) || query.Filter.MarkerTagClauses is { Count: > 0 }, query.SortBy, query.SortDirection) switch
         {
             (false, WorkflowDefinitionSortBy.LastModifiedAt, WorkflowDefinitionSortDirection.Desc) => PageByLastModifiedAtDescendingQuery,
             (false, WorkflowDefinitionSortBy.CreatedAt, WorkflowDefinitionSortDirection.Desc) => PageByCreatedAtDescendingQuery,
@@ -146,7 +162,8 @@ public static class WorkflowsDesignStorageManifest
                 StringProjection(WorkflowDefinitionDescriptionField),
                 new ProjectedColumnDefinition(WorkflowDefinitionDeletedAtField, WorkflowDefinitionDeletedAtField, PortablePhysicalType.DateTime),
                 new ProjectedColumnDefinition(WorkflowDefinitionCreatedAtField, WorkflowDefinitionCreatedAtField, PortablePhysicalType.DateTime, IsNullable: false),
-                new ProjectedColumnDefinition(WorkflowDefinitionLastModifiedAtField, WorkflowDefinitionLastModifiedAtField, PortablePhysicalType.DateTime, IsNullable: false)
+                new ProjectedColumnDefinition(WorkflowDefinitionLastModifiedAtField, WorkflowDefinitionLastModifiedAtField, PortablePhysicalType.DateTime, IsNullable: false),
+                StringProjection(WorkflowDefinitionMarkerProjectionField, WorkflowDefinitionMarkerProjectionLength)
             ],
             [
                 LegacyCollectionPhysicalIndex(envelope, collectionIndex),
@@ -191,6 +208,32 @@ public static class WorkflowsDesignStorageManifest
                     PageRoute(SearchPageByCreatedAtDescendingQuery, createdAtDescendingIndex, WorkflowDefinitionCreatedAtField, BoundedQueryExecutionClass.Ordinary, supportsContains: true, direction: PhysicalSortDirection.Descending)
                 ])
         };
+    }
+
+    private static StorageUnit WorkflowDefinitionTagSetUnit()
+    {
+        var definitionIdIndex = new IndexDeclaration(
+            WorkflowDefinitionTagSetByWorkflowDefinitionIdIndex,
+            [new IndexField(WorkflowDefinitionTagSetWorkflowDefinitionIdField)],
+            IndexValueKind.Keyword,
+            false,
+            true,
+            MissingValueBehavior.Excluded,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In },
+            IndexPhysicalizationPolicy.Optimized);
+        return Unit(
+            WorkflowDefinitionTagSetDocumentKind,
+            "Workflow definition tag set",
+            [Keyword(ByCollectionIndex, CollectionField), definitionIdIndex],
+            [
+                Query(ListAllQuery, ByCollectionIndex),
+                new PortableQueryDeclaration(
+                    FindWorkflowDefinitionTagSetsByDefinitionIdsQuery,
+                    definitionIdIndex.Identity,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In },
+                    QuerySortSupport.None,
+                    QueryPagingSupport.Offset)
+            ]);
     }
 
     private static LogicalIndexDeclaration SortIndex(string identity, string sortField, IndexValueKind sortValueKind) => new(
@@ -252,7 +295,10 @@ public static class WorkflowsDesignStorageManifest
             PortableQueryOperation.In
         };
         if (supportsContains)
+        {
             operations.Add(PortableQueryOperation.Contains);
+            operations.Add(PortableQueryOperation.NotContains);
+        }
 
         var residuals = new List<BoundedQueryResidualPredicateField>
         {
@@ -264,6 +310,12 @@ public static class WorkflowsDesignStorageManifest
                     : [PortableQueryOperation.Equal]),
             Residual(WorkflowDefinitionDeletedAtField, IndexValueKind.DateTime, PortableQueryOperation.Equal, PortableQueryOperation.NotEqual)
         };
+        if (supportsContains)
+            residuals.Add(Residual(
+                WorkflowDefinitionMarkerProjectionField,
+                IndexValueKind.String,
+                PortableQueryOperation.Contains,
+                PortableQueryOperation.NotContains));
         if (sortField != WorkflowDefinitionNameField)
             residuals.Add(Residual(
                 WorkflowDefinitionNameField,

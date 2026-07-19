@@ -1,5 +1,6 @@
 using Elsa.Persistence.Core.Queries;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Filters;
 
@@ -44,11 +45,20 @@ public class WorkflowDefinitionFilter
     public bool? TenantAgnostic { get; set; }
 
     /// <summary>
+    /// Filter logical workflow definitions by Workflow Design-owned marker assignments.
+    /// </summary>
+    public IReadOnlyCollection<WorkflowDefinitionMarkerTagClause>? MarkerTagClauses { get; set; }
+
+    /// <summary>
     /// Projects this filter onto the closed, provider-neutral <see cref="Query{TEntity}"/> spec. This is
     /// the shape every persistence provider can translate.
     /// </summary>
     public Query<WorkflowDefinition> ToQuery()
     {
+        if (MarkerTagClauses is { Count: > 0 })
+            throw new NotSupportedException(
+                "Marker tag clauses require a workflow-definition store with native marker projection query support.");
+
         var query = Query<WorkflowDefinition>.All();
 
         if (Id != null) query.And(x => x.Id, QueryOp.Equal, Id);

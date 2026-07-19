@@ -47,6 +47,14 @@ public sealed record WorkflowDefinitionListQuery(
             throw new ArgumentOutOfRangeException(nameof(PageSize), PageSize, $"Page size must be between 1 and {MaximumPageSize}.");
         if ((long)(Page - 1) * PageSize > int.MaxValue)
             throw new ArgumentOutOfRangeException(nameof(Page), Page, "Page and page size produce an unsupported offset.");
+        if (Filter.MarkerTagClauses is { Count: > 16 })
+            throw new ArgumentOutOfRangeException(nameof(Filter.MarkerTagClauses), "At most 16 marker tag clauses are supported.");
+        foreach (var clause in Filter.MarkerTagClauses ?? [])
+        {
+            clause.Validate();
+            if (clause.TagDefinitionId.Contains('|', StringComparison.Ordinal))
+                throw new ArgumentException("Marker tag identities cannot contain the projection delimiter.", nameof(Filter.MarkerTagClauses));
+        }
     }
 }
 

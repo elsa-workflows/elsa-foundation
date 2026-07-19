@@ -72,6 +72,7 @@
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
+		<ProjectReference Include="..\..\Elsa\Tagging\Persistence\Groundwork\Elsa.Tagging.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
@@ -101,6 +102,8 @@
 		<ProjectReference Include="..\..\Elsa\Secrets\Api\Elsa.Secrets.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Core\Elsa.Secrets.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Elsa.Secrets.csproj" />
+		<ProjectReference Include="..\..\Elsa\Tagging\Api\Elsa.Tagging.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Tagging\Core\Elsa.Tagging.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Tasks\Core\Elsa.Tasks.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
 		<ProjectReference Include="..\..\Elsa\Tasks\Elsa.Tasks.csproj" />
