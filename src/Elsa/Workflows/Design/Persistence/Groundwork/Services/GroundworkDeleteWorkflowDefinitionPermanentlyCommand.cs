@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
@@ -15,7 +16,9 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
     IWorkflowDefinitionDraftStore draftStore,
     IWorkflowDefinitionVersionStore versionStore,
     IWorkflowDefinitionVersionLayoutStore layoutStore,
-    IPersistenceAccessContextAccessor accessContextAccessor)
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IEnumerable<IWorkflowDefinitionPermanentDeletionGuard>? deletionGuards = null,
+    ILogger<GroundworkDeleteWorkflowDefinitionPermanentlyCommand>? logger = null)
     : IDeleteWorkflowDefinitionPermanentlyCommand
 {
     public async Task Execute(string definitionId, CancellationToken cancellationToken = default)
@@ -25,6 +28,8 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
         accessContextAccessor.Current.EnsureTenantScope(definition.TenantId);
         if (definition.DeletedAt is null)
             throw new InvalidOperationException("A workflow definition must be soft-deleted before permanent deletion.");
+        foreach (var guard in deletionGuards ?? [])
+            await guard.EnsureCanDeleteAsync(definitionId, cancellationToken);
 
         var deletes = new List<DeleteDocumentRequest>();
         var drafts = await draftStore.ListByWorkflowDefinitionIdAsync(definitionId, cancellationToken);
@@ -61,6 +66,13 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             definitionId));
 
+        logger?.LogInformation(
+            "Permanently deleting workflow definition {DefinitionId} ({VersionCount} version(s), {DraftCount} draft(s)); soft-deleted at {DeletedAt} with reason {DeletedReason}",
+            definitionId,
+            versions.Count,
+            drafts.Count,
+            definition.DeletedAt,
+            definition.DeletedReason);
         await store.DeleteAllAsync(
             DocumentCommitScope.Of(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,

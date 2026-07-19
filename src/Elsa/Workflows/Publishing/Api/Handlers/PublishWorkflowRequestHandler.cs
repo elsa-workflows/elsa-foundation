@@ -8,6 +8,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
@@ -31,7 +32,8 @@ public sealed class PublishWorkflowRequestHandler(
     IWorkflowDefinitionVersionStore? workflowVersionStore = null,
     PublicationSnapshotReviewService? snapshotReviews = null,
     WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
-    WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null)
+    WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null,
+    ILogger<PublishWorkflowRequestHandler>? logger = null)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
@@ -134,6 +136,11 @@ public sealed class PublishWorkflowRequestHandler(
                 }
                 catch
                 {
+                    logger?.LogWarning(
+                        "Publish: retiring source reference {SourceReferenceId} of workflow definition {DefinitionId} because activation of publication {PublicationId} failed",
+                        reference.SourceReferenceId,
+                        identity.DefinitionId,
+                        publicationId);
                     await sourceReferenceStore.RetireAsync(
                         reference.SourceReferenceId,
                         timeProvider.GetUtcNow(),
@@ -213,6 +220,11 @@ public sealed class PublishWorkflowRequestHandler(
         var publication = await publicationStore.FindAsync(publicationId, cancellationToken);
         if (publication?.SourceReferenceId is not { } sourceReferenceId)
             return;
+        logger?.LogInformation(
+            "Publish: retiring source reference {SourceReferenceId} of workflow definition {DefinitionId} because publication {PublicationId} was replaced",
+            sourceReferenceId,
+            publication.WorkflowDefinitionId,
+            publicationId);
         await sourceReferenceStore.RetireAsync(sourceReferenceId, now, "publication-replaced", cancellationToken);
     }
 
