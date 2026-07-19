@@ -49,7 +49,7 @@ evidence for the five lookup routes against exactly 100,000 physical records and
 candidate. The current Identity shape uses Groundwork physical entity tables. SQLite is mandatory; SQL Server,
 PostgreSQL, and MongoDB use the opt-in external-provider matrix. Spec 095 retains accepted exact-candidate
 Groundwork `preview.60` / Identity manifest v1.0.4 evidence for all four topologies as immutable historical
-provenance. Current execution uses the repository-pinned `preview.67` family and current Identity manifest; no
+provenance. Current execution uses the repository-pinned `preview.72` family and current Identity manifest; no
 historical artifact is linked as an active exact-head pass.
 The committed EF artifact is a non-executed contract baseline only. #646 owns real same-provider EF execution,
 equality, and all timing.
