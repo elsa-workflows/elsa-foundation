@@ -60,7 +60,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(wellKnownTypeRegistry);
 
         _inputBindingResolver = inputBindingResolver;
-        _valueConversionExecutor = new RuntimeValueConversionExecutor();
+        _valueConversionExecutor = new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
         _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore);
@@ -78,7 +78,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ArgumentNullException.ThrowIfNull(portableExpressionEvaluator);
 
         _inputBindingResolver = inputBindingResolver;
-        _valueConversionExecutor = new RuntimeValueConversionExecutor();
+        _valueConversionExecutor = new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
         _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore);

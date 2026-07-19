@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -9,10 +11,10 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
 /// Strict runtime interpreter for publication-pinned value-conversion plans.
-/// It deliberately contains no converter discovery: formatted-content, XML, profiles, and external
-/// reference materialization are introduced by their dedicated runtime slices.
+/// It deliberately contains no converter discovery: only built-in pinned operations and the pinned
+/// <c>elsa.json@1</c> profile are executable in this slice.
 /// </summary>
-public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExecutor
+public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellKnownTypeRegistry = null) : IRuntimeValueConversionExecutor
 {
     public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan)
     {
@@ -131,12 +133,36 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
         return document.RootElement.Clone();
     }
 
-    private static JsonElement ConvertProfile(JsonElement value, ValueConversionPlan plan)
+    private JsonElement ConvertProfile(JsonElement value, ValueConversionPlan plan)
     {
         if (!IsJsonProfile(plan))
             throw Reject(plan, "the pinned conversion profile is not available in this runtime slice");
-        if (plan.SourceRepresentation != ValueRepresentation.FormattedContent)
-            throw Reject(plan, "JSON conversion requires a formatted-content source representation");
+        if (plan.SourceRepresentation is not (ValueRepresentation.FormattedContent or ValueRepresentation.StructuredValue))
+            throw Reject(plan, "JSON conversion requires a formatted-content or structured source representation");
+
+        using var document = ReadJsonDocument(value, plan);
+        var root = document.RootElement.Clone();
+        var nodeCount = CountJsonNodes(root, plan, depth: 1);
+        if (nodeCount > plan.Limits.MaxCollectionItems)
+            throw Reject(plan, $"maximum JSON node count '{plan.Limits.MaxCollectionItems}' was exceeded");
+        if (ValueConversionCompatibility.IsJsonObjectTarget(plan.TargetType) && root.ValueKind != JsonValueKind.Object)
+            throw Reject(plan, "JSON object conversion requires a JSON object root value");
+        if (ValueConversionCompatibility.IsCanonicalAnyTarget(plan.TargetType) ||
+            ValueConversionCompatibility.IsJsonObjectTarget(plan.TargetType))
+            return CanonicalizeAny(root, plan);
+
+        return ConvertTypedJson(root, plan);
+    }
+
+    private static JsonDocument ReadJsonDocument(JsonElement value, ValueConversionPlan plan)
+    {
+        if (plan.SourceRepresentation == ValueRepresentation.StructuredValue)
+            return JsonDocument.Parse(value.GetRawText(), new JsonDocumentOptions
+            {
+                AllowTrailingCommas = false,
+                CommentHandling = JsonCommentHandling.Disallow,
+                MaxDepth = plan.Limits.MaxDepth
+            });
 
         var json = value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? string.Empty
@@ -144,16 +170,18 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
         if (Encoding.UTF8.GetByteCount(json) > plan.Limits.MaxPayloadBytes)
             throw Reject(plan, $"maximum payload size '{plan.Limits.MaxPayloadBytes}' bytes was exceeded");
 
-        using var document = ParseJsonContent(json, plan);
-        var root = document.RootElement;
-        var nodeCount = CountJsonNodes(root, plan, depth: 1);
-        if (nodeCount > plan.Limits.MaxCollectionItems)
-            throw Reject(plan, $"maximum JSON node count '{plan.Limits.MaxCollectionItems}' was exceeded");
-        if (ValueConversionCompatibility.IsJsonObjectTarget(plan.TargetType) && root.ValueKind != JsonValueKind.Object)
-            throw Reject(plan, "JSON object conversion requires a JSON object root value");
-        if (!ValueConversionCompatibility.IsCanonicalAnyTarget(plan.TargetType) &&
-            !ValueConversionCompatibility.IsJsonObjectTarget(plan.TargetType))
-            throw Reject(plan, "JSON conversion supports only Any and JsonObject targets in this runtime slice");
+        return ParseJsonContent(json, plan);
+    }
+
+    private JsonElement ConvertTypedJson(JsonElement root, ValueConversionPlan plan)
+    {
+        if (wellKnownTypeRegistry is null)
+            throw Reject(plan, "JSON typed conversion requires a well-known type registry at runtime");
+        if (!wellKnownTypeRegistry.TryGetTypeOrDefault(plan.TargetType.Alias, out var elementType) || elementType == typeof(object))
+            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' is not a registered typed alias");
+
+        var targetType = TypeReferenceFactory.Close(elementType, plan.TargetType.CollectionKind);
+        ValidateJsonForType(root, targetType, plan, "$");
 
         return CanonicalizeAny(root, plan);
     }
@@ -187,6 +215,156 @@ public sealed class RuntimeValueConversionExecutor : IRuntimeValueConversionExec
             _ => 1
         };
     }
+
+    private static void ValidateJsonForType(JsonElement value, Type targetType, ValueConversionPlan plan, string path)
+    {
+        var nullableType = Nullable.GetUnderlyingType(targetType);
+        if (nullableType is not null)
+        {
+            if (value.ValueKind == JsonValueKind.Null)
+                return;
+            ValidateJsonForType(value, nullableType, plan, path);
+            return;
+        }
+
+        if (!targetType.IsValueType && value.ValueKind == JsonValueKind.Null)
+            return;
+
+        if (targetType == typeof(string))
+        {
+            if (value.ValueKind != JsonValueKind.String)
+                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected string at '{path}'");
+            return;
+        }
+
+        if (targetType == typeof(bool))
+        {
+            if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected boolean at '{path}'");
+            return;
+        }
+
+        if (IsNumericType(targetType))
+        {
+            ValidateNumeric(value, targetType, plan, path);
+            return;
+        }
+
+        if (targetType.IsEnum)
+        {
+            if (value.ValueKind is not (JsonValueKind.String or JsonValueKind.Number))
+                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected enum string or number at '{path}'");
+            return;
+        }
+
+        if (targetType.IsArray)
+        {
+            ValidateJsonArray(value, targetType.GetElementType()!, plan, path);
+            return;
+        }
+
+        if (targetType.IsGenericType)
+        {
+            var definition = targetType.GetGenericTypeDefinition();
+            if (definition == typeof(List<>) || definition == typeof(IList<>) || definition == typeof(ICollection<>) ||
+                definition == typeof(IReadOnlyList<>) || definition == typeof(IReadOnlyCollection<>) || definition == typeof(IEnumerable<>))
+            {
+                ValidateJsonArray(value, targetType.GetGenericArguments()[0], plan, path);
+                return;
+            }
+
+            if ((definition == typeof(Dictionary<,>) || definition == typeof(IDictionary<,>) || definition == typeof(IReadOnlyDictionary<,>)) &&
+                targetType.GetGenericArguments()[0] == typeof(string))
+            {
+                ValidateJsonDictionary(value, targetType.GetGenericArguments()[1], plan, path);
+                return;
+            }
+        }
+
+        ValidateJsonObject(value, targetType, plan, path);
+    }
+
+    private static void ValidateJsonArray(JsonElement value, Type elementType, ValueConversionPlan plan, string path)
+    {
+        if (value.ValueKind != JsonValueKind.Array)
+            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected array at '{path}'");
+        var index = 0;
+        foreach (var item in value.EnumerateArray())
+            ValidateJsonForType(item, elementType, plan, $"{path}[{index++}]");
+    }
+
+    private static void ValidateJsonDictionary(JsonElement value, Type elementType, ValueConversionPlan plan, string path)
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected object at '{path}'");
+        foreach (var property in value.EnumerateObject())
+            ValidateJsonForType(property.Value, elementType, plan, $"{path}.{property.Name}");
+    }
+
+    private static void ValidateJsonObject(JsonElement value, Type targetType, ValueConversionPlan plan, string path)
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected object at '{path}'");
+
+        var properties = targetType
+            .GetProperties()
+            .Where(property => property.GetMethod is not null && property.GetMethod.IsPublic && property.GetIndexParameters().Length == 0)
+            .Select(property => new
+            {
+                Property = property,
+                JsonName = property.GetCustomAttributes(typeof(JsonPropertyNameAttribute), inherit: true)
+                    .Cast<JsonPropertyNameAttribute>()
+                    .SingleOrDefault()?.Name ?? JsonNamingPolicy.CamelCase.ConvertName(property.Name),
+                IsRequired = property.GetCustomAttributes(inherit: true).Any(attribute =>
+                    attribute.GetType().FullName is "System.Runtime.CompilerServices.RequiredMemberAttribute" or "System.Text.Json.Serialization.JsonRequiredAttribute")
+            })
+            .ToDictionary(property => property.JsonName, StringComparer.OrdinalIgnoreCase);
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var jsonProperty in value.EnumerateObject())
+        {
+            if (!properties.TryGetValue(jsonProperty.Name, out var targetProperty))
+                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' does not support member '{jsonProperty.Name}' at '{path}'");
+
+            seen.Add(targetProperty.JsonName);
+            ValidateJsonForType(jsonProperty.Value, targetProperty.Property.PropertyType, plan, $"{path}.{jsonProperty.Name}");
+        }
+
+        foreach (var required in properties.Values.Where(property => property.IsRequired && !seen.Contains(property.JsonName)))
+            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' is missing required member '{required.JsonName}' at '{path}'");
+    }
+
+    private static void ValidateNumeric(JsonElement value, Type targetType, ValueConversionPlan plan, string path)
+    {
+        if (value.ValueKind != JsonValueKind.Number)
+            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected number at '{path}'");
+
+        var ok = Type.GetTypeCode(targetType) switch
+        {
+            TypeCode.Byte => value.TryGetByte(out _),
+            TypeCode.SByte => value.TryGetSByte(out _),
+            TypeCode.Int16 => value.TryGetInt16(out _),
+            TypeCode.UInt16 => value.TryGetUInt16(out _),
+            TypeCode.Int32 => value.TryGetInt32(out _),
+            TypeCode.UInt32 => value.TryGetUInt32(out _),
+            TypeCode.Int64 => value.TryGetInt64(out _),
+            TypeCode.UInt64 => value.TryGetUInt64(out _),
+            TypeCode.Single => value.TryGetSingle(out _),
+            TypeCode.Double => value.TryGetDouble(out _),
+            TypeCode.Decimal => value.TryGetDecimal(out _),
+            _ => false
+        };
+
+        if (!ok)
+            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' cannot safely represent number at '{path}' as '{targetType.Name}'");
+    }
+
+    private static bool IsNumericType(Type type) => Type.GetTypeCode(type) switch
+    {
+        TypeCode.Byte or TypeCode.SByte or TypeCode.Int16 or TypeCode.UInt16 or TypeCode.Int32 or TypeCode.UInt32 or
+            TypeCode.Int64 or TypeCode.UInt64 or TypeCode.Single or TypeCode.Double or TypeCode.Decimal => true,
+        _ => false
+    };
 
     private static void WriteCanonicalJson(Utf8JsonWriter writer, JsonElement value, ValueConversionPlan plan, int depth)
     {

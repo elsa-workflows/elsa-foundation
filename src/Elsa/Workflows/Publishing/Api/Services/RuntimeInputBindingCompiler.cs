@@ -29,7 +29,7 @@ public sealed class RuntimeInputBindingCompiler(
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
-    private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new();
+    private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
 
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentState state)
     {
