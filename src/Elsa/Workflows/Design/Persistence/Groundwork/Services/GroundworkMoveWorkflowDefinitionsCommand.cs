@@ -31,7 +31,7 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommand(
         try
         {
             await using var unit = await store.BeginAsync(DocumentCommitScope.Of(scopeKinds), cancellationToken);
-            await ValidateDestinationAsync(unit, folderId, access.Scope.Value, cancellationToken);
+            await ValidateDestinationAsync(unit, folderId, access, cancellationToken);
             var movedAt = clock.UtcNow;
 
             // Finish every read and visibility check before staging a single mutation. A missing or foreign
@@ -42,8 +42,16 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommand(
                 var envelope = await unit.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, definitionId, cancellationToken)
                     ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId);
                 var definition = ReadDefinition(envelope);
-                if (!string.Equals(definition.TenantId, access.Scope.Value, StringComparison.Ordinal))
+                try
+                {
+                    // Legacy and standard definition documents may omit TenantId; the ambient scoped
+                    // document session remains authoritative. Explicit foreign tenant values are hidden.
+                    access.EnsureTenantScope(definition.TenantId);
+                }
+                catch (InvalidOperationException)
+                {
                     throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId);
+                }
                 definitions.Add((envelope, definition));
             }
 
@@ -66,7 +74,10 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommand(
             }
             await unit.CommitAsync(cancellationToken);
         }
-        catch (DocumentAtomicWriteException exception) when (exception.Status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.IdentityConflict)
+        catch (DocumentAtomicWriteException exception) when (exception.Status is
+            DocumentStoreWriteStatus.ConcurrencyConflict or
+            DocumentStoreWriteStatus.IdentityConflict or
+            DocumentStoreWriteStatus.NotFound)
         {
             throw new WorkflowDefinitionFolderMoveConflictException(exception);
         }
@@ -84,7 +95,11 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommand(
             WorkflowFolderNames.ValidateIdentifier(folderId, nameof(folderId));
     }
 
-    private static async Task ValidateDestinationAsync(IDocumentUnitOfWork unit, string? folderId, string tenantId, CancellationToken cancellationToken)
+    private static async Task ValidateDestinationAsync(
+        IDocumentUnitOfWork unit,
+        string? folderId,
+        PersistenceAccessContext access,
+        CancellationToken cancellationToken)
     {
         if (folderId is null)
             return;
@@ -92,8 +107,14 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommand(
             ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
         var folder = JsonSerializer.Deserialize<GroundworkDocument<WorkflowFolder>>(envelope.ContentJson, GroundworkDesignJson.Options)?.Entity
             ?? throw new InvalidOperationException("The workflow-folder document is empty.");
-        if (!string.Equals(folder.TenantId, tenantId, StringComparison.Ordinal))
+        try
+        {
+            access.EnsureTenantScope(folder.TenantId);
+        }
+        catch (InvalidOperationException)
+        {
             throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
+        }
     }
 
     private static WorkflowDefinition ReadDefinition(DocumentEnvelope envelope) =>

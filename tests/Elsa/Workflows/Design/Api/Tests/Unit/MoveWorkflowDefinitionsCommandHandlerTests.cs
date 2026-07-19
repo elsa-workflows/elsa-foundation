@@ -26,7 +26,7 @@ public sealed class MoveWorkflowDefinitionsCommandHandlerTests
         var handler = new MoveWorkflowDefinitionsCommandHandler(command);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            handler.Handle(new MoveWorkflowDefinitions(["one", "one"]), CancellationToken.None));
+            handler.Handle(new MoveWorkflowDefinitions(["one", "one"], null), CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             handler.Handle(new MoveWorkflowDefinitions(["one"], new string('f', 65)), CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentException>(() =>

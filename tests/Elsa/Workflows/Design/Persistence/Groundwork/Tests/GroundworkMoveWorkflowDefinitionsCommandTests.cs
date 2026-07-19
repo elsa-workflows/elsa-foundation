@@ -1,6 +1,7 @@
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Documents.Store;
 using Xunit;
@@ -109,6 +110,49 @@ public sealed class GroundworkMoveWorkflowDefinitionsCommandTests
         definition.DeletedAt = null;
         await save.Execute(definition);
         Assert.Equal("destination", (await new GroundworkWorkflowDefinitionStore(store).GetAsync("one")).FolderId);
+    }
+
+    [Fact]
+    public async Task Legacy_null_tenant_definition_uses_the_ambient_scoped_document_session()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var clock = new Clock();
+        var access = GroundworkTestAccess.AccessContext("tenant-a");
+        await new GroundworkSaveWorkflowDefinitionCommand(store, clock, access).Execute(
+            new WorkflowDefinition { Id = "legacy", Name = "Legacy" });
+
+        await new GroundworkMoveWorkflowDefinitionsCommand(store, clock, access)
+            .Execute(["legacy"], null);
+
+        Assert.Null((await new GroundworkWorkflowDefinitionStore(store).GetAsync("legacy")).FolderId);
+    }
+
+    [Fact]
+    public async Task Post_read_deletion_conflict_preserves_the_atomic_write_exception()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var clock = new Clock();
+        var access = GroundworkTestAccess.AccessContext("tenant-a");
+        await new GroundworkSaveWorkflowDefinitionCommand(store, clock, access).Execute(
+            new WorkflowDefinition { Id = "one", Name = "One", FolderId = "before", TenantId = "tenant-a" });
+        var failures = new GroundworkFailureController();
+        var atomicWrite = new DocumentAtomicWriteException(
+            DocumentWriteOperationKind.Save,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            "one",
+            DocumentStoreWriteStatus.NotFound);
+        failures.FailAt(GroundworkFailureInjectingDocumentStore.BeforeUnderlyingCommit, () => atomicWrite);
+        var failureStore = new GroundworkFailureInjectingDocumentStore(
+            store,
+            store,
+            store.Access,
+            failures);
+
+        var exception = await Assert.ThrowsAsync<WorkflowDefinitionFolderMoveConflictException>(() =>
+            new GroundworkMoveWorkflowDefinitionsCommand(failureStore, clock, access).Execute(["one"], null));
+
+        Assert.Same(atomicWrite, exception.InnerException);
+        Assert.Equal("before", (await new GroundworkWorkflowDefinitionStore(store).GetAsync("one")).FolderId);
     }
 
     private static WorkflowFolder Folder(string id, string name)

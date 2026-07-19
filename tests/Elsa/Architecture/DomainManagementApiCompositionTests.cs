@@ -240,6 +240,10 @@ public sealed class DomainManagementApiCompositionTests
             "/design/workflows/definitions/move", new { definitionIds = new[] { "one", "one" }, folderId = (string?)null });
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
 
+        using var omittedDestination = await host.Client.PostAsJsonAsync(
+            "/design/workflows/definitions/move", new { definitionIds = new[] { "one" } });
+        Assert.Equal(HttpStatusCode.BadRequest, omittedDestination.StatusCode);
+
         using var missing = await host.Client.PostAsJsonAsync(
             "/design/workflows/definitions/move", new { definitionIds = new[] { "missing" }, folderId = (string?)null });
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
