@@ -1,8 +1,8 @@
-import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowLeft, CheckCircle2, CopyPlus, RefreshCw } from "lucide-react";
-import { studioNavigationRequestedEvent, StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioActivityDefinitionImplementationState, type StudioActivityDefinitionRecoverySettings, type StudioActivityDiagnostic, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext, type StudioRuntimeIdentity } from "@elsa-workflows/studio-sdk";
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, CopyPlus, Play, RefreshCw } from "lucide-react";
+import { studioNavigationRequestedEvent, StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioActivityDefinitionImplementationState, type StudioActivityDefinitionRecoverySettings, type StudioActivityDiagnostic, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext, type StudioRuntimeIdentity, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityDefinitionDraftView } from "./activityDefinitionTypes";
-import { createActivityDefinitionConflictCopy, replaceActivityDefinitionDraft, useActivityAuthoringCapabilities, useActivityContractExpressionDescriptors, useFullActivityDefinitionDraft, useFullActivityDefinitionVersion, validateActivityDefinitionDraft } from "./api/activityDesign";
+import { createActivityDefinitionConflictCopy, replaceActivityDefinitionDraft, useActivityAuthoringCapabilities, useActivityContractExpressionDescriptors, useActivityDefinition, useFullActivityDefinitionDraft, useFullActivityDefinitionVersion, validateActivityDefinitionDraft } from "./api/activityDesign";
 import { createActivityDefinitionRecoveryStore, type ActivityDefinitionRecoverySnapshot } from "./activityDefinitionRecovery";
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
 import { ActivityDefinitionContractEditor } from "./ActivityDefinitionContractEditor";
@@ -11,39 +11,48 @@ import { ActivityDefinitionPublicationReview } from "./ActivityDefinitionPublica
 import { ActivityDefinitionContractProposalReview } from "./ActivityDefinitionContractProposalReview";
 import { ActivityDefinitionProviderMigrationDialog } from "./ActivityDefinitionDraftManagementDialogs";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "./api/capabilities";
+import type { PreparedActivityTestRunRevision } from "./ActivityDefinitionTestRunDialog";
 
 type SaveStatus = "saved" | "pending" | "saving" | "offline" | "conflict" | "failed";
 
-export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, activityEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion }: {
+const ActivityDefinitionTestRunDialog = lazy(() => import("./ActivityDefinitionTestRunDialog").then(module => ({ default: module.ActivityDefinitionTestRunDialog })));
+
+export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, activityEditors, inputEditors = [], recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
   context: StudioEndpointContext;
   definitionId: string;
   draftId: string;
   activityEditors: StudioActivityDefinitionImplementationEditorContribution[];
+  inputEditors?: StudioWorkflowRunInputEditorContribution[];
   recoverySettings?: StudioActivityDefinitionRecoverySettings;
   identity?: StudioRuntimeIdentity;
   onNavigationGuardChange(blocked: boolean): void;
   onBack(force?: boolean): void;
   onOpenDraft(definitionId: string, draftId: string): void;
   onOpenVersion(definitionId: string, versionId: string): void;
+  onOpenStudioPath(path: string): void;
 }) {
   const query = useFullActivityDefinitionDraft(context, draftId);
+  const definitionQuery = useActivityDefinition(context, definitionId);
 
   if (query.isPending || query.isFetching && !query.isFetchedAfterMount) return <main className="ad-page ad-draft-editor" aria-busy="true"><div className="ad-skeleton" role="status">Loading the exact Activity Definition draft…</div></main>;
   if (query.isError || !query.data || query.data.definitionId !== definitionId) return <main className="ad-page ad-draft-editor"><button type="button" className="ad-back" onClick={() => onBack()}><ArrowLeft size={16} /> Activity Definition</button><section className="ad-failure" role="alert"><AlertTriangle size={22} /><h1>Activity draft unavailable</h1><p>Studio could not confirm the exact authorized draft. No provider state is shown.</p><button type="button" onClick={() => void query.refetch()}>Try again</button></section></main>;
 
-  return <LoadedActivityDefinitionDraftEditor context={context} initialDraft={query.data} activityEditors={activityEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} />;
+  return <LoadedActivityDefinitionDraftEditor context={context} initialDraft={query.data} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || query.data.presentationLabel?.trim() || generatedDraftLabel(query.data)} activityEditors={activityEditors} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
 }
 
-function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion }: {
+function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definitionLabel, activityEditors, inputEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
   context: StudioEndpointContext;
   initialDraft: ActivityDefinitionDraftView;
+  definitionLabel: string;
   activityEditors: StudioActivityDefinitionImplementationEditorContribution[];
+  inputEditors: StudioWorkflowRunInputEditorContribution[];
   recoverySettings?: StudioActivityDefinitionRecoverySettings;
   identity?: StudioRuntimeIdentity;
   onNavigationGuardChange(blocked: boolean): void;
   onBack(force?: boolean): void;
   onOpenDraft(definitionId: string, draftId: string): void;
   onOpenVersion(definitionId: string, versionId: string): void;
+  onOpenStudioPath(path: string): void;
 }) {
   const [draft, setDraft] = useState(initialDraft);
   const [status, setStatus] = useState<SaveStatus>("saved");
@@ -58,6 +67,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
   const [contractLocallyValid, setContractLocallyValid] = useState(true);
   const [proposalApplying, setProposalApplying] = useState(false);
   const [migrationOpen, setMigrationOpen] = useState(false);
+  const [testRunOpen, setTestRunOpen] = useState(false);
   const capabilitiesQuery = useActivityAuthoringCapabilities(context);
   const expressionsQuery = useActivityContractExpressionDescriptors(context);
   const baselineQuery = useFullActivityDefinitionVersion(context, initialDraft.sourceVersionId ?? null);
@@ -283,8 +293,6 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
 
   const validateSavedRevision = async () => {
     if (status === "conflict" || !contractLocallyValid || validating) return;
-    let validationRevision: number | null = null;
-    let validationSignature: string | null = null;
     diagnosticFocusRequestRef.current += 1;
     diagnosticReturnRef.current = null;
     setValidating(true);
@@ -292,29 +300,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
     setFocusAnnouncement(null);
     setDraft(current => ({ ...current, validation: null }));
     try {
-      const saved = await flushExactSavedRevision();
-      if (!saved) {
-        setValidationFailure("transport");
-        return;
-      }
-      validationRevision = saved.revision;
-      validationSignature = editableSignature(currentRef.current);
-      const validation = await validateActivityDefinitionDraft(context, draft.draftId, validationRevision);
-      if (revisionRef.current !== validationRevision || editableSignature(currentRef.current) !== validationSignature) return;
-      setDraft(current => ({ ...current, validation }));
-    } catch (error) {
-      if (validationRevision !== null && (
-        revisionRef.current !== validationRevision ||
-        editableSignature(currentRef.current) !== validationSignature
-      )) return;
-      if (isStaleRevision(error)) {
-        autosavePausedRef.current = true;
-        setConflictRevision(readCurrentRevision(error) ?? revisionRef.current);
-        setStatus("conflict");
-        setValidationFailure("rejected");
-      } else {
-        setValidationFailure(classifyValidationFailure(error));
-      }
+      await requestExactDraftValidation();
     } finally {
       setValidating(false);
     }
@@ -331,6 +317,66 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
       return !autosavePausedRef.current && savedSignatureRef.current === editableSignature(currentRef.current)
         ? { revision: revisionRef.current, signature: savedSignatureRef.current }
         : null;
+    }
+  };
+
+  const requestExactDraftValidation = async (
+    onSaved?: (revision: number) => void
+  ) => {
+    let validationRevision: number | null = null;
+    let validationSignature: string | null = null;
+    try {
+      const saved = await flushExactSavedRevision();
+      if (!saved) {
+        setValidationFailure("transport");
+        return null;
+      }
+      validationRevision = saved.revision;
+      validationSignature = editableSignature(currentRef.current);
+      onSaved?.(validationRevision);
+      const validation = await validateActivityDefinitionDraft(
+        context,
+        currentRef.current.draftId,
+        validationRevision);
+      if (
+        revisionRef.current !== validationRevision ||
+        editableSignature(currentRef.current) !== validationSignature
+      ) return null;
+      setDraft(current => ({ ...current, validation }));
+      return validation;
+    } catch (error) {
+      if (validationRevision !== null && (
+        revisionRef.current !== validationRevision ||
+        editableSignature(currentRef.current) !== validationSignature
+      )) return null;
+      if (isStaleRevision(error)) {
+        autosavePausedRef.current = true;
+        setConflictRevision(readCurrentRevision(error) ?? revisionRef.current);
+        setStatus("conflict");
+        setValidationFailure("rejected");
+      } else {
+        setValidationFailure(classifyValidationFailure(error));
+      }
+      return null;
+    }
+  };
+
+  const prepareExactTestRunRevision = async (
+    onPhase: (phase: "saving" | "validating") => void
+  ): Promise<PreparedActivityTestRunRevision | null> => {
+    if (status === "conflict" || !contractLocallyValid || validating || proposalApplying) return null;
+    diagnosticFocusRequestRef.current += 1;
+    diagnosticReturnRef.current = null;
+    setValidating(true);
+    setValidationFailure(null);
+    setFocusAnnouncement(null);
+    setDraft(current => ({ ...current, validation: null }));
+    onPhase("saving");
+    try {
+      const validation = await requestExactDraftValidation(() => onPhase("validating"));
+      return validation ? { revision: validation.revision, validation } : null;
+    } finally {
+      setValidating(false);
     }
   };
 
@@ -388,7 +434,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
 
   return <main className="ad-page ad-draft-editor" aria-labelledby="activity-draft-title">
     <button type="button" className="ad-back" onClick={() => onBack()} disabled={revisionSensitiveActionsBlocked}><ArrowLeft size={16} /> Activity Definition</button>
-    <header className="ad-workbench-header"><div><span className="ad-kicker">Exact mutable draft</span><h1 id="activity-draft-title">{draft.presentationLabel?.trim() || generatedDraftLabel(draft)}</h1><p><code>{draft.draftId}</code> · {draft.provider.providerKey} · schema {draft.provider.schemaVersion}</p></div><div className="ad-header-actions"><button type="button" onClick={() => setMigrationOpen(true)} disabled={revisionSensitiveActionsBlocked}>Migrate provider</button><button type="button" onClick={() => void validateSavedRevision()} disabled={!contractLocallyValid || status === "conflict" || validating || proposalApplying}><CheckCircle2 size={16} /> {validating ? "Saving & validating…" : "Validate saved revision"}</button><button type="button" className="ad-primary-action" onClick={saveNow} disabled={!contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying}><RefreshCw size={16} /> Save now</button></div></header>
+    <header className="ad-workbench-header"><div><span className="ad-kicker">Exact mutable draft</span><h1 id="activity-draft-title">{draft.presentationLabel?.trim() || generatedDraftLabel(draft)}</h1><p><code>{draft.draftId}</code> · {draft.provider.providerKey} · schema {draft.provider.schemaVersion}</p></div><div className="ad-header-actions"><button type="button" onClick={() => setMigrationOpen(true)} disabled={revisionSensitiveActionsBlocked}>Migrate provider</button><button type="button" onClick={() => setTestRunOpen(true)} disabled={!contractLocallyValid || status === "conflict" || validating || proposalApplying}><Play size={16} /> Test Run</button><button type="button" onClick={() => void validateSavedRevision()} disabled={!contractLocallyValid || status === "conflict" || validating || proposalApplying}><CheckCircle2 size={16} /> {validating ? "Saving & validating…" : "Validate saved revision"}</button><button type="button" className="ad-primary-action" onClick={saveNow} disabled={!contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying}><RefreshCw size={16} /> Save now</button></div></header>
     <label className="ad-draft-label"><span>Draft label <small>Optional · need not be unique</small></span><input value={draft.presentationLabel ?? ""} maxLength={200} disabled={status === "conflict"} placeholder={generatedDraftLabel(draft)} onChange={event => scheduleSave({ ...currentRef.current, presentationLabel: event.target.value || null })} /><small>The generated fallback is derived from the stable draft identity.</small></label>
     <div className={`ad-save-state is-${contractLocallyValid ? status : "failed"}`} role={status === "failed" || status === "conflict" || !contractLocallyValid ? "alert" : "status"} aria-live="polite"><strong>{contractLocallyValid ? saveStatusLabel(status, draft.revision) : "Contract correction required"}</strong><span>{contractLocallyValid ? saveStatusDescription(status, revisionSensitiveActionsBlocked) : `Server revision ${draft.revision} is saved, but a visible literal is not valid contract data and has not been added to the autosave queue. Correct it or explicitly discard local changes.`}</span></div>
     <ActivityDefinitionDiagnosticsPanel
@@ -436,6 +482,19 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, activityEd
     {!hasPayload ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation payload unavailable</h2><p>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</p></section> : !contribution || !Editor ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation editor unavailable</h2><p>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</p></section> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} value={{ payload: draft.provider.payload, layout: draft.layout }} readOnly={status === "conflict" || proposalApplying} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></section>}
     {revisionSensitiveActionsBlocked ? <div className="ad-revision-gate" role="status"><span>Revision-sensitive lifecycle actions and navigation are paused until this exact draft revision is saved.</span><button type="button" onClick={discardLocalChanges} disabled={status === "pending" || status === "saving"}>{status === "pending" || status === "saving" ? "Waiting for save before navigation" : "Discard local changes and return"}</button></div> : null}
     {migrationOpen ? <ActivityDefinitionProviderMigrationDialog context={context} draft={draft} activityEditors={activityEditors} onClose={() => setMigrationOpen(false)} onCreated={created => { setMigrationOpen(false); onOpenDraft(created.definitionId, created.draftId); }} /> : null}
+    {testRunOpen ? <Suspense fallback={<div className="ad-dialog-backdrop" role="presentation"><section className="ad-dialog" role="status">Loading the Activity Definition Test Run workbench…</section></div>}><ActivityDefinitionTestRunDialog
+      context={context}
+      draft={draft}
+      definitionLabel={definitionLabel}
+      inputEditors={inputEditors}
+      prepareExactRevision={prepareExactTestRunRevision}
+      onFocusDiagnostic={focusDiagnostic}
+      onClose={() => setTestRunOpen(false)}
+      onOpenRun={path => {
+        setTestRunOpen(false);
+        onOpenStudioPath(path);
+      }}
+    /></Suspense> : null}
   </main>;
 }
 

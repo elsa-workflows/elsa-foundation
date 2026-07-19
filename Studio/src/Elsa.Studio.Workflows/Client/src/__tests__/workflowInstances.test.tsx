@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { projectPinnedExecutable } from "../workflow-editor/WorkflowInstances";
+import {
+  projectPinnedExecutable,
+  resolveInitialActivityEvidenceId
+} from "../workflow-editor/WorkflowInstances";
 import type { WorkflowExecutableDetails, WorkflowInstanceDetails } from "../workflowTypes";
 
 describe("Runtime-pinned workflow instance rendering", () => {
@@ -47,5 +50,19 @@ describe("Runtime-pinned workflow instance rendering", () => {
       activityVersionId: "executable-missing:Example.Root@1.0.0"
     });
     expect(projected.id).toBe("draft:synthetic");
+  });
+
+  it("focuses only an outer activity execution that exists in the loaded Runtime Evidence", () => {
+    const activities = [
+      { activityExecutionId: "outer-activity" },
+      { activityExecutionId: "child-activity" }
+    ];
+
+    expect(resolveInitialActivityEvidenceId(activities, "outer-activity"))
+      .toBe("outer-activity");
+    expect(resolveInitialActivityEvidenceId(activities, "foreign-activity"))
+      .toBeNull();
+    expect(resolveInitialActivityEvidenceId(activities, null))
+      .toBeNull();
   });
 });

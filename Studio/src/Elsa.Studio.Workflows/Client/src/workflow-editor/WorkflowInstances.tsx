@@ -360,11 +360,12 @@ interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
   executableGraph: ExecutableActivityGraph | null;
 }
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], workflowExecutionId, navigate }: {
+export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], workflowExecutionId, initialActivityExecutionId = null, navigate }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
   expressionEditors?: StudioExpressionEditorContribution[];
   workflowExecutionId: string;
+  initialActivityExecutionId?: string | null;
   navigate(path: string): void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
@@ -434,15 +435,21 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
         activityCatalog: catalog,
         executableGraph
       });
-      setSelectedEvidenceId(null);
+      const initialEvidence = resolveInitialActivityEvidenceId(
+        details.activities,
+        initialActivityExecutionId);
+      setSelectedEvidenceId(initialEvidence);
       setFrames([]);
       setState("ready");
+      if (initialEvidence) {
+        requestAnimationFrame(() => requestAnimationFrame(() => focusSelectedCanvasActivity(initialEvidence)));
+      }
     } catch (e) {
       setData(null);
       setError(formatWorkflowRunLoadError(e, workflowExecutionId));
       setState("failed");
     }
-  }, [context, workflowExecutionId]);
+  }, [context, initialActivityExecutionId, workflowExecutionId]);
 
   useEffect(() => {
     void load();
@@ -557,6 +564,16 @@ export function projectPinnedExecutable(
     state: { rootActivity: (executableGraph ?? buildExecutableActivityGraph(executable.rootActivity, catalog)).root },
     layout: executable.chosenReference?.layout ?? []
   };
+}
+
+export function resolveInitialActivityEvidenceId(
+  activities: ReadonlyArray<{ activityExecutionId: string }>,
+  requestedActivityExecutionId: string | null
+) {
+  return requestedActivityExecutionId &&
+    activities.some(activity => activity.activityExecutionId === requestedActivityExecutionId)
+    ? requestedActivityExecutionId
+    : null;
 }
 
 function sourceAccessFromError(error: unknown) {

@@ -1,9 +1,9 @@
 export const activityDefinitionsObservationEvent = "elsa:activity-definitions:observation";
 
 export type ActivityDefinitionsObservation = {
-  event: "route-view" | "query-start" | "query-success" | "query-failure" | "refresh" | "open-definition" | "create-start" | "create-success" | "create-failure" | "provider-editor" | "autosave";
+  event: "route-view" | "query-start" | "query-success" | "query-failure" | "refresh" | "open-definition" | "create-start" | "create-success" | "create-failure" | "provider-editor" | "autosave" | "test-run";
   surface: "collection" | "workbench" | "creation" | "editor";
-  outcome?: "ready" | "empty" | "stale" | "unavailable" | "forbidden" | "not-found" | "expired" | "failed" | "pending" | "saving" | "saved" | "offline" | "conflict";
+  outcome?: "ready" | "empty" | "stale" | "unavailable" | "forbidden" | "not-found" | "expired" | "failed" | "pending" | "saving" | "saved" | "offline" | "conflict" | "dispatching" | "reconciling" | "accepted" | "waiting" | "running" | "suspended" | "completed" | "faulted" | "cancelled" | "validation-rejected" | "dispatch-rejected";
   providerKey?: string;
   providerSchemaVersion?: string;
   hasSearch?: boolean;
@@ -15,11 +15,11 @@ export type ActivityDefinitionsObservation = {
 };
 
 const events = new Set<ActivityDefinitionsObservation["event"]>([
-  "route-view", "query-start", "query-success", "query-failure", "refresh", "open-definition", "create-start", "create-success", "create-failure", "provider-editor", "autosave"
+  "route-view", "query-start", "query-success", "query-failure", "refresh", "open-definition", "create-start", "create-success", "create-failure", "provider-editor", "autosave", "test-run"
 ]);
 const surfaces = new Set<ActivityDefinitionsObservation["surface"]>(["collection", "workbench", "creation", "editor"]);
 const outcomes = new Set<NonNullable<ActivityDefinitionsObservation["outcome"]>>([
-  "ready", "empty", "stale", "unavailable", "forbidden", "not-found", "expired", "failed", "pending", "saving", "saved", "offline", "conflict"
+  "ready", "empty", "stale", "unavailable", "forbidden", "not-found", "expired", "failed", "pending", "saving", "saved", "offline", "conflict", "dispatching", "reconciling", "accepted", "waiting", "running", "suspended", "completed", "faulted", "cancelled", "validation-rejected", "dispatch-rejected"
 ]);
 const pageSizes = new Set<NonNullable<ActivityDefinitionsObservation["pageSize"]>>([10, 25, 50]);
 const resultBands = new Set<NonNullable<ActivityDefinitionsObservation["resultBand"]>>([

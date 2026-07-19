@@ -68,7 +68,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-activity-definitions",
         path: "/workflows/activity-definitions",
         label: "Activity Definitions",
-        component: () => <WorkflowLazyBoundary label="activity definitions"><ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} runtime={api.runtime} /></WorkflowLazyBoundary>
+        component: ({ navigate }) => <WorkflowLazyBoundary label="activity definitions"><ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} /></WorkflowLazyBoundary>
       },
       {
         id: "workflows-definitions",
