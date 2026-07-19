@@ -29,6 +29,6 @@ public class TaggingApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IHttpContextAccessor, HttpContextAccessor>();
         services.RemoveAll<ITagDefinitionAuditContext>();
         services.AddScoped<ITagDefinitionAuditContext, HttpTagDefinitionAuditContext>();
-        services.AddApiCapability(TaggingApiCapabilities.StaticDeclaration);
+        services.AddApiCapabilitySource<TaggingOperationalCapabilitySource>();
     }
 }

@@ -429,6 +429,58 @@ public sealed class FoundationBoundedQueryContractTests
 
     [Theory]
     [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_tag_sets_batch_through_one_declared_bounded_query(
+        string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients |
+            GroundworkTopologyCapabilities.MultiDocumentTransactions);
+        await driver.ResetPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]);
+
+        await using var client = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        await SaveWorkflowDefinitionAsync(
+            client.DocumentStore,
+            new WorkflowDefinition
+            {
+                Id = "definition-tagged",
+                TenantId = "tenant-a",
+                Name = "Tagged"
+            });
+        var bounded = Record(client);
+        var tags = new GroundworkWorkflowDefinitionTagStore(
+            client.DocumentStore,
+            Accessor("tenant-a"),
+            TimeProvider.System,
+            bounded);
+        var saved = await tags.ReplaceManualAsync(new(
+            "definition-tagged",
+            "tenant-a",
+            WorkflowDefinitionTagRevision.Initial,
+            ["tag-priority"],
+            "author",
+            "correlation"));
+
+        Assert.Equal(WorkflowDefinitionTagReplaceStatus.Saved, saved.Status);
+        var tagSets = await tags.ListByDefinitionIdsAsync(
+            ["definition-tagged", "definition-missing"]);
+
+        Assert.Equal(
+            ["tag-priority"],
+            tagSets.Single(tagSet => tagSet.WorkflowDefinitionId == "definition-tagged")
+                .Assertions.Select(assertion => assertion.TagDefinitionId));
+        Assert.Empty(tagSets.Single(tagSet => tagSet.WorkflowDefinitionId == "definition-missing").Assertions);
+        var observation = Assert.Single(bounded.Observations);
+        Assert.Equal(
+            WorkflowsDesignStorageManifest.FindWorkflowDefinitionTagSetsByDefinitionIdsQuery,
+            observation.Query.QueryIdentity);
+        Assert.InRange(observation.MaterializedDocuments, 0, 1);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
     public async Task Workflow_definition_projection_upgrade_backfills_documents_written_under_the_legacy_manifest(
         string providerKey)
     {

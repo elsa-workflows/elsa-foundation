@@ -62,6 +62,17 @@ public interface ITagDefinitionAtomicChangeStore
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Marks a tag catalog persistence provider that is durable and safe to expose through the authoring API.
+/// </summary>
+/// <remarks>
+/// The default in-memory tag store intentionally does not implement this contract. It is useful for
+/// isolated tests and local composition, but must not make a tenant catalog discoverable to clients.
+/// </remarks>
+public interface ITagDefinitionCatalogPersistence
+{
+}
+
 public interface ITagDefinitionAuditContext
 {
     string Actor { get; }

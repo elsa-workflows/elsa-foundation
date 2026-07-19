@@ -24,6 +24,37 @@ public sealed class GroundworkWorkflowDefinitionTagStoreTests
     }
 
     [Fact]
+    public async Task Batch_read_uses_one_bounded_query_and_returns_empty_tag_sets_for_missing_definitions()
+    {
+        var (documents, store) = await CreateSeededStoreAsync();
+        await store.ReplaceManualAsync(new(
+            "workflow-1",
+            "tenant-a",
+            WorkflowDefinitionTagRevision.Initial,
+            ["tag-a"],
+            "author-1",
+            "correlation-1"));
+
+        var queryCountBefore = documents.DocumentQueryCount;
+        var result = await store.ListByDefinitionIdsAsync(["workflow-1", "workflow-missing"]);
+
+        Assert.Equal(1, documents.DocumentQueryCount - queryCountBefore);
+        Assert.Collection(
+            result.OrderBy(x => x.WorkflowDefinitionId, StringComparer.Ordinal),
+            existing =>
+            {
+                Assert.Equal("workflow-1", existing.WorkflowDefinitionId);
+                Assert.Equal(["tag-a"], existing.Assertions.Select(x => x.TagDefinitionId));
+            },
+            missing =>
+            {
+                Assert.Equal("workflow-missing", missing.WorkflowDefinitionId);
+                Assert.Equal(WorkflowDefinitionTagRevision.Initial, missing.Revision);
+                Assert.Empty(missing.Assertions);
+            });
+    }
+
+    [Fact]
     public async Task Replace_manual_slice_commits_assertions_revision_and_audit_together()
     {
         var (documents, store) = await CreateSeededStoreAsync();

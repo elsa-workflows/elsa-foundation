@@ -28,7 +28,8 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
     ScopedVariableAuthoringContract? scopedVariables = null,
     IEnumerable<IActivityInputOptionsProvider>? inputOptionsProviders = null,
     IWorkflowDefinitionTagStore? workflowDefinitionTags = null,
-    ITagDefinitionStore? tagDefinitions = null) : IApiCapabilitySource
+    ITagDefinitionStore? tagDefinitions = null,
+    ITagDefinitionCatalogPersistence? tagCatalogPersistence = null) : IApiCapabilitySource
 {
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
         CancellationToken cancellationToken = default)
@@ -41,7 +42,9 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
                 "activity-input-options",
                 "design/workflows/activities/{activityVersionId}/inputs/{inputName}/options",
                 templated: true));
-        if (workflowDefinitionTags is not null && tagDefinitions is not null)
+        if (workflowDefinitionTags is not null
+            && tagDefinitions is not null
+            && tagCatalogPersistence is not null)
             links.Add(new(
                 "workflow-definition-tags",
                 "design/workflows/definitions/{definitionId}/tags",

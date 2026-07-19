@@ -13,14 +13,19 @@ public sealed class ListDefinitionsRequestHandler(
     IWorkflowDefinitionStore store,
     IWorkflowDefinitionListProjectionStore projectionStore,
     IWorkflowDefinitionTagStore? tagStore = null,
-    ITagDefinitionStore? tagDefinitionStore = null)
+    ITagDefinitionStore? tagDefinitionStore = null,
+    ITagDefinitionCatalogPersistence? tagCatalogPersistence = null)
 
     : IRequestHandler<ListDefinitions, WorkflowDefinitionListView>
 {
     public async Task<WorkflowDefinitionListView> Handle(ListDefinitions request, CancellationToken cancellationToken)
     {
         var markerTagClauses = ParseMarkerTagClauses(request.MarkerTagClauses);
-        if (markerTagClauses.Count > 0 && (tagStore is null || tagDefinitionStore is null))
+        var taggingAvailable =
+            tagStore is not null
+            && tagDefinitionStore is not null
+            && tagCatalogPersistence is not null;
+        if (markerTagClauses.Count > 0 && !taggingAvailable)
             throw new ArgumentException(
                 "Marker tag filters are unavailable because workflow-definition tagging is not active in this shell.",
                 nameof(request.MarkerTagClauses));
@@ -47,9 +52,9 @@ public sealed class ListDefinitionsRequestHandler(
         var projections = await projectionStore.ListByDefinitionIdsAsync(
             definitions.Select(definition => definition.Id).ToArray(),
             cancellationToken);
-        var tagSets = tagStore is null
+        var tagSets = !taggingAvailable
             ? []
-            : await tagStore.ListByDefinitionIdsAsync(
+            : await tagStore!.ListByDefinitionIdsAsync(
                 definitions.Select(definition => definition.Id).ToArray(),
                 cancellationToken);
         var tagDefinitionIds = tagSets
@@ -57,9 +62,9 @@ public sealed class ListDefinitionsRequestHandler(
             .Select(assertion => assertion.TagDefinitionId)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var tagDefinitions = tagDefinitionStore is null
+        var tagDefinitions = !taggingAvailable
             ? []
-            : await ResolveMarkerTagsAsync(tagDefinitionStore, tagDefinitionIds, cancellationToken);
+            : await ResolveMarkerTagsAsync(tagDefinitionStore!, tagDefinitionIds, cancellationToken);
         var projectionsByDefinitionId = projections.ToDictionary(
             projection => projection.WorkflowDefinitionId,
             StringComparer.Ordinal);

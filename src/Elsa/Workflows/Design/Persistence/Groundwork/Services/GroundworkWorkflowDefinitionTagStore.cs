@@ -3,6 +3,7 @@ using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -11,8 +12,12 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkWorkflowDefinitionTagStore(
     IDocumentStore store,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    TimeProvider timeProvider) : IWorkflowDefinitionTagStore
+    TimeProvider timeProvider,
+    IBoundedDocumentStore? boundedStore = null) : IWorkflowDefinitionTagStore
 {
+    private IBoundedDocumentStore BoundedStore => boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+        "Workflow-definition tag queries require an admitted bounded document-store runtime.");
+
     public async Task<WorkflowDefinitionTagSet> GetAsync(
         string workflowDefinitionId,
         CancellationToken cancellationToken = default)
@@ -44,10 +49,37 @@ public sealed class GroundworkWorkflowDefinitionTagStore(
         if (workflowDefinitionIds.Count > 100)
             throw new ArgumentOutOfRangeException(nameof(workflowDefinitionIds), "At most 100 workflow definition tag sets can be read at once.");
 
-        var result = new List<WorkflowDefinitionTagSet>(workflowDefinitionIds.Count);
-        foreach (var id in workflowDefinitionIds.Distinct(StringComparer.Ordinal))
-            result.Add(await GetAsync(id, cancellationToken));
-        return result;
+        var definitionIds = workflowDefinitionIds.Distinct(StringComparer.Ordinal).ToArray();
+        foreach (var definitionId in definitionIds)
+            ArgumentException.ThrowIfNullOrWhiteSpace(definitionId);
+        if (definitionIds.Length == 0)
+            return [];
+
+        var query = new DocumentQuery(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetDocumentKind,
+            WorkflowsDesignStorageManifest.FindWorkflowDefinitionTagSetsByDefinitionIdsQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.In(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetWorkflowDefinitionIdField,
+                definitionIds))],
+            [],
+            skip: 0,
+            take: definitionIds.Length);
+        var found = (await BoundedStore.QueryAsync(query, cancellationToken)).Documents
+            .Select(envelope =>
+            {
+                var document = Deserialize(envelope);
+                accessContextAccessor.Current.EnsureTenantScope(document.TenantId);
+                return ToModel(document, envelope.Version);
+            })
+            .ToDictionary(tagSet => tagSet.WorkflowDefinitionId, StringComparer.Ordinal);
+
+        return definitionIds
+            .Select(definitionId => found.GetValueOrDefault(definitionId) ?? new WorkflowDefinitionTagSet(
+                definitionId,
+                accessContextAccessor.Current.Scope?.Value,
+                WorkflowDefinitionTagRevision.Initial,
+                []))
+            .ToArray();
     }
 
     public async Task<WorkflowDefinitionTagReplaceResult> ReplaceManualAsync(

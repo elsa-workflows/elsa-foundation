@@ -7,7 +7,10 @@ using Elsa.Tagging.Core.Models;
 
 namespace Elsa.Tagging.Api.Endpoints.Definitions;
 
-internal sealed class Update(ITagDefinitionManager manager) : ElsaEndpoint<UpdateTagDefinitionApiRequest, TagDefinitionListItem>
+internal sealed class Update(
+    ITagDefinitionManager manager,
+    ITagDefinitionCatalogPersistence? catalogPersistence = null)
+    : ElsaEndpoint<UpdateTagDefinitionApiRequest, TagDefinitionListItem>
 {
     public override void Configure()
     {
@@ -17,6 +20,12 @@ internal sealed class Update(ITagDefinitionManager manager) : ElsaEndpoint<Updat
 
     public override async Task HandleAsync(UpdateTagDefinitionApiRequest request, CancellationToken cancellationToken)
     {
+        if (catalogPersistence is null)
+        {
+            ThrowError("The tag catalog is unavailable because durable persistence is not active.", 503);
+            return;
+        }
+
         var ifMatch = HttpContext.Request.Headers.IfMatch.ToString();
         if (ifMatch.Length < 3 || ifMatch[0] != '"' || ifMatch[^1] != '"')
         {
@@ -34,6 +43,10 @@ internal sealed class Update(ITagDefinitionManager manager) : ElsaEndpoint<Updat
         catch (TagDefinitionConflictException exception)
         {
             ThrowError(exception, 409);
+        }
+        catch (ArgumentException exception)
+        {
+            ThrowError(exception, 400);
         }
         catch (InvalidOperationException exception)
         {

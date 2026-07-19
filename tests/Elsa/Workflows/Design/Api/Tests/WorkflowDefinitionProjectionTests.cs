@@ -272,6 +272,7 @@ public sealed class WorkflowDefinitionProjectionTests
                 .AddSingleton<IWorkflowDefinitionListProjectionStore>(_projections)
                 .AddSingleton<IWorkflowDefinitionTagStore>(_tags)
                 .AddSingleton<ITagDefinitionStore>(_tagDefinitions)
+                .AddSingleton<ITagDefinitionCatalogPersistence, DurableCatalogPersistence>()
                 .BuildServiceProvider();
             return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
         }
@@ -285,6 +286,8 @@ public sealed class WorkflowDefinitionProjectionTests
             return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
         }
     }
+
+    private sealed class DurableCatalogPersistence : ITagDefinitionCatalogPersistence;
 
     private sealed class CountingDefinitionStore(IReadOnlyList<WorkflowDefinition> definitions) : IWorkflowDefinitionStore
     {

@@ -77,6 +77,9 @@ public static class WorkflowsDesignStorageManifest
 
     public const string WorkflowDefinitionTagSetDocumentKind = "workflowDefinitionTagSet";
     public const string WorkflowDefinitionTagSetCollection = "workflowDefinitionTagSet";
+    public const string WorkflowDefinitionTagSetWorkflowDefinitionIdField = "workflowDefinitionId";
+    public const string WorkflowDefinitionTagSetByWorkflowDefinitionIdIndex = "workflow-definition-tag-set-by-workflow-definition-id";
+    public const string FindWorkflowDefinitionTagSetsByDefinitionIdsQuery = "find-workflow-definition-tag-sets-by-definition-ids";
     public const string WorkflowDefinitionTagAuditDocumentKind = "workflowDefinitionTagAudit";
     public const string WorkflowDefinitionTagAuditCollection = "workflowDefinitionTagAudit";
 
@@ -101,11 +104,7 @@ public static class WorkflowsDesignStorageManifest
                 "Workflow definition version layout",
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query(ListAllQuery, ByCollectionIndex)]),
-            Unit(
-                WorkflowDefinitionTagSetDocumentKind,
-                "Workflow definition tag set",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query(ListAllQuery, ByCollectionIndex)]),
+            WorkflowDefinitionTagSetUnit(),
             Unit(
                 WorkflowDefinitionTagAuditDocumentKind,
                 "Workflow definition tag audit",
@@ -209,6 +208,32 @@ public static class WorkflowsDesignStorageManifest
                     PageRoute(SearchPageByCreatedAtDescendingQuery, createdAtDescendingIndex, WorkflowDefinitionCreatedAtField, BoundedQueryExecutionClass.Ordinary, supportsContains: true, direction: PhysicalSortDirection.Descending)
                 ])
         };
+    }
+
+    private static StorageUnit WorkflowDefinitionTagSetUnit()
+    {
+        var definitionIdIndex = new IndexDeclaration(
+            WorkflowDefinitionTagSetByWorkflowDefinitionIdIndex,
+            [new IndexField(WorkflowDefinitionTagSetWorkflowDefinitionIdField)],
+            IndexValueKind.Keyword,
+            false,
+            true,
+            MissingValueBehavior.Excluded,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In },
+            IndexPhysicalizationPolicy.Optimized);
+        return Unit(
+            WorkflowDefinitionTagSetDocumentKind,
+            "Workflow definition tag set",
+            [Keyword(ByCollectionIndex, CollectionField), definitionIdIndex],
+            [
+                Query(ListAllQuery, ByCollectionIndex),
+                new PortableQueryDeclaration(
+                    FindWorkflowDefinitionTagSetsByDefinitionIdsQuery,
+                    definitionIdIndex.Identity,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In },
+                    QuerySortSupport.None,
+                    QueryPagingSupport.Offset)
+            ]);
     }
 
     private static LogicalIndexDeclaration SortIndex(string identity, string sortField, IndexValueKind sortValueKind) => new(
