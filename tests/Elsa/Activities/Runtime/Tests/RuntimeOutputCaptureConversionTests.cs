@@ -117,6 +117,50 @@ public sealed class RuntimeOutputCaptureConversionTests
     {
         var sourceType = new ValueTypeDescriptor("String");
         var targetType = new ValueTypeDescriptor("Acme.Customer");
+        var plan = new ValueConversionPlan(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.FormattedContent,
+            sourceType,
+            targetType,
+            ValueConversionMode.Auto,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.json", "1"),
+            limits: null,
+            options: null);
+
+        var state = await ProjectCustomerBodyAsync("""{"name":"Ada","loyaltyPoints":42}""", plan);
+
+        Assert.Equal("Acme.Customer", state.Type.Kind);
+        Assert.Equal("Ada", state.InlineValue!.Value.GetProperty("name").GetString());
+        Assert.Equal(42, state.InlineValue.Value.GetProperty("loyaltyPoints").GetInt64());
+    }
+
+    [Fact]
+    public async Task Project_applies_registered_typed_xml_plan_before_persisting_the_target_value()
+    {
+        var sourceType = new ValueTypeDescriptor("String");
+        var targetType = new ValueTypeDescriptor("Acme.Customer");
+        var plan = new ValueConversionPlan(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.FormattedContent,
+            sourceType,
+            targetType,
+            ValueConversionMode.Xml,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.xml", "1"),
+            limits: null,
+            options: null);
+
+        var state = await ProjectCustomerBodyAsync("<customer loyaltyPoints=\"42\"><name>Ada</name></customer>", plan);
+
+        Assert.Equal("Acme.Customer", state.Type.Kind);
+        Assert.Equal("Ada", state.InlineValue!.Value.GetProperty("name").GetString());
+        Assert.Equal(42, state.InlineValue.Value.GetProperty("loyaltyPoints").GetInt64());
+    }
+
+    private static async Task<DurableValueState> ProjectCustomerBodyAsync(string body, ValueConversionPlan plan)
+    {
+        var sourceType = new ValueTypeDescriptor("String");
         var descriptor = JsonSerializer.SerializeToElement(new { type = "test.customer" });
         var contract = new ActivityContract(
             "test.customer",
@@ -131,27 +175,17 @@ public sealed class RuntimeOutputCaptureConversionTests
                 [new ActivityResultProjectionContract("body", "body", sourceType, true, ActivityValuePolicy.Default, ValueRepresentation.FormattedContent)]),
             ["Done"],
             new ActivityActivationRequirement("test", "test.customer"));
-        var transition = ActivityTransition.Complete(new CustomerResult("""{"name":"Ada","loyaltyPoints":42}"""));
+        var transition = ActivityTransition.Complete(new CustomerResult(body));
         var completion = new ActivityCompletionProjector().Project(
             "invocation",
             new ActivityAttempt("attempt", "invocation", 1, ActivityAttemptReason.Initial, DateTimeOffset.UnixEpoch),
             contract,
             transition,
             DateTimeOffset.UnixEpoch);
-        var plan = new ValueConversionPlan(
-            ValueConversionPlan.CurrentSchemaVersion,
-            ValueRepresentation.FormattedContent,
-            sourceType,
-            targetType,
-            ValueConversionMode.Auto,
-            ValueConversionOperation.Profile,
-            new ValueConversionProfileReference("elsa.json", "1"),
-            limits: null,
-            options: null);
         var capture = new RuntimeOutputCapture(
             "body",
             "variable-customer",
-            new RuntimeValueTypeDescriptor("Acme.Customer", WellKnownRuntimeDurableValueStorageDrivers.Json, null),
+            new RuntimeValueTypeDescriptor(plan.TargetType.Alias, WellKnownRuntimeDurableValueStorageDrivers.Json, null),
             DurableValueLifecycle.Instance,
             DurableValueStorage.Custom,
             captureOnSuccessfulCompletion: true,
@@ -182,10 +216,7 @@ public sealed class RuntimeOutputCaptureConversionTests
             completion,
             DateTimeOffset.UnixEpoch);
 
-        var state = Assert.Single(changes).State!;
-        Assert.Equal("Acme.Customer", state.Type.Kind);
-        Assert.Equal("Ada", state.InlineValue!.Value.GetProperty("name").GetString());
-        Assert.Equal(42, state.InlineValue.Value.GetProperty("loyaltyPoints").GetInt64());
+        return Assert.Single(changes).State!;
     }
 
     private static (ExecutableNode Node, ActivityTransition Transition, ActivityCompletionProjection Completion) NewCaptureScenario(
