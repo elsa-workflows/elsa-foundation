@@ -195,7 +195,7 @@ public sealed class SecretsGroundworkDocumentFixtureTests
     private static string FixturePath()
     {
         var fileName = Path.GetFileName(SecretsStorageManifest.SecretDocumentKind + ".json");
-        return Path.Combine(SourceDirectory(), "Fixtures", "v2", fileName);
+        return Path.Join(SourceDirectory(), "Fixtures", "v2", fileName);
     }
 
     private static string SourceDirectory([CallerFilePath] string? callerFilePath = null) =>

@@ -24,7 +24,7 @@ public sealed class EFCoreWorkflowPortfolioDataSourceTests
     [Fact]
     public async Task ReturnsTheCompletePortfolioFixtureBeyondOnePage()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-portfolio-ef-{Guid.NewGuid():N}.db");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-portfolio-ef-{Guid.NewGuid():N}.db");
         try
         {
             var services = new ServiceCollection();

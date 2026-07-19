@@ -241,7 +241,8 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         var fileName = fixtureName + ".json";
         if (Path.IsPathRooted(fileName) || !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal))
             throw new ArgumentException("Fixture names must be file names.", nameof(fixtureName));
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", $"v{version}", fileName);
+        var fixturesDirectory = Path.Join(AppContext.BaseDirectory, "Fixtures", $"v{version}");
+        var path = Path.Join(fixturesDirectory, fileName);
         Assert.True(
             File.Exists(path),
             $"Missing committed golden fixture '{fixtureName}' at '{path}'. " +
@@ -266,7 +267,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         var directory = Path.Join(SourceDirectory(), "Fixtures", $"v{version}");
         Directory.CreateDirectory(directory);
         var canonical = Canonicalize(JsonNode.Parse(contentJson));
-        File.WriteAllText(Path.Combine(directory, kind + ".json"), canonical);
+        File.WriteAllText(Path.Join(directory, kind + ".json"), canonical);
     }
 
     private static string SourceDirectory([CallerFilePath] string? callerFilePath = null) =>

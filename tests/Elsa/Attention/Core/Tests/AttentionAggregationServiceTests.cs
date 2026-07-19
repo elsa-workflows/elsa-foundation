@@ -51,6 +51,18 @@ public sealed class AttentionAggregationServiceTests
     }
 
     [Fact]
+    public async Task Critical_contributor_failures_are_not_hidden_as_safe_failures()
+    {
+        var registry = new AttentionContributorRegistry(
+        [
+            new StubContributor("critical.source", (_, _) => throw new OutOfMemoryException("critical failure"))
+        ]);
+        var service = CreateService(registry);
+
+        await Assert.ThrowsAsync<OutOfMemoryException>(() => service.AggregateAsync(Query()));
+    }
+
+    [Fact]
     public async Task Slow_contributor_times_out_without_blocking_a_ready_contributor()
     {
         var registry = new AttentionContributorRegistry(

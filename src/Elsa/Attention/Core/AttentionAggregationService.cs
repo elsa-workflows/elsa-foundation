@@ -78,11 +78,20 @@ public sealed class AttentionAggregationService(
         {
             throw;
         }
-        catch
+        catch (Exception exception) when (!IsCriticalException(exception))
         {
             return Failure(descriptor, AttentionContributorStatus.Failed, "CONTRIBUTOR_FAILED");
         }
     }
+
+    private static bool IsCriticalException(Exception exception) =>
+        exception is OutOfMemoryException
+            or StackOverflowException
+            or AccessViolationException
+            or AppDomainUnloadedException
+            or BadImageFormatException
+            or CannotUnloadAppDomainException
+            or InvalidProgramException;
 
     private async ValueTask<bool> IsAuthorizedAsync(
         AttentionContributorDescriptor descriptor,

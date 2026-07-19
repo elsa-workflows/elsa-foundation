@@ -28,7 +28,7 @@ public sealed class WorkflowPortfolioProviderTests
     [Fact]
     public async Task GroundworkSqliteReturnsTheCompleteIdenticalPortfolioFixture()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-portfolio-{Guid.NewGuid():N}.db");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-portfolio-{Guid.NewGuid():N}.db");
         try
         {
             var store = await SqliteDocumentStoreFactory.CreateAsync(
