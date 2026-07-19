@@ -38,6 +38,44 @@ test("workflow definitions rebase a paged public capability view after a keyboar
   ]);
 });
 
+test("a paged direct-folder projection rebases to page 1 after moving its page-2 row out", async ({ page }) => {
+  await page.setViewportSize({ width: 980, height: 760 });
+  await page.goto("/?theme=light&mode=move-definitions&source=folder");
+
+  await expect(page.getByText("First page workflow")).toBeVisible();
+  await page.getByRole("treeitem", { name: /Operations/ }).click();
+  await expect(page.getByText("Folder page 1 workflow")).toBeVisible();
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByText("Folder page 2 workflow")).toBeVisible();
+  await page.getByRole("checkbox", { name: "Select workflow definition Folder page 2 workflow" }).check();
+  await page.getByRole("button", { name: "Move to folder" }).click();
+  const dialog = page.getByRole("dialog", { name: "Move workflow definitions" });
+  await expect(dialog.getByRole("radio", { name: "Unfiled" })).toBeChecked();
+  await dialog.getByRole("button", { name: "Move" }).click();
+
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Folder remaining workflow")).toBeVisible();
+  await expect(page.getByText("Folder page 2 workflow")).toBeHidden();
+  await expect(page.getByText("Moved folder workflow")).toBeHidden();
+  await expect(page.getByText("Page 1")).toBeVisible();
+  await expect(page.getByRole("row", { name: /Open workflow definition/ })).toHaveCount(1);
+
+  const folderRequests = await page.evaluate(() =>
+    ((window as Window & { capabilityRequests?: string[] }).capabilityRequests ?? [])
+      .filter(url => url.includes("folderId=folder-operations")));
+  const oldCursorIndex = folderRequests.findIndex(url => url.includes("continuationToken=folder-page-2"));
+  expect(oldCursorIndex).toBeGreaterThanOrEqual(0);
+  const rebasedRequests = folderRequests.slice(oldCursorIndex + 1);
+  expect(rebasedRequests.length).toBeGreaterThan(0);
+  expect(rebasedRequests.every(url => !url.includes("continuationToken="))).toBe(true);
+  await expect.poll(() => page.evaluate(() => (window as Window & { moveRequests?: { url: string; body: unknown }[] }).moveRequests)).toEqual([
+    { url: "/browser/definition-placement", body: { definitionIds: ["folder-definition-2"], folderId: null } }
+  ]);
+
+  await page.getByRole("treeitem", { name: "Unfiled" }).click();
+  await expect(page.getByText("Moved folder workflow")).toBeVisible();
+});
+
 test("move failure keeps the full dialog reachable in a short viewport", async ({ page }) => {
   await page.setViewportSize({ width: 760, height: 430 });
   await page.goto("/?theme=light&mode=move-definitions&move=failure");

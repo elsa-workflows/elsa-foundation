@@ -17,6 +17,7 @@ const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const runDetailFixture = searchParams.get("mode") === "run-detail";
 const moveDefinitionsFixture = searchParams.get("mode") === "move-definitions";
 const moveDefinitionsFailureFixture = moveDefinitionsFixture && searchParams.get("move") === "failure";
+const moveDefinitionsFolderSourceFixture = moveDefinitionsFixture && searchParams.get("source") === "folder";
 
 const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
   window.setTimeout(() => resolve({ default: () => <section aria-label="Deferred workflow designer">Workflow designer ready</section> }), 3_000);
@@ -147,6 +148,7 @@ function MoveDefinitionsFixture() {
   const [moved, setMoved] = useState(false);
   const movedRef = useRef(false);
   const destinationRef = useRef<string | null | undefined>(undefined);
+  const movedDefinitionIdRef = useRef<string | undefined>(undefined);
   const folder = useMemo(() => ({ id: "folder-operations", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" }), []);
   const definition = (id: string, name: string, folderId: string | null = null) => ({
     id, name, description: "Browser workflow", createdAt: "2026-07-19T00:00:00Z", lastModifiedAt: movedRef.current ? "2026-07-19T00:01:00Z" : "2026-07-19T00:00:00Z",
@@ -166,13 +168,31 @@ function MoveDefinitionsFixture() {
         if (url.startsWith("/browser/folders/folder-operations")) return { folder, ancestors: [] };
         if (url.startsWith("/browser/folders")) return { items: [folder], nextContinuationToken: null };
         if (url.startsWith("/browser/definition-pages")) {
+          (window as Window & { capabilityRequests?: string[] }).capabilityRequests = [
+            ...((window as Window & { capabilityRequests?: string[] }).capabilityRequests ?? []),
+            url
+          ];
           const query = new URL(url, window.location.origin).searchParams;
           const folderId = query.get("folderId");
           const unfiled = query.get("unfiled") === "true";
           const next = query.get("continuationToken");
-          if (folderId) return { items: destinationRef.current === folderId ? [definition("definition-browser", "Moved workflow", folderId)] : [], nextContinuationToken: null };
-          if (unfiled) return { items: destinationRef.current === null ? [definition("definition-browser", "Moved workflow")] : [], nextContinuationToken: null };
-          if (movedRef.current) return { items: [definition("definition-browser", "Moved workflow")], nextContinuationToken: null };
+          const movedId = movedDefinitionIdRef.current ?? "definition-browser";
+          const movedName = movedId === "folder-definition-2" ? "Moved folder workflow" : "Moved workflow";
+          if (folderId && moveDefinitionsFolderSourceFixture) {
+            if (movedRef.current) return {
+              items: [
+                definition("folder-definition-1", "Folder remaining workflow", folder.id),
+                ...(destinationRef.current === folderId ? [definition(movedId, movedName, folder.id)] : [])
+              ],
+              nextContinuationToken: null
+            };
+            return next
+              ? { items: [definition("folder-definition-2", "Folder page 2 workflow", folder.id)], nextContinuationToken: null }
+              : { items: [definition("folder-definition-1", "Folder page 1 workflow", folder.id)], nextContinuationToken: "folder-page-2" };
+          }
+          if (folderId) return { items: destinationRef.current === folderId ? [definition(movedId, movedName, folderId)] : [], nextContinuationToken: null };
+          if (unfiled) return { items: destinationRef.current === null ? [definition(movedId, movedName)] : [], nextContinuationToken: null };
+          if (movedRef.current) return { items: [definition(movedId, movedName)], nextContinuationToken: null };
           return next ? { items: [definition("definition-2", "Second page workflow")], nextContinuationToken: null } : { items: [definition("definition-1", "First page workflow")], nextContinuationToken: "page-2" };
         }
         throw new Error(`Unexpected browser fixture request: ${url}`);
@@ -180,7 +200,9 @@ function MoveDefinitionsFixture() {
       postJson: async (url: string, body: unknown) => {
         (window as Window & { moveRequests?: unknown[] }).moveRequests = [...((window as Window & { moveRequests?: unknown[] }).moveRequests ?? []), { url, body }];
         if (moveDefinitionsFailureFixture) throw new Error("Destination is currently unavailable.");
-        destinationRef.current = (body as { folderId: string | null }).folderId;
+        const placement = body as { definitionIds: string[]; folderId: string | null };
+        movedDefinitionIdRef.current = placement.definitionIds[0];
+        destinationRef.current = placement.folderId;
         movedRef.current = true;
         setMoved(true);
         return {};
