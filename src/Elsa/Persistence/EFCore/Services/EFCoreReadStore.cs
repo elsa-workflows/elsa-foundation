@@ -62,7 +62,7 @@ public class EFCoreReadStore<TDbContext, TEntity>(IDbContextFactory<TDbContext> 
         return await queryable.AnyAsync(cancellationToken);
     }
 
-    private static IQueryable<TEntity> BuildQueryable(
+    protected static IQueryable<TEntity> BuildQueryable(
         TDbContext dbContext,
         Query<TEntity> query,
         Func<IQueryable<TEntity>, IQueryable<TEntity>>? include)
@@ -78,7 +78,7 @@ public class EFCoreReadStore<TDbContext, TEntity>(IDbContextFactory<TDbContext> 
         return EFCoreQueryTranslator.Apply(set, query);
     }
 
-    private async Task PublishEntityLoadingEvents(TDbContext dbContext, IReadOnlyCollection<TEntity> entities, CancellationToken cancellationToken)
+    protected async Task PublishEntityLoadingEvents(TDbContext dbContext, IReadOnlyCollection<TEntity> entities, CancellationToken cancellationToken)
     {
         if (entities.Count == 0)
             return;

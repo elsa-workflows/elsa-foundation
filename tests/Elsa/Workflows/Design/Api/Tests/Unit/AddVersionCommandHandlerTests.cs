@@ -11,6 +11,7 @@ using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Xunit;
 
@@ -115,6 +116,9 @@ public sealed class AddVersionCommandHandlerTests
 
         public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<WorkflowDefinition>>([]);
+
+        public Task<WorkflowDefinitionPage> ListPageAsync(WorkflowDefinitionListQuery query, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WorkflowDefinitionPage([], 0));
     }
 
     private sealed class StubVersionStore(List<string> events) : IWorkflowDefinitionVersionStore

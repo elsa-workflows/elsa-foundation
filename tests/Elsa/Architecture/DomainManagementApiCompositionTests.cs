@@ -12,6 +12,7 @@ using Elsa.Expressions.Api.Requests;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Models;
+using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -103,7 +104,25 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Empty(diagnostics.Sets);
     }
 
-    private sealed class CustomManagementHost(WebApplication app, HttpClient client) : IAsyncDisposable
+    [Fact]
+    public async Task Workflow_definition_list_binds_paging_and_sort_query_parameters_at_the_public_host()
+    {
+        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false);
+
+        var response = await host.Client.GetFromJsonAsync<WorkflowDefinitionListView>(
+            "/design/workflows/definitions?state=all&searchTerm=invoice&page=2&pageSize=3&sortBy=createdAt&sortDirection=desc");
+
+        Assert.NotNull(response);
+        Assert.Equal(2, response.Page);
+        Assert.Equal(3, response.PageSize);
+        Assert.Equal(0, response.TotalCount);
+        Assert.Empty(response.Items);
+        Assert.Equal(
+            new ListDefinitions(null, null, "invoice", null, null, "all", Page: 2, PageSize: 3, SortBy: "createdAt", SortDirection: "desc"),
+            host.RequestSender.LastWorkflowDefinitionRequest);
+    }
+
+    private sealed class CustomManagementHost(WebApplication app, HttpClient client, JourneyRequestSender requestSender) : IAsyncDisposable
     {
         private static readonly string[] CommonEndpointTypes =
         [
@@ -116,6 +135,7 @@ public sealed class DomainManagementApiCompositionTests
         ];
 
         public HttpClient Client { get; } = client;
+        public JourneyRequestSender RequestSender { get; } = requestSender;
 
         public static async Task<CustomManagementHost> StartAsync(bool includeExpressions)
         {
@@ -147,7 +167,8 @@ public sealed class DomainManagementApiCompositionTests
                 endpointTypes.Add("Elsa.Expressions.Api.Endpoints.ListExpressionDescriptors");
             }
 
-            builder.Services.AddSingleton<IRequestSender, JourneyRequestSender>();
+            builder.Services.AddSingleton<JourneyRequestSender>();
+            builder.Services.AddSingleton<IRequestSender>(services => services.GetRequiredService<JourneyRequestSender>());
             builder.Services.AddFastEndpoints(options =>
             {
                 options.Assemblies = assemblies.ToArray();
@@ -157,7 +178,10 @@ public sealed class DomainManagementApiCompositionTests
             var app = builder.Build();
             app.UseFastEndpoints(options => options.Endpoints.Configurator = endpoint => endpoint.AllowAnonymous());
             await app.StartAsync();
-            return new CustomManagementHost(app, app.GetTestClient());
+            return new CustomManagementHost(
+                app,
+                app.GetTestClient(),
+                app.Services.GetRequiredService<JourneyRequestSender>());
         }
 
         public async Task AssertJourneyAsync(HttpMethod method, string path, object? body = null)
@@ -181,14 +205,25 @@ public sealed class DomainManagementApiCompositionTests
 
     private sealed class JourneyRequestSender(IServiceProvider services) : IRequestSender
     {
+        public ListDefinitions? LastWorkflowDefinitionRequest { get; private set; }
+
         public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
             if (request is ListExpressionDescriptors expressionDescriptors)
                 return HandleExpressionDescriptors<T>(expressionDescriptors, cancellationToken);
 
+            if (request is ListDefinitions workflowDefinitions)
+            {
+                LastWorkflowDefinitionRequest = workflowDefinitions;
+                return Task.FromResult((T)(object)new WorkflowDefinitionListView(
+                    [],
+                    workflowDefinitions.Page,
+                    workflowDefinitions.PageSize,
+                    0));
+            }
+
             object response = typeof(T) switch
             {
-                var type when type == typeof(WorkflowDefinitionListView) => new WorkflowDefinitionListView([]),
                 var type when type == typeof(ActivityAuthoringCatalogView) => new ActivityAuthoringCatalogView([]),
                 var type when type == typeof(ActivityAvailabilityDiagnostics) => new ActivityAvailabilityDiagnostics([], []),
                 var type when type == typeof(PublishedWorkflowView) => new PublishedWorkflowView(

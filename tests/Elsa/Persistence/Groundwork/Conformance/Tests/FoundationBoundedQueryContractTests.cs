@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -5,6 +6,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.Groundwork;
@@ -15,6 +17,11 @@ using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Groundwork;
+using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Scoping;
@@ -226,6 +233,61 @@ public sealed class FoundationBoundedQueryContractTests
 
         Assert.Single((await otherTenant.ListPageAsync(Request(skip: 0))).Items);
         Assert.Equal(2, (await repository.ListPageAsync(Request(skip: 0))).TotalCount);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_pages_execute_through_the_declared_physical_route_before_materialization(
+        string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients);
+        await driver.ResetPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]);
+
+        await using var client = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        var bounded = Record(client);
+        var definitions = new GroundworkWorkflowDefinitionStore(client.DocumentStore, bounded);
+        foreach (var index in Enumerable.Range(0, 105).Reverse())
+        {
+            var definition = new WorkflowDefinition
+            {
+                Id = $"definition-{index:D3}",
+                Name = $"definition-{index:D3}"
+            };
+            await client.DocumentStore.SaveAsync(new SaveDocumentRequest(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                definition.Id,
+                WorkflowsDesignStorageManifest.SchemaVersion,
+                JsonSerializer.Serialize(
+                    new GroundworkDocument<WorkflowDefinition>(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                        definition),
+                    GroundworkDesignJson.Options)));
+        }
+
+        var page = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter(),
+            WorkflowDefinitionLifecycleScope.All,
+            WorkflowDefinitionSortBy.Name,
+            WorkflowDefinitionSortDirection.Asc,
+            Page: 2,
+            PageSize: 2));
+
+        Assert.Equal(105, page.TotalCount);
+        Assert.Equal(["definition-002", "definition-003"], page.Items.Select(definition => definition.Id));
+        var observation = Assert.Single(bounded.Observations);
+        Assert.Equal(WorkflowsDesignStorageManifest.PageByNameQuery, observation.Query.QueryIdentity);
+        Assert.Equal(2, observation.Query.Skip);
+        Assert.Equal(2, observation.Query.Take);
+        Assert.InRange(observation.MaterializedDocuments, 0, 2);
+        Assert.Equal(105, observation.TotalCount);
+        Assert.Collection(
+            observation.Query.Order,
+            order => AssertOrder(order, WorkflowsDesignStorageManifest.WorkflowDefinitionNameField),
+            order => AssertOrder(order, WorkflowsDesignStorageManifest.WorkflowDefinitionIdField));
     }
 
     [Theory]

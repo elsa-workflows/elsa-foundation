@@ -5,8 +5,12 @@ using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
+using Groundwork.Core.Indexing;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -124,6 +128,99 @@ public class GroundworkWorkflowDefinitionStoreTests
     }
 
     [Fact]
+    public async Task List_page_uses_the_declared_bounded_route_with_stable_id_tie_breaking()
+    {
+        var documents = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var queries = new RecordingBoundedDocumentStore();
+        var store = new GroundworkWorkflowDefinitionStore(documents, queries);
+
+        await store.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter(),
+            WorkflowDefinitionLifecycleScope.All,
+            WorkflowDefinitionSortBy.CreatedAt,
+            WorkflowDefinitionSortDirection.Desc,
+            Page: 2,
+            PageSize: 10));
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(WorkflowsDesignStorageManifest.PageByCreatedAtQuery, query.QueryIdentity);
+        Assert.Equal(10, query.Skip);
+        Assert.Equal(10, query.Take);
+        Assert.Collection(
+            query.Order,
+            order =>
+            {
+                Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionCreatedAtField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Descending, order.Direction);
+            },
+            order =>
+            {
+                Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, order.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+        });
+    }
+
+    [Fact]
+    public async Task List_page_returns_a_bounded_deterministic_window_and_authoritative_total_count()
+    {
+        var store = await SeededStoreAsync(
+            new WorkflowDefinition { Id = "b", Name = "alpha" },
+            new WorkflowDefinition { Id = "a", Name = "alpha" },
+            new WorkflowDefinition { Id = "c", Name = "zeta" });
+
+        var page = await store.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter(),
+            WorkflowDefinitionLifecycleScope.All,
+            WorkflowDefinitionSortBy.Name,
+            WorkflowDefinitionSortDirection.Desc,
+            Page: 1,
+            PageSize: 2));
+
+        Assert.Equal(3, page.TotalCount);
+        Assert.Equal(["c", "a"], page.Items.Select(definition => definition.Id));
+    }
+
+    [Fact]
+    public void Paging_manifest_declares_bounded_server_routes_and_typed_sort_indexes()
+    {
+        var unit = Assert.Single(
+            WorkflowsDesignStorageManifest.Create().StorageUnits,
+            candidate => candidate.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+        var routes = storage.BoundedQueries;
+
+        Assert.Equal(6, routes.Count);
+        var createdAtRoute = Assert.Single(routes, route => route.Identity == WorkflowsDesignStorageManifest.PageByCreatedAtQuery);
+        Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, createdAtRoute.ExecutionClass);
+        Assert.Equal(QueryPagingSupport.Offset, createdAtRoute.PagingSupport);
+        Assert.Equal(QuerySortSupport.Both, createdAtRoute.SortSupport);
+        Assert.True(createdAtRoute.SupportsTotalCount);
+        Assert.Equal(
+            [
+                new BoundedQuerySortField(WorkflowsDesignStorageManifest.WorkflowDefinitionCreatedAtField, PhysicalSortDirection.Ascending),
+                new BoundedQuerySortField(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, PhysicalSortDirection.Ascending)
+            ],
+            createdAtRoute.SortFields);
+        Assert.Contains(
+            createdAtRoute.ResidualPredicateFields,
+            field => field.Path == WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField
+                && field.ValueKind == IndexValueKind.DateTime);
+
+        var searchRoute = Assert.Single(routes, route => route.Identity == WorkflowsDesignStorageManifest.SearchPageByNameQuery);
+        Assert.Equal(BoundedQueryExecutionClass.Ordinary, searchRoute.ExecutionClass);
+        Assert.True(searchRoute.SupportsDisjunction);
+        Assert.Contains(
+            searchRoute.PredicateFields,
+            field => field.Path == WorkflowsDesignStorageManifest.WorkflowDefinitionNameField
+                && field.Operations.Contains(PortableQueryOperation.Contains));
+
+        Assert.Equal(
+            IndexValueKind.DateTime,
+            Assert.Single(storage.LogicalIndexes, index => index.Identity == WorkflowsDesignStorageManifest.WorkflowDefinitionByCreatedAtIndex)
+                .Fields[0].ValueKind);
+    }
+
+    [Fact]
     public async Task Empty_store_returns_nothing()
     {
         var store = await SeededStoreAsync();
@@ -203,5 +300,20 @@ public class GroundworkWorkflowDefinitionStoreTests
 
             return new GroundworkStoreSessionResources(store, store);
         }
+    }
+
+    private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
+    {
+        public List<DocumentQuery> Observed { get; } = [];
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            Observed.Add(query);
+            return Task.FromResult(DocumentQueryResult.Empty);
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }
