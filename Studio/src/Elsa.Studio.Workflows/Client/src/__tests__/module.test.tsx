@@ -404,6 +404,47 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("returns from a cursor page emptied by concurrent changes without losing browse context", async () => {
+    let firstPageRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("continuationToken=live-second-page")) {
+        return response({ items: [], nextContinuationToken: null });
+      }
+      if (url.includes("definition-pages")) {
+        firstPageRequests += 1;
+        return response({
+          items: [definition({ name: firstPageRequests === 1 ? "Original first page" : "Recovered first page" })],
+          nextContinuationToken: "live-second-page"
+        });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?state=all&search=approval",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "Original first page");
+    await click(buttonByText(container, "Next"));
+    await waitForText(container, "No workflows match “approval”");
+    expect(buttonByText(container, "Previous")).not.toBeNull();
+    await click(buttonByText(container, "Previous"));
+    await waitForText(container, "Recovered first page");
+
+    expect(new URLSearchParams(window.location.search).get("state")).toBe("all");
+    expect(new URLSearchParams(window.location.search).get("search")).toBe("approval");
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).at(-1)).toBe(
+      "https://server.example/design/workflows/definition-pages?state=all&search=approval&pageSize=10"
+    );
+    await unmount();
+  });
+
   it("preserves paged selection across search and page-size changes but resets it for lifecycle changes", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response({
       items: [definition()],
@@ -4224,6 +4265,63 @@ describe("workflows module", () => {
     await waitForText(container, `Deleted folder ${deletedChild.name}`);
     expect(folderItem(deletedChild.id)).toBeUndefined();
     expect(container.textContent).toContain(firstChild.name);
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe(parent.id));
+    await unmount();
+  });
+
+  it("keeps reserved object and root-like folder IDs distinct through expansion, paging, and mutation refresh", async () => {
+    const parent = workflowFolder("root", "Root-like folder");
+    const expandableChild = workflowFolder("constructor", "Constructor folder", parent.id);
+    const deletedChild = workflowFolder("__proto__", "Prototype folder", parent.id);
+    const grandchild = workflowFolder("safe-leaf", "Nested workflow folder", expandableChild.id);
+    let deleted = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.includes("/definition-pages")) {
+        const folderId = url.searchParams.get("folderId");
+        return response({ items: [definition({ name: folderId === deletedChild.id ? "Prototype workflow" : "All workflow" })], nextContinuationToken: null });
+      }
+      if (url.pathname.endsWith("/folders")) {
+        const parentId = url.searchParams.get("parentId");
+        const token = url.searchParams.get("continuationToken");
+        if (parentId === parent.id && token === "reserved-next") {
+          return response({ items: deleted ? [] : [deletedChild], nextContinuationToken: null });
+        }
+        if (parentId === parent.id) return response({ items: [expandableChild], nextContinuationToken: "reserved-next" });
+        if (parentId === expandableChild.id) return response({ items: [grandchild], nextContinuationToken: null });
+        return response({ items: [parent], nextContinuationToken: null });
+      }
+      const folderId = decodeURIComponent(url.pathname.split("/folders/")[1]?.split("/")[0] ?? "");
+      if (folderId === deletedChild.id && init?.method === "DELETE") {
+        deleted = true;
+        return new Response(null, { status: 204 });
+      }
+      if (folderId === parent.id) return response({ folder: parent, ancestors: [] });
+      if (folderId === expandableChild.id) return response({ folder: expandableChild, ancestors: [parent] });
+      if (folderId === deletedChild.id) return response({ folder: deletedChild, ancestors: [parent] });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, workflowFolderMutationCapabilities());
+    const folderItem = (id: string) => [...container.querySelectorAll<HTMLElement>("[data-folder-id]")]
+      .find(item => item.dataset.folderId === id);
+
+    await waitForText(container, parent.name);
+    await click(buttonByLabel(container, `Expand ${parent.name}`));
+    await waitForText(container, expandableChild.name);
+    await click(buttonByText(container, "Load more folders"));
+    await waitForText(container, deletedChild.name);
+    await click(buttonByLabel(container, `Expand ${expandableChild.name}`));
+    await waitForText(container, grandchild.name);
+
+    await click(folderItem(deletedChild.id) ?? null);
+    await waitForText(container, "Prototype workflow");
+    await click(buttonByText(container, "Delete"));
+
+    await waitForText(container, `Deleted folder ${deletedChild.name}`);
+    expect(folderItem(deletedChild.id)).toBeUndefined();
+    expect(folderItem(expandableChild.id)?.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain(grandchild.name);
     await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe(parent.id));
     await unmount();
   });

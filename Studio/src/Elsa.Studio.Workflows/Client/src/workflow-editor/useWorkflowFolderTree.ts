@@ -3,7 +3,11 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listWorkflowFolders } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 
-export const workflowFolderRootKey = "root";
+export const workflowFolderRootKey = "tree:root";
+
+export function workflowFolderTreeKey(parentId?: string) {
+  return parentId === undefined ? workflowFolderRootKey : `tree:folder:${parentId}`;
+}
 
 export interface WorkflowFolderTreeLoadOptions {
   append?: boolean;
@@ -25,13 +29,13 @@ interface UseWorkflowFolderTreeOptions {
  */
 export function useWorkflowFolderTree({ context, unavailableMessage, onPageLoaded }: UseWorkflowFolderTreeOptions) {
   const [roots, setRoots] = useState<WorkflowFolder[]>([]);
-  const [children, setChildren] = useState<Record<string, WorkflowFolder[]>>({});
-  const [continuations, setContinuations] = useState<Record<string, string | null>>({});
+  const [children, setChildren] = useState<Map<string, WorkflowFolder[]>>(() => new Map());
+  const [continuations, setContinuations] = useState<Map<string, string | null>>(() => new Map());
   const [loadedKeys, setLoadedKeys] = useState<Set<string>>(() => new Set());
   const [loadingKeys, setLoadingKeys] = useState<Set<string>>(() => new Set());
-  const [loadFailures, setLoadFailures] = useState<Record<string, string>>({});
-  const inFlightGenerations = useRef<Record<string, number>>({});
-  const loadedPageCounts = useRef<Record<string, number>>({});
+  const [loadFailures, setLoadFailures] = useState<Map<string, string>>(() => new Map());
+  const inFlightGenerations = useRef<Map<string, number>>(new Map());
+  const loadedPageCounts = useRef<Map<string, number>>(new Map());
   const nextLoadGeneration = useRef(0);
   const contextRef = useRef(context);
   const contextGeneration = useRef(0);
@@ -39,55 +43,60 @@ export function useWorkflowFolderTree({ context, unavailableMessage, onPageLoade
   useLayoutEffect(() => {
     contextRef.current = context;
     contextGeneration.current += 1;
-    inFlightGenerations.current = {};
-    loadedPageCounts.current = {};
+    inFlightGenerations.current = new Map();
+    loadedPageCounts.current = new Map();
     setRoots([]);
-    setChildren({});
-    setContinuations({});
+    setChildren(new Map());
+    setContinuations(new Map());
     setLoadedKeys(new Set());
     setLoadingKeys(new Set());
-    setLoadFailures({});
+    setLoadFailures(new Map());
     return () => {
       contextGeneration.current += 1;
-      inFlightGenerations.current = {};
+      inFlightGenerations.current = new Map();
     };
   }, [context]);
 
   const invalidatePages = useCallback((parentIds: Iterable<string | undefined>) => {
-    const keys = new Set(Array.from(parentIds, parentId => parentId ?? workflowFolderRootKey));
-    if (keys.size === 0) return;
+    const entries = Array.from(parentIds, parentId => ({
+      parentId,
+      key: workflowFolderTreeKey(parentId)
+    }));
+    if (entries.length === 0) return;
 
-    for (const key of keys) {
-      delete inFlightGenerations.current[key];
-      delete loadedPageCounts.current[key];
+    for (const { key } of entries) {
+      inFlightGenerations.current.delete(key);
+      loadedPageCounts.current.delete(key);
     }
 
-    if (keys.has(workflowFolderRootKey)) setRoots([]);
+    if (entries.some(({ parentId }) => parentId === undefined)) setRoots([]);
     setChildren(current => {
-      const next = { ...current };
-      for (const key of keys) {
-        if (key !== workflowFolderRootKey) delete next[key];
+      const next = new Map(current);
+      for (const { parentId } of entries) {
+        if (parentId !== undefined) next.delete(parentId);
       }
       return next;
     });
     setContinuations(current => {
-      const next = { ...current };
-      for (const key of keys) delete next[key];
+      const next = new Map(current);
+      for (const { key } of entries) next.delete(key);
       return next;
     });
     setLoadedKeys(current => {
       const next = new Set(current);
-      for (const key of keys) next.delete(key);
+      for (const { parentId } of entries) {
+        if (parentId !== undefined) next.delete(parentId);
+      }
       return next;
     });
     setLoadingKeys(current => {
       const next = new Set(current);
-      for (const key of keys) next.delete(key);
+      for (const { key } of entries) next.delete(key);
       return next;
     });
     setLoadFailures(current => {
-      const next = { ...current };
-      for (const key of keys) delete next[key];
+      const next = new Map(current);
+      for (const { key } of entries) next.delete(key);
       return next;
     });
   }, []);
@@ -97,26 +106,26 @@ export function useWorkflowFolderTree({ context, unavailableMessage, onPageLoade
     continuationToken?: string | null,
     { append = false, force = false }: WorkflowFolderTreeLoadOptions = {}
   ) => {
-    const key = parentId ?? workflowFolderRootKey;
-    if (inFlightGenerations.current[key] && !force) return false;
+    const key = workflowFolderTreeKey(parentId);
+    if (inFlightGenerations.current.has(key) && !force) return false;
 
     const generation = ++nextLoadGeneration.current;
     const requestContextGeneration = contextGeneration.current;
     const isCurrent = () =>
       contextRef.current === context &&
       contextGeneration.current === requestContextGeneration &&
-      inFlightGenerations.current[key] === generation;
+      inFlightGenerations.current.get(key) === generation;
 
-    inFlightGenerations.current[key] = generation;
+    inFlightGenerations.current.set(key, generation);
     setLoadingKeys(current => new Set(current).add(key));
     setLoadFailures(current => {
-      const next = { ...current };
-      delete next[key];
+      const next = new Map(current);
+      next.delete(key);
       return next;
     });
 
     try {
-      const pageCount = force ? loadedPageCounts.current[key] ?? 1 : 1;
+      const pageCount = force ? loadedPageCounts.current.get(key) ?? 1 : 1;
       const items: WorkflowFolder[] = [];
       let nextToken = force ? undefined : continuationToken;
       let nextContinuationToken: string | null = null;
@@ -126,7 +135,9 @@ export function useWorkflowFolderTree({ context, unavailableMessage, onPageLoade
         const page = await listWorkflowFolders(context, { parentId, continuationToken: nextToken });
         if (!isCurrent()) return false;
         if (!page) {
-          if (unavailableMessage) setLoadFailures(current => ({ ...current, [key]: unavailableMessage }));
+          if (unavailableMessage) {
+            setLoadFailures(current => new Map(current).set(key, unavailableMessage));
+          }
           return false;
         }
         items.push(...page.items);
@@ -139,28 +150,28 @@ export function useWorkflowFolderTree({ context, unavailableMessage, onPageLoade
       await onPageLoaded?.(items, parentId);
       if (!isCurrent()) return false;
 
-      if (parentId) {
-        setChildren(current => ({
-          ...current,
-          [parentId]: append ? [...(current[parentId] ?? []), ...items] : items
-        }));
+      if (parentId !== undefined) {
+        setChildren(current => new Map(current).set(
+          parentId,
+          append ? [...(current.get(parentId) ?? []), ...items] : items
+        ));
       } else {
         setRoots(current => append ? [...current, ...items] : items);
       }
-      loadedPageCounts.current[key] = append ? (loadedPageCounts.current[key] ?? 1) + loadedPages : loadedPages;
-      setContinuations(current => ({ ...current, [key]: nextContinuationToken }));
-      setLoadedKeys(current => new Set(current).add(key));
+      loadedPageCounts.current.set(key, append ? (loadedPageCounts.current.get(key) ?? 1) + loadedPages : loadedPages);
+      setContinuations(current => new Map(current).set(key, nextContinuationToken));
+      if (parentId !== undefined) setLoadedKeys(current => new Set(current).add(parentId));
       return true;
     } catch (caught) {
       if (!isCurrent()) return false;
-      setLoadFailures(current => ({
-        ...current,
-        [key]: caught instanceof Error ? caught.message : "Couldn't load folders."
-      }));
+      setLoadFailures(current => new Map(current).set(
+        key,
+        caught instanceof Error ? caught.message : "Couldn't load folders."
+      ));
       return false;
     } finally {
       if (isCurrent()) {
-        delete inFlightGenerations.current[key];
+        inFlightGenerations.current.delete(key);
         setLoadingKeys(current => {
           const next = new Set(current);
           next.delete(key);

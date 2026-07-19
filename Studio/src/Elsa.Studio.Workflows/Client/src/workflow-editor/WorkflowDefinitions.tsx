@@ -416,9 +416,9 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
           action={<button type="button" className="wf-link-button" onClick={openCreateDialog}><Plus size={15} /> Create workflow</button>}
         />
       ) : null}
-      {state === "ready" && definitions.length > 0 ? (
+      {state === "ready" && (definitions.length > 0 || page > 1) ? (
         <>
-          <div className="wf-grid" role="table" aria-label="Workflow definitions">
+          {definitions.length > 0 ? <div className="wf-grid" role="table" aria-label="Workflow definitions">
             <div className="wf-grid-head" role="row">
               <label className="wf-row-select">
                 <input
@@ -497,7 +497,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
               </div>
               );
             })}
-          </div>
+          </div> : null}
           <DefinitionPager
             page={page}
             pageSize={pageSize}

@@ -13,8 +13,9 @@ export function DefinitionPager({ page, pageSize, totalCount, itemCount, hasNext
 }) {
   const hasKnownTotal = typeof totalCount === "number";
   const totalPages = hasKnownTotal ? getTotalPages(totalCount, pageSize) : null;
-  const firstItem = hasKnownTotal && totalCount === 0 ? 0 : ((page - 1) * pageSize) + 1;
-  const lastItem = hasKnownTotal ? Math.min(page * pageSize, totalCount) : firstItem + itemCount - 1;
+  const isEmptyPage = itemCount === 0;
+  const firstItem = isEmptyPage || (hasKnownTotal && totalCount === 0) ? 0 : ((page - 1) * pageSize) + 1;
+  const lastItem = isEmptyPage ? 0 : hasKnownTotal ? Math.min(page * pageSize, totalCount) : firstItem + itemCount - 1;
 
   return (
     <div className="wf-pagination" aria-label="Workflow definition pagination">

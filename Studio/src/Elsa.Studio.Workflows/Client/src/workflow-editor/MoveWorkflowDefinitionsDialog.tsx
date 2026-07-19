@@ -4,7 +4,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { moveWorkflowDefinitions } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 import { useDialogFocus } from "./useDialogFocus";
-import { useWorkflowFolderTree, workflowFolderRootKey } from "./useWorkflowFolderTree";
+import { useWorkflowFolderTree, workflowFolderTreeKey } from "./useWorkflowFolderTree";
 
 export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose, onMoved }: {
   context: StudioEndpointContext;
@@ -60,16 +60,16 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
   };
 
   const renderPageControls = (parentId?: string) => {
-    const key = parentId ?? workflowFolderRootKey;
+    const key = workflowFolderTreeKey(parentId);
     if (loadingKeys.has(key)) return <p className="wf-folder-loading" role="status"><LoaderCircle size={14} /> Loading folders…</p>;
-    if (loadFailures[key]) return <p className="wf-folder-load-error" role="alert">{loadFailures[key]} <button type="button" onClick={() => void loadPage(parentId)}>Retry loading folders</button></p>;
-    if (continuations[key]) return <button type="button" className="wf-folder-load-more" onClick={() => void loadPage(parentId, continuations[key], { append: true })}>Load more folders</button>;
+    if (loadFailures.has(key)) return <p className="wf-folder-load-error" role="alert">{loadFailures.get(key)} <button type="button" onClick={() => void loadPage(parentId)}>Retry loading folders</button></p>;
+    if (continuations.get(key)) return <button type="button" className="wf-folder-load-more" onClick={() => void loadPage(parentId, continuations.get(key), { append: true })}>Load more folders</button>;
     return null;
   };
 
   const renderFolder = (folder: WorkflowFolder): ReactNode => {
     const isExpanded = expanded.has(folder.id);
-    const childFolders = children[folder.id] ?? [];
+    const childFolders = children.get(folder.id) ?? [];
     return <div className="wf-move-folder-node" key={folder.id}>
       <div className="wf-move-folder-row">
         <button

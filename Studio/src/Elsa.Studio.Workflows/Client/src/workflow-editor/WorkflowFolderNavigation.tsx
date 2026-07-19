@@ -6,7 +6,7 @@ import type { WorkflowFolder } from "../workflowTypes";
 import { getDialogs } from "./dialogs";
 import { useDialogFocus } from "./useDialogFocus";
 import { MoveWorkflowFolderDialog, RenameWorkflowFolderDialog } from "./WorkflowFolderMutationDialogs";
-import { useWorkflowFolderTree, workflowFolderRootKey } from "./useWorkflowFolderTree";
+import { useWorkflowFolderTree, workflowFolderRootKey, workflowFolderTreeKey } from "./useWorkflowFolderTree";
 
 export type WorkflowFolderSelection = "all" | "unfiled" | { id: string };
 
@@ -118,7 +118,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       return;
     }
     setExpanded(current => new Set(current).add(folder.id));
-    if (!children[folder.id]) await loadFolderPage(folder.id);
+    if (!children.has(folder.id)) await loadFolderPage(folder.id);
   };
 
   const select = (next: WorkflowFolderSelection) => {
@@ -149,7 +149,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const selectedFolder = selectedId ? findFolder(roots, children, selectedId) ?? crumbs.at(-1) : undefined;
 
   const refreshAfterStructureChange = async (nextSelection?: WorkflowFolderSelection) => {
-    invalidatePages([...loadedKeys].filter(key => key !== workflowFolderRootKey && !expanded.has(key)));
+    invalidatePages([...loadedKeys].filter(folderId => !expanded.has(folderId)));
     await Promise.all([
       loadFolderPage(undefined, undefined, { force: true }),
       ...[...expanded].map(folderId => loadFolderPage(folderId, undefined, { force: true }))
@@ -216,8 +216,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     onToggle: toggle,
     onSelect: select,
     onLoadMore: async (parentId?: string) => {
-      const key = parentId ?? workflowFolderRootKey;
-      if (await loadFolderPage(parentId, continuations[key], { append: true })) {
+      const key = workflowFolderTreeKey(parentId);
+      if (await loadFolderPage(parentId, continuations.get(key), { append: true })) {
         setFocusedKey(parentId ? `folder:${parentId}` : "all");
       }
     },
@@ -272,11 +272,11 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
 
 interface FolderTreeProps {
   roots: WorkflowFolder[];
-  children: Record<string, WorkflowFolder[]>;
-  continuations: Record<string, string | null>;
+  children: ReadonlyMap<string, WorkflowFolder[]>;
+  continuations: ReadonlyMap<string, string | null>;
   expanded: Set<string>;
   loadingKeys: Set<string>;
-  loadFailures: Record<string, string>;
+  loadFailures: ReadonlyMap<string, string>;
   selection: WorkflowFolderSelection;
   focusedKey: string;
   pendingChildFocusId: string | null;
@@ -344,7 +344,8 @@ function FolderTree(props: FolderTreeProps) {
       firstChild.focus();
       return;
     }
-    if (loadFailures[pendingChildFocusId] || (pendingChildFocusId in children && !loadingKeys.has(pendingChildFocusId))) {
+    const pendingKey = workflowFolderTreeKey(pendingChildFocusId);
+    if (loadFailures.has(pendingKey) || (children.has(pendingChildFocusId) && !loadingKeys.has(pendingKey))) {
       keyboardExpansionIntents.current.delete(pendingChildFocusId);
       onPendingChildFocusChange(null);
     }
@@ -417,7 +418,7 @@ function FolderTree(props: FolderTreeProps) {
   );
 
   const actionRow = (parentId: string | undefined, kind: "load-more" | "retry", label: string, announcement?: string) => {
-    const parentKey = parentId ?? workflowFolderRootKey;
+    const parentKey = workflowFolderTreeKey(parentId);
     const key = `${kind}:${parentKey}`;
     const loading = loadingKeys.has(parentKey);
     return (
@@ -446,7 +447,7 @@ function FolderTree(props: FolderTreeProps) {
   };
 
   const folderRows = (items: WorkflowFolder[], level: number, parentId?: string): ReactNode => {
-    const parentKey = parentId ?? workflowFolderRootKey;
+    const parentKey = workflowFolderTreeKey(parentId);
     const loading = loadingKeys.has(parentKey);
     return <>
       {items.map(folder => {
@@ -493,8 +494,8 @@ function FolderTree(props: FolderTreeProps) {
               <span className="wf-folder-tree-row"><Folder size={14} />{folder.name}</span>
             </div>
             {expanded.has(folder.id) ? (
-              <div id={groupId} role="group" aria-busy={loadingKeys.has(folder.id)}>
-                {folderRows(children[folder.id] ?? [], level + 1, folder.id)}
+              <div id={groupId} role="group" aria-busy={loadingKeys.has(workflowFolderTreeKey(folder.id))}>
+                {folderRows(children.get(folder.id) ?? [], level + 1, folder.id)}
               </div>
             ) : null}
           </div>
@@ -505,9 +506,9 @@ function FolderTree(props: FolderTreeProps) {
           <span role="status">Loading folders…</span>
         </div>
       ) : null}
-      {loadFailures[parentKey] ? (
-        actionRow(parentId, "retry", "Retry loading folders", `Couldn't load folders. ${loadFailures[parentKey]}`)
-      ) : continuations[parentKey] ? actionRow(parentId, "load-more", "Load more folders") : null}
+      {loadFailures.has(parentKey) ? (
+        actionRow(parentId, "retry", "Retry loading folders", `Couldn't load folders. ${loadFailures.get(parentKey)}`)
+      ) : continuations.get(parentKey) ? actionRow(parentId, "load-more", "Load more folders") : null}
     </>;
   };
 
@@ -545,8 +546,8 @@ function WorkflowFolderBreadcrumb({ crumbs, state, error, selection, onSelect }:
   return <nav className="wf-folder-breadcrumb" aria-label="Folder breadcrumb"><button type="button" onClick={() => onSelect("all")}>All workflows</button>{crumbs.map(folder => <span key={folder.id}><span aria-hidden="true">/</span><button type="button" onClick={() => onSelect({ id: folder.id })}>{folder.name}</button></span>)}</nav>;
 }
 
-function findFolder(roots: WorkflowFolder[], children: Record<string, WorkflowFolder[]>, id: string): WorkflowFolder | undefined {
-  return [...roots, ...Object.values(children).flat()].find(folder => folder.id === id);
+function findFolder(roots: WorkflowFolder[], children: ReadonlyMap<string, WorkflowFolder[]>, id: string): WorkflowFolder | undefined {
+  return [...roots, ...[...children.values()].flat()].find(folder => folder.id === id);
 }
 
 function FolderDrawer({ children, onClose, onCreate }: { children: ReactNode; onClose(): void; onCreate(): void }) {

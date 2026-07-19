@@ -4,7 +4,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { moveWorkflowFolder, renameWorkflowFolder } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 import { useDialogFocus } from "./useDialogFocus";
-import { useWorkflowFolderTree, workflowFolderRootKey } from "./useWorkflowFolderTree";
+import { useWorkflowFolderTree, workflowFolderTreeKey } from "./useWorkflowFolderTree";
 
 export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed }: {
   context: StudioEndpointContext;
@@ -126,10 +126,10 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
   };
 
   const controls = (parentId?: string) => {
-    const key = parentId ?? workflowFolderRootKey;
+    const key = workflowFolderTreeKey(parentId);
     if (loadingKeys.has(key)) return <p role="status" className="wf-folder-loading"><LoaderCircle size={14} /> Loading folders…</p>;
-    if (loadErrors[key]) return <p role="alert" className="wf-folder-load-error">{loadErrors[key]} <button type="button" onClick={() => void loadPage(parentId)}>Retry loading folders</button></p>;
-    if (continuations[key]) return <button type="button" className="wf-folder-load-more" onClick={() => void loadPage(parentId, continuations[key], { append: true })}>Load more folders</button>;
+    if (loadErrors.has(key)) return <p role="alert" className="wf-folder-load-error">{loadErrors.get(key)} <button type="button" onClick={() => void loadPage(parentId)}>Retry loading folders</button></p>;
+    if (continuations.get(key)) return <button type="button" className="wf-folder-load-more" onClick={() => void loadPage(parentId, continuations.get(key), { append: true })}>Load more folders</button>;
     return null;
   };
 
@@ -145,7 +145,7 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
           <Folder size={15} /> {candidate.name}
         </label>
       </div>
-      {open ? <div className="wf-move-folder-children">{rows(children[candidate.id] ?? [])}{controls(candidate.id)}</div> : null}
+      {open ? <div className="wf-move-folder-children">{rows(children.get(candidate.id) ?? [])}{controls(candidate.id)}</div> : null}
     </div>;
   });
 
