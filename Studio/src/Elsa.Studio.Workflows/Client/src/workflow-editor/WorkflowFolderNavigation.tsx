@@ -29,6 +29,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const [loadFailures, setLoadFailures] = useState<Record<string, string>>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [crumbs, setCrumbs] = useState<WorkflowFolder[]>([]);
+  const [breadcrumbState, setBreadcrumbState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const [breadcrumbError, setBreadcrumbError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [focusedKey, setFocusedKey] = useState("all");
   const pendingKeys = useRef(new Set<string>());
@@ -88,14 +90,23 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
 
   useEffect(() => {
     const id = selectedFolderId(selection);
-    if (!id || !available) { setCrumbs([]); return; }
+    setCrumbs([]);
+    setBreadcrumbError(null);
+    if (!id || !available) { setBreadcrumbState("idle"); return; }
+    setBreadcrumbState("loading");
     let cancelled = false;
     void getWorkflowFolder(context, id)
       .then(detail => {
-        if (!cancelled) setCrumbs(detail ? [...detail.ancestors, detail.folder] : []);
+        if (!cancelled) {
+          setCrumbs(detail ? [...detail.ancestors, detail.folder] : []);
+          setBreadcrumbState("ready");
+        }
       })
       .catch(() => {
-        if (!cancelled) setError("Couldn't load this folder's breadcrumb. Select the folder again to retry.");
+        if (!cancelled) {
+          setBreadcrumbError("Couldn't load this folder's path. Select the folder again to retry.");
+          setBreadcrumbState("failed");
+        }
       });
     return () => { cancelled = true; };
   }, [available, context, selection]);
@@ -173,7 +184,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         <FolderTree {...treeProps} />
       </aside>
     ) : null}
-    <WorkflowFolderBreadcrumb crumbs={crumbs} selection={selection} onSelect={select} />
+    <WorkflowFolderBreadcrumb crumbs={crumbs} state={breadcrumbState} error={breadcrumbError} selection={selection} onSelect={select} />
     {error ? <div className="wf-alert" role="alert">{error}</div> : null}
     {drawerOpen ? <FolderDrawer onClose={() => setDrawerOpen(false)} onCreate={createFolder}><FolderTree {...treeProps} /></FolderDrawer> : null}
   </>;
@@ -191,8 +202,8 @@ interface FolderTreeProps {
   onFocusedKeyChange(key: string): void;
   onToggle(folder: WorkflowFolder): void;
   onSelect(selection: WorkflowFolderSelection): void;
-  onLoadMore(parentId?: string): void;
-  onRetry(parentId?: string): void;
+  onLoadMore(parentId?: string): Promise<void>;
+  onRetry(parentId?: string): Promise<void>;
 }
 
 function FolderTree(props: FolderTreeProps) {
@@ -219,7 +230,7 @@ function FolderTree(props: FolderTreeProps) {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const current = (event.target as HTMLElement).closest<HTMLElement>('[role="treeitem"]');
     if (!current || !event.currentTarget.contains(current)) return;
-    const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="treeitem"]')];
+    const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="treeitem"]:not([data-kind="status"])')];
     const index = items.indexOf(current);
     if (event.key === "ArrowDown") { event.preventDefault(); focusItem(items[index + 1]); return; }
     if (event.key === "ArrowUp") { event.preventDefault(); focusItem(items[index - 1]); return; }
@@ -253,12 +264,14 @@ function FolderTree(props: FolderTreeProps) {
       data-selection={value}
       aria-selected={selection === value}
       className="wf-folder-tree-row"
-      onFocus={() => onFocusedKeyChange(value)}
+      onFocus={event => {
+        if (event.currentTarget === event.target) onFocusedKeyChange(value);
+      }}
       onClick={() => onSelect(value)}
     >{label}</div>
   );
 
-  const actionRow = (parentId: string | undefined, kind: "load-more" | "retry", label: string) => {
+  const actionRow = (parentId: string | undefined, kind: "load-more" | "retry", label: string, announcement?: string) => {
     const parentKey = parentId ?? rootKey;
     const key = `${kind}:${parentKey}`;
     const loading = loadingKeys.has(parentKey);
@@ -272,10 +285,18 @@ function FolderTree(props: FolderTreeProps) {
         className="wf-folder-load-more"
         aria-disabled={loading}
         onFocus={() => onFocusedKeyChange(key)}
-        onClick={() => {
-          if (!loading) void (kind === "retry" ? onRetry(parentId) : onLoadMore(parentId));
+        onClick={event => {
+          if (loading) return;
+          const tree = event.currentTarget.closest<HTMLElement>('[role="tree"]');
+          const survivorKey = parentId ? `folder:${parentId}` : "all";
+          onFocusedKeyChange(survivorKey);
+          requestAnimationFrame(() => tree?.querySelector<HTMLElement>(`[data-tree-key="${survivorKey}"]`)?.focus());
+          void (kind === "retry" ? onRetry(parentId) : onLoadMore(parentId));
         }}
-      >{loading ? "Loading folders…" : label}</button>
+      >
+        {announcement ? <span role="alert">{announcement} </span> : null}
+        {loading ? "Loading folders…" : label}
+      </button>
     );
   };
 
@@ -298,8 +319,15 @@ function FolderTree(props: FolderTreeProps) {
             aria-selected={folder.id === active}
             aria-controls={groupId}
             className="wf-folder-tree-item"
-            onFocus={() => onFocusedKeyChange(key)}
-            onClick={() => onSelect({ id: folder.id })}
+            onFocus={event => {
+              if ((event.target as HTMLElement).closest('[role="treeitem"]') === event.currentTarget) onFocusedKeyChange(key);
+            }}
+            onClick={event => {
+              if ((event.target as HTMLElement).closest('[role="treeitem"]') === event.currentTarget) {
+                event.currentTarget.focus();
+                onSelect({ id: folder.id });
+              }
+            }}
           >
             <div className="wf-folder-tree-folder" style={{ paddingInlineStart: `${level * 14}px` }}>
               <button
@@ -325,12 +353,13 @@ function FolderTree(props: FolderTreeProps) {
           </div>
         );
       })}
-      {loading && items.length === 0 ? <span className="wf-folder-loading" role="status">Loading folders…</span> : null}
-      {loadFailures[parentKey] ? (
-        <div className="wf-folder-load-error" role="none">
-          <span role="alert">Couldn't load folders. {loadFailures[parentKey]}</span>
-          {actionRow(parentId, "retry", "Retry loading folders")}
+      {loading && items.length === 0 ? (
+        <div role="treeitem" tabIndex={-1} data-kind="status" aria-disabled="true" className="wf-folder-loading">
+          <span role="status">Loading folders…</span>
         </div>
+      ) : null}
+      {loadFailures[parentKey] ? (
+        actionRow(parentId, "retry", "Retry loading folders", `Couldn't load folders. ${loadFailures[parentKey]}`)
       ) : continuations[parentKey] ? actionRow(parentId, "load-more", "Load more folders") : null}
     </>;
   };
@@ -344,9 +373,17 @@ function FolderTree(props: FolderTreeProps) {
   );
 }
 
-function WorkflowFolderBreadcrumb({ crumbs, selection, onSelect }: { crumbs: WorkflowFolder[]; selection: WorkflowFolderSelection; onSelect(selection: WorkflowFolderSelection): void }) {
+function WorkflowFolderBreadcrumb({ crumbs, state, error, selection, onSelect }: {
+  crumbs: WorkflowFolder[];
+  state: "idle" | "loading" | "ready" | "failed";
+  error: string | null;
+  selection: WorkflowFolderSelection;
+  onSelect(selection: WorkflowFolderSelection): void;
+}) {
   if (selection === "all") return <div className="wf-folder-breadcrumb" aria-label="Folder breadcrumb">All workflows</div>;
   if (selection === "unfiled") return <div className="wf-folder-breadcrumb" aria-label="Folder breadcrumb">Unfiled</div>;
+  if (state === "loading") return <div className="wf-folder-breadcrumb" aria-label="Folder breadcrumb" aria-busy="true"><span role="status">Loading folder path…</span></div>;
+  if (state === "failed") return <div className="wf-folder-breadcrumb" aria-label="Folder breadcrumb"><span role="alert">{error}</span></div>;
   return <nav className="wf-folder-breadcrumb" aria-label="Folder breadcrumb"><button type="button" onClick={() => onSelect("all")}>All workflows</button>{crumbs.map(folder => <span key={folder.id}><span aria-hidden="true">/</span><button type="button" onClick={() => onSelect({ id: folder.id })}>{folder.name}</button></span>)}</nav>;
 }
 

@@ -2898,11 +2898,12 @@ describe("workflows module", () => {
     const secondChild = { id: "folder-child-2", parentId: "folder-root", name: "Billing", normalizedName: "billing", createdAt: "", lastModifiedAt: "" };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes("/folders/folder-child-1")) return response({ folder: firstChild, ancestors: [rootFolder] });
       if (url.includes("/folders/folder-root")) return response({ folder: rootFolder, ancestors: [] });
       if (url.includes("/folders?pageSize=100&parentId=folder-root&continuationToken=next-child")) return response({ items: [secondChild], nextContinuationToken: null });
       if (url.includes("/folders?pageSize=100&parentId=folder-root")) return response({ items: [firstChild], nextContinuationToken: "next-child" });
       if (url.includes("/folders?pageSize=100")) return response({ items: [rootFolder], nextContinuationToken: null });
-      if (url.includes("definition-pages")) return response({ items: [definition({ name: url.includes("folderId=folder-root") ? "Operations workflow" : url.includes("unfiled=true") ? "Unfiled workflow" : "All workflow" })], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition({ name: url.includes("folderId=folder-child-1") ? "Support workflow" : url.includes("folderId=folder-root") ? "Operations workflow" : url.includes("unfiled=true") ? "Unfiled workflow" : "All workflow" })], nextContinuationToken: null });
       throw new Error(`Unexpected request ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2940,6 +2941,15 @@ describe("workflows module", () => {
     await click(loadMoreFolders);
     await waitForText(container, "Billing");
     expect(container.textContent).toContain("Support");
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe("folder-root"));
+
+    const childTreeItem = container.querySelector<HTMLElement>("[role='treeitem'][data-folder-id='folder-child-1']");
+    await click(childTreeItem?.querySelector(".wf-folder-tree-row") ?? null);
+    await waitForText(container, "Support workflow");
+    expect(childTreeItem?.getAttribute("aria-selected")).toBe("true");
+    expect(rootTreeItem?.getAttribute("aria-selected")).toBe("false");
+    expect(childTreeItem?.tabIndex).toBe(0);
+    expect(document.activeElement).toBe(childTreeItem);
 
     const unfiledItem = container.querySelector<HTMLElement>("[role='treeitem'][data-selection='unfiled']");
     unfiledItem?.focus();
@@ -2997,12 +3007,13 @@ describe("workflows module", () => {
     const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
     const child = { id: "folder-child", parentId: "folder-root", name: "Recovered child", normalizedName: "recovered child", createdAt: "", lastModifiedAt: "" };
     let childAttempts = 0;
+    let resolveFirstAttempt: ((value: Response) => void) | undefined;
     let resolveRetry: ((value: Response) => void) | undefined;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/folders?pageSize=100&parentId=folder-root")) {
         childAttempts += 1;
-        if (childAttempts === 1) return response("Temporary child failure", 500);
+        if (childAttempts === 1) return new Promise<Response>(resolve => { resolveFirstAttempt = resolve; });
         return new Promise<Response>(resolve => { resolveRetry = resolve; });
       }
       if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
@@ -3018,16 +3029,24 @@ describe("workflows module", () => {
 
     await waitForText(container, "Operations");
     await click(buttonByLabel(container, "Expand Operations"));
+    const childGroup = container.querySelector<HTMLElement>("[data-folder-id='folder-root'] > [role='group']");
+    await vi.waitFor(() => expect(childGroup?.getAttribute("aria-busy")).toBe("true"));
+    expect(Array.from(childGroup!.children).every(childNode => childNode.getAttribute("role") === "treeitem")).toBe(true);
+    expect(childGroup?.querySelector("[data-kind='status'] [role='status']")?.textContent).toContain("Loading folders");
+    resolveFirstAttempt?.(response("Temporary child failure", 500));
     await waitForText(container, "Retry loading folders");
     expect(container.querySelector("[role='alert']")?.textContent).toContain("Temporary child failure");
-    const retry = buttonByText(container, "Retry loading folders");
+    expect(Array.from(childGroup!.children).every(childNode => childNode.getAttribute("role") === "treeitem")).toBe(true);
+    const retry = container.querySelector<HTMLButtonElement>("[role='treeitem'][data-kind='retry']");
     retry?.click();
     retry?.click();
     await vi.waitFor(() => expect(childAttempts).toBe(2));
     expect(retry?.getAttribute("role")).toBe("treeitem");
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe("folder-root"));
     resolveRetry?.(response({ items: [child], nextContinuationToken: null }));
     await waitForText(container, "Recovered child");
     expect(container.textContent).not.toContain("Retry loading folders");
+    expect(document.activeElement?.getAttribute("data-folder-id")).toBe("folder-root");
     await unmount();
   });
 
@@ -3059,6 +3078,39 @@ describe("workflows module", () => {
     resolveA?.(response({ folder: folderA, ancestors: [] }));
     await flushPromises();
     expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Folder B");
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).not.toContain("Folder A");
+    await unmount();
+  });
+
+  it("clears stale breadcrumbs while the next opaque folder path is loading or fails", async () => {
+    const folderA = { id: "folder-a", parentId: null, name: "Folder A", normalizedName: "folder a", createdAt: "", lastModifiedAt: "" };
+    const folderB = { id: "folder-b", parentId: null, name: "Folder B", normalizedName: "folder b", createdAt: "", lastModifiedAt: "" };
+    let resolveA: ((value: Response) => void) | undefined;
+    let resolveB: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-a")) return new Promise<Response>(resolve => { resolveA = resolve; });
+      if (url.includes("/folders/folder-b")) return new Promise<Response>(resolve => { resolveB = resolve; });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folderA, folderB], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Folder A");
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-a']"));
+    resolveA?.(response({ folder: folderA, ancestors: [] }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Folder A"));
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-b']"));
+    expect(container.querySelector(".wf-folder-breadcrumb")?.getAttribute("aria-busy")).toBe("true");
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).not.toContain("Folder A");
+    resolveB?.(response("Folder detail failed", 500));
+    await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb [role='alert']")?.textContent).toContain("Couldn't load this folder's path"));
     expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).not.toContain("Folder A");
     await unmount();
   });

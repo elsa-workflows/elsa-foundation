@@ -5594,8 +5594,12 @@ button.wf-reference-select {
   text-align: left;
 }
 .wf-folder-tree-row:hover,
-.wf-folder-tree-row:focus-visible,
 .wf-folder-tree-row[aria-selected="true"] { background: var(--wf-accent-soft); outline: none; }
+.wf-folder-tree-row:focus-visible {
+  background: var(--wf-accent-soft);
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
+}
 .wf-folder-tree-item:focus-visible {
   outline: 2px solid var(--studio-focus);
   outline-offset: 1px;
