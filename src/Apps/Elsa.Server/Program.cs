@@ -269,6 +269,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(StudioPreferencesApiFeature).Assembly,
             typeof(StudioPreferencesGroundworkPersistenceFeature).Assembly,
             typeof(WorkflowsDashboardFeature).Assembly,
+            // WorkflowsDashboard DependsOn WorkflowDesignValidations — its assembly must be in the catalog or the
+            // dependency resolver fails shell activation with FeatureNotFoundException.
+            typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,
 
             typeof(ModularityApiFeature).Assembly,
             typeof(ModularityAttentionFeature).Assembly,
