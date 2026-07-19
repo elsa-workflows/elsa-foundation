@@ -1,5 +1,7 @@
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
+using Elsa.Workflows.Design.Api.Commands;
+using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -11,6 +13,54 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
 public sealed class GroundworkWorkflowFolderStoreTests
 {
+    [Fact]
+    public async Task Api_handler_creates_a_child_in_the_ambient_tenant_through_the_real_store()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var folders = new GroundworkWorkflowFolderStore(store, GroundworkTestAccess.AccessContext("tenant-a"), new Clock());
+        await folders.CreateAsync(Folder("parent", "Parent"));
+        var handler = new CreateWorkflowFolderCommandHandler(new FixedIdentityGenerator("child"), folders);
+
+        var created = await handler.Handle(new CreateWorkflowFolder("Child", "parent"), CancellationToken.None);
+
+        Assert.Equal("child", created.Id);
+        Assert.Equal("parent", created.ParentId);
+        var details = await folders.FindWithAncestorsAsync(created.Id);
+        Assert.Equal("tenant-a", details!.Folder.TenantId);
+        Assert.Equal(["parent"], details.Ancestors.Select(folder => folder.Id));
+    }
+
+    [Fact]
+    public async Task Rejects_an_explicit_foreign_tenant_instead_of_reassigning_it_to_the_ambient_scope()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var folders = new GroundworkWorkflowFolderStore(store, GroundworkTestAccess.AccessContext("tenant-a"), new Clock());
+        var folder = Folder("foreign", "Foreign");
+        folder.TenantId = "tenant-b";
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => folders.CreateAsync(folder));
+
+        Assert.Empty(store.Snapshot(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind));
+        Assert.Equal("tenant-b", folder.TenantId);
+    }
+
+    [Fact]
+    public async Task Keeps_an_opaque_at_root_folder_distinct_from_the_persisted_root_parent_key()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var folders = new GroundworkWorkflowFolderStore(store, GroundworkTestAccess.AccessContext("tenant-a"), new Clock());
+        var opaqueRoot = await folders.CreateAsync(Folder("@root", "Opaque root"));
+        var sibling = await folders.CreateAsync(Folder("sibling", "Sibling"));
+        var child = await folders.CreateAsync(Folder("child", "Child", opaqueRoot.Id));
+
+        var roots = await folders.ListDirectChildrenAsync(new WorkflowFolderPageRequest(null));
+        var children = await folders.ListDirectChildrenAsync(new WorkflowFolderPageRequest(opaqueRoot.Id));
+
+        Assert.Equal([opaqueRoot.Id, sibling.Id], roots.Items.Select(folder => folder.Id));
+        Assert.Equal([child.Id], children.Items.Select(folder => folder.Id));
+        Assert.NotEqual(opaqueRoot.ParentKey, child.ParentKey);
+    }
+
     [Fact]
     public async Task Creates_root_children_in_normalized_name_order_and_declares_a_non_null_unique_sibling_key()
     {
@@ -27,7 +77,7 @@ public sealed class GroundworkWorkflowFolderStoreTests
         var physical = Assert.IsType<global::Groundwork.Core.PhysicalStorage.PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage!.Policy).Definition;
         Assert.Contains(physical.Indexes, index => index.LogicalName == "by-parent-and-normalized-name" && index.IsUnique);
         Assert.Equal(
-            WorkflowFolderNames.MaximumIdentifierLength,
+            WorkflowFolderNames.MaximumIdentifierLength + WorkflowFolder.ParentFolderKeyPrefix.Length,
             physical.ProjectedColumns.Single(column => column.LogicalName == "parent_key").Length);
         Assert.Equal(
             WorkflowFolderNames.MaximumNameLength,
@@ -110,6 +160,11 @@ public sealed class GroundworkWorkflowFolderStoreTests
     {
         var normalized = WorkflowFolderNames.Normalize(name);
         return new WorkflowFolder { Id = id, ParentFolderId = parentId, Name = normalized.Name, NormalizedName = normalized.NormalizedName };
+    }
+
+    private sealed class FixedIdentityGenerator(string id) : IIdentityGenerator
+    {
+        public string Generate() => id;
     }
 
     private sealed class Clock : ISystemClock { public DateTimeOffset UtcNow => DateTimeOffset.UnixEpoch; }

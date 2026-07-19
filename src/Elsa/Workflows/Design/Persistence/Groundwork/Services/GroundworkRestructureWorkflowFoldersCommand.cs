@@ -25,6 +25,7 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
     ISystemClock clock,
     IBoundedDocumentStore? boundedStore = null) : IRestructureWorkflowFoldersCommand
 {
+    private const int SnapshotPageSize = 100;
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
 
     public async Task<WorkflowFolder> RenameAsync(string folderId, string name, CancellationToken cancellationToken = default)
@@ -57,37 +58,43 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
         if (StringComparer.Ordinal.Equals(folderId, parentId))
             throw new ArgumentException("A workflow folder cannot be its own parent.", nameof(parentId));
         var access = RequireScope();
-        var snapshot = await SnapshotFoldersAsync(cancellationToken);
-        var stabilized = await SnapshotFoldersAsync(cancellationToken);
+        // A concurrent move can shift a child across a continuation boundary without changing this root.
+        // Stabilize two bounded subtree traversals before the UoW, then CAS-fence every observed node.
+        var snapshot = await SnapshotSubtreeAsync(folderId, access, cancellationToken);
+        SubtreeSnapshot stabilized;
+        try
+        {
+            stabilized = await SnapshotSubtreeAsync(folderId, access, cancellationToken);
+        }
+        catch (EntityNotFoundException exception)
+        {
+            throw new WorkflowFolderRestructureConflictException(exception);
+        }
         if (!SameSnapshot(snapshot, stabilized))
             throw new WorkflowFolderRestructureConflictException();
         snapshot = stabilized;
+        if (parentId is not null && snapshot.Folders.ContainsKey(parentId))
+            throw new ArgumentException("A workflow folder cannot be moved into one of its descendants.", nameof(parentId));
         try
         {
             await using var unit = await store.BeginAsync(DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind), cancellationToken);
             var fences = new Dictionary<string, (DocumentEnvelope Envelope, WorkflowFolder Folder)>(StringComparer.Ordinal);
-            var moving = await LoadOwnedAsync(unit, folderId, access, cancellationToken);
-            EnsureUnchanged(snapshot, moving);
+            var moving = await LoadFencedAsync(unit, folderId, access, snapshot.Folders, cancellationToken);
             fences.Add(folderId, moving);
-            var descendants = FindDescendants(folderId, snapshot);
-            foreach (var descendant in descendants)
+            foreach (var descendant in snapshot.Folders.Values.Where(item => !StringComparer.Ordinal.Equals(item.Entity.Id, folderId)))
             {
-                var loaded = await LoadOwnedAsync(unit, descendant.Id, access, cancellationToken);
-                EnsureUnchanged(snapshot, loaded);
+                var loaded = await LoadFencedAsync(unit, descendant.Entity.Id, access, snapshot.Folders, cancellationToken);
                 fences.TryAdd(loaded.Folder.Id, loaded);
             }
-            if (descendants.Any(descendant => StringComparer.Ordinal.Equals(descendant.Id, parentId)))
-                throw new ArgumentException("A workflow folder cannot be moved into one of its descendants.", nameof(parentId));
-            await AddAncestorsAsync(unit, moving.Folder.ParentFolderId, folderId, access, fences, snapshot, cancellationToken);
-            var destinationDepth = await AddAncestorsAsync(unit, parentId, folderId, access, fences, snapshot, cancellationToken);
-            var deepestDescendant = descendants.Count == 0 ? 0 : descendants.Max(descendant => RelativeDepth(descendant, folderId, descendants));
-            if (destinationDepth + 1 + deepestDescendant > WorkflowFolderNames.MaximumDepth)
+            await AddAncestorsAsync(unit, moving.Folder.ParentFolderId, folderId, access, fences, cancellationToken);
+            var destinationDepth = await AddAncestorsAsync(unit, parentId, folderId, access, fences, cancellationToken);
+            if (destinationDepth + 1 + snapshot.DeepestRelativeDepth > WorkflowFolderNames.MaximumDepth)
                 throw new ArgumentOutOfRangeException(nameof(parentId), "Workflow-folder depth cannot exceed 16.");
 
             // The proposed parent chain is now fully read and fenced.  Seeing the moving id in it would
             // otherwise create a cycle; the bounded walk also rejects a depth greater than sixteen.
             moving.Folder.ParentFolderId = parentId;
-            moving.Folder.ParentKey = parentId ?? WorkflowFolder.RootParentKey;
+            moving.Folder.ParentKey = WorkflowFolder.ToParentKey(parentId);
             moving.Folder.LastModifiedAt = clock.UtcNow;
             foreach (var (_, fenced) in fences)
                 await SaveAsync(unit, fenced.Envelope, fenced.Folder, access, cancellationToken);
@@ -148,7 +155,6 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
         string movingId,
         PersistenceAccessContext access,
         IDictionary<string, (DocumentEnvelope Envelope, WorkflowFolder Folder)> fences,
-        IReadOnlyList<FolderSnapshot> snapshot,
         CancellationToken cancellationToken)
     {
         var depth = 0;
@@ -157,7 +163,6 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
             if (StringComparer.Ordinal.Equals(folderId, movingId))
                 throw new ArgumentException("A workflow folder cannot be moved into one of its descendants.", nameof(folderId));
             var current = await LoadOwnedAsync(unit, folderId, access, cancellationToken);
-            EnsureUnchanged(snapshot, current);
             fences.TryAdd(folderId, current);
             folderId = current.Folder.ParentFolderId;
             if (++depth > WorkflowFolderNames.MaximumDepth)
@@ -166,61 +171,70 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
         return depth;
     }
 
-    private static IReadOnlyList<WorkflowFolder> FindDescendants(string folderId, IReadOnlyList<FolderSnapshot> snapshot)
+    private async Task<SubtreeSnapshot> SnapshotSubtreeAsync(
+        string folderId,
+        PersistenceAccessContext access,
+        CancellationToken cancellationToken)
     {
-        var all = snapshot.Select(item => item.Entity).ToArray();
-        var descendants = new List<WorkflowFolder>();
-        var parents = new HashSet<string>(StringComparer.Ordinal) { folderId };
-        while (true)
-        {
-            var next = all.Where(folder => folder.ParentFolderId is not null && parents.Contains(folder.ParentFolderId))
-                .Where(folder => descendants.All(existing => !StringComparer.Ordinal.Equals(existing.Id, folder.Id)))
-                .ToArray();
-            if (next.Length == 0)
-                return descendants;
-            descendants.AddRange(next);
-            foreach (var folder in next)
-                parents.Add(folder.Id);
-        }
-    }
-
-    private static int RelativeDepth(WorkflowFolder descendant, string rootId, IReadOnlyList<WorkflowFolder> descendants)
-    {
-        var byId = descendants.ToDictionary(folder => folder.Id, StringComparer.Ordinal);
-        var depth = 1;
-        var parentId = descendant.ParentFolderId;
-        while (!StringComparer.Ordinal.Equals(parentId, rootId))
-        {
-            if (parentId is null || !byId.TryGetValue(parentId, out var parent))
-                throw new InvalidOperationException("Workflow-folder descendants are inconsistent.");
-            parentId = parent.ParentFolderId;
-            depth++;
-        }
-        return depth;
-    }
-
-    private async Task<IReadOnlyList<FolderSnapshot>> SnapshotFoldersAsync(CancellationToken cancellationToken)
-    {
-        var documents = await BoundedStore.QueryAsync(new DocumentQuery(
+        var rootEnvelope = await store.LoadAsync(
             WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
-            WorkflowsDesignStorageManifest.ListAllQuery,
-            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(WorkflowsDesignStorageManifest.CollectionField, WorkflowsDesignStorageManifest.WorkflowFolderCollection))]), cancellationToken);
-        return documents.Documents.Select(document => new FolderSnapshot(document, ReadFolder(document))).ToArray();
+            folderId,
+            cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
+        var root = ReadFolder(rootEnvelope);
+        EnsureOwned(root, folderId, access);
+        var folders = new Dictionary<string, FolderSnapshot>(StringComparer.Ordinal)
+        {
+            [folderId] = new(rootEnvelope, root, 0)
+        };
+        var pendingParents = new Queue<FolderSnapshot>();
+        pendingParents.Enqueue(folders[folderId]);
+        var deepestRelativeDepth = 0;
+        while (pendingParents.TryDequeue(out var parent))
+        {
+            string? continuation = null;
+            do
+            {
+                var page = await BoundedStore.QueryAsync(
+                    DirectChildrenQuery(parent.Entity.Id, SnapshotPageSize, continuation),
+                    cancellationToken);
+                foreach (var envelope in page.Documents)
+                {
+                    var child = ReadFolder(envelope);
+                    EnsureOwned(child, child.Id, access);
+                    if (!StringComparer.Ordinal.Equals(child.ParentFolderId, parent.Entity.Id))
+                        throw new WorkflowFolderRestructureConflictException();
+                    var relativeDepth = parent.RelativeDepth + 1;
+                    var childSnapshot = new FolderSnapshot(envelope, child, relativeDepth);
+                    if (!folders.TryAdd(child.Id, childSnapshot))
+                        throw new WorkflowFolderRestructureConflictException();
+                    pendingParents.Enqueue(childSnapshot);
+                    deepestRelativeDepth = Math.Max(deepestRelativeDepth, relativeDepth);
+                }
+                continuation = page.NextContinuation;
+            } while (continuation is not null);
+        }
+        return new SubtreeSnapshot(folders, deepestRelativeDepth);
     }
 
     private async Task<bool> HasDirectChildAsync(string folderId, CancellationToken cancellationToken)
     {
-        var result = await BoundedStore.QueryAsync(new DocumentQuery(
+        var result = await BoundedStore.QueryAsync(DirectChildrenQuery(folderId, 1), cancellationToken);
+        return result.Documents.Count != 0;
+    }
+
+    private static DocumentQuery DirectChildrenQuery(string folderId, int take, string? continuation = null) =>
+        new(
             WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
             WorkflowsDesignStorageManifest.PageWorkflowFoldersQuery,
-            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(WorkflowsDesignStorageManifest.WorkflowFolderParentKeyField, folderId))],
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                WorkflowsDesignStorageManifest.WorkflowFolderParentKeyField,
+                WorkflowFolder.ToParentKey(folderId)))],
             [
                 new DocumentQueryOrder(WorkflowsDesignStorageManifest.WorkflowFolderNormalizedNameField, PhysicalSortDirection.Ascending),
                 new DocumentQueryOrder("entity.id", PhysicalSortDirection.Ascending)
             ],
-            take: 1), cancellationToken);
-        return result.Documents.Count != 0;
-    }
+            take: take,
+            continuation: continuation);
 
     private async Task<bool> HasDirectDefinitionAsync(string folderId, CancellationToken cancellationToken)
     {
@@ -243,21 +257,60 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
         JsonSerializer.Deserialize<GroundworkDocument<WorkflowFolder>>(document.ContentJson, GroundworkDesignJson.Options)?.Entity
         ?? throw new InvalidOperationException("The workflow-folder document is empty.");
 
-    private static void EnsureUnchanged(IReadOnlyList<FolderSnapshot> snapshot, (DocumentEnvelope Envelope, WorkflowFolder Folder) loaded)
+    private static async Task<(DocumentEnvelope Envelope, WorkflowFolder Folder)> LoadFencedAsync(
+        IDocumentUnitOfWork unit,
+        string folderId,
+        PersistenceAccessContext access,
+        IReadOnlyDictionary<string, FolderSnapshot> snapshot,
+        CancellationToken cancellationToken)
     {
-        var expected = snapshot.SingleOrDefault(item => StringComparer.Ordinal.Equals(item.Entity.Id, loaded.Folder.Id));
-        if (expected is null || expected.Envelope.Version != loaded.Envelope.Version ||
+        (DocumentEnvelope Envelope, WorkflowFolder Folder) loaded;
+        try
+        {
+            loaded = await LoadOwnedAsync(unit, folderId, access, cancellationToken);
+        }
+        catch (EntityNotFoundException exception)
+        {
+            throw new WorkflowFolderRestructureConflictException(exception);
+        }
+        if (!snapshot.TryGetValue(loaded.Folder.Id, out var expected) ||
+            expected.Envelope.Version != loaded.Envelope.Version ||
             !StringComparer.Ordinal.Equals(expected.Entity.ParentFolderId, loaded.Folder.ParentFolderId))
             throw new WorkflowFolderRestructureConflictException();
+        return loaded;
     }
 
-    private static bool SameSnapshot(IReadOnlyList<FolderSnapshot> first, IReadOnlyList<FolderSnapshot> second) =>
-        first.Count == second.Count && first.All(item => second.Any(other =>
-            StringComparer.Ordinal.Equals(item.Entity.Id, other.Entity.Id) &&
-            StringComparer.Ordinal.Equals(item.Entity.ParentFolderId, other.Entity.ParentFolderId) &&
-            item.Envelope.Version == other.Envelope.Version));
+    private static bool SameSnapshot(SubtreeSnapshot first, SubtreeSnapshot second)
+    {
+        if (first.Folders.Count != second.Folders.Count)
+            return false;
+        foreach (var (id, item) in first.Folders)
+        {
+            if (!second.Folders.TryGetValue(id, out var other) ||
+                !StringComparer.Ordinal.Equals(item.Entity.ParentFolderId, other.Entity.ParentFolderId) ||
+                item.Envelope.Version != other.Envelope.Version)
+                return false;
+        }
+        return true;
+    }
 
-    private sealed record FolderSnapshot(DocumentEnvelope Envelope, WorkflowFolder Entity);
+    private static void EnsureOwned(WorkflowFolder folder, string folderId, PersistenceAccessContext access)
+    {
+        try
+        {
+            access.EnsureTenantScope(folder.TenantId);
+        }
+        catch (InvalidOperationException)
+        {
+            throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
+        }
+    }
+
+    private sealed record FolderSnapshot(DocumentEnvelope Envelope, WorkflowFolder Entity, int RelativeDepth);
+
+    private sealed record SubtreeSnapshot(
+        IReadOnlyDictionary<string, FolderSnapshot> Folders,
+        int DeepestRelativeDepth);
 
     private static async Task<(DocumentEnvelope Envelope, WorkflowFolder Folder)> LoadOwnedAsync(
         IDocumentUnitOfWork unit,
@@ -269,14 +322,7 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
             ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
         var folder = JsonSerializer.Deserialize<GroundworkDocument<WorkflowFolder>>(envelope.ContentJson, GroundworkDesignJson.Options)?.Entity
             ?? throw new InvalidOperationException("The workflow-folder document is empty.");
-        try
-        {
-            access.EnsureTenantScope(folder.TenantId);
-        }
-        catch (InvalidOperationException)
-        {
-            throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
-        }
+        EnsureOwned(folder, folderId, access);
         return (envelope, folder);
     }
 
@@ -293,7 +339,8 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
             WorkflowsDesignStorageManifest.SchemaVersion,
             folder,
             GroundworkDesignJson.Options,
-            access) with { ExpectedVersion = envelope.Version }, cancellationToken);
+            access) with
+        { ExpectedVersion = envelope.Version }, cancellationToken);
         if (result.Status != DocumentStoreWriteStatus.Saved)
             throw new WorkflowFolderRestructureConflictException();
     }

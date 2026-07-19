@@ -13,6 +13,34 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 public sealed class GroundworkRestructureWorkflowFoldersCommandTests
 {
     [Fact]
+    public async Task Moves_beneath_and_protects_children_of_an_opaque_at_root_folder()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var clock = new Clock();
+        var access = GroundworkTestAccess.AccessContext("tenant-a");
+        var folders = new GroundworkWorkflowFolderStore(store, access, clock);
+        await folders.CreateAsync(Folder("@root", "Opaque root"));
+        await folders.CreateAsync(Folder("moving", "Moving"));
+        var command = new GroundworkRestructureWorkflowFoldersCommand(store, access, clock);
+
+        await command.MoveAsync("moving", "@root");
+
+        Assert.Equal(
+            ["moving"],
+            (await folders.ListDirectChildrenAsync(new WorkflowFolderPageRequest("@root")))
+            .Items.Select(folder => folder.Id));
+        await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.DeleteEmptyAsync("@root"));
+        Assert.NotNull(await folders.FindWithAncestorsAsync("@root"));
+
+        string? destination = null;
+        for (var depth = 0; depth < WorkflowFolderNames.MaximumDepth - 1; depth++)
+            destination = (await folders.CreateAsync(Folder($"depth-{depth}", $"Depth {depth}", destination))).Id;
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => command.MoveAsync("@root", destination));
+        Assert.Null((await folders.FindWithAncestorsAsync("@root"))!.Folder.ParentFolderId);
+    }
+
+    [Fact]
     public async Task Rename_and_move_preserve_descendant_identity_and_definition_placement()
     {
         var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
@@ -82,7 +110,11 @@ public sealed class GroundworkRestructureWorkflowFoldersCommandTests
         await new GroundworkWorkflowFolderStore(store, tenantA, clock).CreateAsync(Folder("occupied", "Occupied"));
         await new GroundworkSaveWorkflowDefinitionCommand(store, clock, tenantA).Execute(new WorkflowDefinition
         {
-            Id = "deleted", Name = "Deleted", FolderId = "occupied", TenantId = "tenant-a", DeletedAt = DateTimeOffset.UnixEpoch
+            Id = "deleted",
+            Name = "Deleted",
+            FolderId = "occupied",
+            TenantId = "tenant-a",
+            DeletedAt = DateTimeOffset.UnixEpoch
         });
         await new GroundworkWorkflowFolderStore(store, tenantB, clock).CreateAsync(Folder("foreign", "Foreign"));
         var local = new GroundworkRestructureWorkflowFoldersCommand(store, tenantA, clock);

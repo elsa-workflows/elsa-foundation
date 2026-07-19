@@ -1,3 +1,4 @@
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
@@ -38,7 +39,10 @@ internal static class WorkflowFolderStoragePhysicalizer
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             "workflow_folders",
             [
-                Column("parent_key", WorkflowsDesignStorageManifest.WorkflowFolderParentKeyField, WorkflowFolderNames.MaximumIdentifierLength),
+                Column(
+                    "parent_key",
+                    WorkflowsDesignStorageManifest.WorkflowFolderParentKeyField,
+                    WorkflowFolderNames.MaximumIdentifierLength + WorkflowFolder.ParentFolderKeyPrefix.Length),
                 Column("normalized_name", WorkflowsDesignStorageManifest.WorkflowFolderNormalizedNameField, WorkflowFolderNames.MaximumNameLength),
                 Column("folder_id", "entity.id", WorkflowFolderNames.MaximumIdentifierLength)
             ], envelope,
@@ -69,7 +73,9 @@ internal static class WorkflowFolderStoragePhysicalizer
                 new BoundedQuerySortField(WorkflowsDesignStorageManifest.WorkflowFolderNormalizedNameField, PhysicalSortDirection.Ascending),
                 new BoundedQuerySortField("entity.id", PhysicalSortDirection.Ascending)
             ]);
-        return unit with { PhysicalStorage = new StorageUnitPhysicalStorage(
+        return unit with
+        {
+            PhysicalStorage = new StorageUnitPhysicalStorage(
             StorageUnitProvisioningMode.Declared,
             PhysicalStoragePolicy.Explicit(definition),
             storage.LogicalIndexes
@@ -79,7 +85,8 @@ internal static class WorkflowFolderStoragePhysicalizer
                 .ToArray(),
             storage.BoundedQueries.Where(item => item.Identity != query.Identity).Append(query).ToArray(),
             storage.NameOverrides,
-            storage.BoundedMutations) };
+            storage.BoundedMutations)
+        };
     }
 
     private static ProjectedColumnDefinition Column(string name, string path, int length) => new(

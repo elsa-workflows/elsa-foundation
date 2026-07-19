@@ -31,7 +31,8 @@ public sealed class GroundworkWorkflowFolderStore(
     {
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
-        var parentKey = string.IsNullOrWhiteSpace(request.ParentFolderId) ? WorkflowFolder.RootParentKey : request.ParentFolderId;
+        var parentKey = WorkflowFolder.ToParentKey(
+            string.IsNullOrWhiteSpace(request.ParentFolderId) ? null : request.ParentFolderId);
         var bounded = _boundedStore
             ?? throw new InvalidOperationException("Workflow-folder browsing requires an admitted bounded document-store runtime.");
         DocumentQueryResult result;
@@ -130,10 +131,10 @@ public sealed class GroundworkWorkflowFolderStore(
         var access = accessContextAccessor.Current;
         if (access.Scope is null)
             throw new InvalidOperationException("Workflow folders require a tenant-scoped persistence context.");
-        folder.TenantId = access.Scope.Value;
         access.EnsureTenantScope(folder.TenantId);
+        folder.TenantId ??= access.Scope.Value;
         folder.ParentFolderId = string.IsNullOrWhiteSpace(folder.ParentFolderId) ? null : folder.ParentFolderId;
-        folder.ParentKey = folder.ParentFolderId ?? WorkflowFolder.RootParentKey;
+        folder.ParentKey = WorkflowFolder.ToParentKey(folder.ParentFolderId);
         try
         {
             await using var unit = await store.BeginAsync(

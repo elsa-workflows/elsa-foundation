@@ -34,8 +34,14 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
         IReadOnlyCollection<DesignMetadataRecord> layout,
         CancellationToken cancellation)
     {
-        accessContextAccessor.Current.EnsureTenantScope(workflowDefinition.TenantId);
-        accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
+        var access = accessContextAccessor.Current;
+        access.EnsureTenantScope(workflowDefinition.TenantId);
+        access.EnsureTenantScope(draft.TenantId);
+        if (access.Scope is { } scope)
+        {
+            workflowDefinition.TenantId ??= scope.Value;
+            draft.TenantId ??= scope.Value;
+        }
 
         var now = clock.UtcNow;
         GroundworkEntityTimestamps.StampAdded(workflowDefinition, now);
@@ -47,7 +53,7 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
             WorkflowsDesignStorageManifest.SchemaVersion,
             workflowDefinition,
             GroundworkDesignJson.Options,
-            accessContextAccessor.Current);
+            access);
 
         var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
             store,
@@ -81,8 +87,14 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
                     folderDocument.ContentJson,
                     GroundworkDesignJson.Options)?.Entity
                     ?? throw new InvalidOperationException("The workflow-folder document is empty.");
-                if (!string.Equals(folder.TenantId, workflowDefinition.TenantId, StringComparison.Ordinal))
+                try
+                {
+                    access.EnsureTenantScope(folder.TenantId);
+                }
+                catch (InvalidOperationException)
+                {
                     throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
+                }
                 folderEnvelope = folderDocument;
                 folderFence = folder;
             }
@@ -99,7 +111,8 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
                     WorkflowsDesignStorageManifest.SchemaVersion,
                     folderFence,
                     GroundworkDesignJson.Options,
-                    accessContextAccessor.Current) with { ExpectedVersion = folderEnvelope!.Version }, cancellation);
+                    access) with
+                { ExpectedVersion = folderEnvelope!.Version }, cancellation);
                 if (fence.Status != DocumentStoreWriteStatus.Saved)
                     throw new WorkflowFolderRestructureConflictException();
             }

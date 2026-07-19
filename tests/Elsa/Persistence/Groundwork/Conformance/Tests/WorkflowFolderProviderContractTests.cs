@@ -288,14 +288,28 @@ public sealed class WorkflowFolderProviderContractTests
             await folders.CreateAsync(Folder("child", "Child", "moving"));
             await folders.CreateAsync(Folder("empty", "Empty"));
             await folders.CreateAsync(Folder("collision", "Renamed", "parent-b"));
+            var bounded = new RecordingBoundedDocumentStore(
+                client.BoundedDocumentStore ?? throw new InvalidOperationException("The provider did not expose its admitted bounded-query runtime."));
             var command = new GroundworkRestructureWorkflowFoldersCommand(
-                client.DocumentStore, access, new Clock(), client.BoundedDocumentStore);
+                client.DocumentStore, access, new Clock(), bounded);
 
             var renamed = await command.RenameAsync("moving", "Renamed");
             Assert.Equal("RENAMED", renamed.NormalizedName);
             await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.MoveAsync("moving", "parent-b"));
             var moved = await command.MoveAsync("moving", "parent-a");
             Assert.Equal("parent-a", moved.ParentFolderId);
+            Assert.DoesNotContain(
+                bounded.Observations,
+                observation => observation.Query.QueryIdentity == WorkflowsDesignStorageManifest.ListAllQuery);
+            Assert.Contains(
+                bounded.Observations,
+                observation => observation.Query.QueryIdentity == WorkflowsDesignStorageManifest.PageWorkflowFoldersQuery);
+            Assert.All(bounded.Observations, observation =>
+            {
+                Assert.Equal(WorkflowsDesignStorageManifest.PageWorkflowFoldersQuery, observation.Query.QueryIdentity);
+                Assert.Equal(100, observation.Query.Take);
+                Assert.InRange(observation.MaterializedDocuments, 0, 100);
+            });
             await Assert.ThrowsAsync<ArgumentException>(() => command.MoveAsync("parent-a", "child"));
             await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.DeleteEmptyAsync("parent-a"));
 
