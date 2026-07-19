@@ -78,6 +78,15 @@ public sealed class ValueConversionPlanResolverTests
     }
 
     [Fact]
+    public void Built_in_profile_registry_lists_profiles_for_authoring_surfaces()
+    {
+        var profiles = BuiltInValueConversionProfileRegistry.Instance.List();
+
+        Assert.Equal(["elsa.json", "elsa.xml"], profiles.Select(profile => profile.Profile.Id));
+        Assert.All(profiles, profile => Assert.Equal("1", profile.Profile.Version));
+    }
+
+    [Fact]
     public void Json_profile_pins_registered_typed_aliases_from_formatted_and_structured_sources()
     {
         var registry = TestWellKnownTypeRegistry.Create();
@@ -149,7 +158,14 @@ public sealed class ValueConversionPlanResolverTests
         var captures = outputCompiler.CompileBoundaryOutputs(
             "writer",
             [new ActivityOutputContract("result", "Result", new TypeReference("UInt32"), true, "elsa.json")],
-            [new ArgumentState("result", new ArgumentValue("total", "Variable"), null, null, null, null)],
+            [new ArgumentState(
+                "result",
+                new ArgumentValue("total", "Variable"),
+                null,
+                null,
+                null,
+                null,
+                new AuthoredValueConversionRequest())],
             [new VariableDefinition("total", "Total", new TypeReference("Int64"), null, null)]);
 
         var capture = Assert.Single(captures).Value;
@@ -163,6 +179,57 @@ public sealed class ValueConversionPlanResolverTests
             new ArgumentValue("total", "Variable"));
 
         Assert.Null(input.ConversionPlan);
+    }
+
+    [Fact]
+    public void Authored_literal_json_conversion_pins_formatted_content_source_plan()
+    {
+        var input = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create(), resolver).Compile(
+            "reader",
+            Input("Elsa.Any"),
+            new ArgumentState(
+                "value",
+                new ArgumentValue("""{"name":"Grace"}""", "Literal"),
+                null,
+                null,
+                null,
+                null,
+                new AuthoredValueConversionRequest(AuthoredValueConversionMode.Json)));
+
+        Assert.Equal(RuntimeInputBindingSource.Literal, input.Source);
+        Assert.Equal("String", input.ConversionPlan!.SourceType.Alias);
+        Assert.Equal(ValueRepresentation.FormattedContent, input.ConversionPlan.SourceRepresentation);
+        Assert.Equal(ValueConversionMode.Json, input.ConversionPlan.Mode);
+        Assert.Equal("elsa.json", input.ConversionPlan.Profile!.Id);
+        Assert.Equal("""{"name":"Grace"}""", input.Literal!.InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public void Output_capture_honors_explicit_authored_conversion_mode_and_profile()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(CustomerContract), "Acme.Customer");
+        var outputCompiler = new RuntimeOutputCaptureCompiler(
+            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]),
+            new ValueConversionPlanResolver(wellKnownTypeRegistry: registry));
+
+        var captures = outputCompiler.CompileBoundaryOutputs(
+            "writer",
+            [new ActivityOutputContract("result", "Result", new TypeReference("String"), true, "elsa.json", SourceRepresentation: ValueRepresentation.FormattedContent)],
+            [new ArgumentState(
+                "result",
+                new ArgumentValue("customer", "Variable"),
+                null,
+                null,
+                null,
+                null,
+                new AuthoredValueConversionRequest(AuthoredValueConversionMode.Xml))],
+            [new VariableDefinition("customer", "Customer", new TypeReference("Acme.Customer"), null, null)]);
+
+        var capture = Assert.Single(captures).Value;
+        Assert.Equal(ValueConversionMode.Xml, capture.ConversionPlan!.Mode);
+        Assert.Equal("elsa.xml", capture.ConversionPlan.Profile!.Id);
+        Assert.Equal("Acme.Customer", capture.ConversionPlan.TargetType.Alias);
     }
 
     [Fact]

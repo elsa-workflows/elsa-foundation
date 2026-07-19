@@ -48,6 +48,22 @@ public sealed class ActivityResultConversionPlanLinkerTests
     }
 
     [Fact]
+    public void Link_honors_authored_direct_result_conversion_request()
+    {
+        var linked = new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver()).Link(
+            Tree(
+                Producer("String", ValueRepresentation.FormattedContent),
+                Consumer("Elsa.Any", new RuntimeValueConversionRequest(ValueConversionMode.Json))));
+
+        var binding = NodeById(linked, "consumer").InputBindings["value"];
+
+        Assert.Null(binding.ConversionRequest);
+        Assert.Equal(ValueConversionMode.Json, binding.ConversionPlan!.Mode);
+        Assert.Equal("elsa.json", binding.ConversionPlan.Profile!.Id);
+        Assert.Equal(ValueConversionOperation.Profile, binding.ConversionPlan.Operation);
+    }
+
+    [Fact]
     public void Linked_plan_fingerprint_is_part_of_the_executable_hash()
     {
         var linked = new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver()).Link(
@@ -86,7 +102,7 @@ public sealed class ActivityResultConversionPlanLinkerTests
         new Dictionary<string, string>(),
         activityContract: Contract(projectionAlias, sourceRepresentation));
 
-    private static ExecutableNode Consumer(string targetAlias) => new(
+    private static ExecutableNode Consumer(string targetAlias, RuntimeValueConversionRequest? conversionRequest = null) => new(
         "consumer",
         "consumer",
         "test.consumer",
@@ -99,7 +115,8 @@ public sealed class ActivityResultConversionPlanLinkerTests
                 Type(targetAlias),
                 ValueProtectionPolicy.InstanceInline,
                 RuntimeInputBindingSource.ActivityResult,
-                activityResult: new RuntimeActivityResultReference("producer", "value", "root"))
+                activityResult: new RuntimeActivityResultReference("producer", "value", "root"),
+                conversionRequest: conversionRequest)
         },
         new Dictionary<string, RuntimeOutputCapture>(),
         new Dictionary<string, string>());

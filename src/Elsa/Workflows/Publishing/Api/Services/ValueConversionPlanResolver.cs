@@ -193,6 +193,7 @@ public sealed class ValueConversionPlanResolver(
 public interface IValueConversionProfileRegistry
 {
     bool TryGet(ValueConversionProfileReference profile, out ValueConversionProfileDefinition definition);
+    IReadOnlyCollection<ValueConversionProfileDefinition> List() => [];
 }
 
 /// <summary>Pure conversion-profile capability declaration. Runtime must use the same pinned identity, never discovery.</summary>
@@ -226,6 +227,11 @@ public sealed class BuiltInValueConversionProfileRegistry : IValueConversionProf
 
     public bool TryGet(ValueConversionProfileReference profile, out ValueConversionProfileDefinition definition) =>
         definitions.TryGetValue((profile.Id, profile.Version), out definition!);
+
+    public IReadOnlyCollection<ValueConversionProfileDefinition> List() =>
+        definitions.Values.OrderBy(definition => definition.Profile.Id, StringComparer.Ordinal)
+            .ThenBy(definition => definition.Profile.Version, StringComparer.Ordinal)
+            .ToArray();
 }
 
 /// <summary>Publication failure with the complete pinned-contract context needed to fix a binding.</summary>

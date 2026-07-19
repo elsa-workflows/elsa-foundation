@@ -65,6 +65,22 @@ public sealed class WorkflowBuilderTests
     }
 
     [Fact]
+    public void Activity_arguments_round_trip_authored_conversion_controls()
+    {
+        var state = new ConversionWorkflow().Compile();
+        var node = Assert.Single(Children(state));
+        var input = Assert.Single(node.Inputs);
+
+        Assert.Equal(AuthoredValueConversionMode.Json, input.Conversion!.Mode);
+        Assert.Equal(32, input.Conversion.Limits!.MaxDepth);
+
+        var roundTripped = JsonSerializer.Deserialize<WorkflowDefinitionState>(JsonSerializer.Serialize(state))!;
+        var restored = Assert.Single(Assert.Single(Children(roundTripped)).Inputs);
+        Assert.Equal(AuthoredValueConversionMode.Json, restored.Conversion!.Mode);
+        Assert.Equal(32, restored.Conversion.Limits!.MaxDepth);
+    }
+
+    [Fact]
     public void Structured_conditionals_lower_lexical_regions_and_derive_connections_deterministically()
     {
         var definition = new StructuredWorkflow();
@@ -195,6 +211,16 @@ public sealed class WorkflowBuilderTests
     private sealed record Result(string Message);
     private sealed class Write;
     private sealed class Probe;
+
+    private sealed class ConversionWorkflow : WorkflowDefinition<Request, Result>
+    {
+        protected override void Build(IWorkflowBuilder<Request, Result> workflow) =>
+            workflow.Sequence.Add<Write, string>("test/write@1", inputs => inputs.Set(
+                "payload",
+                ActivityArgument.Value("""{"message":"hello"}""").WithConversion(new AuthoredValueConversionRequest(
+                    AuthoredValueConversionMode.Json,
+                    Limits: new AuthoredValueConversionLimits(MaxDepth: 32)))));
+    }
 
     private sealed class TestWorkflow : WorkflowDefinition<Request, Result>
     {

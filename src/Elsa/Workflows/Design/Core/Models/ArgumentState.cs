@@ -9,7 +9,8 @@ public sealed record ArgumentState(
     // Stable type aliases (the shared TypeAliasConvention), never an assembly-qualified name.
     string? EvaluatorType,
     string? StorageDriverType,
-    bool? IsSensitive
+    bool? IsSensitive,
+    AuthoredValueConversionRequest? Conversion = null
 )
 {
     public static ArgumentState Null(string refKey) => new(
