@@ -97,6 +97,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-activity availability", label: "Activity Availability", path: "/workflows/activity-availability", parentId: "workflows" })
     ]);
     expect(api.routes.list()).toEqual([
+      expect.objectContaining({ id: "workflows-elsa3-import", path: "/workflows/activity-definitions/import-elsa3" }),
       expect.objectContaining({ id: "workflows-activity-definitions", path: "/workflows/activity-definitions" }),
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables" }),

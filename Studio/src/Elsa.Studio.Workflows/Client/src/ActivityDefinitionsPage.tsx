@@ -70,7 +70,7 @@ export function ActivityDefinitionsPage({
     );
   }
 
-  return <ActivityDefinitionCollection context={context} activityEditors={activityEditors()} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
+  return <ActivityDefinitionCollection context={context} activityEditors={activityEditors()} onImport={() => navigateToStudioPath("/workflows/activity-definitions/import-elsa3")} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
 }
 
 function defaultStudioPathNavigation(path: string) {
@@ -89,7 +89,7 @@ function writeRouteState(route: RouteState, mode: "push" | "replace") {
   window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", `/workflows/activity-definitions${query ? `?${query}` : ""}`);
 }
 
-function ActivityDefinitionCollection({ context, activityEditors, onOpen, onCreated }: { context: StudioEndpointContext; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onOpen(definitionId: string): void; onCreated(definitionId: string, draftId: string): void }) {
+function ActivityDefinitionCollection({ context, activityEditors, onImport, onOpen, onCreated }: { context: StudioEndpointContext; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onImport(): void; onOpen(definitionId: string): void; onCreated(definitionId: string, draftId: string): void }) {
   const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState("");
   const [providerInput, setProviderInput] = useState("");
@@ -174,7 +174,7 @@ function ActivityDefinitionCollection({ context, activityEditors, onOpen, onCrea
     <main className="ad-page" aria-labelledby="activity-definitions-title">
       <header className="ad-page-header">
         <div><span className="ad-kicker">Workflows</span><h1 id="activity-definitions-title">Activity Definitions</h1><p>Browse stable reusable activity identities. Draft and version history stay attached to the definition you open.</p></div>
-        <div className="ad-header-actions"><button type="button" onClick={() => setCreateOpen(true)}>Create Activity Definition</button><button type="button" className="ad-primary-action" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</button></div>
+        <div className="ad-header-actions"><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={() => setCreateOpen(true)}>Create Activity Definition</button><button type="button" className="ad-primary-action" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</button></div>
       </header>
 
       <section className="ad-filters" aria-label="Activity Definition filters">

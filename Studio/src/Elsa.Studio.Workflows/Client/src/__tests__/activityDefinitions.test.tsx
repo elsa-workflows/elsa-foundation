@@ -16,6 +16,29 @@ afterEach(() => {
 });
 
 describe("Activity Definitions experience", () => {
+  it("opens the dedicated Elsa 3 import route through host navigation", async () => {
+    const navigateToStudioPath = vi.fn();
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      return page([]);
+    });
+    const rendered = renderPage(
+      getJson,
+      undefined,
+      "/workflows/activity-definitions",
+      undefined,
+      [],
+      undefined,
+      navigateToStudioPath
+    );
+    await waitForText(rendered.container, "No Activity Definitions yet");
+
+    click(buttonByText(rendered.container, "Import from Elsa 3"));
+
+    expect(navigateToStudioPath).toHaveBeenCalledWith("/workflows/activity-definitions/import-elsa3");
+    await rendered.unmount();
+  });
+
   it("distinguishes initial loading, an empty collection, and no filter matches", async () => {
     let resolveCollection!: (value: unknown) => void;
     const firstCollection = new Promise(resolve => { resolveCollection = resolve; });
@@ -619,14 +642,15 @@ function renderPage(
   path = "/workflows/activity-definitions",
   postJson: (url: string, body: unknown) => Promise<unknown> = vi.fn(),
   activityEditors: StudioActivityDefinitionImplementationEditorContribution[] = [],
-  putJson: (url: string, body: unknown) => Promise<unknown> = vi.fn()
+  putJson: (url: string, body: unknown) => Promise<unknown> = vi.fn(),
+  navigateToStudioPath?: (path: string) => void
 ) {
   window.history.replaceState({}, "", path);
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const context = { baseUrl: `test://activity-definitions-${Math.random()}`, http: { getJson, postJson, putJson } } as unknown as StudioEndpointContext;
-  flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={context} activityEditors={() => activityEditors} /></QueryClientProvider>));
+  flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={context} activityEditors={() => activityEditors} navigateToStudioPath={navigateToStudioPath} /></QueryClientProvider>));
   return {
     container,
     async unmount() {
