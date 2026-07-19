@@ -15,7 +15,7 @@ public static class RuntimePostCommitOutboxItems
 
     /// <summary>Deterministic outbox item id when only the stable intent id is available.</summary>
     public static string OutboxItemId(string commitId, string intentId)
-        => RuntimePostCommitOutboxIdentity.Create(commitId, intentId);
+        => RuntimePostCommitOutboxIdentity.CreateLogicalValue(commitId, intentId);
 
     /// <summary>Builds the pending outbox item for a single intent.</summary>
     public static RuntimePostCommitOutboxItem CreatePending(RuntimeCheckpointCommit commit, RuntimePostCommitIntent intent) =>

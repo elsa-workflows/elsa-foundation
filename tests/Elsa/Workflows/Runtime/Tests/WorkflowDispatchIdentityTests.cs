@@ -33,38 +33,18 @@ public sealed class WorkflowDispatchIdentityTests
     }
 
     [Fact]
-    public void Outbox_identifiers_compact_long_commit_and_intent_components_deterministically()
+    public void Outbox_identifiers_preserve_the_legacy_logical_format_beyond_the_projection_limit()
     {
         var identity = new WorkflowDispatchIdentity("parent-1", "activity-1");
         var longCommitId = new string('c', RuntimePostCommitOutboxIdentity.MaximumLength);
-        var compactedCommit = identity.ParentResumeOutboxItemId(longCommitId);
         var longIntentId = new string('i', RuntimePostCommitOutboxIdentity.MaximumLength);
-        var compactedBoth = RuntimePostCommitOutboxIdentity.Create(longCommitId, longIntentId);
+        var parentResumeId = identity.ParentResumeOutboxItemId(longCommitId);
+        var genericId = RuntimePostCommitOutboxItems.OutboxItemId(longCommitId, longIntentId);
 
-        Assert.True(compactedCommit.Length <= RuntimePostCommitOutboxIdentity.MaximumLength);
-        Assert.EndsWith($":{identity.ParentResumeIntentId}", compactedCommit);
-        Assert.True(identity.MatchesStartOutboxItemId(
-            RuntimePostCommitOutboxIdentity.Create(longCommitId, identity.StartIntentId)));
-        Assert.True(compactedBoth.Length <= RuntimePostCommitOutboxIdentity.MaximumLength);
-        Assert.Equal(compactedBoth, RuntimePostCommitOutboxIdentity.Create(longCommitId, longIntentId));
-        Assert.NotEqual(compactedBoth, RuntimePostCommitOutboxIdentity.Create(longCommitId, $"{longIntentId}x"));
-
-        var reservedSeparator = compactedBoth.LastIndexOf(':');
-        Assert.NotEqual(
-            compactedBoth,
-            RuntimePostCommitOutboxIdentity.Create(
-                compactedBoth[..reservedSeparator],
-                compactedBoth[(reservedSeparator + 1)..]));
-
-        var ambiguousCommitPrefix = new string('a', 100);
-        var ambiguousIntentSuffix = new string('z', RuntimePostCommitOutboxIdentity.MaximumLength);
-        Assert.NotEqual(
-            RuntimePostCommitOutboxIdentity.Create(
-                $"{ambiguousCommitPrefix}:b",
-                ambiguousIntentSuffix),
-            RuntimePostCommitOutboxIdentity.Create(
-                ambiguousCommitPrefix,
-                $"b:{ambiguousIntentSuffix}"));
+        Assert.Equal($"{longCommitId}:{identity.ParentResumeIntentId}", parentResumeId);
+        Assert.Equal($"{longCommitId}:{longIntentId}", genericId);
+        Assert.True(parentResumeId.Length > RuntimePostCommitOutboxIdentity.MaximumLength);
+        Assert.True(genericId.Length > RuntimePostCommitOutboxIdentity.MaximumLength);
     }
 
     [Fact]

@@ -71,10 +71,10 @@ public sealed class WorkflowDispatchIdentity
     }
 
     public string ParentResumeOutboxItemId(string commitId)
-        => RuntimePostCommitOutboxIdentity.Create(commitId, ParentResumeIntentId);
+        => RuntimePostCommitOutboxIdentity.CreateLogicalValue(commitId, ParentResumeIntentId);
 
     public string ChildCancelOutboxItemId(string commitId)
-        => RuntimePostCommitOutboxIdentity.Create(commitId, ChildCancelIntentId);
+        => RuntimePostCommitOutboxIdentity.CreateLogicalValue(commitId, ChildCancelIntentId);
 
     private static string ComputeDigest(string parentWorkflowExecutionId, string parentActivityExecutionId)
         => RuntimeIdentityDigest.Compute(

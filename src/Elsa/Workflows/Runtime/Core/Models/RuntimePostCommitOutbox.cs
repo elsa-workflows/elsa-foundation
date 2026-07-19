@@ -5,31 +5,22 @@ using Elsa.Workflows.Runtime.Core.Constants;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Creates deterministic post-commit identities within the provider-portable projection boundary,
-/// preserving the readable legacy form whenever it already fits.
+/// Creates provider-portable projection values for stable post-commit outbox identities.
 /// </summary>
 public static class RuntimePostCommitOutboxIdentity
 {
     public const int MaximumLength = 450;
-    private const string DigestPrefix = "outbox:sha256:v1:";
     private const string ProjectionDigestPrefix = "outbox:projection:sha256:v1:";
 
-    public static string Create(string commitId, string intentId)
+    /// <summary>Preserves the durable logical identity format used by existing replay markers and providers.</summary>
+    public static string CreateLogicalValue(string commitId, string intentId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
         ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
-
-        var candidate = $"{commitId}:{intentId}";
-        if (candidate.Length <= MaximumLength &&
-            !candidate.StartsWith(DigestPrefix, StringComparison.Ordinal))
-            return candidate;
-
-        candidate = $"{DigestPrefix}{RuntimeIdentityDigest.Compute("elsa.outbox.commit", "v1", commitId)}:{intentId}";
-        return candidate.Length <= MaximumLength
-            ? candidate
-            : $"{DigestPrefix}{RuntimeIdentityDigest.Compute("elsa.outbox.identity", "v1", commitId, intentId)}";
+        return $"{commitId}:{intentId}";
     }
 
+    /// <summary>Returns a bounded physical projection without changing the durable logical identity.</summary>
     public static string CreateProjectionValue(string outboxItemId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
