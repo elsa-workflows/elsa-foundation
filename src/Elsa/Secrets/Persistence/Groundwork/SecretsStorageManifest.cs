@@ -9,13 +9,18 @@ namespace Elsa.Secrets.Persistence.Groundwork;
 
 public static class SecretsStorageManifest
 {
-    public const string SchemaVersion = "1.2.0";
+    public const string SchemaVersion = "2.0.0";
     public const string SecretDocumentKind = "secret";
+    public const string SecretCollection = "secret";
+    public const string CollectionField = "collection";
+    public const string ByCollectionIndex = "by-collection";
     public const string SecretsTable = "secrets";
     public const string SecretByNameIndex = "secret-by-name";
     public const string ListFilteredQuery = "list-filtered";
     public const string SearchFilteredQuery = "search-filtered";
+    public const string LegacyBackfillQuery = "legacy-backfill";
     public const string NormalizedNameField = "normalizedName";
+    public const string TenantIdField = "tenantId";
     public const string NameSearchKeyField = "nameSearchKey";
     public const string DisplayNameSearchKeyField = "displayNameSearchKey";
     public const string TypeNameLookupKeyField = "typeNameLookupKey";
@@ -30,13 +35,21 @@ public static class SecretsStorageManifest
         var envelope = new DocumentEnvelopeDefinition();
         var nameIndex = new LogicalIndexDeclaration(
             SecretByNameIndex,
-            [new IndexField(NormalizedNameField)],
+            [new IndexField(TenantIdField), new IndexField(NormalizedNameField)],
             IndexValueKind.Keyword,
             isUnique: true,
+            MissingValueBehavior.Excluded);
+        var collectionIndex = new LogicalIndexDeclaration(
+            ByCollectionIndex,
+            [new IndexField(CollectionField)],
+            IndexValueKind.Keyword,
+            isUnique: false,
             MissingValueBehavior.Excluded);
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             SecretsTable,
             [
+                StringProjection(CollectionField, length: 64, isNullable: false),
+                StringProjection(TenantIdField, length: 256, isNullable: false),
                 StringProjection(NormalizedNameField, length: SecretNameConstraints.MaximumLength, isNullable: false),
                 StringProjection(NameSearchKeyField, isNullable: false),
                 StringProjection(DisplayNameSearchKeyField, isNullable: false),
@@ -61,9 +74,16 @@ public static class SecretsStorageManifest
                     nameIndex.Identity,
                     [
                         new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
-                        new PhysicalIndexColumnDefinition(NormalizedNameField, 1)
+                        new PhysicalIndexColumnDefinition(TenantIdField, 1),
+                        new PhysicalIndexColumnDefinition(NormalizedNameField, 2)
                     ],
-                    isUnique: true)
+                    isUnique: true),
+                new PhysicalIndexDefinition(
+                    collectionIndex.Identity,
+                    [
+                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                        new PhysicalIndexColumnDefinition(CollectionField, 1)
+                    ])
             ]);
         var listRoute = FilterRoute(
             ListFilteredQuery,
@@ -81,6 +101,27 @@ public static class SecretsStorageManifest
                 Residual(NameSearchKeyField, IndexValueKind.String, PortableQueryOperation.Contains),
                 Residual(DisplayNameSearchKeyField, IndexValueKind.String, PortableQueryOperation.Contains)
             ]);
+        var legacyBackfillRoute = new BoundedQueryDeclaration(
+            LegacyBackfillQuery,
+            collectionIndex.Identity,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+            QuerySortSupport.None,
+            QueryPagingSupport.None,
+            BoundedQueryExecutionClass.Ordinary,
+            predicateFields:
+            [
+                new BoundedQueryPredicateField(
+                    CollectionField,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+            ],
+            residualPredicateFields:
+            [
+                new(
+                    TenantIdField,
+                    IndexValueKind.Keyword,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+                    isRequired: true)
+            ]);
         var unit = new StorageUnit(
             new StorageUnitIdentity(SecretDocumentKind),
             "Secret",
@@ -97,8 +138,8 @@ public static class SecretsStorageManifest
             PhysicalStorage = new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(definition),
-                [nameIndex],
-                [listRoute, searchRoute])
+                [nameIndex, collectionIndex],
+                [listRoute, searchRoute, legacyBackfillRoute])
         };
 
         return new StorageManifest(
@@ -174,7 +215,12 @@ public static class SecretsStorageManifest
             [
                 new BoundedQuerySortField(NormalizedNameField, PhysicalSortDirection.Ascending)
             ],
-            predicateFields: null,
+            predicateFields:
+            [
+                new BoundedQueryPredicateField(
+                    TenantIdField,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+            ],
             residualPredicateFields: residuals);
     }
 
@@ -189,4 +235,5 @@ public static class SecretsStorageManifest
         IndexValueKind valueKind,
         params PortableQueryOperation[] operations) =>
         new(path, valueKind, operations.ToHashSet());
+
 }

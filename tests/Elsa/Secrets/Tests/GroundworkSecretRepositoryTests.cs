@@ -12,6 +12,7 @@ namespace Elsa.Secrets.Tests;
 
 public sealed class GroundworkSecretRepositoryTests
 {
+    private const string TenantId = "tenant-a";
     private static readonly DateTimeOffset Now = new(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -21,7 +22,7 @@ public sealed class GroundworkSecretRepositoryTests
         var queries = new RecordingBoundedDocumentStore();
         var repository = new GroundworkSecretRepository(documents, queries);
 
-        Assert.Empty((await repository.ListPageAsync(new SecretRepositoryListRequest(skip: 10, take: 25))).Items);
+        Assert.Empty((await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest(skip: 10, take: 25))).Items);
 
         var query = Assert.Single(queries.Observed);
         Assert.Equal(SecretsStorageManifest.SecretDocumentKind, query.DocumentKind);
@@ -31,7 +32,8 @@ public sealed class GroundworkSecretRepositoryTests
         Assert.Collection(
             query.Order,
             order => Assert.Equal(SecretsStorageManifest.NormalizedNameField, order.Path));
-        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(2, query.Clauses.Count);
+        var comparison = Assert.Single(query.Clauses[1].Comparisons);
         Assert.Equal(SecretsStorageManifest.StatusField, comparison.Path);
         Assert.Equal(QueryComparisonOperator.NotEqual, comparison.Operator);
         Assert.Null(Assert.Single(comparison.Values));
@@ -46,8 +48,8 @@ public sealed class GroundworkSecretRepositoryTests
         Assert.True(await repository.TryAddAsync(secret));
         Assert.False(await repository.TryAddAsync(secret));
 
-        var found = await repository.FindAsync("payments.api");
-        var all = (await repository.ListPageAsync(new SecretRepositoryListRequest())).Items;
+        var found = await repository.FindAsync(TenantId, "payments.api");
+        var all = (await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest())).Items;
 
         Assert.NotNull(found);
         Assert.Equal("payments.api", found!.Name);
@@ -67,8 +69,8 @@ public sealed class GroundworkSecretRepositoryTests
 
         Assert.Equal(
             SecretStatus.Deleted,
-            Assert.Single((await repository.ListPageAsync(new SecretRepositoryListRequest())).Items).Status);
-        Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync("payments.api"))!.Status);
+            Assert.Single((await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest())).Items).Status);
+        Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync(TenantId, "payments.api"))!.Status);
     }
 
     [Fact]
@@ -82,7 +84,7 @@ public sealed class GroundworkSecretRepositoryTests
         Assert.False(await repository.TryAddAsync(Secret("payments.api", "v2")));
 
         Assert.Equal(0, documents.LoadCount);
-        Assert.Equal("v1", (await repository.FindAsync("payments.api"))!.LatestActiveVersion!.Payload.Value);
+        Assert.Equal("v1", (await repository.FindAsync(TenantId, "payments.api"))!.LatestActiveVersion!.Payload.Value);
     }
 
     [Fact]
@@ -92,8 +94,8 @@ public sealed class GroundworkSecretRepositoryTests
         var revisionAware = Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(repository);
 
         Assert.Equal(SecretRevisionSaveStatus.Saved, (await revisionAware.SaveWithRevisionAsync(Secret("payments.api", "v1"), null)).Status);
-        var first = await revisionAware.FindWithRevisionAsync("payments.api");
-        var second = await revisionAware.FindWithRevisionAsync("payments.api");
+        var first = await revisionAware.FindWithRevisionAsync(TenantId, "payments.api");
+        var second = await revisionAware.FindWithRevisionAsync(TenantId, "payments.api");
 
         first!.Secret.DisplayName = "updated";
         Assert.Equal(SecretRevisionSaveStatus.Saved, (await revisionAware.SaveWithRevisionAsync(first.Secret, first.Revision)).Status);
@@ -102,7 +104,7 @@ public sealed class GroundworkSecretRepositoryTests
         var stale = await revisionAware.SaveWithRevisionAsync(second.Secret, second.Revision);
 
         Assert.Equal(SecretRevisionSaveStatus.Conflict, stale.Status);
-        Assert.Equal("updated", (await repository.FindAsync("payments.api"))!.DisplayName);
+        Assert.Equal("updated", (await repository.FindAsync(TenantId, "payments.api"))!.DisplayName);
     }
 
     [Fact]
@@ -116,7 +118,7 @@ public sealed class GroundworkSecretRepositoryTests
 
         Assert.Equal(SecretRevisionSaveStatus.Saved, created.Status);
         Assert.Equal(SecretRevisionSaveStatus.Conflict, duplicate.Status);
-        Assert.Equal("v1", (await repository.FindAsync("payments.api"))!.LatestActiveVersion!.Payload.Value);
+        Assert.Equal("v1", (await repository.FindAsync(TenantId, "payments.api"))!.LatestActiveVersion!.Payload.Value);
     }
 
     [Fact]
@@ -127,7 +129,7 @@ public sealed class GroundworkSecretRepositoryTests
         await repository.SaveAsync(Secret("b", "v1"));
         await repository.SaveAsync(Secret("c", "v1"));
 
-        var page = await repository.ListPageAsync(new SecretRepositoryListRequest(skip: 1, take: 1));
+        var page = await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest(skip: 1, take: 1));
 
         Assert.Equal(3, page.TotalCount);
         Assert.Equal("b", Assert.Single(page.Items).Name);
@@ -140,7 +142,7 @@ public sealed class GroundworkSecretRepositoryTests
         var queries = new RecordingBoundedDocumentStore();
         var repository = new GroundworkSecretRepository(documents, queries);
 
-        await repository.ListPageAsync(new SecretRepositoryListRequest(search: "payments", take: 25));
+        await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest(search: "payments", take: 25));
 
         Assert.Equal(
             SecretsStorageManifest.SearchFilteredQuery,
@@ -155,19 +157,19 @@ public sealed class GroundworkSecretRepositoryTests
         var request = new SecretRepositoryListRequest(activeOnly: true, now: Now);
 
         await repository.SaveAsync(secret);
-        Assert.Single((await repository.ListPageAsync(request)).Items);
+        Assert.Single((await repository.ListPageAsync(TenantId, request)).Items);
 
         Assert.Single(secret.Versions).ExpiresAt = Now;
         await repository.SaveAsync(secret);
-        Assert.Empty((await repository.ListPageAsync(request)).Items);
+        Assert.Empty((await repository.ListPageAsync(TenantId, request)).Items);
 
         Assert.Single(secret.Versions).ExpiresAt = null;
         await repository.SaveAsync(secret);
-        Assert.Single((await repository.ListPageAsync(request)).Items);
+        Assert.Single((await repository.ListPageAsync(TenantId, request)).Items);
 
         Assert.Single(secret.Versions).Status = SecretStatus.Revoked;
         await repository.SaveAsync(secret);
-        Assert.Empty((await repository.ListPageAsync(request)).Items);
+        Assert.Empty((await repository.ListPageAsync(TenantId, request)).Items);
     }
 
     [Fact]
@@ -186,6 +188,9 @@ public sealed class GroundworkSecretRepositoryTests
         Assert.Equal(QueryPagingSupport.Offset, query.PagingSupport);
         Assert.True(query.SupportsDisjunction);
         Assert.True(query.SupportsTotalCount);
+        Assert.Equal(
+            SecretsStorageManifest.TenantIdField,
+            Assert.Single(query.PredicateFields).Path);
         Assert.Contains(
             query.ResidualPredicateFields,
             field =>
@@ -201,7 +206,9 @@ public sealed class GroundworkSecretRepositoryTests
             storage.BoundedQueries,
             candidate => candidate.Identity == SecretsStorageManifest.SearchFilteredQuery);
         Assert.Equal(BoundedQueryExecutionClass.Ordinary, search.ExecutionClass);
-        Assert.Empty(search.PredicateFields);
+        Assert.Equal(
+            SecretsStorageManifest.TenantIdField,
+            Assert.Single(search.PredicateFields).Path);
         Assert.Contains(
             search.ResidualPredicateFields,
             field =>
@@ -216,6 +223,7 @@ public sealed class GroundworkSecretRepositoryTests
 
     private static Secret Secret(string name, string value) => new()
     {
+        TenantId = TenantId,
         Name = name,
         DisplayName = name,
         TypeName = SecretTypeNames.Text,

@@ -21,6 +21,7 @@
           },
           "DiagnosticsOpenTelemetry": {},
           "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite": {},
+          "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsStructuredLogs": {},
           "DiagnosticsStructuredLogsPersistenceEFCoreSqlite": {},
           "Events": {},
@@ -142,9 +143,16 @@
           "SecretsApi": {},
           "SecretsGroundworkPersistence": {},
           "Serialization": {},
+          "AttentionApi": {},
+          "ModularityAttention": {},
+          "StudioPreferences": {},
+          "StudioPreferencesApi": {},
+          "StudioPreferencesGroundworkPersistence": {},
           "Tasks": {},
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
+          "WorkflowsDashboard": {},
+          "WorkflowsRuntimeAttention": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {},
@@ -153,6 +161,7 @@
             "Mode": "Coalesced",
             "MaxSegmentCheckpoints": 50
           },
+          "WorkflowsRuntimeTracing": {},
           "WorkflowsRuntimeTriggers": {}
         },
         "Configuration": {

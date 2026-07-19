@@ -9,5 +9,5 @@ namespace Elsa.Secrets.Core.Contracts;
 /// </summary>
 public interface ISecretValueResolver
 {
-    ValueTask<ResolvedSecret> ResolveAsync(SecretReference reference, CancellationToken cancellationToken = default);
+    ValueTask<ResolvedSecret> ResolveAsync(string tenantId, SecretReference reference, CancellationToken cancellationToken = default);
 }

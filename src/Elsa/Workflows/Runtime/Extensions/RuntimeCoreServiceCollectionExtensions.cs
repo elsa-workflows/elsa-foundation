@@ -91,6 +91,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<ISchedulerStateStore, InMemorySchedulerStateStore>();
         services.TryAddSingleton<RuntimeExecutionOwnershipOptions>();
         services.TryAddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
+        // WU-1 / spec 105: scoped transport shared by the same-scope drainer and checkpoint committer so a checkpoint
+        // commit can fold the claimed work item's acknowledgement into its unit-of-work.
+        services.TryAddScoped<IRuntimeConsumedSchedulerWorkClaimAccessor, RuntimeConsumedSchedulerWorkClaimAccessor>();
         services.TryAddScoped<IRuntimeExecutionOwnershipService>(serviceProvider =>
             new RuntimeExecutionOwnershipService(
                 serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
@@ -194,7 +197,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
                 serviceProvider.GetRequiredService<IRuntimeDomainRetryPolicy>(),
                 serviceProvider.GetRequiredService<IWorkflowEngineTracer>(),
-                serviceProvider.GetRequiredService<RuntimeSchedulerWorkClaimOptions>()));
+                serviceProvider.GetRequiredService<RuntimeSchedulerWorkClaimOptions>(),
+                serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();

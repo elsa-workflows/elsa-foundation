@@ -30,6 +30,7 @@ public static class RuntimeCheckpointFold
         var workflowDispatches = new MergeBuffer<WorkflowDispatchRecord>();
         var workflowDispatchCancellations = new List<WorkflowDispatchCancellationRequest>();
         var activityScopeCleanups = new List<ActivityScopeCleanupRequest>();
+        var consumedSchedulerWorkItems = new Dictionary<string, ConsumedSchedulerWorkItem>(StringComparer.Ordinal);
 
         foreach (var changeSet in changeSets)
         {
@@ -48,6 +49,10 @@ public static class RuntimeCheckpointFold
             workflowDispatches.AddRange(changeSet.WorkflowDispatches);
             workflowDispatchCancellations.AddRange(changeSet.WorkflowDispatchCancellations);
             activityScopeCleanups.AddRange(changeSet.ActivityScopeCleanups);
+            // Union consumed work items across the segment (last writer per work-item id) so no per-hop consumption is
+            // lost or duplicated in the fold.
+            foreach (var consumed in changeSet.ConsumedSchedulerWorkItems)
+                consumedSchedulerWorkItems[consumed.WorkItemId] = consumed;
         }
 
         return new RuntimeCheckpointStateChangeSet(
@@ -62,7 +67,8 @@ public static class RuntimeCheckpointFold
             activityExecutionInspections: inspections.ToArray(),
             postCommitOutbox: null,
             activityScopeCleanups: activityScopeCleanups,
-            workflowDispatchCancellations: workflowDispatchCancellations);
+            workflowDispatchCancellations: workflowDispatchCancellations,
+            consumedSchedulerWorkItems: consumedSchedulerWorkItems.Values.ToArray());
     }
 
     private sealed class MergeBuffer<TState>

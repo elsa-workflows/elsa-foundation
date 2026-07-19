@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Persistence.EFCore.Options;
 using Elsa.Persistence.EFCore.Sqlite;
+using Elsa.Workflows.Dashboard.Providers.EFCore;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,7 @@ public class SqliteWorkflowsDesignPersistenceShellFeature : EFCoreWorkflowsPersi
     protected override void OnBeforeConfiguring(IServiceCollection services)
     {
         ConnectionString = SqliteShellFeatureDefaults.ApplyDefaults(services, ConnectionString);
+        services.AddEFCoreWorkflowPortfolio();
     }
 
     protected override void ConfigureProvider(DbContextOptionsBuilder builder, Assembly migrationsAssembly, string connectionString, ElsaDbContextOptions? options)
