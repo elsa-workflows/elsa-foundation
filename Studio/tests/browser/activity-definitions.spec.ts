@@ -181,6 +181,146 @@ test("draft management dialog traps and restores focus, supports keyboard clone 
   expect(state.draftRequests.at(-1)).toEqual({ sourceVersionId: "version-1", presentationLabel: "Keyboard clone" });
 });
 
+test("Activity Definition Test Run preserves exact input presence and opens focused Runtime Evidence", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  state.validationMode = "valid";
+  state.testRunStatuses = ["Pending", "Running", "Completed"];
+  await createBrowserActivity(page);
+  state.draft = {
+    ...state.draft,
+    contract: {
+      ...state.draft.contract,
+      inputs: [
+        { ...browserContractInput(), default: { syntax: "Literal", value: "EUR" } },
+        { ...browserContractInput(), referenceKey: "comment", name: "Comment", displayName: "Comment" },
+        { ...browserContractInput(), referenceKey: "reference", name: "Reference", displayName: "Reference" }
+      ]
+    }
+  };
+  await page.reload();
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.evaluate(() => {
+    const observations: unknown[] = [];
+    window.addEventListener("elsa:activity-definitions:observation", event => {
+      observations.push((event as CustomEvent).detail);
+    });
+    (window as Window & { activityTestRunObservations?: unknown[] }).activityTestRunObservations = observations;
+  });
+
+  await page.getByRole("textbox", { name: /Draft label/ }).fill("Immediate Test Run");
+  const opener = page.getByRole("button", { name: "Test Run" });
+  await opener.focus();
+  await opener.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Browser graph activity" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Close Test Run" })).toBeFocused();
+  await expect(dialog.getByText("Revision 2 validated")).toBeVisible();
+  await dialog.getByRole("combobox", { name: "Comment presence" }).selectOption("Null");
+  await dialog.getByRole("combobox", { name: "Reference presence" }).selectOption("Value");
+  await dialog.getByRole("textbox", { name: "Reference" }).fill("invoice-42");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+
+  await dialog.getByRole("button", { name: "Dispatch Test Run" }).click();
+  await expect(dialog.getByText("Dispatch accepted")).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Waiting for scheduling" })).toBeVisible({ timeout: 5_000 });
+  await expect(dialog.getByText("Activity Definition completed")).toBeVisible({ timeout: 5_000 });
+  expect(state.testRunWrites).toBe(1);
+  expect(state.lastTestRunRequest).toMatchObject({
+    expectedRevision: 2,
+    inputs: {
+      currency: { state: "Absent" },
+      comment: { state: "Present", value: null },
+      reference: { state: "Present", value: "invoice-42" }
+    }
+  });
+  expect(JSON.stringify(state.lastTestRunRequest)).not.toContain("EUR");
+  const observations = await page.evaluate(() =>
+    (window as Window & { activityTestRunObservations?: Array<Record<string, unknown>> })
+      .activityTestRunObservations ?? []);
+  expect(observations.filter(item => item.event === "test-run")).toEqual(
+    expect.arrayContaining([
+      { event: "test-run", surface: "editor", outcome: "dispatching" },
+      { event: "test-run", surface: "editor", outcome: "accepted" },
+      { event: "test-run", surface: "editor", outcome: "running" },
+      { event: "test-run", surface: "editor", outcome: "completed" }
+    ]));
+  expect(JSON.stringify(observations)).not.toContain("activity-test-run-browser");
+  expect(JSON.stringify(observations)).not.toContain("invoice-42");
+  expect(JSON.stringify(observations)).not.toContain("wrapper-artifact-browser");
+
+  await dialog.getByRole("button", { name: "Open focused Runtime Evidence" }).click();
+  await expect(page).toHaveURL(/\/workflows\/instances\/workflow-execution-browser\?activityExecutionId=outer-activity-browser/);
+});
+
+test("Activity Definition Test Run keeps validation rejection out of Runtime dispatch", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  await createBrowserActivity(page);
+
+  const opener = page.getByRole("button", { name: "Test Run" });
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: "Browser graph activity" });
+  await expect(dialog.getByRole("heading", { name: "Draft validation rejected revision 1" })).toBeVisible();
+  await expect(dialog.getByText("The required outcome must be retained.")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Dispatch Test Run" })).toHaveCount(0);
+  expect(state.testRunWrites).toBe(0);
+
+  await dialog.getByRole("button", { name: "Close Test Run" }).click();
+  await expect(opener).toBeFocused();
+  state.validationMode = "forbidden";
+  await opener.click();
+  const unauthorized = page.getByRole("dialog", { name: "Browser graph activity" });
+  await expect(unauthorized.getByText("Test Run preparation failed")).toBeVisible();
+  await expect(unauthorized).not.toContainText("hidden validation identity");
+  expect(state.testRunWrites).toBe(0);
+});
+
+test("Activity Definition Test Run separates Runtime rejection and reconciles ambiguous reruns idempotently", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  state.validationMode = "valid";
+  state.testRunMode = "dispatch-rejected";
+  await createBrowserActivity(page);
+
+  await page.getByRole("button", { name: "Test Run" }).click();
+  const dialog = page.getByRole("dialog", { name: "Browser graph activity" });
+  await dialog.getByRole("button", { name: "Dispatch Test Run" }).click();
+  await expect(dialog.getByText("Runtime rejected dispatch")).toBeVisible();
+  await expect(dialog.getByText("runtime.dispatch.denied")).toBeVisible();
+
+  state.testRunMode = "ambiguous";
+  state.testRunReceiptMisses = 1;
+  await dialog.getByRole("button", { name: "Rerun as new evidence" }).click();
+  await expect(dialog.getByText(/dispatch response was ambiguous/i)).toBeVisible();
+  await expect(dialog.getByText("Dispatch accepted")).toBeVisible({ timeout: 5_000 });
+  await expect(dialog.getByText("Immutable rerun history (2)")).toBeVisible();
+  expect(state.testRunWrites).toBe(2);
+  expect(state.testRunReceiptLookups).toBeGreaterThanOrEqual(1);
+  expect(new Set(state.testRunIdempotencyKeys).size).toBe(2);
+});
+
+test("Activity Definition Test Run cancels active evidence and distinguishes full expiry on rerun", async ({ page }) => {
+  const state = await mockActivityDefinitionAuthoring(page);
+  state.validationMode = "valid";
+  state.testRunStatuses = ["Running"];
+  await createBrowserActivity(page);
+
+  await page.getByRole("button", { name: "Test Run" }).click();
+  const dialog = page.getByRole("dialog", { name: "Browser graph activity" });
+  await dialog.getByRole("button", { name: "Dispatch Test Run" }).click();
+  await expect(dialog.getByText("Activity Definition is running")).toBeVisible({ timeout: 5_000 });
+  await dialog.getByRole("button", { name: "Cancel Test Run" }).click();
+  await expect(dialog.getByText("Activity Definition was cancelled")).toBeVisible();
+  expect(state.testRunCancellations).toBe(1);
+
+  state.testRunExpired = true;
+  state.testRunStatuses = ["Completed"];
+  await dialog.getByRole("button", { name: "Rerun as new evidence" }).click();
+  await expect(dialog.getByText("Test Run evidence expired")).toBeVisible({ timeout: 5_000 });
+  await expect(dialog.getByText("Neither its Source Reference nor Runtime Evidence remains available.")).toBeVisible();
+  await expect(dialog.getByText("Immutable rerun history (2)")).toBeVisible();
+  expect(state.testRunWrites).toBe(2);
+});
+
 test("Activity Definition lifecycle review moves recommendation, retires, clears, restores, revokes, reconciles, and rejects stale state", async ({ page }) => {
   test.setTimeout(60_000);
   const state = await mockActivityVersionLifecycle(page);
@@ -1178,7 +1318,19 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     requestedVersions: [] as string[],
     publishMode: "normal" as "normal" | "ambiguous" | "stale",
     preflightMode: "valid" as "valid" | "invalid",
-    latestReceipt: null as ReturnType<typeof browserPublicationReceipt> | null
+    latestReceipt: null as ReturnType<typeof browserPublicationReceipt> | null,
+    testRunWrites: 0,
+    testRunReceiptLookups: 0,
+    testRunReceiptMisses: 0,
+    testRunStatusReads: 0,
+    testRunCancellations: 0,
+    testRunMode: "normal" as "normal" | "ambiguous" | "dispatch-rejected",
+    testRunStatuses: [] as string[],
+    testRunExpired: false,
+    testRunOrdinal: 0,
+    testRunIdempotencyKeys: [] as string[],
+    lastTestRunRequest: null as unknown,
+    latestTestRun: null as ReturnType<typeof browserActivityTestRun> | null
   };
   let releaseCatalog!: () => void;
   const catalogGate = new Promise<void>(resolve => { releaseCatalog = resolve; });
@@ -1378,6 +1530,69 @@ async function mockActivityDefinitionAuthoring(page: Page) {
       contentType: state.latestReceipt ? "application/json" : "application/problem+json",
       body: JSON.stringify(state.latestReceipt ?? { title: "Receipt unavailable" })
     });
+  });
+  await page.route("**/publishing/activity-drafts/activity-draft-browser/test-runs", async route => {
+    const body = route.request().postDataJSON() as {
+      expectedRevision: number;
+      idempotencyKey: string;
+      inputs: Record<string, unknown>;
+    };
+    state.testRunWrites += 1;
+    state.testRunOrdinal += 1;
+    state.lastTestRunRequest = body;
+    state.testRunIdempotencyKeys.push(body.idempotencyKey);
+    const status = state.testRunMode === "dispatch-rejected" ? "DispatchRejected" : "DispatchAccepted";
+    state.latestTestRun = browserActivityTestRun(
+      state.testRunOrdinal,
+      status,
+      state.testRunExpired,
+      body.expectedRevision);
+    if (state.testRunMode === "ambiguous") {
+      state.testRunMode = "normal";
+      return route.abort("connectionreset");
+    }
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify(state.latestTestRun)
+    });
+  });
+  await page.route(/\/publishing\/activity-drafts\/activity-draft-browser\/test-runs\/idempotency\/[^/]+$/, async route => {
+    state.testRunReceiptLookups += 1;
+    if (state.testRunReceiptMisses > 0) {
+      state.testRunReceiptMisses -= 1;
+      return route.fulfill({
+        status: 404,
+        contentType: "application/problem+json",
+        body: JSON.stringify({ title: "Receipt not visible yet" })
+      });
+    }
+    await route.fulfill({
+      status: state.latestTestRun ? 200 : 404,
+      contentType: state.latestTestRun ? "application/json" : "application/problem+json",
+      body: JSON.stringify(state.latestTestRun ?? { title: "Receipt unavailable" })
+    });
+  });
+  await page.route(/\/publishing\/activity-test-runs\/[^/]+\/cancel$/, async route => {
+    state.testRunCancellations += 1;
+    const ordinal = state.latestTestRun ? Number(state.latestTestRun.testRunId.split("-").at(-1)) : 1;
+    state.latestTestRun = browserActivityTestRun(
+      ordinal,
+      "Cancelled",
+      state.testRunExpired,
+      state.latestTestRun?.draftRevision ?? state.draft.revision);
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.latestTestRun) });
+  });
+  await page.route(/\/publishing\/activity-test-runs\/[^/]+$/, async route => {
+    state.testRunStatusReads += 1;
+    const status = state.testRunStatuses.shift() ?? state.latestTestRun?.status ?? "DispatchAccepted";
+    const ordinal = state.latestTestRun ? Number(state.latestTestRun.testRunId.split("-").at(-1)) : 1;
+    state.latestTestRun = browserActivityTestRun(
+      ordinal,
+      status,
+      state.testRunExpired,
+      state.latestTestRun?.draftRevision ?? state.draft.revision);
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.latestTestRun) });
   });
   await page.route("**/design/activities/drafts/activity-draft-recovery", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) }));
   return state;
@@ -1683,7 +1898,11 @@ function authoringApiCapabilities() {
   ] }, { id: "elsa.api.publishing", contractVersion: "1", links: [
     { rel: "activity-publication-preflight", href: "design/activities/drafts/{draftId}/publication-preflight", templated: true },
     { rel: "activity-publication", href: "design/activities/drafts/{draftId}/publish", templated: true },
-    { rel: "activity-publication-receipt", href: "design/activities/publications/{idempotencyKey}", templated: true }
+    { rel: "activity-publication-receipt", href: "design/activities/publications/{idempotencyKey}", templated: true },
+    { rel: "activity-draft-test-run-dispatch", href: "publishing/activity-drafts/{draftId}/test-runs", templated: true },
+    { rel: "activity-draft-test-run-status", href: "publishing/activity-test-runs/{testRunId}", templated: true },
+    { rel: "activity-draft-test-run-idempotency-status", href: "publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}", templated: true },
+    { rel: "activity-draft-test-run-cancel", href: "publishing/activity-test-runs/{testRunId}/cancel", templated: true }
   ] }] };
 }
 
@@ -1778,7 +1997,7 @@ async function createBrowserActivity(page: Page) {
   await page.getByRole("button", { name: "Create Activity Definition" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Published browser activity");
   await page.getByRole("button", { name: "Create definition" }).click();
-  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  await expect(page.getByText("Saved revision 1")).toBeVisible({ timeout: 15_000 });
 }
 
 function authoringDraftSummary(draft: ReturnType<typeof authoringDraft>) {
@@ -1805,6 +2024,53 @@ function browserContractInput() {
     default: null,
     storageDriverKey: "elsa.json",
     durability: "Required"
+  };
+}
+
+function browserActivityTestRun(
+  ordinal: number,
+  status: string,
+  expired = false,
+  draftRevision = 1
+) {
+  const hasExecution = ["Running", "Suspended", "Completed", "Faulted", "Cancelled"].includes(status);
+  const terminal = ["Completed", "Faulted", "Cancelled", "DispatchRejected", "ValidationRejected"].includes(status);
+  return {
+    testRunId: `activity-test-run-browser-${ordinal}`,
+    draftId: "activity-draft-browser",
+    draftRevision,
+    artifactId: `wrapper-artifact-browser-${ordinal}`,
+    sourceReferenceId: `source-reference-browser-${ordinal}`,
+    workflowExecutionId: "workflow-execution-browser",
+    outerActivityExecutionId: hasExecution ? "outer-activity-browser" : null,
+    status,
+    commandDispatchStatus: status === "DispatchRejected" ? "Rejected" : "Accepted",
+    reason: null,
+    failure: status === "DispatchRejected" ? {
+      kind: "RuntimeDispatch",
+      code: "runtime.dispatch.denied",
+      message: "Runtime policy rejected this dispatch.",
+      diagnostics: []
+    } : null,
+    expiration: {
+      sourceReferenceExpiresAt: "2026-07-19T12:30:00Z",
+      sourceReferenceExpired: expired,
+      sourceReferenceRetained: !expired,
+      evidenceRetention: "RetainedUntilRuntimeEvidenceDeletion",
+      evidenceExpiresAt: expired ? "2026-07-19T12:35:00Z" : null,
+      evidenceRetained: !expired && hasExecution,
+      runExpiresAt: null,
+      runStillActive: !terminal && hasExecution,
+      receiptExpiresAt: "2026-07-26T12:00:00Z"
+    },
+    cancellation: {
+      capabilityAdvertised: true,
+      available: !terminal && status !== "DispatchRejected",
+      status: terminal ? "Terminal" : "Available",
+      reason: null
+    },
+    requestedAt: "2026-07-19T12:00:00Z",
+    updatedAt: "2026-07-19T12:00:01Z"
   };
 }
 

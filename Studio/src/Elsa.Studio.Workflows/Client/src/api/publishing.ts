@@ -146,6 +146,64 @@ export interface PublishActivityDraftRequest {
   idempotencyKey: string;
 }
 
+export type ActivityDraftTestRunInputState = "Absent" | "Present";
+
+export interface ActivityDraftTestRunInput {
+  state: ActivityDraftTestRunInputState;
+  value?: unknown;
+}
+
+export interface StartActivityDraftTestRunRequest {
+  expectedRevision: number;
+  idempotencyKey: string;
+  inputs?: Record<string, ActivityDraftTestRunInput>;
+  correlationId?: string | null;
+}
+
+export interface ActivityDraftTestRunFailure {
+  kind: "Validation" | "RuntimeDispatch" | string;
+  code: string;
+  message: string;
+  diagnostics: StudioActivityDiagnostic[];
+}
+
+export interface ActivityDraftTestRunExpiration {
+  sourceReferenceExpiresAt: string;
+  sourceReferenceExpired: boolean;
+  sourceReferenceRetained: boolean;
+  evidenceRetention: string;
+  evidenceExpiresAt?: string | null;
+  evidenceRetained: boolean;
+  runExpiresAt?: string | null;
+  runStillActive: boolean;
+  receiptExpiresAt: string;
+}
+
+export interface ActivityDraftTestRunCancellation {
+  capabilityAdvertised: boolean;
+  available: boolean;
+  status: string;
+  reason?: string | null;
+}
+
+export interface ActivityDraftTestRunView {
+  testRunId: string;
+  draftId: string;
+  draftRevision: number;
+  artifactId?: string | null;
+  sourceReferenceId?: string | null;
+  workflowExecutionId: string;
+  outerActivityExecutionId?: string | null;
+  status: string;
+  commandDispatchStatus?: string | null;
+  reason?: string | null;
+  failure?: ActivityDraftTestRunFailure | null;
+  expiration: ActivityDraftTestRunExpiration;
+  cancellation: ActivityDraftTestRunCancellation;
+  requestedAt: string;
+  updatedAt: string;
+}
+
 export async function preflightPublicationSnapshot(
   context: StudioEndpointContext,
   request: PublicationSnapshotPreflightRequest
@@ -272,6 +330,58 @@ export async function getActivityPublicationReceipt(
     "activity-publication-receipt",
     { idempotencyKey });
   return context.http.getJson<ActivityPublicationReceipt>(path);
+}
+
+export async function startActivityDraftTestRun(
+  context: StudioEndpointContext,
+  draftId: string,
+  request: StartActivityDraftTestRunRequest
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "activity-draft-test-run-dispatch",
+    { draftId });
+  return context.http.requestJson<ActivityDraftTestRunView>(
+    path,
+    createWorkflowExecutionRequestInit(request));
+}
+
+export async function getActivityDraftTestRun(
+  context: StudioEndpointContext,
+  testRunId: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "activity-draft-test-run-status",
+    { testRunId });
+  return context.http.getJson<ActivityDraftTestRunView>(path);
+}
+
+export async function getActivityDraftTestRunByIdempotencyKey(
+  context: StudioEndpointContext,
+  draftId: string,
+  idempotencyKey: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "activity-draft-test-run-idempotency-status",
+    { draftId, idempotencyKey });
+  return context.http.getJson<ActivityDraftTestRunView>(path);
+}
+
+export async function cancelActivityDraftTestRun(
+  context: StudioEndpointContext,
+  testRunId: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "activity-draft-test-run-cancel",
+    { testRunId });
+  return context.http.postJson<ActivityDraftTestRunView>(path, {});
 }
 
 async function publicationSlotsPath(context: StudioEndpointContext, definitionId: string) {

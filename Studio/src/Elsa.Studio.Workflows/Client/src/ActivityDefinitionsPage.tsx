@@ -1,7 +1,7 @@
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Database, RefreshCw, Search } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext, StudioRuntimeSettings } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext, StudioRuntimeSettings, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityDefinitionCollectionRequest, ActivityDefinitionManagementView } from "./activityDefinitionTypes";
 import { classifyActivityDefinitionReadFailure, redactActivityDefinitionManagementCache, useActivityDefinitions } from "./api/activityDesign";
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
@@ -15,7 +15,19 @@ const ActivityDefinitionDraftEditor = lazy(() => import("./ActivityDefinitionDra
 type PageSize = 10 | 25 | 50;
 type RouteState = { definitionId: string | null; section: string | null; draftId: string | null; versionId: string | null; draftActionVersionId?: string | null };
 
-export function ActivityDefinitionsPage({ context, activityEditors = () => [], runtime = {} }: { context: StudioEndpointContext; activityEditors?: () => StudioActivityDefinitionImplementationEditorContribution[]; runtime?: StudioRuntimeSettings }) {
+export function ActivityDefinitionsPage({
+  context,
+  activityEditors = () => [],
+  inputEditors = () => [],
+  runtime = {},
+  navigateToStudioPath = defaultStudioPathNavigation
+}: {
+  context: StudioEndpointContext;
+  activityEditors?: () => StudioActivityDefinitionImplementationEditorContribution[];
+  inputEditors?: () => StudioWorkflowRunInputEditorContribution[];
+  runtime?: StudioRuntimeSettings;
+  navigateToStudioPath?(path: string): void;
+}) {
   const [route, setRoute] = useState(readRouteState);
   const routeRef = useRef(route);
   const navigationBlockedRef = useRef(false);
@@ -49,7 +61,7 @@ export function ActivityDefinitionsPage({ context, activityEditors = () => [], r
 
   if (route.definitionId) {
     if (route.section === "editor" && route.draftId) {
-      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId} activityEditors={activityEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => navigate({ definitionId: route.definitionId, section: "drafts", draftId: route.draftId, versionId: null }, force)} onOpenDraft={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null }, true)} onOpenVersion={(definitionId, versionId) => navigate({ definitionId, section: "versions", draftId: null, versionId }, true)} /></WorkflowLazyBoundary>;
+      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId} activityEditors={activityEditors()} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => navigate({ definitionId: route.definitionId, section: "drafts", draftId: route.draftId, versionId: null }, force)} onOpenDraft={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null }, true)} onOpenVersion={(definitionId, versionId) => navigate({ definitionId, section: "versions", draftId: null, versionId }, true)} onOpenStudioPath={navigateToStudioPath} /></WorkflowLazyBoundary>;
     }
     return (
       <WorkflowLazyBoundary label="activity definition workbench">
@@ -59,6 +71,11 @@ export function ActivityDefinitionsPage({ context, activityEditors = () => [], r
   }
 
   return <ActivityDefinitionCollection context={context} activityEditors={activityEditors()} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
+}
+
+function defaultStudioPathNavigation(path: string) {
+  window.history.pushState({}, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 function writeRouteState(route: RouteState, mode: "push" | "replace") {
