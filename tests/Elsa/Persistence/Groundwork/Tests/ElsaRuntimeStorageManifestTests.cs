@@ -317,6 +317,10 @@ public sealed class ElsaRuntimeStorageManifestTests
             RuntimePostCommitIntent.MaximumKindLength,
             physical.ProjectedColumns.Single(column =>
                 column.LogicalName == ElsaRuntimeStorageManifest.ByOutboxIntentKindIndex).Length);
+        Assert.Equal(
+            RuntimePostCommitOutboxIdentity.MaximumLength,
+            physical.ProjectedColumns.Single(column =>
+                column.LogicalName == ElsaRuntimeStorageManifest.ByOutboxItemIdIndex).Length);
         var immediatePhysicalIndex = Assert.Single(
             physical.Indexes,
             index => index.LogicalName == immediate.IndexIdentity);

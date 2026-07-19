@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -389,10 +390,17 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
         long expectedVersion,
         CancellationToken cancellationToken)
     {
+        var projectionValue = RuntimePostCommitOutboxIdentity.CreateProjectionValue(item.OutboxItemId);
+        var persistedItem = StringComparer.Ordinal.Equals(projectionValue, item.OutboxItemId)
+            ? item
+            : WithOutboxItemId(item, projectionValue);
         var envelope = new OutboxEnvelope(
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
             item.Intent.WorkflowExecutionId,
-            item);
+            persistedItem,
+            StringComparer.Ordinal.Equals(projectionValue, item.OutboxItemId)
+                ? null
+                : item.OutboxItemId);
         var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind, envelope);
         return await store.SaveAsync(
             new SaveDocumentRequest(
@@ -404,8 +412,32 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
             cancellationToken);
     }
 
-    private RuntimePostCommitOutboxItem Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<OutboxEnvelope>(envelope).Item;
+    private RuntimePostCommitOutboxItem Map(DocumentEnvelope envelope)
+    {
+        var outbox = serializer.Deserialize<OutboxEnvelope>(envelope);
+        return outbox.LogicalOutboxItemId is { } logicalOutboxItemId
+            ? WithOutboxItemId(outbox.Item, logicalOutboxItemId)
+            : outbox.Item;
+    }
+
+    private static RuntimePostCommitOutboxItem WithOutboxItemId(
+        RuntimePostCommitOutboxItem item,
+        string outboxItemId) =>
+        new(
+            outboxItemId,
+            item.Intent,
+            item.Status,
+            item.RecordedAt,
+            item.AvailableAt,
+            item.RetryPolicy,
+            item.DeliveryAttemptCount,
+            item.DeliveringOwnerId,
+            item.DeliveryStartedAt,
+            item.DeliveredAt,
+            item.LastFailureMessage,
+            item.Metadata,
+            item.DeliveryFencingToken,
+            item.DeliveryVisibleAfter);
 
     private async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> QueryCandidatesAsync(
         RuntimePostCommitOutboxQuery query,
@@ -618,6 +650,11 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
     // instead of a provider-wide scan, mirroring the other list-capable bridges.
     private sealed record LoadedOutboxItem(RuntimePostCommitOutboxItem Item, long Version);
 
-    private sealed record OutboxEnvelope(string Collection, string WorkflowExecutionId, RuntimePostCommitOutboxItem Item);
+    private sealed record OutboxEnvelope(
+        string Collection,
+        string WorkflowExecutionId,
+        RuntimePostCommitOutboxItem Item,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        string? LogicalOutboxItemId = null);
 
 }

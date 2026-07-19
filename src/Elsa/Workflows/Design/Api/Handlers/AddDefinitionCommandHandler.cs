@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
@@ -17,6 +18,8 @@ public sealed class AddDefinitionCommandHandler(
 {
     public async Task<WorkflowDefinitionDetailsView> Handle(AddDefinition command, CancellationToken cancellationToken)
     {
+        if (command.FolderId is { } folderId)
+            WorkflowFolderNames.ValidateIdentifier(folderId, nameof(command.FolderId));
         var definition = definitionFactory.Create(command.Name, command.Description);
         var draft = draftFactory.Create(definition.Id, (command.InitialState ?? new WorkflowDefinitionStateView()).ToState());
         var draftEntity = WorkflowDefinitionDraft.From(draft);
@@ -30,12 +33,14 @@ public sealed class AddDefinitionCommandHandler(
                 record.AdditionalProperties))
             .ToArray();
 
+        var persistenceDefinition = WorkflowDefinition.From(definition);
+        persistenceDefinition.FolderId = command.FolderId;
         await addCommand.Execute(
-            WorkflowDefinition.From(definition),
+            persistenceDefinition,
             draftEntity,
             layout,
             cancellationToken);
 
-        return new WorkflowDefinitionDetailsView(definition.ToView(), WorkflowDraftView.From(draftEntity, layout), Versions: []);
+        return new WorkflowDefinitionDetailsView(persistenceDefinition.ToView(), WorkflowDraftView.From(draftEntity, layout), Versions: []);
     }
 }

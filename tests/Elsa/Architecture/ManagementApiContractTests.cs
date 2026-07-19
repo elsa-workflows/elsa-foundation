@@ -16,11 +16,17 @@ public class ManagementApiContractTests
         "/design/activities/catalog",
         "/design/workflows/activities/{activityVersionId}/inputs/{inputName}/options",
         "/design/workflows/definitions",
+        "/design/workflows/definitions/move",
+        "/design/workflows/definitions/page",
         "/design/workflows/definitions/{definitionId}",
         "/design/workflows/definitions/{definitionId}/permanent",
         "/design/workflows/definitions/{definitionId}/restore",
         "/design/workflows/drafts/{draftId}",
         "/design/workflows/drafts/{draftId}/promote",
+        "/design/workflows/folders",
+        "/design/workflows/folders/{folderId}",
+        "/design/workflows/folders/{folderId}/move",
+        "/design/workflows/folders/{folderId}/rename",
         "/design/workflows/scoped-variables/analyze",
         "/design/workflows/versions/{versionId}",
         "/expressions/descriptors",
@@ -58,11 +64,14 @@ public class ManagementApiContractTests
         "CapabilityDocument",
         "CapabilityLink",
         "CreateWorkflowDefinitionRequest",
+        "CreateWorkflowFolderRequest",
         "DefinitionListState",
         "DesignMetadata",
         "ExecutableProvenance",
         "ExecutableSourceReference",
         "ExpressionDescriptor",
+        "MoveWorkflowDefinitionsRequest",
+        "MoveWorkflowFolderRequest",
         "Problem",
         "Publication",
         "PublicationIntent",
@@ -70,6 +79,7 @@ public class ManagementApiContractTests
         "PublicationPreflight",
         "PublicationSlot",
         "PublicationStatus",
+        "RenameWorkflowFolderRequest",
         "ReplaceWorkflowDraftRequest",
         "RuntimeDiagnosticsSettings",
         "ScopedVariableAnalysis",
@@ -82,6 +92,8 @@ public class ManagementApiContractTests
         "UpdateWorkflowDefinitionMetadataRequest",
         "VariableTypeDescriptor",
         "WorkflowDefinitionDetails",
+        "WorkflowDefinitionPage",
+        "WorkflowDefinitionPageItem",
         "WorkflowDefinitionState",
         "WorkflowDefinitionSummary",
         "WorkflowDefinitionVersion",
@@ -90,6 +102,10 @@ public class ManagementApiContractTests
         "WorkflowExecutableDetails",
         "WorkflowExecutableSummary",
         "WorkflowExecutionDispatch",
+        "WorkflowFolder",
+        "WorkflowFolderBreadcrumbItem",
+        "WorkflowFolderDetails",
+        "WorkflowFolderPage",
         "WorkflowInstanceDetails",
         "WorkflowInstanceSummary"
     ];
@@ -120,18 +136,68 @@ public class ManagementApiContractTests
             path => path.StartsWith(string.Join('/', "", "_elsa", "workflow-management"), StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Workflow_folder_contract_matches_runtime_status_parameters_and_errors()
+    {
+        var document = await LoadDocumentAsync();
+        var paths = GetMapping(document, "paths");
+        var folders = GetMapping(paths, "/design/workflows/folders");
+        var folderCreateResponses = GetMapping(GetMapping(folders, "post"), "responses");
+        Assert.Equal(
+            ["201", "400", "401", "403", "404", "409"],
+            folderCreateResponses.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
+        Assert.DoesNotContain(new YamlScalarNode("200"), folderCreateResponses.Children.Keys);
+
+        var folderDetail = GetMapping(paths, "/design/workflows/folders/{folderId}");
+        var parameter = Assert.IsType<YamlMappingNode>(Assert.Single(GetSequence(folderDetail, "parameters")));
+        Assert.Equal("#/components/parameters/FolderId", GetScalar(parameter, "$ref"));
+
+        var definitionCreateResponses = GetMapping(
+            GetMapping(GetMapping(paths, "/design/workflows/definitions"), "post"),
+            "responses");
+        Assert.Contains(new YamlScalarNode("404"), definitionCreateResponses.Children.Keys);
+
+        var moveResponses = GetMapping(GetMapping(paths, "/design/workflows/definitions/move"), "post");
+        Assert.Equal("moveWorkflowDefinitionsToFolder", GetScalar(moveResponses, "operationId"));
+        Assert.Equal(
+            ["204", "400", "401", "403", "404", "409"],
+            GetMapping(moveResponses, "responses").Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
+    }
+
+    [Fact]
+    public async Task Workflow_definition_page_contract_exposes_non_null_folder_breadcrumbs_and_unknown_folder_errors()
+    {
+        var document = await LoadDocumentAsync();
+        var paths = GetMapping(document, "paths");
+        var pageResponses = GetMapping(
+            GetMapping(GetMapping(paths, "/design/workflows/definitions/page"), "get"),
+            "responses");
+        Assert.Equal(
+            ["200", "400", "401", "403", "404"],
+            pageResponses.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
+
+        var schemas = GetMapping(GetMapping(document, "components"), "schemas");
+        var summary = GetMapping(schemas, "WorkflowDefinitionSummary");
+        Assert.DoesNotContain(new YamlScalarNode("folderBreadcrumb"), GetSequence(summary, "required").Children);
+        Assert.DoesNotContain(new YamlScalarNode("folderBreadcrumb"), GetMapping(summary, "properties").Children.Keys);
+        var page = GetMapping(schemas, "WorkflowDefinitionPage");
+        var pageItemSchema = GetMapping(GetMapping(GetMapping(page, "properties"), "items"), "items");
+        Assert.Equal(
+            "#/components/schemas/WorkflowDefinitionPageItem",
+            GetScalar(pageItemSchema, "$ref"));
+        var pageItem = GetMapping(schemas, "WorkflowDefinitionPageItem");
+        var pageItemOverlay = Assert.IsType<YamlMappingNode>(GetSequence(pageItem, "allOf").Children[1]);
+        Assert.Contains(new YamlScalarNode("folderBreadcrumb"), GetSequence(pageItemOverlay, "required").Children);
+        var breadcrumb = GetMapping(GetMapping(pageItemOverlay, "properties"), "folderBreadcrumb");
+        Assert.Equal("array", GetScalar(breadcrumb, "type"));
+        Assert.Equal(
+            "#/components/schemas/WorkflowFolderBreadcrumbItem",
+            GetScalar(GetMapping(breadcrumb, "items"), "$ref"));
+    }
+
     private static async Task<ContractInventory> LoadContractAsync()
     {
-        Assert.True(
-            File.Exists(ContractPath),
-            $"Expected the management API contract fixture at '{ContractPath}'.");
-
-        await using var stream = File.OpenRead(ContractPath);
-        using var reader = new StreamReader(stream);
-        var yaml = new YamlStream();
-        yaml.Load(reader);
-
-        var document = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        var document = await LoadDocumentAsync();
         Assert.Equal("3.1.0", GetScalar(document, "openapi"));
 
         var paths = GetMapping(document, "paths").Children.Keys
@@ -147,8 +213,24 @@ public class ManagementApiContractTests
         return new ContractInventory(paths, schemas);
     }
 
+    private static async Task<YamlMappingNode> LoadDocumentAsync()
+    {
+        Assert.True(
+            File.Exists(ContractPath),
+            $"Expected the management API contract fixture at '{ContractPath}'.");
+
+        await using var stream = File.OpenRead(ContractPath);
+        using var reader = new StreamReader(stream);
+        var yaml = new YamlStream();
+        yaml.Load(reader);
+        return Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+    }
+
     private static YamlMappingNode GetMapping(YamlMappingNode parent, string key) =>
         Assert.IsType<YamlMappingNode>(parent.Children[new YamlScalarNode(key)]);
+
+    private static YamlSequenceNode GetSequence(YamlMappingNode parent, string key) =>
+        Assert.IsType<YamlSequenceNode>(parent.Children[new YamlScalarNode(key)]);
 
     private static string? GetScalar(YamlMappingNode parent, string key) =>
         Assert.IsType<YamlScalarNode>(parent.Children[new YamlScalarNode(key)]).Value;

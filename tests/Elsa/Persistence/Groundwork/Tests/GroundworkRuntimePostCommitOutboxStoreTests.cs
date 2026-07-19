@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Documents.Store;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -47,7 +48,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
-    public async Task Nested_scheduler_identity_beyond_portable_document_limit_round_trips(string provider)
+    public async Task Nested_scheduler_identity_preserves_its_logical_value_while_bounding_the_projection(string provider)
     {
         await using var fixture = CreateStore(provider);
         var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
@@ -63,7 +64,8 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
             idempotencyKey: null,
             payload: null);
         var logicalOutboxItemId = RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent);
-        Assert.True(logicalOutboxItemId.Length > 450, $"Expected the regression identity to exceed 450 code units, but observed {logicalOutboxItemId.Length}.");
+        Assert.True(logicalOutboxItemId.Length > RuntimePostCommitOutboxIdentity.MaximumLength);
+        Assert.Equal(logicalOutboxItemId, RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent));
         var pending = new RuntimePostCommitOutboxItem(
             logicalOutboxItemId,
             intent,
@@ -89,10 +91,20 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         await store.SavePendingAsync(Pending(outboxItemId, "wf-lookup"));
 
         var found = await ((IPostCommitOutboxLookupStore)store).FindAsync(outboxItemId);
+        var envelope = await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+            GroundworkPhysicalDocumentIdTestData.PhysicalAliasFor(outboxItemId));
+        using var content = JsonDocument.Parse(envelope!.ContentJson);
 
         Assert.NotNull(found);
         Assert.Equal(outboxItemId, found.OutboxItemId);
         Assert.Equal("wf-lookup", found.Intent.WorkflowExecutionId);
+        Assert.Equal(
+            outboxItemId,
+            content.RootElement.GetProperty("logicalOutboxItemId").GetString());
+        Assert.True(
+            content.RootElement.GetProperty("item").GetProperty("outboxItemId").GetString()!.Length <=
+            RuntimePostCommitOutboxIdentity.MaximumLength);
         Assert.Null(await ((IPostCommitOutboxLookupStore)store).FindAsync("missing"));
     }
 

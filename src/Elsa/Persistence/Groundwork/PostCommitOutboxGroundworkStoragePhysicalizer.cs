@@ -105,6 +105,10 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
                 {
                     Length = RuntimePostCommitIntent.MaximumKindLength
                 },
+                ElsaRuntimeStorageManifest.ByOutboxItemIdIndex => column with
+                {
+                    Length = RuntimePostCommitOutboxIdentity.MaximumLength
+                },
                 _ => column
             })
             .ToArray();

@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Definitions;
 
 /// <summary>Updates definition metadata only; authored state is replaced through the first-class Draft endpoint.</summary>
 internal sealed class Update(ICommandSender commandSender, ILogger<Update> logger)
-    : ElsaCommandHandlerEndpoint<UpdateDefinitionMetadata, WorkflowDefinitionDetailsView>(commandSender, logger)
+    : WorkflowDefinitionCommandHandlerEndpoint<UpdateDefinitionMetadata, WorkflowDefinitionDetailsView>(commandSender, logger)
 {
     public override void Configure()
     {

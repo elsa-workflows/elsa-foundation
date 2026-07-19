@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
@@ -28,6 +29,24 @@ public static class WorkflowsDesignStorageManifest
     public const string ListAllQuery = "list-all";
 
     public const string WorkflowDefinitionDocumentKind = "workflowDefinition";
+    public const string WorkflowFolderDocumentKind = "workflowFolder";
+    public const string WorkflowFolderCollection = "workflowFolder";
+    public const string WorkflowFolderParentKeyField = "entity.parentKey";
+    public const string WorkflowFolderNormalizedNameField = "entity.normalizedName";
+    public const string WorkflowFolderBrowseIndex = "by-parent-normalized-name-and-id";
+    public const string PageWorkflowFoldersQuery = "page-workflow-folders";
+    public const string PageWorkflowDefinitionsQuery = "page-workflow-definitions";
+    public const string PageWorkflowDefinitionsByFolderQuery = "page-workflow-definitions-by-folder";
+    public const string PageAllWorkflowDefinitionsByFolderQuery = "page-all-workflow-definitions-by-folder";
+    public const string SearchWorkflowDefinitionsQuery = "search-workflow-definitions";
+    public const string WorkflowDefinitionBrowseOrderIndex = "by-last-modified-and-id";
+    public const string WorkflowDefinitionFolderAllBrowseOrderIndex = "by-folder-last-modified-and-id";
+    public const string WorkflowDefinitionLastModifiedAtField = "entity.lastModifiedAt";
+    public const string WorkflowDefinitionIdField = "entity.id";
+    public const string WorkflowDefinitionDeletedAtField = "entity.deletedAt";
+    public const string WorkflowDefinitionNameField = "entity.name";
+    public const string WorkflowDefinitionDescriptionField = "entity.description";
+    public const string WorkflowDefinitionFolderIdField = "entity.folderId";
 
     /// <summary>Constant partition value stamped on every workflow-definition document (see <see cref="ByCollectionIndex"/>).</summary>
     public const string WorkflowDefinitionCollection = "workflowDefinition";
@@ -58,6 +77,11 @@ public static class WorkflowsDesignStorageManifest
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
+                WorkflowFolderDocumentKind,
+                "Workflow folder",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query(ListAllQuery, ByCollectionIndex)]),
+            Unit(
                 WorkflowDefinitionVersionDocumentKind,
                 "Workflow definition version",
                 [Keyword(ByCollectionIndex, CollectionField)],
@@ -75,6 +99,12 @@ public static class WorkflowsDesignStorageManifest
         ],
         new HashSet<string> { "optimistic-concurrency" },
         []);
+
+    /// <summary>Creates the provider-facing design manifest including its admitted bounded browse route.</summary>
+    public static StorageManifest CreatePhysicalized() =>
+        WorkflowFolderStoragePhysicalizer.AddRoute(
+            WorkflowDefinitionPagingStoragePhysicalizer.AddRoute(
+                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create())));
 
     private static StorageUnit Unit(
         string documentKind,

@@ -125,6 +125,44 @@ public sealed class WorkflowsVersionReconcilerTests
     }
 
     [Fact]
+    public async Task Changed_source_metadata_and_deletion_preserve_manually_selected_folder()
+    {
+        var incoming = BuildIncomingVersion(
+            definitionId: "wf-filed",
+            version: "1.0.0",
+            name: "Source Name",
+            description: "Source description",
+            deleted: true);
+        var existingDef = new WorkflowDefinition
+        {
+            Id = "wf-filed",
+            Name = "Old Name",
+            Description = "Old description",
+            FolderId = "manually-selected",
+            IsSourceOwned = true
+        };
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-filed", "1.0.0"));
+        var saveDef = new SpySaveDefinitionCommand();
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs,
+            versions,
+            new SpyAddCommand<WorkflowDefinition>(),
+            new SpyAddCommand<WorkflowDefinitionVersion>(),
+            DuplicateHandling.Skip,
+            saveDef);
+
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var saved = Assert.Single(saveDef.Saved);
+        Assert.Equal("Source Name", saved.Name);
+        Assert.Equal("Source description", saved.Description);
+        Assert.NotNull(saved.DeletedAt);
+        Assert.Equal("manually-selected", saved.FolderId);
+    }
+
+    [Fact]
     public async Task Unchanged_metadata_on_existing_definition_writes_nothing()
     {
         // Incoming metadata is byte-for-byte the persisted metadata.

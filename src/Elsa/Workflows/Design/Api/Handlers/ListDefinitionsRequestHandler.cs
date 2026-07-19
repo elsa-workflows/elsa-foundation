@@ -31,28 +31,7 @@ public sealed class ListDefinitionsRequestHandler(
                 _ => definition.DeletedAt is null
             })
             .ToArray();
-        var projections = await projectionStore.ListByDefinitionIdsAsync(
-            definitions.Select(definition => definition.Id).ToArray(),
-            cancellationToken);
-        var projectionsByDefinitionId = projections.ToDictionary(
-            projection => projection.WorkflowDefinitionId,
-            StringComparer.Ordinal);
-
-        var items = definitions.Select(definition =>
-        {
-            projectionsByDefinitionId.TryGetValue(definition.Id, out var projection);
-            return new WorkflowDefinitionView(
-                definition.Id,
-                definition.Name,
-                definition.Description,
-                definition.CreatedAt,
-                definition.LastModifiedAt,
-                definition.DeletedAt,
-                projection?.DraftId,
-                projection?.LatestVersionId,
-                projection?.LatestVersion,
-                projection?.VersionCount ?? 0);
-        }).ToArray();
+        var items = await WorkflowDefinitionViewMapper.CreateAsync(definitions, projectionStore, cancellationToken);
         return new WorkflowDefinitionListView(items);
     }
 }
