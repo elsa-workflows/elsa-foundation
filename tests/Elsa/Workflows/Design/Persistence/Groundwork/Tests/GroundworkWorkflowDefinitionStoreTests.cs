@@ -143,7 +143,7 @@ public class GroundworkWorkflowDefinitionStoreTests
             PageSize: 10));
 
         var query = Assert.Single(queries.Observed);
-        Assert.Equal(WorkflowsDesignStorageManifest.PageByCreatedAtQuery, query.QueryIdentity);
+        Assert.Equal(WorkflowsDesignStorageManifest.PageByCreatedAtDescendingQuery, query.QueryIdentity);
         Assert.Equal(10, query.Skip);
         Assert.Equal(10, query.Take);
         Assert.Collection(
@@ -189,11 +189,12 @@ public class GroundworkWorkflowDefinitionStoreTests
         var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
         var routes = storage.BoundedQueries;
 
-        Assert.Equal(6, routes.Count);
+        Assert.Equal(13, routes.Count);
+        Assert.Contains(routes, route => route.Identity == WorkflowsDesignStorageManifest.ListAllQuery);
         var createdAtRoute = Assert.Single(routes, route => route.Identity == WorkflowsDesignStorageManifest.PageByCreatedAtQuery);
         Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, createdAtRoute.ExecutionClass);
         Assert.Equal(QueryPagingSupport.Offset, createdAtRoute.PagingSupport);
-        Assert.Equal(QuerySortSupport.Both, createdAtRoute.SortSupport);
+        Assert.Equal(QuerySortSupport.Ascending, createdAtRoute.SortSupport);
         Assert.True(createdAtRoute.SupportsTotalCount);
         Assert.Equal(
             [
@@ -218,6 +219,15 @@ public class GroundworkWorkflowDefinitionStoreTests
             IndexValueKind.DateTime,
             Assert.Single(storage.LogicalIndexes, index => index.Identity == WorkflowsDesignStorageManifest.WorkflowDefinitionByCreatedAtIndex)
                 .Fields[0].ValueKind);
+
+        var descendingRoute = Assert.Single(routes, route => route.Identity == WorkflowsDesignStorageManifest.PageByCreatedAtDescendingQuery);
+        Assert.Equal(
+            [
+                new BoundedQuerySortField(WorkflowsDesignStorageManifest.WorkflowDefinitionCreatedAtField, PhysicalSortDirection.Descending),
+                new BoundedQuerySortField(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, PhysicalSortDirection.Ascending)
+            ],
+            descendingRoute.SortFields);
+        Assert.Equal(QuerySortSupport.Descending, descendingRoute.SortSupport);
     }
 
     [Fact]

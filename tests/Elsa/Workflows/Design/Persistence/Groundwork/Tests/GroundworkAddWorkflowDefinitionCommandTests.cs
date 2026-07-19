@@ -1,6 +1,7 @@
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Xunit;
 
@@ -98,6 +99,59 @@ public class GroundworkAddWorkflowDefinitionCommandTests
         Assert.NotNull(readDraft);
         Assert.Equal("draft-1", readDraft!.Id);
         Assert.Equal(layout, readLayout);
+    }
+
+    [Fact]
+    public async Task Add_accepts_the_portable_128_character_definition_identity_and_name()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var command = new GroundworkAddWorkflowDefinitionCommand(
+            store,
+            Payloads,
+            new FakeSystemClock(),
+            GroundworkTestAccess.DefaultAccessContextAccessor);
+        var definition = new WorkflowDefinition
+        {
+            Id = new string('i', WorkflowDefinitionConstraints.MaximumIdLength),
+            Name = new string('n', WorkflowDefinitionConstraints.MaximumNameLength)
+        };
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft-128",
+            WorkflowDefinitionId = definition.Id,
+            State = WorkflowDefinitionState.Empty
+        };
+
+        await command.Execute(definition, draft, [], CancellationToken.None);
+
+        Assert.Single(store.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Add_rejects_values_larger_than_the_portable_limit_before_staging(bool oversizedId)
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var command = new GroundworkAddWorkflowDefinitionCommand(
+            store,
+            Payloads,
+            new FakeSystemClock(),
+            GroundworkTestAccess.DefaultAccessContextAccessor);
+        var definition = new WorkflowDefinition
+        {
+            Id = oversizedId ? new string('i', 129) : "definition-1",
+            Name = oversizedId ? "Name" : new string('n', 129)
+        };
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft-over-limit",
+            WorkflowDefinitionId = definition.Id,
+            State = WorkflowDefinitionState.Empty
+        };
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => command.Execute(definition, draft, [], CancellationToken.None));
+        Assert.Equal(0, store.BeginCount);
     }
 
     private sealed class FakeSystemClock : ISystemClock

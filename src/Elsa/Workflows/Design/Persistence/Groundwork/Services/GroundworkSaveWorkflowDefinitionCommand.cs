@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -16,6 +17,7 @@ public sealed class GroundworkSaveWorkflowDefinitionCommand(
 {
     public async Task Execute(WorkflowDefinition definition, CancellationToken cancellationToken = default)
     {
+        WorkflowDefinitionConstraints.Validate(definition);
         accessContextAccessor.Current.EnsureTenantScope(definition.TenantId);
         var existing = await new GroundworkWorkflowDefinitionStore(store).FindByIdAsync(definition.Id, cancellationToken);
         GroundworkEntityTimestamps.StampSaved(definition, existing, clock.UtcNow);

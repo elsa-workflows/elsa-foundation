@@ -8,7 +8,6 @@ public sealed record ListDefinitions(
     string? Name,
     string? SearchTerm,
     string? Description,
-    bool? TenantAgnostic,
     string? State = null,
     int Page = 1,
     int PageSize = 50,

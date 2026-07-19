@@ -45,6 +45,8 @@ public sealed record WorkflowDefinitionListQuery(
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(Page);
         if (PageSize is <= 0 or > MaximumPageSize)
             throw new ArgumentOutOfRangeException(nameof(PageSize), PageSize, $"Page size must be between 1 and {MaximumPageSize}.");
+        if ((long)(Page - 1) * PageSize > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(Page), Page, "Page and page size produce an unsupported offset.");
     }
 }
 

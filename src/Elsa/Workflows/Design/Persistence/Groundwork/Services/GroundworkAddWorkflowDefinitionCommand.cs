@@ -4,6 +4,7 @@ using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -31,6 +32,7 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
         IReadOnlyCollection<DesignMetadataRecord> layout,
         CancellationToken cancellation)
     {
+        WorkflowDefinitionConstraints.Validate(workflowDefinition);
         accessContextAccessor.Current.EnsureTenantScope(workflowDefinition.TenantId);
         accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
 

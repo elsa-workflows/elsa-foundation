@@ -13,6 +13,8 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
+using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -118,8 +120,25 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Equal(0, response.TotalCount);
         Assert.Empty(response.Items);
         Assert.Equal(
-            new ListDefinitions(null, null, "invoice", null, null, "all", Page: 2, PageSize: 3, SortBy: "createdAt", SortDirection: "desc"),
+            new ListDefinitions(null, null, "invoice", null, "all", Page: 2, PageSize: 3, SortBy: "createdAt", SortDirection: "desc"),
             host.RequestSender.LastWorkflowDefinitionRequest);
+    }
+
+    [Theory]
+    [InlineData("page=0")]
+    [InlineData("page=-1")]
+    [InlineData("pageSize=0")]
+    [InlineData("pageSize=101")]
+    [InlineData("page=2147483647&pageSize=2")]
+    [InlineData("sortBy=priority")]
+    [InlineData("sortDirection=sideways")]
+    public async Task Workflow_definition_list_returns_bad_request_for_invalid_public_paging_and_sort_input(string query)
+    {
+        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false);
+
+        var response = await host.Client.GetAsync($"/design/workflows/definitions?{query}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private sealed class CustomManagementHost(WebApplication app, HttpClient client, JourneyRequestSender requestSender) : IAsyncDisposable
@@ -214,6 +233,7 @@ public sealed class DomainManagementApiCompositionTests
 
             if (request is ListDefinitions workflowDefinitions)
             {
+                ValidateWorkflowDefinitionList(workflowDefinitions);
                 LastWorkflowDefinitionRequest = workflowDefinitions;
                 return Task.FromResult((T)(object)new WorkflowDefinitionListView(
                     [],
@@ -236,6 +256,30 @@ public sealed class DomainManagementApiCompositionTests
             };
 
             return Task.FromResult((T)response);
+        }
+
+        private static void ValidateWorkflowDefinitionList(ListDefinitions request)
+        {
+            var query = new WorkflowDefinitionListQuery(
+                new WorkflowDefinitionFilter(),
+                request.State?.ToLowerInvariant() == "all" ? WorkflowDefinitionLifecycleScope.All : WorkflowDefinitionLifecycleScope.Active,
+                request.SortBy?.ToLowerInvariant() switch
+                {
+                    null or "" => WorkflowDefinitionSortBy.Name,
+                    "name" => WorkflowDefinitionSortBy.Name,
+                    "lastmodifiedat" => WorkflowDefinitionSortBy.LastModifiedAt,
+                    "createdat" => WorkflowDefinitionSortBy.CreatedAt,
+                    _ => throw new ArgumentException("Invalid sortBy.")
+                },
+                request.SortDirection?.ToLowerInvariant() switch
+                {
+                    null or "" or "asc" => WorkflowDefinitionSortDirection.Asc,
+                    "desc" => WorkflowDefinitionSortDirection.Desc,
+                    _ => throw new ArgumentException("Invalid sortDirection.")
+                },
+                request.Page,
+                request.PageSize);
+            query.Validate();
         }
 
         private async Task<T> HandleExpressionDescriptors<T>(

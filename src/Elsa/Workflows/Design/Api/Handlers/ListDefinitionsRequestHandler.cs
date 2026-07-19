@@ -20,8 +20,7 @@ public sealed class ListDefinitionsRequestHandler(
             Id = request.Id,
             Description = request.Description,
             Name = request.Name,
-            SearchTerm = request.SearchTerm,
-            TenantAgnostic = request.TenantAgnostic
+            SearchTerm = request.SearchTerm
         };
 
         var listQuery = new WorkflowDefinitionListQuery(

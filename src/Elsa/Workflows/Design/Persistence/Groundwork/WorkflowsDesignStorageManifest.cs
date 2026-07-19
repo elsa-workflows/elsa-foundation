@@ -3,6 +3,7 @@ using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork;
@@ -14,31 +15,37 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork;
 /// host-selected document provider can back every Elsa module.
 /// <para>
 /// Each design unit declares a <b>by-collection keyword index</b> — equality on a constant partition value
-/// stamped on every document of the kind. Groundwork's portable document query supports equality-on-index
-/// today, so this index lets the closed <c>Query&lt;TEntity&gt;</c> spec enumerate a kind through the
-/// universally-supported equality contract; the richer operators (IN, substring, OR, ordering) are applied
-/// by <c>GroundworkReadStore&lt;TEntity&gt;</c>'s in-memory fallback until Groundwork ships the
-/// capability-spec uplift, at which point native index declarations can be added without changing the ports.
+/// stamped on every document of the kind. This remains the compatibility route for legacy
+/// <c>ListAsync</c> callers. Workflow-definition paging uses the explicit bounded routes and linked
+/// projection below, so filtering, ordering, counting, and the requested window execute in the provider.
 /// </para>
 /// </summary>
 public static class WorkflowsDesignStorageManifest
 {
-    public const string SchemaVersion = "1.0.0";
+    public const string SchemaVersion = "1.1.0";
 
     public const string ByCollectionIndex = "by-collection";
     public const string CollectionField = "collection";
     public const string ListAllQuery = "list-all";
 
-    public const string WorkflowDefinitionsTable = "workflow_definitions";
     public const string WorkflowDefinitionByNameIndex = "workflow-definition-by-name";
+    public const string WorkflowDefinitionByNameDescendingIndex = "workflow-definition-by-name-descending";
     public const string WorkflowDefinitionByLastModifiedAtIndex = "workflow-definition-by-last-modified-at";
+    public const string WorkflowDefinitionByLastModifiedAtDescendingIndex = "workflow-definition-by-last-modified-at-descending";
     public const string WorkflowDefinitionByCreatedAtIndex = "workflow-definition-by-created-at";
+    public const string WorkflowDefinitionByCreatedAtDescendingIndex = "workflow-definition-by-created-at-descending";
     public const string PageByNameQuery = "page-by-name";
     public const string PageByLastModifiedAtQuery = "page-by-last-modified-at";
     public const string PageByCreatedAtQuery = "page-by-created-at";
+    public const string PageByNameDescendingQuery = "page-by-name-descending";
+    public const string PageByLastModifiedAtDescendingQuery = "page-by-last-modified-at-descending";
+    public const string PageByCreatedAtDescendingQuery = "page-by-created-at-descending";
     public const string SearchPageByNameQuery = "search-page-by-name";
     public const string SearchPageByLastModifiedAtQuery = "search-page-by-last-modified-at";
     public const string SearchPageByCreatedAtQuery = "search-page-by-created-at";
+    public const string SearchPageByNameDescendingQuery = "search-page-by-name-descending";
+    public const string SearchPageByLastModifiedAtDescendingQuery = "search-page-by-last-modified-at-descending";
+    public const string SearchPageByCreatedAtDescendingQuery = "search-page-by-created-at-descending";
     public const string WorkflowDefinitionIdField = "entity.id";
     public const string WorkflowDefinitionNameField = "entity.name";
     public const string WorkflowDefinitionDescriptionField = "entity.description";
@@ -96,39 +103,61 @@ public static class WorkflowsDesignStorageManifest
     /// deliberately ordinary because substring predicates can scan; no-search routes stay scale-bearing.
     /// </summary>
     public static string PageQueryIdentity(WorkflowDefinitionListQuery query) =>
-        (!string.IsNullOrWhiteSpace(query.Filter.SearchTerm), query.SortBy) switch
+        (!string.IsNullOrWhiteSpace(query.Filter.SearchTerm), query.SortBy, query.SortDirection) switch
         {
-            (false, WorkflowDefinitionSortBy.LastModifiedAt) => PageByLastModifiedAtQuery,
-            (false, WorkflowDefinitionSortBy.CreatedAt) => PageByCreatedAtQuery,
-            (false, _) => PageByNameQuery,
-            (true, WorkflowDefinitionSortBy.LastModifiedAt) => SearchPageByLastModifiedAtQuery,
-            (true, WorkflowDefinitionSortBy.CreatedAt) => SearchPageByCreatedAtQuery,
-            (true, _) => SearchPageByNameQuery
+            (false, WorkflowDefinitionSortBy.LastModifiedAt, WorkflowDefinitionSortDirection.Desc) => PageByLastModifiedAtDescendingQuery,
+            (false, WorkflowDefinitionSortBy.CreatedAt, WorkflowDefinitionSortDirection.Desc) => PageByCreatedAtDescendingQuery,
+            (false, WorkflowDefinitionSortBy.Name, WorkflowDefinitionSortDirection.Desc) => PageByNameDescendingQuery,
+            (false, WorkflowDefinitionSortBy.LastModifiedAt, _) => PageByLastModifiedAtQuery,
+            (false, WorkflowDefinitionSortBy.CreatedAt, _) => PageByCreatedAtQuery,
+            (false, _, _) => PageByNameQuery,
+            (true, WorkflowDefinitionSortBy.LastModifiedAt, WorkflowDefinitionSortDirection.Desc) => SearchPageByLastModifiedAtDescendingQuery,
+            (true, WorkflowDefinitionSortBy.CreatedAt, WorkflowDefinitionSortDirection.Desc) => SearchPageByCreatedAtDescendingQuery,
+            (true, WorkflowDefinitionSortBy.Name, WorkflowDefinitionSortDirection.Desc) => SearchPageByNameDescendingQuery,
+            (true, WorkflowDefinitionSortBy.LastModifiedAt, _) => SearchPageByLastModifiedAtQuery,
+            (true, WorkflowDefinitionSortBy.CreatedAt, _) => SearchPageByCreatedAtQuery,
+            (true, _, _) => SearchPageByNameQuery
         };
 
     private static StorageUnit WorkflowDefinitionUnit()
     {
+        var sharedStorage = new SharedStorageBinding(LegacyGroundworkStorageManifestPhysicalizer.SharedDocumentsLogicalName);
         var envelope = new DocumentEnvelopeDefinition();
+        var collectionIndex = CollectionIndex();
         var nameIndex = SortIndex(WorkflowDefinitionByNameIndex, WorkflowDefinitionNameField, IndexValueKind.String);
+        var nameDescendingIndex = SortIndex(WorkflowDefinitionByNameDescendingIndex, WorkflowDefinitionNameField, IndexValueKind.String);
         var lastModifiedAtIndex = SortIndex(WorkflowDefinitionByLastModifiedAtIndex, WorkflowDefinitionLastModifiedAtField, IndexValueKind.DateTime);
+        var lastModifiedAtDescendingIndex = SortIndex(WorkflowDefinitionByLastModifiedAtDescendingIndex, WorkflowDefinitionLastModifiedAtField, IndexValueKind.DateTime);
         var createdAtIndex = SortIndex(WorkflowDefinitionByCreatedAtIndex, WorkflowDefinitionCreatedAtField, IndexValueKind.DateTime);
-        var definition = PhysicalTableDefinition.PhysicalEntityTable(
-            WorkflowDefinitionsTable,
+        var createdAtDescendingIndex = SortIndex(WorkflowDefinitionByCreatedAtDescendingIndex, WorkflowDefinitionCreatedAtField, IndexValueKind.DateTime);
+        var definition = PhysicalTableDefinition.SharedDocuments(
+            sharedStorage,
             [
-                // Both fields participate in portable composite indexes; keep their SQL Server keys bounded.
-                StringProjection(WorkflowDefinitionIdField, length: 128, isNullable: false),
-                StringProjection(WorkflowDefinitionNameField, length: 128, isNullable: false),
+                // Preserve the legacy linked projection unchanged so its existing physical operations remain
+                // part of the additive target while the paged routes add their own columns and indexes.
+                new ProjectedColumnDefinition(
+                    ByCollectionIndex,
+                    CollectionField,
+                    PortablePhysicalType.String,
+                    Length: LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength,
+                    IsNullable: true),
+                StringProjection(WorkflowDefinitionIdField, length: WorkflowDefinitionConstraints.MaximumIdLength, isNullable: false),
+                StringProjection(WorkflowDefinitionNameField, length: WorkflowDefinitionConstraints.MaximumNameLength, isNullable: false),
                 StringProjection(WorkflowDefinitionDescriptionField),
                 new ProjectedColumnDefinition(WorkflowDefinitionDeletedAtField, WorkflowDefinitionDeletedAtField, PortablePhysicalType.DateTime),
                 new ProjectedColumnDefinition(WorkflowDefinitionCreatedAtField, WorkflowDefinitionCreatedAtField, PortablePhysicalType.DateTime, IsNullable: false),
                 new ProjectedColumnDefinition(WorkflowDefinitionLastModifiedAtField, WorkflowDefinitionLastModifiedAtField, PortablePhysicalType.DateTime, IsNullable: false)
             ],
-            envelope,
             [
+                LegacyCollectionPhysicalIndex(envelope, collectionIndex),
                 PhysicalIndex(envelope, nameIndex, WorkflowDefinitionNameField),
+                PhysicalIndex(envelope, nameDescendingIndex, WorkflowDefinitionNameField, PhysicalSortDirection.Descending),
                 PhysicalIndex(envelope, lastModifiedAtIndex, WorkflowDefinitionLastModifiedAtField),
-                PhysicalIndex(envelope, createdAtIndex, WorkflowDefinitionCreatedAtField)
-            ]);
+                PhysicalIndex(envelope, lastModifiedAtDescendingIndex, WorkflowDefinitionLastModifiedAtField, PhysicalSortDirection.Descending),
+                PhysicalIndex(envelope, createdAtIndex, WorkflowDefinitionCreatedAtField),
+                PhysicalIndex(envelope, createdAtDescendingIndex, WorkflowDefinitionCreatedAtField, PhysicalSortDirection.Descending)
+            ],
+            linkedProjectionLogicalName: "workflowDefinition_projection");
         return new StorageUnit(
             new StorageUnitIdentity(WorkflowDefinitionDocumentKind),
             "Workflow definition",
@@ -143,16 +172,23 @@ public static class WorkflowsDesignStorageManifest
             PhysicalizationPolicy.Portable)
         {
             PhysicalStorage = new StorageUnitPhysicalStorage(
-                StorageUnitProvisioningMode.Declared,
+                StorageUnitProvisioningMode.Dynamic,
                 PhysicalStoragePolicy.Explicit(definition),
-                [nameIndex, lastModifiedAtIndex, createdAtIndex],
+                [collectionIndex, nameIndex, nameDescendingIndex, lastModifiedAtIndex, lastModifiedAtDescendingIndex, createdAtIndex, createdAtDescendingIndex],
                 [
+                    LegacyListAllRoute(collectionIndex),
                     PageRoute(PageByNameQuery, nameIndex, WorkflowDefinitionNameField, BoundedQueryExecutionClass.ScaleBearing),
+                    PageRoute(PageByNameDescendingQuery, nameDescendingIndex, WorkflowDefinitionNameField, BoundedQueryExecutionClass.ScaleBearing, direction: PhysicalSortDirection.Descending),
                     PageRoute(PageByLastModifiedAtQuery, lastModifiedAtIndex, WorkflowDefinitionLastModifiedAtField, BoundedQueryExecutionClass.ScaleBearing),
+                    PageRoute(PageByLastModifiedAtDescendingQuery, lastModifiedAtDescendingIndex, WorkflowDefinitionLastModifiedAtField, BoundedQueryExecutionClass.ScaleBearing, direction: PhysicalSortDirection.Descending),
                     PageRoute(PageByCreatedAtQuery, createdAtIndex, WorkflowDefinitionCreatedAtField, BoundedQueryExecutionClass.ScaleBearing),
+                    PageRoute(PageByCreatedAtDescendingQuery, createdAtDescendingIndex, WorkflowDefinitionCreatedAtField, BoundedQueryExecutionClass.ScaleBearing, direction: PhysicalSortDirection.Descending),
                     PageRoute(SearchPageByNameQuery, nameIndex, WorkflowDefinitionNameField, BoundedQueryExecutionClass.Ordinary, supportsContains: true),
+                    PageRoute(SearchPageByNameDescendingQuery, nameDescendingIndex, WorkflowDefinitionNameField, BoundedQueryExecutionClass.Ordinary, supportsContains: true, direction: PhysicalSortDirection.Descending),
                     PageRoute(SearchPageByLastModifiedAtQuery, lastModifiedAtIndex, WorkflowDefinitionLastModifiedAtField, BoundedQueryExecutionClass.Ordinary, supportsContains: true),
-                    PageRoute(SearchPageByCreatedAtQuery, createdAtIndex, WorkflowDefinitionCreatedAtField, BoundedQueryExecutionClass.Ordinary, supportsContains: true)
+                    PageRoute(SearchPageByLastModifiedAtDescendingQuery, lastModifiedAtDescendingIndex, WorkflowDefinitionLastModifiedAtField, BoundedQueryExecutionClass.Ordinary, supportsContains: true, direction: PhysicalSortDirection.Descending),
+                    PageRoute(SearchPageByCreatedAtQuery, createdAtIndex, WorkflowDefinitionCreatedAtField, BoundedQueryExecutionClass.Ordinary, supportsContains: true),
+                    PageRoute(SearchPageByCreatedAtDescendingQuery, createdAtDescendingIndex, WorkflowDefinitionCreatedAtField, BoundedQueryExecutionClass.Ordinary, supportsContains: true, direction: PhysicalSortDirection.Descending)
                 ])
         };
     }
@@ -164,23 +200,50 @@ public static class WorkflowsDesignStorageManifest
         isUnique: false,
         MissingValueBehavior.Excluded);
 
+    private static LogicalIndexDeclaration CollectionIndex() => new(
+        ByCollectionIndex,
+        [new IndexField(CollectionField)],
+        IndexValueKind.Keyword,
+        isUnique: false,
+        MissingValueBehavior.Excluded);
+
+    private static BoundedQueryDeclaration LegacyListAllRoute(LogicalIndexDeclaration index) => new(
+        ListAllQuery,
+        index.Identity,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        QuerySortSupport.None,
+        QueryPagingSupport.Offset,
+        BoundedQueryExecutionClass.Ordinary);
+
     private static PhysicalIndexDefinition PhysicalIndex(
         DocumentEnvelopeDefinition envelope,
         LogicalIndexDeclaration index,
-        string sortField) => new(
+        string sortField,
+        PhysicalSortDirection direction = PhysicalSortDirection.Ascending) => new(
         index.Identity,
         [
             new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
-            new PhysicalIndexColumnDefinition(sortField, 1),
+            new PhysicalIndexColumnDefinition(sortField, 1, direction),
             new PhysicalIndexColumnDefinition(WorkflowDefinitionIdField, 2)
         ]);
+
+    private static PhysicalIndexDefinition LegacyCollectionPhysicalIndex(
+        DocumentEnvelopeDefinition envelope,
+        LogicalIndexDeclaration index) => new(
+        index.Identity,
+        [
+            new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+            new PhysicalIndexColumnDefinition(ByCollectionIndex, 1)
+        ],
+        missingValueBehavior: MissingValueBehavior.Excluded);
 
     private static BoundedQueryDeclaration PageRoute(
         string identity,
         LogicalIndexDeclaration index,
         string sortField,
         BoundedQueryExecutionClass executionClass,
-        bool supportsContains = false)
+        bool supportsContains = false,
+        PhysicalSortDirection direction = PhysicalSortDirection.Ascending)
     {
         var operations = new HashSet<PortableQueryOperation>
         {
@@ -213,14 +276,16 @@ public static class WorkflowsDesignStorageManifest
             identity,
             index.Identity,
             operations,
-            QuerySortSupport.Both,
+            direction == PhysicalSortDirection.Descending
+                ? QuerySortSupport.Descending
+                : QuerySortSupport.Ascending,
             QueryPagingSupport.Offset,
             executionClass,
             supportsDisjunction: supportsContains,
             supportsTotalCount: true,
             sortFields:
             [
-                new BoundedQuerySortField(sortField, PhysicalSortDirection.Ascending),
+                new BoundedQuerySortField(sortField, direction),
                 new BoundedQuerySortField(WorkflowDefinitionIdField, PhysicalSortDirection.Ascending)
             ],
             predicateFields:
@@ -257,17 +322,17 @@ public static class WorkflowsDesignStorageManifest
             residualPredicateFields: residuals);
     }
 
-    private static ProjectedColumnDefinition StringProjection(
-        string path,
-        int? length = null,
-        bool isNullable = true) =>
-        new(path, path, PortablePhysicalType.String, Length: length, IsNullable: isNullable);
-
     private static BoundedQueryResidualPredicateField Residual(
         string path,
         IndexValueKind valueKind,
         params PortableQueryOperation[] operations) =>
         new(path, valueKind, operations.ToHashSet());
+
+    private static ProjectedColumnDefinition StringProjection(
+        string path,
+        int? length = null,
+        bool isNullable = true) =>
+        new(path, path, PortablePhysicalType.String, Length: length, IsNullable: isNullable);
 
     private static StorageUnit Unit(
         string documentKind,

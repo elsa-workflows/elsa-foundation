@@ -30,13 +30,14 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
         WorkflowDefinitionState state,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        WorkflowDefinitionConstraints.ValidateName(name);
         ArgumentNullException.ThrowIfNull(state);
         SubmittedActivityTreeValidator.Validate(state.RootActivity, activityStructureService);
 
         var definitionId = identityGenerator.Generate();
         var draftId = identityGenerator.Generate();
         var versionId = identityGenerator.Generate();
+        WorkflowDefinitionConstraints.ValidateId(definitionId);
 
         var definition = new WorkflowDefinition
         {

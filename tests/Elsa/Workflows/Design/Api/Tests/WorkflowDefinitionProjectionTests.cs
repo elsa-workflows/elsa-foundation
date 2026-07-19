@@ -23,7 +23,7 @@ public sealed class WorkflowDefinitionProjectionTests
         var fixture = new ProjectionFixture(25);
 
         var result = await fixture.CreateHandler().Handle(
-            new ListDefinitions(null, null, null, null, null, "all", Page: 2, PageSize: 3),
+            new ListDefinitions(null, null, null, null, "all", Page: 2, PageSize: 3),
             CancellationToken.None);
 
         Assert.Equal(2, result.Page);
@@ -41,7 +41,7 @@ public sealed class WorkflowDefinitionProjectionTests
         var handler = new ProjectionFixture(1).CreateHandler();
 
         await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
-            new ListDefinitions(null, null, null, null, null, SortBy: sortBy, SortDirection: sortDirection),
+            new ListDefinitions(null, null, null, null, SortBy: sortBy, SortDirection: sortDirection),
             CancellationToken.None));
     }
 
@@ -54,8 +54,24 @@ public sealed class WorkflowDefinitionProjectionTests
         var handler = new ProjectionFixture(1).CreateHandler();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => handler.Handle(
-            new ListDefinitions(null, null, null, null, null, Page: page, PageSize: pageSize),
+            new ListDefinitions(null, null, null, null, Page: page, PageSize: pageSize),
             CancellationToken.None));
+    }
+
+    [Fact]
+    public void Paging_offset_accepts_the_last_representable_window_and_rejects_the_next()
+    {
+        var accepted = new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter(),
+            Page: 1_073_741_824,
+            PageSize: 2);
+
+        accepted.Validate();
+        Assert.Equal(2_147_483_646, accepted.Skip);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter(),
+            Page: 1_073_741_825,
+            PageSize: 2).Validate());
     }
 
     [Fact]
@@ -69,7 +85,7 @@ public sealed class WorkflowDefinitionProjectionTests
         ]);
 
         var result = await fixture.CreateHandler().Handle(
-            new ListDefinitions(null, null, null, null, null, PageSize: 3, SortDirection: "desc"),
+            new ListDefinitions(null, null, null, null, PageSize: 3, SortDirection: "desc"),
             CancellationToken.None);
 
         Assert.Equal(["c", "a", "b"], result.Items.Select(item => item.Id));
@@ -81,7 +97,7 @@ public sealed class WorkflowDefinitionProjectionTests
         var fixture = new ProjectionFixture(3);
 
         var result = await fixture.CreateHandler().Handle(
-            new ListDefinitions(null, null, "needle", null, null, "all", Page: 9, PageSize: 2),
+            new ListDefinitions(null, null, "needle", null, "all", Page: 9, PageSize: 2),
             CancellationToken.None);
 
         Assert.Empty(result.Items);
@@ -100,7 +116,7 @@ public sealed class WorkflowDefinitionProjectionTests
         var handler = fixture.CreateHandler();
 
         var result = (await handler.Handle(
-            new ListDefinitions(null, null, null, null, null, "all"),
+            new ListDefinitions(null, null, null, null, "all"),
             CancellationToken.None)).Items.ToArray();
 
         Assert.Equal(definitionCount, result.Length);
@@ -125,7 +141,7 @@ public sealed class WorkflowDefinitionProjectionTests
     {
         var fixture = new ProjectionFixture(25);
         var result = await fixture.CreateHandler().Handle(
-            new ListDefinitions(null, null, null, null, null, state),
+            new ListDefinitions(null, null, null, null, state),
             CancellationToken.None);
 
         Assert.Equal(expectedCount, result.Items.Count);
