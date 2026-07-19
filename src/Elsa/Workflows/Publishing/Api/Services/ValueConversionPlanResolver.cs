@@ -55,6 +55,22 @@ public sealed class ValueConversionPlanResolver(IValueConversionProfileRegistry?
         if (ValueConversionCompatibility.IsCanonicalAnyTarget(targetType) && sourceRepresentation is ValueRepresentation.TypedValue or ValueRepresentation.StructuredValue or ValueRepresentation.TextValue)
             return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.CanonicalAny, null, limits, options);
 
+        if (sourceRepresentation == ValueRepresentation.FormattedContent &&
+            (ValueConversionCompatibility.IsCanonicalAnyTarget(targetType) || ValueConversionCompatibility.IsJsonObjectTarget(targetType)) &&
+            ProfileRegistry.TryGet(new ValueConversionProfileReference("elsa.json", "1"), out var jsonDefinition) &&
+            jsonDefinition.Supports(sourceRepresentation, targetType))
+        {
+            return Create(
+                sourceType,
+                sourceRepresentation,
+                targetType,
+                mode,
+                ValueConversionOperation.Profile,
+                jsonDefinition.Profile,
+                limits,
+                options);
+        }
+
         throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, ExplainAutomaticRejection(sourceType, targetType));
     }
 
@@ -161,7 +177,13 @@ public sealed class BuiltInValueConversionProfileRegistry : IValueConversionProf
     public static BuiltInValueConversionProfileRegistry Instance { get; } = new();
 
     private readonly IReadOnlyDictionary<(string Id, string Version), ValueConversionProfileDefinition> definitions =
-        new Dictionary<(string Id, string Version), ValueConversionProfileDefinition>();
+        new Dictionary<(string Id, string Version), ValueConversionProfileDefinition>
+        {
+            [("elsa.json", "1")] = new(
+                new ValueConversionProfileReference("elsa.json", "1"),
+                new HashSet<ValueRepresentation> { ValueRepresentation.FormattedContent },
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Elsa.Any", "Any", "JsonNode", "JsonObject" })
+        };
 
     public bool TryGet(ValueConversionProfileReference profile, out ValueConversionProfileDefinition definition) =>
         definitions.TryGetValue((profile.Id, profile.Version), out definition!);

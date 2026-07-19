@@ -324,7 +324,7 @@ public sealed class ExecutableNodeCompiler(
                     new ValueTypeDescriptor(type.Alias, type.CollectionKind),
                     attribute.IsRequired,
                     CompileActivityPolicy(outputDefinition?.StorageDriverType, outputState, $"Result projection '{key}' on activity node '{activity.NodeId}'"),
-                    ValueRepresentationDefaults.Infer(new ValueTypeDescriptor(type.Alias, type.CollectionKind)));
+                    ResolveSourceRepresentation(attribute, outputDefinition, new ValueTypeDescriptor(type.Alias, type.CollectionKind)));
             })
             .ToArray();
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
@@ -351,6 +351,13 @@ public sealed class ExecutableNodeCompiler(
             outcomes,
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)));
     }
+
+    private static ValueRepresentation ResolveSourceRepresentation(
+        OutputAttribute attribute,
+        OutputDefinition? outputDefinition,
+        ValueTypeDescriptor sourceType) =>
+        outputDefinition?.SourceRepresentation ??
+        (attribute.HasSourceRepresentation ? attribute.SourceRepresentation : ValueRepresentationDefaults.Infer(sourceType));
 
     private static IReadOnlyCollection<InputDefinition> NormalizeLegacyClrInputNullability(
         IEnumerable<InputDefinition> inputDefinitions,

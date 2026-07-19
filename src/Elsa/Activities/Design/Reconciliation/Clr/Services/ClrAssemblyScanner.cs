@@ -165,6 +165,10 @@ public sealed class ClrAssemblyScanner(
                     continue;
 
                 var key = ReadNamedStringArgument(attribute, nameof(OutputAttribute.Key)) ?? property.Name;
+                var sourceRepresentation = HasNamedArgument(attribute, nameof(OutputAttribute.HasSourceRepresentation)) &&
+                                           ReadNamedBoolArgument(attribute, nameof(OutputAttribute.HasSourceRepresentation))
+                    ? ReadNamedEnumArgument<ValueRepresentation>(attribute, nameof(OutputAttribute.SourceRepresentation))
+                    : null;
                 outputs.Add(new OutputDefinition(
                     ReferenceKey: key,
                     Name: property.Name,
@@ -173,7 +177,8 @@ public sealed class ClrAssemblyScanner(
                     DisplayName: property.Name,
                     Category: null,
                     IsRequired: !HasNamedArgument(attribute, nameof(OutputAttribute.IsRequired)) ||
-                                ReadNamedBoolArgument(attribute, nameof(OutputAttribute.IsRequired))));
+                                ReadNamedBoolArgument(attribute, nameof(OutputAttribute.IsRequired)),
+                    SourceRepresentation: sourceRepresentation));
             }
         }
 
@@ -315,6 +320,18 @@ public sealed class ClrAssemblyScanner(
     {
         var value = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == name).TypedValue.Value;
         return value is bool boolValue && boolValue;
+    }
+
+    private static TEnum? ReadNamedEnumArgument<TEnum>(CustomAttributeData attribute, string name)
+        where TEnum : struct, Enum
+    {
+        var value = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == name).TypedValue.Value;
+        return value switch
+        {
+            TEnum enumValue => enumValue,
+            int integer when Enum.IsDefined(typeof(TEnum), integer) => (TEnum)Enum.ToObject(typeof(TEnum), integer),
+            _ => null
+        };
     }
 
     private static bool IsActivityType(Type type) =>

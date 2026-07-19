@@ -544,6 +544,17 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void SendHttpRequest_ResponseBody_IsDiscoveredAsFormattedContent()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(SendHttpRequest).FullName);
+        var responseBody = model.Outputs.Single(output => output.ReferenceKey == "ResponseBody");
+
+        Assert.Equal(ValueRepresentation.FormattedContent, responseBody.SourceRepresentation);
+    }
+
+    [Fact]
     public void DiscoveredActivities_AreCategorised_ByAssemblyNameLastSegment()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);

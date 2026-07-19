@@ -3,6 +3,7 @@ using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Microsoft.Extensions.Options;
 
@@ -166,7 +167,12 @@ public sealed class SendHttpRequest(
 /// <summary>The atomic response document returned by <see cref="SendHttpRequest"/>.</summary>
 public sealed record SendHttpRequestResult(
     [property: Output(Key = "StatusCode", Path = "statusCode")] int? StatusCode,
-    [property: Output(Key = "ResponseBody", Path = "responseBody")] string? ResponseBody,
+    [property: Output(
+        Key = "ResponseBody",
+        Path = "responseBody",
+        HasSourceRepresentation = true,
+        SourceRepresentation = ValueRepresentation.FormattedContent)]
+    string? ResponseBody,
     [property: Output(Key = "ResponseHeaders", Path = "responseHeaders")] IDictionary<string, string[]>? ResponseHeaders)
 {
     public static SendHttpRequestResult NoResponse { get; } = new(null, null, null);

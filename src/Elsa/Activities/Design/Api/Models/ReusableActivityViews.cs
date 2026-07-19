@@ -68,8 +68,7 @@ public static class ActivityContractViewMappings
             x.Category,
             x.Order,
             x.UiHint,
-            Clone(x.UiSpecifications),
-            x.SourceRepresentation)).ToArray(),
+            Clone(x.UiSpecifications))).ToArray(),
         view.Outputs.Select(x => new ActivityOutputContract(
             x.ReferenceKey,
             x.Name,
@@ -114,7 +113,8 @@ public static class ActivityContractViewMappings
             x.Category,
             x.Order,
             x.UiHint,
-            Clone(x.UiSpecifications))).ToArray(),
+            Clone(x.UiSpecifications),
+            x.SourceRepresentation)).ToArray(),
         contract.Outcomes.Select(x => new ActivityOutcomeContractView(x.ReferenceKey, x.Name, x.IsEmitted, x.Description)).ToArray());
 
     public static TypeReference ToDomain(this ActivityTypeReferenceView view)
