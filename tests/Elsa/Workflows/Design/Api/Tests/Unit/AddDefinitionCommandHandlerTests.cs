@@ -7,6 +7,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
@@ -61,6 +62,43 @@ public sealed class AddDefinitionCommandHandlerTests
 
         Assert.Equal("folder-1", persistence.Definition!.FolderId);
         Assert.Equal("folder-1", result.Definition.FolderId);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task Creation_rejects_a_blank_folder_identifier_instead_of_reinterpreting_it_as_unfiled(string folderId)
+    {
+        var identities = new SequentialIdentityGenerator();
+        var persistence = new RecordingAddWorkflowDefinitionCommand();
+        var handler = new AddDefinitionCommandHandler(
+            new WorkflowDefinitionFactory(identities),
+            new WorkflowDefinitionDraftFactory(identities),
+            persistence);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            handler.Handle(new AddDefinition("Filed workflow", null, FolderId: folderId), CancellationToken.None));
+
+        Assert.Null(persistence.Definition);
+    }
+
+    [Fact]
+    public async Task Creation_rejects_an_overlong_folder_identifier()
+    {
+        var identities = new SequentialIdentityGenerator();
+        var persistence = new RecordingAddWorkflowDefinitionCommand();
+        var handler = new AddDefinitionCommandHandler(
+            new WorkflowDefinitionFactory(identities),
+            new WorkflowDefinitionDraftFactory(identities),
+            persistence);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            handler.Handle(
+                new AddDefinition(
+                    "Filed workflow",
+                    null,
+                    FolderId: new string('f', WorkflowFolderNames.MaximumIdentifierLength + 1)),
+                CancellationToken.None));
     }
 
     [Fact]

@@ -79,7 +79,7 @@ public sealed class GroundworkRestructureWorkflowFoldersCommandTests
         await folders.CreateAsync(Folder("child", "Child", "root"));
         var command = new GroundworkRestructureWorkflowFoldersCommand(store, access, clock);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => command.MoveAsync("root", "child"));
+        await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.MoveAsync("root", "child"));
         await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.DeleteEmptyAsync("root"));
         Assert.NotNull(await folders.FindWithAncestorsAsync("root"));
         Assert.NotNull(await folders.FindWithAncestorsAsync("child"));

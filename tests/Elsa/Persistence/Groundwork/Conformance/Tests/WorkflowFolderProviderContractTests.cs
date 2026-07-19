@@ -84,6 +84,10 @@ public sealed class WorkflowFolderProviderContractTests
         Assert.Null(await tenantBFolders.FindWithAncestorsAsync("nested-a"));
         Assert.Empty(await tenantBFolders.FindManyWithAncestorsAsync(["nested-a"]));
         await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            tenantBFolders.ListDirectChildrenAsync(new WorkflowFolderPageRequest("nested-a", 10)));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            tenantBFolders.ListDirectChildrenAsync(new WorkflowFolderPageRequest("missing", 10)));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() =>
             tenantBFolders.CreateAsync(Folder("cross-tenant-child", "No access", "nested-a")));
     }
 
@@ -286,6 +290,8 @@ public sealed class WorkflowFolderProviderContractTests
             await folders.CreateAsync(Folder("parent-b", "Parent B"));
             await folders.CreateAsync(Folder("moving", "Moving"));
             await folders.CreateAsync(Folder("child", "Child", "moving"));
+            for (var index = 0; index <= 100; index++)
+                await folders.CreateAsync(Folder($"paged-{index:D3}", $"Paged {index:D3}", "moving"));
             await folders.CreateAsync(Folder("empty", "Empty"));
             await folders.CreateAsync(Folder("collision", "Renamed", "parent-b"));
             var bounded = new RecordingBoundedDocumentStore(
@@ -304,13 +310,16 @@ public sealed class WorkflowFolderProviderContractTests
             Assert.Contains(
                 bounded.Observations,
                 observation => observation.Query.QueryIdentity == WorkflowsDesignStorageManifest.PageWorkflowFoldersQuery);
+            Assert.Contains(
+                bounded.Observations,
+                observation => observation.Query.Continuation is not null);
             Assert.All(bounded.Observations, observation =>
             {
                 Assert.Equal(WorkflowsDesignStorageManifest.PageWorkflowFoldersQuery, observation.Query.QueryIdentity);
                 Assert.Equal(100, observation.Query.Take);
                 Assert.InRange(observation.MaterializedDocuments, 0, 100);
             });
-            await Assert.ThrowsAsync<ArgumentException>(() => command.MoveAsync("parent-a", "child"));
+            await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.MoveAsync("parent-a", "child"));
             await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.DeleteEmptyAsync("parent-a"));
 
             await new GroundworkSaveWorkflowDefinitionCommand(client.DocumentStore, new Clock(), access).Execute(new WorkflowDefinition
@@ -434,9 +443,12 @@ public sealed class WorkflowFolderProviderContractTests
         await using var reopened = await driver.OpenPhysicalClientAsync(Access(tenant));
         var folders = Store(reopened, tenant);
         var target = await folders.FindWithAncestorsAsync("target");
-        var children = await folders.ListDirectChildrenAsync(new WorkflowFolderPageRequest("target", 10));
-        Assert.True(target is null && children.Items.Count == 0 ||
-                    target is not null && Assert.Single(children.Items).Id == "child");
+        if (target is null)
+            await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+                folders.ListDirectChildrenAsync(new WorkflowFolderPageRequest("target", 10)));
+        else
+            Assert.Equal("child", Assert.Single(
+                (await folders.ListDirectChildrenAsync(new WorkflowFolderPageRequest("target", 10))).Items).Id);
     }
 
     [Theory]

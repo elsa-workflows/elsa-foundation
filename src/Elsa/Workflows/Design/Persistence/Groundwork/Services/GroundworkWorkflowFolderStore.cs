@@ -31,8 +31,27 @@ public sealed class GroundworkWorkflowFolderStore(
     {
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
+        if (request.ParentFolderId is { } requestedParentId)
+        {
+            var access = accessContextAccessor.Current;
+            var parentEnvelope = await store.LoadAsync(
+                WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
+                requestedParentId,
+                cancellationToken);
+            if (parentEnvelope is null)
+                throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), requestedParentId);
+            var parent = ReadFolder(parentEnvelope);
+            try
+            {
+                access.EnsureTenantScope(parent.TenantId);
+            }
+            catch (InvalidOperationException)
+            {
+                throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), requestedParentId);
+            }
+        }
         var parentKey = WorkflowFolder.ToParentKey(
-            string.IsNullOrWhiteSpace(request.ParentFolderId) ? null : request.ParentFolderId);
+            request.ParentFolderId);
         var bounded = _boundedStore
             ?? throw new InvalidOperationException("Workflow-folder browsing requires an admitted bounded document-store runtime.");
         DocumentQueryResult result;
@@ -126,14 +145,16 @@ public sealed class GroundworkWorkflowFolderStore(
     {
         ArgumentNullException.ThrowIfNull(folder);
         WorkflowFolderNames.ValidateIdentifier(folder.Id, nameof(folder.Id));
-        if (!string.IsNullOrWhiteSpace(folder.ParentFolderId))
+        if (folder.ParentFolderId is not null)
             WorkflowFolderNames.ValidateIdentifier(folder.ParentFolderId, nameof(folder.ParentFolderId));
+        var normalized = WorkflowFolderNames.Normalize(folder.Name);
+        folder.Name = normalized.Name;
+        folder.NormalizedName = normalized.NormalizedName;
         var access = accessContextAccessor.Current;
         if (access.Scope is null)
             throw new InvalidOperationException("Workflow folders require a tenant-scoped persistence context.");
         access.EnsureTenantScope(folder.TenantId);
         folder.TenantId ??= access.Scope.Value;
-        folder.ParentFolderId = string.IsNullOrWhiteSpace(folder.ParentFolderId) ? null : folder.ParentFolderId;
         folder.ParentKey = WorkflowFolder.ToParentKey(folder.ParentFolderId);
         try
         {

@@ -8,6 +8,8 @@ public sealed record WorkflowFolderPageRequest(string? ParentFolderId, int PageS
 {
     public void Validate()
     {
+        if (ParentFolderId is not null)
+            WorkflowFolderNames.ValidateIdentifier(ParentFolderId, nameof(ParentFolderId));
         if (PageSize is <= 0 or > 100)
             throw new ArgumentOutOfRangeException(nameof(PageSize), "Workflow-folder page size must be between 1 and 100.");
         if (ContinuationToken is not null && string.IsNullOrWhiteSpace(ContinuationToken))

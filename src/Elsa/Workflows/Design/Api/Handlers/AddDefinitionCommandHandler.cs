@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
@@ -31,7 +32,9 @@ public sealed class AddDefinitionCommandHandler(
             .ToArray();
 
         var persistenceDefinition = WorkflowDefinition.From(definition);
-        persistenceDefinition.FolderId = string.IsNullOrWhiteSpace(command.FolderId) ? null : command.FolderId;
+        if (command.FolderId is { } folderId)
+            WorkflowFolderNames.ValidateIdentifier(folderId, nameof(command.FolderId));
+        persistenceDefinition.FolderId = command.FolderId;
         await addCommand.Execute(
             persistenceDefinition,
             draftEntity,

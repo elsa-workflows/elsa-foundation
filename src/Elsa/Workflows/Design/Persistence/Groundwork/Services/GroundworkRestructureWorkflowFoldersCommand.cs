@@ -56,7 +56,7 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
         if (parentId is not null)
             WorkflowFolderNames.ValidateIdentifier(parentId, nameof(parentId));
         if (StringComparer.Ordinal.Equals(folderId, parentId))
-            throw new ArgumentException("A workflow folder cannot be its own parent.", nameof(parentId));
+            throw new WorkflowFolderRestructureConflictException();
         var access = RequireScope();
         // A concurrent move can shift a child across a continuation boundary without changing this root.
         // Stabilize two bounded subtree traversals before the UoW, then CAS-fence every observed node.
@@ -74,7 +74,7 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
             throw new WorkflowFolderRestructureConflictException();
         snapshot = stabilized;
         if (parentId is not null && snapshot.Folders.ContainsKey(parentId))
-            throw new ArgumentException("A workflow folder cannot be moved into one of its descendants.", nameof(parentId));
+            throw new WorkflowFolderRestructureConflictException();
         try
         {
             await using var unit = await store.BeginAsync(DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind), cancellationToken);
@@ -161,7 +161,7 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
         while (folderId is not null)
         {
             if (StringComparer.Ordinal.Equals(folderId, movingId))
-                throw new ArgumentException("A workflow folder cannot be moved into one of its descendants.", nameof(folderId));
+                throw new WorkflowFolderRestructureConflictException();
             var current = await LoadOwnedAsync(unit, folderId, access, cancellationToken);
             fences.TryAdd(folderId, current);
             folderId = current.Folder.ParentFolderId;

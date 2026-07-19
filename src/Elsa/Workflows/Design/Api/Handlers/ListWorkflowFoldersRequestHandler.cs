@@ -11,6 +11,8 @@ public sealed class ListWorkflowFoldersRequestHandler(IWorkflowFolderStore folde
 {
     public async Task<WorkflowFolderListView> Handle(ListWorkflowFolders request, CancellationToken cancellationToken)
     {
+        if (request.ParentId is { } parentId)
+            WorkflowFolderNames.ValidateIdentifier(parentId, nameof(request.ParentId));
         var page = await folders.ListDirectChildrenAsync(
             new WorkflowFolderPageRequest(request.ParentId, Math.Clamp(request.PageSize ?? 100, 1, 100), request.ContinuationToken),
             cancellationToken);

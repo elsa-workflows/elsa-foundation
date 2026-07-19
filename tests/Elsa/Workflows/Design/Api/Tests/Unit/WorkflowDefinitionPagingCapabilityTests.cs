@@ -70,6 +70,39 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
         Assert.Contains(links, link => link.Rel == "workflow-folder-delete-empty" && link.Href == "design/workflows/folders/{folderId}");
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task Folder_read_handlers_reject_blank_identifiers_at_the_request_boundary(string folderId)
+    {
+        var store = new StubFolderStore();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new ListWorkflowFoldersRequestHandler(store).Handle(
+                new ListWorkflowFolders(ParentId: folderId),
+                CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new GetWorkflowFolderRequestHandler(store).Handle(
+                new GetWorkflowFolder(folderId),
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Folder_read_handlers_reject_overlong_identifiers_at_the_request_boundary()
+    {
+        var store = new StubFolderStore();
+        var folderId = new string('f', WorkflowFolderNames.MaximumIdentifierLength + 1);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            new ListWorkflowFoldersRequestHandler(store).Handle(
+                new ListWorkflowFolders(ParentId: folderId),
+                CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            new GetWorkflowFolderRequestHandler(store).Handle(
+                new GetWorkflowFolder(folderId),
+                CancellationToken.None));
+    }
+
     [Fact]
     public async Task Paged_handler_composes_lifecycle_search_page_size_and_continuation()
     {

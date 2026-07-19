@@ -3,6 +3,7 @@ using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -88,6 +89,24 @@ public sealed class GroundworkWorkflowFolderStoreTests
     }
 
     [Fact]
+    public async Task Direct_create_recomputes_the_display_and_normalized_name()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var folders = new GroundworkWorkflowFolderStore(store, GroundworkTestAccess.AccessContext("tenant-a"), new Clock());
+        var folder = new WorkflowFolder
+        {
+            Id = "folder",
+            Name = "  Orders  ",
+            NormalizedName = "caller-controlled"
+        };
+
+        var created = await folders.CreateAsync(folder);
+
+        Assert.Equal("Orders", created.Name);
+        Assert.Equal("ORDERS", created.NormalizedName);
+    }
+
+    [Fact]
     public async Task Rejects_a_seventeenth_level_and_unknown_parent_without_writing_a_folder()
     {
         var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
@@ -115,6 +134,8 @@ public sealed class GroundworkWorkflowFolderStoreTests
             folders.CreateAsync(Folder(new string('i', WorkflowFolderNames.MaximumIdentifierLength + 1), "Folder")));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             folders.CreateAsync(Folder("child", "Child", new string('p', WorkflowFolderNames.MaximumIdentifierLength + 1))));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            folders.CreateAsync(Folder("blank-parent", "Blank parent", " ")));
         Assert.Empty(store.Snapshot(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind));
     }
 
@@ -154,6 +175,10 @@ public sealed class GroundworkWorkflowFolderStoreTests
 
         Assert.Null(await tenantBFolders.FindWithAncestorsAsync("folder"));
         Assert.Empty(await tenantBFolders.FindManyWithAncestorsAsync(["folder"]));
+        await Assert.ThrowsAsync<Elsa.Primitives.Exceptions.EntityNotFoundException>(() =>
+            tenantBFolders.ListDirectChildrenAsync(new WorkflowFolderPageRequest("folder")));
+        await Assert.ThrowsAsync<Elsa.Primitives.Exceptions.EntityNotFoundException>(() =>
+            tenantBFolders.ListDirectChildrenAsync(new WorkflowFolderPageRequest("missing")));
     }
 
     private static WorkflowFolder Folder(string id, string name, string? parentId = null)

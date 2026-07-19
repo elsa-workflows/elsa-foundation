@@ -134,7 +134,7 @@ Recommended capability and routes:
 - `GET /design/workflows/folders?parentId={id}` lists direct children;
 - `GET /design/workflows/folders/{id}` returns folder detail and its ancestor breadcrumb;
 - `POST /design/workflows/folders` creates a folder;
-- `PATCH /design/workflows/folders/{id}` renames a folder;
+- `POST /design/workflows/folders/{id}/rename` renames a folder;
 - `POST /design/workflows/folders/{id}/move` moves a folder;
 - `DELETE /design/workflows/folders/{id}` deletes an empty folder;
 - `POST /design/workflows/definitions/move` moves one or more definitions atomically.
