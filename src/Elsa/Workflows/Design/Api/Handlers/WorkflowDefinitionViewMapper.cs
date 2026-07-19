@@ -31,7 +31,8 @@ internal static class WorkflowDefinitionViewMapper
                 projection?.DraftId,
                 projection?.LatestVersionId,
                 projection?.LatestVersion,
-                projection?.VersionCount ?? 0);
+                projection?.VersionCount ?? 0,
+                definition.FolderId);
         }).ToArray();
     }
 }

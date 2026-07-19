@@ -103,6 +103,12 @@ paths:
         - name: state
           in: query
           schema: { $ref: '#/components/schemas/DefinitionListState' }
+        - name: folderId
+          in: query
+          schema: { type: string }
+        - name: unfiled
+          in: query
+          schema: { type: boolean }
       responses:
         '200':
           description: A bounded definition-summary page and opaque forward continuation
@@ -115,6 +121,53 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /design/workflows/folders:
+    get:
+      tags: [Workflow Design]
+      operationId: listWorkflowFolders
+      description: Optional capability relation `workflow-folders`; lists direct children only.
+      parameters:
+        - name: parentId
+          in: query
+          schema: { type: [string, 'null'] }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+        - name: continuationToken
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: A bounded direct-child folder page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowFolderPage' }
+    post:
+      tags: [Workflow Design]
+      operationId: createWorkflowFolder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWorkflowFolderRequest' }
+      responses:
+        '200':
+          description: Created workflow folder
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowFolder' }
+
+  /design/workflows/folders/{folderId}:
+    get:
+      tags: [Workflow Design]
+      operationId: getWorkflowFolder
+      responses:
+        '200':
+          description: Folder plus ordered ancestors
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowFolderDetails' }
 
   /design/workflows/definitions/{definitionId}:
     parameters:
@@ -1013,6 +1066,7 @@ components:
         latestVersionId: { type: [string, 'null'] }
         latestVersion: { type: [string, 'null'] }
         versionCount: { type: integer, minimum: 0 }
+        folderId: { type: [string, 'null'] }
     WorkflowDefinitionPage:
       type: object
       required: [items]
@@ -1041,6 +1095,7 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         description: { type: [string, 'null'] }
+        folderId: { type: [string, 'null'] }
         initialState:
           oneOf:
             - $ref: '#/components/schemas/WorkflowDefinitionState'
@@ -1446,6 +1501,38 @@ components:
             state:
               type: object
               additionalProperties: true
+    WorkflowFolder:
+      type: object
+      required: [id, name, normalizedName, createdAt, lastModifiedAt]
+      properties:
+        id: { type: string }
+        parentId: { type: [string, 'null'] }
+        name: { type: string }
+        normalizedName: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastModifiedAt: { type: string, format: date-time }
+    WorkflowFolderPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowFolder' }
+        nextContinuationToken: { type: [string, 'null'] }
+    WorkflowFolderDetails:
+      type: object
+      required: [folder, ancestors]
+      properties:
+        folder: { $ref: '#/components/schemas/WorkflowFolder' }
+        ancestors:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowFolder' }
+    CreateWorkflowFolderRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        parentId: { type: [string, 'null'] }
     RuntimeDiagnosticsSettings:
       type: object
       additionalProperties: true

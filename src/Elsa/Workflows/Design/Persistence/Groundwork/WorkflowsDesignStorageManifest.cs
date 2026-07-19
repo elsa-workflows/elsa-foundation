@@ -29,6 +29,12 @@ public static class WorkflowsDesignStorageManifest
     public const string ListAllQuery = "list-all";
 
     public const string WorkflowDefinitionDocumentKind = "workflowDefinition";
+    public const string WorkflowFolderDocumentKind = "workflowFolder";
+    public const string WorkflowFolderCollection = "workflowFolder";
+    public const string WorkflowFolderParentKeyField = "entity.parentKey";
+    public const string WorkflowFolderNormalizedNameField = "entity.normalizedName";
+    public const string WorkflowFolderBrowseIndex = "by-parent-normalized-name-and-id";
+    public const string PageWorkflowFoldersQuery = "page-workflow-folders";
     public const string PageWorkflowDefinitionsQuery = "page-workflow-definitions";
     public const string SearchWorkflowDefinitionsQuery = "search-workflow-definitions";
     public const string WorkflowDefinitionBrowseOrderIndex = "by-last-modified-and-id";
@@ -37,6 +43,7 @@ public static class WorkflowsDesignStorageManifest
     public const string WorkflowDefinitionDeletedAtField = "entity.deletedAt";
     public const string WorkflowDefinitionNameField = "entity.name";
     public const string WorkflowDefinitionDescriptionField = "entity.description";
+    public const string WorkflowDefinitionFolderIdField = "entity.folderId";
 
     /// <summary>Constant partition value stamped on every workflow-definition document (see <see cref="ByCollectionIndex"/>).</summary>
     public const string WorkflowDefinitionCollection = "workflowDefinition";
@@ -67,6 +74,25 @@ public static class WorkflowsDesignStorageManifest
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
+                WorkflowFolderDocumentKind,
+                "Workflow folder",
+                [
+                    Keyword(ByCollectionIndex, CollectionField),
+                    new IndexDeclaration(
+                        "by-parent-and-normalized-name",
+                        [
+                            new IndexField(WorkflowFolderParentKeyField),
+                            new IndexField(WorkflowFolderNormalizedNameField)
+                        ],
+                        IndexValueKind.Keyword,
+                        IsUnique: true,
+                        IsSortable: false,
+                        MissingValueBehavior.Excluded,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+                        IndexPhysicalizationPolicy.Optimized)
+                ],
+                [Query(ListAllQuery, ByCollectionIndex)]),
+            Unit(
                 WorkflowDefinitionVersionDocumentKind,
                 "Workflow definition version",
                 [Keyword(ByCollectionIndex, CollectionField)],
@@ -87,8 +113,9 @@ public static class WorkflowsDesignStorageManifest
 
     /// <summary>Creates the provider-facing design manifest including its admitted bounded browse route.</summary>
     public static StorageManifest CreatePhysicalized() =>
-        WorkflowDefinitionPagingStoragePhysicalizer.AddRoute(
-            LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()));
+        WorkflowFolderStoragePhysicalizer.AddRoute(
+            WorkflowDefinitionPagingStoragePhysicalizer.AddRoute(
+                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create())));
 
     private static StorageUnit Unit(
         string documentKind,

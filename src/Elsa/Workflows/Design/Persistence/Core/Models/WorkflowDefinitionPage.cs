@@ -7,7 +7,9 @@ public sealed record WorkflowDefinitionPageQuery(
     int PageSize,
     string? SearchTerm = null,
     WorkflowDefinitionPageState State = WorkflowDefinitionPageState.Active,
-    string? ContinuationToken = null)
+    string? ContinuationToken = null,
+    string? FolderId = null,
+    bool? Unfiled = null)
 {
     public void Validate()
     {
@@ -15,6 +17,8 @@ public sealed record WorkflowDefinitionPageQuery(
             throw new ArgumentOutOfRangeException(nameof(PageSize), PageSize, "Workflow-definition page size must be between 1 and 100.");
         if (ContinuationToken is not null && string.IsNullOrWhiteSpace(ContinuationToken))
             throw new ArgumentException("The workflow-definition continuation token cannot be blank.", nameof(ContinuationToken));
+        if (!string.IsNullOrWhiteSpace(FolderId) && Unfiled == true)
+            throw new ArgumentException("folderId and unfiled cannot be combined.", nameof(FolderId));
     }
 }
 

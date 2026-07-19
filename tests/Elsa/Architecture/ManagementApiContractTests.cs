@@ -22,6 +22,8 @@ public class ManagementApiContractTests
         "/design/workflows/definitions/{definitionId}/restore",
         "/design/workflows/drafts/{draftId}",
         "/design/workflows/drafts/{draftId}/promote",
+        "/design/workflows/folders",
+        "/design/workflows/folders/{folderId}",
         "/design/workflows/scoped-variables/analyze",
         "/design/workflows/versions/{versionId}",
         "/expressions/descriptors",
@@ -59,6 +61,7 @@ public class ManagementApiContractTests
         "CapabilityDocument",
         "CapabilityLink",
         "CreateWorkflowDefinitionRequest",
+        "CreateWorkflowFolderRequest",
         "DefinitionListState",
         "DesignMetadata",
         "ExecutableProvenance",
@@ -92,6 +95,9 @@ public class ManagementApiContractTests
         "WorkflowExecutableDetails",
         "WorkflowExecutableSummary",
         "WorkflowExecutionDispatch",
+        "WorkflowFolder",
+        "WorkflowFolderDetails",
+        "WorkflowFolderPage",
         "WorkflowInstanceDetails",
         "WorkflowInstanceSummary"
     ];

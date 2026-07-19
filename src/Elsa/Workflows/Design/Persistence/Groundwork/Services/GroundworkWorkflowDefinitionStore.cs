@@ -139,6 +139,13 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
                 DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, query.SearchTerm)));
         }
 
+        if (!string.IsNullOrWhiteSpace(query.FolderId))
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionFolderIdField, query.FolderId)));
+        else if (query.Unfiled == true)
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionFolderIdField, null)));
+
         return clauses;
     }
 }

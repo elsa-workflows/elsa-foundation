@@ -20,6 +20,7 @@ public sealed class WorkflowsDesignGroundworkStorageManifestSource : IGroundwork
             [
                 typeof(IWorkflowDefinitionStore),
                 typeof(IWorkflowDefinitionPageStore),
+                typeof(IWorkflowFolderStore),
                 typeof(IWorkflowDefinitionVersionStore),
                 typeof(IWorkflowDefinitionDraftStore),
                 typeof(IWorkflowDefinitionListProjectionStore),

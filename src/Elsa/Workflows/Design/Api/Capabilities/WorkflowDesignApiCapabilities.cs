@@ -26,7 +26,8 @@ public static class WorkflowDesignApiCapabilities
 public sealed class WorkflowDesignOperationalCapabilitySource(
     ScopedVariableAuthoringContract? scopedVariables = null,
     IEnumerable<IActivityInputOptionsProvider>? inputOptionsProviders = null,
-    IWorkflowDefinitionPageStore? pageStore = null) : IApiCapabilitySource
+    IWorkflowDefinitionPageStore? pageStore = null,
+    IWorkflowFolderStore? folderStore = null) : IApiCapabilitySource
 {
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
         CancellationToken cancellationToken = default)
@@ -41,6 +42,8 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
                 templated: true));
         if (pageStore?.IsAvailable == true)
             links.Add(new("workflow-definitions-page", "design/workflows/definitions/page"));
+        if (folderStore?.IsAvailable == true)
+            links.Add(new("workflow-folders", "design/workflows/folders"));
 
         IReadOnlyCollection<ApiCapabilityDeclaration> declarations = links.Count == 0
             ? []
