@@ -75,6 +75,7 @@ public sealed class RuntimeCheckpointStateChangeSet
             activityExecutionInspections,
             postCommitOutbox,
             activityScopeCleanups,
+            null,
             null)
     {
     }
@@ -91,13 +92,15 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections,
         IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox,
         IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups,
-        IReadOnlyCollection<WorkflowDispatchCancellationRequest>? workflowDispatchCancellations)
+        IReadOnlyCollection<WorkflowDispatchCancellationRequest>? workflowDispatchCancellations,
+        IReadOnlyCollection<ConsumedSchedulerWorkItem>? consumedSchedulerWorkItems = null)
     {
         activityExecutionInspections ??= [];
         postCommitOutbox ??= [];
         workflowDispatches ??= [];
         activityScopeCleanups ??= [];
         workflowDispatchCancellations ??= [];
+        consumedSchedulerWorkItems ??= [];
         ValidateStateIdMatches(activityExecutions, state => state.Execution.ActivityExecutionId, "Activity execution state change StateId must match ActivityExecutionState.Execution.ActivityExecutionId.", nameof(activityExecutions));
         ValidateStateIdMatches(bookmarks, state => state.BookmarkId, "Bookmark state change StateId must match BookmarkState.BookmarkId.", nameof(bookmarks));
         ValidateStateIdMatches(activityExecutionInspections, state => state.ActivityExecutionId, "Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.", nameof(activityExecutionInspections));
@@ -119,6 +122,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         ActivityScopeCleanups = activityScopeCleanups;
         WorkflowDispatches = workflowDispatches;
         WorkflowDispatchCancellations = NormalizeCancellations(workflowDispatchCancellations);
+        ConsumedSchedulerWorkItems = NormalizeConsumedSchedulerWorkItems(consumedSchedulerWorkItems);
     }
 
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
@@ -136,6 +140,14 @@ public sealed class RuntimeCheckpointStateChangeSet
 
     /// <summary>Query-independent parent-cancellation requests resolved by the provider at commit time.</summary>
     public IReadOnlyCollection<WorkflowDispatchCancellationRequest> WorkflowDispatchCancellations { get; }
+
+    /// <summary>
+    /// Claimed scheduler work items to delete inside this checkpoint's atomic unit-of-work (WU-1 / spec 105). Folding the
+    /// claimed item's fence-checked delete here replaces the drainer's separate post-dispatch acknowledgement, so a
+    /// single-commit drain step performs one durable transaction instead of two. Deletion is owner+token fence-checked so
+    /// a stale claimant's commit fails claim-lost rather than deleting successor-owned work.
+    /// </summary>
+    public IReadOnlyCollection<ConsumedSchedulerWorkItem> ConsumedSchedulerWorkItems { get; }
 
     /// <summary>
     /// Pending post-commit outbox items, applied atomically with the rest of the change set. Built by the
@@ -160,7 +172,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityExecutionInspections,
             postCommitOutbox,
             ActivityScopeCleanups,
-            WorkflowDispatchCancellations);
+            WorkflowDispatchCancellations,
+            ConsumedSchedulerWorkItems);
 
     /// <summary>Returns a copy with the supplied workflow-dispatch lifecycle changes.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatches(
@@ -177,7 +190,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityExecutionInspections,
             PostCommitOutbox,
             ActivityScopeCleanups,
-            WorkflowDispatchCancellations);
+            WorkflowDispatchCancellations,
+            ConsumedSchedulerWorkItems);
 
     /// <summary>Returns a copy with the supplied provider-resolved dispatch cancellation requests.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatchCancellations(
@@ -194,7 +208,47 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityExecutionInspections,
             PostCommitOutbox,
             ActivityScopeCleanups,
-            workflowDispatchCancellations);
+            workflowDispatchCancellations,
+            ConsumedSchedulerWorkItems);
+
+    /// <summary>Returns a copy with the supplied claimed scheduler work items folded in for atomic consumption.</summary>
+    public RuntimeCheckpointStateChangeSet WithConsumedSchedulerWorkItems(
+        IReadOnlyCollection<ConsumedSchedulerWorkItem> consumedSchedulerWorkItems) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            WorkflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations,
+            consumedSchedulerWorkItems);
+
+    private static IReadOnlyCollection<ConsumedSchedulerWorkItem> NormalizeConsumedSchedulerWorkItems(
+        IReadOnlyCollection<ConsumedSchedulerWorkItem> items)
+    {
+        var normalized = new Dictionary<string, ConsumedSchedulerWorkItem>(StringComparer.Ordinal);
+        foreach (var item in items)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+            ArgumentException.ThrowIfNullOrWhiteSpace(item.WorkflowExecutionId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(item.WorkItemId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(item.ClaimOwnerId);
+            if (normalized.TryGetValue(item.WorkItemId, out var existing) && existing != item)
+            {
+                throw new ArgumentException(
+                    $"Consumed scheduler work item '{item.WorkItemId}' occurs more than once with conflicting fence state.",
+                    nameof(items));
+            }
+            normalized[item.WorkItemId] = item;
+        }
+        return normalized.Values.OrderBy(item => item.WorkItemId, StringComparer.Ordinal).ToArray();
+    }
 
     private static IReadOnlyCollection<WorkflowDispatchCancellationRequest> NormalizeCancellations(
         IReadOnlyCollection<WorkflowDispatchCancellationRequest> requests)

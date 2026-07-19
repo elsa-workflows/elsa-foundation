@@ -64,6 +64,7 @@ using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Attention;
+using Elsa.Workflows.Runtime.Tracing;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
@@ -271,7 +272,13 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(SqliteStructuredLogsPersistenceShellFeature).Assembly,
-            typeof(OpenTelemetryFeature).Assembly
+            typeof(OpenTelemetryFeature).Assembly,
+
+            // Engine self-instrumentation (MS-9): puts the WorkflowsRuntimeTracing feature in the catalog so it can be
+            // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The host-local
+            // OpenTelemetryEngineTracingBridge feature (below, in WithHostAssemblies) subscribes that source and forwards
+            // the spans into the OpenTelemetry ingestion store so Studio's timing view is populated.
+            typeof(WorkflowsRuntimeTracingFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)

@@ -227,6 +227,42 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         }
     }
 
+    public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ConsumeClaimedAsync(
+        ConsumedSchedulerWorkItem consumed,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(consumed);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var key = new SchedulerWorkItemKey(consumed.WorkflowExecutionId, consumed.WorkItemId);
+            // Fence on owner + fencing token only (renewal-stable): a renewal advances the revision but keeps these, so a
+            // renewed claim still consumes its item, while a successor reclaim (token advanced) or a completed/absent item
+            // is claim-lost.
+            if (!_claimsByScopedId.TryGetValue(key, out var state) ||
+                state.OwnerId is null ||
+                !StringComparer.Ordinal.Equals(state.OwnerId, consumed.ClaimOwnerId) ||
+                state.FencingToken != consumed.FencingToken)
+            {
+                return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.Stale);
+            }
+
+            _workItemsByScopedId.Remove(key);
+            _claimsByScopedId.Remove(key);
+            if (_queuesByWorkflowExecutionId.TryGetValue(consumed.WorkflowExecutionId, out var queue))
+            {
+                var retained = queue.Where(item => !StringComparer.Ordinal.Equals(item.WorkItemId, consumed.WorkItemId)).ToArray();
+                if (retained.Length == 0)
+                    _queuesByWorkflowExecutionId.Remove(consumed.WorkflowExecutionId);
+                else
+                    _queuesByWorkflowExecutionId[consumed.WorkflowExecutionId] = new Queue<RuntimeSchedulerWorkItem>(retained);
+            }
+
+            return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.Applied());
+        }
+    }
+
     private bool TryGetCurrentState(RuntimeSchedulerWorkClaim claim, out ClaimState state)
     {
         if (_claimsByScopedId.TryGetValue(KeyOf(claim), out state!) &&

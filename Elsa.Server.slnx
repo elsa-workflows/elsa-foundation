@@ -3,6 +3,9 @@
   <Folder Name="/benchmarks/Elsa/Activities/Runtime/">
     <Project Path="benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/Elsa/Workflows/Runtime/">
+    <Project Path="benchmarks/Elsa/Workflows/Runtime/Benchmarks/Elsa.Workflows.Runtime.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
   </Folder>

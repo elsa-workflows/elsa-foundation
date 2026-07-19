@@ -697,8 +697,13 @@ paths:
                   type: object
                   additionalProperties: true
       responses:
-        '202':
-          description: Workflow start dispatched
+        '200':
+          description: >-
+            Workflow started and drained to quiescence. The call is synchronous to quiescence (ADR 0031): the run has
+            already reached completion, a fault, or its first durable suspension. The body's commandDispatchStatus
+            reports the drain outcome (Accepted, AcceptedButFaulted, Duplicate, or Deferred); AcceptedButFaulted still
+            returns 200 with a body describing the fault. GET /runtime/workflows/instances/{workflowExecutionId}
+            remains the polling surface for later state.
           content:
             application/json:
               schema:

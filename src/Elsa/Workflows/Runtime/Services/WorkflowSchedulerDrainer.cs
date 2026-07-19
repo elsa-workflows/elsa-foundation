@@ -3,6 +3,7 @@ using System.Runtime.ExceptionServices;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -21,6 +22,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IRuntimeDomainRetryPolicy? _retryPolicy;
     private readonly IWorkflowEngineTracer _tracer;
     private readonly RuntimeSchedulerWorkClaimOptions _claimOptions;
+    private readonly IRuntimeConsumedSchedulerWorkClaimAccessor? _consumedWorkClaimAccessor;
     private readonly string _claimOwnerId = $"scheduler-drainer:{Guid.NewGuid():N}";
 
     /// <summary>
@@ -42,7 +44,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IWorkflowSchedulerPoisonStore? poisonStore = null,
         IRuntimeDomainRetryPolicy? retryPolicy = null,
         IWorkflowEngineTracer? tracer = null,
-        RuntimeSchedulerWorkClaimOptions? claimOptions = null)
+        RuntimeSchedulerWorkClaimOptions? claimOptions = null,
+        IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
@@ -61,6 +64,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _retryPolicy = retryPolicy;
         _tracer = tracer ?? NullWorkflowEngineTracer.Instance;
         _claimOptions = claimOptions ?? new RuntimeSchedulerWorkClaimOptions();
+        _consumedWorkClaimAccessor = consumedWorkClaimAccessor;
         if (_claimOptions.VisibilityTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(claimOptions), "Scheduler work visibility timeout must be greater than zero.");
     }
@@ -161,6 +165,13 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         var startedAt = _timeProvider.GetUtcNow();
         var renewal = claim is null ? null : new ClaimRenewalState(claim);
 
+        // WU-1 / spec 105: stage this dispatch's claim so a checkpoint commit can fold its fence-checked deletion into the
+        // commit unit-of-work. When it does, the committer marks it consumed and the separate acknowledgement below is
+        // skipped. Owner+token fence is renewal-stable, so the claim captured here stays valid across renewals.
+        using var consumeScope = claim is not null && _consumedWorkClaimAccessor is not null
+            ? _consumedWorkClaimAccessor.Begin(ConsumedSchedulerWorkItem.FromClaim(claim))
+            : null;
+
         // MS-9: the dispatch span nests under the drain-cycle span via Activity.Current. The activity-execution span
         // (Invoke slot) and the checkpoint-commit span both nest under this one when the pipeline runs. Null when
         // tracing is inactive.
@@ -183,9 +194,13 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                     : handler.HandleAsync(workItem, dispatchCancellationToken),
                 cancellationToken);
 
-            // The handler's effect is now durable. Complete the fenced claim, or consume the FIFO head for a legacy
-            // single-writer provider. A crash before this point leaves the item queued for idempotent re-drive.
-            await AckAsync(workItem, renewal?.Current, cancellationToken);
+            // The handler's effect is now durable. On the atomic path a checkpoint commit already deleted the claimed item
+            // inside its unit-of-work (WU-1 / spec 105), so the separate acknowledgement is redundant and skipped;
+            // otherwise (legacy/non-atomic provider, or a dispatch that produced no commit) complete the fenced claim or
+            // consume the FIFO head for a legacy single-writer provider. A crash before this point leaves the item queued
+            // for idempotent re-drive.
+            if (_consumedWorkClaimAccessor?.WasConsumedDurably != true)
+                await AckAsync(workItem, renewal?.Current, cancellationToken);
 
             activity?.SetTag(WorkflowEngineTelemetry.OutcomeTag, WorkflowEngineTelemetry.OutcomeCompleted);
 
@@ -205,6 +220,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         catch (RuntimeSchedulerWorkClaimLostException)
         {
             // A successor owns (or may own) this work. Never acknowledge or poison it from the stale dispatch.
+            throw;
+        }
+        catch (RuntimeSchedulerWorkConsumeConflictException)
+        {
+            // The atomic commit's fence-checked consume failed: a successor reclaimed the item (WU-1 / spec 105). Treat it
+            // exactly like a lost claim — the commit rolled back and persisted nothing, so never acknowledge or poison it.
             throw;
         }
         catch (Exception exception)
@@ -227,7 +248,13 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // deterministically-poisoning handler would hot-loop (redeliver forever). Ack-on-fault makes poison delivery
             // bounded. (A process crash — as opposed to a handler fault — never reaches this line, so the item stays
             // queued for idempotent re-drive, which is exactly the redrive-safety this unit adds.)
-            await AckAsync(workItem, renewal?.Current, cancellationToken);
+            // WU-1 / spec 105: when an earlier checkpoint commit in THIS dispatch already consumed the item durably (a
+            // multi-commit handler faulting after its first commit landed), the item is already gone from the queue —
+            // poison delivery stays bounded without a second acknowledgement. A CompleteClaimAsync here would fail its
+            // fence against the consumed claim and throw a spurious claim-lost out of this catch, skipping poison
+            // recording entirely. Skip the ack but still record poison and return the Faulted result.
+            if (_consumedWorkClaimAccessor?.WasConsumedDurably != true)
+                await AckAsync(workItem, renewal?.Current, cancellationToken);
 
             await HandleHandlerCrashAsync(workItem, handlerName, faultInfo, cancellationToken);
 
