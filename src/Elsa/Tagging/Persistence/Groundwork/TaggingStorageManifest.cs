@@ -71,12 +71,10 @@ public static class TaggingStorageManifest
             supportsDisjunction: false,
             supportsTotalCount: true,
             sortFields: [],
-            predicateFields: null,
-            residualPredicateFields: [new BoundedQueryResidualPredicateField(
+            predicateFields: [new BoundedQueryPredicateField(
                 TagDefinitionIdField,
-                IndexValueKind.Keyword,
-                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In },
-                isRequired: true)]);
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In })],
+            residualPredicateFields: null);
         var definitions = new StorageUnit(
             new StorageUnitIdentity(TagDefinitionDocumentKind),
             "Tag definition",
@@ -96,7 +94,18 @@ public static class TaggingStorageManifest
         };
 
         var auditEnvelope = new DocumentEnvelopeDefinition();
-        var auditTable = PhysicalTableDefinition.PhysicalEntityTable(TagDefinitionAuditsTable, [], auditEnvelope, []);
+        var auditTable = PhysicalTableDefinition.PhysicalEntityTable(
+            TagDefinitionAuditsTable,
+            [
+                new ProjectedColumnDefinition(
+                    TagDefinitionIdField,
+                    TagDefinitionIdField,
+                    PortablePhysicalType.String,
+                    Length: 64,
+                    IsNullable: false)
+            ],
+            auditEnvelope,
+            []);
         var audits = new StorageUnit(
             new StorageUnitIdentity(TagDefinitionAuditDocumentKind),
             "Tag definition audit record",
