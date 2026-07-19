@@ -138,7 +138,8 @@ public sealed class WorkflowsVersionReconcilerTests
             Id = "wf-filed",
             Name = "Old Name",
             Description = "Old description",
-            FolderId = "manually-selected"
+            FolderId = "manually-selected",
+            IsSourceOwned = true
         };
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-filed", "1.0.0"));
