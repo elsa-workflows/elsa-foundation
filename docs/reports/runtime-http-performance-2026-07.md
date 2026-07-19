@@ -65,3 +65,16 @@ crash-convergence tests.
 
 Startup activation should be measured and optimized as a separate cold-start objective; changing the checkpoint mode
 does not remove shell construction, feature discovery, database migrations, reconciliation, or route-table startup.
+
+## Addendum (2026-07-19): spec 095 changed the coalesced commit floor
+
+The "13 → 1 commits per request" result above predates spec 095. Spec 095 added a non-negotiable durable
+pre-activation boundary per transient CLR activity: `ActivityAttemptClaimed` is now a mandatory-flush checkpoint
+(`CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames`), so each CLR activity forces a
+segment flush before it activates. The coalesced physical-commit floor is therefore approximately
+**(transient CLR activity count) + terminal commit**, not 1 — the committed acceptance test
+(`HttpEndpointRuntimePerformanceTests`) enshrines 6 commits for the 5-activity HTTP workflow, and a 2-node
+Flowchart+WriteLine run lands at ~4. Coalescing still folds every intra-activity checkpoint inside a segment; the
+per-activity boundary commits are the residual durable cost by design. On slow-fsync storage those boundary commits
+dominate trivial-workflow latency; reducing them further is a checkpoint-cadence (ADR 0032) / burst-execution
+(ADR 0031) question, not a coalescing configuration issue.
