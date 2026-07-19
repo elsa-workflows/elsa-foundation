@@ -268,7 +268,7 @@ public class UnifiedGroundworkHostTests
         Assert.Null(reopenedServices.GetService<IUserStore>());
         Assert.Equal(
             "v1",
-            (await reopenedServices.GetRequiredService<ISecretRepository>().FindAsync(secret.Name))?
+            (await reopenedServices.GetRequiredService<ISecretRepository>().FindAsync("tenant-1", secret.Name))?
             .LatestActiveVersion?.Payload.Value);
         Assert.Equal(
             placement.OwnerId,

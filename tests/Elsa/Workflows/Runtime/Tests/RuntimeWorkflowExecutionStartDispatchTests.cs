@@ -112,18 +112,15 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         WorkflowExecutableReferenceScope scope,
         string expectedOrigin)
     {
-        var store = new InMemoryWorkflowExecutableStore();
-        await store.SaveAsync(NewExecutable());
-        var referenceStore = new InMemoryWorkflowExecutableSourceReferenceStore();
-        await referenceStore.SaveAsync(Reference("ref-1", "artifact-1", scope, _now.AddMinutes(30)));
-        var agentProvider = new RecordingAgentProvider();
-        var dispatcher = NewDispatcher(store, agentProvider, referenceStore);
+        await _store.SaveAsync(NewExecutable());
+        await _references.SaveAsync(Reference("ref-1", "artifact-1", scope, _now.AddMinutes(30)));
+        var dispatcher = NewDispatcher(new AllowWorkflowExecutableStartPolicy());
 
         await dispatcher.DispatchAsync(
             new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"),
             scope);
 
-        var envelope = Assert.Single(agentProvider.Agent.Envelopes);
+        var envelope = Assert.Single(_agentProvider.Agent.Envelopes);
         Assert.Equal(expectedOrigin, envelope.Command.Metadata[RuntimeMetadataKeys.WorkflowExecutionOrigin]);
     }
 

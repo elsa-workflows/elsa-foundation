@@ -172,11 +172,11 @@ public sealed class FoundationBoundedQueryContractTests
         await repository.SaveAsync(Secret("portable.unicode", "Search Å😀 value", scope: "portable"));
         await repository.SaveAsync(Secret("portable.literal", @"Search %_[].*\ value", scope: "portable"));
 
-        var first = await repository.ListPageAsync(Request(skip: 0));
-        var second = await repository.ListPageAsync(Request(skip: 1));
-        var searched = await repository.ListPageAsync(Request(skip: 0, search: "Payments API Alpha"));
-        var unicode = await repository.ListPageAsync(Request(skip: 0, search: "å😀", scope: "PORTABLE"));
-        var literal = await repository.ListPageAsync(Request(skip: 0, search: @"%_[].*\", scope: "portable"));
+        var first = await repository.ListPageAsync("tenant-a", Request(skip: 0));
+        var second = await repository.ListPageAsync("tenant-a", Request(skip: 1));
+        var searched = await repository.ListPageAsync("tenant-a", Request(skip: 0, search: "Payments API Alpha"));
+        var unicode = await repository.ListPageAsync("tenant-a", Request(skip: 0, search: "å😀", scope: "PORTABLE"));
+        var literal = await repository.ListPageAsync("tenant-a", Request(skip: 0, search: @"%_[].*\", scope: "portable"));
 
         Assert.Equal(2, first.TotalCount);
         Assert.Equal(2, second.TotalCount);
@@ -224,8 +224,8 @@ public sealed class FoundationBoundedQueryContractTests
             otherTenantClient.BoundedDocumentStore);
         await otherTenant.SaveAsync(Secret("payments.alpha", "Tenant B Payments API"));
 
-        Assert.Single((await otherTenant.ListPageAsync(Request(skip: 0))).Items);
-        Assert.Equal(2, (await repository.ListPageAsync(Request(skip: 0))).TotalCount);
+        Assert.Single((await otherTenant.ListPageAsync("tenant-b", Request(skip: 0))).Items);
+        Assert.Equal(2, (await repository.ListPageAsync("tenant-a", Request(skip: 0))).TotalCount);
     }
 
     [Theory]
