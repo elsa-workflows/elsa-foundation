@@ -30,6 +30,22 @@ export interface WorkflowDefinitionSummary {
   latestVersionId?: string | null;
   latestVersion?: string | null;
   versionCount: number;
+  /** Organizational placement, intentionally separate from the authored workflow state. */
+  folderId?: string | null;
+}
+
+export interface WorkflowFolder {
+  id: string;
+  parentId?: string | null;
+  name: string;
+  normalizedName: string;
+  createdAt: string;
+  lastModifiedAt: string;
+}
+
+export interface WorkflowFolderDetail {
+  folder: WorkflowFolder;
+  ancestors: WorkflowFolder[];
 }
 
 export type DefinitionListState = "active" | "deleted" | "all";
@@ -407,6 +423,7 @@ export interface CreateDefinitionRequest {
   description?: string | null;
   initialState?: WorkflowDefinitionState | null;
   layout?: DesignMetadataRecord[];
+  folderId?: string | null;
 }
 
 export interface PromoteDraftResponse {
