@@ -2892,6 +2892,200 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("moves selected definitions through the advertised relation, deduplicates submission, and announces success", async () => {
+    const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    let moveRequest: unknown;
+    let resolveMove: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("folder-inventory?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.endsWith("/placement/bulk") && init?.method === "POST") {
+        moveRequest = JSON.parse(String(init.body));
+        return new Promise<Response>(resolve => { resolveMove = resolve; });
+      }
+      if (url.includes("definition-pages")) return response({ items: [definition(), definition({ id: "definition-2", name: "Second workflow" })], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "inventory/folder-inventory" },
+      { rel: "workflow-definition-folder-move", href: "placement/bulk" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await click(checkboxByLabel(container, "Select workflow definition Second workflow"));
+    const move = buttonByText(container, "Move to folder");
+    expect(move).not.toBeNull();
+    move?.focus();
+    await click(move);
+    await waitForText(dialog(container), "Operations");
+    expect(dialog(container).textContent).toContain("Unfiled");
+    expect(dialog(container).textContent).not.toContain("All workflows");
+    expect(dialog(container).querySelector("[role='tree']")).toBeNull();
+    await click(dialog(container).querySelector<HTMLInputElement>("input[data-folder-id='folder-root']"));
+    const submit = buttonByText(dialog(container), "Move");
+    await click(submit);
+    await click(submit);
+    await vi.waitFor(() => expect(moveRequest).toEqual({ definitionIds: ["definition-1", "definition-2"], folderId: "folder-root" }));
+    expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith("/placement/bulk") && (init as RequestInit)?.method === "POST")).toHaveLength(1);
+
+    resolveMove?.(new Response(null, { status: 204 }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+    await waitForText(container, "Moved 2 workflow definitions");
+    expect(container.querySelector("[role='status']")?.textContent).toContain("Moved 2 workflow definitions");
+    await vi.waitFor(() => expect(container.querySelector(".wf-selection-bar")).toBeNull());
+    expect(document.activeElement).toBe(buttonByText(container, "Refresh"));
+    await unmount();
+  });
+
+  it("keeps the move dialog, chosen destination, and selection after a rejected move", async () => {
+    const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.endsWith("/definition-placement") && init?.method === "POST") return response("You cannot move this definition.", 403);
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" },
+      { rel: "workflow-definition-folder-move", href: "design/workflows/definition-placement" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await click(buttonByText(container, "Move to folder"));
+    await waitForText(dialog(container), "Operations");
+    const destination = dialog(container).querySelector<HTMLInputElement>("input[data-folder-id='folder-root']");
+    await click(destination);
+    await click(buttonByText(dialog(container), "Move"));
+    await waitForText(dialog(container), "Couldn't move the selected workflow definitions");
+    expect(destination?.checked).toBe(true);
+    expect(container.querySelector(".wf-selection-bar")?.textContent).toContain("1 selected");
+    expect(dialog(container)).not.toBeNull();
+    await unmount();
+  });
+
+  it.each([400, 404, 409])("keeps move state actionable after a %i placement response", async status => {
+    const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.endsWith("/definition-placement") && init?.method === "POST") return response(`Move rejected with ${status}.`, status);
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" },
+      { rel: "workflow-definition-folder-move", href: "design/workflows/definition-placement" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await click(buttonByText(container, "Move to folder"));
+    await waitForText(dialog(container), "Operations");
+    const destination = dialog(container).querySelector<HTMLInputElement>("input[data-folder-id='folder-root']");
+    await click(destination);
+    await click(buttonByText(dialog(container), "Move"));
+    await waitForText(dialog(container), `Move rejected with ${status}.`);
+    expect(destination?.checked).toBe(true);
+    expect(container.querySelector(".wf-selection-bar")?.textContent).toContain("1 selected");
+    await unmount();
+  });
+
+  it("moves one selected definition to Unfiled with an explicit null folder ID", async () => {
+    let moveRequest: unknown;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/definition-placement") && init?.method === "POST") {
+        moveRequest = JSON.parse(String(init.body));
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-definition-folder-move", href: "design/workflows/definition-placement" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await click(buttonByText(container, "Move to folder"));
+    await waitForText(dialog(container), "Unfiled");
+    expect(dialog(container).querySelector<HTMLInputElement>("input[data-destination='unfiled']")?.checked).toBe(true);
+    await click(buttonByText(dialog(container), "Move"));
+    await vi.waitFor(() => expect(moveRequest).toEqual({ definitionIds: ["definition-1"], folderId: null }));
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
+    await waitForText(container, "Moved 1 workflow definition");
+    await unmount();
+  });
+
+  it("loads move destinations lazily and retries a failed child page without selecting an unavailable folder", async () => {
+    const rootFolder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const childFolder = { id: "folder-child", parentId: "folder-root", name: "Support", normalizedName: "support", createdAt: "", lastModifiedAt: "" };
+    let childAttempts = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders?pageSize=100&parentId=folder-root")) {
+        childAttempts += 1;
+        return childAttempts === 1 ? response("Temporary folder outage", 500) : response({ items: [childFolder], nextContinuationToken: null });
+      }
+      if (url.includes("/folders?pageSize=100")) return response({ items: [rootFolder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" },
+      { rel: "workflow-definition-folder-move", href: "design/workflows/definition-placement" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await click(buttonByText(container, "Move to folder"));
+    await waitForText(dialog(container), "Operations");
+    expect(dialog(container).querySelector("input[data-folder-id='folder-child']")).toBeNull();
+    await click(buttonByLabel(dialog(container), "Expand Operations"));
+    await waitForText(dialog(container), "Retry loading folders");
+    expect(dialog(container).querySelector("input[data-folder-id='folder-child']")).toBeNull();
+    await click(buttonByText(dialog(container), "Retry loading folders"));
+    await waitForText(dialog(container), "Support");
+    expect(childAttempts).toBe(2);
+    await unmount();
+  });
+
+  it("does not expose or probe the move endpoint when its advertised relation is absent", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    expect(buttonByText(container, "Move to folder")).toBeNull();
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("placement"))).toBe(false);
+    await unmount();
+  });
+
   it("browses paged folder children through the capability root and appends the next child page", async () => {
     const rootFolder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
     const firstChild = { id: "folder-child-1", parentId: "folder-root", name: "Support", normalizedName: "support", createdAt: "", lastModifiedAt: "" };

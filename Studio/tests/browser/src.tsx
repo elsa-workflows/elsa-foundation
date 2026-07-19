@@ -2,8 +2,9 @@ import React, { lazy, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
 import { WorkflowLazyBoundary } from "../../src/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
+import { MoveWorkflowDefinitionsDialog } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/MoveWorkflowDefinitionsDialog";
 import { useRunDetailLayout } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
-import type { StudioActivityDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor, StudioEndpointContext, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode } from "../../src/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import "../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "../../src/Elsa.Studio.Workflows/Client/src/styles.css";
@@ -14,6 +15,7 @@ const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
 const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const runDetailFixture = searchParams.get("mode") === "run-detail";
+const moveDefinitionsFixture = searchParams.get("mode") === "move-definitions";
 
 const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
   window.setTimeout(() => resolve({ default: () => <section aria-label="Deferred workflow designer">Workflow designer ready</section> }), 3_000);
@@ -140,6 +142,46 @@ function LazyBoundaryFixture() {
   );
 }
 
+function MoveDefinitionsFixture() {
+  const [open, setOpen] = useState(false);
+  const [moved, setMoved] = useState(false);
+  const context = {
+    baseUrl: "browser-move-definitions",
+    http: {
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return {
+          capabilities: [{
+            id: "elsa.api.workflow-design",
+            contractVersion: "1",
+            links: [
+              { rel: "workflow-folders", href: "browser/folders" },
+              { rel: "workflow-definition-folder-move", href: "browser/definition-placement" }
+            ]
+          }]
+        };
+        if (url.startsWith("/browser/folders")) return {
+          items: [{ id: "folder-operations", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" }],
+          nextContinuationToken: null
+        };
+        throw new Error(`Unexpected browser fixture request: ${url}`);
+      },
+      postJson: async () => ({})
+    }
+  } as unknown as StudioEndpointContext;
+
+  return <main className="browser-fixture">
+    <h1>Workflow definitions</h1>
+    <button type="button" onClick={() => setOpen(true)}>Move to folder</button>
+    {moved ? <p role="status">Moved 1 workflow definition</p> : null}
+    {open ? <MoveWorkflowDefinitionsDialog
+      context={context}
+      definitionIds={["definition-browser"]}
+      onClose={() => setOpen(false)}
+      onMoved={() => setMoved(true)}
+    /> : null}
+  </main>;
+}
+
 function RunDetailFixture() {
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const layout = useRunDetailLayout({ selectedActivityId });
@@ -188,5 +230,5 @@ const theme = searchParams.get("theme");
 document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "harbor";
 document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
 createRoot(document.getElementById("root")!).render(
-  runDetailFixture ? <RunDetailFixture /> : lazyBoundaryFixture ? <LazyBoundaryFixture /> : <Fixture />
+  runDetailFixture ? <RunDetailFixture /> : lazyBoundaryFixture ? <LazyBoundaryFixture /> : moveDefinitionsFixture ? <MoveDefinitionsFixture /> : <Fixture />
 );

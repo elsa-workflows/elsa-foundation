@@ -14,11 +14,13 @@ export function selectedFolderId(selection: WorkflowFolderSelection) {
 
 const rootKey = "root";
 
-export function WorkflowFolderNavigation({ context, selection, onSelect, onAvailable }: {
+export function WorkflowFolderNavigation({ context, selection, onSelect, onAvailable, refreshKey = 0 }: {
   context: StudioEndpointContext;
   selection: WorkflowFolderSelection;
   onSelect(selection: WorkflowFolderSelection): void;
   onAvailable(available: boolean): void;
+  /** Refreshes loaded folder projections without remounting the tree or discarding its expansion state. */
+  refreshKey?: number;
 }) {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [roots, setRoots] = useState<WorkflowFolder[]>([]);
@@ -34,6 +36,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const [error, setError] = useState<string | null>(null);
   const [focusedKey, setFocusedKey] = useState("all");
   const pendingKeys = useRef(new Set<string>());
+  const appliedRefreshKey = useRef(refreshKey);
 
   const loadFolderPage = useCallback(async (parentId?: string, continuationToken?: string | null, append = false) => {
     const key = parentId ?? rootKey;
@@ -89,6 +92,14 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   }, [context, loadFolderPage, onAvailable]);
 
   useEffect(() => {
+    if (refreshKey === appliedRefreshKey.current) return;
+    appliedRefreshKey.current = refreshKey;
+    if (!available) return;
+    void loadFolderPage();
+    for (const folderId of expanded) void loadFolderPage(folderId);
+  }, [available, expanded, loadFolderPage, refreshKey]);
+
+  useEffect(() => {
     const id = selectedFolderId(selection);
     setCrumbs([]);
     setBreadcrumbError(null);
@@ -109,7 +120,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         }
       });
     return () => { cancelled = true; };
-  }, [available, context, selection]);
+  }, [available, context, refreshKey, selection]);
 
   const toggle = async (folder: WorkflowFolder) => {
     if (expanded.has(folder.id)) {

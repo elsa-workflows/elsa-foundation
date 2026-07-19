@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, Package, Plus, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition } from "../api/workflowDesign";
+import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -13,6 +13,7 @@ import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
 import { CreateWorkflowDialog } from "./CreateWorkflowDialog";
 import { WorkflowFolderNavigation, type WorkflowFolderSelection, selectedFolderId } from "./WorkflowFolderNavigation";
+import { MoveWorkflowDefinitionsDialog } from "./MoveWorkflowDefinitionsDialog";
 
 export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointContext; ai: StudioAiContributionApi; onOpen(id: string): void }) {
   const [search, setSearch] = useState("");
@@ -33,7 +34,12 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [folderCapabilityAvailable, setFolderCapabilityAvailable] = useState(false);
   const [folderSelection, setFolderSelection] = useState<WorkflowFolderSelection>("all");
+  const [folderNavigationRefreshKey, setFolderNavigationRefreshKey] = useState(0);
+  const [moveCapabilityAvailable, setMoveCapabilityAvailable] = useState(false);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [focusRefreshAfterMove, setFocusRefreshAfterMove] = useState(false);
   const selectVisibleRef = useRef<HTMLInputElement | null>(null);
+  const refreshButtonRef = useRef<HTMLButtonElement | null>(null);
   const loadGenerationRef = useRef(0);
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
   const continuationToken = nextContinuationTokens[page];
@@ -89,6 +95,14 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void workflowDefinitionFolderMovePath(context)
+      .then(path => { if (!cancelled) setMoveCapabilityAvailable(!!path); })
+      .catch(() => { if (!cancelled) setMoveCapabilityAvailable(false); });
+    return () => { cancelled = true; };
+  }, [context]);
 
   useEffect(() => {
     if (selectVisibleRef.current) {
@@ -153,6 +167,21 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   };
 
   const clearSelection = () => setSelectedDefinitionIds(new Set());
+
+  useEffect(() => {
+    if (moveDialogOpen || !focusRefreshAfterMove) return;
+    clearSelection();
+    refreshButtonRef.current?.focus();
+    setFocusRefreshAfterMove(false);
+  }, [focusRefreshAfterMove, moveDialogOpen]);
+
+  const movedDefinitions = async () => {
+    setFolderNavigationRefreshKey(current => current + 1);
+    await load();
+    const count = selectedDefinitionIds.size;
+    setStatus(`Moved ${count === 1 ? "1 workflow definition" : `${count} workflow definitions`}`);
+    setFocusRefreshAfterMove(true);
+  };
 
   const toggleDefinitionSelection = (definitionId: string, selected: boolean) => {
     setSelectedDefinitionIds(current => {
@@ -243,7 +272,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
 
   return (
     <>
-      <WorkflowFolderNavigation context={context} selection={folderSelection} onSelect={changeFolder} onAvailable={setFolderCapabilityAvailable} />
+      <WorkflowFolderNavigation context={context} selection={folderSelection} onSelect={changeFolder} onAvailable={setFolderCapabilityAvailable} refreshKey={folderNavigationRefreshKey} />
       <div className="wf-toolbar">
         <div className="wf-segmented" role="tablist" aria-label="Definition state">
           <button type="button" className={listState === "active" ? "active" : ""} aria-selected={listState === "active"} onClick={() => changeListState("active")}>Active</button>
@@ -253,15 +282,28 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
           <Search size={15} />
           <input value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
         </label>
-        <button type="button" onClick={() => void load()}>Refresh</button>
+        <button ref={refreshButtonRef} type="button" onClick={() => void load()}>Refresh</button>
         <div className="wf-actions">
           <button type="button" title="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create</button>
+          {moveCapabilityAvailable ? (
+            <button
+              type="button"
+              aria-disabled={selectedDefinitionIds.size === 0}
+              title={selectedDefinitionIds.size === 0 ? "Select one or more workflow definitions to move." : "Move selected workflow definitions to a folder"}
+              onClick={() => {
+                if (selectedDefinitionIds.size === 0) return;
+                setError("");
+                setStatus("");
+                setMoveDialogOpen(true);
+              }}
+            >Move to folder</button>
+          ) : null}
         </div>
       </div>
 
       {state === "failed" ? <WfErrorCard message={error} title="Couldn't load workflow definitions" /> : null}
       {state !== "failed" && error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
-      {status ? <div className="wf-status-line"><Check size={14} /> {status}</div> : null}
+      {status ? <div className="wf-status-line" role="status"><Check size={14} /> {status}</div> : null}
       {selectedDefinitionIds.size > 0 ? (
         <div className="wf-selection-bar" aria-live="polite">
           <span>{selectedDefinitionIds.size} selected</span>
@@ -368,6 +410,14 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
           onChange={nextDraft => setCreateDraft(nextDraft)}
           onClose={() => setCreateDraft(null)}
           onSubmit={submitCreate}
+        />
+      ) : null}
+      {moveDialogOpen ? (
+        <MoveWorkflowDefinitionsDialog
+          context={context}
+          definitionIds={[...selectedDefinitionIds]}
+          onClose={() => setMoveDialogOpen(false)}
+          onMoved={movedDefinitions}
         />
       ) : null}
     </>

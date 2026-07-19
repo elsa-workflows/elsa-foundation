@@ -615,6 +615,106 @@
   background: var(--wf-panel-muted);
 }
 
+.wf-actions button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.wf-move-definitions-dialog {
+  width: min(620px, 100%);
+}
+
+.wf-dialog-error {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--wf-danger) 45%, var(--wf-border));
+  border-radius: var(--wf-radius);
+  background: color-mix(in srgb, var(--wf-danger) 8%, var(--wf-panel));
+  color: var(--wf-danger);
+  line-height: 1.45;
+  padding: 9px 10px;
+}
+
+.wf-move-destination {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  padding: 10px;
+}
+
+.wf-move-destination legend {
+  color: var(--wf-text);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 4px;
+}
+
+.wf-move-folder-list {
+  display: grid;
+  gap: 3px;
+  max-height: min(44vh, 380px);
+  overflow: auto;
+}
+
+.wf-move-folder-node { min-width: 0; }
+.wf-move-folder-row {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  gap: 6px;
+  color: var(--wf-text);
+}
+
+label.wf-move-folder-row {
+  padding: 4px 7px;
+  border-radius: var(--wf-radius-sm);
+  cursor: pointer;
+}
+
+label.wf-move-folder-row:hover,
+label.wf-move-folder-row:has(input:focus-visible) {
+  background: var(--wf-accent-soft);
+  outline: 2px solid transparent;
+}
+
+label.wf-move-folder-row:has(input:focus-visible) {
+  outline-color: var(--studio-focus);
+  outline-offset: 1px;
+}
+
+.wf-move-folder-expand {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: var(--wf-radius-sm);
+  background: transparent;
+  color: var(--wf-muted-text);
+}
+
+.wf-move-folder-expand:hover,
+.wf-move-folder-expand:focus-visible {
+  background: var(--wf-panel-muted);
+  color: var(--wf-text);
+}
+
+.wf-move-folder-expand:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
+}
+
+.wf-move-folder-children {
+  display: grid;
+  gap: 3px;
+  margin-left: 18px;
+  padding-left: 10px;
+  border-left: 1px solid var(--wf-border);
+}
+
 .wf-filter-chip {
   display: inline-flex;
   min-height: 30px;
