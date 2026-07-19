@@ -3033,6 +3033,10 @@ describe("workflows module", () => {
     await vi.waitFor(() => expect(childGroup?.getAttribute("aria-busy")).toBe("true"));
     expect(Array.from(childGroup!.children).every(childNode => childNode.getAttribute("role") === "treeitem")).toBe(true);
     expect(childGroup?.querySelector("[data-kind='status'] [role='status']")?.textContent).toContain("Loading folders");
+    const rootTreeItem = container.querySelector<HTMLElement>("[role='treeitem'][data-folder-id='folder-root']");
+    expect(document.activeElement).toBe(rootTreeItem);
+    rootTreeItem?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(document.activeElement).toBe(rootTreeItem);
     resolveFirstAttempt?.(response("Temporary child failure", 500));
     await waitForText(container, "Retry loading folders");
     expect(container.querySelector("[role='alert']")?.textContent).toContain("Temporary child failure");

@@ -243,7 +243,7 @@ function FolderTree(props: FolderTreeProps) {
     if (event.key === "ArrowRight") {
       event.preventDefault();
       if (!expanded.has(folder.id)) void onToggle(folder);
-      else focusItem(current.querySelector<HTMLElement>(':scope > [role="group"] [role="treeitem"]'));
+      else focusItem(current.querySelector<HTMLElement>(':scope > [role="group"] [role="treeitem"]:not([data-kind="status"])'));
       return;
     }
     if (event.key === "ArrowLeft") {
