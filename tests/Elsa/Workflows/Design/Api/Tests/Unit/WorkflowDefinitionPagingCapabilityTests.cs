@@ -31,6 +31,17 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
     }
 
     [Fact]
+    public async Task Folder_relation_requires_both_the_folder_and_paged_definition_stores()
+    {
+        var folders = new StubFolderStore();
+        var withoutPaging = await new WorkflowDesignOperationalCapabilitySource(folderStore: folders).GetCapabilitiesAsync();
+        var withPaging = await new WorkflowDesignOperationalCapabilitySource(pageStore: new StubPagedStore(), folderStore: folders).GetCapabilitiesAsync();
+
+        Assert.DoesNotContain(withoutPaging.SelectMany(x => x.Links), link => link.Rel == "workflow-folders");
+        Assert.Contains(withPaging.SelectMany(x => x.Links), link => link.Rel == "workflow-folders");
+    }
+
+    [Fact]
     public async Task Paged_handler_composes_lifecycle_search_page_size_and_continuation()
     {
         var pageStore = new StubPagedStore
@@ -53,6 +64,16 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
         Assert.Equal(WorkflowDefinitionPageState.Deleted, pageStore.Query.State);
         Assert.Equal("next-token", response.NextContinuationToken);
         Assert.Equal("definition-1", Assert.Single(response.Items).Id);
+    }
+
+    [Fact]
+    public async Task Paged_handler_composes_mutually_exclusive_folder_selectors_for_the_store_to_validate()
+    {
+        var pageStore = new StubPagedStore();
+        var handler = new ListWorkflowDefinitionPageRequestHandler(new PageStoreServiceProvider(pageStore), new EmptyProjectionStore());
+
+        await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
+            new ListWorkflowDefinitionPage(FolderId: "folder-1", Unfiled: true), CancellationToken.None));
     }
 
     [Theory]
@@ -111,5 +132,13 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
             IReadOnlyCollection<string> workflowDefinitionIds,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<WorkflowDefinitionListProjection>>([]);
+    }
+
+    private sealed class StubFolderStore : IWorkflowFolderStore
+    {
+        public bool IsAvailable => true;
+        public Task<WorkflowFolderPage> ListDirectChildrenAsync(WorkflowFolderPageRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowFolderDetails?> FindWithAncestorsAsync(string folderId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowFolder> CreateAsync(WorkflowFolder folder, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

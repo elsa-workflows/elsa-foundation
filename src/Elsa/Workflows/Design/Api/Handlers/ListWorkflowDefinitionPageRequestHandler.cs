@@ -28,6 +28,7 @@ public sealed class ListWorkflowDefinitionPageRequestHandler(
             request.ContinuationToken,
             request.FolderId,
             request.Unfiled);
+        query.Validate();
         var page = await pageStore.QueryPageAsync(query, cancellationToken);
         var items = await WorkflowDefinitionViewMapper.CreateAsync(page.Items, projectionStore, cancellationToken);
 

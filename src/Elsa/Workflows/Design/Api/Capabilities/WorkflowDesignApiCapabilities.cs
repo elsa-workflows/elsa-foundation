@@ -42,7 +42,9 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
                 templated: true));
         if (pageStore?.IsAvailable == true)
             links.Add(new("workflow-definitions-page", "design/workflows/definitions/page"));
-        if (folderStore?.IsAvailable == true)
+        // Folder selection is only useful when the companion bounded definition route can apply
+        // folderId/unfiled server-side; never advertise a tree that Studio cannot browse through.
+        if (folderStore?.IsAvailable == true && pageStore?.IsAvailable == true)
             links.Add(new("workflow-folders", "design/workflows/folders"));
 
         IReadOnlyCollection<ApiCapabilityDeclaration> declarations = links.Count == 0
