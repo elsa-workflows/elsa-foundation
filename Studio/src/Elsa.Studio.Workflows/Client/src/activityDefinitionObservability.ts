@@ -1,8 +1,8 @@
 export const activityDefinitionsObservationEvent = "elsa:activity-definitions:observation";
 
 export type ActivityDefinitionsObservation = {
-  event: "route-view" | "query-start" | "query-success" | "query-failure" | "refresh" | "open-definition" | "create-start" | "create-success" | "create-failure" | "provider-editor" | "autosave" | "test-run";
-  surface: "collection" | "workbench" | "creation" | "editor";
+  event: "route-view" | "query-start" | "query-success" | "query-failure" | "refresh" | "open-definition" | "create-start" | "create-success" | "create-failure" | "provider-editor" | "autosave" | "test-run" | "upgrade-plan" | "upgrade-apply";
+  surface: "collection" | "workbench" | "creation" | "editor" | "upgrade-workbench";
   outcome?: "ready" | "empty" | "stale" | "unavailable" | "forbidden" | "not-found" | "expired" | "failed" | "pending" | "saving" | "saved" | "offline" | "conflict" | "dispatching" | "reconciling" | "accepted" | "waiting" | "running" | "suspended" | "completed" | "faulted" | "cancelled" | "validation-rejected" | "dispatch-rejected";
   providerKey?: string;
   providerSchemaVersion?: string;
@@ -15,9 +15,9 @@ export type ActivityDefinitionsObservation = {
 };
 
 const events = new Set<ActivityDefinitionsObservation["event"]>([
-  "route-view", "query-start", "query-success", "query-failure", "refresh", "open-definition", "create-start", "create-success", "create-failure", "provider-editor", "autosave", "test-run"
+  "route-view", "query-start", "query-success", "query-failure", "refresh", "open-definition", "create-start", "create-success", "create-failure", "provider-editor", "autosave", "test-run", "upgrade-plan", "upgrade-apply"
 ]);
-const surfaces = new Set<ActivityDefinitionsObservation["surface"]>(["collection", "workbench", "creation", "editor"]);
+const surfaces = new Set<ActivityDefinitionsObservation["surface"]>(["collection", "workbench", "creation", "editor", "upgrade-workbench"]);
 const outcomes = new Set<NonNullable<ActivityDefinitionsObservation["outcome"]>>([
   "ready", "empty", "stale", "unavailable", "forbidden", "not-found", "expired", "failed", "pending", "saving", "saved", "offline", "conflict", "dispatching", "reconciling", "accepted", "waiting", "running", "suspended", "completed", "faulted", "cancelled", "validation-rejected", "dispatch-rejected"
 ]);

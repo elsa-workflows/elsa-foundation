@@ -9,7 +9,8 @@ export default mergeConfig(
   }),
   {
     build: {
-      manifest: true
+      manifest: true,
+      cssCodeSplit: true
     }
   }
 );

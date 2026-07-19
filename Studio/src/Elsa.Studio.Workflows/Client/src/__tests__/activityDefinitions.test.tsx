@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 describe("Activity Definitions experience", () => {
-  it("opens the dedicated Elsa 3 import route through host navigation", async () => {
+  it("opens dedicated Elsa 3 import and broad upgrade routes through host navigation", async () => {
     const navigateToStudioPath = vi.fn();
     const getJson = vi.fn(async (url: string) => {
       if (url === "/capabilities") return capabilities();
@@ -36,6 +36,8 @@ describe("Activity Definitions experience", () => {
     click(buttonByText(rendered.container, "Import from Elsa 3"));
 
     expect(navigateToStudioPath).toHaveBeenCalledWith("/workflows/activity-definitions/import-elsa3");
+    click(buttonByText(rendered.container, "Plan broad upgrade"));
+    expect(navigateToStudioPath).toHaveBeenCalledWith("/workflows/activity-definitions/upgrades");
     await rendered.unmount();
   });
 
@@ -72,6 +74,7 @@ describe("Activity Definitions experience", () => {
   });
 
   it("opens the stable definition workbench and keeps an exact draft identity in the URL", async () => {
+    const navigateToStudioPath = vi.fn();
     const getJson = vi.fn(async (url: string) => {
       if (url === "/capabilities") return capabilities();
       if (url.startsWith("/design/activities/definitions?")) return page([definition()]);
@@ -82,7 +85,15 @@ describe("Activity Definitions experience", () => {
       if (url === "/design/activities/versions/version-1") return versionDetail();
       throw new Error(`Unexpected GET ${url}`);
     });
-    const rendered = renderPage(getJson);
+    const rendered = renderPage(
+      getJson,
+      undefined,
+      "/workflows/activity-definitions",
+      undefined,
+      [],
+      undefined,
+      navigateToStudioPath
+    );
 
     await waitForText(rendered.container, "Invoice evaluator");
     const row = rendered.container.querySelector<HTMLElement>("[role='row'][tabindex='0']")!;
@@ -100,6 +111,10 @@ describe("Activity Definitions experience", () => {
     expect(window.location.pathname).toBe("/workflows/activity-definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
     expect(new URLSearchParams(window.location.search).get("draft")).toBe("draft-1");
+    click(buttonByText(rendered.container, "Plan broad upgrade from this exact draft"));
+    expect(navigateToStudioPath).toHaveBeenCalledWith(
+      "/workflows/activity-definitions/upgrades?rootKind=ActivityDraft&rootId=draft-1"
+    );
     await rendered.unmount();
   });
 
@@ -160,6 +175,7 @@ describe("Activity Definitions experience", () => {
   });
 
   it("clones one authorized exact immutable version without rewriting the source", async () => {
+    const navigateToStudioPath = vi.fn();
     const postJson = vi.fn(async (_url: string, _body: unknown) => draftDetail({ draftId: "draft-clone", presentationLabel: "Review" }));
     const getJson = vi.fn(async (url: string) => {
       if (url === "/capabilities") return capabilities(true);
@@ -172,9 +188,21 @@ describe("Activity Definitions experience", () => {
       if (url === "/design/activities/drafts/draft-clone") return draftDetail({ draftId: "draft-clone", presentationLabel: "Review" });
       throw new Error(`Unexpected GET ${url}`);
     });
-    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1", postJson, [graphContribution()]);
+    const rendered = renderPage(
+      getJson,
+      undefined,
+      "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1",
+      postJson,
+      [graphContribution()],
+      undefined,
+      navigateToStudioPath
+    );
 
     await waitForText(rendered.container, "Create draft from this exact version");
+    click(buttonByText(rendered.container, "Plan broad upgrade from this exact version"));
+    expect(navigateToStudioPath).toHaveBeenCalledWith(
+      "/workflows/activity-definitions/upgrades?rootKind=ActivityVersion&rootId=version-1"
+    );
     click(buttonByText(rendered.container, "Create draft from this exact version"));
     await waitForText(rendered.container, "Clone exact version");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Draft label"), "Review");

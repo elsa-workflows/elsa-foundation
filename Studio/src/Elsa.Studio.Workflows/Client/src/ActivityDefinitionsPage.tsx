@@ -13,7 +13,14 @@ const ActivityDefinitionCreateDialog = lazy(() => import("./ActivityDefinitionCr
 const ActivityDefinitionDraftEditor = lazy(() => import("./ActivityDefinitionDraftEditor").then(module => ({ default: module.ActivityDefinitionDraftEditor })));
 
 type PageSize = 10 | 25 | 50;
-type RouteState = { definitionId: string | null; section: string | null; draftId: string | null; versionId: string | null; draftActionVersionId?: string | null };
+type RouteState = {
+  definitionId: string | null;
+  section: string | null;
+  draftId: string | null;
+  versionId: string | null;
+  draftActionVersionId?: string | null;
+  returnPlanId?: string | null;
+};
 
 export function ActivityDefinitionsPage({
   context,
@@ -61,16 +68,23 @@ export function ActivityDefinitionsPage({
 
   if (route.definitionId) {
     if (route.section === "editor" && route.draftId) {
-      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId} activityEditors={activityEditors()} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => navigate({ definitionId: route.definitionId, section: "drafts", draftId: route.draftId, versionId: null }, force)} onOpenDraft={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null }, true)} onOpenVersion={(definitionId, versionId) => navigate({ definitionId, section: "versions", draftId: null, versionId }, true)} onOpenStudioPath={navigateToStudioPath} /></WorkflowLazyBoundary>;
+      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId} activityEditors={activityEditors()} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
+        if (route.returnPlanId) {
+          navigationBlockedRef.current = false;
+          navigateToStudioPath(`/workflows/activity-definitions/upgrades?plan=${encodeURIComponent(route.returnPlanId)}`);
+          return;
+        }
+        navigate({ definitionId: route.definitionId, section: "drafts", draftId: route.draftId, versionId: null }, force);
+      }} onOpenDraft={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null, returnPlanId: route.returnPlanId }, true)} onOpenVersion={(definitionId, versionId) => navigate({ definitionId, section: "versions", draftId: null, versionId, returnPlanId: route.returnPlanId }, true)} onOpenStudioPath={navigateToStudioPath} /></WorkflowLazyBoundary>;
     }
     return (
       <WorkflowLazyBoundary label="activity definition workbench">
-        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} requestedDraftActionVersionId={route.draftActionVersionId} activityEditors={activityEditors()} onNavigate={navigate} />
+        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} requestedDraftActionVersionId={route.draftActionVersionId} activityEditors={activityEditors()} onNavigate={navigate} onPlanUpgrade={(kind, id) => navigateToStudioPath(`/workflows/activity-definitions/upgrades?rootKind=${encodeURIComponent(kind)}&rootId=${encodeURIComponent(id)}`)} />
       </WorkflowLazyBoundary>
     );
   }
 
-  return <ActivityDefinitionCollection context={context} activityEditors={activityEditors()} onImport={() => navigateToStudioPath("/workflows/activity-definitions/import-elsa3")} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
+  return <ActivityDefinitionCollection context={context} activityEditors={activityEditors()} onImport={() => navigateToStudioPath("/workflows/activity-definitions/import-elsa3")} onPlanUpgrade={() => navigateToStudioPath("/workflows/activity-definitions/upgrades")} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
 }
 
 function defaultStudioPathNavigation(path: string) {
@@ -85,11 +99,12 @@ function writeRouteState(route: RouteState, mode: "push" | "replace") {
   if (route.draftId) parameters.set("draft", route.draftId);
   if (route.versionId) parameters.set("version", route.versionId);
   if (route.draftActionVersionId) parameters.set("createDraftFrom", route.draftActionVersionId);
+  if (route.returnPlanId) parameters.set("returnPlan", route.returnPlanId);
   const query = parameters.toString();
   window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", `/workflows/activity-definitions${query ? `?${query}` : ""}`);
 }
 
-function ActivityDefinitionCollection({ context, activityEditors, onImport, onOpen, onCreated }: { context: StudioEndpointContext; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onImport(): void; onOpen(definitionId: string): void; onCreated(definitionId: string, draftId: string): void }) {
+function ActivityDefinitionCollection({ context, activityEditors, onImport, onPlanUpgrade, onOpen, onCreated }: { context: StudioEndpointContext; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onImport(): void; onPlanUpgrade(): void; onOpen(definitionId: string): void; onCreated(definitionId: string, draftId: string): void }) {
   const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState("");
   const [providerInput, setProviderInput] = useState("");
@@ -174,7 +189,7 @@ function ActivityDefinitionCollection({ context, activityEditors, onImport, onOp
     <main className="ad-page" aria-labelledby="activity-definitions-title">
       <header className="ad-page-header">
         <div><span className="ad-kicker">Workflows</span><h1 id="activity-definitions-title">Activity Definitions</h1><p>Browse stable reusable activity identities. Draft and version history stay attached to the definition you open.</p></div>
-        <div className="ad-header-actions"><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={() => setCreateOpen(true)}>Create Activity Definition</button><button type="button" className="ad-primary-action" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</button></div>
+        <div className="ad-header-actions"><button type="button" onClick={onPlanUpgrade}>Plan broad upgrade</button><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={() => setCreateOpen(true)}>Create Activity Definition</button><button type="button" className="ad-primary-action" onClick={refresh} disabled={query.isFetching}><RefreshCw size={16} aria-hidden /> {query.isFetching && data ? "Refreshing" : "Refresh"}</button></div>
       </header>
 
       <section className="ad-filters" aria-label="Activity Definition filters">
@@ -235,7 +250,14 @@ function useDebouncedValue(value: string, delay: number) {
 
 function readRouteState(): RouteState {
   const parameters = new URLSearchParams(window.location.search);
-  return { definitionId: parameters.get("definition"), section: parameters.get("section"), draftId: parameters.get("draft"), versionId: parameters.get("version"), draftActionVersionId: parameters.get("createDraftFrom") };
+  return {
+    definitionId: parameters.get("definition"),
+    section: parameters.get("section"),
+    draftId: parameters.get("draft"),
+    versionId: parameters.get("version"),
+    draftActionVersionId: parameters.get("createDraftFrom"),
+    returnPlanId: parameters.get("returnPlan")
+  };
 }
 
 function formatDate(value: string | null | undefined) {

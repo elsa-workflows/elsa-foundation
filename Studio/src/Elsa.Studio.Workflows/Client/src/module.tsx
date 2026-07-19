@@ -16,6 +16,7 @@ const WorkflowExecutableInspectorPage = lazy(() => import("./workflow-editor/pag
 const WorkflowInstancesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowInstancesPage })));
 const WorkflowInstanceDetailsPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowInstanceDetailsPage })));
 const ActivityDefinitionsPage = lazy(() => import("./ActivityDefinitionsPage").then(module => ({ default: module.ActivityDefinitionsPage })));
+const ActivityUpgradeWorkbenchPage = lazy(() => import("./ActivityUpgradeWorkbenchPage").then(module => ({ default: module.ActivityUpgradeWorkbenchPage })));
 const Elsa3ReusableImportPage = lazy(() => import("./Elsa3ReusableImportPage").then(module => ({ default: module.Elsa3ReusableImportPage })));
 const ActivityAvailabilityPage = lazy(() => import("./ActivityAvailabilityPage").then(module => ({ default: module.ActivityAvailabilityPage })));
 const RuntimeDiagnosticsSettingsPage = lazy(() => import("./RuntimeDiagnosticsSettingsPage").then(module => ({ default: module.RuntimeDiagnosticsSettingsPage })));
@@ -72,6 +73,12 @@ export function register(api: ElsaStudioModuleApi) {
         path: "/workflows/activity-definitions/import-elsa3",
         label: "Elsa 3 import",
         component: ({ navigate }) => deferred("Elsa 3 import", <Elsa3ReusableImportPage context={api.backend} navigate={navigate} />)
+      },
+      {
+        id: "workflows-activity-upgrades",
+        path: "/workflows/activity-definitions/upgrades",
+        label: "Activity Definition upgrades",
+        component: () => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} />)
       },
       {
         id: "workflows-activity-definitions",
