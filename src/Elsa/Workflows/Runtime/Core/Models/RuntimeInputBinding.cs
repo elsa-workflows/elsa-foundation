@@ -64,11 +64,13 @@ public sealed class RuntimeInputBinding
     public RuntimeExpressionBinding? Expression { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
     /// <summary>Null preserves the legacy identity/retyping behavior of artifacts published before conversion plans.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ValueConversionPlan? ConversionPlan { get; }
     /// <summary>
     /// Authored conversion intent retained only until a later publication linker can resolve a source contract.
     /// Published executable bindings should prefer <see cref="ConversionPlan"/>.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeValueConversionRequest? ConversionRequest { get; }
 
     private static void ValidateCanonical(

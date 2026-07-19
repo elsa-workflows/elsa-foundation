@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:1ebf171d8a556664c46c07eb4af8f684afe85f00c66a5de116bf6881b3752983",
-    "artifactId": "artifact-1ebf171d8a55",
+    "artifactHash": "sha256:575b82328028c5fbf7e68bf1d3e78b5a4cf27651af7e446f354647ab9c939541",
+    "artifactId": "artifact-575b82328028",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -94,6 +94,32 @@
           {
             "initialBinding": {
               "activityResult": null,
+              "conversionPlan": {
+                "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb",
+                "limits": {
+                  "maxCollectionItems": 10000,
+                  "maxDepth": 64,
+                  "maxPayloadBytes": 1048576
+                },
+                "mode": "Auto",
+                "operation": "Identity",
+                "options": {},
+                "profile": null,
+                "schemaVersion": 1,
+                "sourceRepresentation": "TextValue",
+                "sourceType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                }
+              },
               "effectivePolicy": {
                 "isSensitive": false,
                 "lifecycle": 1,

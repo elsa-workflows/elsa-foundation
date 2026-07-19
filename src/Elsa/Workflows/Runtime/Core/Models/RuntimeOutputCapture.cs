@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -47,5 +49,6 @@ public sealed class RuntimeOutputCapture
     public string StorageDriverKey { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
     /// <summary>Null preserves the legacy identity/retyping behavior of artifacts published before conversion plans.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ValueConversionPlan? ConversionPlan { get; }
 }

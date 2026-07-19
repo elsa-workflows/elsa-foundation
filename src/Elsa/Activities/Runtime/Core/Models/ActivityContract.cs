@@ -263,7 +263,9 @@ public sealed class ActivityResultContract
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
     public ActivityValuePolicy Policy { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ValueRepresentation? SourceRepresentation { get; }
+    [JsonIgnore]
     public ValueRepresentation EffectiveSourceRepresentation => SourceRepresentation ?? ValueRepresentationDefaults.Infer(Type);
     public IReadOnlyDictionary<string, ActivityResultProjectionContract> Projections { get; }
 }
@@ -296,7 +298,9 @@ public sealed class ActivityResultProjectionContract
     public ValueTypeDescriptor Type { get; }
     public bool IsRequired { get; }
     public ActivityValuePolicy Policy { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ValueRepresentation? SourceRepresentation { get; }
+    [JsonIgnore]
     public ValueRepresentation EffectiveSourceRepresentation => SourceRepresentation ?? ValueRepresentationDefaults.Infer(Type);
 }
 
