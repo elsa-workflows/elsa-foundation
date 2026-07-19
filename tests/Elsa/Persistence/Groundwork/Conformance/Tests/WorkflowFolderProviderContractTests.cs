@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Core.Scoping;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Xunit;
@@ -141,11 +142,14 @@ public sealed class WorkflowFolderProviderContractTests
             LastModifiedAt = DateTimeOffset.UnixEpoch
         };
         await SaveLegacyDefinitionAsync(client.DocumentStore, legacy);
-        var definitions = new GroundworkWorkflowDefinitionStore(
-            client.DocumentStore,
+        var bounded = new RecordingBoundedDocumentStore(
             client.BoundedDocumentStore ?? throw new InvalidOperationException("The provider did not expose its admitted bounded-query runtime."));
+        var definitions = new GroundworkWorkflowDefinitionStore(client.DocumentStore, bounded);
         var unfiled = await definitions.QueryPageAsync(new WorkflowDefinitionPageQuery(10, Unfiled: true));
         Assert.Contains(unfiled.Items, definition => definition.Id == legacy.Id && definition.FolderId is null);
+        Assert.Equal(
+            WorkflowsDesignStorageManifest.PageWorkflowDefinitionsByFolderQuery,
+            Assert.Single(bounded.Observations).Query.QueryIdentity);
 
         var folder = await folders.CreateAsync(Folder("definition-folder", "Definition folder"));
         var addDefinition = new GroundworkAddWorkflowDefinitionCommand(
@@ -164,10 +168,52 @@ public sealed class WorkflowFolderProviderContractTests
             },
             [],
             CancellationToken.None);
+        var legacyDeleted = new WorkflowDefinition
+        {
+            Id = "legacy-deleted-filed",
+            Name = "Legacy deleted filed",
+            TenantId = tenant,
+            FolderId = folder.Id,
+            DeletedAt = DateTimeOffset.UnixEpoch,
+            LastModifiedAt = DateTimeOffset.UnixEpoch
+        };
+        await SaveLegacyDefinitionAsync(client.DocumentStore, legacyDeleted);
+
         var filed = await definitions.QueryPageAsync(new WorkflowDefinitionPageQuery(10, FolderId: folder.Id));
         Assert.Contains(filed.Items, definition => definition.Id == "filed-definition" && definition.FolderId == folder.Id);
+        Assert.DoesNotContain(filed.Items, definition => definition.Id == legacyDeleted.Id);
         var unfiledAfterFiling = await definitions.QueryPageAsync(new WorkflowDefinitionPageQuery(10, Unfiled: true));
         Assert.DoesNotContain(unfiledAfterFiling.Items, definition => definition.Id == "filed-definition");
+        var deletedFiled = await definitions.QueryPageAsync(
+            new WorkflowDefinitionPageQuery(10, State: WorkflowDefinitionPageState.Deleted, FolderId: folder.Id));
+        Assert.Contains(deletedFiled.Items, definition => definition.Id == legacyDeleted.Id);
+        Assert.DoesNotContain(deletedFiled.Items, definition => definition.Id == "filed-definition");
+        var allFiled = await definitions.QueryPageAsync(
+            new WorkflowDefinitionPageQuery(10, State: WorkflowDefinitionPageState.All, FolderId: folder.Id));
+        Assert.Contains(allFiled.Items, definition => definition.Id == "filed-definition");
+        Assert.Contains(allFiled.Items, definition => definition.Id == legacyDeleted.Id);
+        Assert.Equal(
+            [
+                WorkflowsDesignStorageManifest.PageWorkflowDefinitionsByFolderQuery,
+                WorkflowsDesignStorageManifest.PageWorkflowDefinitionsByFolderQuery,
+                WorkflowsDesignStorageManifest.PageWorkflowDefinitionsByFolderQuery,
+                WorkflowsDesignStorageManifest.PageWorkflowDefinitionsByFolderQuery,
+                WorkflowsDesignStorageManifest.PageAllWorkflowDefinitionsByFolderQuery
+            ],
+            bounded.Observations.Select(observation => observation.Query.QueryIdentity));
+        Assert.All(bounded.Observations, observation =>
+        {
+            Assert.Equal(10, observation.Query.Take);
+            Assert.InRange(observation.MaterializedDocuments, 0, 10);
+        });
+        var explainer = client.PhysicalDocumentQueryExplainer
+            ?? throw new InvalidOperationException("The provider did not expose native query explanations.");
+        foreach (var observation in bounded.Observations.DistinctBy(item => item.Query.QueryIdentity))
+        {
+            var explanation = await explainer.ExplainAsync(observation.Query, CancellationToken.None);
+            Assert.Equal(observation.Query.QueryIdentity, explanation.Plan.QueryIdentity);
+            Assert.NotEmpty(explanation.Commands);
+        }
 
         await using var tenantBClient = await driver.OpenPhysicalClientAsync(Access("tenant-b"));
         var crossTenantAdd = new GroundworkAddWorkflowDefinitionCommand(
@@ -239,17 +285,42 @@ public sealed class WorkflowFolderProviderContractTests
         var document = new GroundworkDocument<WorkflowDefinition>(
             WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
             definition);
+        var canonicalJson = JsonSerializer.Serialize(document, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.DoesNotContain("lifecycleKey", canonicalJson, StringComparison.OrdinalIgnoreCase);
         return store.SaveAsync(new SaveDocumentRequest(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             definition.Id,
             WorkflowsDesignStorageManifest.SchemaVersion,
-            JsonSerializer.Serialize(document, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+            canonicalJson));
     }
 
     private sealed class Clock : ISystemClock
     {
         public DateTimeOffset UtcNow => DateTimeOffset.UnixEpoch;
     }
+
+    private sealed class RecordingBoundedDocumentStore(IBoundedDocumentStore inner) : IBoundedDocumentStore
+    {
+        public List<QueryObservation> Observations { get; } = [];
+
+        public async Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            var result = await inner.QueryAsync(query, cancellationToken);
+            Observations.Add(new QueryObservation(query, result.Documents.Count));
+            return result;
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.CountAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+    }
+
+    private sealed record QueryObservation(DocumentQuery Query, int MaterializedDocuments);
 
     private sealed class PayloadSerializer : IPayloadSerializer
     {

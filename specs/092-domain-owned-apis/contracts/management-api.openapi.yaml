@@ -63,7 +63,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-
     post:
       tags: [Workflow Design]
       operationId: createWorkflowDefinition
@@ -86,6 +85,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /design/workflows/definitions/page:
     get:
@@ -143,6 +144,12 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkflowFolderPage' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [Workflow Design]
       operationId: createWorkflowFolder
@@ -152,13 +159,25 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateWorkflowFolderRequest' }
       responses:
-        '200':
+        '201':
           description: Created workflow folder
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkflowFolder' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /design/workflows/folders/{folderId}:
+    parameters:
+      - $ref: '#/components/parameters/FolderId'
     get:
       tags: [Workflow Design]
       operationId: getWorkflowFolder
@@ -168,6 +187,12 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkflowFolderDetails' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /design/workflows/definitions/{definitionId}:
     parameters:
@@ -924,6 +949,13 @@ components:
       required: true
       schema:
         type: string
+    FolderId:
+      name: folderId
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 64
     DraftId:
       name: draftId
       in: path
@@ -1066,7 +1098,7 @@ components:
         latestVersionId: { type: [string, 'null'] }
         latestVersion: { type: [string, 'null'] }
         versionCount: { type: integer, minimum: 0 }
-        folderId: { type: [string, 'null'] }
+        folderId: { type: [string, 'null'], maxLength: 64 }
     WorkflowDefinitionPage:
       type: object
       required: [items]
@@ -1095,7 +1127,7 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         description: { type: [string, 'null'] }
-        folderId: { type: [string, 'null'] }
+        folderId: { type: [string, 'null'], maxLength: 64 }
         initialState:
           oneOf:
             - $ref: '#/components/schemas/WorkflowDefinitionState'
@@ -1505,10 +1537,10 @@ components:
       type: object
       required: [id, name, normalizedName, createdAt, lastModifiedAt]
       properties:
-        id: { type: string }
-        parentId: { type: [string, 'null'] }
-        name: { type: string }
-        normalizedName: { type: string }
+        id: { type: string, maxLength: 64 }
+        parentId: { type: [string, 'null'], maxLength: 64 }
+        name: { type: string, maxLength: 128 }
+        normalizedName: { type: string, maxLength: 128 }
         createdAt: { type: string, format: date-time }
         lastModifiedAt: { type: string, format: date-time }
     WorkflowFolderPage:
@@ -1531,8 +1563,8 @@ components:
       type: object
       required: [name]
       properties:
-        name: { type: string, minLength: 1 }
-        parentId: { type: [string, 'null'] }
+        name: { type: string, minLength: 1, maxLength: 128 }
+        parentId: { type: [string, 'null'], maxLength: 64 }
     RuntimeDiagnosticsSettings:
       type: object
       additionalProperties: true

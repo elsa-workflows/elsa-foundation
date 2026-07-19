@@ -128,18 +128,31 @@ public class ManagementApiContractTests
             path => path.StartsWith(string.Join('/', "", "_elsa", "workflow-management"), StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Workflow_folder_contract_matches_runtime_status_parameters_and_errors()
+    {
+        var document = await LoadDocumentAsync();
+        var paths = GetMapping(document, "paths");
+        var folders = GetMapping(paths, "/design/workflows/folders");
+        var folderCreateResponses = GetMapping(GetMapping(folders, "post"), "responses");
+        Assert.Equal(
+            ["201", "400", "401", "403", "404", "409"],
+            folderCreateResponses.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
+        Assert.DoesNotContain(new YamlScalarNode("200"), folderCreateResponses.Children.Keys);
+
+        var folderDetail = GetMapping(paths, "/design/workflows/folders/{folderId}");
+        var parameter = Assert.IsType<YamlMappingNode>(Assert.Single(GetSequence(folderDetail, "parameters")));
+        Assert.Equal("#/components/parameters/FolderId", GetScalar(parameter, "$ref"));
+
+        var definitionCreateResponses = GetMapping(
+            GetMapping(GetMapping(paths, "/design/workflows/definitions"), "post"),
+            "responses");
+        Assert.Contains(new YamlScalarNode("404"), definitionCreateResponses.Children.Keys);
+    }
+
     private static async Task<ContractInventory> LoadContractAsync()
     {
-        Assert.True(
-            File.Exists(ContractPath),
-            $"Expected the management API contract fixture at '{ContractPath}'.");
-
-        await using var stream = File.OpenRead(ContractPath);
-        using var reader = new StreamReader(stream);
-        var yaml = new YamlStream();
-        yaml.Load(reader);
-
-        var document = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        var document = await LoadDocumentAsync();
         Assert.Equal("3.1.0", GetScalar(document, "openapi"));
 
         var paths = GetMapping(document, "paths").Children.Keys
@@ -155,8 +168,24 @@ public class ManagementApiContractTests
         return new ContractInventory(paths, schemas);
     }
 
+    private static async Task<YamlMappingNode> LoadDocumentAsync()
+    {
+        Assert.True(
+            File.Exists(ContractPath),
+            $"Expected the management API contract fixture at '{ContractPath}'.");
+
+        await using var stream = File.OpenRead(ContractPath);
+        using var reader = new StreamReader(stream);
+        var yaml = new YamlStream();
+        yaml.Load(reader);
+        return Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+    }
+
     private static YamlMappingNode GetMapping(YamlMappingNode parent, string key) =>
         Assert.IsType<YamlMappingNode>(parent.Children[new YamlScalarNode(key)]);
+
+    private static YamlSequenceNode GetSequence(YamlMappingNode parent, string key) =>
+        Assert.IsType<YamlSequenceNode>(parent.Children[new YamlScalarNode(key)]);
 
     private static string? GetScalar(YamlMappingNode parent, string key) =>
         Assert.IsType<YamlScalarNode>(parent.Children[new YamlScalarNode(key)]).Value;

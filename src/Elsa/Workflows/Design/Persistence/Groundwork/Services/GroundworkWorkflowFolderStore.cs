@@ -89,6 +89,9 @@ public sealed class GroundworkWorkflowFolderStore(
     public async Task<WorkflowFolder> CreateAsync(WorkflowFolder folder, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(folder);
+        WorkflowFolderNames.ValidateIdentifier(folder.Id, nameof(folder.Id));
+        if (!string.IsNullOrWhiteSpace(folder.ParentFolderId))
+            WorkflowFolderNames.ValidateIdentifier(folder.ParentFolderId, nameof(folder.ParentFolderId));
         var access = accessContextAccessor.Current;
         if (access.Scope is null)
             throw new InvalidOperationException("Workflow folders require a tenant-scoped persistence context.");

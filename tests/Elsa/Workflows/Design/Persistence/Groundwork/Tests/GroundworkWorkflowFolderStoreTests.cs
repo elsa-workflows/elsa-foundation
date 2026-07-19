@@ -25,6 +25,15 @@ public sealed class GroundworkWorkflowFolderStoreTests
             unit.Identity.Value == WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind);
         var physical = Assert.IsType<global::Groundwork.Core.PhysicalStorage.PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage!.Policy).Definition;
         Assert.Contains(physical.Indexes, index => index.LogicalName == "by-parent-and-normalized-name" && index.IsUnique);
+        Assert.Equal(
+            WorkflowFolderNames.MaximumIdentifierLength,
+            physical.ProjectedColumns.Single(column => column.LogicalName == "parent_key").Length);
+        Assert.Equal(
+            WorkflowFolderNames.MaximumNameLength,
+            physical.ProjectedColumns.Single(column => column.LogicalName == "normalized_name").Length);
+        Assert.Equal(
+            WorkflowFolderNames.MaximumIdentifierLength,
+            physical.ProjectedColumns.Single(column => column.LogicalName == "folder_id").Length);
     }
 
     [Fact]
@@ -41,6 +50,21 @@ public sealed class GroundworkWorkflowFolderStoreTests
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => folders.CreateAsync(Folder("too-deep", "Too deep", parent)));
         await Assert.ThrowsAsync<Elsa.Primitives.Exceptions.EntityNotFoundException>(() => folders.CreateAsync(Folder("missing", "Missing", "nope")));
+    }
+
+    [Fact]
+    public async Task Rejects_names_and_identifiers_that_cannot_be_represented_by_the_physical_contract()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var folders = new GroundworkWorkflowFolderStore(store, GroundworkTestAccess.AccessContext("tenant-a"), new Clock());
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            WorkflowFolderNames.Normalize(new string('n', WorkflowFolderNames.MaximumNameLength + 1)));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            folders.CreateAsync(Folder(new string('i', WorkflowFolderNames.MaximumIdentifierLength + 1), "Folder")));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            folders.CreateAsync(Folder("child", "Child", new string('p', WorkflowFolderNames.MaximumIdentifierLength + 1))));
+        Assert.Empty(store.Snapshot(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind));
     }
 
     private static WorkflowFolder Folder(string id, string name, string? parentId = null)

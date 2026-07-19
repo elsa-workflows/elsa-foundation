@@ -15,9 +15,13 @@ public sealed class CreateWorkflowFolderCommandHandler(
     public async Task<WorkflowFolderView> Handle(CreateWorkflowFolder command, CancellationToken cancellationToken)
     {
         var (name, normalizedName) = WorkflowFolderNames.Normalize(command.Name);
+        var id = identities.Generate();
+        WorkflowFolderNames.ValidateIdentifier(id, nameof(id));
+        if (!string.IsNullOrWhiteSpace(command.ParentId))
+            WorkflowFolderNames.ValidateIdentifier(command.ParentId, nameof(command.ParentId));
         var folder = new WorkflowFolder
         {
-            Id = identities.Generate(),
+            Id = id,
             ParentFolderId = string.IsNullOrWhiteSpace(command.ParentId) ? null : command.ParentId,
             Name = name,
             NormalizedName = normalizedName

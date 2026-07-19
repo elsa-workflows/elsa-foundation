@@ -1,4 +1,4 @@
-using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
@@ -38,9 +38,9 @@ internal static class WorkflowFolderStoragePhysicalizer
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             "workflow_folders",
             [
-                Column("parent_key", WorkflowsDesignStorageManifest.WorkflowFolderParentKeyField),
-                Column("normalized_name", WorkflowsDesignStorageManifest.WorkflowFolderNormalizedNameField),
-                Column("folder_id", "entity.id")
+                Column("parent_key", WorkflowsDesignStorageManifest.WorkflowFolderParentKeyField, WorkflowFolderNames.MaximumIdentifierLength),
+                Column("normalized_name", WorkflowsDesignStorageManifest.WorkflowFolderNormalizedNameField, WorkflowFolderNames.MaximumNameLength),
+                Column("folder_id", "entity.id", WorkflowFolderNames.MaximumIdentifierLength)
             ], envelope,
             [new PhysicalIndexDefinition(unique.Identity,
                 [
@@ -82,6 +82,6 @@ internal static class WorkflowFolderStoragePhysicalizer
             storage.BoundedMutations) };
     }
 
-    private static ProjectedColumnDefinition Column(string name, string path) => new(
-        name, path, PortablePhysicalType.String, Length: LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength);
+    private static ProjectedColumnDefinition Column(string name, string path, int length) => new(
+        name, path, PortablePhysicalType.String, Length: length);
 }

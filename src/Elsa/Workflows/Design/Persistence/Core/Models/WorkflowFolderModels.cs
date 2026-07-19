@@ -18,13 +18,28 @@ public sealed record WorkflowFolderPageRequest(string? ParentFolderId, int PageS
 public static class WorkflowFolderNames
 {
     public const int MaximumDepth = 16;
+    public const int MaximumNameLength = 128;
+    public const int MaximumIdentifierLength = 64;
+
+    public static void ValidateIdentifier(string identifier, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(identifier))
+            throw new ArgumentException("A workflow-folder identifier is required.", parameterName);
+        if (identifier.Length > MaximumIdentifierLength)
+            throw new ArgumentOutOfRangeException(parameterName, $"A workflow-folder identifier cannot exceed {MaximumIdentifierLength} characters.");
+    }
 
     public static (string Name, string NormalizedName) Normalize(string name)
     {
         var trimmed = name?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(trimmed))
             throw new ArgumentException("A workflow-folder name is required.", nameof(name));
+        if (trimmed.Length > MaximumNameLength)
+            throw new ArgumentOutOfRangeException(nameof(name), $"A workflow-folder name cannot exceed {MaximumNameLength} characters.");
 
-        return (trimmed, trimmed.ToUpperInvariant());
+        var normalized = trimmed.ToUpperInvariant();
+        if (normalized.Length > MaximumNameLength)
+            throw new ArgumentOutOfRangeException(nameof(name), $"A normalized workflow-folder name cannot exceed {MaximumNameLength} characters.");
+        return (trimmed, normalized);
     }
 }

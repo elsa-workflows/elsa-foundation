@@ -36,8 +36,11 @@ public static class WorkflowsDesignStorageManifest
     public const string WorkflowFolderBrowseIndex = "by-parent-normalized-name-and-id";
     public const string PageWorkflowFoldersQuery = "page-workflow-folders";
     public const string PageWorkflowDefinitionsQuery = "page-workflow-definitions";
+    public const string PageWorkflowDefinitionsByFolderQuery = "page-workflow-definitions-by-folder";
+    public const string PageAllWorkflowDefinitionsByFolderQuery = "page-all-workflow-definitions-by-folder";
     public const string SearchWorkflowDefinitionsQuery = "search-workflow-definitions";
     public const string WorkflowDefinitionBrowseOrderIndex = "by-last-modified-and-id";
+    public const string WorkflowDefinitionFolderAllBrowseOrderIndex = "by-folder-last-modified-and-id";
     public const string WorkflowDefinitionLastModifiedAtField = "entity.lastModifiedAt";
     public const string WorkflowDefinitionIdField = "entity.id";
     public const string WorkflowDefinitionDeletedAtField = "entity.deletedAt";

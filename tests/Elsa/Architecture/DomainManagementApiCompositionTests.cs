@@ -16,8 +16,12 @@ using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Publishing.Api;
@@ -191,6 +195,21 @@ public sealed class DomainManagementApiCompositionTests
         using var mutuallyExclusiveSelectors = await host.Client.GetAsync(
             "/design/workflows/definitions/page?folderId=folder-1&unfiled=true");
         Assert.Equal(HttpStatusCode.BadRequest, mutuallyExclusiveSelectors.StatusCode);
+
+        using var definitionCreated = await host.Client.PostAsJsonAsync(
+            "/design/workflows/definitions",
+            new { name = "Filed workflow", folderId = "folder-1" });
+        definitionCreated.EnsureSuccessStatusCode();
+        var createdDefinition = await definitionCreated.Content.ReadFromJsonAsync<WorkflowDefinitionDetailsView>();
+        Assert.Equal("folder-1", createdDefinition!.Definition.FolderId);
+
+        var persistedDefinition = await host.Client.GetFromJsonAsync<WorkflowDefinitionDetailsView>(
+            $"/design/workflows/definitions/{createdDefinition.Definition.Id}");
+        Assert.Equal("folder-1", persistedDefinition!.Definition.FolderId);
+
+        using var unexpected = await host.Client.PostAsJsonAsync("/design/workflows/folders", new { name = "Unexpected" });
+        Assert.Equal(HttpStatusCode.InternalServerError, unexpected.StatusCode);
+        Assert.DoesNotContain("provider-secret", await unexpected.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -259,7 +278,16 @@ public sealed class DomainManagementApiCompositionTests
             {
                 builder.Services.AddSingleton<IWorkflowFolderStore, HttpWorkflowFolderStore>();
                 builder.Services.AddSingleton<IIdentityGenerator, HttpIdentityGenerator>();
+                builder.Services.AddSingleton<HttpWorkflowDefinitionRepository>();
+                builder.Services.AddSingleton<IAddWorkflowDefinitionCommand>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
+                builder.Services.AddSingleton<IWorkflowDefinitionStore>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
+                builder.Services.AddSingleton<IWorkflowDefinitionDraftStore>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
+                builder.Services.AddSingleton<IWorkflowDefinitionVersionStore>(services => services.GetRequiredService<HttpWorkflowDefinitionRepository>());
+                builder.Services.AddSingleton<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
+                builder.Services.AddSingleton<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
                 endpointTypes.UnionWith([
+                    "Elsa.Workflows.Design.Api.Endpoints.Definitions.Add",
+                    "Elsa.Workflows.Design.Api.Endpoints.Definitions.Get",
                     "Elsa.Workflows.Design.Api.Endpoints.Folders.List",
                     "Elsa.Workflows.Design.Api.Endpoints.Folders.Get",
                     "Elsa.Workflows.Design.Api.Endpoints.Folders.Create"]);
@@ -311,6 +339,8 @@ public sealed class DomainManagementApiCompositionTests
                 return HandleWorkflowFolders<T>(folders, cancellationToken);
             if (request is GetWorkflowFolder folder)
                 return HandleWorkflowFolder<T>(folder, cancellationToken);
+            if (request is GetDefinition definition)
+                return HandleWorkflowDefinition<T>(definition, cancellationToken);
 
             object response = typeof(T) switch
             {
@@ -335,6 +365,11 @@ public sealed class DomainManagementApiCompositionTests
             {
                 var handler = services.GetRequiredService<Elsa.Mediator.Core.Contracts.ICommandHandler<CreateWorkflowFolder, WorkflowFolderView>>();
                 return (T)(object)await handler.Handle(folder, cancellationToken);
+            }
+            if (command is AddDefinition definition)
+            {
+                var handler = services.GetRequiredService<Elsa.Mediator.Core.Contracts.ICommandHandler<AddDefinition, WorkflowDefinitionDetailsView>>();
+                return (T)(object)await handler.Handle(definition, cancellationToken);
             }
             throw new InvalidOperationException($"Unexpected command '{command.GetType().Name}'.");
         }
@@ -367,6 +402,12 @@ public sealed class DomainManagementApiCompositionTests
         private async Task<T> HandleWorkflowFolder<T>(GetWorkflowFolder request, CancellationToken cancellationToken) where T : notnull
         {
             var handler = services.GetRequiredService<IRequestHandler<GetWorkflowFolder, WorkflowFolderDetailsView>>();
+            return (T)(object)await handler.Handle(request, cancellationToken);
+        }
+
+        private async Task<T> HandleWorkflowDefinition<T>(GetDefinition request, CancellationToken cancellationToken) where T : notnull
+        {
+            var handler = services.GetRequiredService<IRequestHandler<GetDefinition, WorkflowDefinitionDetailsView>>();
             return (T)(object)await handler.Handle(request, cancellationToken);
         }
     }
@@ -441,12 +482,86 @@ public sealed class DomainManagementApiCompositionTests
                 throw new Elsa.Workflows.Design.Persistence.Core.Exceptions.WorkflowFolderSiblingConflictException();
             if (folder.ParentFolderId == "missing")
                 throw Elsa.Primitives.Exceptions.EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folder.ParentFolderId);
+            if (folder.NormalizedName == "UNEXPECTED")
+                throw new InvalidOperationException("provider-secret");
             return Task.FromResult(folder);
         }
     }
 
     private sealed class HttpIdentityGenerator : IIdentityGenerator
     {
-        public string Generate() => "created-folder";
+        private int _next;
+        public string Generate() => $"http-id-{Interlocked.Increment(ref _next)}";
+    }
+
+    private sealed class HttpWorkflowDefinitionRepository :
+        IAddWorkflowDefinitionCommand,
+        IWorkflowDefinitionStore,
+        IWorkflowDefinitionDraftStore,
+        IWorkflowDefinitionVersionStore
+    {
+        private WorkflowDefinition? _definition;
+        private WorkflowDefinitionDraft? _draft;
+        private IReadOnlyCollection<DesignMetadataRecord> _layout = [];
+
+        public Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellation) =>
+            Execute(workflowDefinition, draft, [], cancellation);
+
+        public Task Execute(
+            WorkflowDefinition workflowDefinition,
+            WorkflowDefinitionDraft draft,
+            IReadOnlyCollection<DesignMetadataRecord> layout,
+            CancellationToken cancellation)
+        {
+            _definition = workflowDefinition;
+            _draft = draft;
+            _layout = layout;
+            return Task.CompletedTask;
+        }
+
+        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_definition is not null && _definition.Id == id
+                ? _definition
+                : throw Elsa.Primitives.Exceptions.EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), id));
+
+        public async Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) =>
+            await GetAsync(id, cancellationToken);
+
+        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<WorkflowDefinition>>(_definition is null ? [] : [_definition]);
+
+        Task<WorkflowDefinitionDraft?> IWorkflowDefinitionDraftStore.FindByIdAsync(string draftId, CancellationToken cancellationToken) =>
+            Task.FromResult(_draft?.Id == draftId ? _draft : null);
+
+        public Task<WorkflowDefinitionDraft?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_draft?.WorkflowDefinitionId == workflowDefinitionId ? _draft : null);
+
+        public Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<WorkflowDefinitionDraft>>(
+                _draft?.WorkflowDefinitionId == workflowDefinitionId ? [_draft] : []);
+
+        public Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyCollection<DesignMetadataRecord>>(_draft?.Id == draftId ? _layout : []);
+
+        public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default) =>
+            _draft?.Id == draftId ? new DraftWithLayout(_draft, await FindLayoutByDraftIdAsync(draftId, cancellationToken)) : null;
+
+        Task<WorkflowDefinitionVersion> IWorkflowDefinitionVersionStore.GetAsync(string versionId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        Task<WorkflowDefinitionVersion?> IWorkflowDefinitionVersionStore.FindByIdAsync(string versionId, CancellationToken cancellationToken) =>
+            Task.FromResult<WorkflowDefinitionVersion?>(null);
+
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<WorkflowDefinitionVersion?>(null);
+
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<WorkflowDefinitionVersion>>([]);
+
+        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
     }
 }

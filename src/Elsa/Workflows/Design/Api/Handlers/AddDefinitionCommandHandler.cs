@@ -38,6 +38,6 @@ public sealed class AddDefinitionCommandHandler(
             layout,
             cancellationToken);
 
-        return new WorkflowDefinitionDetailsView(definition.ToView(), WorkflowDraftView.From(draftEntity, layout), Versions: []);
+        return new WorkflowDefinitionDetailsView(persistenceDefinition.ToView(), WorkflowDraftView.From(draftEntity, layout), Versions: []);
     }
 }

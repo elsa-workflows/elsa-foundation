@@ -65,12 +65,11 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
         DocumentQueryResult result;
         try
         {
+            var queryIdentity = SelectPageQuery(query);
             result = await BoundedStore.QueryAsync(
                 new DocumentQuery(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-                    string.IsNullOrWhiteSpace(query.SearchTerm)
-                        ? WorkflowsDesignStorageManifest.PageWorkflowDefinitionsQuery
-                        : WorkflowsDesignStorageManifest.SearchWorkflowDefinitionsQuery,
+                    queryIdentity,
                     BuildPageClauses(query),
                     [
                         new DocumentQueryOrder(
@@ -94,6 +93,17 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
 
         var items = result.Documents.Select(ReadPageDocument).ToArray();
         return new WorkflowDefinitionPage(items, result.NextContinuation);
+    }
+
+    private static string SelectPageQuery(WorkflowDefinitionPageQuery query)
+    {
+        if (!string.IsNullOrWhiteSpace(query.SearchTerm))
+            return WorkflowsDesignStorageManifest.SearchWorkflowDefinitionsQuery;
+        if (string.IsNullOrWhiteSpace(query.FolderId) && query.Unfiled != true)
+            return WorkflowsDesignStorageManifest.PageWorkflowDefinitionsQuery;
+        return query.State == WorkflowDefinitionPageState.All
+            ? WorkflowsDesignStorageManifest.PageAllWorkflowDefinitionsByFolderQuery
+            : WorkflowsDesignStorageManifest.PageWorkflowDefinitionsByFolderQuery;
     }
 
     private IBoundedDocumentStore BoundedStore => _boundedStore ?? throw new InvalidOperationException(

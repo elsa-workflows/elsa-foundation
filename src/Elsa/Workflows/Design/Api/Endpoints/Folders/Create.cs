@@ -6,10 +6,11 @@ using Elsa.Workflows.Design.Api.Constants;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Primitives.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Folders;
 
-internal sealed class Create(ICommandSender commandSender)
+internal sealed class Create(ICommandSender commandSender, ILogger<Create> logger)
     : ElsaEndpoint<CreateWorkflowFolder, WorkflowFolderView>
 {
     public override void Configure()
@@ -35,6 +36,15 @@ internal sealed class Create(ICommandSender commandSender)
         catch (ArgumentException exception)
         {
             ThrowError(exception, 400);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Unexpected error occurred when creating a workflow folder");
+            ThrowError("Unexpected error occurred", 500);
         }
     }
 }
