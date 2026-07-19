@@ -75,16 +75,10 @@ public sealed class WorkflowDispatchIdentity
     }
 
     public string ParentResumeOutboxItemId(string commitId)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
-        return $"{commitId}:{ParentResumeIntentId}";
-    }
+        => RuntimePostCommitOutboxIdentity.Create(commitId, ParentResumeIntentId);
 
     public string ChildCancelOutboxItemId(string commitId)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
-        return $"{commitId}:{ChildCancelIntentId}";
-    }
+        => RuntimePostCommitOutboxIdentity.Create(commitId, ChildCancelIntentId);
 
     private static string ComputeDigest(string parentWorkflowExecutionId, string parentActivityExecutionId)
     {

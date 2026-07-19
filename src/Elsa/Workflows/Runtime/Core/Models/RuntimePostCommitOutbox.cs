@@ -1,8 +1,38 @@
 using System.Text.Json.Serialization;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
+
+/// <summary>
+/// Creates deterministic post-commit identities within the provider-portable projection boundary,
+/// preserving the readable legacy form whenever it already fits.
+/// </summary>
+public static class RuntimePostCommitOutboxIdentity
+{
+    public const int MaximumLength = 450;
+    private const string DigestPrefix = "outbox:sha256:v1:";
+
+    public static string Create(string commitId, string intentId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
+
+        var candidate = $"{commitId}:{intentId}";
+        if (candidate.Length <= MaximumLength)
+            return candidate;
+
+        candidate = $"{DigestPrefix}{Digest(commitId)}:{intentId}";
+        return candidate.Length <= MaximumLength
+            ? candidate
+            : $"{DigestPrefix}{Digest($"{commitId}:{intentId}")}";
+    }
+
+    private static string Digest(string value) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+}
 
 /// <summary>
 /// Durable delivery state for a post-commit intent. Intent payloads are delivered only after checkpoint commit.

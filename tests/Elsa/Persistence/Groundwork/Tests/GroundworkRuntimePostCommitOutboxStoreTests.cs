@@ -47,7 +47,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
-    public async Task Nested_scheduler_identity_beyond_portable_document_limit_round_trips(string provider)
+    public async Task Nested_scheduler_identity_is_compacted_within_the_portable_projection_limit(string provider)
     {
         await using var fixture = CreateStore(provider);
         var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
@@ -63,7 +63,8 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
             idempotencyKey: null,
             payload: null);
         var logicalOutboxItemId = RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent);
-        Assert.True(logicalOutboxItemId.Length > 450, $"Expected the regression identity to exceed 450 code units, but observed {logicalOutboxItemId.Length}.");
+        Assert.True(logicalOutboxItemId.Length <= RuntimePostCommitOutboxIdentity.MaximumLength);
+        Assert.Equal(logicalOutboxItemId, RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent));
         var pending = new RuntimePostCommitOutboxItem(
             logicalOutboxItemId,
             intent,
