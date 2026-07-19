@@ -39,7 +39,7 @@ public sealed class FlowchartLoopIterationTests
         await fixture.ExecuteAsync(executable);
 
         var state = await fixture.GetFlowchartStateAsync();
-        var activityStates = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var activityStates = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         // W32: the loop-iteration scope minted on the backward edge to node-a is pruned once the run
         // completes (no live path references it). Its durable evidence is the monotonic per-owner counter,
         // which records that exactly one loopback iteration was created for node-a.
@@ -105,7 +105,7 @@ public sealed class FlowchartLoopIterationTests
 
         await fixture.ExecuteAsync(executable);
 
-        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         Assert.Contains(states, state => state.Execution.ExecutableNodeId == "node-flowchart" && state.FaultCount > 0);
     }
 

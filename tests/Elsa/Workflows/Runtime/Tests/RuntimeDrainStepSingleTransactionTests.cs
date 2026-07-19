@@ -33,7 +33,7 @@ public sealed class RuntimeDrainStepSingleTransactionTests
 
         Assert.Equal(1, result.DrainedCount);
         Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
         Assert.Equal(1, queue.ConsumeClaimedCalls); // acked inside the commit
         Assert.Equal(0, queue.CompleteClaimCalls);  // no second durable transaction
         Assert.Single(store.ListCommits());
@@ -53,7 +53,7 @@ public sealed class RuntimeDrainStepSingleTransactionTests
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
 
         Assert.Equal(1, result.DrainedCount);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
         Assert.Equal(0, queue.ConsumeClaimedCalls);
         Assert.Equal(1, queue.CompleteClaimCalls); // legacy ack
     }
@@ -85,7 +85,7 @@ public sealed class RuntimeDrainStepSingleTransactionTests
 
         Assert.Empty(store.ListCommits()); // nothing persisted
         var survivors = await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId));
-        Assert.Single(survivors); // successor-owned item survives
+        Assert.Single(survivors.Items); // successor-owned item survives
     }
 
     // (b) A renewed claim (owner + fencing token unchanged, only revision advanced) still consumes successfully.
@@ -111,7 +111,7 @@ public sealed class RuntimeDrainStepSingleTransactionTests
             Assert.True(accessor.WasConsumedDurably);
         }
 
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
     }
 
     // (c) A handler that faults before committing still ack-deletes via the legacy fault path and poisons exactly once.
@@ -128,7 +128,7 @@ public sealed class RuntimeDrainStepSingleTransactionTests
 
         Assert.True(result.StoppedOnFault);
         Assert.False(accessor.WasConsumedDurably);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))); // ack-deleted
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items); // ack-deleted
         var poison = await poisonStore.FindAsync(WorkflowExecutionId, "work-1");
         Assert.NotNull(poison);
         Assert.Equal(1, poison!.FailureCount); // poisoned exactly once
@@ -154,7 +154,7 @@ public sealed class RuntimeDrainStepSingleTransactionTests
         Assert.True(result.StoppedOnFault);
         var item = Assert.Single(result.Items);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, item.Status);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))); // consumed by the commit
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items); // consumed by the commit
         Assert.Equal(1, queue.ConsumeClaimedCalls);
         Assert.Equal(0, queue.CompleteClaimCalls); // no second ack attempted against the consumed claim
         var poison = await poisonStore.FindAsync(WorkflowExecutionId, "work-1");
@@ -184,7 +184,7 @@ public sealed class RuntimeDrainStepSingleTransactionTests
 
         Assert.Equal(2, result.DrainedCount);
         Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
         Assert.Equal(1, queue.ConsumeClaimedCalls);  // item A: consumed inside its commit
         Assert.Equal(1, queue.CompleteClaimCalls);   // item B: legacy ack — the flag did not leak
     }
@@ -361,7 +361,7 @@ public sealed class RuntimeDrainStepSingleTransactionTests
         public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
             inner.EnqueueAsync(workItem, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
             inner.ListAsync(query, cancellationToken);
 
         public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>

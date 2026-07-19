@@ -89,7 +89,8 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             ["IClaimMappingStore"] = ["IdentityClaimMappingDocumentKind"],
             ["IProviderConfigurationStore"] =
             [
-                "IdentityProviderConfigurationDocumentKind"
+                "IdentityProviderConfigurationDocumentKind",
+                "IdentityGlobalProviderConfigurationDocumentKind"
             ],
             ["ITenantMembershipStore"] = ["IdentityTenantMembershipDocumentKind"],
             ["ISecretRepository"] = ["SecretDocumentKind"],

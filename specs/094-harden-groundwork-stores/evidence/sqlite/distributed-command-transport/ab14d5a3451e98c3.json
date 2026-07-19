@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:list-pending-execution-ids-bounded",
+  "sourceScenarioId": "distributed-bounded-route-equivalence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "9720b542240858e0c51ca4782073b070c690bab0c809d102baa7097b09ca3ca3",
+  "executionPath": "provider-driver/sqlite/distributed-command-transport/ab14d5a3451e98c3",
+  "clients": 1,
+  "resultHash": "c10492fef6630062ca664f570e11844504e95a02d7e95429f1501ff9349b4213",
+  "outcome": "pass",
+  "queryShape": "list-pending-execution-ids-bounded",
+  "nativeQueryIdentity": "list-visible-command-executions",
+  "documentKind": "executionCommandTransport",
+  "nativeEvidence": "evidence/sqlite/distributed-command-transport/ab14d5a3451e98c3.plan.txt",
+  "evidence": "evidence/sqlite/distributed-command-transport/ab14d5a3451e98c3.json"
+}

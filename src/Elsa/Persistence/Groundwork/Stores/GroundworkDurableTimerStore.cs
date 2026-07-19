@@ -59,8 +59,8 @@ public sealed class GroundworkDurableTimerStore(
         int limit,
         CancellationToken cancellationToken = default)
     {
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Due-timer listing limit must be greater than zero.");
+        if (limit is <= 0 or > RuntimeStorePageRequest.MaximumLimit)
+            throw new ArgumentOutOfRangeException(nameof(limit), $"Due-timer listing limit must be between 1 and {RuntimeStorePageRequest.MaximumLimit}.");
         cancellationToken.ThrowIfCancellationRequested();
 
         var result = await BoundedStore.QueryAsync(
@@ -94,20 +94,34 @@ public sealed class GroundworkDurableTimerStore(
             cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<DurableTimer>> ListAsync(
-        string workflowExecutionId,
+    public async ValueTask<RuntimeStorePage<DurableTimer>> ListPageAsync(
+        DurableTimerPageQuery query,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
-        var timers = await QueryDocumentsAsync<DurableTimerEnvelope, DurableTimer>(
-            ElsaRuntimeStorageManifest.ListDurableTimersByWorkflowExecutionQuery,
-            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
-            workflowExecutionId,
-            envelope => envelope.Timer,
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageDurableTimersByWorkflowExecutionQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                    query.WorkflowExecutionId))],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableTimerIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
             cancellationToken);
-        return timers.OrderBy(timer => timer.TimerId, StringComparer.Ordinal).ToArray();
+
+        return new RuntimeStorePage<DurableTimer>(
+            query,
+            result.Documents.Select(envelope => Deserialize(envelope).Timer).ToArray(),
+            result.NextContinuation);
     }
+
+    public async ValueTask<IReadOnlyCollection<DurableTimer>> ListAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllAsync(this, workflowExecutionId, cancellationToken);
 
     public async ValueTask DeleteAsync(
         string workflowExecutionId,

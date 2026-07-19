@@ -402,11 +402,8 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
         {
             using var client = new MongoClient(RequiredConnectionString());
             var database = client.GetDatabase(_databaseName);
-            foreach (var group in requests.GroupBy(request => request.PhysicalName, StringComparer.Ordinal))
-            {
-                var collection = database.GetCollection<BsonDocument>(group.Key);
-                await EnsureNativeRouteDatasetAsync(collection, group.ToArray(), cancellationToken);
-            }
+            foreach (var group in requests.GroupBy(request => (request.PhysicalName, request.DocumentKind)))
+                await EnsureNativeRouteDatasetAsync(database, group.ToArray(), cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -430,6 +427,9 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
             var database = client.GetDatabase(_databaseName);
             var collection = database.GetCollection<BsonDocument>(request.PhysicalName);
             var expectedIndex = await ResolveNativeRouteIndexAsync(collection, request, cancellationToken);
+            var routeIndexes = (await ListNativeRouteIndexesAsync(collection, cancellationToken))
+                .Where(index => !string.Equals(index, "_id_", StringComparison.Ordinal))
+                .ToArray();
             var commands = explanation.Commands.Select((command, ordinal) =>
             {
                 if (!string.Equals(command.NativePlanFormat, "mongodb-json", StringComparison.Ordinal))
@@ -438,17 +438,26 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                 var stages = new SortedSet<string>(StringComparer.Ordinal);
                 var indexes = new SortedSet<string>(StringComparer.Ordinal);
                 CollectPlanSummary(plan, stages, indexes);
-                if (!indexes.Contains(expectedIndex) || !stages.Contains("IXSCAN") || stages.Contains("COLLSCAN"))
+                var expectedIndexes = command.Kind == PhysicalDocumentQueryCommandKind.PrimaryHydration
+                    ? ["_id_"]
+                    : routeIndexes;
+                if (!indexes.Intersect(expectedIndexes, StringComparer.Ordinal).Any() ||
+                    !stages.Contains("IXSCAN") ||
+                    stages.Contains("COLLSCAN"))
                 {
                     throw new InvalidOperationException(
-                        $"MongoDB route '{request.QueryIdentity}' command '{command.Identity}' was not scan-free through '{expectedIndex}'.");
+                        $"MongoDB route '{request.QueryIdentity}' command '{command.Identity}' was not scan-free through an admitted route index.");
                 }
                 return GroundworkNativeRouteCommandEvidence.Create(
                     ordinal,
                     command,
                     "index-scan",
-                    [expectedIndex]);
+                    indexes);
             }).ToArray();
+            var selectedIndex = GroundworkNativeRoutePlanResult.SelectCompiledIndex(
+                request,
+                routeIndexes,
+                commands);
             var cardinality = await collection.CountDocumentsAsync(
                 FilterDefinition<BsonDocument>.Empty,
                 cancellationToken: cancellationToken);
@@ -457,7 +466,7 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                 ProviderKey,
                 cardinality,
                 "index-scan",
-                expectedIndex,
+                selectedIndex,
                 request.Limit,
                 materializedCandidateCount,
                 commands);
@@ -718,17 +727,30 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
     });
 
     private static async Task EnsureNativeRouteDatasetAsync(
-        IMongoCollection<BsonDocument> collection,
+        IMongoDatabase database,
         IReadOnlyCollection<GroundworkNativeRoutePlanRequest> requests,
         CancellationToken cancellationToken)
     {
         var dataset = GroundworkNativeRouteDataset.Create(requests);
-        await collection.DeleteManyAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken);
+        var lookup = database.GetCollection<BsonDocument>(dataset.PhysicalName);
+        var primary = dataset.PrimaryPhysicalName is null
+            ? lookup
+            : database.GetCollection<BsonDocument>(dataset.PrimaryPhysicalName);
+        await lookup.DeleteManyAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken);
+        if (dataset.PrimaryPhysicalName is not null)
+        {
+            await primary.DeleteManyAsync(
+                Builders<BsonDocument>.Filter.Eq("document_kind", dataset.DocumentKind),
+                cancellationToken);
+        }
         const int batchSize = 5_000;
         for (var offset = 0; offset < dataset.AcceptanceCardinality; offset += batchSize)
         {
             var count = Math.Min(batchSize, dataset.AcceptanceCardinality - offset);
-            var documents = new List<BsonDocument>(count);
+            var primaryDocuments = new List<BsonDocument>(count);
+            var lookupDocuments = dataset.PrimaryPhysicalName is null
+                ? primaryDocuments
+                : new List<BsonDocument>(count);
             for (var index = 0; index < count; index++)
             {
                 var ordinal = offset + index;
@@ -739,13 +761,22 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                 var content = ordinal == 0
                     ? BsonDocument.Parse(dataset.CandidateContentJson)
                     : new BsonDocument();
-                var document = new BsonDocument
-                {
-                    ["_id"] = new BsonDocument
+                var incarnation = $"native-{ordinal:D32}";
+                var primaryId = dataset.PrimaryPhysicalName is null
+                    ? new BsonDocument
                     {
                         ["storage_scope"] = storageScope,
                         ["id_lookup_key"] = lookupKey
-                    },
+                    }
+                    : new BsonDocument
+                    {
+                        ["document_kind"] = dataset.DocumentKind,
+                        ["storage_scope"] = storageScope,
+                        ["id_lookup_key"] = lookupKey
+                    };
+                var document = new BsonDocument
+                {
+                    ["_id"] = primaryId,
                     ["document_kind"] = dataset.DocumentKind,
                     ["storage_scope"] = storageScope,
                     ["id"] = id,
@@ -753,24 +784,63 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                     ["id_lookup_key"] = lookupKey,
                     ["schema_version"] = dataset.CandidateSchemaVersion,
                     ["version"] = 1L,
-                    ["document"] = content.DeepClone(),
+                    [dataset.ContentColumn] = content.DeepClone(),
                     ["_groundwork_content"] = content,
-                    ["_groundwork_incarnation"] = $"native-{ordinal:D32}",
+                    ["_groundwork_incarnation"] = incarnation,
                     ["_groundwork_created_at"] = DateTime.UnixEpoch,
                     ["_groundwork_updated_at"] = DateTime.UnixEpoch
                 };
-                foreach (var projectedField in dataset.ProjectedValues)
-                    document[projectedField.Key] = ordinal is 0 or 1 ? projectedField.Value : $"noise-{ordinal:D6}";
-                documents.Add(document);
+                primaryDocuments.Add(document);
+
+                var projectedDocument = dataset.PrimaryPhysicalName is null
+                    ? document
+                    : new BsonDocument
+                    {
+                        ["_id"] = new BsonDocument
+                        {
+                            ["document_kind"] = dataset.DocumentKind,
+                            ["storage_scope"] = storageScope,
+                            ["document_id_lookup_key"] = lookupKey
+                        },
+                        ["document_kind"] = dataset.DocumentKind,
+                        ["storage_scope"] = storageScope,
+                        ["document_id"] = id,
+                        ["document_id_comparison_key"] = comparisonKey,
+                        ["document_id_lookup_key"] = lookupKey,
+                        ["_groundwork_primary_version"] = 1L,
+                        ["_groundwork_incarnation"] = incarnation
+                    };
+                foreach (var projectedField in dataset.ProjectedValues.Values)
+                {
+                    var varies = dataset.VaryingProjectedFields.Contains(projectedField.Field, StringComparer.Ordinal);
+                    var isPredicate = dataset.PredicateFields.Contains(projectedField.Field);
+                    projectedDocument[projectedField.Field] = ordinal <= dataset.MatchingCardinality
+                        ? NativeMatchingBsonValue(
+                            projectedField,
+                            ordinal,
+                            varies && dataset.MatchingCardinality > 1)
+                        : varies || !isPredicate
+                            ? NativeNoiseBsonValue(projectedField, ordinal)
+                            : NativeNoiseBsonValue(projectedField);
+                }
+                if (dataset.PrimaryPhysicalName is not null)
+                    lookupDocuments.Add(projectedDocument);
             }
 
-            await collection.InsertManyAsync(
-                documents,
+            await primary.InsertManyAsync(
+                primaryDocuments,
                 new InsertManyOptions { IsOrdered = false },
                 cancellationToken);
+            if (dataset.PrimaryPhysicalName is not null)
+            {
+                await lookup.InsertManyAsync(
+                    lookupDocuments,
+                    new InsertManyOptions { IsOrdered = false },
+                    cancellationToken);
+            }
         }
 
-        var cardinality = await collection.CountDocumentsAsync(
+        var cardinality = await lookup.CountDocumentsAsync(
             FilterDefinition<BsonDocument>.Empty,
             cancellationToken: cancellationToken);
         if (cardinality != dataset.AcceptanceCardinality)
@@ -788,17 +858,78 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
         {
             foreach (var index in cursor.Current)
             {
+                var name = index.GetValue("name", string.Empty).AsString;
+                if (string.Equals(name, request.ExpectedIndexName, StringComparison.Ordinal))
+                    return name;
                 var keys = index.GetValue("key", new BsonDocument()).AsBsonDocument.Elements.ToArray();
-                if (keys.Length >= 2 &&
-                    string.Equals(keys[0].Name, "storage_scope", StringComparison.Ordinal) &&
-                    string.Equals(keys[1].Name, request.RouteField, StringComparison.Ordinal))
-                    return index.GetValue("name", string.Empty).AsString;
+                var expected = new[] { "storage_scope" }.Concat(request.IndexFields).ToArray();
+                if (keys.Select(key => key.Name).Take(expected.Length).SequenceEqual(expected, StringComparer.Ordinal))
+                    return name;
             }
         }
 
         throw new InvalidOperationException(
-            $"MongoDB route '{request.QueryIdentity}' has no physical index on storage_scope and {request.RouteField}.");
+            $"MongoDB route '{request.QueryIdentity}' has no physical index prefix ({string.Join(", ", new[] { "storage_scope" }.Concat(request.IndexFields))}).");
     }
+
+    private static async Task<IReadOnlyList<string>> ListNativeRouteIndexesAsync(
+        IMongoCollection<BsonDocument> collection,
+        CancellationToken cancellationToken)
+    {
+        var indexes = new List<string>();
+        using var cursor = await collection.Indexes.ListAsync(cancellationToken);
+        while (await cursor.MoveNextAsync(cancellationToken))
+        {
+            indexes.AddRange(cursor.Current.Select(index =>
+                index.GetValue("name", string.Empty).AsString));
+        }
+        return indexes;
+    }
+
+    private static BsonValue NativeBsonValue(GroundworkNativeRouteProjectedValue value) =>
+        value.Kind == GroundworkNativeRouteProjectedValueKind.DateTime
+            ? new BsonInt64(((DateTimeOffset)value.ToProviderValue()).UtcTicks)
+            : BsonValue.Create(value.ToProviderValue());
+
+    private static BsonValue NativeMatchingBsonValue(
+        GroundworkNativeRouteProjectedValue value,
+        int ordinal,
+        bool varies)
+    {
+        if (!varies)
+            return NativeBsonValue(value);
+        return value.Kind switch
+        {
+            GroundworkNativeRouteProjectedValueKind.String => $"{value.Value}-{ordinal:D6}",
+            GroundworkNativeRouteProjectedValueKind.Int64 => (long)value.ToProviderValue() + ordinal,
+            GroundworkNativeRouteProjectedValueKind.DateTime =>
+                new BsonInt64(((DateTimeOffset)value.ToProviderValue()).UtcTicks + ordinal),
+            _ => throw new InvalidOperationException(
+                $"Projected field '{value.Field}' cannot vary uniquely at acceptance scale.")
+        };
+    }
+
+    private static BsonValue NativeNoiseBsonValue(
+        GroundworkNativeRouteProjectedValue value) =>
+        value.Kind == GroundworkNativeRouteProjectedValueKind.DateTime
+            ? new BsonInt64(((DateTimeOffset)value.ToProviderNoiseValue()).UtcTicks)
+            : BsonValue.Create(value.ToProviderNoiseValue());
+
+    private static BsonValue NativeNoiseBsonValue(
+        GroundworkNativeRouteProjectedValue value,
+        int ordinal) =>
+        value.Kind switch
+        {
+            GroundworkNativeRouteProjectedValueKind.String => $"noise-{ordinal:D6}",
+            GroundworkNativeRouteProjectedValueKind.Boolean => !((bool)value.ToProviderValue()),
+            GroundworkNativeRouteProjectedValueKind.Int64 => (long)value.ToProviderValue() + ordinal + 1L,
+            GroundworkNativeRouteProjectedValueKind.DateTime =>
+                new BsonInt64(((DateTimeOffset)value.ToProviderValue()).UtcTicks + ordinal + 1L),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(value),
+                value.Kind,
+                "Unknown native-route projected value kind.")
+        };
 
     private string RequiredConnectionString() => _connectionString ??
         throw new InvalidOperationException("The MongoDB provider target has not been initialized.");

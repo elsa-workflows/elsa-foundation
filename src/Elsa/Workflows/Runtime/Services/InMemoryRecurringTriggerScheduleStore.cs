@@ -53,19 +53,42 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
+    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
         string publicationId,
+        CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
+
+    public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(
+        RecurringTriggerSchedulePublicationPageQuery query,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
-            var matches = _schedules.Values
-                .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
+            var schedules = _schedules.Values
+                .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, query.PublicationId))
+                .OrderBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
                 .ToArray();
-            return ValueTask.FromResult<IReadOnlyCollection<RecurringTriggerSchedule>>(matches);
+            return new(CreatePage(query, schedules));
+        }
+    }
+
+    public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(
+        RecurringTriggerScheduleArtifactPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var schedules = _schedules.Values
+                .Where(schedule => StringComparer.Ordinal.Equals(schedule.ArtifactId, query.ArtifactId))
+                .OrderBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
+                .ToArray();
+            return new(CreatePage(query, schedules));
         }
     }
 
@@ -108,8 +131,8 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
 
     public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
     {
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Due-schedule listing limit must be greater than zero.");
+        if (limit is <= 0 or > RuntimeStorePageRequest.MaximumLimit)
+            throw new ArgumentOutOfRangeException(nameof(limit), $"Due-schedule listing limit must be between 1 and {RuntimeStorePageRequest.MaximumLimit}.");
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
@@ -214,5 +237,24 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
                      .Select(schedule => schedule.ScheduleId)
                      .ToArray())
             _schedules.Remove(scheduleId);
+    }
+
+    private static RuntimeStorePage<RecurringTriggerSchedule> CreatePage(
+        RuntimeStorePageRequest query,
+        IReadOnlyList<RecurringTriggerSchedule> schedules)
+    {
+        var offset = ParseOffset(query.ContinuationToken);
+        var items = schedules.Skip(offset).Take(query.Limit).ToArray();
+        var nextOffset = checked(offset + items.Length);
+        return new(query, items, nextOffset < schedules.Count ? nextOffset.ToString() : null);
+    }
+
+    private static int ParseOffset(string? continuationToken)
+    {
+        if (continuationToken is null)
+            return 0;
+        if (!int.TryParse(continuationToken, out var offset) || offset < 0)
+            throw new ArgumentException("The recurring-schedule page continuation is invalid.", nameof(continuationToken));
+        return offset;
     }
 }

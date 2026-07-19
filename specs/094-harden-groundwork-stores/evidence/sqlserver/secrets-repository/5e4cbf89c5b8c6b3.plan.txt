@@ -1,0 +1,14 @@
+provider=sqlserver
+document-kind=secret
+route=list-filtered
+physical-name=secrets
+physical-cardinality=100000
+plan-classification=index-seek
+index=secret-filtered-list
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=16
+materialized-candidate-count=16
+command-count=2
+command-0=Count|count|sqlserver-statistics-xml|index-seek|secret-filtered-list|document_kind,hasNonExpiringActiveVersion,maxActiveVersionExpiresAt,status,storage_scope,tenantId|1||fc7796c269261828488b34f6adff1cdd05e42c9856ecccf84c02e6bda14633c1
+command-1=Page|page|sqlserver-statistics-xml|index-seek|secret-filtered-list|document_kind,hasNonExpiringActiveVersion,maxActiveVersionExpiresAt,status,storage_scope,tenantId|16|normalizedName:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|7c4a9a876ff26aef134e799578a9adf89b2adca2459c2befbf0db04c048db010

@@ -261,7 +261,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
                 if (continuation.IsComplete && parentActivity is IRuntimeActivityCheckpointParticipant checkpointParticipant)
                 {
-                    var persistedValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+                    var persistedValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workItem.WorkflowExecutionId, cancellationToken);
                     completionCheckpointPreparation = await checkpointParticipant.PrepareCompletionCheckpointAsync(
                         context,
                         persistedValues,

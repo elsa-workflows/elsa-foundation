@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "restartScenario:dispose-and-reopen-same-database",
+  "sourceScenarioId": "runtime-scheduler-state-roundtrip",
+  "coverageEntryId": "runtime-scheduler-state",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "48ccfae8967e642ad5cc64768952a9548198844eb28656e44d9dc21c4e005cdc",
+  "executionPath": "provider-driver/sqlite/runtime-scheduler-state/9ff7253c911b2760",
+  "clients": 2,
+  "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
+  "outcome": "pass",
+  "restartScenario": "dispose-and-reopen-same-database",
+  "evidence": "evidence/sqlite/runtime-scheduler-state/9ff7253c911b2760.json"
+}

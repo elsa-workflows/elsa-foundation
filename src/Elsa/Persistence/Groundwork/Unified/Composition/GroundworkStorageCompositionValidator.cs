@@ -250,6 +250,11 @@ public sealed class GroundworkStorageCompositionValidator
         ICollection<GroundworkDiagnostic> diagnostics)
     {
         var routedUnits = routes.Select(route => route.StorageUnit).ToFrozenSet();
+        var compiledQueries = routes
+            .SelectMany(route => route.CandidateQueryPaths.SelectMany(path =>
+                path.QueryIdentities.Select(queryIdentity =>
+                    (route.StorageUnit, QueryIdentity: queryIdentity))))
+            .ToFrozenSet();
         foreach (var (declaration, requirement) in request.Declarations
                      .SelectMany(declaration => declaration.RequiredRoutes.Select(requirement =>
                          (Declaration: declaration, Requirement: requirement)))
@@ -258,11 +263,15 @@ public sealed class GroundworkStorageCompositionValidator
                      .ThenBy(item => item.Requirement.RouteIdentity, StringComparer.Ordinal))
         {
             var ownsUnit = declaration.Manifest.StorageUnits.Any(unit => unit.Identity == requirement.StorageUnit);
-            if (!ownsUnit || !routedUnits.Contains(requirement.StorageUnit))
+            var requiresCompiledQuery = requirement.RequiredCapabilities.Count == 0;
+            if (!ownsUnit ||
+                !routedUnits.Contains(requirement.StorageUnit) ||
+                requiresCompiledQuery &&
+                !compiledQueries.Contains((requirement.StorageUnit, requirement.RouteIdentity)))
             {
                 diagnostics.Add(Error(
                     "ELSA-GW-COMPOSITION-ROUTE-MISSING",
-                    $"Feature '{declaration.FeatureIdentity}' requires route '{requirement.RouteIdentity}' for storage unit '{requirement.StorageUnit.Value}', but that unit has no executable route owned by the feature.",
+                    $"Feature '{declaration.FeatureIdentity}' requires route '{requirement.RouteIdentity}' for storage unit '{requirement.StorageUnit.Value}', but that exact route was not compiled for the feature.",
                     RouteTarget(declaration.FeatureIdentity, requirement)));
                 continue;
             }

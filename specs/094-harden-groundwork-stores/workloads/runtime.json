@@ -1,0 +1,363 @@
+{
+  "schemaVersion": 1,
+  "workloads": [
+    {
+      "id": "checkpoint-commit",
+      "version": "1.0.0",
+      "scenarioId": "runtime-checkpoint-commit",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Commit a representative runtime checkpoint bundle through IRuntimeCheckpointCommitStore with fence validation, idempotency, activity and durable-value changes, executable state, and post-commit outbox work.",
+      "coverageRows": [
+        "runtime-activity-execution-state",
+        "runtime-checkpoint-commit",
+        "runtime-durable-value-state",
+        "runtime-workflow-executable"
+      ],
+      "input": {
+        "seed": "spec094-checkpoint-commit-v1",
+        "fingerprintSha256": "f59eef8b9359dc3623bbb42ce07c531f0f027170dc6d33e1788b1bd80dcdab93",
+        "executionCount": 128,
+        "checkpointCount": 1024,
+        "activityChangesPerCheckpoint": 4,
+        "durableValueChangesPerCheckpoint": 3,
+        "outboxEntriesPerCheckpoint": 2,
+        "concurrentFenceContenders": 2,
+        "payloadBytes": 512,
+        "timedSetup": "excluded"
+      },
+      "operationSequence": [
+        "seed-fenced-executions",
+        "commit-checkpoint-bundle",
+        "replay-equivalent-commit",
+        "attempt-stale-fence-commit",
+        "reopen-and-read-committed-bundle"
+      ],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": [],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "abaa23e9e4f3c9285f50a07f33d7569696ec4cfe1ac496575c12b45dbe78042a",
+        "invariants": [
+          "each checkpoint is one atomic bundle with no partial activity, value, executable, outbox, or marker state",
+          "the current fence is accepted and a stale fence is rejected",
+          "an equivalent replay is stable and creates no duplicate outbox work",
+          "the reopened store exposes the same committed bundle"
+        ],
+        "timingGate": "Run the public correctness baseline and capture the deterministic digest before #646 times the operation; no benchmark verdict is supplied here."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-runtime-checkpoint-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable checkpoint contract only; #646 owns real same-provider EF execution and comparison."
+      },
+      "physicalFormsFor646": [
+        "shared-documents-with-linked-index-tables",
+        "document-type-specific-tables",
+        "checkpoint-unit-of-work-with-linked-outbox"
+      ],
+      "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "provider topology", "checkpoint admission evidence"]
+    },
+    {
+      "id": "bookmark-lookup",
+      "version": "1.0.0",
+      "scenarioId": "runtime-bookmark-state",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Resolve a bounded page of resumable bookmarks by workflow, stimulus, and bookmark type through IBookmarkStateStore.",
+      "coverageRows": ["runtime-bookmark-state"],
+      "input": {
+        "seed": "spec094-bookmark-lookup-v1",
+        "fingerprintSha256": "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a",
+        "tenantCount": 2,
+        "workflowCount": 128,
+        "bookmarksPerWorkflow": 64,
+        "matchingBookmarks": 37,
+        "pageSize": 25,
+        "payloadBytes": 256,
+        "timedSetup": "excluded"
+      },
+      "operationSequence": ["seed-bookmarks", "lookup-by-stimulus-and-type", "read-next-bounded-page", "verify-cross-scope-isolation"],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": ["list-by-stimulus-and-type", "list-by-stimulus-type"],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "9f3d29edc4c3e64409f3fb9b64b4ec3e7d5e5064d8233be8afd92215ec3d680e",
+        "invariants": ["the exact resumable bookmark identities are returned", "result order and continuation are deterministic", "no bookmark from the other scope is visible", "the requested page is smaller than the candidate population"],
+        "timingGate": "Run the public bounded lookup correctness baseline and capture native route evidence before #646 times the operation."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-runtime-bookmark-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable bookmark lookup contract only; it is not a live EF execution."
+      },
+      "physicalFormsFor646": ["shared-documents-with-linked-index-tables", "document-type-specific-tables"],
+      "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "native route evidence", "sanitized topology"]
+    },
+    {
+      "id": "trigger-binding-stimulus-lookup",
+      "version": "1.0.0",
+      "scenarioId": "runtime-trigger-binding-stimulus-lookup",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Resolve active workflow trigger bindings and executable source references by stimulus type and hash through the public runtime trigger routes.",
+      "coverageRows": ["runtime-executable-source-reference", "runtime-trigger-binding"],
+      "input": {
+        "seed": "spec094-trigger-binding-stimulus-lookup-v1",
+        "fingerprintSha256": "cbd570ed8c80f996554853b1143fc34f634138b005858322d1a669dde2113b9a",
+        "tenantCount": 2,
+        "publicationCount": 96,
+        "bindingsPerPublication": 48,
+        "activeMatches": 31,
+        "retiredBindings": 17,
+        "pageSize": 20,
+        "timedSetup": "excluded"
+      },
+      "operationSequence": ["seed-publications-and-bindings", "lookup-active-bindings-by-stimulus-type", "load-executable-source-references", "verify-publication-and-scope-isolation"],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": ["list-by-stimulus-and-type", "list-by-stimulus-type", "page-live-by-scope"],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "3c10eab69da70eccacc648780781ef57ad6499b91cb012465d154d6b1b7e9294",
+        "invariants": ["only active bindings matching the exact stimulus are returned", "source references resolve to the matching live artifact", "cross-publication and cross-scope bindings are absent", "result order and finite page boundary are stable"],
+        "timingGate": "Run the public trigger lookup correctness baseline and capture native route evidence before #646 times the operation."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-runtime-trigger-binding-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable trigger binding contract only; #646 owns EF execution and equality evidence."
+      },
+      "physicalFormsFor646": ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "linked-executable-source-reference-index"],
+      "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "native route evidence", "sanitized topology"]
+    },
+    {
+      "id": "recovery-scan",
+      "version": "1.0.0",
+      "scenarioId": "runtime-recovery-scan",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Select a bounded, ordered set of stale or recoverable execution, liveness, incident, scheduler, and hold state through IRuntimeRecoveryScanner and its public state stores.",
+      "coverageRows": ["runtime-execution-liveness", "runtime-incident-state", "runtime-scheduler-state", "runtime-workflow-execution-state", "runtime-workflow-hold-state"],
+      "input": {
+        "seed": "spec094-recovery-scan-v1",
+        "fingerprintSha256": "7284c110669aaa3db7587893e9e31005af8c807d8323609aeb80cfd948d82b48",
+        "tenantCount": 2,
+        "executionCount": 2048,
+        "recoverableCandidates": 173,
+        "liveExecutions": 1875,
+        "pageSize": 64,
+        "fixedNowUtc": "2026-07-20T10:00:00Z",
+        "timedSetup": "excluded"
+      },
+      "operationSequence": ["seed-live-and-recoverable-state", "scan-recovery-candidates", "reopen-and-rescan", "verify-bounded-order-and-non-candidates"],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": ["list-recovery-detected", "list-recovery-by-lease-expiry", "list-recovery-by-lease-acquisition", "list-recovery-by-heartbeat"],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "06033b0de6f4784abc87772b63f5f9a561a5bfc40bc18b3f429b4e318fccd785",
+        "invariants": ["the exact stale and recoverable candidates are returned", "due ordering is deterministic across reopen", "live and terminal executions are absent", "no route materializes the full candidate population"],
+        "timingGate": "Run the public recovery correctness baseline and capture native route evidence before #646 times the operation."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-runtime-recovery-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable recovery contract only; it is not live EF execution or a performance result."
+      },
+      "physicalFormsFor646": ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "recovery-candidate-index"],
+      "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "native route evidence", "restart metadata"]
+    },
+    {
+      "id": "queue-drain",
+      "version": "1.0.0",
+      "scenarioId": "runtime-scheduler-queue-drain",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Claim, process, retry, and acknowledge a bounded scheduler work batch through IWorkflowSchedulerWorkQueue and IWorkflowSchedulerPoisonStore.",
+      "coverageRows": ["runtime-scheduler-poison", "runtime-scheduler-work-queue"],
+      "input": {
+        "seed": "spec094-queue-drain-v1",
+        "fingerprintSha256": "21d5dabec0cb604dae214af9bc20835b09ab5f87cfd3d697b946d8adb31d20fa",
+        "workflowCount": 128,
+        "workItemsPerWorkflow": 32,
+        "batchSize": 16,
+        "retryableItems": 5,
+        "poisonItems": 3,
+        "concurrentClaimants": 2,
+        "timedSetup": "excluded"
+      },
+      "operationSequence": ["enqueue-work-items", "claim-bounded-batch", "complete-current-claims", "retry-expired-claim", "record-and-read-poison-state", "attempt-stale-acknowledgement"],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": ["list-pending-scheduler-workflow-executions", "list-by-workflow-execution"],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "bf82d193b202ff0c9e3be211009a3f10401cf1411aaac607db64a199657fb630",
+        "invariants": ["one current owner holds each claimed item", "claim order is deterministic", "a stale acknowledgement is rejected", "retry and poison relationships survive reopen"],
+        "timingGate": "Run the public queue correctness baseline with independent clients before #646 times the operation."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-runtime-queue-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable scheduler queue contract only; #646 owns live EF execution and timing."
+      },
+      "physicalFormsFor646": ["dedicated-scheduler-work-documents", "dedicated-scheduler-poison-documents", "shared-documents-with-linked-index-tables"],
+      "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "independent-client metadata", "native route evidence"]
+    },
+    {
+      "id": "outbox-drain",
+      "version": "1.0.0",
+      "scenarioId": "runtime-post-commit-outbox-drain",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Claim and complete or retry a bounded due post-commit outbox batch through IRuntimePostCommitOutboxClaimStore and IRuntimePostCommitOutboxClaimCompletionStore.",
+      "coverageRows": ["runtime-post-commit-outbox"],
+      "input": {
+        "seed": "spec094-outbox-drain-v1",
+        "fingerprintSha256": "3a6f44fea2a5905e3df316bd3585b13f6080588c75c6eab9598cced26c184eef",
+        "outboxEntryCount": 1024,
+        "dueEntries": 211,
+        "batchSize": 32,
+        "retryableEntries": 7,
+        "concurrentClaimants": 2,
+        "fixedNowUtc": "2026-07-20T10:00:00Z",
+        "timedSetup": "excluded"
+      },
+      "operationSequence": ["seed-due-and-not-due-outbox-entries", "claim-due-batch", "record-delivered-and-retryable-results", "reclaim-after-visibility-expiry", "attempt-stale-completion"],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": ["list-claimable"],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "0f4f678c6250ce1c951ad1e14218a1c38c61d6b15b947fa724c50859a4339934",
+        "invariants": ["only due entries are claimed in deterministic order", "each entry has one current claim", "a stale completion is rejected", "retryable entries become visible only at their recorded retry time"],
+        "timingGate": "Run the public outbox correctness baseline with independent claimants before #646 times the operation."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-runtime-outbox-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable post-commit outbox contract only; it is not a timing verdict."
+      },
+      "physicalFormsFor646": ["dedicated-post-commit-outbox-documents", "shared-documents-with-linked-index-tables", "due-order-index"],
+      "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "claim-token metadata", "native route evidence"]
+    },
+    {
+      "id": "due-timer-selection",
+      "version": "1.0.0",
+      "scenarioId": "runtime-durable-timer-selection",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Select and conditionally advance a bounded due timer page through IDurableTimerStore.",
+      "coverageRows": ["runtime-durable-timer"],
+      "input": {
+        "seed": "spec094-due-timer-selection-v1",
+        "fingerprintSha256": "86bef68c844d10b3cb02c8f65da33ba46ec4c27b9ba0090b9783cd5036f1ab0e",
+        "timerCount": 2048,
+        "dueTimers": 193,
+        "pageSize": 50,
+        "sameDueTimestampTimers": 17,
+        "concurrentClaimants": 2,
+        "fixedNowUtc": "2026-07-20T10:00:00Z",
+        "timedSetup": "excluded"
+      },
+      "operationSequence": ["seed-due-and-not-due-timers", "list-bounded-due-timers", "advance-due-timer", "attempt-stale-advance", "reopen-and-read-due-state"],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": ["list-due"],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "002fe0f7e4808d7ec2b85f267f8188981c3fd8ed4beca7ad11100ddd6c8d2002",
+        "invariants": ["the exact due timers are returned in deterministic order", "not-due timers are absent", "only one conditional advance wins", "the advanced timer state survives reopen"],
+        "timingGate": "Run the public durable timer correctness baseline and capture the bounded route evidence before #646 times the operation."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-runtime-durable-timer-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable due timer contract only; #646 owns live EF execution and comparison."
+      },
+      "physicalFormsFor646": ["dedicated-durable-timer-documents", "shared-documents-with-linked-index-tables", "due-order-index"],
+      "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "native route evidence", "sanitized topology"]
+    },
+    {
+      "id": "recurring-schedule-selection",
+      "version": "1.0.0",
+      "scenarioId": "runtime-recurring-schedule-selection",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Select and conditionally advance bounded due recurring trigger schedules while reading the associated publication projection state.",
+      "coverageRows": ["runtime-publication-projection-state", "runtime-recurring-trigger-schedule"],
+      "input": {
+        "seed": "spec094-recurring-schedule-selection-v1",
+        "fingerprintSha256": "ab6e1c276995da9e564f55cee00f243a13e16334c58c0d19cc146f2f757b3b5e",
+        "publicationCount": 256,
+        "scheduleCount": 2048,
+        "dueSchedules": 179,
+        "pageSize": 50,
+        "inactivePublications": 41,
+        "concurrentAdvancers": 2,
+        "fixedNowUtc": "2026-07-20T10:00:00Z",
+        "timedSetup": "excluded"
+      },
+      "operationSequence": ["seed-publications-and-schedules", "list-bounded-due-schedules", "load-publication-projections", "advance-current-schedule", "attempt-stale-advance", "reopen-and-read-projection-state"],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": ["list-due", "page-by-publication"],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "af1d9aecbc7604ce39e33c553d9c1014be2377d81300aa4905e700beffcf7b17",
+        "invariants": ["the exact due schedules are returned in deterministic order", "inactive publication schedules are absent", "only one conditional advance wins", "publication projection state remains consistent after reopen"],
+        "timingGate": "Run the public recurring schedule correctness baseline and capture bounded route evidence before #646 times the operation."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-runtime-recurring-schedule-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable recurring schedule contract only; it does not supply a benchmark verdict."
+      },
+      "physicalFormsFor646": ["dedicated-recurring-schedule-documents", "publication-projection-documents", "shared-documents-with-linked-index-tables"],
+      "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "native route evidence", "sanitized topology"]
+    }
+  ]
+}

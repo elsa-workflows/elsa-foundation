@@ -23,11 +23,11 @@ public sealed class WorkflowExecutableInspector(
     {
         var now = _timeProvider.GetUtcNow();
         var retainedCounts = await RetainedCountsAsync(cancellationToken);
-        var referencesByArtifact = (await referenceStore.ListAsync(cancellationToken: cancellationToken))
+        var referencesByArtifact = (await referenceStore.ListAllAsync(cancellationToken: cancellationToken))
             .GroupBy(reference => reference.ArtifactId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var items = new List<WorkflowExecutableSummaryView>();
-        foreach (var executable in await executableStore.ListAsync(cancellationToken))
+        foreach (var executable in await executableStore.ListAllAsync(cancellationToken))
         {
             var references = referencesByArtifact.GetValueOrDefault(executable.Identity.ArtifactId) ?? [];
             var matching = references.Where(reference => MatchesScope(reference, scope)).ToArray();
@@ -63,7 +63,7 @@ public sealed class WorkflowExecutableInspector(
         if (executable is null)
             return null;
         var now = _timeProvider.GetUtcNow();
-        var references = await referenceStore.ListByArtifactAsync(artifactId, cancellationToken);
+        var references = await referenceStore.ListAllByArtifactAsync(artifactId, cancellationToken);
         var ordered = OrderReferences(references).ToArray();
         var requested = sourceReferenceId is null
             ? null
@@ -147,7 +147,7 @@ public sealed class WorkflowExecutableInspector(
         if (await executableStore.FindAsync(artifactId, cancellationToken) is null)
             return null;
         var now = _timeProvider.GetUtcNow();
-        var references = (await referenceStore.ListByArtifactAsync(artifactId, cancellationToken))
+        var references = (await referenceStore.ListAllByArtifactAsync(artifactId, cancellationToken))
             .OrderByDescending(reference => reference.CreatedAt)
             .ThenBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
             .ToArray();

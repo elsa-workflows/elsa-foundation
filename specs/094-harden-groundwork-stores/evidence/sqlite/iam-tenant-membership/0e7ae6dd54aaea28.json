@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-tenant-membership",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "ce1e14e01dcecef5817ee8a3951f5e26158f2f272447607e15bf83d6b2b95a31",
+  "executionPath": "provider-driver/sqlite/iam-tenant-membership/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
+  "outcome": "pass",
+  "evidence": "evidence/sqlite/iam-tenant-membership/0e7ae6dd54aaea28.json"
+}

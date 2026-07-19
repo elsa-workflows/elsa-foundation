@@ -36,7 +36,7 @@ public sealed class HttpResponseInstructionDelivery(
 
         foreach (var workflowExecutionId in workflowExecutionIds.Distinct(StringComparer.Ordinal))
         {
-            var states = await activityExecutionStateStore.ListAsync(workflowExecutionId, cancellationToken);
+            var states = await activityExecutionStateStore.ListAllAsync(workflowExecutionId, cancellationToken);
             foreach (var state in states
                          .Where(IsResponseInstructionCompletion)
                          .OrderBy(candidate => candidate.CompletedAt)

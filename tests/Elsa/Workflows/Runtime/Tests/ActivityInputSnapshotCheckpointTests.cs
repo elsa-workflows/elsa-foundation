@@ -53,7 +53,7 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
 
         var stored = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(stored!.InputSnapshot);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
         Assert.Null(stored.InputSnapshot);
         Assert.Null(stored.Attempts);
         Assert.Empty(commitStore.ListCommits());
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     private WorkflowStartActivitySchedulerWorkHandler NewHandler(InMemoryRuntimeCheckpointCommitStore commitStore) =>

@@ -20,7 +20,7 @@ public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryScanner
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var states = await _operationalStateStore.ListAllAsync(cancellationToken);
+        var states = await RuntimeOperationalStorePagingExtensions.ListAllAsync(_operationalStateStore, cancellationToken);
         return RuntimeRecoveryCandidateSelector.Select(states, request);
     }
 }

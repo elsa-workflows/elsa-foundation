@@ -156,6 +156,7 @@
       "additionalProperties": false,
       "required": [
         "scenarioId",
+        "sourceScenarioId",
         "coverageEntryId",
         "provider",
         "providerIdentity",
@@ -171,6 +172,10 @@
       ],
       "properties": {
         "scenarioId": { "type": "string", "minLength": 1 },
+        "sourceScenarioId": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
         "coverageEntryId": { "type": "string", "minLength": 1 },
         "provider": {
           "type": "string",
@@ -198,6 +203,8 @@
         },
         "clients": { "type": "integer", "minimum": 1 },
         "queryShape": { "type": "string", "minLength": 1 },
+        "nativeQueryIdentity": { "type": "string", "minLength": 1 },
+        "documentKind": { "type": "string", "minLength": 1 },
         "concurrencySemantic": { "type": "string", "minLength": 1 },
         "failureWindow": { "type": "string", "minLength": 1 },
         "restartScenario": { "type": "string", "minLength": 1 },
@@ -216,7 +223,20 @@
           "pattern": "^evidence/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}\\.json$"
         },
         "evidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["queryShape"] },
+          "then": {
+            "required": [
+              "nativeQueryIdentity",
+              "documentKind",
+              "nativeEvidence",
+              "nativeEvidenceSha256"
+            ]
+          }
+        }
+      ]
     },
     "providerEvidence": {
       "type": "object",

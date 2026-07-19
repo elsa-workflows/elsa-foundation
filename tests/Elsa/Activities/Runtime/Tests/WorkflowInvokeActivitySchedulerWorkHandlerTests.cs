@@ -79,7 +79,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(ActivityExecutionStatus.Completed, stateChange.State.Status);
         Assert.Empty(commit.StateChanges.ActivityExecutionInspections);
         Assert.Single(commit.PostCommitIntents);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
 
         var committer = provider.GetRequiredService<RuntimeCheckpointCommitter>();
         var commitCount = _checkpointWriter.ListCommits().Count;
@@ -175,7 +175,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(1, activator.ActivateCalls);
         Assert.Equal(committed, await _activityStateStore.FindAsync("wfexec-1", "actexec-1"));
         Assert.Equal(committedCheckpointCount, _checkpointWriter.ListCommits().Count);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -587,7 +587,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(ActivityExecutionStatus.Completed, stateChange.State.Status);
         Assert.Empty(commit.StateChanges.ActivityExecutionInspections);
         Assert.Single(commit.PostCommitIntents);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
 
         var committer = provider.GetRequiredService<RuntimeCheckpointCommitter>();
         var commitCount = _checkpointWriter.ListCommits().Count;
@@ -627,7 +627,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     {
         var intents = _checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents).ToArray();
         var work = intents.Length == 0
-            ? Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")))
+            ? Assert.Single(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")))
             : Assert.Single(intents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, work.CommandKind);
         return work.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;

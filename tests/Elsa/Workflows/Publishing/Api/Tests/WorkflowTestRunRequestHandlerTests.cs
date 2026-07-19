@@ -52,7 +52,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.StartsWith("artifact-", view.ArtifactId, StringComparison.Ordinal);
         // Under ADR 0040 there is a single content-addressed store; the test-run artifact now lives in it (scope/
         // expiry are reference facts, no longer segregated by an artifact-level list filter).
-        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAsync()).Identity.ArtifactId);
+        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAllAsync()).Identity.ArtifactId);
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
     }
 
@@ -119,7 +119,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         // Single content-addressed store (ADR 0040): the draft test-run artifact is present. Reference-driven
         // scope gating for dispatch (rejecting a test-run artifact from a normal runtime dispatch) is worker W3's
         // slice; the artifact-level dispatcher no longer rejects by scope.
-        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAsync()).Identity.ArtifactId);
+        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAllAsync()).Identity.ArtifactId);
         var snapshot = await _testRunStore.FindDraftSnapshotAsync(view.DefinitionVersionId);
         Assert.NotNull(snapshot);
         Assert.Equal("write-one", snapshot.State.RootActivity!.NodeId);
@@ -148,7 +148,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
             SnapshotId: "snapshot-authored-input",
             State: state), CancellationToken.None);
 
-        var reference = Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(view.ArtifactId!));
+        var reference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(view.ArtifactId!));
         var authored = Assert.Single(reference.AuthoredInputs);
         Assert.Equal("write-one", authored.ExecutableNodeId);
         Assert.Equal("Text", authored.InputKey);
@@ -161,7 +161,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     {
         var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))));
         var first = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
-        var existingReference = Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(first.ArtifactId!));
+        var existingReference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(first.ArtifactId!));
         await _sourceReferenceStore.RetireAsync(existingReference.SourceReferenceId, DateTimeOffset.UtcNow, "test-setup");
         var now = DateTimeOffset.UtcNow;
         var deletionGuard = await _executableStore.TryBeginDeletionAsync(first.ArtifactId!, "gc-test", now.AddMinutes(1), now);
@@ -171,8 +171,11 @@ public sealed class WorkflowTestRunRequestHandlerTests
 
         Assert.NotNull(deletionGuard);
         Assert.Equal(first.ArtifactId, exception.ArtifactId);
-        Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(first.ArtifactId!));
-        Assert.Empty(await _sourceReferenceStore.ListAsync(WorkflowExecutableReferenceScope.TestRun, liveOnly: true));
+        Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(first.ArtifactId!));
+        Assert.Empty(await _sourceReferenceStore.ListAllAsync(
+            WorkflowExecutableReferenceScope.TestRun,
+            liveOnly: true,
+            now: now));
     }
 
     [Fact]
@@ -191,7 +194,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Null(view.ArtifactId);
         Assert.Null(view.WorkflowExecutionId);
         Assert.Contains("root activity", view.Reason, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(await _executableStore.ListAsync());
+        Assert.Empty(await _executableStore.ListAllAsync());
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
         Assert.Null(await _testRunStore.FindDraftSnapshotAsync(view.DefinitionVersionId));
     }
@@ -220,7 +223,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("definition-1", view.DefinitionId);
         Assert.Equal("version-1", view.DefinitionVersionId);
         Assert.Contains("root activity", view.Reason, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(await _executableStore.ListAsync());
+        Assert.Empty(await _executableStore.ListAllAsync());
     }
 
     [Fact]
@@ -285,7 +288,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
 
         Assert.NotNull(await _executableStore.FindAsync(view.ArtifactId!));
-        var reference = Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(view.ArtifactId!));
+        var reference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(view.ArtifactId!));
         Assert.Equal(WorkflowExecutableReferenceScope.TestRun, reference.Scope);
         Assert.Equal(view.ExpiresAt, reference.ExpiresAt);
         Assert.Null(reference.PublishedAt);
@@ -328,8 +331,8 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.NotNull(versionView.ArtifactId);
         Assert.Equal(versionView.ArtifactId, draftView.ArtifactId);
         // Both references point at the single shared artifact.
-        Assert.Single(await _executableStore.ListAsync());
-        Assert.Equal(2, (await _sourceReferenceStore.ListByArtifactAsync(versionView.ArtifactId!)).Count);
+        Assert.Single(await _executableStore.ListAllAsync());
+        Assert.Equal(2, (await _sourceReferenceStore.ListAllByArtifactAsync(versionView.ArtifactId!)).Count);
     }
 
     [Fact]

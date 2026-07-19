@@ -15,16 +15,14 @@ public sealed class GroundworkProviderConfigurationStore(
     IDocumentStore store,
     IPersistenceAccessContextAccessor accessContextAccessor) : IProviderConfigurationStore, IRevisionAwareProviderConfigurationStore
 {
-    private const string GlobalDocumentScope = "global";
-
     public async ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(
         string provider,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureGlobalAccess();
         var envelope = await store.LoadAsync(
-            IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
-            IdentityCompositeDocumentId.From(GlobalDocumentScope, provider),
+            IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind,
+            IdentityCompositeDocumentId.Normalize(provider),
             cancellationToken);
 
         return envelope is null ? null : Map(envelope);
@@ -57,8 +55,8 @@ public sealed class GroundworkProviderConfigurationStore(
     {
         accessContextAccessor.EnsureGlobalAccess();
         var envelope = await store.LoadAsync(
-            IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
-            IdentityCompositeDocumentId.From(GlobalDocumentScope, provider),
+            IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind,
+            IdentityCompositeDocumentId.Normalize(provider),
             cancellationToken);
 
         return envelope is null
@@ -110,10 +108,16 @@ public sealed class GroundworkProviderConfigurationStore(
             IdentityCompositeDocumentId.Normalize(configuration.Provider),
             configuration);
         var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
+        var documentKind = configuration.TenantId is null
+            ? IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind
+            : IdentityStorageManifest.IdentityProviderConfigurationDocumentKind;
+        var documentId = configuration.TenantId is null
+            ? IdentityCompositeDocumentId.Normalize(configuration.Provider)
+            : IdentityCompositeDocumentId.From(configuration.TenantId, configuration.Provider);
         return await store.SaveAsync(
             new SaveDocumentRequest(
-                IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
-                IdentityCompositeDocumentId.From(configuration.TenantId ?? GlobalDocumentScope, configuration.Provider),
+                documentKind,
+                documentId,
                 IdentityStorageManifest.SchemaVersion,
                 content,
                 expectedVersion),

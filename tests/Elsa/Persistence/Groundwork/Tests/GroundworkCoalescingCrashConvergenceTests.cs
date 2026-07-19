@@ -125,7 +125,7 @@ public sealed class GroundworkCoalescingCrashConvergenceTests
         ServiceProvider provider)
     {
         var stateStore = provider.GetRequiredService<IActivityExecutionStateStore>();
-        var states = await stateStore.ListAsync("wfexec-1");
+        var states = await stateStore.ListAllAsync("wfexec-1");
         return states
             .Select(state => (state.Execution.ExecutableNodeId, state.Status))
             .OrderBy(entry => entry.ExecutableNodeId, StringComparer.Ordinal)

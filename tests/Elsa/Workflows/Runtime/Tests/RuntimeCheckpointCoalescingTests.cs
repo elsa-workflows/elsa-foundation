@@ -107,7 +107,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             Assert.True((await queue.CompleteClaimAsync(durableClaim!)).Succeeded);
         }
 
-        Assert.Empty(await inner.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId)));
+        Assert.Empty(await inner.ListAllAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId)));
     }
 
     [Fact]
@@ -223,6 +223,37 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var page = await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10));
 
         Assert.Equal("wfexec-history", Assert.Single(page.Items).WorkflowExecutionId);
+    }
+
+    [Fact]
+    public async Task Coalesced_activity_pages_merge_overlay_without_traversing_the_inner_collection()
+    {
+        var inner = new CountingActivityExecutionStateStore();
+        var session = new RuntimeCoalescingSession(
+            "wfexec-1",
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var store = new CoalescingActivityExecutionStateStore(
+            new CoalescingInner<IActivityExecutionStateStore>(inner),
+            new FixedCoalescingSessionAccessor(session));
+        await inner.SaveAsync(Activity("act-a"));
+        await inner.SaveAsync(Activity("act-c"));
+        session.BufferDeferred(NewEmptyCommit("wfexec-1", 99, "overlay") with
+        {
+            StateChanges = ActivityUpsert(Activity("act-b"))
+        });
+
+        var first = await store.ListPageAsync(new ActivityExecutionStatePageQuery("wfexec-1", limit: 1));
+        var second = await store.ListPageAsync(new ActivityExecutionStatePageQuery("wfexec-1", limit: 1, first.NextContinuationToken));
+        var third = await store.ListPageAsync(new ActivityExecutionStatePageQuery("wfexec-1", limit: 1, second.NextContinuationToken));
+
+        Assert.Equal("act-a", Assert.Single(first.Items).Execution.ActivityExecutionId);
+        Assert.Equal("act-b", Assert.Single(second.Items).Execution.ActivityExecutionId);
+        Assert.Equal("act-c", Assert.Single(third.Items).Execution.ActivityExecutionId);
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.NotNull(second.NextContinuationToken);
+        Assert.Null(third.NextContinuationToken);
+        Assert.Equal(4, inner.PageReadCount);
     }
 
     // W8's Delay is the first real suspending activity: it writes a durable timer (via IDurableTimerStore) and
@@ -453,7 +484,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     private static async Task<IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)>> SnapshotAsync(ServiceProvider provider)
     {
         var stateStore = provider.GetRequiredService<IActivityExecutionStateStore>();
-        var states = await stateStore.ListAsync("wfexec-1");
+        var states = await stateStore.ListAllAsync("wfexec-1");
         return states
             .Select(state => (state.Execution.ExecutableNodeId, state.Status))
             .OrderBy(entry => entry.ExecutableNodeId, StringComparer.Ordinal)
@@ -681,6 +712,18 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
 
+    private static ActivityExecutionState Activity(string activityExecutionId) =>
+        NewRunningActivityState() with
+        {
+            Execution = new ActivityExecution(
+                activityExecutionId,
+                "wfexec-1",
+                $"node-{activityExecutionId}",
+                $"authored-{activityExecutionId}",
+                "test/activity",
+                "1.0.0")
+        };
+
     private static WorkflowExecutable NewExecutableWithResumeTarget()
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
@@ -756,5 +799,22 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
         public IDisposable Push(RuntimeCoalescingSession? pushedSession) =>
             throw new NotSupportedException("The cap test provides a fixed ambient session.");
+    }
+
+    private sealed class CountingActivityExecutionStateStore : IActivityExecutionStateStore
+    {
+        private readonly InMemoryActivityExecutionStateStore inner = new();
+
+        public int PageReadCount { get; private set; }
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) => inner.SaveAsync(state, cancellationToken);
+        public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) => inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+        public ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => inner.CountAsync(workflowExecutionId, cancellationToken);
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(ActivityExecutionStateParentPageQuery query, CancellationToken cancellationToken = default) => inner.ListByParentPageAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken cancellationToken = default)
+        {
+            PageReadCount++;
+            return inner.ListPageAsync(query, cancellationToken);
+        }
     }
 }

@@ -82,7 +82,7 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
             UpdatedAt = occurredAt,
             CompletedAt = occurredAt
         });
-        var cancellableStates = (await _activityExecutionStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken))
+        var cancellableStates = (await _activityExecutionStateStore.ListAllAsync(workItem.WorkflowExecutionId, cancellationToken))
             .Where(IsCancellable)
             .Select(state => RuntimeContainerScopeService.CloseOwnedFrames(state with
             {

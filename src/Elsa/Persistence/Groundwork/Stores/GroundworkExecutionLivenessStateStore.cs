@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
@@ -81,25 +82,65 @@ public sealed class GroundworkExecutionLivenessStateStore(
         return new VersionedExecutionLivenessState(document.State, envelope.Version);
     }
 
-    public async ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListPageAsync(
+        ExecutionLivenessStatePageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-
-        return await QueryDocumentsAsync<ExecutionLivenessStateDocument, ExecutionLivenessState>(
-            ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
-            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
-            workflowExecutionId,
-            document => document.State,
+        ArgumentNullException.ThrowIfNull(query);
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageExecutionLivenessStatesByWorkflowExecutionQuery,
+                [Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, query.WorkflowExecutionId)],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.ExecutionLivenessOperationalStateIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
             cancellationToken);
+
+        return new RuntimeStorePage<ExecutionLivenessState>(
+            query,
+            result.Documents
+                .Select(envelope => Serializer.Deserialize<ExecutionLivenessStateDocument>(envelope).State)
+                .ToArray(),
+            result.NextContinuation);
     }
 
-    public async ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAllAsync(CancellationToken cancellationToken = default) =>
-        await QueryDocumentsAsync<ExecutionLivenessStateDocument, ExecutionLivenessState>(
-            ElsaRuntimeStorageManifest.ListAllQuery,
-            ElsaRuntimeStorageManifest.CollectionField,
-            ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
-            document => document.State,
+    public async ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListAllPageAsync(
+        RuntimeStorePageRequest query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageExecutionLivenessStatesQuery,
+                [Equal(
+                    ElsaRuntimeStorageManifest.CollectionField,
+                    ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind)],
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.ExecutionLivenessOperationalStateIdField)
+                ],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
             cancellationToken);
+
+        return new RuntimeStorePage<ExecutionLivenessState>(
+            query,
+            result.Documents
+                .Select(envelope => Serializer.Deserialize<ExecutionLivenessStateDocument>(envelope).State)
+                .ToArray(),
+            result.NextContinuation);
+    }
+
+    public async ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllAsync(this, workflowExecutionId, cancellationToken);
+
+    public async ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAllAsync(
+        CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllAsync(this, cancellationToken);
 
     internal static string DocumentIdentity(string workflowExecutionId, string operationalStateId) =>
         DocumentId.Compose(workflowExecutionId, operationalStateId);
@@ -136,6 +177,9 @@ public sealed class GroundworkExecutionLivenessStateStore(
             throw new InvalidOperationException("Groundwork liveness-state document identity does not match its content.");
         }
     }
+
+    private static DocumentQueryClause Equal(string path, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(path, value));
 
     internal sealed record ExecutionLivenessStateDocument(
         string Collection,

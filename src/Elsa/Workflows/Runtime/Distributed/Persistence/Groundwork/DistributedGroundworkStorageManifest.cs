@@ -31,7 +31,10 @@ public static class DistributedGroundworkStorageManifest
     public const string OwnerIdLookupKeyField = "ownerIdLookupKey";
     public const string ExpiresAtField = "expiresAt";
     public const string VisibleAtField = "visibleAt";
+    public const string LeaseOwnerIdField = "leaseOwnerId";
+    public const string LeaseTokenField = "leaseToken";
     public const string SequenceField = "sequence";
+    public const string LastSequenceField = "lastSequence";
     public const string CollectionField = "collection";
 
     public const string ListOwnedPlacementsQuery = "list-owned-live-placements";
@@ -45,12 +48,7 @@ public static class DistributedGroundworkStorageManifest
         new StorageManifestVersion(SchemaVersion),
         [
             PlacementUnit(),
-            Unit(
-                DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind,
-                "Execution command stream head",
-                PhysicalTableDefinition.DedicatedDocumentTable(CommandStreamHeadsTable),
-                [],
-                []),
+            CommandStreamHeadUnit(),
             CommandTransportUnit()
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
@@ -166,6 +164,12 @@ public static class DistributedGroundworkStorageManifest
                     VisibleAtField,
                     PortablePhysicalType.DateTime,
                     IsNullable: false),
+                StringProjection(LeaseOwnerIdField, length: 64),
+                new ProjectedColumnDefinition(
+                    LeaseTokenField,
+                    LeaseTokenField,
+                    PortablePhysicalType.Int64,
+                    IsNullable: false),
                 new ProjectedColumnDefinition(
                     SequenceField,
                     SequenceField,
@@ -276,6 +280,30 @@ public static class DistributedGroundworkStorageManifest
             table,
             [logicalIndex, pendingIndex],
             [lease, pendingExecutions, count]);
+    }
+
+    private static StorageUnit CommandStreamHeadUnit()
+    {
+        var envelope = new DocumentEnvelopeDefinition();
+        var table = PhysicalTableDefinition.PhysicalEntityTable(
+            CommandStreamHeadsTable,
+            [
+                OrdinalKeyProjection(WorkflowExecutionIdKeyField),
+                new ProjectedColumnDefinition(
+                    LastSequenceField,
+                    LastSequenceField,
+                    PortablePhysicalType.Int64,
+                    IsNullable: false)
+            ],
+            envelope,
+            []);
+
+        return Unit(
+            DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind,
+            "Execution command stream head",
+            table,
+            [],
+            []);
     }
 
     // Groundwork's required positional StorageUnit constructor still carries the legacy physicalization argument;

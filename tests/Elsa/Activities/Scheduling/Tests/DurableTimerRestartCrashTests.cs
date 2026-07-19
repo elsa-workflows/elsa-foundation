@@ -216,7 +216,7 @@ public sealed class DurableTimerRestartCrashTests
     private static async Task<int> CompletedDelayCountAsync(WorkflowExecutionHarness harness)
     {
         var states = await harness.Services.GetRequiredService<IActivityExecutionStateStore>()
-            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+            .ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
         return states.Count(s =>
             s.Execution.ExecutableNodeId == "node-delay" && s.Status == ActivityExecutionStatus.Completed);
     }
@@ -224,7 +224,7 @@ public sealed class DurableTimerRestartCrashTests
     private static async Task<string> DescribeActivityAsync(WorkflowExecutionHarness harness)
     {
         var states = await harness.Services.GetRequiredService<IActivityExecutionStateStore>()
-            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+            .ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
         return string.Join(Environment.NewLine, states.Select(state =>
             $"{state.Execution.ExecutableNodeId}: {state.Status}/{state.SubStatus}; fault={state.Metadata.GetValueOrDefault("runtime.faultMessage")}"));
     }

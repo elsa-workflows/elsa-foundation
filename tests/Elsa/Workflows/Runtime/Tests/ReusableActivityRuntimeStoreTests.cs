@@ -86,6 +86,23 @@ public sealed class ReusableActivityRuntimeStoreTests
     }
 
     [Fact]
+    public async Task TemplateStore_Reads_Finite_Ordered_Pages()
+    {
+        var store = new InMemoryExecutableActivityTemplateStore();
+        await store.SaveAsync(Template("template-c", "sha256:c", Node("node-c")));
+        await store.SaveAsync(Template("template-a", "sha256:a", Node("node-a")));
+        await store.SaveAsync(Template("template-b", "sha256:b", Node("node-b")));
+
+        var first = await store.ListPageAsync(new RuntimeStorePageRequest(limit: 2));
+        var second = await store.ListPageAsync(new RuntimeStorePageRequest(limit: 2, first.NextContinuationToken));
+
+        Assert.Equal(["template-a", "template-b"], first.Items.Select(template => template.TemplateId));
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Equal(["template-c"], second.Items.Select(template => template.TemplateId));
+        Assert.Null(second.NextContinuationToken);
+    }
+
+    [Fact]
     public async Task HierarchyStore_Pins_The_FirstPage_Watermark_Across_Continuation()
     {
         var store = new InMemoryActivityExecutionHierarchyStore();

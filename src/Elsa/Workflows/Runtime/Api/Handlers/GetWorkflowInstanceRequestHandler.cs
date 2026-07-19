@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
@@ -26,10 +27,13 @@ public sealed class GetWorkflowInstanceRequestHandler(
 
         var canInspectSensitiveValues = authorization.CanInspectSensitiveValues(state);
 
-        var activities = (await activityExecutionInspectionStore.ListSummariesAsync(request.WorkflowExecutionId, cancellationToken))
-            .OrderBy(activity => activity.ExecutionSequence)
-            .ThenBy(activity => activity.ScheduledAt)
-            .ThenBy(activity => activity.ActivityExecutionId, StringComparer.Ordinal)
+        var activityPage = await activityExecutionInspectionStore.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery(
+                request.WorkflowExecutionId,
+                request.ActivityPageSize,
+                request.ActivityContinuationToken),
+            cancellationToken);
+        var activities = activityPage.Items
             .Select(ActivityExecutionInspectionSummaryView.From)
             .ToArray();
         var incidents = (await incidentStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken))
@@ -42,7 +46,7 @@ public sealed class GetWorkflowInstanceRequestHandler(
         // values, with every payload routed through the configured capture policy (declined payloads surface
         // as named redacted markers, never silently absent).
         var outputProjections = RuntimeWorkflowOutputStateProjection
-            .Project(await durableValueStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken), payloadCapturePolicy)
+            .Project(await durableValueStateStore.ListAllDurableValueStatesAsync(request.WorkflowExecutionId, cancellationToken), payloadCapturePolicy)
             .ToArray();
         var outputs = outputProjections.ToDictionary(
             output => output.Name,
@@ -52,9 +56,10 @@ public sealed class GetWorkflowInstanceRequestHandler(
             StringComparer.Ordinal);
 
         return new GetWorkflowInstanceResponse(new WorkflowInstanceDetailsView(
-            WorkflowInstanceSummaryView.From(state, activities.Length, incidents.Length, canInspectSensitiveValues),
+            WorkflowInstanceSummaryView.From(state, activityPage.TotalCount, incidents.Length, canInspectSensitiveValues),
             activities,
             incidents,
-            outputs));
+            outputs,
+            activityPage.NextContinuationToken));
     }
 }

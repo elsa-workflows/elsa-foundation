@@ -185,8 +185,8 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 
     public async ValueTask<WorkflowExecutableReferenceSweepResult> SweepAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        var executables = (await _executableStore.ListAsync(cancellationToken)).ToArray();
-        var templates = (await _activityTemplateStore.ListAsync(cancellationToken)).ToArray();
+        var executables = (await _executableStore.ListAllAsync(cancellationToken)).ToArray();
+        var templates = (await _activityTemplateStore.ListAllAsync(cancellationToken)).ToArray();
         HashSet<string> protectedArtifactIds;
         HashSet<string> executionProtectedArtifactIds;
         try
@@ -220,7 +220,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         // Query 1 — drop expired/retired references unless a retained execution still pins their inspectable
         // executable/template graph. Terminal executions remain roots until their execution state is removed.
         var deletedReferenceIds = new List<string>();
-        var doomedReferences = (await _sourceReferenceStore.ListAsync(cancellationToken: cancellationToken))
+        var doomedReferences = (await _sourceReferenceStore.ListAllAsync(cancellationToken: cancellationToken))
             .Where(reference => reference.DeletedAt is not null || reference.IsExpired(now))
             .Where(reference => !retainedMaterialIds.Contains(reference.ArtifactId))
             .ToArray();
@@ -239,7 +239,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             .Select(executable => executable.Identity.ArtifactId)
             .Where(artifactId => !protectedArtifactIds.Contains(artifactId))
             .ToArray();
-        var unreferencedArtifactIds = await _sourceReferenceStore.ListUnreferencedArtifactIdsAsync(artifactIds, now, cancellationToken);
+        var unreferencedArtifactIds = await ListUnreferencedArtifactIdsAsync(artifactIds, now, cancellationToken);
 
         var deletedArtifactCount = 0;
         foreach (var artifactId in unreferencedArtifactIds)
@@ -259,15 +259,15 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 
             try
             {
-                var stillUnreferenced = await _sourceReferenceStore.ListUnreferencedArtifactIdsAsync([artifactId], now, cancellationToken);
+                var stillUnreferenced = await ListUnreferencedArtifactIdsAsync([artifactId], now, cancellationToken);
                 if (!stillUnreferenced.Contains(artifactId, StringComparer.Ordinal))
                 {
                     await CancelDeletionConservativelyAsync(deletionGuard);
                     continue;
                 }
 
-                var currentExecutables = await _executableStore.ListAsync(cancellationToken);
-                var currentTemplates = await _activityTemplateStore.ListAsync(cancellationToken);
+                var currentExecutables = await _executableStore.ListAllAsync(cancellationToken);
+                var currentTemplates = await _activityTemplateStore.ListAllAsync(cancellationToken);
                 var currentProtectedArtifactIds = await LoadProtectedClosureAsync(currentExecutables, currentTemplates, now, cancellationToken);
                 if (currentProtectedArtifactIds.Contains(artifactId))
                 {
@@ -304,7 +304,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             .Select(template => template.TemplateId)
             .Where(templateId => !retainedTemplateIds.Contains(templateId))
             .ToArray();
-        var unreferencedTemplateIds = await _sourceReferenceStore.ListUnreferencedArtifactIdsAsync(templateIds, now, cancellationToken);
+        var unreferencedTemplateIds = await ListUnreferencedArtifactIdsAsync(templateIds, now, cancellationToken);
         var deletedActivityTemplateCount = 0;
         foreach (var templateId in unreferencedTemplateIds)
         {
@@ -346,7 +346,10 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var sourceRoots = await _sourceReferenceStore.ListAsync(liveOnly: true, now: now, cancellationToken: cancellationToken);
+        var sourceRoots = await _sourceReferenceStore.ListAllAsync(
+            liveOnly: true,
+            now: now,
+            cancellationToken: cancellationToken);
         var runtimeRootIds = await ListRuntimeRootIdsAsync(cancellationToken);
         var executableIds = executables.Select(executable => executable.Identity.ArtifactId).ToHashSet(StringComparer.Ordinal);
         var templateIds = templates.Select(template => template.TemplateId).ToHashSet(StringComparer.Ordinal);
@@ -378,6 +381,25 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         if (_workflowDispatchRootStore is not null)
             roots.AddRange(await _workflowDispatchRootStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         return roots;
+    }
+
+    private async ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
+        IEnumerable<string> artifactIds,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var candidates = artifactIds.Distinct(StringComparer.Ordinal).ToArray();
+        var result = new List<string>(candidates.Length);
+        foreach (var batch in candidates.Chunk(RuntimeStorePageRequest.MaximumLimit))
+        {
+            var unreferenced = await _sourceReferenceStore.ListUnreferencedArtifactIdsAsync(
+                new WorkflowExecutableArtifactCandidateBatch(batch),
+                now,
+                cancellationToken);
+            result.AddRange(unreferenced);
+        }
+
+        return result;
     }
 
     private static HashSet<string> ResolveProtectedClosure(

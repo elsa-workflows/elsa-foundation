@@ -311,7 +311,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     {
         var store = Services.GetRequiredService<IWorkflowTriggerBindingStore>();
         await store.ActivatePublicationAsync(publicationId, replacedPublicationId);
-        var bindings = await store.ListByPublicationAsync(publicationId);
+        var bindings = await store.ListAllByPublicationAsync(publicationId);
         await NotifyPublicationAuthorityChangedAsync(artifactId, bindings);
     }
 
@@ -687,7 +687,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// </summary>
     public async Task<JsonElement> ReadHttpResponseArtifactAsync(string workflowExecutionId)
     {
-        var activityStates = await Services.GetRequiredService<IActivityExecutionStateStore>().ListAsync(workflowExecutionId);
+        var activityStates = await Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(workflowExecutionId);
         var completion = Assert.Single(
             activityStates,
             state => state.Completion?.Result.Type.Alias == TypeAliasConvention.CanonicalAlias(typeof(HttpResponseInstruction)));
@@ -710,7 +710,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     /// <summary>Reads all waiting bookmarks for a run (spec 089 D — inspect the mid-flow suspension).</summary>
     public async Task<IReadOnlyCollection<BookmarkState>> ListBookmarksAsync(string workflowExecutionId) =>
-        await Services.GetRequiredService<IBookmarkStateStore>().ListAsync(workflowExecutionId);
+        await Services.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(workflowExecutionId);
 
     /// <summary>
     /// Upserts a bookmark state (spec 089 D scenario 4.3 — overwrite a waiting bookmark with a past
@@ -737,11 +737,11 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     /// <summary>The number of workflow executions the runtime has persisted — 0 proves nothing started (401/413 paths).</summary>
     public async Task<int> CountWorkflowExecutionsAsync() =>
-        (await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync()).Count;
+        (await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync()).Count;
 
     /// <summary>The single persisted workflow execution's state — asserts exactly one run exists.</summary>
     public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync() =>
-        Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
+        Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync());
 
     /// <summary>
     /// Waits for an asynchronously converging run and its committed result projection after the request that started it has
@@ -828,7 +828,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     /// <summary>The artifact's trigger bindings in the durable index — empty proves a failed publish wrote nothing.</summary>
     public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ListTriggerBindingsAsync(string artifactId) =>
-        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().ListByArtifactAsync(artifactId);
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().ListAllByArtifactAsync(artifactId);
 
     /// <summary>
     /// Reads a named projection from the latest activity completion whose pinned contract declares it.
@@ -844,7 +844,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             .FindAsync(workflowState.PinnedExecutable.ArtifactId)
             ?? throw new InvalidOperationException($"Executable '{workflowState.PinnedExecutable.ArtifactId}' was not found.");
         var nodesById = executable.Nodes.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
-        var activityState = (await Services.GetRequiredService<IActivityExecutionStateStore>().ListAsync(workflowExecutionId))
+        var activityState = (await Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(workflowExecutionId))
             .Where(state => state.Completion is not null)
             .Where(state => resultFixtureKey is null ||
                             nodesById[state.Execution.ExecutableNodeId].Metadata.GetValueOrDefault(ResultFixtureKeyMetadata) == resultFixtureKey)

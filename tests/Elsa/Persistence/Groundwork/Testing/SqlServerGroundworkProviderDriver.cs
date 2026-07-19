@@ -26,6 +26,7 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
     private const string Image = "mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04";
     private const string ProtocolVersion = "1.0.0";
     private const int AdministrativeCommandTimeoutSeconds = 120;
+    private const int NativeRouteDatasetCommandTimeoutSeconds = 300;
     private readonly MsSqlContainer _container = new MsSqlBuilder(Image).Build();
     private readonly string _databaseName = $"elsa_groundwork_driver_{Guid.NewGuid():N}";
     private readonly GroundworkProcessProbeRunner _processProbeRunner = new();
@@ -348,7 +349,7 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
     {
         await using var connection = new SqlConnection(RequiredConnectionString());
         await connection.OpenAsync(cancellationToken);
-        foreach (var group in requests.GroupBy(request => request.PhysicalName, StringComparer.Ordinal))
+        foreach (var group in requests.GroupBy(request => (request.PhysicalName, request.DocumentKind)))
             await EnsureNativeRouteDatasetAsync(connection, group.ToArray(), cancellationToken);
     }
 
@@ -361,6 +362,10 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
         await using var connection = new SqlConnection(RequiredConnectionString());
         await connection.OpenAsync(cancellationToken);
         var expectedIndex = await ResolveNativeRouteIndexAsync(connection, request, cancellationToken);
+        var lookupIndexes = await ListNativeRouteIndexesAsync(
+            connection,
+            request.PhysicalName,
+            cancellationToken);
         var commands = explanation.Commands.Select((command, ordinal) =>
         {
             if (!string.Equals(command.NativePlanFormat, "sqlserver-statistics-xml", StringComparison.Ordinal))
@@ -368,7 +373,7 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
             var document = XDocument.Parse(command.NativePlan, LoadOptions.None);
             var operators = ExtractShowPlanOperators(document);
             var indexes = ExtractShowPlanIndexes(document);
-            if (!indexes.Contains(expectedIndex, StringComparer.Ordinal) ||
+            if (!indexes.Intersect(lookupIndexes, StringComparer.Ordinal).Any() ||
                 !operators.Contains("Index Seek", StringComparer.Ordinal) ||
                 operators.Any(value => value.Contains("Scan", StringComparison.OrdinalIgnoreCase)))
             {
@@ -379,15 +384,19 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
                 ordinal,
                 command,
                 "index-seek",
-                [expectedIndex]);
+                indexes);
         }).ToArray();
+        var selectedIndex = GroundworkNativeRoutePlanResult.SelectCompiledIndex(
+            request,
+            lookupIndexes,
+            commands);
         var cardinality = await CountPhysicalRowsAsync(connection, request.PhysicalName, cancellationToken);
         return GroundworkNativeRoutePlanResult.Create(
             request,
             ProviderKey,
             cardinality,
             "index-seek",
-            expectedIndex,
+            selectedIndex,
             request.Limit,
             materializedCandidateCount,
             commands);
@@ -617,39 +626,87 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
     {
         var dataset = GroundworkNativeRouteDataset.Create(requests);
         var projectedColumns = string.Join(", ", dataset.ProjectedValues.Keys.Select(Quote));
-        var projectedValues = string.Join(", ", dataset.ProjectedValues.Keys.Select((_, index) =>
-            $"CASE WHEN value IN (0, 1) THEN @target{index} ELSE CONCAT('noise-', RIGHT(CONCAT('000000', value), 6)) END"));
+        var projectedValues = string.Join(", ", dataset.ProjectedValues.Values.Select((value, index) =>
+        {
+            var varies = dataset.VaryingProjectedFields.Contains(value.Field, StringComparer.Ordinal);
+            var isPredicate = dataset.PredicateFields.Contains(value.Field);
+            return
+            $"CASE WHEN value <= @matchingCardinality THEN " +
+            $"{NativeMatchingExpression(value, index, varies && dataset.MatchingCardinality > 1)} " +
+            $"ELSE {(varies || !isPredicate ? NativeNoiseExpression(value.Kind, index) : $"@noise{index}")} END";
+        }));
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
         await using (var command = connection.CreateCommand())
         {
             command.Transaction = transaction;
-            command.CommandTimeout = AdministrativeCommandTimeoutSeconds;
-            command.CommandText = $"""
-                DELETE FROM {Quote(dataset.PhysicalName)};
+            command.CommandTimeout = NativeRouteDatasetCommandTimeoutSeconds;
+            var sequence = """
                 WITH sequence(value) AS (
                     SELECT TOP (@cardinality)
                            ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1
                     FROM sys.all_objects first_set
                     CROSS JOIN sys.all_objects second_set
                 )
-                INSERT INTO {Quote(dataset.PhysicalName)}
+                """;
+            const string orderedLookupKey =
+                "CONVERT(binary(32), 0xFF + CONVERT(varbinary(31), RIGHT(CONCAT('000000', value), 6)))";
+            var primaryName = dataset.PrimaryPhysicalName ?? dataset.PhysicalName;
+            var primaryInsert = $"""
+                {sequence}
+                INSERT INTO {Quote(primaryName)}
                     ([document_kind], [storage_scope], [id], [id_comparison_key], [id_lookup_key],
-                     [schema_version], [version], [document], [created_utc], [updated_utc], {projectedColumns})
+                     [schema_version], [version], {Quote(dataset.ContentColumn)}, [created_utc], [updated_utc])
                 SELECT @kind,
                        CASE WHEN value = 1 THEN @crossScope ELSE @scope END,
                        CASE WHEN value = 0 THEN @candidateId ELSE CONCAT('native-', RIGHT(CONCAT('000000', value), 6)) END,
                        CASE WHEN value = 0 THEN @candidateComparison ELSE CONVERT(varbinary(1350), CONCAT('native-', RIGHT(CONCAT('000000', value), 6))) END,
-                       CASE WHEN value = 0 THEN @candidateLookup ELSE CONVERT(binary(32), HASHBYTES(
-                           'SHA2_256',
-                           CONVERT(varbinary(max), CONCAT('native-', RIGHT(CONCAT('000000', value), 6))))) END,
+                       CASE WHEN value = 0 THEN @candidateLookup ELSE {orderedLookupKey} END,
                        @schemaVersion,
                        1,
                        CASE WHEN value = 0 THEN @candidateContent ELSE @emptyContent END,
                        N'2000-01-01T00:00:00.0000000+00:00',
-                       N'2000-01-01T00:00:00.0000000+00:00',
+                       N'2000-01-01T00:00:00.0000000+00:00'
+                FROM sequence;
+                """;
+            var lookupInsert = $"""
+                {sequence}
+                INSERT INTO {Quote(dataset.PhysicalName)}
+                    ([document_kind], [storage_scope], [document_id], [document_id_comparison_key],
+                     [document_id_lookup_key], {projectedColumns})
+                SELECT @kind,
+                       CASE WHEN value = 1 THEN @crossScope ELSE @scope END,
+                       CASE WHEN value = 0 THEN @candidateId ELSE CONCAT('native-', RIGHT(CONCAT('000000', value), 6)) END,
+                       CASE WHEN value = 0 THEN @candidateComparison ELSE CONVERT(varbinary(1350), CONCAT('native-', RIGHT(CONCAT('000000', value), 6))) END,
+                       CASE WHEN value = 0 THEN @candidateLookup ELSE {orderedLookupKey} END,
                        {projectedValues}
                 FROM sequence;
                 """;
+            command.CommandText = dataset.PrimaryPhysicalName is null
+                ? $"""
+                    DELETE FROM {Quote(dataset.PhysicalName)};
+                    {sequence}
+                    INSERT INTO {Quote(dataset.PhysicalName)}
+                        ([document_kind], [storage_scope], [id], [id_comparison_key], [id_lookup_key],
+                         [schema_version], [version], {Quote(dataset.ContentColumn)}, [created_utc], [updated_utc], {projectedColumns})
+                    SELECT @kind,
+                           CASE WHEN value = 1 THEN @crossScope ELSE @scope END,
+                           CASE WHEN value = 0 THEN @candidateId ELSE CONCAT('native-', RIGHT(CONCAT('000000', value), 6)) END,
+                           CASE WHEN value = 0 THEN @candidateComparison ELSE CONVERT(varbinary(1350), CONCAT('native-', RIGHT(CONCAT('000000', value), 6))) END,
+                           CASE WHEN value = 0 THEN @candidateLookup ELSE {orderedLookupKey} END,
+                           @schemaVersion,
+                           1,
+                           CASE WHEN value = 0 THEN @candidateContent ELSE @emptyContent END,
+                           N'2000-01-01T00:00:00.0000000+00:00',
+                           N'2000-01-01T00:00:00.0000000+00:00',
+                           {projectedValues}
+                    FROM sequence;
+                    """
+                : $"""
+                    DELETE FROM {Quote(dataset.PhysicalName)};
+                    DELETE FROM {Quote(primaryName)} WHERE [document_kind] = @kind;
+                    {primaryInsert}
+                    {lookupInsert}
+                    """;
             command.Parameters.AddWithValue("@kind", dataset.DocumentKind);
             command.Parameters.AddWithValue("@scope", dataset.StorageScope);
             command.Parameters.AddWithValue("@crossScope", dataset.CrossScope);
@@ -660,15 +717,24 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
             command.Parameters.AddWithValue("@candidateContent", dataset.CandidateContentJson);
             command.Parameters.AddWithValue("@emptyContent", "{}");
             command.Parameters.AddWithValue("@cardinality", dataset.AcceptanceCardinality);
+            command.Parameters.AddWithValue("@matchingCardinality", dataset.MatchingCardinality);
             var index = 0;
             foreach (var value in dataset.ProjectedValues.Values)
-                command.Parameters.AddWithValue($"@target{index++}", value);
+            {
+                command.Parameters.AddWithValue($"@target{index}", value.ToProviderValue());
+                command.Parameters.AddWithValue($"@noise{index}", value.ToProviderNoiseValue());
+                index++;
+            }
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         await transaction.CommitAsync(cancellationToken);
         await using (var statistics = connection.CreateCommand())
         {
-            statistics.CommandText = $"UPDATE STATISTICS {Quote(dataset.PhysicalName)} WITH FULLSCAN;";
+            statistics.CommandTimeout = NativeRouteDatasetCommandTimeoutSeconds;
+            statistics.CommandText = dataset.PrimaryPhysicalName is null
+                ? $"UPDATE STATISTICS {Quote(dataset.PhysicalName)} WITH FULLSCAN;"
+                : $"UPDATE STATISTICS {Quote(dataset.PhysicalName)} WITH FULLSCAN; " +
+                  $"UPDATE STATISTICS {Quote(dataset.PrimaryPhysicalName)} WITH FULLSCAN;";
             await statistics.ExecuteNonQueryAsync(cancellationToken);
         }
         var cardinality = await CountPhysicalRowsAsync(connection, dataset.PhysicalName, cancellationToken);
@@ -704,15 +770,71 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
                 indexes[name] = columns = [];
             columns.Add(reader.GetString(2));
         }
+        if (request.ExpectedIndexName is { } expectedIndex && indexes.ContainsKey(expectedIndex))
+            return expectedIndex;
+        var expected = new[] { "storage_scope" }.Concat(request.IndexFields).ToArray();
         var match = indexes.FirstOrDefault(index =>
-            index.Value.Count >= 2 &&
-            string.Equals(index.Value[0], "storage_scope", StringComparison.Ordinal) &&
-            string.Equals(index.Value[1], request.RouteField, StringComparison.Ordinal));
+            index.Value.Take(expected.Length).SequenceEqual(expected, StringComparer.Ordinal));
         return !string.IsNullOrWhiteSpace(match.Key)
             ? match.Key
             : throw new InvalidOperationException(
-                $"SQL Server route '{request.QueryIdentity}' has no physical index on storage_scope and {request.RouteField}.");
+                $"SQL Server route '{request.QueryIdentity}' has no physical index prefix ({string.Join(", ", expected)}).");
     }
+
+    private static async Task<IReadOnlyList<string>> ListNativeRouteIndexesAsync(
+        SqlConnection connection,
+        string physicalName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT i.name
+            FROM sys.indexes i
+            WHERE i.object_id = OBJECT_ID(@qualifiedTable)
+              AND i.name IS NOT NULL
+            ORDER BY i.name;
+            """;
+        command.Parameters.AddWithValue("@qualifiedTable", $"dbo.{physicalName}");
+        var indexes = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            indexes.Add(reader.GetString(0));
+        return indexes;
+    }
+
+    private static string NativeNoiseExpression(
+        GroundworkNativeRouteProjectedValueKind kind,
+        int targetIndex) =>
+        kind switch
+        {
+            GroundworkNativeRouteProjectedValueKind.String =>
+                "CONCAT('noise-', RIGHT(CONCAT('000000', value), 6))",
+            GroundworkNativeRouteProjectedValueKind.Boolean =>
+                $"CASE WHEN @target{targetIndex} = 1 THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END",
+            GroundworkNativeRouteProjectedValueKind.Int64 =>
+                $"CONVERT(bigint, @target{targetIndex}) + value + 1",
+            GroundworkNativeRouteProjectedValueKind.DateTime =>
+                $"DATEADD(second, CONVERT(int, value) + 1, CONVERT(datetimeoffset, @target{targetIndex}))",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown native-route projected value kind.")
+        };
+
+    private static string NativeMatchingExpression(
+        GroundworkNativeRouteProjectedValue value,
+        int targetIndex,
+        bool varies) =>
+        !varies
+            ? $"@target{targetIndex}"
+            : value.Kind switch
+            {
+                GroundworkNativeRouteProjectedValueKind.String =>
+                    $"CONCAT(@target{targetIndex}, '-', RIGHT(CONCAT('000000', value), 6))",
+                GroundworkNativeRouteProjectedValueKind.Int64 =>
+                    $"CONVERT(bigint, @target{targetIndex}) + value",
+                GroundworkNativeRouteProjectedValueKind.DateTime =>
+                    $"DATEADD(second, CONVERT(int, value), CONVERT(datetimeoffset, @target{targetIndex}))",
+                _ => throw new InvalidOperationException(
+                    $"Projected field '{value.Field}' cannot vary uniquely at acceptance scale.")
+            };
 
     private static async Task<long> CountPhysicalRowsAsync(
         SqlConnection connection,

@@ -31,11 +31,12 @@ public interface IExecutionCommandTransport
     ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> LeaseAsync(string workflowExecutionId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, int maxItems, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Removes an item after successful dispatch + durable commit. Returns <c>false</c> when the item is no longer held
-    /// by <paramref name="ownerId"/> (e.g. its lease expired and another node re-leased it), so a superseded node
-    /// cannot ack away a command the survivor is now responsible for.
+    /// Removes an item after successful dispatch + durable commit. The acknowledgement must carry the exact
+    /// <paramref name="leaseToken"/> returned by <see cref="LeaseAsync"/>. Returns <c>false</c> when the item is no
+    /// longer held by <paramref name="ownerId"/> with that token (e.g. its lease expired and another node re-leased
+    /// it), so a superseded node cannot ack away a command the survivor is now responsible for.
     /// </summary>
-    ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, DateTimeOffset now, CancellationToken cancellationToken = default);
+    ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lists at most <paramref name="maxItems"/> execution IDs that currently have at least one visible item, in

@@ -101,11 +101,13 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
         }
     }
 
-    public ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, DateTimeOffset now, CancellationToken cancellationToken = default)
+    public ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         ArgumentException.ThrowIfNullOrWhiteSpace(transportItemId);
         DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
+        if (leaseToken <= 0)
+            throw new ArgumentOutOfRangeException(nameof(leaseToken), "Lease token must be positive.");
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_state.SyncRoot)
@@ -122,7 +124,9 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
 
             // Only the node that currently holds a live lease may ack. If the lease expired and another node re-leased
             // it, the superseded node's ack is refused so the survivor stays responsible for the command.
-            if (!string.Equals(current.LeasedByOwnerId, ownerId, StringComparison.Ordinal) || current.IsVisible(now))
+            if (!string.Equals(current.LeasedByOwnerId, ownerId, StringComparison.Ordinal) ||
+                current.LeaseToken != leaseToken ||
+                current.IsVisible(now))
                 return new ValueTask<bool>(false);
 
             inbox.RemoveAt(index);

@@ -265,7 +265,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutableReferenceScope requiredScope,
         CancellationToken cancellationToken)
     {
-        var references = await _sourceReferenceStore.ListByArtifactAsync(request.ArtifactId, cancellationToken);
+        var references = await _sourceReferenceStore.ListAllByArtifactAsync(request.ArtifactId, cancellationToken);
         if (references.Count == 0)
         {
             if (request.SourceSelection is null &&

@@ -539,21 +539,22 @@ public sealed class ActivityDraftTestRunTests
                 var secondStatus = await StatusAsync(generation1, second.WorkflowExecutionId);
                 if (firstStatus is null || secondStatus is null || firstStatus.Value.IsTerminal() || secondStatus.Value.IsTerminal())
                 {
-                    var firstStates = await generation1.GetRequiredService<IActivityExecutionStateStore>().ListAsync(first.WorkflowExecutionId);
+                    var firstStates = await generation1.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(first.WorkflowExecutionId);
                     var firstIncidents = await generation1.GetRequiredService<IIncidentStateStore>().ListAsync(first.WorkflowExecutionId);
                     var firstPoison = await generation1.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(first.WorkflowExecutionId);
                     throw new Xunit.Sdk.XunitException(
                         $"Expected suspended runs. First={firstStatus} Second={secondStatus} States={JsonSerializer.Serialize(firstStates)} Incidents={JsonSerializer.Serialize(firstIncidents)} Poison={JsonSerializer.Serialize(firstPoison)}");
                 }
-                var firstBookmarks = await generation1.GetRequiredService<IBookmarkStateStore>().ListAsync(first.WorkflowExecutionId);
+                var firstBookmarks = await generation1.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(first.WorkflowExecutionId);
                 if (firstBookmarks.Count == 0)
                 {
-                    var pending = await generation1.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new(first.WorkflowExecutionId));
+                    var pending = await generation1.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                        .ListAllAsync(new RuntimeSchedulerWorkQuery(first.WorkflowExecutionId));
                     var poison = await generation1.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(first.WorkflowExecutionId);
                     throw new Xunit.Sdk.XunitException($"No bookmark. Pending={JsonSerializer.Serialize(pending)} Poison={JsonSerializer.Serialize(poison)} Dispatch={first.CommandDispatchStatus}/{first.Reason}");
                 }
                 Assert.Single(firstBookmarks);
-                Assert.Single(await generation1.GetRequiredService<IBookmarkStateStore>().ListAsync(second.WorkflowExecutionId));
+                Assert.Single(await generation1.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(second.WorkflowExecutionId));
                 var suspended = await generation1.GetRequiredService<IActivityDraftTestRunService>().GetAsync(first.TestRunId);
                 Assert.Contains(suspended.Status, new[]
                 {
@@ -564,20 +565,20 @@ public sealed class ActivityDraftTestRunTests
                 Assert.False(suspended.Expiration.SourceReferenceExpired);
                 Assert.True(suspended.Expiration.RunStillActive);
 
-                var executions = await generation1.GetRequiredService<IActivityExecutionStateStore>().ListAsync(first.WorkflowExecutionId);
+                var executions = await generation1.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(first.WorkflowExecutionId);
                 Assert.Equal(2, executions.Count);
                 committedExecutionSequences = executions.ToDictionary(
                     state => state.Execution.ActivityExecutionId,
                     state => state.ExecutionSequence,
                     StringComparer.Ordinal);
-                Assert.Single((await generation1.GetRequiredService<IDurableValueStateStore>().ListAsync(first.WorkflowExecutionId))
+                Assert.Single((await generation1.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(first.WorkflowExecutionId))
                     .Where(IsBoundaryInput));
 
                 var artifactId = Assert.IsType<string>(first.ArtifactId);
                 var sourceReferenceId = Assert.IsType<string>(first.SourceReferenceId);
                 var executable = await generation1.GetRequiredService<IWorkflowExecutableStore>().FindAsync(artifactId);
                 Assert.NotNull(executable);
-                templateId = Assert.Single(await generation1.GetRequiredService<IExecutableActivityTemplateStore>().ListAsync()).TemplateId;
+                templateId = Assert.Single(await generation1.GetRequiredService<IExecutableActivityTemplateStore>().ListAllAsync()).TemplateId;
                 Assert.Equal("sha256:test-run-suspending-template", executable!.CompatibilityMetadata["activity.templateHash"]);
 
                 clock.Advance(ActivityDraftTestRunService.DefaultRetention + TimeSpan.FromSeconds(1));
@@ -615,13 +616,13 @@ public sealed class ActivityDraftTestRunTests
                 }
                 Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(generation2, second.WorkflowExecutionId));
 
-                var resumedExecutions = await generation2.GetRequiredService<IActivityExecutionStateStore>().ListAsync(first.WorkflowExecutionId);
+                var resumedExecutions = await generation2.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(first.WorkflowExecutionId);
                 Assert.Equal(committedExecutionSequences.Keys.Order(StringComparer.Ordinal),
                     resumedExecutions.Select(x => x.Execution.ActivityExecutionId).Order(StringComparer.Ordinal));
                 Assert.All(resumedExecutions, state =>
                     Assert.Equal(committedExecutionSequences[state.Execution.ActivityExecutionId], state.ExecutionSequence));
 
-                var durableValues = await generation2.GetRequiredService<IDurableValueStateStore>().ListAsync(first.WorkflowExecutionId);
+                var durableValues = await generation2.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(first.WorkflowExecutionId);
                 Assert.Single(durableValues.Where(IsBoundaryInput));
                 var output = Assert.Single(durableValues.Where(IsBoundaryOutput));
                 Assert.Equal("completed", output.InlineValue?.GetString());

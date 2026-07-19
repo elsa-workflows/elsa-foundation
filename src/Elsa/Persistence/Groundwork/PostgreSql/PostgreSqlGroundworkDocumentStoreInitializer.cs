@@ -26,7 +26,8 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
     bool autoApplyOnStartup,
     IServiceScopeFactory scopeFactory,
     GroundworkStoreSessionSource sessionSource,
-    ILogger<PostgreSqlGroundworkDocumentStoreInitializer> logger) : IHostedService, IShellInitializer
+    ILogger<PostgreSqlGroundworkDocumentStoreInitializer> logger,
+    GroundworkProviderCapabilityAdmission? capabilityAdmission = null) : IHostedService, IShellInitializer
 {
     private readonly SemaphoreSlim initializationLock = new(1, 1);
     private bool initialized;
@@ -81,7 +82,7 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
             if (!sessionSource.IsInitialized)
             {
                 var manifest = source.CreateManifest();
-                sessionSource.TrySetAdmitted((access, ct) =>
+                if (sessionSource.TrySetAdmitted((access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
                     var store = new PostgreSqlPhysicalDocumentStore(
@@ -99,7 +100,10 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
                                     route,
                                     source.PhysicalTarget.Provider))));
                     return ValueTask.FromResult(new GroundworkStoreSessionResources(store, boundedStore));
-                }, TransactionBoundary.CrossUnitAtomic);
+                }, TransactionBoundary.CrossUnitAtomic))
+                {
+                    capabilityAdmission?.TrySet(capabilities);
+                }
             }
 
             initialized = true;

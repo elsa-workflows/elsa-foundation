@@ -37,7 +37,7 @@ public sealed class FlowchartImplicitJoinTests
 
         await fixture.ExecuteAsync(executable);
 
-        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         var reconverged = states.Where(state => state.Execution.ExecutableNodeId == "node-d").ToArray();
         Assert.Single(reconverged);
         Assert.Equal(ActivityExecutionStatus.Completed, reconverged[0].Status);
@@ -71,7 +71,7 @@ public sealed class FlowchartImplicitJoinTests
 
         await fixture.ExecuteAsync(executable);
 
-        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         Assert.DoesNotContain(states, state => state.Execution.ExecutableNodeId == "node-c");
         Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-d"));
         Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.Provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1"))?.Status);
@@ -109,7 +109,7 @@ public sealed class FlowchartImplicitJoinTests
 
         await fixture.ExecuteAsync(executable);
 
-        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-d"));
         Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-e"));
         Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.Provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1"))?.Status);

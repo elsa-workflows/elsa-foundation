@@ -68,6 +68,8 @@ public interface IWorkflowExecutableStore
     /// <summary>Finds an artifact by id, or null.</summary>
     ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default);
 
-    /// <summary>Lists every stored artifact.</summary>
-    ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default);
+    /// <summary>Reads one finite, forward-only page of stored artifacts.</summary>
+    ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(
+        RuntimeStorePageRequest request,
+        CancellationToken cancellationToken = default);
 }

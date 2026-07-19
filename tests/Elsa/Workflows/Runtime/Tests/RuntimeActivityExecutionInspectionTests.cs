@@ -25,12 +25,42 @@ public sealed class RuntimeActivityExecutionInspectionTests
         await store.SaveAsync(Projection("wf-1", "ae-2", "authored-a", sequence: 2));
         await store.SaveAsync(Projection("wf-1", "ae-1", "authored-a", sequence: 1));
 
-        var result = await store.ListSummariesAsync("wf-1");
+        var result = await store.ListAllSummariesAsync("wf-1");
 
         Assert.Collection(
             result,
             projection => Assert.Equal("ae-1", projection.ActivityExecutionId),
             projection => Assert.Equal("ae-2", projection.ActivityExecutionId));
+    }
+
+    [Fact]
+    public async Task InMemoryStore_Pages_Summaries_With_Exact_Count_And_Bound_Continuation()
+    {
+        var store = new InMemoryActivityExecutionInspectionStore();
+        await store.SaveAsync(Projection("wf-1", "ae-2", "authored-a", sequence: 2));
+        await store.SaveAsync(Projection("wf-1", "ae-1", "authored-a", sequence: 1));
+        await store.SaveAsync(Projection("wf-2", "ae-other", "authored-a", sequence: 0));
+
+        var first = await store.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery("wf-1", limit: 1));
+        var second = await store.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery(
+                "wf-1",
+                limit: 1,
+                first.NextContinuationToken));
+
+        Assert.Equal(2, first.TotalCount);
+        Assert.Equal("ae-1", Assert.Single(first.Items).ActivityExecutionId);
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Equal(2, second.TotalCount);
+        Assert.Equal("ae-2", Assert.Single(second.Items).ActivityExecutionId);
+        Assert.Null(second.NextContinuationToken);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            store.ListSummariesPageAsync(
+                new ActivityExecutionInspectionSummaryPageQuery(
+                    "wf-2",
+                    limit: 1,
+                    first.NextContinuationToken)).AsTask());
     }
 
     [Fact]
@@ -54,7 +84,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
             ]
         });
 
-        var summary = Assert.Single(await store.ListSummariesAsync("wf-1"));
+        var summary = Assert.Single(await store.ListAllSummariesAsync("wf-1"));
 
         Assert.Equal("ae-1", summary.ActivityExecutionId);
         Assert.Equal(1, summary.ValueSnapshotCount);

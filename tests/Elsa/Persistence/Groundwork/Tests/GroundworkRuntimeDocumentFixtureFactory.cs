@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
@@ -241,7 +242,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 GroundworkTestAccess.DefaultAccessContextAccessor).FindAsync(Dispatch().DispatchId))?.Status,
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind =>
             (await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer)
-                .ListAsync(new RuntimeSchedulerWorkQuery(Wf)))
+                .ListAllAsync(new RuntimeSchedulerWorkQuery(Wf)))
                 .SingleOrDefault()?.WorkItemId,
         ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind =>
             (await new GroundworkWorkflowSchedulerPoisonStore(store, Serializer)
@@ -250,7 +251,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkDurableTimerStore(store, Serializer).FindAsync(Wf, "timer-1"))?.StimulusHash,
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind =>
             (await new GroundworkWorkflowTriggerBindingStore(store, Serializer)
-                .ListByArtifactAsync("artifact-1"))
+                .ListAllByArtifactAsync("artifact-1"))
                 .SingleOrDefault()?.StimulusType,
         ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind =>
             (await new GroundworkRecurringTriggerScheduleStore(store, Serializer)

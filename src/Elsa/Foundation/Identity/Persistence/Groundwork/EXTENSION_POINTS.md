@@ -27,28 +27,31 @@ select two concrete authorities for the same identity surface.
 ## Persisted document kinds
 
 The feature owns its own `IdentityStorageManifest` (identity `elsa-identity`, owner `elsa.identity`,
-schema `1.0.4`) rather than folding identity kinds into the runtime document manifest. Each document kind
+schema `1.0.6`) rather than folding identity kinds into the runtime document manifest. Each document kind
 is a **wire-safe, stable persistence identifier** and must never be renamed without a schema migration and
 a golden-fixture bump (see [`../../../../../../docs/serialization.md`](../../../../../../docs/serialization.md)).
 
-| Document kind | Backing record | Primary key | Declared index |
-|---|---|---|---|
-| `identityUser` | `UserRecord` | `tenantId:userId` | `by-email` (`emailKey`) |
-| `identityRole` | `RoleRecord` | `tenantId:roleId` | `by-tenant` (`tenantKey`) |
-| `identityExternalIdentity` | `ExternalIdentityRecord` | `tenantId:provider:providerSubject` | `by-user` (`userKey`) |
-| `identityTenantMembership` | `TenantMembershipRecord` | `tenantId:userId` | none; exact primary-ID reads |
-| `identityMutationReceipt` | atomic mutation outcome | deterministic mutation receipt id | oldest-expired (`expiresAt`) |
+| Document kind | Scope | Primary responsibility |
+|---|---|---|
+| `identityUser`, `identityRole`, `identityApplication`, `identityCredential`, `identityClaimMapping` | Scoped | Tenant identity authority and its application/credential/claim-mapping records |
+| `identityProviderConfiguration` | Scoped | Tenant-local provider configuration |
+| `identityGlobalProviderConfiguration` | Global | Deliberately host-wide provider configuration; it is the sole global Identity unit |
+| `identityUserClaim`, `identityRoleClaim`, `identityExternalLogin`, `identityUserRole`, `identityUserToken` | Scoped | User/role relationship records |
+| `identityTenantMembership`, `identityUserNameReservation`, `identityEmailReservation`, `identityRoleNameReservation`, `identityMutationReceipt` | Scoped | Membership, uniqueness reservation, and atomic mutation-receipt records |
 
 Composite ids are escaped and case-normalized so a separator inside a part can never forge a different key
 and lookups stay case-insensitive (matching the in-memory store). The frozen `IdentityGroundworkJson`
 options serialize enums as strings and round-trip the records' `IReadOnlySet<string>` collections via
 `ReadOnlyStringSetJsonConverter` (sorted for deterministic output).
 
-The ASP.NET Core Identity Groundwork provider uses physicalized identity authority documents and exactly
-10 live scale-bearing application routes for normalized user name, normalized email, normalized role name,
-tenant role listing, claims, user-role, role-user, and login-by-user lookups. External-login subject, token, and
-tenant-membership and reservation lookups use deterministic primary IDs; receipt cleanup has one separate bounded
-oldest-expired maintenance route. Unsupported provider topology, missing schema, or a
+The ASP.NET Core Identity Groundwork provider uses physicalized identity authority documents. Its exact declared
+bounded-route identities are `find-user-by-normalized-name`, `find-user-by-normalized-email`,
+`find-role-by-normalized-name`, `list-roles-by-tenant`, `list-user-claims`, `find-users-by-claim`,
+`list-role-claims`, `list-user-roles`, `list-role-users`, `list-user-logins`,
+`list-claim-mappings-by-provider`, and `list-expired-mutation-receipts`. External-login subject, token,
+tenant-membership, reservation, and provider-configuration point lookups use deterministic primary IDs.
+The global configuration unit must be acquired with global access; a global storage unit never grants
+privileged write authority by itself. Unsupported provider topology, missing schema, or a
 missing required bounded route is a readiness failure; runtime code must not silently fall back to whole-document
 scans.
 
@@ -95,6 +98,11 @@ services.AddFoundationAspNetCoreIdentityGroundwork();
 The same generic deployment-schema overload is available for PostgreSQL, SQL Server, and MongoDB. Provider
 registration still contributes only the six provider-level families; the explicit Identity feature contributes
 its own services and manifest. Validate/apply that same Identity deployment schema in the deployment pipeline:
+
+The repository pins the whole Groundwork package family and `Groundwork.Tool` to
+`0.0.1-preview.72`. `validate`, `plan`, and `status` inspect only; `apply --safe` is the only normal command
+that may mutate the target. Retain the emitted plan fingerprint for any protected operation and use the exact
+same public parameterless deployment-source type for runtime composition and every CLI command.
 
 ```bash
 dotnet groundwork validate \

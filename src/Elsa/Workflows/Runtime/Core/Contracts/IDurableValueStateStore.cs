@@ -23,7 +23,9 @@ public interface IDurableValueStateStore
     ValueTask<DurableValueState?> FindAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns all durable value states for the given workflow execution ID.
+    /// Returns one finite, deterministic live-view page of durable value states for the given workflow execution ID.
     /// </summary>
-    ValueTask<IReadOnlyCollection<DurableValueState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
+    ValueTask<RuntimeStorePage<DurableValueState>> ListPageAsync(
+        DurableValueStatePageQuery query,
+        CancellationToken cancellationToken = default);
 }

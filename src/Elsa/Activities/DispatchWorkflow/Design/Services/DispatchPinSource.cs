@@ -46,7 +46,7 @@ public sealed class DispatchPinSource(
         if (context.Request.Scope is not (WorkflowExecutableReferenceScope.Published or WorkflowExecutableReferenceScope.TestRun))
             throw new ArgumentException($"DispatchWorkflow is not supported in executable scope '{context.Request.Scope}'.");
 
-        var references = await sourceReferenceStore.ListAsync(
+        var references = await sourceReferenceStore.ListAllAsync(
             WorkflowExecutableReferenceScope.Published,
             liveOnly: true,
             now: timeProvider.GetUtcNow(),

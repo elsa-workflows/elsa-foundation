@@ -87,7 +87,7 @@ public sealed class DispatchWorkflowWaitCrashTests
             Assert.Equal(
                 2,
                 (await completing.GetRequiredService<IDurableValueStateStore>()
-                    .ListAsync(identity.ChildWorkflowExecutionId)).Count);
+                    .ListAllDurableValueStatesAsync(identity.ChildWorkflowExecutionId)).Count);
             Assert.Equal(
                 item.OutboxItemId,
                 Assert.Single(await completing.GetRequiredService<IRuntimePostCommitOutboxStore>().GetDeliverableAsync(
@@ -178,7 +178,7 @@ public sealed class DispatchWorkflowWaitCrashTests
                 WorkflowDispatchStatus.Completed,
                 (await completingChild.GetRequiredService<IWorkflowDispatchStore>().FindAsync(identity.DispatchId))!.Status);
             var childOutputs = await completingChild.GetRequiredService<IDurableValueStateStore>()
-                .ListAsync(identity.ChildWorkflowExecutionId);
+                .ListAllDurableValueStatesAsync(identity.ChildWorkflowExecutionId);
             Assert.Equal(2, childOutputs.Count);
             Assert.Contains(childOutputs, output => StringComparer.Ordinal.Equals(
                 output.ValueId,
@@ -271,7 +271,7 @@ public sealed class DispatchWorkflowWaitCrashTests
                 (await recovered.GetRequiredService<IWorkflowExecutionStateStore>()
                     .FindAsync(ParentWorkflowExecutionId))!.Status);
             AssertSafeParentResult(await recovered.GetRequiredService<IDurableValueStateStore>()
-                .ListAsync(ParentWorkflowExecutionId));
+                .ListAllDurableValueStatesAsync(ParentWorkflowExecutionId));
         }
     }
 
@@ -461,7 +461,7 @@ public sealed class DispatchWorkflowWaitCrashTests
                 bookmark.WorkflowExecutionId == ParentWorkflowExecutionId &&
                 bookmark.BookmarkId == identity.WaitBookmarkId);
             AssertSafeParentResult(await auditing.GetRequiredService<IDurableValueStateStore>()
-                .ListAsync(ParentWorkflowExecutionId));
+                .ListAllDurableValueStatesAsync(ParentWorkflowExecutionId));
 
             Assert.NotNull(resumeOutboxItemId);
             var resume = Assert.IsType<RuntimePostCommitOutboxItem>(
@@ -637,7 +637,7 @@ public sealed class DispatchWorkflowWaitCrashTests
 
     private static async Task<ActivityExecutionState> FindParentActivityAsync(ServiceProvider provider) =>
         Assert.Single(await provider.GetRequiredService<IActivityExecutionStateStore>()
-            .ListAsync(ParentWorkflowExecutionId));
+            .ListAllAsync(ParentWorkflowExecutionId));
 
     private static async Task<WorkflowDispatchIdentity> FindIdentityAsync(ServiceProvider provider)
     {

@@ -177,7 +177,10 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
                     or WorkflowExecutionCommandDispatchStatus.Duplicate
                     or WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted)
                 {
-                    if (await transport.AckAsync(executionId, item.TransportItemId, placementService.NodeId, _timeProvider.GetUtcNow(), cancellationToken))
+                    if (item.LeaseToken is null)
+                        throw new InvalidOperationException("A leased command transport item must carry a lease token.");
+
+                    if (await transport.AckAsync(executionId, item.TransportItemId, placementService.NodeId, item.LeaseToken.Value, _timeProvider.GetUtcNow(), cancellationToken))
                         acked++;
                 }
             }

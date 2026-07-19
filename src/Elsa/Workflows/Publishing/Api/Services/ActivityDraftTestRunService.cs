@@ -578,7 +578,7 @@ public sealed class ActivityDraftTestRunService(
         string? outerActivityExecutionId = null;
         if (execution is not null)
         {
-            outerActivityExecutionId = (await activityExecutions.ListAsync(receipt.WorkflowExecutionId, cancellationToken))
+            outerActivityExecutionId = (await activityExecutions.ListAllAsync(receipt.WorkflowExecutionId, cancellationToken))
                 .Where(x => x.ParentActivityExecutionId is null)
                 .OrderBy(x => x.ExecutionSequence)
                 .ThenBy(x => x.Execution.ActivityExecutionId, StringComparer.Ordinal)

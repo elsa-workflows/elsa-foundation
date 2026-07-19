@@ -107,7 +107,7 @@ public sealed class WorkflowIntrinsicExecutor(
 
         var workflowState = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException($"{intrinsicKind} intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
-        var runtimeView = await activityExecutionStateStore.ListAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
+        var runtimeView = await activityExecutionStateStore.ListAllAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
         var frameOwner = ResolveVisibleFrame(workflowState, intrinsicState, runtimeView, target.DeclaringScopeId);
         var value = await MaterializeValueAsync(
             valueBinding,
@@ -163,7 +163,7 @@ public sealed class WorkflowIntrinsicExecutor(
 
         var workflowState = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException($"{intrinsicKind} intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
-        var runtimeView = await activityExecutionStateStore.ListAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
+        var runtimeView = await activityExecutionStateStore.ListAllAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
         var materialized = await MaterializeValueAsync(
             binding,
             workflowState,
@@ -471,7 +471,7 @@ public sealed class WorkflowIntrinsicExecutor(
             throw new InvalidOperationException($"{node.IntrinsicKind} intrinsic '{node.ExecutableNodeId}' has no '{inputKey}' binding.");
         var workflowState = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException($"{node.IntrinsicKind} intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
-        var runtimeView = await activityExecutionStateStore.ListAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
+        var runtimeView = await activityExecutionStateStore.ListAllAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
         return await MaterializeValueAsync(binding, workflowState, intrinsicState, executable, runtimeView, cancellationToken);
     }
 
@@ -563,7 +563,7 @@ public sealed class WorkflowIntrinsicExecutor(
         IReadOnlyCollection<ActivityExecutionState> runtimeView,
         CancellationToken cancellationToken)
     {
-        var durableValues = await durableValueStateStore.ListAsync(workflowState.WorkflowExecutionId, cancellationToken);
+        var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowState.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
         var frameEnvelopes = BuildVisibleFrameEnvelopes(workflowState, intrinsicState, runtimeView);
 

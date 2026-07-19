@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
 /// Parent-scoped read coverage for <see cref="InMemoryActivityExecutionStateStore"/> (#514/#413 item 3): the
-/// in-memory default store must return exactly the (workflow, parent) subset of <c>ListAsync</c>, matching the
+/// in-memory default store must return exactly the (workflow, parent) subset of the workflow page, matching the
 /// Groundwork bridge so the Parallel join counts the same branches regardless of the selected provider.
 /// </summary>
 public sealed class InMemoryActivityExecutionStateStoreTests
@@ -23,8 +23,8 @@ public sealed class InMemoryActivityExecutionStateStoreTests
         await _store.SaveAsync(ChildState("wf-1", "ae-orphan", parentActivityExecutionId: null));
         await _store.SaveAsync(ChildState("wf-2", "ae-a3", "parent-a"));
 
-        var byParent = await _store.ListByParentAsync("wf-1", "parent-a");
-        var expected = (await _store.ListAsync("wf-1")).Where(s => s.ParentActivityExecutionId == "parent-a");
+        var byParent = await _store.ListAllByParentAsync("wf-1", "parent-a");
+        var expected = (await _store.ListAllAsync("wf-1")).Where(s => s.ParentActivityExecutionId == "parent-a");
 
         Assert.Equal(
             expected.Select(s => s.Execution.ActivityExecutionId).OrderBy(x => x),
@@ -38,10 +38,41 @@ public sealed class InMemoryActivityExecutionStateStoreTests
         await _store.SaveAsync(ChildState("wf-1", "ae-a1", "parent-a"));
         await _store.SaveAsync(ChildState("wf-2", "ae-a2", "parent-a")); // same parent id, different workflow
 
-        var byParent = await _store.ListByParentAsync("wf-1", "parent-a");
+        var byParent = await _store.ListAllByParentAsync("wf-1", "parent-a");
 
         Assert.Equal(new[] { "ae-a1" }, byParent.Select(s => s.Execution.ActivityExecutionId));
-        Assert.Empty(await _store.ListByParentAsync("wf-1", "parent-missing"));
+        Assert.Empty(await _store.ListAllByParentAsync("wf-1", "parent-missing"));
+    }
+
+    [Fact]
+    public async Task Pages_are_finite_ordered_and_scope_bound()
+    {
+        await _store.SaveAsync(ChildState("wf-1", "ae-c", "parent-a"));
+        await _store.SaveAsync(ChildState("wf-1", "ae-a", "parent-a"));
+        await _store.SaveAsync(ChildState("wf-1", "ae-b", "parent-a"));
+
+        var first = await _store.ListPageAsync(new ActivityExecutionStatePageQuery("wf-1", limit: 2));
+        var second = await _store.ListPageAsync(
+            new ActivityExecutionStatePageQuery("wf-1", limit: 2, continuationToken: first.NextContinuationToken));
+
+        Assert.Equal(["ae-a", "ae-b"], first.Items.Select(x => x.Execution.ActivityExecutionId));
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Equal(["ae-c"], second.Items.Select(x => x.Execution.ActivityExecutionId));
+        Assert.Null(second.NextContinuationToken);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _store.ListPageAsync(
+                new ActivityExecutionStatePageQuery("wf-2", continuationToken: first.NextContinuationToken)).AsTask());
+    }
+
+    [Fact]
+    public async Task Count_is_scoped_to_one_workflow_execution()
+    {
+        await _store.SaveAsync(ChildState("wf-1", "ae-1", "parent-a"));
+        await _store.SaveAsync(ChildState("wf-1", "ae-2", "parent-b"));
+        await _store.SaveAsync(ChildState("wf-2", "ae-3", "parent-a"));
+
+        Assert.Equal(2, await _store.CountAsync("wf-1"));
+        Assert.Equal(1, await _store.CountAsync("wf-2"));
     }
 
     private static ActivityExecutionState ChildState(string workflowExecutionId, string activityExecutionId, string? parentActivityExecutionId) => new(

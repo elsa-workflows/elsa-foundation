@@ -33,7 +33,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         await queue.EnqueueAsync(NewWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.True(result.StoppedOnFault);
         var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
@@ -53,7 +53,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         await queue.EnqueueAsync(NewWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.True(result.StoppedOnFault);
         var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
@@ -72,7 +72,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         await queue.EnqueueAsync(NewWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.True(result.StoppedOnFault);
         var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
@@ -132,7 +132,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             Assert.True(result.StoppedOnFault);
             Assert.Equal(1, result.DrainedCount); // exactly one item processed per drain — no in-drain hot-loop
 
-            var afterDrain = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+            var afterDrain = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
             Assert.Single(afterDrain); // RetryNow re-enqueued exactly one copy; the ack-deleted original did not linger
             Assert.Equal("work-1", afterDrain.Single().WorkItemId);
         }
@@ -161,7 +161,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
 
         Assert.True(noopResult.StoppedOnFault);
         Assert.Equal(1, noopHandler.InvocationCount);
-        Assert.Empty(await noopQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))); // ack-on-fault removed the item; NoopRetry did not re-enqueue
+        Assert.Empty(await noopQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))); // ack-on-fault removed the item; NoopRetry did not re-enqueue
     }
 
     private WorkflowSchedulerDrainer NewDrainer(

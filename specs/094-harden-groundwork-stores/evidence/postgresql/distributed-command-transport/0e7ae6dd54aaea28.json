@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "distributed-command-send-sequence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "fa37b55e1cb88c4e51eb93351249b5626bc5420705f86cee45c79e3170c4ab59",
+  "executionPath": "provider-driver/postgresql/distributed-command-transport/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
+  "outcome": "pass",
+  "evidence": "evidence/postgresql/distributed-command-transport/0e7ae6dd54aaea28.json"
+}

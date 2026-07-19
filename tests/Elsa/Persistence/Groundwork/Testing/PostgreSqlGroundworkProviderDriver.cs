@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.PostgreSql;
@@ -24,6 +25,7 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
     private const string ProviderIdentity = "groundwork-postgresql";
     private const string IdentityIndex = "ux_groundwork_documents_identity_lookup";
     private const string PlanProbeId = "provider-plan-probe";
+    private const int NativeRouteDatasetCommandTimeoutSeconds = 180;
     private static readonly GroundworkCompositionFingerprint FixtureComposition =
         GroundworkCompositionFingerprint.Create("elsa-runtime-provider-fixture:v1");
     private static readonly string PackageVersion =
@@ -292,7 +294,7 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
     {
         await using var connection = new NpgsqlConnection(RequireConnectionString());
         await connection.OpenAsync(cancellationToken);
-        foreach (var group in requests.GroupBy(request => request.PhysicalName, StringComparer.Ordinal))
+        foreach (var group in requests.GroupBy(request => (request.PhysicalName, request.DocumentKind)))
             await EnsureNativeRouteDatasetAsync(connection, group.ToArray(), cancellationToken);
     }
 
@@ -305,14 +307,20 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
         await using var connection = new NpgsqlConnection(RequireConnectionString());
         await connection.OpenAsync(cancellationToken);
         var expectedIndex = await ResolveNativeRouteIndexAsync(connection, request, cancellationToken);
+        var lookupIndexes = await ListNativeRouteIndexesAsync(
+            connection,
+            request.PhysicalName,
+            cancellationToken);
         var commands = explanation.Commands.Select((command, ordinal) =>
         {
+            var indexes = ExtractNativePlanIndexes(command.NativePlan);
             if (!string.Equals(command.NativePlanFormat, "postgresql-json", StringComparison.Ordinal) ||
                 command.NativePlan.Contains("Seq Scan", StringComparison.Ordinal) ||
-                !command.NativePlan.Contains(expectedIndex, StringComparison.Ordinal))
+                !indexes.Intersect(lookupIndexes, StringComparer.Ordinal).Any())
             {
                 throw new InvalidOperationException(
-                    $"PostgreSQL route '{request.QueryIdentity}' command '{command.Identity}' was not scan-free through '{expectedIndex}'.");
+                    $"PostgreSQL route '{request.QueryIdentity}' command '{command.Identity}' was not scan-free " +
+                    $"through '{expectedIndex}': {command.NativePlan}");
             }
             var classification = command.NativePlan.Contains("Index Only Scan", StringComparison.Ordinal)
                 ? "index-only-scan"
@@ -325,15 +333,19 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
                 ordinal,
                 command,
                 classification,
-                [expectedIndex]);
+                indexes);
         }).ToArray();
+        var selectedIndex = GroundworkNativeRoutePlanResult.SelectCompiledIndex(
+            request,
+            lookupIndexes,
+            commands);
         var cardinality = await CountPhysicalRowsAsync(connection, request.PhysicalName, cancellationToken);
         return GroundworkNativeRoutePlanResult.Create(
             request,
             ProviderKey,
             cardinality,
             "indexed",
-            expectedIndex,
+            selectedIndex,
             request.Limit,
             materializedCandidateCount,
             commands);
@@ -555,17 +567,25 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
     {
         var dataset = GroundworkNativeRouteDataset.Create(requests);
         var projectedColumns = string.Join(", ", dataset.ProjectedValues.Keys.Select(QuoteIdentifier));
-        var projectedValues = string.Join(", ", dataset.ProjectedValues.Keys.Select((_, index) =>
-            $"CASE WHEN value IN (0, 1) THEN @target{index} ELSE 'noise-' || lpad(value::text, 6, '0') END"));
+        var projectedValues = string.Join(", ", dataset.ProjectedValues.Values.Select((value, index) =>
+        {
+            var varies = dataset.VaryingProjectedFields.Contains(value.Field, StringComparer.Ordinal);
+            var isPredicate = dataset.PredicateFields.Contains(value.Field);
+            return
+            $"CASE WHEN value <= @matchingCardinality THEN " +
+            $"{NativeMatchingExpression(value, index, varies && dataset.MatchingCardinality > 1)} " +
+            $"ELSE {(varies || !isPredicate ? NativeNoiseExpression(value.Kind, index) : $"@noise{index}")} END";
+        }));
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await using (var command = connection.CreateCommand())
         {
             command.Transaction = transaction;
-            command.CommandText = $"""
-                DELETE FROM {QuoteIdentifier(dataset.PhysicalName)};
-                INSERT INTO {QuoteIdentifier(dataset.PhysicalName)}
+            command.CommandTimeout = NativeRouteDatasetCommandTimeoutSeconds;
+            var primaryName = dataset.PrimaryPhysicalName ?? dataset.PhysicalName;
+            var primaryInsert = $"""
+                INSERT INTO {QuoteIdentifier(primaryName)}
                     (document_kind, storage_scope, id, id_comparison_key, id_lookup_key,
-                     schema_version, version, document, created_utc, updated_utc, {projectedColumns})
+                     schema_version, version, {QuoteIdentifier(dataset.ContentColumn)}, created_utc, updated_utc)
                 SELECT @kind,
                        CASE WHEN value = 1 THEN @crossScope ELSE @scope END,
                        CASE WHEN value = 0 THEN @candidateId ELSE 'native-' || lpad(value::text, 6, '0') END,
@@ -575,10 +595,46 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
                        1,
                        CASE WHEN value = 0 THEN @candidateContent ELSE @emptyContent END,
                        TIMESTAMPTZ '2000-01-01T00:00:00Z',
-                       TIMESTAMPTZ '2000-01-01T00:00:00Z',
+                       TIMESTAMPTZ '2000-01-01T00:00:00Z'
+                FROM generate_series(0, @cardinality - 1) AS sequence(value);
+                """;
+            var lookupInsert = $"""
+                INSERT INTO {QuoteIdentifier(dataset.PhysicalName)}
+                    (document_kind, storage_scope, document_id, document_id_comparison_key,
+                     document_id_lookup_key, {projectedColumns})
+                SELECT @kind,
+                       CASE WHEN value = 1 THEN @crossScope ELSE @scope END,
+                       CASE WHEN value = 0 THEN @candidateId ELSE 'native-' || lpad(value::text, 6, '0') END,
+                       CASE WHEN value = 0 THEN @candidateComparison ELSE 'noise-comparison-' || lpad(value::text, 6, '0') END,
+                       CASE WHEN value = 0 THEN @candidateLookup ELSE 'noise-lookup-' || lpad(value::text, 6, '0') END,
                        {projectedValues}
                 FROM generate_series(0, @cardinality - 1) AS sequence(value);
                 """;
+            command.CommandText = dataset.PrimaryPhysicalName is null
+                ? $"""
+                    DELETE FROM {QuoteIdentifier(dataset.PhysicalName)};
+                    INSERT INTO {QuoteIdentifier(dataset.PhysicalName)}
+                        (document_kind, storage_scope, id, id_comparison_key, id_lookup_key,
+                         schema_version, version, {QuoteIdentifier(dataset.ContentColumn)}, created_utc, updated_utc, {projectedColumns})
+                    SELECT @kind,
+                           CASE WHEN value = 1 THEN @crossScope ELSE @scope END,
+                           CASE WHEN value = 0 THEN @candidateId ELSE 'native-' || lpad(value::text, 6, '0') END,
+                           CASE WHEN value = 0 THEN @candidateComparison ELSE 'noise-comparison-' || lpad(value::text, 6, '0') END,
+                           CASE WHEN value = 0 THEN @candidateLookup ELSE 'noise-lookup-' || lpad(value::text, 6, '0') END,
+                           @schemaVersion,
+                           1,
+                           CASE WHEN value = 0 THEN @candidateContent ELSE @emptyContent END,
+                           TIMESTAMPTZ '2000-01-01T00:00:00Z',
+                           TIMESTAMPTZ '2000-01-01T00:00:00Z',
+                           {projectedValues}
+                    FROM generate_series(0, @cardinality - 1) AS sequence(value);
+                    """
+                : $"""
+                    DELETE FROM {QuoteIdentifier(dataset.PhysicalName)};
+                    DELETE FROM {QuoteIdentifier(primaryName)} WHERE document_kind = @kind;
+                    {primaryInsert}
+                    {lookupInsert}
+                    """;
             command.Parameters.AddWithValue("kind", dataset.DocumentKind);
             command.Parameters.AddWithValue("scope", dataset.StorageScope);
             command.Parameters.AddWithValue("crossScope", dataset.CrossScope);
@@ -589,14 +645,23 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
             command.Parameters.AddWithValue("candidateContent", dataset.CandidateContentJson);
             command.Parameters.AddWithValue("emptyContent", "{}");
             command.Parameters.AddWithValue("cardinality", dataset.AcceptanceCardinality);
+            command.Parameters.AddWithValue("matchingCardinality", dataset.MatchingCardinality);
             var index = 0;
             foreach (var value in dataset.ProjectedValues.Values)
-                command.Parameters.AddWithValue($"target{index++}", value);
+            {
+                command.Parameters.AddWithValue($"target{index}", PostgreSqlProviderValue(value, noise: false));
+                command.Parameters.AddWithValue($"noise{index}", PostgreSqlProviderValue(value, noise: true));
+                index++;
+            }
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         await transaction.CommitAsync(cancellationToken);
         await using var analyze = connection.CreateCommand();
-        analyze.CommandText = $"ANALYZE {QuoteIdentifier(dataset.PhysicalName)};";
+        analyze.CommandTimeout = NativeRouteDatasetCommandTimeoutSeconds;
+        analyze.CommandText = dataset.PrimaryPhysicalName is null
+            ? $"ANALYZE {QuoteIdentifier(dataset.PhysicalName)};"
+            : $"ANALYZE {QuoteIdentifier(dataset.PhysicalName)}; " +
+              $"ANALYZE {QuoteIdentifier(dataset.PrimaryPhysicalName)};";
         await analyze.ExecuteNonQueryAsync(cancellationToken);
 
         var cardinality = await CountPhysicalRowsAsync(connection, dataset.PhysicalName, cancellationToken);
@@ -620,16 +685,117 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
             """;
         command.Parameters.AddWithValue("table", request.PhysicalName);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var available = new List<string>();
         while (await reader.ReadAsync(cancellationToken))
         {
+            if (string.Equals(reader.GetString(0), request.ExpectedIndexName, StringComparison.Ordinal))
+                return reader.GetString(0);
             var definition = reader.GetString(1)
                 .Replace("\"", string.Empty, StringComparison.Ordinal)
-                .Replace(" ", string.Empty, StringComparison.Ordinal);
-            if (definition.Contains($"(storage_scope,{request.RouteField})", StringComparison.Ordinal))
+                .Replace(" ", string.Empty, StringComparison.Ordinal)
+                .Replace("NULLSFIRST", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace("NULLSLAST", string.Empty, StringComparison.OrdinalIgnoreCase);
+            available.Add($"{reader.GetString(0)}={definition}");
+            var expectedPrefix = $"(storage_scope,{string.Join(",", request.IndexFields)}";
+            if (definition.Contains(expectedPrefix, StringComparison.OrdinalIgnoreCase))
                 return reader.GetString(0);
         }
         throw new InvalidOperationException(
-            $"PostgreSQL route '{request.QueryIdentity}' has no physical index on storage_scope and {request.RouteField}.");
+            $"PostgreSQL route '{request.QueryIdentity}' has no physical index prefix " +
+            $"({string.Join(", ", new[] { "storage_scope" }.Concat(request.IndexFields))}). " +
+            $"Available indexes: {string.Join("; ", available)}.");
+    }
+
+    private static async Task<IReadOnlyList<string>> ListNativeRouteIndexesAsync(
+        NpgsqlConnection connection,
+        string physicalName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT indexname
+            FROM pg_indexes
+            WHERE schemaname = current_schema()
+              AND tablename = @table
+            ORDER BY indexname;
+            """;
+        command.Parameters.AddWithValue("table", physicalName);
+        var indexes = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            indexes.Add(reader.GetString(0));
+        return indexes;
+    }
+
+    private static IReadOnlyList<string> ExtractNativePlanIndexes(string nativePlan)
+    {
+        using var document = JsonDocument.Parse(nativePlan);
+        var indexes = new HashSet<string>(StringComparer.Ordinal);
+        CollectNativePlanIndexes(document.RootElement, indexes);
+        return indexes.Order(StringComparer.Ordinal).ToArray();
+    }
+
+    private static void CollectNativePlanIndexes(JsonElement element, ISet<string> indexes)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.NameEquals("Index Name") &&
+                    property.Value.ValueKind == JsonValueKind.String)
+                    indexes.Add(property.Value.GetString()!);
+                else
+                    CollectNativePlanIndexes(property.Value, indexes);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+                CollectNativePlanIndexes(item, indexes);
+        }
+    }
+
+    private static string NativeNoiseExpression(
+        GroundworkNativeRouteProjectedValueKind kind,
+        int targetIndex) =>
+        kind switch
+        {
+            GroundworkNativeRouteProjectedValueKind.String =>
+                "'noise-' || lpad(value::text, 6, '0')",
+            GroundworkNativeRouteProjectedValueKind.Boolean =>
+                $"NOT @target{targetIndex}",
+            GroundworkNativeRouteProjectedValueKind.Int64 =>
+                $"@target{targetIndex} + value + 1",
+            GroundworkNativeRouteProjectedValueKind.DateTime =>
+                $"@target{targetIndex} + value + 1",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown native-route projected value kind.")
+        };
+
+    private static string NativeMatchingExpression(
+        GroundworkNativeRouteProjectedValue value,
+        int targetIndex,
+        bool varies) =>
+        !varies
+            ? $"@target{targetIndex}"
+            : value.Kind switch
+            {
+                GroundworkNativeRouteProjectedValueKind.String =>
+                    $"@target{targetIndex} || '-' || lpad(value::text, 6, '0')",
+                GroundworkNativeRouteProjectedValueKind.Int64 or
+                    GroundworkNativeRouteProjectedValueKind.DateTime =>
+                    $"@target{targetIndex} + value",
+                _ => throw new InvalidOperationException(
+                    $"Projected field '{value.Field}' cannot vary uniquely at acceptance scale.")
+            };
+
+    private static object PostgreSqlProviderValue(
+        GroundworkNativeRouteProjectedValue value,
+        bool noise)
+    {
+        var providerValue = noise ? value.ToProviderNoiseValue() : value.ToProviderValue();
+        return value.Kind == GroundworkNativeRouteProjectedValueKind.DateTime
+            ? ((DateTimeOffset)providerValue).UtcDateTime.Ticks
+            : providerValue;
     }
 
     private static async Task<long> CountPhysicalRowsAsync(

@@ -6,8 +6,9 @@ public interface IExecutableActivityTemplateReader
 {
     ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default);
     ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyCollection<ExecutableActivityTemplate>> ListAsync(CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult<IReadOnlyCollection<ExecutableActivityTemplate>>([]);
+    ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(
+        RuntimeStorePageRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IExecutableActivityTemplateWriter
@@ -43,14 +44,14 @@ public interface IActivityExecutionHierarchyCursorCodec
 public interface IWorkflowExecutableSourceReferenceReader
 {
     ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(
-        WorkflowExecutableReferenceScope? scope = null,
-        bool liveOnly = false,
-        DateTimeOffset? now = null,
+    ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(
+        WorkflowExecutableSourceReferenceArtifactPageQuery query,
+        CancellationToken cancellationToken = default);
+    ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
+        WorkflowExecutableSourceReferencePageQuery query,
         CancellationToken cancellationToken = default);
     ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
-        IEnumerable<string> artifactIds,
+        WorkflowExecutableArtifactCandidateBatch candidates,
         DateTimeOffset now,
         CancellationToken cancellationToken = default);
 }
@@ -61,5 +62,8 @@ public interface IWorkflowExecutableSourceReferenceWriter
     ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default);
     ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(false);
-    ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(DateTimeOffset now, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(
+        WorkflowExecutableSourceReferenceCleanupBatch batch,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default);
 }

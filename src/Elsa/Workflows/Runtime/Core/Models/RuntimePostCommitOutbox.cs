@@ -10,6 +10,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public static class RuntimePostCommitOutboxIdentity
 {
     public const int MaximumLength = 450;
+    public const int MaximumProjectionLength = 256;
     private const string ProjectionDigestPrefix = "outbox:projection:sha256:v1:";
 
     /// <summary>Preserves the durable logical identity format used by existing replay markers and providers.</summary>
@@ -24,7 +25,7 @@ public static class RuntimePostCommitOutboxIdentity
     public static string CreateProjectionValue(string outboxItemId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
-        return outboxItemId.Length <= MaximumLength
+        return outboxItemId.Length <= MaximumProjectionLength
             ? outboxItemId
             : $"{ProjectionDigestPrefix}{RuntimeIdentityDigest.Compute("elsa.outbox.projection", "v1", outboxItemId)}";
     }

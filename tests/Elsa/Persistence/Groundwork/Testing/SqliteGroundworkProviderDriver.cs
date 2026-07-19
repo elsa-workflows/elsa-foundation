@@ -275,7 +275,7 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
     {
         await using var connection = new SqliteConnection(RequireConnectionString().ConnectionString);
         await connection.OpenAsync(cancellationToken);
-        foreach (var group in requests.GroupBy(request => request.PhysicalName, StringComparer.Ordinal))
+        foreach (var group in requests.GroupBy(request => (request.PhysicalName, request.DocumentKind)))
             await EnsureNativeRouteDatasetAsync(connection, group.ToArray(), cancellationToken);
     }
 
@@ -288,29 +288,36 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
         await using var connection = new SqliteConnection(RequireConnectionString().ConnectionString);
         await connection.OpenAsync(cancellationToken);
         var expectedIndex = await ResolveNativeRouteIndexAsync(connection, request, cancellationToken);
+        var lookupIndexes = await ListNativeRouteIndexesAsync(connection, request.PhysicalName, cancellationToken);
         var commands = explanation.Commands.Select((command, ordinal) =>
         {
+            var indexes = ExtractNativePlanIndexes(command.NativePlan);
             if (!string.Equals(command.NativePlanFormat, "sqlite-query-plan", StringComparison.Ordinal) ||
-                command.NativePlan.Contains("SCAN", StringComparison.OrdinalIgnoreCase) ||
+                HasFallbackCollectionScan(command.NativePlan) ||
                 !command.NativePlan.Contains("SEARCH", StringComparison.OrdinalIgnoreCase) ||
-                !command.NativePlan.Contains(expectedIndex, StringComparison.Ordinal))
+                !indexes.Intersect(lookupIndexes, StringComparer.Ordinal).Any())
             {
                 throw new InvalidOperationException(
-                    $"SQLite route '{request.QueryIdentity}' command '{command.Identity}' was not a scan-free search through '{expectedIndex}'.");
+                    $"SQLite route '{request.QueryIdentity}' command '{command.Identity}' was not a scan-free search " +
+                    $"through '{expectedIndex}': {command.NativePlan}");
             }
             return GroundworkNativeRouteCommandEvidence.Create(
                 ordinal,
                 command,
                 "index-search",
-                [expectedIndex]);
+                indexes);
         }).ToArray();
+        var selectedIndex = GroundworkNativeRoutePlanResult.SelectCompiledIndex(
+            request,
+            lookupIndexes,
+            commands);
         var cardinality = await CountPhysicalRowsAsync(connection, request.PhysicalName, cancellationToken);
         return GroundworkNativeRoutePlanResult.Create(
             request,
             ProviderKey,
             cardinality,
             "index-search",
-            expectedIndex,
+            selectedIndex,
             request.Limit,
             materializedCandidateCount,
             commands);
@@ -467,22 +474,32 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
     {
         var dataset = GroundworkNativeRouteDataset.Create(requests);
         var projectedColumns = string.Join(", ", dataset.ProjectedValues.Keys.Select(QuoteIdentifier));
-        var projectedValues = string.Join(", ", dataset.ProjectedValues.Keys.Select((_, index) =>
-            $"CASE WHEN value IN (0, 1) THEN @target{index} ELSE printf('noise-%06d', value) END"));
+        var projectedValues = string.Join(", ", dataset.ProjectedValues.Values.Select((value, index) =>
+        {
+            var varies = dataset.VaryingProjectedFields.Contains(value.Field, StringComparer.Ordinal);
+            var isPredicate = dataset.PredicateFields.Contains(value.Field);
+            return
+            $"CASE WHEN value <= @matchingCardinality THEN " +
+            $"{NativeMatchingExpression(value, index, varies && dataset.MatchingCardinality > 1)} " +
+            $"ELSE {(varies || !isPredicate ? NativeNoiseExpression(value.Kind, index) : $"@noise{index}")} END";
+        }));
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await using (var command = connection.CreateCommand())
         {
             command.Transaction = (SqliteTransaction)transaction;
-            command.CommandText = $"""
-                DELETE FROM {QuoteIdentifier(dataset.PhysicalName)};
+            var sequence = """
                 WITH digits(value) AS (VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)),
                 sequence(value) AS (
                     SELECT d0.value + 10*d1.value + 100*d2.value + 1000*d3.value + 10000*d4.value
                     FROM digits d0 CROSS JOIN digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4
                 )
-                INSERT INTO {QuoteIdentifier(dataset.PhysicalName)}
+                """;
+            var primaryName = dataset.PrimaryPhysicalName ?? dataset.PhysicalName;
+            var primaryInsert = $"""
+                {sequence}
+                INSERT INTO {QuoteIdentifier(primaryName)}
                     (document_kind, storage_scope, id, id_comparison_key, id_lookup_key,
-                     schema_version, version, document, created_utc, updated_utc, {projectedColumns})
+                     schema_version, version, {QuoteIdentifier(dataset.ContentColumn)}, created_utc, updated_utc)
                 SELECT @kind,
                        CASE WHEN value = 1 THEN @crossScope ELSE @scope END,
                        CASE WHEN value = 0 THEN @candidateId ELSE printf('native-%06d', value) END,
@@ -492,11 +509,51 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
                        1,
                        CASE WHEN value = 0 THEN @candidateContent ELSE @emptyContent END,
                        '2000-01-01T00:00:00.0000000+00:00',
-                       '2000-01-01T00:00:00.0000000+00:00',
+                       '2000-01-01T00:00:00.0000000+00:00'
+                FROM sequence
+                WHERE value < @cardinality;
+                """;
+            var lookupInsert = $"""
+                {sequence}
+                INSERT INTO {QuoteIdentifier(dataset.PhysicalName)}
+                    (document_kind, storage_scope, document_id, document_id_comparison_key,
+                     document_id_lookup_key, {projectedColumns})
+                SELECT @kind,
+                       CASE WHEN value = 1 THEN @crossScope ELSE @scope END,
+                       CASE WHEN value = 0 THEN @candidateId ELSE printf('native-%06d', value) END,
+                       CASE WHEN value = 0 THEN @candidateComparison ELSE printf('noise-comparison-%06d', value) END,
+                       CASE WHEN value = 0 THEN @candidateLookup ELSE printf('noise-lookup-%06d', value) END,
                        {projectedValues}
                 FROM sequence
                 WHERE value < @cardinality;
                 """;
+            command.CommandText = dataset.PrimaryPhysicalName is null
+                ? $"""
+                    DELETE FROM {QuoteIdentifier(dataset.PhysicalName)};
+                    {sequence}
+                    INSERT INTO {QuoteIdentifier(dataset.PhysicalName)}
+                        (document_kind, storage_scope, id, id_comparison_key, id_lookup_key,
+                         schema_version, version, {QuoteIdentifier(dataset.ContentColumn)}, created_utc, updated_utc, {projectedColumns})
+                    SELECT @kind,
+                           CASE WHEN value = 1 THEN @crossScope ELSE @scope END,
+                           CASE WHEN value = 0 THEN @candidateId ELSE printf('native-%06d', value) END,
+                           CASE WHEN value = 0 THEN @candidateComparison ELSE printf('noise-comparison-%06d', value) END,
+                           CASE WHEN value = 0 THEN @candidateLookup ELSE printf('noise-lookup-%06d', value) END,
+                           @schemaVersion,
+                           1,
+                           CASE WHEN value = 0 THEN @candidateContent ELSE @emptyContent END,
+                           '2000-01-01T00:00:00.0000000+00:00',
+                           '2000-01-01T00:00:00.0000000+00:00',
+                           {projectedValues}
+                    FROM sequence
+                    WHERE value < @cardinality;
+                    """
+                : $"""
+                    DELETE FROM {QuoteIdentifier(dataset.PhysicalName)};
+                    DELETE FROM {QuoteIdentifier(primaryName)} WHERE document_kind = @kind;
+                    {primaryInsert}
+                    {lookupInsert}
+                    """;
             command.Parameters.AddWithValue("@kind", dataset.DocumentKind);
             command.Parameters.AddWithValue("@scope", dataset.StorageScope);
             command.Parameters.AddWithValue("@crossScope", dataset.CrossScope);
@@ -507,14 +564,22 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
             command.Parameters.AddWithValue("@candidateContent", dataset.CandidateContentJson);
             command.Parameters.AddWithValue("@emptyContent", "{}");
             command.Parameters.AddWithValue("@cardinality", dataset.AcceptanceCardinality);
+            command.Parameters.AddWithValue("@matchingCardinality", dataset.MatchingCardinality);
             var index = 0;
             foreach (var value in dataset.ProjectedValues.Values)
-                command.Parameters.AddWithValue($"@target{index++}", value);
+            {
+                command.Parameters.AddWithValue($"@target{index}", SqliteProviderValue(value, noise: false));
+                command.Parameters.AddWithValue($"@noise{index}", SqliteProviderValue(value, noise: true));
+                index++;
+            }
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         await transaction.CommitAsync(cancellationToken);
         await using var analyze = connection.CreateCommand();
-        analyze.CommandText = $"ANALYZE {QuoteIdentifier(dataset.PhysicalName)};";
+        analyze.CommandText = dataset.PrimaryPhysicalName is null
+            ? $"ANALYZE {QuoteIdentifier(dataset.PhysicalName)};"
+            : $"ANALYZE {QuoteIdentifier(dataset.PhysicalName)}; " +
+              $"ANALYZE {QuoteIdentifier(dataset.PrimaryPhysicalName)};";
         await analyze.ExecuteNonQueryAsync(cancellationToken);
 
         var cardinality = await CountPhysicalRowsAsync(connection, dataset.PhysicalName, cancellationToken);
@@ -528,28 +593,106 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
         GroundworkNativeRoutePlanRequest request,
         CancellationToken cancellationToken)
     {
-        var indexes = new List<string>();
-        await using (var command = connection.CreateCommand())
-        {
-            command.CommandText = $"SELECT name FROM pragma_index_list({QuoteLiteral(request.PhysicalName)}) ORDER BY name;";
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-                indexes.Add(reader.GetString(0));
-        }
+        var indexes = await ListNativeRouteIndexesAsync(
+            connection,
+            request.PhysicalName,
+            cancellationToken);
 
         foreach (var index in indexes)
         {
+            if (string.Equals(index, request.ExpectedIndexName, StringComparison.Ordinal))
+                return index;
             var columns = (await DescribeIndexColumnsAsync(connection, index, cancellationToken))
                 .Split(',', StringSplitOptions.RemoveEmptyEntries);
-            if (columns.Length >= 2 &&
-                string.Equals(columns[0], "storage_scope", StringComparison.Ordinal) &&
-                string.Equals(columns[1], request.RouteField, StringComparison.Ordinal))
+            var expected = new[] { "storage_scope" }.Concat(request.IndexFields).ToArray();
+            if (columns.Take(expected.Length).SequenceEqual(expected, StringComparer.Ordinal))
                 return index;
         }
 
         throw new InvalidOperationException(
-            $"SQLite route '{request.QueryIdentity}' has no physical index on storage_scope and {request.RouteField}.");
+            $"SQLite route '{request.QueryIdentity}' has no physical index prefix ({string.Join(", ", new[] { "storage_scope" }.Concat(request.IndexFields))}).");
     }
+
+    private static async Task<IReadOnlyList<string>> ListNativeRouteIndexesAsync(
+        SqliteConnection connection,
+        string physicalName,
+        CancellationToken cancellationToken)
+    {
+        var indexes = new List<string>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT name FROM pragma_index_list({QuoteLiteral(physicalName)}) ORDER BY name;";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            indexes.Add(reader.GetString(0));
+        return indexes;
+    }
+
+    private static string NativeNoiseExpression(
+        GroundworkNativeRouteProjectedValueKind kind,
+        int targetIndex) =>
+        kind switch
+        {
+            GroundworkNativeRouteProjectedValueKind.String => "printf('noise-%06d', value)",
+            GroundworkNativeRouteProjectedValueKind.Boolean =>
+                $"CASE WHEN @target{targetIndex} THEN 0 ELSE 1 END",
+            GroundworkNativeRouteProjectedValueKind.Int64 =>
+                $"CAST(@target{targetIndex} AS INTEGER) + value + 1",
+            GroundworkNativeRouteProjectedValueKind.DateTime =>
+                $"CAST(@target{targetIndex} AS INTEGER) + value + 1",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown native-route projected value kind.")
+        };
+
+    private static string NativeMatchingExpression(
+        GroundworkNativeRouteProjectedValue value,
+        int targetIndex,
+        bool varies) =>
+        !varies
+            ? $"@target{targetIndex}"
+            : value.Kind switch
+            {
+                GroundworkNativeRouteProjectedValueKind.String =>
+                    $"@target{targetIndex} || '-' || printf('%06d', value)",
+                GroundworkNativeRouteProjectedValueKind.Int64 or
+                    GroundworkNativeRouteProjectedValueKind.DateTime =>
+                    $"CAST(@target{targetIndex} AS INTEGER) + value",
+                _ => throw new InvalidOperationException(
+                    $"Projected field '{value.Field}' cannot vary uniquely at acceptance scale.")
+            };
+
+    private static object SqliteProviderValue(
+        GroundworkNativeRouteProjectedValue value,
+        bool noise)
+    {
+        var providerValue = noise ? value.ToProviderNoiseValue() : value.ToProviderValue();
+        return value.Kind == GroundworkNativeRouteProjectedValueKind.DateTime
+            ? ((DateTimeOffset)providerValue).UtcDateTime.Ticks
+            : providerValue;
+    }
+
+    private static IReadOnlyList<string> ExtractNativePlanIndexes(string nativePlan) =>
+        nativePlan
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line =>
+            {
+                const string marker = "INDEX ";
+                var start = line.IndexOf(marker, StringComparison.Ordinal);
+                return start < 0
+                    ? null
+                    : line[(start + marker.Length)..]
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+            })
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    private static bool HasFallbackCollectionScan(string nativePlan) =>
+        nativePlan
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => line.Contains("SCAN", StringComparison.OrdinalIgnoreCase))
+            .Any(line =>
+                line.StartsWith("SCAN p", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("SCAN l", StringComparison.OrdinalIgnoreCase));
 
     private static async Task<long> CountPhysicalRowsAsync(
         SqliteConnection connection,

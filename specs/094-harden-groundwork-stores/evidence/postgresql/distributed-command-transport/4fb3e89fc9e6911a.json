@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:count-pending-by-execution",
+  "sourceScenarioId": "distributed-bounded-route-equivalence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+  "executionPath": "provider-driver/postgresql/distributed-command-transport/4fb3e89fc9e6911a",
+  "clients": 1,
+  "resultHash": "dc8f0223c75299c7958f3a64fcbcf5c687ce72c744bc3f0523f09fc25303bbc9",
+  "outcome": "pass",
+  "queryShape": "count-pending-by-execution",
+  "nativeQueryIdentity": "count-pending-commands-by-execution",
+  "documentKind": "executionCommandTransport",
+  "nativeEvidence": "evidence/postgresql/distributed-command-transport/4fb3e89fc9e6911a.plan.txt",
+  "evidence": "evidence/postgresql/distributed-command-transport/4fb3e89fc9e6911a.json"
+}

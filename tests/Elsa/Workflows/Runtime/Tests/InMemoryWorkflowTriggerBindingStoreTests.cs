@@ -64,7 +64,7 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
         await store.SaveAsync(Binding("artifact-1", "node-a", stimulusType: "Event", stimulusHash: "sha256:v1"));
         await store.SaveAsync(Binding("artifact-1", "node-a", stimulusType: "Signal", stimulusHash: "sha256:v1"));
 
-        var bindings = await store.ListByArtifactAsync("artifact-1");
+        var bindings = await store.ListAllByArtifactAsync("artifact-1");
 
         var binding = Assert.Single(bindings);
         Assert.Equal("Signal", binding.StimulusType);
@@ -77,7 +77,7 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
         await store.SaveAsync(Binding("artifact-1", "node-a", stimulusHash: "sha256:v1"));
         await store.SaveAsync(Binding("artifact-1", "node-a", stimulusHash: "sha256:v2"));
 
-        var bindings = await store.ListByArtifactAsync("artifact-1");
+        var bindings = await store.ListAllByArtifactAsync("artifact-1");
 
         Assert.Equal(2, bindings.Count);
         Assert.Equal(
@@ -182,10 +182,10 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
                 continuationToken: first.NextContinuationToken));
 
         var boundary = Assert.Single(first.Items).TriggerBindingId;
-        var expectedResumed = (await store.ListByArtifactAsync("artifact-a"))
-            .Concat(await store.ListByArtifactAsync("artifact-b"))
-            .Concat(await store.ListByArtifactAsync("artifact-c"))
-            .Concat(await store.ListByArtifactAsync("artifact-d"))
+        var expectedResumed = (await store.ListAllByArtifactAsync("artifact-a"))
+            .Concat(await store.ListAllByArtifactAsync("artifact-b"))
+            .Concat(await store.ListAllByArtifactAsync("artifact-c"))
+            .Concat(await store.ListAllByArtifactAsync("artifact-d"))
             .Where(binding => StringComparer.Ordinal.Compare(binding.TriggerBindingId, boundary) > 0)
             .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
             .Select(binding => binding.ArtifactId);
@@ -212,9 +212,9 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
                 limit: 2,
                 continuationToken: first.NextContinuationToken));
 
-        var expected = (await store.ListByArtifactAsync("artifact-a"))
-            .Concat(await store.ListByArtifactAsync("artifact-c"))
-            .Concat(await store.ListByArtifactAsync("artifact-d"))
+        var expected = (await store.ListAllByArtifactAsync("artifact-a"))
+            .Concat(await store.ListAllByArtifactAsync("artifact-c"))
+            .Concat(await store.ListAllByArtifactAsync("artifact-d"))
             .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
             .Select(binding => binding.ArtifactId)
             .ToArray();
@@ -242,6 +242,58 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
                     "Signal",
                     limit: 1,
                     continuationToken: first.NextContinuationToken)));
+    }
+
+    [Fact]
+    public async Task PublicationAndArtifactPages_AreOrderedBoundedAndQueryBound()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.SaveAsync(Binding("artifact-c", "node", stimulusHash: "sha256:c") with { PublicationId = "publication-a", SlotId = "default" });
+        await store.SaveAsync(Binding("artifact-a", "node", stimulusHash: "sha256:a") with { PublicationId = "publication-a", SlotId = "default" });
+        await store.SaveAsync(Binding("artifact-b", "node", stimulusHash: "sha256:b") with { PublicationId = "publication-a", SlotId = "default" });
+
+        var first = await store.ListByPublicationAsync(
+            new WorkflowTriggerBindingPublicationPageQuery("publication-a", limit: 2));
+        var second = await store.ListByPublicationAsync(
+            new WorkflowTriggerBindingPublicationPageQuery(
+                "publication-a",
+                limit: 2,
+                continuationToken: first.NextContinuationToken));
+
+        Assert.Equal(3, first.TotalCount);
+        Assert.Equal(
+            first.Items.Concat(second.Items).Select(binding => binding.TriggerBindingId).Order(StringComparer.Ordinal),
+            first.Items.Concat(second.Items).Select(binding => binding.TriggerBindingId));
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Null(second.NextContinuationToken);
+        await Assert.ThrowsAsync<ArgumentException>(async () => await store.ListByArtifactAsync(
+            new WorkflowTriggerBindingArtifactPageQuery(
+                "artifact-a",
+                continuationToken: first.NextContinuationToken)));
+    }
+
+    [Fact]
+    public async Task ListAllByPublicationAndArtifact_TraversesEveryBoundedPage()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        for (var index = 0; index <= WorkflowTriggerBindingPageQuery.MaximumLimit; index++)
+        {
+            await store.SaveAsync(Binding(
+                "artifact-shared",
+                $"node-{index:D3}",
+                stimulusHash: $"sha256:{index:D3}") with
+            {
+                PublicationId = "publication-shared",
+                SlotId = "default"
+            });
+        }
+
+        var publication = await store.ListAllByPublicationAsync("publication-shared");
+        var artifact = await store.ListAllByArtifactAsync("artifact-shared");
+
+        Assert.Equal(WorkflowTriggerBindingPageQuery.MaximumLimit + 1, publication.Count);
+        Assert.Equal(publication.Select(binding => binding.TriggerBindingId).Order(StringComparer.Ordinal), publication.Select(binding => binding.TriggerBindingId));
+        Assert.Equal(publication, artifact);
     }
 
     [Fact]
@@ -330,8 +382,8 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
         var removed = await store.DeleteByArtifactAsync("artifact-1");
 
         Assert.Equal(2, removed);
-        Assert.Empty(await store.ListByArtifactAsync("artifact-1"));
-        Assert.Single(await store.ListByArtifactAsync("artifact-2"));
+        Assert.Empty(await store.ListAllByArtifactAsync("artifact-1"));
+        Assert.Single(await store.ListAllByArtifactAsync("artifact-2"));
     }
 
     private WorkflowTriggerBinding Binding(

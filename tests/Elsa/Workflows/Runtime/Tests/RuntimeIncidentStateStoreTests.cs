@@ -23,6 +23,7 @@ public sealed class RuntimeIncidentStateStoreTests
 
         Assert.Same(blocking, await store.FindAsync("wfexec-1", "incident-1"));
         Assert.Equal(2, (await store.ListAsync("wfexec-1")).Count);
+        Assert.Equal(2, await store.CountAsync("wfexec-1"));
 
         var blockingIncidents = await store.ListBlockingAsync("wfexec-1");
 

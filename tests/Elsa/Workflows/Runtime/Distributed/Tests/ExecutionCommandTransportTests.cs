@@ -54,7 +54,7 @@ public sealed class ExecutionCommandTransportTests
         await transport.SendAsync(ExecutionId, Envelope("env-1"), _now);
         var leased = await transport.LeaseAsync(ExecutionId, NodeA, _now, LeaseDuration, maxItems: 10);
 
-        var acked = await transport.AckAsync(ExecutionId, leased[0].TransportItemId, NodeA, _now);
+        var acked = await transport.AckAsync(ExecutionId, leased[0].TransportItemId, NodeA, leased[0].LeaseToken!.Value, _now);
 
         Assert.True(acked);
         Assert.Equal(0, await transport.CountPendingAsync(ExecutionId));
@@ -74,12 +74,12 @@ public sealed class ExecutionCommandTransportTests
 
         // Node A resurrects and tries to ack the item it leased before dying — it must be refused, because node B now
         // holds the lease and is responsible for re-driving the command (at-least-once re-delivery on failover).
-        var staleAck = await transport.AckAsync(ExecutionId, leasedByA[0].TransportItemId, NodeA, afterExpiry);
+        var staleAck = await transport.AckAsync(ExecutionId, leasedByA[0].TransportItemId, NodeA, leasedByA[0].LeaseToken!.Value, afterExpiry);
         Assert.False(staleAck);
         Assert.Equal(1, await transport.CountPendingAsync(ExecutionId));
 
         // Node B, the live lease holder, can ack.
-        var liveAck = await transport.AckAsync(ExecutionId, leasedByB[0].TransportItemId, NodeB, afterExpiry);
+        var liveAck = await transport.AckAsync(ExecutionId, leasedByB[0].TransportItemId, NodeB, leasedByB[0].LeaseToken!.Value, afterExpiry);
         Assert.True(liveAck);
         Assert.Equal(0, await transport.CountPendingAsync(ExecutionId));
     }

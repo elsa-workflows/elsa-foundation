@@ -31,6 +31,7 @@ public static class IdentityStorageManifest
     public const string IdentityCredentialDocumentKind = "identityCredential";
     public const string IdentityClaimMappingDocumentKind = "identityClaimMapping";
     public const string IdentityProviderConfigurationDocumentKind = "identityProviderConfiguration";
+    public const string IdentityGlobalProviderConfigurationDocumentKind = "identityGlobalProviderConfiguration";
     public const string UserClaimDocumentKind = "identityUserClaim";
     public const string RoleClaimDocumentKind = "identityRoleClaim";
     public const string ExternalLoginDocumentKind = "identityExternalLogin";
@@ -105,10 +106,17 @@ public static class IdentityStorageManifest
                 [Query(ListClaimMappingsByProviderQuery, "identity-claim-mapping-by-provider")]),
             Unit(
                 IdentityProviderConfigurationDocumentKind,
-                "Identity Provider Configuration",
+                "Identity Tenant Provider Configuration",
                 "identity_provider_configurations",
                 [],
                 []),
+            Unit(
+                IdentityGlobalProviderConfigurationDocumentKind,
+                "Identity Global Provider Configuration",
+                "identity_global_provider_configurations",
+                [],
+                [],
+                TenancyPolicy.Global),
             Unit(
                 UserClaimDocumentKind,
                 "Identity User Claim",
@@ -178,7 +186,8 @@ public static class IdentityStorageManifest
         string label,
         string tableName,
         IndexDeclaration[] indexes,
-        PortableQueryDeclaration[] queries)
+        PortableQueryDeclaration[] queries,
+        TenancyPolicy? tenancy = null)
     {
         return new StorageUnit(
             new StorageUnitIdentity(documentKind),
@@ -186,7 +195,7 @@ public static class IdentityStorageManifest
             StorageIntent.PortableDocument(),
             LifecyclePolicy.Mutable,
             IdentityPolicy.StringId(),
-            TenancyPolicy.Scoped,
+            tenancy ?? TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
             indexes,

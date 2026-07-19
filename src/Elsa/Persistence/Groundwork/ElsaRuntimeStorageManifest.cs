@@ -21,7 +21,13 @@ public static class ElsaRuntimeStorageManifest
     // also includes the fixed-width identity lookup tie-break.
     // These values are guarded by manifest and SQL Server route-admission tests.
     public const int RuntimeStatusProjectionLength = 32;
+    public const int RuntimeExecutionIdProjectionLength = 128;
+    public const int RuntimeCollectionProjectionLength = 128;
+    public const int SchedulerWorkOrderKeyProjectionLength = 170;
+    public const int BookmarkStimulusLookupKeyProjectionLength = 64;
     public const int WorkflowDispatchIdProjectionLength = 76;
+    public const int PostCommitOutboxItemIdProjectionLength =
+        RuntimePostCommitOutboxIdentity.MaximumProjectionLength;
     public const int StimulusHashProjectionLength = LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength;
     public const int StimulusTypeProjectionLength = 256;
     public const int WorkflowTriggerBindingStimulusTypeProjectionLength = 240;
@@ -41,6 +47,8 @@ public static class ElsaRuntimeStorageManifest
     public const string ByStimulusTypeIndex = "by-stimulus-type";
     public const string ByArtifactIndex = "by-artifact";
     public const string ByTemplateHashIndex = "by-template-hash";
+    public const string ByTemplateIdIndex = "by-template-id";
+    public const string BySourceReferenceIdIndex = "by-source-reference-id";
     public const string ByExecutionScopeIndex = "by-execution-scope";
     public const string ByPublicationIndex = "by-publication";
     public const string ByParentActivityExecutionIndex = "by-parent-activity-execution";
@@ -57,12 +65,13 @@ public static class ElsaRuntimeStorageManifest
     public const string ByCreatedAtIndex = "by-created-at";
     public const string ByDispatchIdIndex = "by-dispatch-id";
     public const string ByOutboxStatusIndex = "by-outbox-status";
-    public const string ByOutboxAvailableAtIndex = "by-outbox-available-at";
-    public const string ByOutboxVisibleAfterIndex = "by-outbox-visible-after";
+    public const string ByOutboxDeliverableAtIndex = "by-outbox-deliverable-at";
+    public const string ByOutboxClaimableAtIndex = "by-outbox-claimable-at";
     public const string ByOutboxRecordedAtIndex = "by-outbox-recorded-at";
     public const string ByOutboxItemIdIndex = "by-outbox-item-id";
     public const string ByOutboxIntentKindIndex = "by-outbox-intent-kind";
     public const string BySchedulerWorkOrderIndex = "by-scheduler-work-order";
+    public const string SchedulerWorkPendingByWorkflowOrderIndex = "by-workflow-execution-and-scheduler-work-order";
     public const string ByTimerIdIndex = "by-timer-id";
     public const string ByRecurringScheduleIdIndex = "by-recurring-schedule-id";
     public const string ByRecurringScheduleActiveIndex = "by-recurring-schedule-active";
@@ -76,6 +85,9 @@ public static class ElsaRuntimeStorageManifest
     public const string StimulusTypeField = "stimulusType";
     public const string ArtifactIdField = "artifactId";
     public const string TemplateHashField = "templateHash";
+    public const string WorkflowExecutableArtifactIdField = "executable.identity.artifactId";
+    public const string ExecutableActivityTemplateIdField = "template.templateId";
+    public const string WorkflowExecutableSourceReferenceIdField = "reference.sourceReferenceId";
     public const string ExecutionScopeIdField = "executionScopeId";
     public const string PublicationIdField = "publicationId";
     public const string ListAllQuery = "list-all";
@@ -88,6 +100,13 @@ public static class ElsaRuntimeStorageManifest
     // field without changing the document shape. Groundwork index fields are dot-paths resolved by walking
     // nested JSON (relational RelationalPhysicalizationValues.TryGetPropertyPath, Mongo content.<path> BSON key).
     public const string ParentActivityExecutionIdField = "state.parentActivityExecutionId";
+    public const string ActivityExecutionIdField = "state.execution.activityExecutionId";
+    public const string BookmarkIdField = "bookmarkId";
+    public const string BookmarkStimulusLookupKeyField = "stimulusLookupKey";
+    public const string BookmarkStimulusTypeLookupKeyField = "stimulusTypeLookupKey";
+    public const string WorkflowTriggerBindingStimulusLookupKeyField = "stimulusLookupKey";
+    public const string WorkflowTriggerBindingStimulusTypeLookupKeyField = "stimulusTypeLookupKey";
+    public const string DurableValueIdField = "durableValueId";
     public const string ParentWorkflowExecutionIdField = "parentWorkflowExecutionId";
     public const string ChildWorkflowExecutionIdField = "childWorkflowExecutionId";
     public const string StatusField = "status";
@@ -100,6 +119,9 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowDispatchCreatedAtField = "record.createdAt";
     public const string WorkflowDispatchIdField = "record.dispatchId";
     public const string PostCommitOutboxStatusField = "item.status";
+    public const string PostCommitOutboxDeliverableAtField = "deliverableAt";
+    public const string PostCommitOutboxClaimableAtField = "claimableAt";
+    // Retained only for test-double compatibility while older callers move to the flattened candidate fields.
     public const string PostCommitOutboxAvailableAtField = "item.availableAt";
     public const string PostCommitOutboxVisibleAfterField = "item.deliveryVisibleAfter";
     public const string PostCommitOutboxRecordedAtField = "item.recordedAt";
@@ -120,11 +142,17 @@ public static class ElsaRuntimeStorageManifest
 
     /// <summary>Composite bounded route used by <c>IBookmarkStimulusIndex.ListByStimulusAsync</c>.</summary>
     public const string BookmarkStateByStimulusAndType = ByStimulusAndTypeIndex;
+    public const string BookmarkStateByStimulusAndTypeAndIdentity =
+        "by-stimulus-and-type-and-bookmark-identity";
 
     /// <summary>Bounded route used to rebuild stimulus-type bookmark indexes at startup.</summary>
     public const string BookmarkStateByStimulusType = ByStimulusTypeIndex;
+    public const string BookmarkStateByStimulusTypeAndIdentity =
+        "by-stimulus-type-and-bookmark-identity";
 
     public const string ListBookmarksByWorkflowExecutionQuery = ListByWorkflowExecutionQuery;
+    public const string BookmarkStateByWorkflowAndBookmarkId =
+        "by-workflow-execution-and-bookmark-id";
     public const string ListBookmarksByStimulusQuery = "list-by-stimulus";
     public const string ListBookmarksByStimulusAndTypeQuery = "list-by-stimulus-and-type";
     public const string ListBookmarksByStimulusTypeQuery = "list-by-stimulus-type";
@@ -140,6 +168,9 @@ public static class ElsaRuntimeStorageManifest
     /// provider supports, rather than relying on a provider-specific "scan all" capability.
     /// </summary>
     public const string WorkflowExecutableCollection = "workflowExecutable";
+    public const string PageWorkflowExecutablesQuery = "page-all";
+    public const string WorkflowExecutableByCollectionAndId =
+        "by-collection-and-document-id";
 
     // Content-addressed reusable-activity execution material. The future Groundwork adapter stores a
     // thin envelope { collection, templateHash, template }; indexes therefore target the lifted flat
@@ -151,6 +182,9 @@ public static class ElsaRuntimeStorageManifest
     public const string ExecutableActivityTemplateByHash = ByTemplateHashIndex;
     public const string ListExecutableActivityTemplatesQuery = ListAllQuery;
     public const string FindExecutableActivityTemplateByHashQuery = "find-by-template-hash";
+    public const string PageExecutableActivityTemplatesQuery = "page-all";
+    public const string ExecutableActivityTemplateByCollectionAndId =
+        "by-collection-and-document-id";
 
     // Per-publish source references into the content-addressed artifact store (ADR 0038/0039/0040). One document
     // per reference; carries source identity, scope/expiry, retirement facts and the embedded layout sidecar.
@@ -172,6 +206,32 @@ public static class ElsaRuntimeStorageManifest
     public const string ListWorkflowExecutableSourceReferencesByScopeQuery = "list-by-scope";
     public const string ListExpiredWorkflowExecutableSourceReferencesQuery = "list-expired";
     public const string ListRetiredWorkflowExecutableSourceReferencesQuery = "list-retired";
+    public const string PageWorkflowExecutableSourceReferencesQuery = "page-all";
+    public const string PageWorkflowExecutableSourceReferencesByScopeQuery = "page-by-scope";
+    public const string PageWorkflowExecutableSourceReferencesByArtifactQuery = "page-by-artifact";
+    public const string FindLiveWorkflowExecutableSourceReferenceByArtifactQuery =
+        "find-live-by-artifact";
+    public const string PageLiveWorkflowExecutableSourceReferencesQuery = "page-live-all";
+    public const string PageLiveWorkflowExecutableSourceReferencesByScopeQuery =
+        "page-live-by-scope";
+    public const string BatchExpiredWorkflowExecutableSourceReferencesQuery = "batch-expired";
+    public const string BatchRetiredWorkflowExecutableSourceReferencesQuery = "batch-retired";
+    public const string WorkflowExecutableSourceReferenceByCollectionAndId =
+        "by-collection-and-document-id";
+    public const string WorkflowExecutableSourceReferenceByScopeAndId =
+        "by-scope-and-document-id";
+    public const string WorkflowExecutableSourceReferenceByArtifactAndId =
+        "by-artifact-and-document-id";
+    public const string WorkflowExecutableSourceReferenceLiveByArtifactAndId =
+        "by-artifact-retired-expiry-and-document-id";
+    public const string WorkflowExecutableSourceReferenceLiveByCollectionAndId =
+        "by-collection-retired-expiry-and-document-id";
+    public const string WorkflowExecutableSourceReferenceLiveByScopeAndId =
+        "by-scope-retired-expiry-and-document-id";
+    public const string WorkflowExecutableSourceReferenceByExpiryAndId =
+        "by-expiry-and-document-id";
+    public const string WorkflowExecutableSourceReferenceByRetiredAndId =
+        "by-retired-and-document-id";
 
     public const string ActivityExecutionStateDocumentKind = "activityExecutionState";
 
@@ -184,15 +244,48 @@ public static class ElsaRuntimeStorageManifest
     /// contract rather than relying on their global uniqueness).
     /// </summary>
     public const string ActivityExecutionStateByParent = ByParentActivityExecutionIndex;
+    public const string ActivityExecutionStateByWorkflowAndActivityExecutionId =
+        "by-workflow-execution-and-activity-execution-id";
+    public const string ActivityExecutionStateByWorkflowParentAndActivityExecutionId =
+        "by-workflow-parent-and-activity-execution-id";
+    public const string PageActivityExecutionStatesByWorkflowExecutionQuery =
+        "page-by-workflow-execution";
+    public const string PageActivityExecutionStatesByParentQuery =
+        "page-by-parent-activity-execution";
     public const string ActivityExecutionInspectionDocumentKind = "activityExecutionInspection";
+    public const string ActivityExecutionInspectionOrderIndex =
+        "by-workflow-execution-and-summary-order";
+    public const string ActivityExecutionInspectionSummaryExecutionSequenceField =
+        "summary.executionSequence";
+    public const string ActivityExecutionInspectionSummaryScheduledAtField =
+        "summary.scheduledAt";
+    public const string ActivityExecutionInspectionSummaryActivityExecutionIdField =
+        "summary.activityExecutionId";
+    public const string PageActivityExecutionInspectionSummariesQuery =
+        "page-summaries-by-workflow-execution";
 
     // Committed descendant relation projection. The future Groundwork adapter stores
-    // { workflowExecutionId, executionScopeId, activityExecutionId, executionSequence, record } so
+    // { workflowExecutionId, executionScopeId, isScopeRoot, activityExecutionId, executionSequence, record } so
     // scope and workflow lookups stay on flat envelope fields and do not couple indexes to the read model.
     public const string ActivityExecutionHierarchyDocumentKind = "activityExecutionHierarchy";
     public const string ActivityExecutionHierarchyByWorkflowExecution = ByWorkflowExecutionIndex;
     public const string ActivityExecutionHierarchyByExecutionScope = ByExecutionScopeIndex;
     public const string ListActivityExecutionHierarchyByWorkflowExecutionQuery = ListByWorkflowExecutionQuery;
+    public const string ActivityExecutionHierarchyLatestByWorkflowIndex =
+        "by-workflow-execution-and-hierarchy-order";
+    public const string ActivityExecutionHierarchyPageByWorkflowIndex =
+        "by-workflow-execution-and-hierarchy-page";
+    public const string ActivityExecutionHierarchyByScopeAndOrderIndex =
+        "by-workflow-execution-scope-and-hierarchy-order";
+    public const string ActivityExecutionHierarchyIsScopeRootField = "isScopeRoot";
+    public const string ActivityExecutionHierarchyExecutionSequenceField = "executionSequence";
+    public const string ActivityExecutionHierarchyActivityExecutionIdField = "activityExecutionId";
+    public const string FindLatestActivityExecutionHierarchyByWorkflowQuery =
+        "find-latest-by-workflow-execution";
+    public const string PageActivityExecutionHierarchyByWorkflowQuery =
+        "page-by-workflow-execution";
+    public const string PageActivityExecutionHierarchyByScopeQuery =
+        "page-by-workflow-execution-and-scope";
     public const string WorkflowExecutionStateDocumentKind = "workflowExecutionState";
     public const string WorkflowExecutionStateCollection = "workflowExecutionState";
     public const string ListWorkflowExecutionsQuery = ListAllQuery;
@@ -206,6 +299,10 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowExecutionHistoryRunKindField = "historyRunKind";
     public const string WorkflowExecutionHistoryCorrelationIdField = "historyCorrelationId";
     public const string WorkflowExecutionHistoryArtifactIdField = "historyArtifactId";
+    public const string WorkflowExecutionPinnedArtifactOrderIndex =
+        "by-collection-and-pinned-artifact";
+    public const string PagePinnedExecutableArtifactIdsQuery =
+        "page-pinned-executable-artifact-ids";
     public const string WorkflowTestScopeDocumentKind = "workflowTestScope";
     public const string WorkflowTestScopeCollection = "workflowTestScope";
     public const string ListWorkflowTestScopesQuery = ListAllQuery;
@@ -213,11 +310,21 @@ public static class ElsaRuntimeStorageManifest
     public const string ListWorkflowTestScopesByStatePageQuery = "list-by-state-page";
     public const string ListExpiredOpenWorkflowTestScopesQuery = "list-open-by-expiry";
     public const string DurableValueStateDocumentKind = "durableValueState";
+    public const string DurableValueStateByWorkflowAndValueId =
+        "by-workflow-execution-and-durable-value-id";
     public const string SchedulerStateDocumentKind = "schedulerState";
     // Persisted wire identifiers — the string values predate the W14 type renames
     // (ExecutionLivenessState was OperationalState; WorkflowHoldState was ControlPlaneState).
     // Do not change the literal values: they are the durable Groundwork document-kind discriminators.
     public const string ExecutionLivenessStateDocumentKind = "operationalState";
+    public const string ExecutionLivenessOperationalStateIdField = "state.operationalStateId";
+    public const string ExecutionLivenessStateByWorkflowAndStateId =
+        "by-workflow-execution-and-operational-state-id";
+    public const string ExecutionLivenessStateByCollectionWorkflowAndStateId =
+        "by-collection-workflow-execution-and-operational-state-id";
+    public const string PageExecutionLivenessStatesByWorkflowExecutionQuery =
+        "page-by-workflow-execution";
+    public const string PageExecutionLivenessStatesQuery = "page-all";
     public const string RecoveryHasOperationalOwnerField = "hasOperationalOwner";
     public const string RecoveryInterruptionStatusField = "state.interruptedExecution.status";
     public const string RecoveryInterruptedAtField = "state.interruptedExecution.interruptedAt";
@@ -264,6 +371,11 @@ public static class ElsaRuntimeStorageManifest
     public const string ListDeliverablePostCommitOutboxByWorkflowQuery = "list-deliverable-by-workflow";
     public const string ListDeliverablePostCommitOutboxByIntentKindQuery = "list-deliverable-by-intent-kind";
     public const string ListDeliverablePostCommitOutboxByWorkflowAndIntentKindQuery = "list-deliverable-by-workflow-and-intent-kind";
+    public const string ListClaimablePostCommitOutboxQuery = "list-claimable";
+    public const string ListClaimablePostCommitOutboxByWorkflowQuery = "list-claimable-by-workflow";
+    public const string ListClaimablePostCommitOutboxByIntentKindQuery = "list-claimable-by-intent-kind";
+    public const string ListClaimablePostCommitOutboxByWorkflowAndIntentKindQuery = "list-claimable-by-workflow-and-intent-kind";
+    // Retained only for test-double compatibility; production routes use the two provider-side candidate sets above.
     public const string ListImmediatePostCommitOutboxQuery = "list-immediate";
     public const string ListImmediatePostCommitOutboxByWorkflowQuery = "list-immediate-by-workflow";
     public const string ListImmediatePostCommitOutboxByIntentKindQuery = "list-immediate-by-intent-kind";
@@ -314,7 +426,10 @@ public static class ElsaRuntimeStorageManifest
     public const string DurableTimerByDueTimeAndTimerId = "by-due-time-and-timer-id";
     public const string DurableTimerClaimOrderKeyField = "claimOrderKey";
     public const string DurableTimerByClaimOrder = "by-claim-order";
+    public const string DurableTimerByWorkflowAndTimerId =
+        "by-workflow-execution-and-timer-id";
     public const string ListDurableTimersByWorkflowExecutionQuery = ListByWorkflowExecutionQuery;
+    public const string PageDurableTimersByWorkflowExecutionQuery = "page-by-workflow-execution";
     public const string ListDueDurableTimersQuery = "list-due";
     public const string ClaimDueDurableTimersQuery = "claim-due";
 
@@ -325,6 +440,10 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowTriggerBindingDocumentKind = "workflowTriggerBinding";
     public const string TriggerBindingIdField = "triggerBindingId";
     public const string WorkflowTriggerBindingById = "by-trigger-binding-id";
+    public const string WorkflowTriggerBindingByArtifactAndId =
+        "by-artifact-and-trigger-binding-id";
+    public const string WorkflowTriggerBindingByPublicationAndId =
+        "by-publication-and-trigger-binding-id";
 
     /// <summary>Durable prepared/active marker for a publication-owned Runtime serving projection.</summary>
     public const string PublicationProjectionStateDocumentKind = "publicationProjectionState";
@@ -387,8 +506,14 @@ public static class ElsaRuntimeStorageManifest
     public const string RecurringTriggerScheduleByNextOccurrence = "by-next-occurrence";
     public const string RecurringTriggerScheduleByActiveNextOccurrenceAndScheduleId =
         "by-active-next-occurrence-and-schedule-id";
+    public const string RecurringTriggerScheduleByPublicationAndScheduleId =
+        "by-publication-and-schedule-id";
+    public const string RecurringTriggerScheduleByArtifactAndScheduleId =
+        "by-artifact-and-schedule-id";
 
     public const string ListRecurringTriggerSchedulesByPublicationQuery = "list-by-publication";
+    public const string PageRecurringTriggerSchedulesByPublicationQuery = "page-by-publication";
+    public const string PageRecurringTriggerSchedulesByArtifactQuery = "page-by-artifact";
     public const string ListDueRecurringTriggerSchedulesQuery = "list-due";
 
     /// <summary>
@@ -396,7 +521,9 @@ public static class ElsaRuntimeStorageManifest
     /// over the provider-neutral legacy declarations.
     /// </summary>
     public static StorageManifest CreatePhysicalized() =>
-        WorkflowExecutionHistoryStoragePhysicalizer.AddRoute(
+        ElsaGroundworkQueryRoutes.AddPhysicalRoutes(
+            WorkflowExecutionHistoryStoragePhysicalizer.AddRoute(
+            ExecutionLivenessStatePagingPhysicalizer.AddRoutes(
             ExecutionLivenessRecoveryStoragePhysicalizer.AddRoutes(
                 PostCommitOutboxGroundworkStoragePhysicalizer.AddBoundedDeliveryRoutes(
                     TestScopeStoragePhysicalizer.AddCompositeRoutes(
@@ -404,7 +531,8 @@ public static class ElsaRuntimeStorageManifest
                             BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
                                 WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
                                     DueWorkStoragePhysicalizer.AddRoutes(
-                                        LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create())))))))));
+                                        SchedulerWorkStoragePhysicalizer.AddRoutes(
+                                            LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()))))))))))));
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
@@ -560,8 +688,8 @@ public static class ElsaRuntimeStorageManifest
                     Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
                     Keyword(ByCollectionIndex, CollectionField),
                     Number(ByOutboxStatusIndex, PostCommitOutboxStatusField),
-                    DateTime(ByOutboxAvailableAtIndex, PostCommitOutboxAvailableAtField),
-                    DateTime(ByOutboxVisibleAfterIndex, PostCommitOutboxVisibleAfterField),
+                    DateTime(ByOutboxDeliverableAtIndex, PostCommitOutboxDeliverableAtField),
+                    DateTime(ByOutboxClaimableAtIndex, PostCommitOutboxClaimableAtField),
                     DateTime(ByOutboxRecordedAtIndex, PostCommitOutboxRecordedAtField),
                     Keyword(ByOutboxItemIdIndex, PostCommitOutboxItemIdField),
                     Keyword(ByOutboxIntentKindIndex, PostCommitOutboxIntentKindField)
@@ -618,12 +746,14 @@ public static class ElsaRuntimeStorageManifest
                         ListByWorkflowExecutionQuery,
                         SchedulerWorkByWorkflowOrderIndex,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
-                        QuerySortSupport.Ascending),
+                        QuerySortSupport.Ascending,
+                        QueryPagingSupport.Cursor),
                     Query(
                         ListPendingSchedulerWorkflowExecutionsQuery,
                         ByWorkflowExecutionIndex,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
-                        QuerySortSupport.Ascending),
+                        QuerySortSupport.Ascending,
+                        QueryPagingSupport.Cursor),
                     Query("list-all", ByCollectionIndex)
                 ]),
             Unit(
@@ -742,12 +872,13 @@ public static class ElsaRuntimeStorageManifest
         string name,
         string indexName,
         IReadOnlySet<PortableQueryOperation>? operations = null,
-        QuerySortSupport sortSupport = QuerySortSupport.None) => new(
+        QuerySortSupport sortSupport = QuerySortSupport.None,
+        QueryPagingSupport pagingSupport = QueryPagingSupport.Offset) => new(
         name,
         indexName,
         operations ?? new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         sortSupport,
-        QueryPagingSupport.Offset);
+        pagingSupport);
 
     private static IndexDeclaration Keyword(string identity, string field, bool isUnique = false) => new(
         identity,

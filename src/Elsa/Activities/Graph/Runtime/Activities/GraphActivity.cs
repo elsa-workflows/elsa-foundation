@@ -94,7 +94,7 @@ public sealed class GraphActivity(
         GraphActivityScope scope;
         if (isRetry)
         {
-            var persistedValues = await durableValueStateStore.ListAsync(context.WorkflowExecutionId, cancellationToken);
+            var persistedValues = await durableValueStateStore.ListAllDurableValueStatesAsync(context.WorkflowExecutionId, cancellationToken);
             var retryInputs = persistedValues
                 .Where(value => StringComparer.Ordinal.Equals(value.SourceActivityExecutionId, outerActivityExecutionId))
                 .Where(value => value.Metadata.ContainsKey(RuntimeMetadataKeys.RetrySourceActivityExecutionId))

@@ -58,12 +58,13 @@ public sealed class ListWorkflowInstancesRequestHandler(
             : await QueryAuthorizedPageAsync(query, cancellationToken);
         var summaryTasks = page.Items.Select(async state =>
         {
-            var activityCount = (await activityExecutionStateStore.ListAsync(state.WorkflowExecutionId, cancellationToken)).Count;
-            var incidentCount = (await incidentStateStore.ListAsync(state.WorkflowExecutionId, cancellationToken)).Count;
+            var activityCountTask = activityExecutionStateStore.CountAsync(state.WorkflowExecutionId, cancellationToken).AsTask();
+            var incidentCountTask = incidentStateStore.CountAsync(state.WorkflowExecutionId, cancellationToken).AsTask();
+            await Task.WhenAll(activityCountTask, incidentCountTask);
             return WorkflowInstanceSummaryView.From(
                 state,
-                activityCount,
-                incidentCount,
+                activityCountTask.Result,
+                incidentCountTask.Result,
                 authorization.CanInspectSensitiveValues(state));
         });
         var items = await Task.WhenAll(summaryTasks);

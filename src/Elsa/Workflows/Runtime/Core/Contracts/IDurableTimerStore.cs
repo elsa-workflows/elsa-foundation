@@ -37,9 +37,16 @@ public interface IDurableTimerStore
     /// <summary>Finds a single timer by its identity, or <c>null</c> if it does not exist.</summary>
     ValueTask<DurableTimer?> FindAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken = default);
 
-    /// <summary>Lists every timer owned by one workflow execution for provider-neutral scope cleanup.</summary>
-    ValueTask<IReadOnlyCollection<DurableTimer>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("This durable timer store does not support workflow-scoped listing.");
+    /// <summary>Returns one finite, ordered page of timers for a workflow execution.</summary>
+    ValueTask<RuntimeStorePage<DurableTimer>> ListPageAsync(
+        DurableTimerPageQuery query,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeStorePage<DurableTimer>>(
+            new NotSupportedException("This durable timer store does not support workflow-scoped pages."));
+
+    /// <summary>Legacy complete traversal for commands such as scope cleanup.</summary>
+    async ValueTask<IReadOnlyCollection<DurableTimer>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllAsync(this, workflowExecutionId, cancellationToken);
 
     /// <summary>Deletes a timer by its identity. Deleting a missing timer is a no-op.</summary>
     ValueTask DeleteAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken = default);

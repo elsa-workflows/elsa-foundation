@@ -147,7 +147,7 @@ public sealed class FlowchartExecutionEngineTests
 
         await fixture.ExecuteAsync(executable);
 
-        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListSummariesAsync("wfexec-1");
+        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListAllSummariesAsync("wfexec-1");
         var childProjection = projections.Single(projection => projection.ActivityExecutionId == "actexec-a");
         Assert.Equal(ActivityExecutionStatus.Completed, childProjection.Status);
         Assert.Equal("actexec-flowchart", childProjection.Provenance.ParentActivityExecutionId);
@@ -191,7 +191,7 @@ public sealed class FlowchartExecutionEngineTests
 
         await fixture.ExecuteAsync(executable);
 
-        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-d"));
     }
 
@@ -228,7 +228,7 @@ public sealed class FlowchartExecutionEngineTests
 
         await fixture.ExecuteAsync(executable);
 
-        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         var flowchartState = await fixture.GetFlowchartStateAsync();
         Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-d"));
         Assert.Contains(flowchartState.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Waiting && diagnostic.NodeId == "node-d");
@@ -311,7 +311,7 @@ public sealed class FlowchartExecutionEngineTests
 
         await fixture.ExecuteAsync(executable);
 
-        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-c"));
     }
 
@@ -349,7 +349,7 @@ public sealed class FlowchartExecutionEngineTests
 
         await fixture.ExecuteAsync(executable);
 
-        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         Assert.Equal(2, states.Count(state => state.Execution.ExecutableNodeId == "node-d"));
     }
 
@@ -384,7 +384,7 @@ public sealed class FlowchartExecutionEngineTests
 
         var flowchartState = await fixture.GetFlowchartStateAsync();
         Assert.Contains(flowchartState.Scopes, scope => scope.Kind == ExecutionScopeKind.Race);
-        var runtimeState = (await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1"))
+        var runtimeState = (await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1"))
             .Single(state => state.Execution.ExecutableNodeId == "node-flowchart");
         Assert.Equal(ActivityExecutionStatus.Completed, runtimeState.Status);
         Assert.Null(runtimeState.PrivateState);
@@ -426,7 +426,7 @@ public sealed class FlowchartExecutionEngineTests
         var flowchartState = await fixture.GetFlowchartStateAsync();
         // #382: the completed continuation path is pruned from the persisted blob; the durable evidence
         // that node-d ran in the parent (root) scope is its inspection projection's provenance.
-        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListSummariesAsync("wfexec-1");
+        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListAllSummariesAsync("wfexec-1");
         var winnerContinuation = projections.Single(projection => projection.ExecutableNodeId == "node-d");
         Assert.Equal(flowchartState.RootExecutionScopeId, winnerContinuation.Provenance.ExecutionScopeId);
     }
@@ -476,7 +476,7 @@ public sealed class FlowchartExecutionEngineTests
         Assert.All(raceScopes, scope => Assert.Equal(flowchartState.RootExecutionScopeId, scope.ParentExecutionScopeId));
         // #382: the completed continuation path is pruned from the persisted blob; the durable evidence
         // that node-f ran in the root scope is its inspection projection's provenance.
-        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListSummariesAsync("wfexec-1");
+        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListAllSummariesAsync("wfexec-1");
         var innerContinuation = projections.Single(projection => projection.ExecutableNodeId == "node-f");
         Assert.Equal(flowchartState.RootExecutionScopeId, innerContinuation.Provenance.ExecutionScopeId);
     }

@@ -1,7 +1,7 @@
 {
   "artifactId": "artifact-1",
   "collection": "workflowExecutableSourceReference",
-  "expiresAt": null,
+  "expiresAt": "9999-12-31T23:59:59.9999999\u002B00:00",
   "isRetired": "False",
   "reference": {
     "artifactId": "artifact-1",

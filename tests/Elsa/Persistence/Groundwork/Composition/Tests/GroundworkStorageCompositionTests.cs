@@ -285,6 +285,36 @@ public class GroundworkStorageCompositionTests
     }
 
     [Fact]
+    public void Validator_rejects_required_query_identity_that_was_not_compiled()
+    {
+        var requirement = new GroundworkStorageRouteRequirement(
+            new StorageUnitIdentity("unit"),
+            "missing-query-route",
+            new HashSet<CapabilityId>());
+        var declaration = CreateDeclaration(
+            "feature",
+            "unit",
+            requiredRoutes: [requirement]);
+        var capabilities = ProviderSnapshot(activePaths:
+        [
+            new GroundworkActiveStoragePath(
+                "feature",
+                requirement.StorageUnit,
+                requirement.RouteIdentity,
+                requirement.RequiredCapabilities)
+        ]);
+
+        var result = Validate([declaration], providerCapabilities: capabilities);
+
+        Assert.False(result.IsValid);
+        var diagnostic = Assert.Single(result.Diagnostics.Where(x =>
+            x.Code == "ELSA-GW-COMPOSITION-ROUTE-MISSING"));
+        Assert.Contains("feature", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("unit", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("missing-query-route", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Validator_rejects_required_capability_without_an_active_path()
     {
         var declaration = CreateDeclaration(
@@ -323,6 +353,27 @@ public class GroundworkStorageCompositionTests
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Diagnostics, x => x.Code == "ELSA-GW-COMPOSITION-CAPABILITY-UNEVIDENCED");
+    }
+
+    [Fact]
+    public void Validator_rejects_active_but_unsupported_capability_without_fallback()
+    {
+        var declaration = AtomicDeclaration();
+        var capabilities = ProviderSnapshot(
+            activePaths: [AtomicPath()],
+            supported: new HashSet<CapabilityId>(),
+            evidenced: new HashSet<CapabilityId> { AtomicCommit });
+
+        var result = Validate([declaration], providerCapabilities: capabilities);
+
+        Assert.False(result.IsValid);
+        var diagnostic = Assert.Single(result.Diagnostics.Where(x =>
+            x.Code == "ELSA-GW-COMPOSITION-CAPABILITY-UNSUPPORTED"));
+        Assert.Contains("feature", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("unit", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("atomic-route", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains(AtomicCommit.Value, diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("groundwork-sqlite", diagnostic.Message, StringComparison.Ordinal);
     }
 
     [Fact]

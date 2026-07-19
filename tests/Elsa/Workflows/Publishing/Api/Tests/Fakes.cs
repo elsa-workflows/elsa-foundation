@@ -147,14 +147,72 @@ internal static class TestCompiler
     {
         public ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default) => ValueTask.FromResult<ExecutableActivityTemplate?>(null);
         public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) => ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+        public ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(request, Array.Empty<ExecutableActivityTemplate>(), template => template.TemplateId, "activity-template"));
     }
 
     private sealed class EmptySourceReferenceReader : IWorkflowExecutableSourceReferenceReader
     {
         public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => ValueTask.FromResult<WorkflowExecutableSourceReference?>(null);
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
-        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(query, Array.Empty<WorkflowExecutableSourceReference>(), reference => reference.SourceReferenceId, $"source-reference:artifact:{query.ArtifactId}"));
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(query, Array.Empty<WorkflowExecutableSourceReference>(), reference => reference.SourceReferenceId, TestRuntimeStorePages.SourceReferenceQueryBinding(query)));
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.UnreferencedArtifactIds(candidates, Array.Empty<WorkflowExecutableSourceReference>(), now));
+    }
+}
+
+internal static class TestRuntimeStorePages
+{
+    public static string SourceReferenceQueryBinding(WorkflowExecutableSourceReferencePageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return FormattableString.Invariant(
+            $"source-reference:list:{query.Scope?.ToString() ?? "all"}:{query.LiveOnly}:{query.Now?.UtcTicks}");
+    }
+
+    public static RuntimeStorePage<T> Page<T>(
+        RuntimeStorePageRequest request,
+        IEnumerable<T> values,
+        Func<T, string> identity,
+        string queryBinding)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(values);
+        ArgumentNullException.ThrowIfNull(identity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(queryBinding);
+
+        var prefix = $"{queryBinding}:";
+        var lastId = request.ContinuationToken switch
+        {
+            null => null,
+            { } token when token.StartsWith(prefix, StringComparison.Ordinal) => token[prefix.Length..],
+            _ => throw new ArgumentException("The page continuation does not belong to this fake query.", nameof(request))
+        };
+        var ordered = values
+            .OrderBy(identity, StringComparer.Ordinal)
+            .Where(value => lastId is null || StringComparer.Ordinal.Compare(identity(value), lastId) > 0)
+            .Take(request.Limit + 1)
+            .ToArray();
+        var items = ordered.Take(request.Limit).ToArray();
+        var continuation = ordered.Length > request.Limit ? $"{prefix}{identity(items[^1])}" : null;
+        return new RuntimeStorePage<T>(request, items, continuation);
+    }
+
+    public static IReadOnlyCollection<string> UnreferencedArtifactIds(
+        WorkflowExecutableArtifactCandidateBatch candidates,
+        IEnumerable<WorkflowExecutableSourceReference> references,
+        DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(references);
+
+        var liveArtifactIds = references
+            .Where(reference => reference.IsLive(now))
+            .Select(reference => reference.ArtifactId)
+            .ToHashSet(StringComparer.Ordinal);
+        return candidates.ArtifactIds.Where(artifactId => !liveArtifactIds.Contains(artifactId)).ToArray();
     }
 }
 

@@ -84,7 +84,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() =>
             handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
-        Assert.Empty(await _bindingStore.ListByArtifactAsync((await _executableStore.ListAsync()).SingleOrDefault()?.Identity.ArtifactId ?? "none"));
+        Assert.Empty(await _bindingStore.ListAllByArtifactAsync((await _executableStore.ListAllAsync()).SingleOrDefault()?.Identity.ArtifactId ?? "none"));
     }
 
     [Theory]
@@ -95,7 +95,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var view = await FirstPartyHandler(scenario, scenario.ValidInputs)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        var bindings = await _bindingStore.ListByArtifactAsync(view.ArtifactId);
+        var bindings = await _bindingStore.ListAllByArtifactAsync(view.ArtifactId);
         Assert.Equal(scenario.ExpectedBindingCount, bindings.Count);
         Assert.All(bindings, binding =>
         {
@@ -124,7 +124,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
     {
         var seededView = await FirstPartyHandler(scenario, scenario.ValidInputs)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        var seededBindings = await _bindingStore.ListByArtifactAsync(seededView.ArtifactId);
+        var seededBindings = await _bindingStore.ListAllByArtifactAsync(seededView.ArtifactId);
         var seededPublicationId = Assert.Single(seededBindings.Select(binding => binding.PublicationId).Distinct())!;
         var seededSchedule = (await _scheduleStore.ListByPublicationAsync(seededPublicationId)).SingleOrDefault();
 
@@ -134,7 +134,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
 
         Assert.Equal(
             seededBindings.OrderBy(x => x.TriggerBindingId),
-            (await _bindingStore.ListByArtifactAsync(seededView.ArtifactId)).OrderBy(x => x.TriggerBindingId));
+            (await _bindingStore.ListAllByArtifactAsync(seededView.ArtifactId)).OrderBy(x => x.TriggerBindingId));
         Assert.Equal(
             seededSchedule,
             (await _scheduleStore.ListByPublicationAsync(seededPublicationId)).SingleOrDefault());
@@ -147,7 +147,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
     {
         var seededView = await FirstPartyHandler(scenario, scenario.ValidInputs, legacyActionCatalog: true)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        Assert.Equal(scenario.ExpectedBindingCount, (await _bindingStore.ListByArtifactAsync(seededView.ArtifactId)).Count);
+        Assert.Equal(scenario.ExpectedBindingCount, (await _bindingStore.ListAllByArtifactAsync(seededView.ArtifactId)).Count);
 
         var invalidExecutable = await FirstPartyCompiler(scenario, scenario.InvalidInputs, legacyActionCatalog: true)
             .CompileAsync(new WorkflowExecutableCompileRequest(
@@ -189,7 +189,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             FirstPartyHandler(scenario, scenario.InvalidInputs, legacyActionCatalog: true)
                 .Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
-        Assert.Equal(seededBinding, Assert.Single(await _bindingStore.ListByArtifactAsync(invalidExecutable.Identity.ArtifactId)));
+        Assert.Equal(seededBinding, Assert.Single(await _bindingStore.ListAllByArtifactAsync(invalidExecutable.Identity.ArtifactId)));
         Assert.Equal(
             seededSchedule,
             await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(invalidExecutable.Identity.ArtifactId, "trigger-node")));

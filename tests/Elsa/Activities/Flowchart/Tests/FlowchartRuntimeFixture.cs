@@ -48,7 +48,7 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
 
     public async Task<string> GetRawFlowchartStateAsync()
     {
-        var states = await Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         var flowchartState = states.Single(state => state.Execution.ExecutableNodeId == "node-flowchart");
         var lastCommittedPrivateState = Provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits()
             .SelectMany(record => record.Commit.StateChanges.ActivityExecutions)

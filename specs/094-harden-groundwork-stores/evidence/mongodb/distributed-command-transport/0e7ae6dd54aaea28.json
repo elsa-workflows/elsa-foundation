@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "distributed-command-send-sequence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "7980149bab0427138208d61616c81e89c59c79428b98d83f4fe4eb116fc1f0bc",
+  "executionPath": "provider-driver/mongodb/distributed-command-transport/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
+  "outcome": "pass",
+  "evidence": "evidence/mongodb/distributed-command-transport/0e7ae6dd54aaea28.json"
+}

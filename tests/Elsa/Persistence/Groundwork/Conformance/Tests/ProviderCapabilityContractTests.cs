@@ -1,22 +1,29 @@
+using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Queries;
+using Groundwork.MongoDb;
+using Groundwork.PostgreSql;
+using Groundwork.Sqlite;
+using Groundwork.SqlServer;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 
 /// <summary>
-/// Direct red tests for the Spec 094 T019 provider-capability boundary. Provider support and
+/// Direct tests for the Spec 094 T092 provider-capability boundary. Provider support and
 /// evidence describe what a package can do; only a matching active composition path can make that
 /// capability available to an Elsa store.
 /// </summary>
 public class ProviderCapabilityContractTests
 {
     private static readonly CapabilityId AtomicCommit = WellKnownCapabilities.AtomicCommit;
+    private static readonly GroundworkActiveStoragePath CheckpointCommitPath = CreateCheckpointCommitPath();
 
     [Fact]
     public void Capability_is_available_when_support_evidence_and_the_active_path_intersect()
@@ -99,6 +106,115 @@ public class ProviderCapabilityContractTests
         Assert.False(snapshot.SupportsTopology(new GroundworkStorageTopologyRequirement("multi-document-transactions")));
     }
 
+    [Fact]
+    public void Lease_fencing_is_unavailable_until_an_active_evidenced_checkpoint_path_is_admitted()
+    {
+        var admission = new GroundworkProviderCapabilityAdmission();
+        var leaseFencing = new GroundworkWorkflowExecutionLeaseFencingCapability(admission);
+        var snapshot = CreateSnapshot(
+            activePaths: [CheckpointCommitPath],
+            supported: new HashSet<CapabilityId> { AtomicCommit },
+            evidenced: new HashSet<CapabilityId> { AtomicCommit },
+            topologyCapabilities: new HashSet<string>(
+                [RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity],
+                StringComparer.Ordinal));
+
+        Assert.False(leaseFencing.IsAvailable);
+        Assert.True(admission.TrySet(snapshot));
+        Assert.True(leaseFencing.IsAvailable);
+    }
+
+    [Theory]
+    [InlineData(false, true, true, true)]
+    [InlineData(true, false, true, true)]
+    [InlineData(true, true, false, true)]
+    [InlineData(true, true, true, false)]
+    public void Lease_fencing_rejects_unselected_unsupported_unevidenced_or_topologically_unapproved_checkpoint_paths(
+        bool selected,
+        bool supported,
+        bool evidenced,
+        bool topologyApproved)
+    {
+        var admission = new GroundworkProviderCapabilityAdmission();
+        var leaseFencing = new GroundworkWorkflowExecutionLeaseFencingCapability(admission);
+        var snapshot = CreateSnapshot(
+            activePaths: selected ? [CheckpointCommitPath] : [],
+            supported: supported ? new HashSet<CapabilityId> { AtomicCommit } : new HashSet<CapabilityId>(),
+            evidenced: evidenced ? new HashSet<CapabilityId> { AtomicCommit } : new HashSet<CapabilityId>(),
+            topologyCapabilities: topologyApproved
+                ? new HashSet<string>(
+                    [RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity],
+                    StringComparer.Ordinal)
+                : new HashSet<string>(StringComparer.Ordinal));
+
+        Assert.True(admission.TrySet(snapshot));
+        Assert.False(leaseFencing.IsAvailable);
+    }
+
+    [Theory]
+    [MemberData(nameof(MandatoryProviderCapabilityReports))]
+    public void Every_mandatory_provider_requires_the_selected_checkpoint_path_and_approved_topology_to_admit_lease_fencing(
+        string providerKey,
+        ProviderCapabilityReport report)
+    {
+        var snapshot = new GroundworkProviderCapabilitySnapshot(
+            report,
+            new GroundworkProviderTopologySnapshot(
+                report.Provider.Name,
+                $"{providerKey}-approved-topology",
+                new HashSet<string>(
+                    [RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity],
+                    StringComparer.Ordinal)),
+            [CheckpointCommitPath]);
+        var admission = new GroundworkProviderCapabilityAdmission();
+        var leaseFencing = new GroundworkWorkflowExecutionLeaseFencingCapability(admission);
+
+        Assert.True(admission.TrySet(snapshot));
+        Assert.True(leaseFencing.IsAvailable);
+    }
+
+    [Fact]
+    public void Capability_derivation_catalog_is_closed_and_requires_the_mandatory_provider_topology()
+    {
+        var scenarioIds = GroundworkStoreScenarioCatalog
+            .Requiring(GroundworkStoreScenarioEvidence.CapabilityDerivation)
+            .Select(definition => definition.ScenarioId)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            new[]
+            {
+                "distributed-bounded-route-equivalence",
+                "distributed-command-lease-retry-and-stale-acknowledgement",
+                "distributed-placement-claim-renew-and-takeover",
+                "distributed-placement-stale-release-and-execution-fence",
+                "iam-bounded-query-equivalence",
+                "runtime-bounded-route-equivalence",
+                "runtime-execution-ownership-fencing",
+                "runtime-outbox-claim-retry-and-stale-acknowledgement",
+                "runtime-recurring-schedule-conditional-advance",
+                "runtime-scheduler-queue-claim-and-stale-acknowledgement",
+                "runtime-timer-create-once-and-due-selection",
+                "runtime-trigger-stimulus-lookup",
+                "secret-bounded-list-equivalence"
+            },
+            scenarioIds);
+        Assert.Equal(new[] { "mongodb", "postgresql", "sqlite", "sqlserver" }, GroundworkStoreScenarioCatalog.MandatoryProviderKeys);
+
+        var scenarios = GroundworkStoreScenarioCatalog.Requiring(GroundworkStoreScenarioEvidence.CapabilityDerivation);
+        foreach (var scenario in scenarios)
+        {
+            Assert.Equal(GroundworkStoreScenarioEvidenceSource.ProviderMatrix, scenario.EvidenceSource);
+            Assert.True(scenario.RequiredEvidence.HasFlag(GroundworkStoreScenarioEvidence.PersistentStorage));
+        }
+
+        Assert.Contains(scenarios, scenario =>
+            scenario.RequiredEvidence.HasFlag(GroundworkStoreScenarioEvidence.IndependentClients));
+        Assert.Contains(scenarios, scenario =>
+            !scenario.RequiredEvidence.HasFlag(GroundworkStoreScenarioEvidence.IndependentClients));
+    }
+
     private static GroundworkProviderCapabilitySnapshot CreateSnapshot(
         IReadOnlyCollection<GroundworkActiveStoragePath>? activePaths = null,
         IReadOnlySet<CapabilityId>? supported = null,
@@ -128,4 +244,22 @@ public class ProviderCapabilityContractTests
         new StorageUnitIdentity("unit"),
         "atomic-route",
         new HashSet<CapabilityId> { AtomicCommit });
+
+    private static GroundworkActiveStoragePath CreateCheckpointCommitPath()
+    {
+        var route = RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement();
+        return new GroundworkActiveStoragePath(
+            RuntimeGroundworkStorageManifestSource.FeatureName,
+            route.StorageUnit,
+            route.RouteIdentity,
+            route.RequiredCapabilities);
+    }
+
+    public static IEnumerable<object[]> MandatoryProviderCapabilityReports()
+    {
+        yield return ["mongodb", MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment()];
+        yield return ["postgresql", PostgreSqlGroundworkCapabilities.Runtime()];
+        yield return ["sqlite", SqliteGroundworkCapabilities.Runtime()];
+        yield return ["sqlserver", SqlServerGroundworkCapabilities.Runtime()];
+    }
 }

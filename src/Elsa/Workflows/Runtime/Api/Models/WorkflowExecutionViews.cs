@@ -28,7 +28,7 @@ public sealed record WorkflowInstanceSummaryView(
     string? CorrelationId,
     string? ParentWorkflowExecutionId,
     string? TenantId,
-    int ActivityCount,
+    long ActivityCount,
     int IncidentCount,
     string? SourceReferenceId = null,
     string? PublicationId = null,
@@ -39,7 +39,7 @@ public sealed record WorkflowInstanceSummaryView(
 {
     public static WorkflowInstanceSummaryView From(
         WorkflowExecutionState state,
-        int activityCount = 0,
+        long activityCount = 0,
         int incidentCount = 0,
         bool canInspectSensitiveValues = false) =>
         new(
@@ -73,7 +73,8 @@ public sealed record WorkflowInstanceDetailsView(
     WorkflowInstanceSummaryView Instance,
     IReadOnlyCollection<ActivityExecutionInspectionSummaryView> Activities,
     IReadOnlyCollection<IncidentStateView> Incidents,
-    IReadOnlyDictionary<string, WorkflowOutputView> Outputs);
+    IReadOnlyDictionary<string, WorkflowOutputView> Outputs,
+    string? ActivityNextContinuationToken = null);
 
 /// <summary>
 /// A named workflow output on the instance details view (#254 Seam R1): the durably captured value a

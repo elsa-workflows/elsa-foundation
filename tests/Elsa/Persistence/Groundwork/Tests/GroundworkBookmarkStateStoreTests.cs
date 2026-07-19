@@ -37,11 +37,11 @@ public sealed class GroundworkBookmarkStateStoreTests
         Assert.Equal("/orders", found.Payload!.Value.GetProperty("url").GetString());
         Assert.Equal("v1", found.Metadata["tag"]);
 
-        var wf1 = await store.ListAsync("wf-1");
+        var wf1 = await store.ListAllBookmarkStatesAsync("wf-1");
         Assert.Equal(2, wf1.Count);
         Assert.Equal(new[] { "bm-a", "bm-b" }, wf1.Select(s => s.BookmarkId).OrderBy(x => x));
 
-        var wf2 = await store.ListAsync("wf-2");
+        var wf2 = await store.ListAllBookmarkStatesAsync("wf-2");
         Assert.Single(wf2);
         Assert.Equal("bm-a", wf2.Single().BookmarkId);
     }
@@ -59,7 +59,7 @@ public sealed class GroundworkBookmarkStateStoreTests
 
         var found = await store.FindAsync("wf-1", "bm-a");
         Assert.Equal("Timer", found!.StimulusType);
-        Assert.Single(await store.ListAsync("wf-1"));
+        Assert.Single(await store.ListAllBookmarkStatesAsync("wf-1"));
     }
 
     [Theory]
@@ -75,7 +75,7 @@ public sealed class GroundworkBookmarkStateStoreTests
         Assert.True(await store.DeleteAsync("wf-1", "bm-a"));
         Assert.False(await store.DeleteAsync("wf-1", "bm-a"));
         Assert.Null(await store.FindAsync("wf-1", "bm-a"));
-        Assert.Empty(await store.ListAsync("wf-1"));
+        Assert.Empty(await store.ListAllBookmarkStatesAsync("wf-1"));
     }
 
     [Theory]
@@ -87,7 +87,7 @@ public sealed class GroundworkBookmarkStateStoreTests
         IBookmarkStateStore store = CreateBridge(fixture);
 
         Assert.Null(await store.FindAsync("missing", "missing"));
-        Assert.Empty(await store.ListAsync("missing"));
+        Assert.Empty(await store.ListAllBookmarkStatesAsync("missing"));
     }
 
     [Theory]
@@ -105,10 +105,19 @@ public sealed class GroundworkBookmarkStateStoreTests
         await store.SaveAsync(Bookmark("wf-2", "bm-b", stimulus: "HttpEndpoint", stimulusHash: "h2"));
         await store.SaveAsync(Bookmark("wf-3", "bm-c", stimulus: "Event", stimulusHash: "h3"));
 
-        var http = await index.ListByStimulusTypeAsync("HttpEndpoint");
+        var first = await index.ListByStimulusTypePageAsync(
+            new BookmarkStimulusTypePageQuery("HttpEndpoint", limit: 1));
+        var second = await index.ListByStimulusTypePageAsync(
+            new BookmarkStimulusTypePageQuery(
+                "HttpEndpoint",
+                limit: 1,
+                continuationToken: first.NextContinuationToken));
+        var http = first.Items.Concat(second.Items).ToArray();
         Assert.Equal(new[] { "bm-a", "bm-b" }, http.Select(b => b.BookmarkId).OrderBy(x => x));
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Null(second.NextContinuationToken);
 
-        Assert.Empty(await index.ListByStimulusTypeAsync("Signal"));
+        Assert.Empty(await index.ListAllByStimulusTypeAsync("Signal"));
     }
 
     [Theory]
@@ -124,7 +133,7 @@ public sealed class GroundworkBookmarkStateStoreTests
         await store.SaveAsync(Bookmark("wf-2", "bm-b", stimulus: "Signal", stimulusHash: "shared"));
         await store.SaveAsync(Bookmark("wf-3", "bm-c", stimulus: "HttpEndpoint", stimulusHash: "other"));
 
-        var bookmarks = await index.ListByStimulusAsync("HttpEndpoint", "shared");
+        var bookmarks = await index.ListAllByStimulusAsync("HttpEndpoint", "shared");
 
         Assert.Equal("bm-a", Assert.Single(bookmarks).BookmarkId);
     }
@@ -139,7 +148,8 @@ public sealed class GroundworkBookmarkStateStoreTests
             GroundworkTestSerialization.Serializer,
             queries);
 
-        await index.ListByStimulusAsync("HttpEndpoint", "hash-1");
+        await index.ListByStimulusPageAsync(
+            new BookmarkStimulusPageQuery("HttpEndpoint", "hash-1", limit: 17));
 
         var query = Assert.Single(queries.Observed);
         Assert.Equal(ElsaRuntimeStorageManifest.BookmarkStateDocumentKind, query.DocumentKind);
@@ -148,16 +158,20 @@ public sealed class GroundworkBookmarkStateStoreTests
             query.Clauses.SelectMany(clause => clause.Comparisons),
             stimulus =>
             {
-                Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashField, stimulus.Path);
+                Assert.Equal(
+                    ElsaRuntimeStorageManifest.BookmarkStimulusLookupKeyField,
+                    stimulus.Path);
                 Assert.Equal(QueryComparisonOperator.Equal, stimulus.Operator);
-                Assert.Equal("hash-1", Assert.Single(stimulus.Values));
-            },
-            type =>
-            {
-                Assert.Equal(ElsaRuntimeStorageManifest.StimulusTypeField, type.Path);
-                Assert.Equal(QueryComparisonOperator.Equal, type.Operator);
-                Assert.Equal("HttpEndpoint", Assert.Single(type.Values));
+                Assert.Equal(
+                    "e9e2ec447250dc1aabece4a962f95d1259036ff2f3d858f254eb7a90d14fc973",
+                    Assert.Single(stimulus.Values));
             });
+        Assert.Equal(17, query.Take);
+        Assert.Collection(
+            query.Order,
+            workflow => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, workflow.Path),
+            bookmark => Assert.Equal(ElsaRuntimeStorageManifest.BookmarkIdField, bookmark.Path));
+        Assert.Null(query.Skip);
     }
 
     private static BookmarkState Bookmark(string workflowExecutionId, string bookmarkId, string stimulus, object? payload = null, string stimulusHash = "hash-1")

@@ -9,6 +9,7 @@ using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -40,7 +41,7 @@ public sealed class WriteHttpResponseExecutionTests
         Assert.Equal("application/json", result.GetProperty("contentType").GetString());
 
         var durableValues = await harness.Services.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IDurableValueStateStore>()
-            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+            .ListAllDurableValueStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId);
         Assert.DoesNotContain(durableValues, value => value.Metadata.ContainsKey(RuntimeMetadataKeys.OutputName));
     }
 

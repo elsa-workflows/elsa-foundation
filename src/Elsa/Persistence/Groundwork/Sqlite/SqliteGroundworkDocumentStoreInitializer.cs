@@ -31,7 +31,8 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
     bool autoApplyOnStartup,
     IServiceScopeFactory scopeFactory,
     GroundworkStoreSessionSource sessionSource,
-    ILogger<SqliteGroundworkDocumentStoreInitializer> logger) : IHostedService, IShellInitializer
+    ILogger<SqliteGroundworkDocumentStoreInitializer> logger,
+    GroundworkProviderCapabilityAdmission? capabilityAdmission = null) : IHostedService, IShellInitializer
 {
     private readonly SemaphoreSlim initializationLock = new(1, 1);
     private bool initialized;
@@ -87,7 +88,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             if (!sessionSource.IsInitialized)
             {
                 var manifest = source.CreateManifest();
-                sessionSource.TrySetAdmitted(async (access, ct) =>
+                if (sessionSource.TrySetAdmitted(async (access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
                     SqliteConnection? connection = null;
@@ -122,7 +123,10 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                             SqliteGroundworkPersistenceOperation.OpenSession,
                             await DisposeAfterFailureAsync(connection, exception));
                     }
-                }, TransactionBoundary.CrossUnitAtomic);
+                }, TransactionBoundary.CrossUnitAtomic))
+                {
+                    capabilityAdmission?.TrySet(capabilities);
+                }
             }
 
             initialized = true;

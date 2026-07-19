@@ -51,8 +51,6 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
         var storage = unit.PhysicalStorage
             ?? throw new InvalidOperationException(
                 "Workflow execution history requires an existing physical storage declaration.");
-        var collectionIndex = storage.LogicalIndexes.Single(index =>
-            StringComparer.Ordinal.Equals(index.Identity, ElsaRuntimeStorageManifest.ByCollectionIndex));
         var historyIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowExecutionHistoryOrderIndex,
             [
@@ -66,11 +64,26 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             IndexValueKind.Number,
             isUnique: false,
             MissingValueBehavior.Excluded);
+        var pinnedArtifactIndex = new LogicalIndexDeclaration(
+            ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex,
+            [
+                new IndexField(ElsaRuntimeStorageManifest.CollectionField),
+                new IndexField(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField),
+                new IndexField(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)
+            ],
+            IndexValueKind.Keyword,
+            isUnique: false,
+            MissingValueBehavior.Excluded);
         var envelope = new DocumentEnvelopeDefinition();
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             TableName,
             [
-                Projected(CollectionColumn, ElsaRuntimeStorageManifest.CollectionField, PortablePhysicalType.String),
+                Projected(
+                    CollectionColumn,
+                    ElsaRuntimeStorageManifest.CollectionField,
+                    PortablePhysicalType.String,
+                    ElsaRuntimeStorageManifest.RuntimeCollectionProjectionLength),
                 Projected(
                     SortTicksColumn,
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
@@ -78,7 +91,8 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                 Projected(
                     WorkflowExecutionIdColumn,
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
-                    PortablePhysicalType.String),
+                    PortablePhysicalType.String,
+                    ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
                 Projected(
                     TenantIdColumn,
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField,
@@ -102,16 +116,11 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                 Projected(
                     ArtifactIdColumn,
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
-                    PortablePhysicalType.String)
+                    PortablePhysicalType.String,
+                    ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength)
             ],
             envelope,
             [
-                new PhysicalIndexDefinition(
-                    collectionIndex.Identity,
-                    [
-                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
-                        new PhysicalIndexColumnDefinition(CollectionColumn, 1)
-                    ]),
                 new PhysicalIndexDefinition(
                     historyIndex.Identity,
                     [
@@ -122,6 +131,14 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                             PhysicalSortDirection.Descending),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 2),
                         new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
+                    ]),
+                new PhysicalIndexDefinition(
+                    pinnedArtifactIndex.Identity,
+                    [
+                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                        new PhysicalIndexColumnDefinition(CollectionColumn, 1),
+                        new PhysicalIndexColumnDefinition(ArtifactIdColumn, 2),
+                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3)
                     ])
             ]);
         var historyQuery = new BoundedQueryDeclaration(
@@ -185,6 +202,35 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                     IndexValueKind.Keyword,
                     Equal)
             ]);
+        var pinnedArtifactQuery = new BoundedQueryDeclaration(
+            ElsaRuntimeStorageManifest.PagePinnedExecutableArtifactIdsQuery,
+            pinnedArtifactIndex.Identity,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+            QuerySortSupport.Ascending,
+            QueryPagingSupport.Offset,
+            BoundedQueryExecutionClass.ScaleBearing,
+            supportsTotalCount: true,
+            sortFields:
+            [
+                new BoundedQuerySortField(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
+                    PhysicalSortDirection.Ascending),
+                new BoundedQuerySortField(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
+                    PhysicalSortDirection.Ascending)
+            ],
+            predicateFields:
+            [
+                new BoundedQueryPredicateField(
+                    ElsaRuntimeStorageManifest.CollectionField,
+                    Equal)
+            ],
+            resultOperations: new HashSet<BoundedQueryResultOperation>
+            {
+                BoundedQueryResultOperation.Documents,
+                BoundedQueryResultOperation.Count
+            },
+            latestPerKeyPath: ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField);
 
         return unit with
         {
@@ -194,14 +240,26 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                 storage.LogicalIndexes
                     .Where(index => !StringComparer.Ordinal.Equals(
                         index.Identity,
+                        ElsaRuntimeStorageManifest.ByCollectionIndex))
+                    .Where(index => !StringComparer.Ordinal.Equals(
+                        index.Identity,
                         ElsaRuntimeStorageManifest.WorkflowExecutionHistoryOrderIndex))
-                    .Append(historyIndex)
+                    .Where(index => !StringComparer.Ordinal.Equals(
+                        index.Identity,
+                        ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex))
+                    .Concat([historyIndex, pinnedArtifactIndex])
                     .ToArray(),
                 storage.BoundedQueries
                     .Where(query => !StringComparer.Ordinal.Equals(
                         query.Identity,
+                        ElsaRuntimeStorageManifest.ListAllQuery))
+                    .Where(query => !StringComparer.Ordinal.Equals(
+                        query.Identity,
                         ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery))
-                    .Append(historyQuery)
+                    .Where(query => !StringComparer.Ordinal.Equals(
+                        query.Identity,
+                        ElsaRuntimeStorageManifest.PagePinnedExecutableArtifactIdsQuery))
+                    .Concat([historyQuery, pinnedArtifactQuery])
                     .ToArray(),
                 storage.NameOverrides,
                 storage.BoundedMutations)
@@ -211,13 +269,14 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
     private static ProjectedColumnDefinition Projected(
         string logicalName,
         string path,
-        PortablePhysicalType type) =>
+        PortablePhysicalType type,
+        int? length = null) =>
         new(
             logicalName,
             path,
             type,
             Length: type == PortablePhysicalType.String
-                ? LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength
+                ? length ?? LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength
                 : null);
 
     private static BoundedQueryResidualPredicateField Residual(
