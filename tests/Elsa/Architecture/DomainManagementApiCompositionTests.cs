@@ -177,6 +177,9 @@ public sealed class DomainManagementApiCompositionTests
         using var duplicate = await host.Client.PostAsJsonAsync("/design/workflows/folders", new { name = "Duplicate" });
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
 
+        using var missingParent = await host.Client.PostAsJsonAsync("/design/workflows/folders", new { name = "Child", parentId = "missing" });
+        Assert.Equal(HttpStatusCode.NotFound, missingParent.StatusCode);
+
         var folderDefinitions = await host.Client.GetFromJsonAsync<WorkflowDefinitionPageView>(
             "/design/workflows/definitions/page?folderId=folder-1");
         Assert.Equal("folder-1", Assert.Single(folderDefinitions!.Items).FolderId);
@@ -436,6 +439,8 @@ public sealed class DomainManagementApiCompositionTests
         {
             if (folder.NormalizedName == "DUPLICATE")
                 throw new Elsa.Workflows.Design.Persistence.Core.Exceptions.WorkflowFolderSiblingConflictException();
+            if (folder.ParentFolderId == "missing")
+                throw Elsa.Primitives.Exceptions.EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folder.ParentFolderId);
             return Task.FromResult(folder);
         }
     }

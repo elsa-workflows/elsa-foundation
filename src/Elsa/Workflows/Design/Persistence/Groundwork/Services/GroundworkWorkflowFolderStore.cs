@@ -21,8 +21,10 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkWorkflowFolderStore(
     IDocumentStore store,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    ISystemClock clock) : IWorkflowFolderStore
+    ISystemClock clock,
+    IBoundedDocumentStore? boundedStore = null) : IWorkflowFolderStore
 {
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
     private readonly GroundworkReadStore<WorkflowFolder> _reads = new(
         store,
         WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
@@ -31,14 +33,14 @@ public sealed class GroundworkWorkflowFolderStore(
         WorkflowsDesignStorageManifest.WorkflowFolderCollection,
         GroundworkDesignJson.Options);
 
-    public bool IsAvailable => store is global::Groundwork.Documents.Store.IBoundedDocumentStore;
+    public bool IsAvailable => _boundedStore is not null;
 
     public async Task<WorkflowFolderPage> ListDirectChildrenAsync(WorkflowFolderPageRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
         var parentKey = string.IsNullOrWhiteSpace(request.ParentFolderId) ? WorkflowFolder.RootParentKey : request.ParentFolderId;
-        var bounded = store as global::Groundwork.Documents.Store.IBoundedDocumentStore
+        var bounded = _boundedStore
             ?? throw new InvalidOperationException("Workflow-folder browsing requires an admitted bounded document-store runtime.");
         DocumentQueryResult result;
         try
@@ -109,8 +111,10 @@ public sealed class GroundworkWorkflowFolderStore(
                 GroundworkDesignJson.Options,
                 access) with { ExpectedVersion = 0 };
             var result = await unit.SaveAsync(save, cancellationToken);
-            if (result.Status != DocumentStoreWriteStatus.Saved)
+            if (result.Status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.IdentityConflict)
                 throw new WorkflowFolderSiblingConflictException();
+            if (result.Status != DocumentStoreWriteStatus.Saved)
+                throw new InvalidOperationException($"Workflow-folder create failed with write status '{result.Status}'.");
             await unit.CommitAsync(cancellationToken);
             return folder;
         }

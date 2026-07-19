@@ -76,21 +76,7 @@ public static class WorkflowsDesignStorageManifest
             Unit(
                 WorkflowFolderDocumentKind,
                 "Workflow folder",
-                [
-                    Keyword(ByCollectionIndex, CollectionField),
-                    new IndexDeclaration(
-                        "by-parent-and-normalized-name",
-                        [
-                            new IndexField(WorkflowFolderParentKeyField),
-                            new IndexField(WorkflowFolderNormalizedNameField)
-                        ],
-                        IndexValueKind.Keyword,
-                        IsUnique: true,
-                        IsSortable: false,
-                        MissingValueBehavior.Excluded,
-                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-                        IndexPhysicalizationPolicy.Optimized)
-                ],
+                [Keyword(ByCollectionIndex, CollectionField)],
                 [Query(ListAllQuery, ByCollectionIndex)]),
             Unit(
                 WorkflowDefinitionVersionDocumentKind,

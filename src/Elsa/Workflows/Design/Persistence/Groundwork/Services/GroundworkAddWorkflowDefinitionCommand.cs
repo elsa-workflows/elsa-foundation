@@ -7,6 +7,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using Elsa.Primitives.Exceptions;
+using System.Text.Json;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
@@ -68,8 +69,14 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
         await using var unit = await store.BeginAsync(DocumentCommitScope.Of(scopeKinds), cancellation);
         if (workflowDefinition.FolderId is { } folderId)
         {
-            var folder = await unit.LoadAsync(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind, folderId, cancellation);
-            if (folder is null)
+            var folderDocument = await unit.LoadAsync(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind, folderId, cancellation);
+            if (folderDocument is null)
+                throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
+            var folder = JsonSerializer.Deserialize<GroundworkDocument<WorkflowFolder>>(
+                folderDocument.ContentJson,
+                GroundworkDesignJson.Options)?.Entity
+                ?? throw new InvalidOperationException("The workflow-folder document is empty.");
+            if (!string.Equals(folder.TenantId, workflowDefinition.TenantId, StringComparison.Ordinal))
                 throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
         }
 

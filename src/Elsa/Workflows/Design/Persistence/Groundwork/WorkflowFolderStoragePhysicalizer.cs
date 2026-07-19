@@ -26,7 +26,15 @@ internal static class WorkflowFolderStoragePhysicalizer
                 new IndexField(WorkflowsDesignStorageManifest.WorkflowFolderNormalizedNameField, IndexValueKind.Keyword),
                 new IndexField("entity.id", IndexValueKind.Keyword)
             ], IndexValueKind.Keyword, false, MissingValueBehavior.Excluded);
-        var unique = storage.LogicalIndexes.Single(item => item.Identity == "by-parent-and-normalized-name");
+        var unique = new LogicalIndexDeclaration(
+            "by-parent-and-normalized-name",
+            [
+                new IndexField(WorkflowsDesignStorageManifest.WorkflowFolderParentKeyField, IndexValueKind.Keyword),
+                new IndexField(WorkflowsDesignStorageManifest.WorkflowFolderNormalizedNameField, IndexValueKind.Keyword)
+            ],
+            IndexValueKind.Keyword,
+            isUnique: true,
+            MissingValueBehavior.Excluded);
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             "workflow_folders",
             [
@@ -64,7 +72,11 @@ internal static class WorkflowFolderStoragePhysicalizer
         return unit with { PhysicalStorage = new StorageUnitPhysicalStorage(
             StorageUnitProvisioningMode.Declared,
             PhysicalStoragePolicy.Explicit(definition),
-            storage.LogicalIndexes.Where(item => item.Identity != index.Identity).Append(index).ToArray(),
+            storage.LogicalIndexes
+                .Where(item => item.Identity != unique.Identity && item.Identity != index.Identity)
+                .Append(unique)
+                .Append(index)
+                .ToArray(),
             storage.BoundedQueries.Where(item => item.Identity != query.Identity).Append(query).ToArray(),
             storage.NameOverrides,
             storage.BoundedMutations) };

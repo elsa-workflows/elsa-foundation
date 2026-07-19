@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Constants;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Primitives.Exceptions;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Folders;
 
@@ -26,6 +27,10 @@ internal sealed class Create(ICommandSender commandSender)
         catch (WorkflowFolderSiblingConflictException exception)
         {
             ThrowError(exception.Message, 409);
+        }
+        catch (EntityNotFoundException exception)
+        {
+            ThrowError(exception.Message, 404);
         }
         catch (ArgumentException exception)
         {
