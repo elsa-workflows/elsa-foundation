@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
 import { ActivityDefinitionsPage } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionsPage";
+import { Elsa3ReusableImportPage } from "../../src/Elsa.Studio.Workflows/Client/src/Elsa3ReusableImportPage";
 import { activityGraphImplementationEditorContribution } from "../../src/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
 import { WorkflowLazyBoundary } from "../../src/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
 import { useRunDetailLayout } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
@@ -34,7 +35,9 @@ const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
 const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const runDetailFixture = searchParams.get("mode") === "run-detail";
-const activityDefinitionsFixture = searchParams.get("mode") === "activity-definitions" || window.location.pathname.startsWith("/workflows/activity-definitions");
+const elsa3ReusableImportFixture = window.location.pathname.startsWith("/workflows/activity-definitions/import-elsa3");
+const activityDefinitionsFixture = searchParams.get("mode") === "activity-definitions" ||
+  (window.location.pathname.startsWith("/workflows/activity-definitions") && !elsa3ReusableImportFixture);
 const reusableBoundaryFixture = searchParams.get("mode") === "reusable-boundary";
 const versionChangeFixture = searchParams.get("mode") === "version-change";
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -514,6 +517,8 @@ document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : 
 createRoot(document.getElementById("root")!).render(
   versionChangeFixture
     ? <QueryClientProvider client={queryClient}><VersionChangeFixture /></QueryClientProvider>
+    : elsa3ReusableImportFixture
+      ? <Elsa3ReusableImportPage context={endpointContext} navigate={path => window.history.pushState({}, "", path)} />
     : activityDefinitionsFixture
     ? <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={endpointContext} activityEditors={() => [activityGraphImplementationEditorContribution]} runtime={{ identity: { tenantId: "browser-tenant", subject: "browser-author" }, activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } } }} /></QueryClientProvider>
     : reusableBoundaryFixture
