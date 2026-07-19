@@ -10,6 +10,7 @@ using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
+using Groundwork.Core.PhysicalStorage;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
@@ -31,12 +32,10 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
         WorkflowFolderNames.ValidateIdentifier(folderId, nameof(folderId));
         var (displayName, normalizedName) = WorkflowFolderNames.Normalize(name);
         var access = RequireScope();
-        var snapshot = await SnapshotFoldersAsync(cancellationToken);
         try
         {
             await using var unit = await store.BeginAsync(DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind), cancellationToken);
             var (envelope, folder) = await LoadOwnedAsync(unit, folderId, access, cancellationToken);
-            EnsureUnchanged(snapshot, (envelope, folder));
             folder.Name = displayName;
             folder.NormalizedName = normalizedName;
             folder.LastModifiedAt = clock.UtcNow;
@@ -105,25 +104,24 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
     {
         WorkflowFolderNames.ValidateIdentifier(folderId, nameof(folderId));
         var access = RequireScope();
-        var folders = await SnapshotFoldersAsync(cancellationToken);
-        var target = folders.SingleOrDefault(folder => StringComparer.Ordinal.Equals(folder.Entity.Id, folderId));
-        if (target is null)
-            throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
-        try { access.EnsureTenantScope(target.Entity.TenantId); }
+        var snapshotEnvelope = await store.LoadAsync(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind, folderId, cancellationToken)
+            ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId);
+        var snapshotFolder = ReadFolder(snapshotEnvelope);
+        try { access.EnsureTenantScope(snapshotFolder.TenantId); }
         catch (InvalidOperationException) { throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), folderId); }
-        var childExists = folders.Any(folder => StringComparer.Ordinal.Equals(folder.Entity.ParentFolderId, folderId));
-        var definitionExists = (await SnapshotDefinitionsAsync(cancellationToken)).Any(definition => StringComparer.Ordinal.Equals(definition.FolderId, folderId));
+        var childExists = await HasDirectChildAsync(folderId, cancellationToken);
+        var definitionExists = await HasDirectDefinitionAsync(folderId, cancellationToken);
         if (childExists || definitionExists)
             throw new WorkflowFolderRestructureConflictException();
         try
         {
             await using var unit = await store.BeginAsync(DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind), cancellationToken);
             // The bounded snapshot is taken before the UoW because native providers do not permit a
-            // second physical reader while an atomic writer is open. Comparing its version immediately
-            // after the in-UoW load is the fence: membership writers CAS-touch this folder, so either the
-            // snapshot check or the expected-version delete rejects any intervening placement/create.
+            // second physical reader while an atomic writer is open. Membership writers CAS-touch this
+            // folder, so its expected-version delete rejects any intervening placement or child creation.
             var loaded = await LoadOwnedAsync(unit, folderId, access, cancellationToken);
-            EnsureUnchanged(folders, loaded);
+            if (loaded.Envelope.Version != snapshotEnvelope.Version)
+                throw new WorkflowFolderRestructureConflictException();
             var envelope = loaded.Envelope;
             var result = await unit.DeleteAsync(new DeleteDocumentRequest(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind, folderId, envelope.Version), cancellationToken);
             if (result.Status != DocumentStoreWriteStatus.Deleted)
@@ -210,14 +208,32 @@ public sealed class GroundworkRestructureWorkflowFoldersCommand(
         return documents.Documents.Select(document => new FolderSnapshot(document, ReadFolder(document))).ToArray();
     }
 
-    private async Task<IReadOnlyList<WorkflowDefinition>> SnapshotDefinitionsAsync(CancellationToken cancellationToken)
+    private async Task<bool> HasDirectChildAsync(string folderId, CancellationToken cancellationToken)
     {
-        var documents = await BoundedStore.QueryAsync(new DocumentQuery(
+        var result = await BoundedStore.QueryAsync(new DocumentQuery(
+            WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
+            WorkflowsDesignStorageManifest.PageWorkflowFoldersQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(WorkflowsDesignStorageManifest.WorkflowFolderParentKeyField, folderId))],
+            [
+                new DocumentQueryOrder(WorkflowsDesignStorageManifest.WorkflowFolderNormalizedNameField, PhysicalSortDirection.Ascending),
+                new DocumentQueryOrder("entity.id", PhysicalSortDirection.Ascending)
+            ],
+            take: 1), cancellationToken);
+        return result.Documents.Count != 0;
+    }
+
+    private async Task<bool> HasDirectDefinitionAsync(string folderId, CancellationToken cancellationToken)
+    {
+        var result = await BoundedStore.QueryAsync(new DocumentQuery(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-            WorkflowsDesignStorageManifest.ListAllQuery,
-            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(WorkflowsDesignStorageManifest.CollectionField, WorkflowsDesignStorageManifest.WorkflowDefinitionCollection))]), cancellationToken);
-        return documents.Documents.Select(document => JsonSerializer.Deserialize<GroundworkDocument<WorkflowDefinition>>(document.ContentJson, GroundworkDesignJson.Options)?.Entity
-            ?? throw new InvalidOperationException("The workflow-definition document is empty.")).ToArray();
+            WorkflowsDesignStorageManifest.PageAllWorkflowDefinitionsByFolderQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionFolderIdField, folderId))],
+            [
+                new DocumentQueryOrder(WorkflowsDesignStorageManifest.WorkflowDefinitionLastModifiedAtField, PhysicalSortDirection.Descending),
+                new DocumentQueryOrder(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, PhysicalSortDirection.Ascending)
+            ],
+            take: 1), cancellationToken);
+        return result.Documents.Count != 0;
     }
 
     private IBoundedDocumentStore BoundedStore => _boundedStore ?? throw new InvalidOperationException(

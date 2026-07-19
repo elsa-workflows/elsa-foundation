@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
@@ -168,6 +169,29 @@ public class GroundworkWorkflowDefinitionCommandTests
 
         Assert.Equal(0, _store.LoadCount);
         Assert.Equal(0, _store.BeginCount);
+        Assert.Empty(_store.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind));
+    }
+
+    [Fact]
+    public async Task SaveWorkflowDefinition_rejects_missing_or_foreign_folder_without_staging_an_orphan()
+    {
+        var tenantA = GroundworkTestAccess.AccessContext("tenant-a");
+        var tenantB = GroundworkTestAccess.AccessContext("tenant-b");
+        var save = new GroundworkSaveWorkflowDefinitionCommand(_store, _clock, tenantA);
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => save.Execute(new WorkflowDefinition
+        {
+            Id = "missing-folder", Name = "Missing", TenantId = "tenant-a", FolderId = "missing"
+        }));
+        await new GroundworkWorkflowFolderStore(_store, tenantB, _clock).CreateAsync(new WorkflowFolder
+        {
+            Id = "foreign-folder", Name = "Foreign", NormalizedName = "FOREIGN"
+        });
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => save.Execute(new WorkflowDefinition
+        {
+            Id = "foreign-folder", Name = "Foreign", TenantId = "tenant-a", FolderId = "foreign-folder"
+        }));
+
         Assert.Empty(_store.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind));
     }
 

@@ -1,6 +1,7 @@
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Design.Api.Endpoints;
@@ -20,6 +21,10 @@ internal abstract class NoContentDesignCommandEndpoint<TCommand>(
         catch (EntityNotFoundException exception)
         {
             ThrowError(exception.Message, 404);
+        }
+        catch (WorkflowFolderRestructureConflictException exception)
+        {
+            ThrowError(exception.Message, 409);
         }
         catch (ArgumentException exception)
         {

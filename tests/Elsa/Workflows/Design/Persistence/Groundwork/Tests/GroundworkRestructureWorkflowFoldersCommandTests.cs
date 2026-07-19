@@ -1,5 +1,6 @@
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
+using Elsa.Persistence.Core.Queries;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Models;
@@ -90,6 +91,32 @@ public sealed class GroundworkRestructureWorkflowFoldersCommandTests
         await Assert.ThrowsAsync<EntityNotFoundException>(() => local.RenameAsync("foreign", "Hidden"));
     }
 
+    [Fact]
+    public async Task Delete_empty_uses_bounded_direct_member_probes_instead_of_tenant_wide_scans()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var clock = new Clock();
+        var access = GroundworkTestAccess.AccessContext("tenant-a");
+        var folders = new GroundworkWorkflowFolderStore(store, access, clock);
+        await folders.CreateAsync(Folder("empty", "Empty"));
+        var bounded = new RecordingBoundedDocumentStore(store);
+
+        await new GroundworkRestructureWorkflowFoldersCommand(store, access, clock, bounded).DeleteEmptyAsync("empty");
+
+        Assert.Equal(
+            [
+                WorkflowsDesignStorageManifest.PageWorkflowFoldersQuery,
+                WorkflowsDesignStorageManifest.PageAllWorkflowDefinitionsByFolderQuery
+            ],
+            bounded.Observations.Select(observation => observation.Query.QueryIdentity));
+        Assert.All(bounded.Observations, observation =>
+        {
+            Assert.Equal(1, observation.Query.Take);
+            Assert.InRange(observation.MaterializedDocuments, 0, 1);
+            Assert.NotEqual(WorkflowsDesignStorageManifest.ListAllQuery, observation.Query.QueryIdentity);
+        });
+    }
+
     private static WorkflowFolder Folder(string id, string name, string? parentId = null)
     {
         var normalized = WorkflowFolderNames.Normalize(name);
@@ -101,4 +128,22 @@ public sealed class GroundworkRestructureWorkflowFoldersCommandTests
         public DateTimeOffset UtcNow { get; private set; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         public void Advance() => UtcNow = UtcNow.AddMinutes(1);
     }
+
+    private sealed class RecordingBoundedDocumentStore(IBoundedDocumentStore inner) : IBoundedDocumentStore
+    {
+        public List<QueryObservation> Observations { get; } = [];
+
+        public async Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            var result = await inner.QueryAsync(query, cancellationToken);
+            Observations.Add(new QueryObservation(query, result.Documents.Count));
+            return result;
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) => inner.CountAsync(query, cancellationToken);
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) => inner.FirstOrDefaultAsync(query, cancellationToken);
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) => inner.AnyAsync(query, cancellationToken);
+    }
+
+    private sealed record QueryObservation(DocumentQuery Query, int MaterializedDocuments);
 }
