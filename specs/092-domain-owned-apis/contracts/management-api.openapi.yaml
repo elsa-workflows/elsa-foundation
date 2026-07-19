@@ -1182,7 +1182,7 @@ components:
         latestVersionId: { type: [string, 'null'] }
         latestVersion: { type: [string, 'null'] }
         versionCount: { type: integer, minimum: 0 }
-        folderId: { type: [string, 'null'], maxLength: 64 }
+        folderId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
     WorkflowDefinitionPageItem:
       allOf:
         - $ref: '#/components/schemas/WorkflowDefinitionSummary'
@@ -1220,7 +1220,7 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         description: { type: [string, 'null'] }
-        folderId: { type: [string, 'null'], maxLength: 64 }
+        folderId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
         initialState:
           oneOf:
             - $ref: '#/components/schemas/WorkflowDefinitionState'
@@ -1641,7 +1641,7 @@ components:
       required: [id, name, normalizedName, createdAt, lastModifiedAt]
       properties:
         id: { type: string, maxLength: 64 }
-        parentId: { type: [string, 'null'], maxLength: 64 }
+        parentId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
         name: { type: string, maxLength: 128 }
         normalizedName: { type: string, maxLength: 128 }
         createdAt: { type: string, format: date-time }
@@ -1673,7 +1673,7 @@ components:
       required: [name]
       properties:
         name: { type: string, minLength: 1, maxLength: 128 }
-        parentId: { type: [string, 'null'], maxLength: 64 }
+        parentId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
     RenameWorkflowFolderRequest:
       type: object
       required: [name]
