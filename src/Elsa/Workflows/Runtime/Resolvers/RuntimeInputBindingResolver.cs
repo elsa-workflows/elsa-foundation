@@ -166,7 +166,10 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
 
         if (!source.InlineValue.HasValue && source.ExternalReference is not null)
         {
-            var externalProjectionSource = ValueEnvelope.External(binding.TargetType, source.ExternalReference, source.Policy);
+            var externalProjectionSource = ValueEnvelope.External(
+                binding.ConversionPlan?.SourceType ?? binding.TargetType,
+                source.ExternalReference,
+                source.Policy);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = externalProjectionSource

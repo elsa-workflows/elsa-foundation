@@ -224,6 +224,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
         if (source.ExternalReference is not null && HasExternalProjection(binding))
             return await MaterializeExternalProjectionAsync(node, invocationId, input, binding, source, effectivePolicy, resolutionContext, cancellationToken);
+        if (source.ExternalReference is not null && RequiresExternalConversion(binding))
+            return await MaterializeExternalConversionAsync(node, invocationId, input, binding, source, effectivePolicy, resolutionContext, cancellationToken);
 
         var projected = source;
         var retyped = binding.ConversionPlan is null
@@ -256,7 +258,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ValueProtectionPolicy sourcePolicy,
         ValueProtectionPolicy effectivePolicy,
         RuntimeInputBindingResolutionContext resolutionContext,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? fallbackStorageProfile = null)
     {
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
@@ -265,7 +268,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 $"Input '{input.Key}'",
                 value,
                 sourcePolicy,
-                effectivePolicy),
+                effectivePolicy,
+                fallbackStorageProfile),
             cancellationToken);
     }
 
@@ -282,7 +286,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         if (_externalPayloadStore is null)
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' requires an IExternalPayloadStore for projection.");
 
-        var payload = await _externalPayloadStore.ReadAsync(source.ExternalReference!, cancellationToken);
+        var payload = await ReadExternalPayloadAsync(node, input, source, cancellationToken);
         var path = ResolveProjectionPath(binding, resolutionContext);
         foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
@@ -308,6 +312,58 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             cancellationToken);
     }
 
+    private async ValueTask<ValueEnvelope> MaterializeExternalConversionAsync(
+        ExecutableNode node,
+        string invocationId,
+        ActivityInputContract input,
+        RuntimeInputBinding binding,
+        ValueEnvelope source,
+        ValueProtectionPolicy effectivePolicy,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        CancellationToken cancellationToken)
+    {
+        if (_externalPayloadStore is null)
+            throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' requires an IExternalPayloadStore for conversion.");
+
+        var payload = await ReadExternalPayloadAsync(node, input, source, cancellationToken);
+        var conversionSource = payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            ? ValueEnvelope.Null(source.Type, effectivePolicy)
+            : ValueEnvelope.Inline(source.Type, payload, effectivePolicy);
+        return await ApplyDestinationStorageAsync(
+            invocationId,
+            input,
+            ApplyConversionPlan(binding, conversionSource),
+            source.Policy,
+            effectivePolicy,
+            resolutionContext,
+            cancellationToken,
+            source.ExternalReference!.StorageProfile);
+    }
+
+    private async ValueTask<JsonElement> ReadExternalPayloadAsync(
+        ExecutableNode node,
+        ActivityInputContract input,
+        ValueEnvelope source,
+        CancellationToken cancellationToken)
+    {
+        var reference = source.ExternalReference
+            ?? throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' has no external payload reference.");
+        try
+        {
+            return await _externalPayloadStore!.ReadAsync(reference, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(
+                $"VF-ACT-005: External payload for input '{input.Key}' on executable node '{node.ExecutableNodeId}' could not be read from storage profile '{reference.StorageProfile}' at locator '{reference.Locator}'.",
+                exception);
+        }
+    }
+
     private ValueEnvelope ApplyConversionPlan(RuntimeInputBinding binding, ValueEnvelope source) =>
         binding.ConversionPlan is null
             ? source
@@ -318,6 +374,9 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         !StringComparer.Ordinal.Equals(binding.ActivityResult!.ProjectionKey, "$result") ||
         binding.Source == RuntimeInputBindingSource.WorkflowRequest &&
         !string.IsNullOrWhiteSpace(binding.WorkflowRequest!.Path);
+
+    private static bool RequiresExternalConversion(RuntimeInputBinding binding) =>
+        binding.ConversionPlan is { Operation: not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility };
 
     private static bool TryGetProperty(JsonElement value, string name, out JsonElement property)
     {
