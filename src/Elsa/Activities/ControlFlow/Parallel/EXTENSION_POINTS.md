@@ -10,10 +10,13 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
 
 ## Consumed runtime extension points
 
-- `Parallel` implements both `IActivityChildCompletionHandler` and `IActivityChildFaultHandler`
-  (`Elsa.Activities.Runtime.Core`). The runtime invokes the completion handler on each branch completion and
-  the fault handler on each branch fault (the engine propagates branch faults via a child-fault
-  parent-evaluation work item). Both funnel through one fault-aware join decision: complete with `Done` once
+- `Parallel` implements the engine-only `IRuntimeStructuralActivity` protocol
+  (`Elsa.Workflows.Runtime.Core`). Its initial `ExecuteStructureAsync` invocation schedules every runnable
+  branch and returns `RuntimeStructuralContinuation.Defer`.
+- `Parallel` also implements `IRuntimeActivityChildCompletionHandler` and
+  `IRuntimeActivityChildFaultHandler`. The runtime invokes the relevant callback on each branch completion
+  or fault (faults arrive through a child-fault parent-evaluation work item). Both callbacks funnel through
+  one fault-aware join decision and return a `RuntimeStructuralContinuation`: complete with `Done` once
   enough branches succeed, fault the composite once the threshold is unreachable, otherwise defer.
 
 ## Cross-domain contributions

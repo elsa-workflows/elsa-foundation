@@ -83,6 +83,23 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
+    public void Baseline_comparison_rejects_an_incomplete_repository_restore_instead_of_reporting_phantom_changes()
+    {
+        var baseline = EmptySurface() with
+        {
+            ResolvedEfPackageConsumers = ["src/Consumer/Consumer.csproj -> Microsoft.EntityFrameworkCore"]
+        };
+        var actual = EmptySurface() with { ProjectsMissingAssets = ["src/Consumer/Consumer.csproj"] };
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            EfCoreSurfaceBaseline.Compare(baseline, actual));
+
+        Assert.Contains("dotnet restore Elsa.Server.slnx", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("src/Consumer/Consumer.csproj", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("EF surface shrank", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Baseline_generation_rejects_an_incomplete_repository_restore()
     {
         using var fixture = new TemporaryRepository();

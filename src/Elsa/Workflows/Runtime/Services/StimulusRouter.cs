@@ -116,7 +116,10 @@ public sealed class StimulusRouter : IStimulusRouter
         // Reuse the caller's already-fetched match set when supplied (e.g. the HTTP endpoint middleware fetched it
         // for its ambiguity guard + per-endpoint options), so a request costs one durable trigger read, not two.
         var bindings = request.MatchedTriggerBindings
-            ?? await _triggerBindingStore.ListByStimulusAsync(request.StimulusType, request.StimulusHash, cancellationToken);
+            ?? await _triggerBindingStore.ListAllByStimulusAsync(
+                request.StimulusType,
+                request.StimulusHash,
+                cancellationToken);
 
         // Deterministic order so fan-out of starts is stable across providers.
         var ordered = bindings
@@ -186,7 +189,9 @@ public sealed class StimulusRouter : IStimulusRouter
                 input: request.Input,
                 idempotencyKey: request.IdempotencyKey is null ? null : $"{request.IdempotencyKey}:resume:{workflowExecutionId}",
                 requestedBy: request.RequestedBy,
-                metadata: dispatchMetadata);
+                metadata: dispatchMetadata,
+                payloadType: request.PayloadType,
+                providerId: request.ProviderId);
 
             // Same request scope serves every outcome of one HTTP request (spec 089 FR-019 / scenario 5.5): a resume
             // driven by a synchronous-mode endpoint gets the caller's ambient services so its subsequent live write

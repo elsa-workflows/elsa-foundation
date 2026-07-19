@@ -9,6 +9,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork;
@@ -166,6 +167,7 @@ public sealed class ActivityDefinitionPublicationTests
         Assert.Equal("1.0.0", commit.SourceReference.ArtifactVersion);
         Assert.Equal(commit.SourceReference.SourceReferenceId, commit.Design.Publication.SourceReferenceId);
         Assert.Equal(template.TemplateHash, commit.Design.Publication.TemplateHash);
+        Assert.Equal(ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary, commit.Design.Publication.ResolutionKind);
         Assert.Equal(1, harness.Commit.CallCount);
     }
 
@@ -853,7 +855,7 @@ public sealed class ActivityDefinitionPublicationTests
             0);
     }
 
-    private static ActivityContract Contract() => new("1", [], [], []);
+    private static Elsa.Activities.Design.Core.Models.ActivityContract Contract() => new("1", [], [], []);
     private static ActivityProviderManifest Provider() => new("test.provider", "1", Json("{}"));
     private static JsonElement Json(string value) => JsonDocument.Parse(value).RootElement.Clone();
     private static string ReceiptId(string idempotencyKey, string? tenantId = null) =>
@@ -898,6 +900,9 @@ public sealed class ActivityDefinitionPublicationTests
             DefinitionVersionId = source.DefinitionVersionId,
             Version = version,
             ActivityTypeKey = source.ActivityTypeKey,
+            ResolutionKind = source.ResolutionKind,
+            SourceDraftId = source.SourceDraftId,
+            SourceVersionId = source.SourceVersionId,
             Contract = source.Contract,
             Provider = source.Provider,
             TemplateId = source.TemplateId,
@@ -921,6 +926,8 @@ public sealed class ActivityDefinitionPublicationTests
             DefinitionVersionId = versionId,
             Version = "1.0.0",
             ActivityTypeKey = activityTypeKey,
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
+            SourceDraftId = $"draft-{versionId}",
             Contract = Contract(),
             Provider = Provider(),
             TemplateId = template.TemplateId,
@@ -1124,7 +1131,7 @@ public sealed class ActivityDefinitionPublicationTests
                 new SequentialIdentityGenerator(),
                 TimeProvider.System,
                 receipts,
-                runtimeReady ? new ReadyActivityConstructorRegistry() : null);
+                runtimeReady ? [new ReadyActivityActivationStrategy()] : null);
             return new(publisher, compiler, commit, drafts, receipts);
         }
 
@@ -1240,22 +1247,25 @@ public sealed class ActivityDefinitionPublicationTests
         }
     }
 
-    private sealed class ReadyActivityConstructorRegistry : IActivityConstructorRegistry
+    private sealed class ReadyActivityActivationStrategy : IActivityActivationStrategy
     {
-        public void Add(IActivityConstructor constructor) => throw new NotSupportedException();
-        public void AddAll(IEnumerable<IActivityConstructor> constructors) => throw new NotSupportedException();
-        public IActivityConstructor Resolve(string consumerKey, string schemaVersion) =>
-            throw new NotSupportedException();
-        public bool TryResolve(
-            string consumerKey,
-            string schemaVersion,
-            out IActivityConstructor? constructor)
-        {
-            constructor = null;
-            return true;
-        }
+        public string ConsumerKey => "test.consumer";
+        public IReadOnlyCollection<string> SupportedSchemaVersions => ["1"];
+        public bool RequiresInputHydration => false;
 
-        public IReadOnlyCollection<string> GetSupportedSchemaVersions(string consumerKey) => ["1"];
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationStrategyRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(new ActivityActivationLease(new ReadyActivity()));
+        }
+    }
+
+    private sealed class ReadyActivity : Activity
+    {
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
     }
 
     private sealed class SpyPublicationCommit(
@@ -1461,6 +1471,7 @@ public sealed class ActivityDefinitionPublicationTests
                 DefinitionId = "definition-1",
                 Version = "1.0.0",
                 ActivityTypeKey = "test.activity",
+                ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
                 SourceDraftId = "draft-1",
                 Contract = Contract(),
                 Provider = Provider(),

@@ -1,7 +1,9 @@
 using CShells.Lifecycle;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Scoping;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.MongoDb;
@@ -91,13 +93,12 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
                 _connectionString,
                 _databaseName,
                 cancellationToken);
-            var providerCapabilities = GroundworkProviderCapabilitySnapshot.ForFeatureRoutes(
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var providerCapabilities = await GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
                 MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment(),
                 topology,
-                RuntimeGroundworkStorageManifestSource.FeatureName,
-                [RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement()]);
-
-            await using var scope = _scopeFactory.CreateAsyncScope();
+                scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+                cancellationToken);
             var source = await scope.ServiceProvider
                 .GetRequiredService<GroundworkStorageCompositionFactory>()
                 .CreateSourceAsync(
@@ -244,12 +245,12 @@ public sealed class MongoDbGroundworkRuntimeAdmission : IMongoDbGroundworkRuntim
                     $"MongoDB Groundwork runtime admission opened a target that differs from the selected target '{source.TargetFingerprint}'.");
             }
 
-            if (!sessionSource.TrySet((access, ct) =>
+            if (!sessionSource.TrySetAdmitted((access, ct) =>
             {
                 ct.ThrowIfCancellationRequested();
                 var store = handle.CreateStore(access);
                 return ValueTask.FromResult(new GroundworkStoreSessionResources(store, store));
-            }, handle))
+            }, TransactionBoundary.CrossUnitAtomic, handle))
             {
                 await handle.DisposeAsync();
                 throw new InvalidOperationException(

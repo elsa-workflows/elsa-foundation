@@ -56,7 +56,7 @@ The domain splits into two co-equal sub-domains, each with its own seam:
 | Sub-domain | Concern | Seam (the `.Core` surface) |
 |---|---|---|
 | **Design** | author & persist what an activity/workflow *is* | `IActivityDefinitionVersion` (stable provider and consumer key/schema pairs, opaque `DescriptorPayload`, `InputDefinition`/`OutputDefinition` keyed by `ReferenceKey`); `ActivityNode` + `ArgumentState` (author-filled values) |
-| **Runtime** | construct & execute a live object | `IActivityFactory` → `IActivityConstructor` → `IActivityConstructorRegistry`; the payload stays **opaque** until the owning constructor deserializes it |
+| **Runtime** | activate & execute one invocation | `IActivityActivator` selects a Core-owned `IActivityActivationStrategy` by stable consumer key/schema; the strategy creates a transient activity and owned activation lease, after which the activator hydrates ordinary `[ActivityInput]` properties from the committed input snapshot when the strategy requests it |
 
 ```mermaid
 flowchart TB
@@ -65,29 +65,32 @@ flowchart TB
         NODE["ActivityNode + ArgumentState<br/>(author-filled values, by ReferenceKey)"]
     end
     subgraph Runtime["Runtime seam — Elsa.Activities.Runtime.Core"]
-        FAC["IActivityFactory.Create(runtime descriptor, inputs, outputs)"]
-        CON["IActivityConstructor&lt;TDescriptor&gt;<br/>(one claim per consumer key/schema)"]
-        ACT["IActivity (a live object)"]
-        FAC --> CON --> ACT
+        STRATEGY["IActivityActivationStrategy<br/>(consumer key + supported schemas)"]
+        ACT["ActivityActivationLease<br/>(one transient live object + owned scope)"]
+        STRATEGY --> ACT
     end
+    ACTIVATE["Elsa.Activities.Runtime<br/>IActivityActivator.ActivateAsync<br/>(pinned contract + snapshot + attempt + descriptor)"]
+    ACTIVATE --> STRATEGY
     classDef seam fill:#eef,stroke:#558;
-    class ADV,NODE,FAC,CON,ACT seam;
+    class ADV,NODE,STRATEGY,ACT seam;
 ```
 
-A compiled runtime descriptor's stable `(ConsumerKey, SchemaVersion)` decides which constructor builds it:
+A compiled runtime descriptor's stable `(ConsumerKey, SchemaVersion)` decides which activation
+strategy owns it:
 
-- `elsa.clr-activity`, schema `1` → the CLR consumer (`ClrActivityConstructor`)
-- `elsa.graph-activity`, schema `1` → the inline graph-composite consumer (`GraphActivityConstructor`)
+- `elsa.clr-activity`, schema `1` → the CLR consumer (`ClrActivityActivator`)
+- `elsa.graph-activity`, schema `1` → the inline graph-composite consumer (`GraphActivityActivationStrategy`)
 
-There is no workflow-definition constructor. `ExecuteWorkflow` is an explicit separate-workflow operation;
+There is no workflow-definition activator. `ExecuteWorkflow` is an explicit separate-workflow operation;
 reusable graph activities execute inside the current workflow execution.
 
 ---
 
-## 3. Bridge 1 — Activity construction *(the worked example)*
+## 3. Bridge 1 — Activity compilation and invocation *(the worked example)*
 
-This is the bridge you can run today: [`Elsa.Workflows.Publishing.Api`](../src/Elsa/Workflows/Publishing/Api).
-Its `construct/{activityId}` endpoint reads a persisted catalog row and produces a live `IActivity`.
+[`Elsa.Workflows.Publishing.Api`](../src/Elsa/Workflows/Publishing/Api) reads the authored contract and
+compiles it into an executable node. Design tooling does not construct a live activity object.
+Transient activation is reserved for a pinned runtime invocation attempt.
 
 ```mermaid
 flowchart LR
@@ -95,31 +98,36 @@ flowchart LR
         ROW["ActivityDefinitionVersion<br/>provider + consumer key/schema<br/>+ opaque payload + I/O definitions"]
         STATE["ArgumentState<br/>(author values, by ReferenceKey)"]
     end
-    MAP["MAP<br/>join ArgumentState.ReferenceKey<br/>→ *Definition.ReferenceKey<br/>→ typed InputArgument/OutputArgument"]
+    COMPILE["COMPILE<br/>join ArgumentState.ReferenceKey<br/>→ *Definition.ReferenceKey<br/>→ RuntimeInputBinding + ActivityContract"]
+    NODE["ExecutableNode<br/>descriptor + bindings + pinned contract"]
     subgraph RuntimeSeam["Runtime seam (drive)"]
-        CREATE["IActivityFactory.Create(...)"]
-        LIVE["IActivity"]
-        CREATE --> LIVE
+        SNAP["committed ActivityInputSnapshot"]
+        ACTIVATE["IActivityActivator.ActivateAsync(...)"]
+        LIVE["ActivityActivationLease"]
+        RESULT["immutable ActivityTransition&lt;TResult&gt;"]
+        SNAP --> ACTIVATE --> LIVE --> RESULT
     end
-    ROW --> MAP
-    STATE --> MAP
-    MAP --> CREATE
+    ROW --> COMPILE
+    STATE --> COMPILE
+    COMPILE --> NODE
+    NODE --> ACTIVATE
 
     classDef seam fill:#eef,stroke:#558;
     classDef bridge fill:#efe,stroke:#585,stroke-width:2px;
-    class ROW,STATE,CREATE,LIVE seam;
-    class MAP bridge;
+    class ROW,STATE,SNAP,ACTIVATE,LIVE,RESULT seam;
+    class COMPILE,NODE bridge;
 ```
 
 The bridge does three things, each touching exactly one seam:
 
 1. **Read** the persisted version — the Design seam hands over stable provider/consumer identities and
-   opaque payload plus
-   the argument definitions. The bridge never deserializes the payload itself.
-2. **Map** — join author `ArgumentState`s onto argument definitions by `ReferenceKey`, producing the
-   typed runtime argument bags.
-3. **Drive** `IActivityFactory.Create(...)` — the Runtime seam dispatches on consumer key/schema to the
-   owning constructor and returns a whole `IActivity`.
+   opaque payload plus the argument definitions. The compiler never deserializes the provider-owned
+   descriptor payload.
+2. **Compile** — join author `ArgumentState`s onto definitions by `ReferenceKey`, producing immutable
+   runtime bindings and a pinned activity contract.
+3. **Invoke** — the runtime materializes and commits an input snapshot, selects the owning activation
+   strategy by consumer key/schema, hydrates plain activity properties once, and projects the returned
+   immutable result. No workflow value travels through the live activity instance or its DI scope.
 
 **Why this is legal.** `Elsa.Workflows.Publishing.Api` references only `Elsa.Activities.Design(.Persistence).Core`
 and `Elsa.Activities.Runtime.Core` — the two seams. It references **neither** the Runtime
@@ -179,16 +187,17 @@ not be merged.
 
 Seams are where the domain will *expand*, and they tell you where:
 
-- **Today:** `construct/{activityId}` constructs one activity (construct-only; no value binding).
-- **Next:** map author **values** — join `ArgumentState` onto typed arguments through the expression
-  system. The `MAP` box in Bridge 1 fills in.
-- **Then:** compile a whole root activity — Bridge 1 recurses through activity-specific child slots, and
-  the `Elsa.Workflows.Publishing.*` feature grows from one endpoint into a compile-and-publish
-  sub-domain.
+- **Design inspection:** `construct/{activityId}` projects the persisted authored contract; it does not
+  activate a runtime object.
+- **Publish:** author values compile into typed bindings, contracts, descriptors, and immutable
+  executable nodes.
+- **Invoke:** a committed input snapshot activates one transient activity instance; immutable returned
+  results become durable projections, variables, or downstream inputs according to compiled routing.
 
-Through all of that, **the seams do not move.** `IActivityFactory` and `IActivityDefinitionVersion`
-are the same contracts whether we construct one activity or publish ten thousand. The bridge grows
-into a domain; the checkpoints stay where they are. That is what makes them worth marking.
+Through all of that, **the seams do not move.** `IActivityActivator`,
+`IActivityActivationStrategy`, and `IActivityDefinitionVersion` remain the contracts whether one
+activity is invoked or ten thousand are published. The bridge grows into a domain; the checkpoints
+stay where they are.
 
 ---
 
@@ -200,6 +209,6 @@ into a domain; the checkpoints stay where they are. That is what makes them wort
   features that interpret it.
 - **§E2.9** — *The architectural triplet.* `WorkflowDefinitionState` ↔ read projections ↔
   `WorkflowExecutable`, at three separate scopes.
-- **Construction seam spec** — [`specs/006-activity-construction-seam/`](../specs/006-activity-construction-seam)
-  (`spec.md`, `plan.md`, `quickstart.md`).
+- **Current value-flow design** — [`specs/095-value-flow-redesign/`](../specs/095-value-flow-redesign)
+  and [ADR 0045](adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md).
 - **The worked bridge** — [`src/Elsa/Workflows/Publishing/Api/`](../src/Elsa/Workflows/Publishing/Api).

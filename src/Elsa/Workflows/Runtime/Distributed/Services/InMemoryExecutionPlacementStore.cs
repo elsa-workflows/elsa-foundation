@@ -41,7 +41,7 @@ public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
 
     public ValueTask<ExecutionPlacementLease?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         cancellationToken.ThrowIfCancellationRequested();
 
         _state.Leases.TryGetValue(Key(workflowExecutionId), out var lease);
@@ -98,18 +98,29 @@ public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListAsync(CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(
+        ExecutionPlacementLeaseListRequest request,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        IReadOnlyCollection<ExecutionPlacementLease> leases = _state.Leases
+        IReadOnlyList<ExecutionPlacementLease> leases = OrderedLeases()
+            .Where(lease =>
+                StringComparer.Ordinal.Equals(lease.OwnerId, request.OwnerId) &&
+                !lease.IsExpired(request.Now))
+            .OrderBy(lease => lease.ExpiresAt)
+            .ThenBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal)
+            .Take(request.Take)
+            .ToArray();
+        return new ValueTask<IReadOnlyList<ExecutionPlacementLease>>(leases);
+    }
+
+    private IEnumerable<ExecutionPlacementLease> OrderedLeases() =>
+        _state.Leases
             .Where(pair => StringComparer.Ordinal.Equals(pair.Key.Partition, _partition))
             .Select(pair => pair.Value)
-            .OrderBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal)
-            .ToArray();
-
-        return new ValueTask<IReadOnlyCollection<ExecutionPlacementLease>>(leases);
-    }
+            .OrderBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal);
 
     private InMemoryExecutionPlacementKey Key(string workflowExecutionId) => new(_partition, workflowExecutionId);
 }

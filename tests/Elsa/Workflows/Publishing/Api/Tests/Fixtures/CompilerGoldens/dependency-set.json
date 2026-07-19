@@ -18,8 +18,8 @@
     }
   ],
   "identity": {
-    "artifactHash": "sha256:f39caae60bb64bc6c76a22afbab4dbf293fecca1ce284694938b86873927150d",
-    "artifactId": "artifact-f39caae60bb6",
+    "artifactHash": "sha256:2358403c9f3b3881b9c2001c2cea6f675455e90f23693cde92c1e71c24aa5991",
+    "artifactId": "artifact-2358403c9f3b",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -44,12 +44,26 @@
             "descriptor": {
               "consumerKey": "elsa.clr-activity",
               "payload": {
-                "TypeAlias": "Object"
+                "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
               },
               "schemaVersion": "1"
             },
             "executableNodeId": "dispatch-b",
-            "inputBindings": [],
+            "inputBindings": [
+              {
+                "expression": null,
+                "inputName": "Text",
+                "key": "Text",
+                "literalValue": null,
+                "metadata": [
+                  {
+                    "Key": "referenceKey",
+                    "Value": "Text"
+                  }
+                ],
+                "source": "Literal"
+              }
+            ],
             "metadata": [
               {
                 "Key": "authoredNodeId",
@@ -70,12 +84,26 @@
             "descriptor": {
               "consumerKey": "elsa.clr-activity",
               "payload": {
-                "TypeAlias": "Object"
+                "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
               },
               "schemaVersion": "1"
             },
             "executableNodeId": "dispatch-a",
-            "inputBindings": [],
+            "inputBindings": [
+              {
+                "expression": null,
+                "inputName": "Text",
+                "key": "Text",
+                "literalValue": null,
+                "metadata": [
+                  {
+                    "Key": "referenceKey",
+                    "Value": "Text"
+                  }
+                ],
+                "source": "Literal"
+              }
+            ],
             "metadata": [
               {
                 "Key": "authoredNodeId",
@@ -95,7 +123,7 @@
     "descriptor": {
       "consumerKey": "elsa.clr-activity",
       "payload": {
-        "TypeAlias": "Object"
+        "TypeAlias": "Elsa.Activities.Sequence.Activities.Sequence"
       },
       "schemaVersion": "1"
     },

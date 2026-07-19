@@ -1,6 +1,5 @@
 ﻿using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Expressions.JavaScript.Rendering.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
@@ -23,7 +22,11 @@ namespace Elsa.Expressions.JavaScript.Rendering;
 )]
 public class JavaScriptRenderingFeature : IShellFeature
 {
-    public IEnumerable<JavaScriptFunctionDeclaration> FunctionDeclarations { get; set; } = DefaultFunctionDeclarations.Get();
+    /// <summary>
+    /// Additional declarations for non-binding authoring surfaces. The canonical binding-pure
+    /// surface is closed by default and therefore exposes no ambient host functions.
+    /// </summary>
+    public IEnumerable<JavaScriptFunctionDeclaration> FunctionDeclarations { get; set; } = [];
 
     public IEnumerable<JavaScriptTypeDeclaration> TypeDeclarations { get; set; } = [];
 

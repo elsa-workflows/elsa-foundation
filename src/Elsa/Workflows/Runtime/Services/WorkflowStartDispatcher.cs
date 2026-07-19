@@ -15,6 +15,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutionPartitionAccessor? _partitionAccessor;
     private readonly IWorkflowExecutableStartPolicy _startPolicy;
+    private readonly IWorkflowDispatchStore? _workflowDispatchStore;
+    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
@@ -54,6 +56,29 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         TimeProvider timeProvider,
         IWorkflowExecutionPartitionAccessor? partitionAccessor,
         IWorkflowExecutableStartPolicy startPolicy)
+        : this(
+            executableStore,
+            sourceReferenceStore,
+            agentProvider,
+            idGenerator,
+            timeProvider,
+            partitionAccessor,
+            startPolicy,
+            null,
+            null)
+    {
+    }
+
+    public WorkflowStartDispatcher(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IWorkflowExecutableStartPolicy startPolicy,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
@@ -69,6 +94,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         _timeProvider = timeProvider;
         _partitionAccessor = partitionAccessor;
         _startPolicy = startPolicy;
+        _workflowDispatchStore = workflowDispatchStore;
+        _workflowExecutionStateStore = workflowExecutionStateStore;
     }
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
@@ -88,9 +115,31 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             ? await ResolveRetainedDependencyAsync(request, executable, cancellationToken)
             : await ResolvePinnedExecutableAsync(request, executable, requiredScope, cancellationToken);
         var partition = request.Partition ?? CurrentPartition();
-        await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
+        if (resolved.Dispatch is not null && _workflowExecutionStateStore is not null)
+        {
+            var workflowExecutionId = request.WorkflowExecutionId!;
+            var existing = await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
+            if (existing is not null)
+            {
+                return ExistingDispatchResult(
+                    existing,
+                    resolved.Dispatch,
+                    resolved.Identity,
+                    resolved.Source,
+                    request.DispatchNestingDepth);
+            }
+        }
 
-        return await DispatchCoreAsync(request, resolved.Identity, resolved.Source, partition, dispatchOptions, cancellationToken);
+        await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
+        return await DispatchCoreAsync(
+            request,
+            resolved.Identity,
+            resolved.Source,
+            resolved.Dispatch,
+            partition,
+            requiredScope,
+            dispatchOptions,
+            cancellationToken);
     }
 
     private async ValueTask<ResolvedPinnedExecutable> ResolveRetainedDependencyAsync(
@@ -125,7 +174,57 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
                 "The retained parent does not authorize this exact child executable and dispatch node.");
         }
 
-        return new(child.Identity, null);
+        if (_workflowDispatchStore is null)
+            return new(child.Identity, null, null);
+        if (request.ParentWorkflowExecutionId is null || request.WorkflowExecutionId is null || request.Partition is null)
+        {
+            throw AuthorityRejected(
+                "retained-dependency-dispatch-context-missing",
+                "The retained dependency start is missing committed dispatch context.");
+        }
+
+        var committedDispatches = await _workflowDispatchStore.ListAsync(request.ParentWorkflowExecutionId, cancellationToken);
+        var identityCandidates = committedDispatches.Where(dispatch =>
+            StringComparer.Ordinal.Equals(dispatch.ChildWorkflowExecutionId, request.WorkflowExecutionId) &&
+            WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(dispatch.ChildExecutable, child.Identity))
+            .ToArray();
+        var committedDispatch = identityCandidates.SingleOrDefault(dispatch =>
+            StringComparer.Ordinal.Equals(dispatch.CorrelationId, request.CorrelationId) &&
+            StringComparer.Ordinal.Equals(dispatch.TenantId, request.TenantId) &&
+            Equals(dispatch.Partition, request.Partition) &&
+            dispatch.RunKind == request.RunKind &&
+            dispatch.DispatchNestingDepth == request.DispatchNestingDepth &&
+            WorkflowTestScope.ContextEquals(dispatch.TestScope, request.TestScope) &&
+            AuthorityEquals(request.Authority, dispatch.Authority));
+        if (committedDispatch is null)
+        {
+            var mismatch = identityCandidates.Length == 1
+                ? $" Context mismatches: {DescribeDispatchContextMismatch(identityCandidates[0], request)}."
+                : $" Matching identity candidates: {identityCandidates.Length}.";
+            throw AuthorityRejected(
+                "retained-dependency-dispatch-not-found",
+                "No committed dispatch authorizes this retained dependency start." + mismatch);
+        }
+
+        // Retained-dependency authority is the immutable provenance for this start. Historical source
+        // provenance remains on the dispatch record for inspection, but must not be copied into the start
+        // command because the canonical payload deliberately makes those authority modes mutually exclusive.
+        return new(child.Identity, null, committedDispatch);
+    }
+
+    private static string DescribeDispatchContextMismatch(
+        WorkflowDispatchRecord dispatch,
+        WorkflowExecutionStartDispatchRequest request)
+    {
+        var mismatches = new List<string>();
+        if (!StringComparer.Ordinal.Equals(dispatch.CorrelationId, request.CorrelationId)) mismatches.Add(nameof(request.CorrelationId));
+        if (!StringComparer.Ordinal.Equals(dispatch.TenantId, request.TenantId)) mismatches.Add(nameof(request.TenantId));
+        if (!Equals(dispatch.Partition, request.Partition)) mismatches.Add(nameof(request.Partition));
+        if (dispatch.RunKind != request.RunKind) mismatches.Add(nameof(request.RunKind));
+        if (dispatch.DispatchNestingDepth != request.DispatchNestingDepth) mismatches.Add(nameof(request.DispatchNestingDepth));
+        if (!WorkflowTestScope.ContextEquals(dispatch.TestScope, request.TestScope)) mismatches.Add(nameof(request.TestScope));
+        if (!AuthorityEquals(request.Authority, dispatch.Authority)) mismatches.Add(nameof(request.Authority));
+        return mismatches.Count == 0 ? "none (multiple candidates)" : string.Join(", ", mismatches);
     }
 
     private async ValueTask EnforceStartPolicyAsync(
@@ -171,7 +270,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         {
             if (request.SourceSelection is null &&
                 request.ProvenanceRequirement == WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
-                return new(executable.Identity, null);
+                return new(executable.Identity, null, null);
 
             throw new WorkflowExecutableReferenceRejectedException(
                 request.ArtifactId,
@@ -192,7 +291,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         if (liveReferences.Length == 1)
             return new(
                 executable.Identity,
-                WorkflowExecutableSourceProvenance.From(liveReferences[0]));
+                WorkflowExecutableSourceProvenance.From(liveReferences[0]),
+                null);
 
         if (liveReferences.Length > 1)
             throw new WorkflowExecutableReferenceRejectedException(
@@ -235,13 +335,16 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableIdentity pinnedIdentity,
         WorkflowExecutableSourceProvenance? pinnedSource,
+        WorkflowDispatchRecord? retainedDispatch,
         WorkflowExecutionPartition partition,
+        WorkflowExecutableReferenceScope requiredScope,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
-        var now = _timeProvider.GetUtcNow();
-        var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource);
+        var requestedAt = _timeProvider.GetUtcNow();
+        var enqueuedAt = retainedDispatch?.CreatedAt ?? requestedAt;
+        var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource, retainedDispatch, requiredScope);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: pinnedIdentity,
             requestedArtifactId: request.ArtifactId,
@@ -257,30 +360,35 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             partition: partition,
             authority: request.Authority,
             startAuthority: request.StartAuthority,
-            dispatchNestingDepth: request.DispatchNestingDepth));
+            dispatchNestingDepth: request.DispatchNestingDepth,
+            testScope: request.TestScope));
 
         var command = new WorkflowExecutionCommand(
-            CommandId: _idGenerator.NewWorkflowExecutionCommandId(),
+            CommandId: retainedDispatch is null
+                ? _idGenerator.NewWorkflowExecutionCommandId()
+                : $"{retainedDispatch.DispatchId}:command:start",
             WorkflowExecutionId: workflowExecutionId,
             Kind: WorkflowExecutionCommandKind.Start,
-            EnqueuedAt: now,
+            EnqueuedAt: enqueuedAt,
             Payload: payload.Clone(),
             Metadata: metadata);
 
         var envelope = new WorkflowExecutionCommandEnvelope(
-            envelopeId: _idGenerator.NewWorkflowExecutionCommandEnvelopeId(),
+            envelopeId: retainedDispatch is null
+                ? _idGenerator.NewWorkflowExecutionCommandEnvelopeId()
+                : $"{retainedDispatch.DispatchId}:envelope:start",
             workflowExecutionId: workflowExecutionId,
             command: command,
             idempotencyKey: request.IdempotencyKey ?? CreateDefaultIdempotencyKey(workflowExecutionId, pinnedIdentity.ArtifactId),
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
-            enqueuedAt: now,
+            enqueuedAt: enqueuedAt,
             metadata: metadata,
             partition: partition);
 
         var activationRequest = new WorkflowExecutionActorActivationRequest(
             workflowExecutionId: workflowExecutionId,
             reason: WorkflowExecutionActorActivationReason.Start,
-            requestedAt: now,
+            requestedAt: requestedAt,
             requestedBy: request.RequestedBy,
             requiredCapabilities: WorkflowExecutionActorCapabilities.None,
             metadata: metadata,
@@ -300,7 +408,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private static IReadOnlyDictionary<string, string> CreateDispatchMetadata(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableIdentity identity,
-        WorkflowExecutableSourceProvenance? source)
+        WorkflowExecutableSourceProvenance? source,
+        WorkflowDispatchRecord? retainedDispatch,
+        WorkflowExecutableReferenceScope requiredScope)
     {
         var metadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         // Diagnostic breadcrumb only — never read back or matched, so it is safe for this value to track the type name.
@@ -308,8 +418,11 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         metadata["runtime.artifactId"] = identity.ArtifactId;
         metadata["runtime.artifactVersion"] = source?.ArtifactVersion ?? identity.ArtifactVersion;
         metadata["runtime.artifactHash"] = identity.ArtifactHash;
+        metadata[RuntimeMetadataKeys.WorkflowExecutionOrigin] = requiredScope.ToString();
         if (source?.SourceReferenceId is { } sourceReferenceId)
             metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
+        if (retainedDispatch is not null)
+            metadata[RuntimeMetadataKeys.WorkflowDispatchId] = retainedDispatch.DispatchId;
         return RuntimeModelMetadata.Snapshot(metadata);
     }
 
@@ -326,5 +439,54 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
     private sealed record ResolvedPinnedExecutable(
         WorkflowExecutableIdentity Identity,
-        WorkflowExecutableSourceProvenance? Source);
+        WorkflowExecutableSourceProvenance? Source,
+        WorkflowDispatchRecord? Dispatch);
+
+    private static WorkflowExecutionStartDispatchResult ExistingDispatchResult(
+        WorkflowExecutionState existing,
+        WorkflowDispatchRecord dispatch,
+        WorkflowExecutableIdentity pinnedIdentity,
+        WorkflowExecutableSourceProvenance? pinnedSource,
+        int dispatchNestingDepth)
+    {
+        var exact = WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(existing.PinnedExecutable, pinnedIdentity) &&
+            Equals(existing.PinnedSource, pinnedSource) &&
+            StringComparer.Ordinal.Equals(existing.ParentWorkflowExecutionId, dispatch.ParentWorkflowExecutionId) &&
+            StringComparer.Ordinal.Equals(existing.CorrelationId, dispatch.CorrelationId) &&
+            StringComparer.Ordinal.Equals(existing.TenantId, dispatch.TenantId) &&
+            Equals(existing.Partition, dispatch.Partition) &&
+            existing.RunKind == dispatch.RunKind &&
+            existing.DispatchNestingDepth == dispatchNestingDepth &&
+            WorkflowTestScope.ContextEquals(existing.TestScope, dispatch.TestScope) &&
+            AuthorityEquals(existing.Authority, dispatch.Authority);
+        if (!exact)
+            throw new InvalidOperationException($"Workflow execution '{existing.WorkflowExecutionId}' already exists with conflicting dispatch identity or context.");
+
+        var envelopeId = $"{dispatch.DispatchId}:envelope:start";
+        return new WorkflowExecutionStartDispatchResult(
+            existing.WorkflowExecutionId,
+            pinnedIdentity,
+            new WorkflowExecutionCommandDispatchResult(
+                envelopeId,
+                existing.WorkflowExecutionId,
+                WorkflowExecutionCommandDispatchStatus.Duplicate,
+                existing.UpdatedAt ?? existing.StartedAt ?? existing.CreatedAt),
+            new WorkflowExecutionActorDescriptor(
+                existing.WorkflowExecutionId,
+                $"existing:{existing.WorkflowExecutionId}",
+                "durable-state",
+                WorkflowExecutionActorStatus.Passivated,
+                WorkflowExecutionActorCapabilities.None,
+                existing.StartedAt ?? existing.CreatedAt),
+            pinnedSource);
+    }
+
+    private static bool AuthorityEquals(
+        WorkflowExecutionAuthoritySnapshot? existing,
+        WorkflowExecutionAuthoritySnapshot expected) =>
+        existing is not null &&
+        StringComparer.Ordinal.Equals(existing.SystemIdentity, expected.SystemIdentity) &&
+        StringComparer.Ordinal.Equals(existing.RootInitiator, expected.RootInitiator) &&
+        existing.Metadata.Count == expected.Metadata.Count &&
+        existing.Metadata.All(item => expected.Metadata.TryGetValue(item.Key, out var value) && StringComparer.Ordinal.Equals(item.Value, value));
 }

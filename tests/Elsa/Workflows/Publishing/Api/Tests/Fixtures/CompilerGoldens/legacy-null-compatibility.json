@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:75565fdff1eb6489c2da9cbd39e4817f6953ec37b2d422e243843a27878c30ed",
-    "artifactId": "artifact-75565fdff1eb",
+    "artifactHash": "sha256:cbc6b770d59f7dd4f4b52331115961bd02ab7c998ed529ac2cd240b50ef92282",
+    "artifactId": "artifact-cbc6b770d59f",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -19,7 +19,7 @@
     "descriptor": {
       "consumerKey": "elsa.clr-activity",
       "payload": {
-        "TypeAlias": "Object"
+        "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
       },
       "schemaVersion": "1"
     },
@@ -34,10 +34,6 @@
           {
             "Key": "referenceKey",
             "Value": "Text"
-          },
-          {
-            "Key": "typeName",
-            "Value": "System.String, System.Private.CoreLib"
           }
         ],
         "source": "Literal"

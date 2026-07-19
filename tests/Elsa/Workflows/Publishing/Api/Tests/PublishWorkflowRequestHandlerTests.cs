@@ -108,7 +108,9 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(1, view.NodeCount);
         Assert.Equal("write-one", executable.RootActivity.ExecutableNodeId);
         Assert.Equal("one", executable.NodesById["write-one"].InputBindings["Text"].LiteralValue!.Value.GetString());
-        Assert.Equal($"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}", executable.NodesById["write-one"].InputBindings["Text"].Metadata["typeName"]);
+        var binding = executable.NodesById["write-one"].InputBindings["Text"];
+        Assert.Equal("String", binding.TargetType.Alias);
+        Assert.DoesNotContain("typeName", binding.Metadata);
     }
 
     [Fact]
@@ -389,7 +391,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         var executable = await _store.FindAsync(view.ArtifactId);
         var binding = Assert.Single(executable!.RootActivity.InputBindings).Value;
         Assert.Equal("Text", binding.InputKey);
-        Assert.True(binding.IsSensitive);
+        Assert.True(binding.EffectivePolicy.IsSensitive);
     }
 
     [Fact]
@@ -474,7 +476,8 @@ public sealed class PublishWorkflowRequestHandlerTests
             structure: new ActivityNodeStructure(
                 UnknownStructureKind,
                 UnknownStructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { marker = "kept" })));
+                JsonSerializer.SerializeToElement(new { marker = "kept" })),
+            Text("opaque"));
         var workflowVersion = WorkflowVersion(root);
         var handler = Handler(workflowVersion);
 
@@ -797,7 +800,7 @@ public sealed class PublishWorkflowRequestHandlerTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TestActivityAliases.ForActivityVersionId(id))),
             Inputs = inputs
         };
 

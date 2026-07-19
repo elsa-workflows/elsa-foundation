@@ -1,8 +1,13 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -79,6 +84,31 @@ public sealed class EventTriggerStimulusProviderTests
         Assert.StartsWith("sha256:", EventStimulus.Hash("order-shipped"));
     }
 
+    [Fact]
+    public async Task Execute_returns_event_name_as_one_atomic_result()
+    {
+        await using var services = new ServiceCollection().BuildServiceProvider();
+        await using var activation = await TypedActivityTestActivation.ActivateAsync<Event>(
+            services,
+            new Dictionary<string, object?>
+            {
+                [nameof(Event.EventName)] = "order-shipped",
+                [nameof(Event.CorrelationId)] = "order-7"
+            });
+        var activity = Assert.IsType<Event>(activation.Activity);
+        var context = new SimpleActivityExecutionContext(
+            activity,
+            CancellationToken.None,
+            invocationId: "event-invocation",
+            executableNodeId: "event-node");
+
+        var transition = await ((IActivity)activity).ExecuteAsync(context.ToActivityExecutionContext());
+        var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
+
+        Assert.Equal("order-shipped", completion.Result.EventName);
+        Assert.Equal("Done", completion.Outcome);
+    }
+
     private static ExecutableNode EventNode(
         string? eventName,
         string? correlationId = null,
@@ -99,18 +129,32 @@ public sealed class EventTriggerStimulusProviderTests
             authoredActivityId: "authored-node-event",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
+            descriptorType: "test",
+            descriptorPayload: document.RootElement.Clone(),
             inputBindings: bindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
 
     private static RuntimeInputBinding LiteralBinding(string name, string value)
     {
-        using var document = JsonDocument.Parse(JsonSerializer.Serialize(value));
-        return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
+        var type = new ValueTypeDescriptor("String");
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
     }
 
     private static RuntimeInputBinding ExpressionBinding(string name) =>
-        new(name, RuntimeInputBindingSource.Expression, expression: new RuntimeExpressionBinding("JavaScript", "input.eventName"));
+        new(
+            name,
+            new ValueTypeDescriptor("String"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                "input.eventName",
+                new RuntimeValueTypeDescriptor("alias", "String", null),
+                capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1));
 }

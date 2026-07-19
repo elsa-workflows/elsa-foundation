@@ -54,22 +54,22 @@ public interface IWorkflowTriggerBindingStore
     ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Cross-artifact lookup used by the stimulus router: returns every start-trigger binding whose
-    /// stimulus identity matches, so a single stimulus can start instances of any workflow that triggers
-    /// on it. Keyed by stimulus hash; the store post-filters by stimulus type so a hash shared across two
-    /// stimulus types can never cross-match.
+    /// Cross-artifact lookup used by the stimulus router: returns one finite page of active start-trigger
+    /// bindings whose exact stimulus identity matches. Continue until the returned token is null when the
+    /// operation requires every matching workflow.
     /// </summary>
-    ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default);
+    ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(
+        WorkflowTriggerBindingPageQuery query,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Returns every binding owned by the given artifact.</summary>
     ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns every binding of the given stimulus type across all artifacts. Used to rebuild a per-shell
-    /// projection over one stimulus family (e.g. the HTTP route table, which enumerates every HTTP-endpoint
-    /// binding's route template). Unlike <see cref="ListByStimulusAsync"/> this is not keyed by a stimulus
-    /// hash — it is a type-scoped full scan, so callers should treat it as a startup/refresh operation rather
-    /// than a per-request lookup.
+    /// Returns one finite page of active bindings of the given stimulus type across all artifacts. Callers
+    /// rebuilding a complete projection must traverse the opaque continuation deliberately.
     /// </summary>
-    ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default);
+    ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
+        WorkflowTriggerBindingTypePageQuery query,
+        CancellationToken cancellationToken = default);
 }

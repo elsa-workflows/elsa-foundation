@@ -21,6 +21,9 @@ public class Elsa3MappingFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddScoped<Elsa3ArgumentDefinitionToInputOutput>();
+        services.AddScoped<Elsa3MemoryReferenceGraph>();
+        services.AddScoped<Elsa3ExpressionRewriter>();
+        services.AddScoped<Elsa3ValueFlowLowerer>();
         services.AddScoped<Elsa3ActivityToState>();
         services.AddScoped<Elsa3WorkflowDefinitionToState>();
         services.AddScoped<Elsa3WorkflowDefinitionToWorkflowDefinitionVersion>();

@@ -38,15 +38,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
         var persistedDefinition = ActivityDefinition.From(definition);
         catalogVersion.Definition = persistedDefinition;
 
-        var root = new ExecutableNode(
-            "root",
-            "root",
-            definition.ActivityTypeKey,
-            version.ConsumerSchemaVersion,
-            new RuntimeActivityDescriptor(version.ConsumerKey, version.ConsumerSchemaVersion, version.DescriptorPayload),
-            new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal),
-            new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal),
-            new Dictionary<string, string>(StringComparer.Ordinal));
+        var root = nodeCompiler.CompileSourceOwnedRoot(catalogVersion);
         var resumeTargets = nodeCompiler.BuildResumeTargets(root)
             .ToDictionary(
                 x => x.Key,
@@ -103,6 +95,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
             DefinitionId = definition.Id,
             Version = version.Version,
             ActivityTypeKey = definition.ActivityTypeKey,
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.AuthorableActivity,
             Contract = contract,
             Provider = new(version.ProviderKey, version.ProviderSchemaVersion, version.DescriptorPayload),
             TemplateId = templateId,
@@ -157,9 +150,9 @@ public sealed class SourceOwnedActivityVersionPublisher(
             sourceReference), cancellationToken);
     }
 
-    private static ActivityContract ToContract(IActivityDefinitionVersion version) => new(
+    private static Elsa.Activities.Design.Core.Models.ActivityContract ToContract(IActivityDefinitionVersion version) => new(
         "1",
-        version.Inputs.Select(input => new ActivityInputContract(
+        version.Inputs.Select(input => new Elsa.Activities.Design.Core.Models.ActivityInputContract(
             input.ReferenceKey,
             input.Name,
             input.Type,
@@ -185,7 +178,8 @@ public sealed class SourceOwnedActivityVersionPublisher(
             Category: output.Category,
             Order: output.Order,
             UiHint: output.UiHint,
-            UiSpecifications: output.UISpecifications)).ToArray(),
+            UiSpecifications: output.UISpecifications,
+            SourceRepresentation: output.SourceRepresentation)).ToArray(),
         [new("Done", "Done", true)]);
 
     private static string StableId(string prefix, string value) =>

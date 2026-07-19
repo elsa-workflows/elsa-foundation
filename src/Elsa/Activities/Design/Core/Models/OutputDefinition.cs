@@ -29,4 +29,5 @@ public sealed record OutputDefinition(
     string? UiHint = null,
     JsonElement? PropertyInfo = null,
     JsonElement? UISpecifications = null,
-    bool IsRequired = false);
+    bool IsRequired = false,
+    ValueRepresentation? SourceRepresentation = null);

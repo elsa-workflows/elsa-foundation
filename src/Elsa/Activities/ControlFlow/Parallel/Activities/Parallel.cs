@@ -1,9 +1,11 @@
+using Elsa.Activities.ControlFlow.Results;
 using Elsa.Activities.Parallel.Exceptions;
 using Elsa.Activities.Parallel.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -40,7 +42,7 @@ namespace Elsa.Activities.Parallel.Activities;
 /// </para>
 /// <para>
 /// <b>Fault-aware join (#308).</b> Branch faults are propagated to this composite via
-/// <see cref="IActivityChildFaultHandler"/> (the engine rides a child-fault parent-evaluation work item on the
+/// <see cref="IRuntimeActivityChildFaultHandler"/> (the engine rides a child-fault parent-evaluation work item on the
 /// branch's fault incident), so the join resolves deterministically instead of hanging. The join counts each
 /// branch by terminal disposition: it completes with <c>Done</c> once enough branches reach <c>Completed</c>
 /// to meet the threshold; it <b>faults the composite</b> (surfacing a composite incident) once too many
@@ -66,7 +68,7 @@ namespace Elsa.Activities.Parallel.Activities;
     ChildProperty = "activity",
     LabelProperty = "name",
     SlotNameTemplate = "Parallel.Branch[{name}]")]
-public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IActivityChildFaultHandler
+public sealed class Parallel(IActivityExecutionStateStore activityExecutionStateStore) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler
 {
     public const string BranchSlotPrefix = "Parallel.Branch[";
     public const string BranchSlotSuffix = "]";
@@ -76,9 +78,8 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
     /// <summary>Builds the named child slot for a branch from its stable branch name.</summary>
     public static string BranchSlotName(string name) => $"{BranchSlotPrefix}{name}{BranchSlotSuffix}";
 
-    protected override void Execute(IActivityExecutionContext context)
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var runtimeContext = RequireRuntimeContext(context);
         var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
         var branches = navigator.RunnableBranches;
 
@@ -86,8 +87,7 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
         // branches the effective threshold is 0; with any runnable branch it is at least 1.)
         if (branches.Count == 0)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
 
         var compositeExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
@@ -98,10 +98,10 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
             ScheduleBranch(runtimeContext, compositeExecutionId, branch);
 
         // The branches now drive the run; the join completes the composite once enough of them finish.
-        runtimeContext.DeferCompositeCompletion();
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
-    public async ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+    public async ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -111,10 +111,10 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
         if (!navigator.IsBranch(context.CompletedChildExecutableNodeId))
             throw new ParallelExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not a Parallel branch.");
 
-        await ApplyJoinDecisionAsync(runtimeContext, navigator);
+        return await ApplyJoinDecisionAsync(runtimeContext, navigator);
     }
 
-    public async ValueTask OnChildFaultedAsync(ActivityChildFaultedContext context)
+    public async ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -124,7 +124,7 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
         if (!navigator.IsBranch(context.FaultedChildExecutableNodeId))
             throw new ParallelExecutionException($"Faulted child executable node '{context.FaultedChildExecutableNodeId}' is not a Parallel branch.");
 
-        await ApplyJoinDecisionAsync(runtimeContext, navigator);
+        return await ApplyJoinDecisionAsync(runtimeContext, navigator);
     }
 
     /// <summary>
@@ -134,7 +134,7 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
     /// (#308), or defer while branches are still running. Both the completion and fault callbacks funnel
     /// through here so the decision is identical regardless of which branch event triggered it.
     /// </summary>
-    private static async ValueTask ApplyJoinDecisionAsync(IRuntimeActivityExecutionContext runtimeContext, ParallelNavigator navigator)
+    private async ValueTask<RuntimeStructuralContinuation> ApplyJoinDecisionAsync(IRuntimeActivityExecutionContext runtimeContext, ParallelNavigator navigator)
     {
         var compositeExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
         var (completed, terminalNonSuccess) = await CountBranchesAsync(runtimeContext, navigator, compositeExecutionId);
@@ -144,19 +144,19 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
         // Enough branches have succeeded: the join is satisfied.
         if (completed >= threshold)
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return;
+            return RuntimeStructuralContinuation.Complete();
         }
 
         // The remaining branches can no longer carry the join to its success threshold, so it can never
-        // complete: fault the composite (the throw is recorded by the engine as a composite incident) rather
+        // complete: return a fault decision that the engine records as a composite incident rather
         // than leaving it Running forever (#308).
         if (runnable - terminalNonSuccess < threshold)
-            throw new ParallelExecutionException(
-                $"Parallel join can no longer be satisfied: {terminalNonSuccess} of {runnable} branch(es) reached a terminal non-success state, leaving fewer than the required {threshold} successful branch(es).");
+            return RuntimeStructuralContinuation.Faulted(new ActivityFault(
+                "parallel.join.unsatisfied",
+                $"Parallel join can no longer be satisfied: {terminalNonSuccess} of {runnable} branch(es) reached a terminal non-success state, leaving fewer than the required {threshold} successful branch(es)."));
 
         // More branches are still running; wait for them.
-        runtimeContext.DeferCompositeCompletion();
+        return RuntimeStructuralContinuation.Defer;
     }
 
     private static void ScheduleBranch(
@@ -164,7 +164,7 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
         string compositeExecutionId,
         ExecutableNode branch)
     {
-        var branchId = $"{compositeExecutionId}:parallel-branch:{branch.ExecutableNodeId}";
+        var branchId = StructuredExecutionIdentity.Branch(compositeExecutionId, branch.ExecutableNodeId);
 
         runtimeContext.ScheduleChildActivity(
             branch.ExecutableNodeId,
@@ -192,18 +192,16 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
     /// non-success state (<c>Faulted</c>/<c>Cancelled</c>). Grouping by node guards against any branch
     /// contributing more than once; a branch that has any <c>Completed</c> state counts as a success.
     /// </summary>
-    private static async ValueTask<(int Completed, int TerminalNonSuccess)> CountBranchesAsync(
+    private async ValueTask<(int Completed, int TerminalNonSuccess)> CountBranchesAsync(
         IRuntimeActivityExecutionContext runtimeContext,
         ParallelNavigator navigator,
         string compositeExecutionId)
     {
-        var store = runtimeContext.GetRequiredService<IActivityExecutionStateStore>();
-
         // Read only this composite's direct children rather than every activity-execution state in the workflow: the join
         // fires once per branch-completion/fault event, so a whole-workflow list here made the join O(branches × workflow
         // states) — effectively quadratic on wide/large workflows (#514/#413 item 3). The parent-scoped read returns exactly
         // the ParentActivityExecutionId == compositeExecutionId subset; the branch/grouping filters stay here.
-        var states = await store.ListByParentAsync(runtimeContext.WorkflowExecutionId, compositeExecutionId, runtimeContext.CancellationToken);
+        var states = await activityExecutionStateStore.ListByParentAsync(runtimeContext.WorkflowExecutionId, compositeExecutionId, runtimeContext.CancellationToken);
 
         var branchGroups = states
             .Where(state => navigator.IsBranch(state.Execution.ExecutableNodeId))

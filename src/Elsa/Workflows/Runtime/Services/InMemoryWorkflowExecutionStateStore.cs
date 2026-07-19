@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -66,8 +68,8 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
     {
         var comparer = Comparer<WorkflowExecutionState>.Create(WorkflowExecutionStateHistory.Compare);
         var candidates = new SortedSet<WorkflowExecutionState>(comparer);
-        var pageSize = WorkflowExecutionStateHistory.EffectivePageSize(query);
-        var limit = checked(pageSize + 1);
+        var cursor = query.Cursor is null ? null : DecodeCursor(query.Cursor, query);
+        var limit = checked(query.PageSize + 1);
         long total = 0;
 
         foreach (var state in states)
@@ -76,55 +78,81 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
                 continue;
 
             total++;
-            if (query.Cursor is { } cursor)
+            if (cursor is not null)
             {
-                var comparison = WorkflowExecutionStateHistory.Compare(state, cursor);
-                if (cursor.Direction == WorkflowExecutionStatePageDirection.Next ? comparison <= 0 : comparison >= 0)
+                var timestamp = cursor.SortTimestamp.CompareTo(WorkflowExecutionStateHistory.SortTimestamp(state));
+                var comparison = timestamp != 0
+                    ? timestamp
+                    : StringComparer.Ordinal.Compare(state.WorkflowExecutionId, cursor.WorkflowExecutionId);
+                if (comparison <= 0)
                     continue;
             }
 
             candidates.Add(state);
             if (candidates.Count <= limit)
                 continue;
-
-            if (query.Cursor?.Direction == WorkflowExecutionStatePageDirection.Previous)
-                candidates.Remove(candidates.Min!);
-            else
-                candidates.Remove(candidates.Max!);
+            candidates.Remove(candidates.Max!);
         }
 
-        var hasExtra = candidates.Count > pageSize;
+        var hasExtra = candidates.Count > query.PageSize;
         if (hasExtra)
-        {
-            if (query.Cursor?.Direction == WorkflowExecutionStatePageDirection.Previous)
-                candidates.Remove(candidates.Min!);
-            else
-                candidates.Remove(candidates.Max!);
-        }
+            candidates.Remove(candidates.Max!);
 
         var items = candidates.ToArray();
-        var hasPrevious = query.Cursor?.Direction switch
-        {
-            WorkflowExecutionStatePageDirection.Next => true,
-            WorkflowExecutionStatePageDirection.Previous => hasExtra,
-            _ => false
-        };
-        var hasNext = query.Cursor?.Direction switch
-        {
-            WorkflowExecutionStatePageDirection.Previous => true,
-            _ => hasExtra
-        };
-
         return new(
             items,
-            hasPrevious && items.Length > 0
-                ? WorkflowExecutionStateHistory.Cursor(items[0], WorkflowExecutionStatePageDirection.Previous, query)
+            hasExtra && items.Length > 0
+                ? EncodeCursor(items[^1], query)
                 : null,
-            hasNext && items.Length > 0
-                ? WorkflowExecutionStateHistory.Cursor(items[^1], WorkflowExecutionStatePageDirection.Next, query)
-                : null,
-            hasPrevious,
-            hasNext,
+            hasExtra,
             total);
     }
+
+    private static string EncodeCursor(
+        WorkflowExecutionState state,
+        WorkflowExecutionStatePageQuery query)
+    {
+        var value = string.Join(
+            '|',
+            "v1",
+            WorkflowExecutionStateHistory.SortTimestamp(state).UtcTicks.ToString(CultureInfo.InvariantCulture),
+            Convert.ToBase64String(Encoding.UTF8.GetBytes(state.WorkflowExecutionId)),
+            WorkflowExecutionStateHistory.Scope(query));
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+
+    private static InMemoryCursor DecodeCursor(
+        string cursor,
+        WorkflowExecutionStatePageQuery query)
+    {
+        try
+        {
+            var base64 = cursor.Replace('-', '+').Replace('_', '/');
+            base64 = base64.PadRight(base64.Length + ((4 - base64.Length % 4) % 4), '=');
+            var parts = Encoding.UTF8.GetString(Convert.FromBase64String(base64)).Split('|');
+            if (parts.Length != 4 ||
+                parts[0] != "v1" ||
+                !long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks) ||
+                !StringComparer.Ordinal.Equals(parts[3], WorkflowExecutionStateHistory.Scope(query)))
+            {
+                throw new FormatException();
+            }
+
+            return new(
+                new DateTimeOffset(ticks, TimeSpan.Zero),
+                Encoding.UTF8.GetString(Convert.FromBase64String(parts[2])));
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException)
+        {
+            throw new ArgumentException(
+                "The workflow execution history cursor is invalid or does not belong to this query.",
+                nameof(cursor),
+                exception);
+        }
+    }
+
+    private sealed record InMemoryCursor(DateTimeOffset SortTimestamp, string WorkflowExecutionId);
 }

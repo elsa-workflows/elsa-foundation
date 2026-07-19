@@ -37,6 +37,13 @@ public sealed record ActivityRecommendationDecision(
     string? ReplacementVersionId = null,
     ActivityDefinitionVersionLifecycle? ExpectedReplacementLifecycle = null);
 
+public enum ActivityDefinitionVersionResolutionKind
+{
+    Unspecified = 0,
+    AuthorableActivity = 1,
+    ReusableTemplateBoundary = 2
+}
+
 public enum ActivityBoundaryDurability
 {
     Required
@@ -188,7 +195,8 @@ public sealed record ActivityOutputContract(
     string? Category = null,
     float Order = 0,
     string? UiHint = null,
-    JsonElement? UiSpecifications = null);
+    JsonElement? UiSpecifications = null,
+    ValueRepresentation? SourceRepresentation = null);
 
 public sealed record ActivityOutcomeContract(
     string ReferenceKey,

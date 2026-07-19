@@ -2,10 +2,13 @@ using System.Linq.Expressions;
 using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
+using Elsa.Primitives.Models;
 using Elsa.Primitives.Persistence;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
@@ -44,8 +47,51 @@ internal static class TestWellKnownTypeRegistry
         registry.RegisterType(typeof(decimal), "Decimal");
         registry.RegisterType(typeof(DateTime), "DateTime");
         registry.RegisterType(typeof(Guid), "Guid");
+        registry.RegisterType(typeof(TestWriteLineActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLineActivity)));
+        registry.RegisterType(typeof(TestWriteLinesActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)));
+        registry.RegisterType(
+            typeof(Elsa.Activities.Sequence.Activities.Sequence),
+            TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Sequence.Activities.Sequence)));
+        registry.RegisterType(
+            typeof(Elsa.Activities.Flowchart.Activities.Flowchart),
+            TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Flowchart.Activities.Flowchart)));
         return registry;
     }
+}
+
+/// <summary>
+/// Maps the shared activity-version-id fixtures to the CLR type alias of a registered activity with a
+/// typed result, so compiled test workflows satisfy the publish-time VF-ACT-001 contract gate the same
+/// way production catalog rows do.
+/// </summary>
+internal static class TestActivityAliases
+{
+    public static string ForActivityVersionId(string id) => id switch
+    {
+        "activity-write-line" => TypeAliasConvention.CanonicalAlias(typeof(TestWriteLineActivity)),
+        "activity-write-lines" => TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)),
+        "activity-sequence" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Sequence.Activities.Sequence)),
+        "activity-flowchart" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Flowchart.Activities.Flowchart)),
+        _ => "Object"
+    };
+}
+
+internal sealed class TestWriteLineActivity : Activity<ActivityUnit>
+{
+    [ActivityInput(Key = "Text")]
+    public string? Text { get; set; }
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+}
+
+internal sealed class TestWriteLinesActivity : Activity<ActivityUnit>
+{
+    [ActivityInput(Key = "Lines")]
+    public IReadOnlyCollection<string>? Lines { get; set; }
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
 }
 
 /// <summary>
@@ -155,46 +201,6 @@ internal static class TestExecutable
             new Dictionary<string, string>(),
             inputContract: new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []),
             dependencies);
-}
-
-/// <summary>A bare <see cref="IActivity"/> with one concrete-declared property, for projection assertions.</summary>
-internal sealed class StubActivity : IActivity
-{
-    public string Greeting { get; set; } = "hello";
-
-    public string Id { get; set; } = "act-1";
-    public string NodeId { get; set; } = "node-1";
-    public string? Name { get; set; }
-    public string Type { get; set; } = "Stub";
-    public string Version { get; set; } = "1.0.0";
-    public Dictionary<string, object> CustomProperties { get; set; } = new() { ["author"] = "joey" };
-    public Dictionary<string, object> SyntheticProperties { get; set; } = new() { ["WorkflowIdentity"] = "wf-123" };
-    public Dictionary<string, object> Metadata { get; set; } = new();
-
-    public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-    public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
-}
-
-/// <summary>Captures what the bridge passed across the seam and returns a preset activity.</summary>
-internal sealed class FakeActivityFactory(IActivity result) : IActivityFactory
-{
-    public RuntimeActivityDescriptor? LastDescriptor { get; private set; }
-    public JsonElement LastPayload { get; private set; }
-    public IReadOnlyDictionary<string, InputArgument>? LastInputs { get; private set; }
-    public IReadOnlyDictionary<string, OutputArgument>? LastOutputs { get; private set; }
-
-    public ValueTask<IActivity> Create(
-        RuntimeActivityDescriptor descriptor,
-        IReadOnlyDictionary<string, InputArgument>? inputs,
-        IReadOnlyDictionary<string, OutputArgument>? outputs,
-        CancellationToken cancellationToken = default)
-    {
-        LastDescriptor = descriptor;
-        LastPayload = descriptor.Payload;
-        LastInputs = inputs;
-        LastOutputs = outputs;
-        return ValueTask.FromResult(result);
-    }
 }
 
 /// <summary>Minimal in-memory activity version read port: only the routes the bridge uses are real.</summary>

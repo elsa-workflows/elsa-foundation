@@ -1,6 +1,5 @@
-using Elsa.Activities.Runtime.Core.Abstractions;
+using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -9,93 +8,70 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Scheduling.Activities;
 
 /// <summary>
-/// Suspends the workflow durably for a relative <see cref="Duration"/>, then resumes on schedule. Ported in
-/// spirit from elsa-core's <c>Delay</c> activity and adapted to this repo's durable-timer model: the activity
-/// registers a durable timer and creates a matching bookmark, then the hosted timer pump fires the bookmark
-/// through the existing resume dispatcher at due time.
+/// Suspends one typed invocation for a relative duration and completes when its durable timer fires.
+/// Workflow data is a plain hydrated property; timer services are constructor-injected into each
+/// transient activation.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>Ordering invariant.</b> The timer is written strictly <i>before</i> the bookmark is requested, so the
-/// dangerous "bookmark committed but timer missing → hang forever" state is structurally excluded: a
-/// timer-write failure faults the activity and no bookmark is created.
-/// </para>
-/// <para>
-/// <b>Determinism.</b> The timer id, bookmark id and stimulus hash are all derived from the replay-stable
-/// <c>ActivityExecutionId</c>, so a crash-replay re-invoke of the same activity execution upserts the same
-/// timer and re-requests the same bookmark rather than creating duplicates.
-/// </para>
-/// <para>
-/// <b>Bookmark expiry.</b> The bookmark is created with no <c>ExpiresAt</c>: the <i>timer</i> owns the
-/// deadline, not the bookmark. Setting <c>ExpiresAt = dueTime</c> would make the bookmark unmatchable exactly
-/// at fire time (the stimulus lookup filters out bookmarks whose expiry is at/behind the evaluation instant),
-/// producing a permanent hang.
-/// </para>
-/// <para>
-/// <b>Durability.</b> Restart-durable resumption requires a durable timer store (the Groundwork store). In a
-/// shell configured with the in-memory default store, <c>Delay</c> still suspends and resumes within the
-/// process but does <i>not</i> survive a process restart.
-/// </para>
+/// The timer is persisted before the suspension transition is returned. Its deterministic identity makes
+/// retry idempotent, while the activity state and trigger registration are committed atomically by the
+/// runtime after this method returns.
 /// </remarks>
-public sealed class Delay : CodeActivity
+[ActivityOutcome("Done")]
+public sealed class Delay(IDurableTimerScheduler scheduler, TimeProvider timeProvider) :
+    StatefulActivity<ActivityUnit, DelayState, DurableTimerElapsed>
 {
-    /// <summary>The relative duration to suspend for, measured from when the activity executes.</summary>
-    public InputArgument<TimeSpan>? Duration { get; set; }
+    public const string TimerTriggerProviderId = "provider.durable-timer";
+    private const string ResumeTargetId = "resume-target:durable-timer";
 
-    protected override async ValueTask ExecuteAsync(IActivityExecutionContext context)
+    /// <summary>The relative duration to suspend for, measured from the initial attempt.</summary>
+    [ActivityInput(Key = "Duration", DefaultValue = "00:00:00", DefaultSyntax = "Literal")]
+    public TimeSpan Duration { get; set; }
+
+    protected override async ValueTask<ActivityTransition<ActivityUnit, DelayState>> ExecuteAsync(
+        ActivityExecutionContext context)
     {
-        var runtimeContext = RequireRuntimeContext(context);
-        var duration = context.Get(Duration);
-
-        var timeProvider = context.GetRequiredService<TimeProvider>();
-        var scheduler = context.GetRequiredService<IDurableTimerScheduler>();
-
         var now = timeProvider.GetUtcNow();
-        var dueTime = duration <= TimeSpan.Zero ? now : now + duration;
+        var dueTime = Duration <= TimeSpan.Zero ? now : now + Duration;
+        var timerId = DeriveTimerId(context.InvocationId);
+        var trigger = new DurableTimerElapsed(timerId);
+        var registration = new ActivityTriggerRegistration<DurableTimerElapsed>(
+            ResumeTargetId,
+            DurableTimerConstants.TimerStimulusType,
+            timerId,
+            ActivityTriggerDeduplicationMode.Once);
 
-        var activityExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
-        var timerId = DeriveTimerId(activityExecutionId);
-        var stimulusHash = timerId;
-        var bookmarkId = timerId;
-
-        // Timer FIRST — a write failure faults the activity before any bookmark exists (ordering invariant).
         await scheduler.ScheduleAsync(
             new DurableTimer(
                 TimerId: timerId,
-                WorkflowExecutionId: runtimeContext.WorkflowExecutionId,
+                WorkflowExecutionId: context.WorkflowExecutionId,
                 StimulusType: DurableTimerConstants.TimerStimulusType,
-                StimulusHash: stimulusHash,
+                StimulusHash: timerId,
                 DueTime: dueTime,
                 CreatedAt: now,
-                ActivityExecutionId: activityExecutionId,
-                ExecutionScopeId: runtimeContext.ActivityExecutionState.ExecutionScopeId ?? runtimeContext.ActivityExecutionState.Provenance.ExecutionScopeId),
+                Input: JsonSerializer.SerializeToElement(trigger),
+                PayloadType: registration.PayloadType,
+                ProviderId: TimerTriggerProviderId),
             context.CancellationToken);
 
-        // ExpiresAt is intentionally null: the timer owns the deadline, not the bookmark expiry.
-        context.CreateBookmark(new ActivityBookmarkRequest(
-            bookmarkId: bookmarkId,
-            resumeTargetId: ResumeTargetId,
-            stimulusType: DurableTimerConstants.TimerStimulusType,
-            stimulusHash: stimulusHash,
-            expiresAt: null));
+        return Suspend(new DelayState(timerId), [registration]);
     }
 
-    /// <summary>
-    /// Runtime resume target invoked by the timer pump's dispatched <c>ResumeBookmark</c>. Completing the
-    /// activity is handled by the resume work handler after this returns, so the body is a no-op.
-    /// </summary>
     [ResumeTarget(ResumeTargetId)]
-    private ValueTask OnTimerElapsedAsync() => ValueTask.CompletedTask;
-
-    private const string ResumeTargetId = "resume-target:durable-timer";
-
-    private static string DeriveTimerId(string activityExecutionId) => $"timer:{activityExecutionId}";
-
-    private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)
+    protected override ValueTask<ActivityTransition<ActivityUnit, DelayState>> ResumeAsync(
+        ActivityResumeContext<DelayState, DurableTimerElapsed> context)
     {
-        if (context is IRuntimeActivityExecutionContext runtimeContext)
-            return runtimeContext;
+        if (!StringComparer.Ordinal.Equals(context.State.TimerId, context.Trigger.TimerId))
+            throw new InvalidOperationException("The delivered durable timer does not match the committed delay state.");
 
-        throw new InvalidOperationException("Delay requires an Elsa runtime activity execution context.");
+        return ValueTask.FromResult(Complete(ActivityUnit.Value));
     }
+
+    private static string DeriveTimerId(string invocationId) => $"timer:{invocationId}";
 }
+
+/// <summary>The complete private state required to validate a resumed delay.</summary>
+public sealed record DelayState(string TimerId);
+
+/// <summary>The typed payload delivered by the durable timer provider.</summary>
+public sealed record DurableTimerElapsed(string TimerId);

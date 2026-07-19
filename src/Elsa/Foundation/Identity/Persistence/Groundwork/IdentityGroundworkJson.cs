@@ -9,7 +9,7 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork;
 /// membership status) survive as stable, human-readable strings rather than ordinals. Freezing these
 /// options keeps the on-disk shape deterministic, which the golden-fixture drift test relies on.
 /// </summary>
-internal static class IdentityGroundworkJson
+public static class IdentityGroundworkJson
 {
     public static readonly JsonSerializerOptions Options = Create();
 

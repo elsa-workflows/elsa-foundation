@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -53,7 +51,7 @@ public sealed class ListWorkflowInstancesRequestHandler(
             WorkflowExecutionId: EmptyToNull(request.WorkflowExecutionId),
             ArtifactId: EmptyToNull(request.ArtifactId));
         if (!string.IsNullOrWhiteSpace(request.Cursor))
-            query = query with { Cursor = DecodeCursor(request.Cursor, maxTake, query.Scope()) };
+            query = query with { Cursor = request.Cursor };
 
         var page = authorization.TenantScope == "all-tenants"
             ? await workflowExecutionStateStore.QueryPageAsync(query, cancellationToken)
@@ -72,15 +70,13 @@ public sealed class ListWorkflowInstancesRequestHandler(
 
         return new(
             items,
-            page.PreviousCursor is { } previous ? EncodeCursor(previous) : null,
-            page.NextCursor is { } next ? EncodeCursor(next) : null,
-            page.HasPrevious,
+            page.NextCursor,
             page.HasNext,
             items.Length,
             page.TotalCount >= int.MaxValue ? int.MaxValue : (int)page.TotalCount);
     }
 
-    private static WorkflowInstanceListView Empty() => new([], null, null, false, false, 0, 0);
+    private static WorkflowInstanceListView Empty() => new([], null, false, 0, 0);
 
     private async ValueTask<WorkflowExecutionStatePage> QueryAuthorizedPageAsync(
         WorkflowExecutionStatePageQuery query,
@@ -116,45 +112,4 @@ public sealed class ListWorkflowInstancesRequestHandler(
     }
 
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
-
-    private static string EncodeCursor(WorkflowExecutionStatePageCursor cursor)
-    {
-        var value = string.Join('|',
-            "v1",
-            cursor.Direction == WorkflowExecutionStatePageDirection.Next ? "n" : "p",
-            cursor.SortTimestamp.UtcTicks.ToString(CultureInfo.InvariantCulture),
-            Convert.ToBase64String(Encoding.UTF8.GetBytes(cursor.WorkflowExecutionId)),
-            cursor.PageSize.ToString(CultureInfo.InvariantCulture),
-            cursor.Scope);
-        return Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
-    }
-
-    private static WorkflowExecutionStatePageCursor DecodeCursor(string cursor, int maxTake, string queryScope)
-    {
-        try
-        {
-            var base64 = cursor.Replace('-', '+').Replace('_', '/');
-            base64 = base64.PadRight(base64.Length + ((4 - base64.Length % 4) % 4), '=');
-            var parts = Encoding.UTF8.GetString(Convert.FromBase64String(base64)).Split('|');
-            if (parts.Length is not (5 or 6) || parts[0] != "v1" || parts[1] is not ("n" or "p") ||
-                !long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks) ||
-                !int.TryParse(parts[4], NumberStyles.None, CultureInfo.InvariantCulture, out var pageSize))
-                throw new FormatException();
-
-            var scope = parts.Length == 6 ? parts[5] : queryScope;
-            return new(
-                new DateTimeOffset(ticks, TimeSpan.Zero),
-                Encoding.UTF8.GetString(Convert.FromBase64String(parts[3])),
-                parts[1] == "n" ? WorkflowExecutionStatePageDirection.Next : WorkflowExecutionStatePageDirection.Previous,
-                Math.Clamp(pageSize, 1, maxTake),
-                scope);
-        }
-        catch (Exception exception) when (exception is FormatException or ArgumentException)
-        {
-            throw new ArgumentException("The workflow instance cursor is invalid.", nameof(cursor), exception);
-        }
-    }
 }

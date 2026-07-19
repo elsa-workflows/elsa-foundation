@@ -173,6 +173,9 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
     {
         CompareCommon(before, after, memberKind, changes);
         CompareNullability(before, after, memberKind, changes);
+        if (before.SourceRepresentation != after.SourceRepresentation)
+            Add(changes, MemberChange(after, memberKind, "SourceRepresentationChanged", Project(before), Project(after), ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major,
+                $"Output '{after.ReferenceKey}' changed source representation."));
         if (before.IsRequired == after.IsRequired) return;
         var breaking = before.IsRequired && !after.IsRequired;
         Add(changes, MemberChange(after, memberKind, "RequirednessChanged", Project(before), Project(after),
@@ -529,7 +532,8 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         member.IsRequired,
         member.IsNullable,
         member.StorageDriverKey,
-        member.Durability
+        member.Durability,
+        member.SourceRepresentation
     });
 
     private static JsonElement Project(ActivityOutcomeContract member) => Element(new { member.Name, member.IsEmitted });

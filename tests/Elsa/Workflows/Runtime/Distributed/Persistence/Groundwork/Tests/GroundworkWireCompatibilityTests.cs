@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Distributed.Models;
+using Groundwork.Core.Text;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests;
@@ -44,10 +45,11 @@ public sealed class GroundworkWireCompatibilityTests
 
         var root = JsonNode.Parse(envelope.ContentJson)!.AsObject();
         Assert.Equal(
-            new[] { "collection", "item", "workflowExecutionId" },
+            new[] { "collection", "item", "sequence", "visibleAt", "workflowExecutionId", "workflowExecutionIdKey" },
             root.Select(property => property.Key).OrderBy(key => key, StringComparer.Ordinal).ToArray());
         Assert.Equal(DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind, (string?)root["collection"]);
         Assert.Equal("wf-1", (string?)root["workflowExecutionId"]);
+        Assert.Equal(PortableStringComparison.CreateOrdinal("wf-1"), (string?)root["workflowExecutionIdKey"]);
 
         // The nested item carries exactly the frozen shape's property names (the fixture pins values elsewhere;
         // here we pin the structural contract of what the bridge writes).
@@ -67,9 +69,23 @@ public sealed class GroundworkWireCompatibilityTests
 
         var root = JsonNode.Parse(envelope.ContentJson)!.AsObject();
         Assert.Equal(
-            new[] { "collection", "lease" },
+            new[]
+            {
+                "collection",
+                "expiresAt",
+                "lease",
+                "ownerId",
+                "ownerIdComparisonKey",
+                "ownerIdLookupKey",
+                "workflowExecutionId",
+                "workflowExecutionIdKey"
+            },
             root.Select(property => property.Key).OrderBy(key => key, StringComparer.Ordinal).ToArray());
         Assert.Equal(DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind, (string?)root["collection"]);
+        Assert.Equal(PortableStringComparison.CreateOrdinal("wf-1"), (string?)root["workflowExecutionIdKey"]);
+        var ownerKey = PortableStringComparison.CreateOrdinal("node-a");
+        Assert.Equal(ownerKey, (string?)root["ownerIdComparisonKey"]);
+        Assert.Equal(PortableStringComparison.CreateHash(ownerKey), (string?)root["ownerIdLookupKey"]);
 
         AssertSamePropertyNames(ReadFixture("executionPlacement"), root["lease"]!);
     }

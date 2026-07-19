@@ -123,7 +123,6 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
                     RuntimeActivityDescriptor.InitialSchemaVersion,
                     JsonSerializer.SerializeToElement(new { })),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,

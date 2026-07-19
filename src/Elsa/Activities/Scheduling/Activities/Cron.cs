@@ -1,6 +1,4 @@
-using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Activities.Scheduling.Activities;
@@ -30,24 +28,23 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// </para>
 /// </remarks>
 [TriggerActivity]
-public sealed class Cron : CodeActivity<string>
+public sealed class Cron : Activity<CronResult>
 {
     /// <summary>The stable activity type key the trigger/schedule providers match on.</summary>
     public const string ActivityType = "Elsa.Cron";
-
-    public Cron() : base(ActivityType)
-    {
-    }
 
     /// <summary>
     /// The cron expression, as an authored literal (UTC). Five fields = standard cron; six/seven fields enable
     /// the seconds field. Drives the stimulus hash and the recurring schedule.
     /// </summary>
-    public InputArgument<string> Expression { get; set; } = null!;
+    [ActivityInput(Key = nameof(Expression))]
+    [Required]
+    public string Expression { get; set; } = null!;
 
-    protected override void Execute(IActivityExecutionContext context)
-    {
-        var expression = context.Get(Expression);
-        context.Set(Result, expression);
-    }
+    protected override ValueTask<ActivityTransition<CronResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new CronResult(Expression)));
 }
+
+/// <summary>The atomic result produced when a recurring cron schedule starts a workflow.</summary>
+public sealed record CronResult(
+    [property: Output(Key = "Result", Path = "expression")] string Expression);

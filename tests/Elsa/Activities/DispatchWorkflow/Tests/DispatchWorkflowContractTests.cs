@@ -4,15 +4,16 @@ using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
+using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
-using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -53,23 +54,105 @@ public sealed class DispatchWorkflowContractTests
     }
 
     [Fact]
+    public async Task Runtime_feature_registers_resolvable_handlers_enricher_and_retry_policy()
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        await using var scope = fixture.Services.CreateAsyncScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ChildStartExecutor>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ChildCancelExecutor>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ParentResumeExecutor>());
+        Assert.IsType<WorkflowDispatchDeliveryFailureProjector>(
+            scope.ServiceProvider.GetRequiredService<IPostCommitFailureProjector>());
+        Assert.Contains(
+            scope.ServiceProvider.GetServices<IRuntimeCheckpointCommitEnricher>(),
+            enricher => enricher is WorkflowDispatchCompletionEnricher);
+        Assert.Contains(
+            scope.ServiceProvider.GetServices<IRuntimeCheckpointCommitEnricher>(),
+            enricher => enricher is WorkflowDispatchCancellationEnricher);
+
+        var contributions = fixture.Services
+            .GetServices<RuntimePostCommitIntentHandlerContribution>()
+            .ToDictionary(contribution => contribution.IntentKind, StringComparer.Ordinal);
+        Assert.Equal(typeof(ChildStartExecutor), contributions[DispatchWorkflowConstants.StartChildIntentKind].HandlerType);
+        Assert.Equal(DispatchWorkflowDeliveryOptions.DefaultMaxDeliveryAttempts, contributions[DispatchWorkflowConstants.StartChildIntentKind].RetryPolicy.MaxAttempts);
+        Assert.Equal(DispatchWorkflowDeliveryOptions.DefaultRetryDelay, contributions[DispatchWorkflowConstants.StartChildIntentKind].RetryPolicy.Delay);
+        Assert.False(contributions[DispatchWorkflowConstants.StartChildIntentKind].RetryPolicy.RetryUntilAcknowledged);
+        Assert.Equal(typeof(ChildCancelExecutor), contributions[DispatchWorkflowConstants.CancelChildIntentKind].HandlerType);
+        Assert.True(contributions[DispatchWorkflowConstants.CancelChildIntentKind].RetryPolicy.RetryUntilAcknowledged);
+        Assert.Equal(TimeSpan.FromSeconds(1), contributions[DispatchWorkflowConstants.CancelChildIntentKind].RetryPolicy.Delay);
+        Assert.Equal(typeof(ParentResumeExecutor), contributions[DispatchWorkflowConstants.ResumeParentIntentKind].HandlerType);
+        Assert.True(contributions[DispatchWorkflowConstants.ResumeParentIntentKind].RetryPolicy.RetryUntilAcknowledged);
+        Assert.Equal(TimeSpan.FromSeconds(1), contributions[DispatchWorkflowConstants.ResumeParentIntentKind].RetryPolicy.Delay);
+    }
+
+    [Fact]
+    public void Runtime_feature_snapshots_validated_host_child_start_delivery_policy()
+    {
+        var services = new ServiceCollection();
+        var feature = new DispatchWorkflowRuntimeFeature
+        {
+            ChildStartMaxDeliveryAttempts = 7,
+            ChildStartRetryDelaySeconds = 2.5
+        };
+
+        feature.ConfigureServices(services);
+
+        var contribution = Assert.Single(
+            services
+                .Where(descriptor => descriptor.ServiceType == typeof(RuntimePostCommitIntentHandlerContribution))
+                .Select(descriptor => descriptor.ImplementationInstance)
+                .OfType<RuntimePostCommitIntentHandlerContribution>(),
+            item => item.IntentKind == DispatchWorkflowConstants.StartChildIntentKind);
+        Assert.Equal(7, contribution.RetryPolicy.MaxAttempts);
+        Assert.Equal(TimeSpan.FromSeconds(2.5), contribution.RetryPolicy.Delay);
+        Assert.False(contribution.RetryPolicy.RetryUntilAcknowledged);
+        Assert.Throws<ArgumentOutOfRangeException>(() => feature.ChildStartMaxDeliveryAttempts = 0);
+        Assert.Throws<ArgumentOutOfRangeException>(() => feature.ChildStartRetryDelaySeconds = 0);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Runtime_processor_rejects_competing_failure_projectors_in_either_registration_order(
+        bool competitorFirst)
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        if (competitorFirst)
+            services.AddScoped<IPostCommitFailureProjector, StubFailureProjectionReplacement>();
+
+        new DispatchWorkflowRuntimeFeature().ConfigureServices(services);
+
+        if (!competitorFirst)
+            services.AddScoped<IPostCommitFailureProjector, StubFailureProjectionReplacement>();
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
+
+        Assert.Contains("exactly one", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Activity_exposes_stable_schema_defaults_editor_and_outcomes()
     {
-        var activity = new Activity();
-
-        Assert.Equal(DispatchWorkflowConstants.ActivityType, activity.Type);
+        Assert.Equal(DispatchWorkflowConstants.ActivityType, Activity.ActivityType);
 
         var inputs = typeof(Activity).GetProperties()
-            .Where(property => DerivesFrom(property.PropertyType, typeof(InputArgument)))
+            .Where(property => property.GetCustomAttribute<ActivityInputAttribute>() is not null)
             .ToDictionary(property => property.Name, StringComparer.Ordinal);
-        var outputs = typeof(Activity).GetProperties()
-            .Where(property => DerivesFrom(property.PropertyType, typeof(OutputArgument)))
+        var outputs = typeof(DispatchWorkflowActivityResult).GetProperties()
+            .Where(property => property.GetCustomAttribute<OutputAttribute>() is not null)
             .ToDictionary(property => property.Name, StringComparer.Ordinal);
 
         Assert.Equal(
             new[] { nameof(Activity.WorkflowDefinitionId), nameof(Activity.Inputs), nameof(Activity.WaitForCompletion), nameof(Activity.CancelChildOnParentCancellation), nameof(Activity.CorrelationId) },
             inputs.Keys.OrderBy(InputOrder).ToArray());
-        Assert.Equal(new[] { nameof(Activity.ChildWorkflowExecutionId), nameof(Activity.Result) }, outputs.Keys.Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            new[] { nameof(DispatchWorkflowActivityResult.ChildWorkflowExecutionId), nameof(DispatchWorkflowActivityResult.Result) },
+            outputs.Keys.Order(StringComparer.Ordinal).ToArray());
 
         var workflowId = inputs[nameof(Activity.WorkflowDefinitionId)].GetCustomAttribute<ActivityInputAttribute>();
         Assert.NotNull(workflowId);
@@ -78,11 +161,12 @@ public sealed class DispatchWorkflowContractTests
 
         Assert.Equal("false", inputs[nameof(Activity.WaitForCompletion)].GetCustomAttribute<ActivityInputAttribute>()?.DefaultValue);
         Assert.Equal("true", inputs[nameof(Activity.CancelChildOnParentCancellation)].GetCustomAttribute<ActivityInputAttribute>()?.DefaultValue);
-        Assert.Equal(typeof(OutputArgument<DispatchWorkflowResult>), outputs[nameof(Activity.Result)].PropertyType);
+        Assert.Equal(typeof(string), outputs[nameof(DispatchWorkflowActivityResult.ChildWorkflowExecutionId)].PropertyType);
+        Assert.Equal(typeof(DispatchWorkflowResult), outputs[nameof(DispatchWorkflowActivityResult.Result)].PropertyType);
 
         Assert.Equal(
             new[] { "Dispatched", "Completed", "Faulted", "Cancelled", "DispatchFailed" },
-            DispatchWorkflowOutcomes.All);
+            typeof(Activity).GetCustomAttributes<ActivityOutcomeAttribute>().Select(attribute => attribute.Key).ToArray());
     }
 
     [Fact]
@@ -116,18 +200,14 @@ public sealed class DispatchWorkflowContractTests
     }
 
     [Fact]
-    public async Task Wait_for_completion_true_is_rejected_in_this_slice()
+    public void Wait_mode_uses_stable_nonexpiring_bookmark_contract()
     {
-        var activity = new Activity
-        {
-            WaitForCompletion = new InputArgument<bool>(new MemoryBlockReference("wait"))
-        };
-        var context = new StubExecutionContext(activity, new Dictionary<string, object?> { ["wait"] = true });
+        Assert.Equal("Elsa.Activities.DispatchWorkflow.ChildCompleted", DispatchWorkflowConstants.WaitStimulusType);
+        Assert.Equal("resume-target:dispatch-workflow-completed", DispatchWorkflowConstants.CompletionResumeTargetId);
 
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
-            await ((IActivity)activity).ExecuteAsync(context));
-
-        Assert.Contains("#679", exception.Message, StringComparison.Ordinal);
+        var identity = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        Assert.StartsWith("bookmark:dispatch-wait:v1:", identity.WaitBookmarkId, StringComparison.Ordinal);
+        Assert.StartsWith("stimulus:dispatch-wait:v1:", identity.WaitStimulusHash, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -187,14 +267,117 @@ public sealed class DispatchWorkflowContractTests
         Assert.Equal(42, Assert.Single(result.Outputs).Value?.GetInt32());
     }
 
-    private static bool DerivesFrom(Type candidate, Type baseType)
+    [Theory]
+    [InlineData(WorkflowDispatchStatus.Faulted)]
+    [InlineData(WorkflowDispatchStatus.Cancelled)]
+    public void NonSuccessResult_RejectsOutputsAndCallerSuppliedDiagnostics(WorkflowDispatchStatus status)
     {
-        for (var current = candidate; current is not null; current = current.BaseType)
-            if (current == baseType)
-                return true;
+        var output = new DispatchWorkflowOutput(
+            "partial",
+            System.Text.Json.JsonSerializer.SerializeToElement("secret-output"),
+            "System.String",
+            false);
 
-        return false;
+        Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult("child-1", status, [output]));
+        Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(
+            "child-1",
+            status,
+            diagnosticMetadata: new Dictionary<string, string>
+            {
+                ["exceptionType"] = "SecretException",
+                ["stackTrace"] = "secret stack",
+                ["message"] = "secret message"
+            }));
     }
+
+    [Theory]
+    [InlineData(WorkflowDispatchStatus.Completed)]
+    [InlineData(WorkflowDispatchStatus.Faulted)]
+    [InlineData(WorkflowDispatchStatus.Cancelled)]
+    [InlineData(WorkflowDispatchStatus.DispatchFailed)]
+    public void ParentResumePayload_AcceptsExactlySupportedChildTerminalStatuses(WorkflowDispatchStatus status)
+    {
+        var identity = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        var result = status switch
+        {
+            WorkflowDispatchStatus.Faulted => new DispatchWorkflowResult(
+                identity.ChildWorkflowExecutionId,
+                status,
+                diagnosticMetadata: new Dictionary<string, string>
+                {
+                    [DispatchWorkflowDiagnostics.CodeKey] = DispatchWorkflowDiagnostics.FaultedCode,
+                    [DispatchWorkflowDiagnostics.CategoryKey] = DispatchWorkflowDiagnostics.Category,
+                    [DispatchWorkflowDiagnostics.SummaryKey] = DispatchWorkflowDiagnostics.FaultedSummary,
+                    [DispatchWorkflowDiagnostics.IncidentCountKey] = "1",
+                    [DispatchWorkflowDiagnostics.IncidentIdsTruncatedKey] = "false",
+                    ["incidentId.000"] = "incident-a"
+                }),
+            WorkflowDispatchStatus.Cancelled => new DispatchWorkflowResult(
+                identity.ChildWorkflowExecutionId,
+                status,
+                diagnosticMetadata: new Dictionary<string, string>
+                {
+                    [DispatchWorkflowDiagnostics.CodeKey] = DispatchWorkflowDiagnostics.CancelledCode,
+                    [DispatchWorkflowDiagnostics.CategoryKey] = DispatchWorkflowDiagnostics.Category,
+                    [DispatchWorkflowDiagnostics.SummaryKey] = DispatchWorkflowDiagnostics.CancelledSummary
+                }),
+            WorkflowDispatchStatus.DispatchFailed => new DispatchWorkflowResult(
+                identity.ChildWorkflowExecutionId,
+                status,
+                diagnosticMetadata: new Dictionary<string, string>
+                {
+                    [DispatchWorkflowDiagnostics.CodeKey] = DispatchWorkflowDiagnostics.DispatchFailedCode,
+                    [DispatchWorkflowDiagnostics.CategoryKey] = DispatchWorkflowDiagnostics.DeliveryCategory,
+                    [DispatchWorkflowDiagnostics.SummaryKey] = DispatchWorkflowDiagnostics.DispatchFailedSummary,
+                    [DispatchWorkflowDiagnostics.DeliveryIncidentIdKey] = identity.DeliveryIncidentId(0)
+                }),
+            _ => new DispatchWorkflowResult(identity.ChildWorkflowExecutionId, status)
+        };
+
+        var payload = new WorkflowDispatchParentResumePayload(
+            identity.DispatchId,
+            "parent-1",
+            "activity-1",
+            identity.ChildWorkflowExecutionId,
+            identity.WaitBookmarkId,
+            DispatchWorkflowConstants.WaitStimulusType,
+            identity.WaitStimulusHash,
+            result);
+
+        Assert.Equal(status, payload.Result.Status);
+    }
+
+    [Fact]
+    public void DispatchFailedResult_RejectsOutputsAndNoncanonicalOrRawDiagnostics()
+    {
+        var output = new DispatchWorkflowOutput(
+            "partial",
+            System.Text.Json.JsonSerializer.SerializeToElement("secret"),
+            "System.String",
+            false);
+        Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(
+            "child-1",
+            WorkflowDispatchStatus.DispatchFailed,
+            [output],
+            DispatchFailedDiagnostics("incident-1")));
+
+        var raw = DispatchFailedDiagnostics("incident-1")
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        raw["exception"] = "secret provider reason";
+        Assert.Throws<ArgumentException>(() => new DispatchWorkflowResult(
+            "child-1",
+            WorkflowDispatchStatus.DispatchFailed,
+            diagnosticMetadata: raw));
+    }
+
+    private static IReadOnlyDictionary<string, string> DispatchFailedDiagnostics(string incidentId) =>
+        new Dictionary<string, string>
+        {
+            [DispatchWorkflowDiagnostics.CodeKey] = DispatchWorkflowDiagnostics.DispatchFailedCode,
+            [DispatchWorkflowDiagnostics.CategoryKey] = DispatchWorkflowDiagnostics.DeliveryCategory,
+            [DispatchWorkflowDiagnostics.SummaryKey] = DispatchWorkflowDiagnostics.DispatchFailedSummary,
+            [DispatchWorkflowDiagnostics.DeliveryIncidentIdKey] = incidentId
+        };
 
     private static void AssertFeatureCanBeSpecialized(Type featureType)
     {
@@ -216,30 +399,14 @@ public sealed class DispatchWorkflowContractTests
         _ => int.MaxValue
     };
 
-    private sealed class StubExecutionContext(IActivity activity, IReadOnlyDictionary<string, object?> values) : IActivityExecutionContext
+    private sealed class StubFailureProjectionReplacement
+        : IPostCommitFailureProjector
     {
-        public TService GetRequiredService<TService>() where TService : notnull => throw new InvalidOperationException();
-        public IExpressionExecutionContext ExpressionExecutionContext => throw new InvalidOperationException();
-        public IActivity Activity { get; } = activity;
-        public IActivityExecutionContext ParentActivityExecutionContext => throw new InvalidOperationException();
-        public CancellationToken CancellationToken => CancellationToken.None;
-
-        public T? Get<T>(InputArgument<T>? input) =>
-            input?.MemoryBlockReference() is { } reference && values.TryGetValue(reference.Id, out var value)
-                ? (T?)value
-                : default;
-
-        public void Set<T>(OutputArgument<T>? output, T? value, string? outputName = null) { }
-        public IAsyncEnumerable<ActivityOutputs> GetActivityOutputs() => Empty();
-        public void SetOutcomes(string[] outcomes) { }
-        public IEnumerable<string> GetOutcomes() => [];
-        public void CreateBookmark(ActivityBookmarkRequest request) { }
-        public IReadOnlyCollection<ActivityBookmarkRequest> GetBookmarkRequests() => [];
-
-        private static async IAsyncEnumerable<ActivityOutputs> Empty()
-        {
-            await Task.CompletedTask;
-            yield break;
-        }
+        public ValueTask<PostCommitFailureProjection?> ProjectAsync(
+            RuntimePostCommitOutboxItem item,
+            RuntimePostCommitOutboxDeliveryResult finalResult,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<PostCommitFailureProjection?>(null);
     }
+
 }

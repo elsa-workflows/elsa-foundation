@@ -16,6 +16,8 @@ public sealed class FoundationIdentityOptions
 
     public bool RequireHttpsMetadata { get; set; } = true;
 
+    public bool RequireUniqueEmail { get; set; }
+
     public IReadOnlySet<string> AllowedSecretHashAlgorithms { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         SecretHashAlgorithms.Pbkdf2Sha256

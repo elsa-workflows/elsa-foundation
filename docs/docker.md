@@ -95,6 +95,7 @@ environment variables. Standard .NET double-underscore (`__`) env keys override 
 | `ASPNETCORE_URLS` | Kestrel bind (already set in the image) | `http://+:8080` |
 | `Elsa__ModuleManagement__ApiKey` | The Elsa host management key the server accepts on its `/_elsa/module-management` API (header `X-Elsa-Module-Management-Key`). Server-side only — the browser never sees or sends it. **Must match** Studio's `Studio__BackendModuleManagementApiKey`. | `elsa-docker-demo-key` |
 | `Cors__AllowedOrigins__0`, `__1`, … | Browser origins allowed by the `ElsaStudio` CORS policy. The Studio container's **published host origin** must be listed. | `http://localhost:14000` |
+| `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0`, `__1`, … | Origins the development login provider may redirect back to after sign-in. Add the Studio origin when Studio is hosted separately from the backend. | `http://localhost:14000` |
 | `CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString` | Optional: override the Postgres connection string without editing the mounted `shells.json`. | *(commented out)* |
 
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the

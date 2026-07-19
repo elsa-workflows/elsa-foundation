@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -102,6 +103,25 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         Assert.Equal("version-1", payload.PinnedExecutable.DefinitionVersionId);
         Assert.Equal("1.0.0", payload.PinnedExecutable.ArtifactVersion);
         Assert.Equal("sha256:test", payload.PinnedExecutable.ArtifactHash);
+    }
+
+    [Theory]
+    [InlineData(WorkflowExecutableReferenceScope.Published, "Published")]
+    [InlineData(WorkflowExecutableReferenceScope.TestRun, "TestRun")]
+    public async Task DispatchAsync_CarriesDurableExecutionOrigin(
+        WorkflowExecutableReferenceScope scope,
+        string expectedOrigin)
+    {
+        await _store.SaveAsync(NewExecutable());
+        await _references.SaveAsync(Reference("ref-1", "artifact-1", scope, _now.AddMinutes(30)));
+        var dispatcher = NewDispatcher(new AllowWorkflowExecutableStartPolicy());
+
+        await dispatcher.DispatchAsync(
+            new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"),
+            scope);
+
+        var envelope = Assert.Single(_agentProvider.Agent.Envelopes);
+        Assert.Equal(expectedOrigin, envelope.Command.Metadata[RuntimeMetadataKeys.WorkflowExecutionOrigin]);
     }
 
     [Fact]
@@ -726,7 +746,6 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { type = "test" })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private sealed class RecordingAgentProvider : IWorkflowExecutionActorProvider

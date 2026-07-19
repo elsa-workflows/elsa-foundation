@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:fab7ba118b56e70d80db55907015e2f61630172e978401ceefa39e08b0e15de7",
-    "artifactId": "artifact-fab7ba118b56",
+    "artifactHash": "sha256:85965ceced366e640e2a17c8fc762c27e5f63092bbd98a15fe5e42783391d7bb",
+    "artifactId": "artifact-85965ceced36",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -29,7 +29,7 @@
             "descriptor": {
               "consumerKey": "elsa.clr-activity",
               "payload": {
-                "TypeAlias": "Object"
+                "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
               },
               "schemaVersion": "1"
             },
@@ -44,10 +44,6 @@
                   {
                     "Key": "referenceKey",
                     "Value": "Text"
-                  },
-                  {
-                    "Key": "typeName",
-                    "Value": "System.String, System.Private.CoreLib"
                   }
                 ],
                 "source": "Literal"
@@ -73,7 +69,7 @@
             "descriptor": {
               "consumerKey": "elsa.clr-activity",
               "payload": {
-                "TypeAlias": "Object"
+                "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
               },
               "schemaVersion": "1"
             },
@@ -88,10 +84,6 @@
                   {
                     "Key": "referenceKey",
                     "Value": "Text"
-                  },
-                  {
-                    "Key": "typeName",
-                    "Value": "System.String, System.Private.CoreLib"
                   }
                 ],
                 "source": "Literal"
@@ -116,7 +108,7 @@
     "descriptor": {
       "consumerKey": "elsa.clr-activity",
       "payload": {
-        "TypeAlias": "Object"
+        "TypeAlias": "Elsa.Activities.Sequence.Activities.Sequence"
       },
       "schemaVersion": "1"
     },

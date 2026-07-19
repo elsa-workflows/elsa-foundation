@@ -297,10 +297,12 @@ public sealed class StimulusRouterTests
     {
         public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default) =>
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("The router must reuse the supplied match set, not query the store.");
         public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
+            WorkflowTriggerBindingTypePageQuery query,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private StimulusRouter Router(
@@ -455,7 +457,6 @@ public sealed class StimulusRouterTests
                 activityTypeVersion: "1.0.0",
                 descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>());
         }
     }

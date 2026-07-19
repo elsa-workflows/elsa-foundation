@@ -80,7 +80,7 @@ authority. In particular:
   durable requirement.
 
 The ledger validator compares the composition record with the exact 32-row denominator, checks the
-external-authority links against the row-level authority fields, and verifies the durable artifact at
+external-authority links and their reviewed relationships against the row-level authority fields, and verifies the durable artifact at
 `evidence/composition/host-selection-all32.json` by SHA-256 and payload equality.
 
 ## Scope/session acquisition

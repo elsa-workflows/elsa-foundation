@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:5795f8095442033ef47d04d9053299068de579d3c834b723f10a3b362147a933",
-    "artifactId": "artifact-5795f8095442",
+    "artifactHash": "sha256:c947434b2b826224beb8e48abc51ee3e498464c93a8cec0943972f49a2370553",
+    "artifactId": "artifact-c947434b2b82",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -22,18 +22,14 @@
     "descriptor": {
       "consumerKey": "elsa.clr-activity",
       "payload": {
-        "TypeAlias": "Object"
+        "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
       },
       "schemaVersion": "1"
     },
     "executableNodeId": "write-var",
     "inputBindings": [
       {
-        "expression": {
-          "expression": "{\u0022referenceKey\u0022:\u0022var-counter\u0022,\u0022declaringScopeId\u0022:null}",
-          "language": "Variable",
-          "resultTypeId": "System.String, System.Private.CoreLib"
-        },
+        "expression": null,
         "inputName": "Text",
         "key": "Text",
         "literalValue": null,
@@ -41,13 +37,9 @@
           {
             "Key": "referenceKey",
             "Value": "Text"
-          },
-          {
-            "Key": "typeName",
-            "Value": "System.String, System.Private.CoreLib"
           }
         ],
-        "source": "Expression"
+        "source": "VariableRead"
       }
     ],
     "metadata": [

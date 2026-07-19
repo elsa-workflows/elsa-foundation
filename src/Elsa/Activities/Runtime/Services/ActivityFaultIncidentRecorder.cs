@@ -15,14 +15,14 @@ public sealed class ActivityFaultIncidentRecorder
     private readonly ActivityActivationFailureHandler _activationFailures;
 
     public ActivityFaultIncidentRecorder(TimeProvider timeProvider)
-        : this(timeProvider, null, DefaultRuntimeFaultCapturePolicy.CreateDefault(), new ActivityActivationFailureHandler())
+        : this(timeProvider, null, DefaultRuntimeFaultCapturePolicy.CreateDefault(), null)
     {
     }
 
     public ActivityFaultIncidentRecorder(
         TimeProvider timeProvider,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator)
-        : this(timeProvider, inspectionAccumulator, DefaultRuntimeFaultCapturePolicy.CreateDefault(), new ActivityActivationFailureHandler())
+        : this(timeProvider, inspectionAccumulator, DefaultRuntimeFaultCapturePolicy.CreateDefault(), null)
     {
     }
 
@@ -53,7 +53,7 @@ public sealed class ActivityFaultIncidentRecorder
         var incidentId = NewIncidentId(request);
         var faultInfo = _faultCapturePolicy.Capture(request.Exception);
         var metadata = NewCommitMetadata(request, incidentId, activationFailure);
-        var faultedState = NewActivityState(request, incidentId, occurredAt, faultInfo, activationFailure);
+        var faultedState = NewFaultedActivityState(request, incidentId, occurredAt, faultInfo, activationFailure);
         var incident = NewIncident(request, incidentId, occurredAt, faultInfo, activationFailure);
         var checkpointId = $"checkpoint:{request.WorkItem.WorkItemId}:incident-recorded:{incidentId}";
         var inspection = _inspectionAccumulator is null
@@ -167,7 +167,7 @@ public sealed class ActivityFaultIncidentRecorder
             [RuntimeMetadataKeys.FaultSubStatus] = request.SubStatus
         };
 
-    private static ActivityExecutionState NewActivityState(
+    private ActivityExecutionState NewFaultedActivityState(
         ActivityFaultIncidentRecordRequest request,
         string incidentId,
         DateTimeOffset completedAt,
@@ -183,19 +183,71 @@ public sealed class ActivityFaultIncidentRecorder
         metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
         AddActivationMetadata(metadata, activationFailure);
 
-        return request.State with
+        if (activationFailure is not null)
         {
-            Status = activationFailure is null ? ActivityExecutionStatus.Faulted : ActivityExecutionStatus.Waiting,
-            SubStatus = activationFailure is null ? request.SubStatus : ActivityActivationFailureHandler.IncidentFailureType,
-            CompletedAt = activationFailure is null ? completedAt : null,
-            IncidentIds = request.State.IncidentIds.Append(incidentId).Distinct(StringComparer.Ordinal).ToArray(),
-            FaultCount = request.State.FaultCount + (activationFailure is null ? 1 : 0),
-            AggregateFaultCount = request.State.AggregateFaultCount + (activationFailure is null ? 1 : 0),
+            return request.State with
+            {
+                Status = ActivityExecutionStatus.Waiting,
+                SubStatus = ActivityActivationFailureHandler.IncidentFailureType,
+                CompletedAt = null,
+                IncidentIds = request.State.IncidentIds.Append(incidentId).Distinct(StringComparer.Ordinal).ToArray(),
+                Metadata = metadata
+            };
+        }
+
+        var state = EndOpenAttempt(request.State, incidentId, completedAt);
+        return RuntimeContainerScopeService.CloseOwnedFrames(state with
+        {
+            Status = ActivityExecutionStatus.Faulted,
+            SubStatus = request.SubStatus,
+            CompletedAt = completedAt,
+            IncidentIds = state.IncidentIds.Append(incidentId).Distinct(StringComparer.Ordinal).ToArray(),
+            FaultCount = state.FaultCount + 1,
+            AggregateFaultCount = state.AggregateFaultCount + 1,
+            Fault = state.Fault ?? new NormalizedActivityFault(
+                request.SubStatus,
+                faultInfo.ExceptionType,
+                faultInfo.Message,
+                faultInfo.StackTrace,
+                isRetryable: false),
             Metadata = metadata
+        });
+    }
+
+    private static ActivityExecutionState EndOpenAttempt(
+        ActivityExecutionState state,
+        string incidentId,
+        DateTimeOffset endedAt)
+    {
+        var attempts = state.Attempts ?? [];
+        var openAttempt = attempts
+            .Where(attempt => attempt.EndedAt is null)
+            .OrderByDescending(attempt => attempt.Ordinal)
+            .FirstOrDefault();
+        if (openAttempt is null)
+            return state;
+
+        var endedAttempt = new ActivityAttempt(
+            openAttempt.AttemptId,
+            openAttempt.InvocationId,
+            openAttempt.Ordinal,
+            openAttempt.Reason,
+            openAttempt.StartedAt,
+            endedAt,
+            openAttempt.TriggerDeliveryId,
+            Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault,
+            incidentId);
+        return state with
+        {
+            Attempts = attempts
+                .Where(attempt => attempt.AttemptId != openAttempt.AttemptId)
+                .Append(endedAttempt)
+                .OrderBy(attempt => attempt.Ordinal)
+                .ToArray()
         };
     }
 
-    private static IncidentState NewIncident(
+    private IncidentState NewIncident(
         ActivityFaultIncidentRecordRequest request,
         string incidentId,
         DateTimeOffset occurredAt,
@@ -230,6 +282,7 @@ public sealed class ActivityFaultIncidentRecorder
     {
         if (activationFailure is null)
             return;
+
         foreach (var item in activationFailure.Metadata)
             metadata[item.Key] = item.Value;
         if (!string.IsNullOrWhiteSpace(activationFailure.ArtifactId))
@@ -240,7 +293,18 @@ public sealed class ActivityFaultIncidentRecorder
         metadata.GetValueOrDefault(RuntimeMetadataKeys.PinnedArtifactId) ??
         metadata.GetValueOrDefault(RuntimeMetadataKeys.ExecutableArtifactId);
 
-    private static void AddExceptionMetadata(IDictionary<string, string> metadata, RuntimeFaultInfo faultInfo, Exception exception)
+    private static void AddCausationMetadata(IDictionary<string, string> metadata, Exception exception)
+    {
+        if (exception is not IActivityFaultCausation causation)
+            return;
+
+        metadata[RuntimeMetadataKeys.CausalIncidentId] = causation.CausalIncidentId;
+        metadata[RuntimeMetadataKeys.CausalActivityExecutionId] = causation.CausalActivityExecutionId;
+        metadata[RuntimeMetadataKeys.CausalExecutableNodeId] = causation.CausalExecutableNodeId;
+        metadata[RuntimeMetadataKeys.CausationKind] = causation.CausationKind;
+    }
+
+    private void AddExceptionMetadata(IDictionary<string, string> metadata, RuntimeFaultInfo faultInfo, Exception exception)
     {
         metadata[RuntimeMetadataKeys.FaultType] = faultInfo.ExceptionType;
         metadata[RuntimeMetadataKeys.FaultMessage] = faultInfo.Message;
@@ -251,19 +315,9 @@ public sealed class ActivityFaultIncidentRecorder
         if (exception.InnerException is not { } inner)
             return;
 
-        metadata[RuntimeMetadataKeys.FaultInnerType] = inner.GetType().FullName ?? inner.GetType().Name;
-        metadata[RuntimeMetadataKeys.FaultInnerMessage] = inner.Message;
-    }
-
-    private static void AddCausationMetadata(IDictionary<string, string> metadata, Exception exception)
-    {
-        if (exception is not IActivityFaultCausation causation)
-            return;
-
-        metadata[RuntimeMetadataKeys.CausalIncidentId] = causation.CausalIncidentId;
-        metadata[RuntimeMetadataKeys.CausalActivityExecutionId] = causation.CausalActivityExecutionId;
-        metadata[RuntimeMetadataKeys.CausalExecutableNodeId] = causation.CausalExecutableNodeId;
-        metadata[RuntimeMetadataKeys.CausationKind] = causation.CausationKind;
+        var innerFaultInfo = _faultCapturePolicy.Capture(inner);
+        metadata[RuntimeMetadataKeys.FaultInnerType] = innerFaultInfo.ExceptionType;
+        metadata[RuntimeMetadataKeys.FaultInnerMessage] = innerFaultInfo.Message;
     }
 }
 

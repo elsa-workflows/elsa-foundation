@@ -1,76 +1,43 @@
-using Elsa.Events.Core.Contracts;
-using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.Liquid.Options;
+using System.Text.Json;
+using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Liquid.Services;
+using Elsa.Primitives.Models;
 using Fluid;
-using Microsoft.Extensions.Caching.Memory;
-using System.Text.Encodings.Web;
 using Xunit;
 
 namespace Elsa.Expressions.Tests.Unit;
 
 /// <summary>
-/// #422 (item 3): when a malformed template's <c>{% raw %}</c>-wrapped fallback re-parse of the parse
-/// error ALSO failed, <see cref="LiquidTemplateManager"/> cached <c>null</c> and rendering crashed with
-/// an unhandled <see cref="NullReferenceException"/>. It must surface a clear "template invalid" error.
+/// Invalid portable Liquid definitions fail predictably instead of rendering parser diagnostics as
+/// workflow values or requiring an ambient expression execution context.
 /// </summary>
-public sealed class LiquidTemplateManagerInvalidTemplateTests
+public sealed class PortableLiquidInvalidTemplateTests
 {
-    private readonly LiquidTemplateManager _manager = new(
-        new(),
-        new MemoryCache(new MemoryCacheOptions()),
-        new StubEventPublisher(),
-        new(HtmlEncoder.Default, [], _ => { }));
-
-    [Fact]
-    public async Task RenderAsync_TemplateFailingBothParses_ThrowsDescriptiveError()
+    [Theory]
+    [InlineData("{% if true %}{% endraw %}{% endif %}")]
+    [InlineData("{% assign %}")]
+    public async Task EvaluateAsync_InvalidTemplate_ThrowsDescriptiveError(string source)
     {
-        // The parse error for this template embeds template markup, which also breaks the
-        // '{% raw %}'-wrapped fallback re-parse — previously caching null and throwing NRE on render.
-        const string template = "{% if true %}{% endraw %}{% endif %}";
+        var evaluator = new PortableLiquidExpressionHandler(new FluidParser());
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _manager.RenderAsync(template, new StubExpressionExecutionContext()));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await evaluator.EvaluateAsync(Request(source)));
 
-        Assert.Contains("Failed to parse Liquid template", exception.Message);
+        Assert.Contains("Failed to parse Liquid binding expression", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task RenderAsync_TemplateWhoseFallbackParses_RendersParseError()
+    private static ExpressionEvaluationRequest Request(string source)
     {
-        // Single parse failure keeps the existing behavior: the raw-wrapped parse error is rendered.
-        var result = await _manager.RenderAsync("{% assign %}", new StubExpressionExecutionContext());
-
-        Assert.Contains("An identifier was expected after the 'assign' tag", result);
-    }
-
-    private sealed class StubEventPublisher : IInlineEventPublisher
-    {
-        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-    }
-
-    private sealed class StubExpressionExecutionContext : IExpressionExecutionContext
-    {
-        public IMemoryRegister Memory => throw new NotSupportedException();
-        public IExpressionExecutionContext? ParentContext { get; set; }
-        public CancellationToken CancellationToken => CancellationToken.None;
-        public bool IsContainedWithinCompositeActivity() => false;
-        public bool TryGetActivityInput(string key, out object? value) => throw new NotSupportedException();
-        public bool TryGetWorkflowInput(string key, out object? value) => throw new NotSupportedException();
-        public object? GetVariableValueOrDefault(string variableName) => null;
-        public string GetCorrelationId() => "";
-        public string GetWorkflowDefinitionId() => "";
-        public string GetWorkflowDefinitionVersionId() => "";
-        public int GetWorkflowDefinitionVersion() => 0;
-        public string GetWorkflowInstanceId() => "";
-        public object? GetRequiredService(Type type) => throw new NotSupportedException();
-        public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => throw new NotSupportedException();
-        public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) => throw new NotSupportedException();
-        public T? Get<T>(IMemoryBlockReference blockReference) => throw new NotSupportedException();
-        public void Set(IMemoryBlockReference blockReference, object? value, Action<IMemoryBlock>? configure = null) => throw new NotSupportedException();
-        public IVariable? GetVariable(string name, bool localScopeOnly = false) => null;
-        public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null) => throw new NotSupportedException();
-        public IEnumerable<IVariable> EnumerateVariablesInScope() => [];
+        var definition = new ExpressionDefinition(
+            "Liquid",
+            source,
+            new TypeReference("String"),
+            new Dictionary<string, ExpressionParameterBinding>(),
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV1);
+        return new ExpressionEvaluationRequest(
+            definition,
+            new Dictionary<string, JsonElement>(),
+            CancellationToken.None);
     }
 }

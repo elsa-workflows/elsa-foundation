@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -41,6 +42,8 @@ public sealed class ActivityDraftTestRunService(
     WorkflowExecutableHasher hasher,
     IWorkflowExecutableStore workflowExecutables,
     IWorkflowStartDispatcher startDispatcher,
+    IWorkflowTestScopeStore testScopeStore,
+    IWorkflowExecutionPartitionAccessor partitionAccessor,
     IActivityDraftTestRunStore testRuns,
     IWorkflowExecutionStateStore workflowExecutions,
     IActivityExecutionStateStore activityExecutions,
@@ -319,9 +322,6 @@ public sealed class ActivityDraftTestRunService(
             return await ProjectAsync(receipt, cancellationToken);
         }
 
-        var inputValues = (request.Inputs ?? new Dictionary<string, ActivityDraftTestRunInput>())
-            .Where(x => StringComparer.OrdinalIgnoreCase.Equals(x.Value.State, "Present") && x.Value.Value.HasValue)
-            .ToDictionary(x => x.Key, x => (object?)x.Value.Value!.Value.Clone(), StringComparer.Ordinal);
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["runtime.scope"] = "test-run",
@@ -333,6 +333,14 @@ public sealed class ActivityDraftTestRunService(
         if (!string.IsNullOrWhiteSpace(request.CorrelationId))
             metadata["runtime.correlationId"] = request.CorrelationId;
 
+        var partition = partitionAccessor.Current;
+        var testScope = new WorkflowTestScope(
+            receipt.TestRunId,
+            receipt.SourceReferenceExpiresAt,
+            receipt.TenantId,
+            partition);
+        await testScopeStore.CreateAsync(testScope, timeProvider.GetUtcNow(), cancellationToken);
+
         try
         {
             var dispatch = await startDispatcher.DispatchAsync(
@@ -343,7 +351,7 @@ public sealed class ActivityDraftTestRunService(
                     idempotencyKey: $"activity-test-run:{receipt.TestRunId}:start",
                     metadata: metadata,
                     variables: null,
-                    inputs: inputValues,
+                    inputs: null,
                     stimulusInput: null,
                     triggerNodeId: null,
                     runKind: WorkflowRunKind.TestRun,
@@ -352,12 +360,15 @@ public sealed class ActivityDraftTestRunService(
                     parentWorkflowExecutionId: null,
                     correlationId: request.CorrelationId,
                     tenantId: receipt.TenantId,
-                    partition: null,
+                    partition: partition,
                     authority: null,
                     startAuthority: null,
-                    dispatchNestingDepth: 0),
+                    dispatchNestingDepth: 0,
+                    testScope: testScope),
                 WorkflowExecutableReferenceScope.TestRun,
                 cancellationToken: cancellationToken);
+            if (dispatch.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Rejected)
+                await CloseTestScopeAsync(testScope.ScopeId, cancellationToken);
             receipt = await UpdateAsync(
                 receipt,
                 x => x with
@@ -372,6 +383,7 @@ public sealed class ActivityDraftTestRunService(
         }
         catch (WorkflowExecutableStartRejectedException exception)
         {
+            await CloseTestScopeAsync(testScope.ScopeId, cancellationToken);
             receipt = await RuntimeRejectAsync(
                 receipt,
                 $"runtime.start.{exception.ReasonCode}",
@@ -380,10 +392,12 @@ public sealed class ActivityDraftTestRunService(
         }
         catch (WorkflowExecutableReferenceRejectedException exception)
         {
+            await CloseTestScopeAsync(testScope.ScopeId, cancellationToken);
             receipt = await RuntimeRejectAsync(receipt, $"runtime.reference.{exception.Reason}", "Runtime rejected the Test Run Source Reference.", cancellationToken);
         }
         catch (WorkflowExecutableNotFoundException)
         {
+            await CloseTestScopeAsync(testScope.ScopeId, cancellationToken);
             receipt = await RuntimeRejectAsync(receipt, "runtime.artifact.not-found", "Runtime could not resolve the Test Run artifact.", cancellationToken);
         }
         catch (OperationCanceledException)
@@ -406,6 +420,16 @@ public sealed class ActivityDraftTestRunService(
 
         return await GetAsync(receipt.TestRunId, cancellationToken);
     }
+
+    private ValueTask<WorkflowTestScopeCloseResult> CloseTestScopeAsync(
+        string scopeId,
+        CancellationToken cancellationToken) =>
+        testScopeStore.CloseAsync(
+            new WorkflowTestScopeCloseRequest(
+                scopeId,
+                WorkflowTestScopeCloseReason.ExplicitTeardown,
+                timeProvider.GetUtcNow()),
+            cancellationToken);
 
     public async Task<ActivityDraftTestRunView> GetAsync(
         string testRunId,
@@ -706,13 +730,20 @@ public sealed class ActivityDraftTestRunService(
             }
             if (!StringComparer.OrdinalIgnoreCase.Equals(value.State, "Present") || !value.Value.HasValue)
                 throw Reject("activity.test-run.input-state-invalid", $"Activity input '{input.ReferenceKey}' has an invalid state/value combination.");
-            result.Add(input.Name, new(
-                input.Name,
-                RuntimeInputBindingSource.Literal,
-                literalValue: value.Value.Value.Clone(),
+            var targetType = new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind);
+            var policy = ValuePolicyCombiner.ToProtectionPolicy(
+                ValuePolicyCombiner.FromAuthoredStorage(input.StorageDriverKey));
+            var literal = value.Value.Value.ValueKind == JsonValueKind.Null
+                ? ValueEnvelope.Null(targetType, policy)
+                : ValueEnvelope.Inline(targetType, value.Value.Value, policy);
+            result.Add(input.ReferenceKey, new RuntimeInputBinding(
+                inputKey: input.ReferenceKey,
+                targetType: targetType,
+                effectivePolicy: policy,
+                source: RuntimeInputBindingSource.Literal,
+                literal: literal,
                 metadata: new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["typeName"] = typeof(object).AssemblyQualifiedName!,
                     ["referenceKey"] = input.ReferenceKey
                 }));
         }

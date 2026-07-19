@@ -22,7 +22,8 @@ public sealed class WorkflowTriggerIndexerTests
         await indexer.PreparePublicationAsync(executable, "publication-default-v1", "slot-default");
         await indexer.PreparePublicationAsync(executable, "publication-blue", "slot-blue");
 
-        Assert.Empty(await store.ListByStimulusAsync("Event", "sha256:event:shared"));
+        Assert.Empty((await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "sha256:event:shared"))).Items);
         var defaultBinding = Assert.Single(await store.ListByPublicationAsync("publication-default-v1"));
         var blueBinding = Assert.Single(await store.ListByPublicationAsync("publication-blue"));
         Assert.Equal("publication-default-v1", defaultBinding.PublicationId);
@@ -36,7 +37,8 @@ public sealed class WorkflowTriggerIndexerTests
 
         Assert.Equal(
             ["publication-blue", "publication-default-v1"],
-            (await store.ListByStimulusAsync("Event", "sha256:event:shared"))
+            (await store.ListByStimulusAsync(
+                    new WorkflowTriggerBindingPageQuery("Event", "sha256:event:shared"))).Items
                 .Select(binding => binding.PublicationId)
                 .Order(StringComparer.Ordinal));
 
@@ -45,14 +47,16 @@ public sealed class WorkflowTriggerIndexerTests
 
         Assert.Equal(
             ["publication-blue", "publication-default-v2"],
-            (await store.ListByStimulusAsync("Event", "sha256:event:shared"))
+            (await store.ListByStimulusAsync(
+                    new WorkflowTriggerBindingPageQuery("Event", "sha256:event:shared"))).Items
                 .Select(binding => binding.PublicationId)
                 .Order(StringComparer.Ordinal));
 
         await store.DeleteByPublicationAsync("publication-default-v1");
         await store.DeleteByPublicationAsync("publication-default-v2");
 
-        var survivingBinding = Assert.Single(await store.ListByStimulusAsync("Event", "sha256:event:shared"));
+        var survivingBinding = Assert.Single((await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "sha256:event:shared"))).Items);
         Assert.Equal("publication-blue", survivingBinding.PublicationId);
         Assert.Equal("slot-blue", survivingBinding.SlotId);
     }
@@ -295,7 +299,6 @@ public sealed class WorkflowTriggerIndexerTests
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = executionType },
             childSlots: childSlots);
     }

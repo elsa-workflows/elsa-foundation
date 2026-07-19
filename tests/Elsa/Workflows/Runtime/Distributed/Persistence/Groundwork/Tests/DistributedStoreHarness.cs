@@ -1,13 +1,17 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Distributed.Services;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Sqlite;
 using Groundwork.Sqlite.Documents;
+using Groundwork.Sqlite.PhysicalStorage;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests;
 
@@ -40,12 +44,33 @@ internal sealed class DistributedStoreHarness(
                 return FromDocumentStore(new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create()));
             case GroundworkSqlite:
                 var database = new TemporarySqliteDatabase();
-                var store = await SqliteDocumentStoreFactory.CreateAsync(
-                    database.ConnectionString,
-                    DistributedGroundworkStorageManifest.Create(),
+                var manifest = DistributedGroundworkStorageManifest.Create();
+                var target = PhysicalSchemaTargetCompiler.Compile(
+                    manifest,
                     SqliteProvider,
-                    GroundworkTestAccess.DefaultScoped);
-                return FromDocumentStore(store, database);
+                    SqliteGroundworkCapabilities.PhysicalNames);
+                var store = await SqliteDocumentStoreFactory.OpenPhysicalAsync(
+                    database.ConnectionString,
+                    manifest,
+                    SqliteProvider,
+                    GroundworkTestAccess.DefaultScoped,
+                    options: new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = true });
+                var queries = new GroundworkBoundedDocumentStoreRouter(
+                    target.Routes.Select(route =>
+                        KeyValuePair.Create<string, IBoundedDocumentStore>(
+                            route.StorageUnit.Value,
+                            SqlitePhysicalQueryRuntime.Create(
+                                store,
+                                manifest,
+                                route,
+                                target.Provider))));
+                return new DistributedStoreHarness(
+                    new GroundworkExecutionPlacementStore(store, queries),
+                    new GroundworkExecutionCommandTransport(
+                        store,
+                        GroundworkDistributedTestAccess.Scoped(),
+                        queries),
+                    database);
             default:
                 throw new ArgumentOutOfRangeException(nameof(provider), provider, null);
         }
@@ -53,7 +78,9 @@ internal sealed class DistributedStoreHarness(
 
     public static DistributedStoreHarness FromDocumentStore(IDocumentStore documentStore, IAsyncDisposable? owner = null)
     {
-        var queries = documentStore as IBoundedDocumentStore ?? new DistributedTestBoundedDocumentStore(documentStore);
+        var queries = documentStore as IBoundedDocumentStore ?? throw new ArgumentException(
+            "The distributed Groundwork harness requires a document store that executes bounded routes.",
+            nameof(documentStore));
         return new DistributedStoreHarness(
             new GroundworkExecutionPlacementStore(documentStore, queries),
             new GroundworkExecutionCommandTransport(

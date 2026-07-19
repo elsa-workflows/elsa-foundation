@@ -31,6 +31,27 @@ public interface IExecutionPlacementStore
     /// </summary>
     ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default);
 
-    /// <summary>Lists all currently stored placement leases (used by a node's pump to discover the executions it owns).</summary>
-    ValueTask<IReadOnlyCollection<ExecutionPlacementLease>> ListAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Returns at most <see cref="ExecutionPlacementLeaseListRequest.Take"/> live leases held by one owner, ordered by
+    /// expiry and workflow execution id so renewal work remains deterministic and finite.
+    /// </summary>
+    ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(
+        ExecutionPlacementLeaseListRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class ExecutionPlacementLeaseListRequest
+{
+    public ExecutionPlacementLeaseListRequest(string ownerId, DateTimeOffset now, int take = 100)
+    {
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
+
+        OwnerId = ownerId;
+        Now = now;
+        Take = DistributedRuntimeQueryLimits.ValidateTake(take, nameof(take));
+    }
+
+    public string OwnerId { get; }
+    public DateTimeOffset Now { get; }
+    public int Take { get; }
 }

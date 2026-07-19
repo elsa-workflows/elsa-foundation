@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -17,9 +17,12 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// readiness, version selection, and token construction independently reviewable.
 /// </summary>
 internal sealed class ActivityPublicationReviewPolicy(
-    IActivityConstructorRegistry? activityConstructors,
+    IEnumerable<IActivityActivationStrategy>? activityActivationStrategies,
     IRuntimeDurableValueStorageDriverRegistry? storageDrivers)
 {
+    private readonly IActivityActivationStrategy[] _activityActivationStrategies =
+        activityActivationStrategies?.ToArray() ?? [];
+
     public IReadOnlyList<ActivityPublicationCapabilityReadinessView> StorageReadiness(
         ExecutableActivityTemplate? template) =>
         template?.StorageDriverRequirements
@@ -41,10 +44,13 @@ internal sealed class ActivityPublicationReviewPolicy(
             .ThenBy(x => x.SchemaVersion, StringComparer.Ordinal)
             .Select(x =>
             {
-                var supported = activityConstructors?.GetSupportedSchemaVersions(x.ConsumerKey)
-                                    .Order(StringComparer.Ordinal)
-                                    .ToArray() ?? [];
-                var status = activityConstructors?.TryResolve(x.ConsumerKey, x.SchemaVersion, out _) == true
+                var supported = _activityActivationStrategies
+                    .Where(strategy => StringComparer.Ordinal.Equals(strategy.ConsumerKey, x.ConsumerKey))
+                    .SelectMany(strategy => strategy.SupportedSchemaVersions)
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray();
+                var status = supported.Contains(x.SchemaVersion, StringComparer.Ordinal)
                     ? "Available"
                     : supported.Length == 0 ? "Missing" : "UnsupportedSchema";
                 return new ActivityPublicationCapabilityReadinessView(

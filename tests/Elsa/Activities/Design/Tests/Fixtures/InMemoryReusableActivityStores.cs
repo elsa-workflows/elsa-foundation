@@ -1172,6 +1172,7 @@ public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReferenc
         DefinitionVersionId = source.DefinitionVersionId,
         DefinitionId = source.DefinitionId,
         ActivityTypeKey = source.ActivityTypeKey,
+        ResolutionKind = source.ResolutionKind,
         Version = source.Version,
         SourceDraftId = source.SourceDraftId,
         SourceVersionId = source.SourceVersionId,

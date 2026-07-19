@@ -45,6 +45,20 @@ public interface IAuthSessionService
     ValueTask<AuthSession> GetAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Optionally invalidates server-side authentication state owned by a specific provider before the generic
+/// identity API clears that provider's client-side authentication scheme. Providers without server-side
+/// session state do not register an implementation.
+/// </summary>
+public interface IAuthenticationSessionInvalidator
+{
+    string ProviderId { get; }
+
+    ValueTask InvalidateAsync(
+        AuthenticationSessionInvalidationContext context,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed record AuthenticationProviderDescriptor(
     string Id,
     string DisplayName,
@@ -70,6 +84,8 @@ public sealed record AuthSession(
     IReadOnlySet<string> Permissions,
     string TokenFreshness,
     string? Provider);
+
+public sealed record AuthenticationSessionInvalidationContext(ClaimsPrincipal Principal);
 
 public sealed record PrincipalFactoryContext(
     string TenantId,

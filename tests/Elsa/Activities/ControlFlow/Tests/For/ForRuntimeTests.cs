@@ -4,6 +4,7 @@ using Elsa.Activities.For;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -15,7 +16,7 @@ namespace Elsa.Activities.For.Tests;
 /// <summary>
 /// In-process execution coverage for the <c>For</c> counted-loop composite running through the real
 /// workflow agent. Built on the shared <see cref="WorkflowExecutionHarness"/>: this file declares only the
-/// For-specific activity constructor and graph shape; provider wiring, execution, and assertions come from
+/// For-specific activity graph shape; provider wiring, CLR activation, execution, and assertions come from
 /// the harness. Asserts the body runs the right count for a range, each pass sees the correct index, and an
 /// empty range never runs the body yet still completes.
 /// </summary>
@@ -128,7 +129,6 @@ public sealed class ForRuntimeTests
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<ForActivityConstructor>()
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
@@ -148,7 +148,8 @@ public sealed class ForRuntimeTests
             authoredActivityId: "authored-for",
             activityType: typeof(ForActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(ForActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new ForDescriptor())),
+            descriptorType: typeof(ForDescriptor).FullName!,
+            descriptorPayload: JsonSerializer.SerializeToElement(new ForDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Start"] = IntBinding("Start", start),
@@ -156,7 +157,6 @@ public sealed class ForRuntimeTests
                 ["Step"] = IntBinding("Step", step),
                 ["EndInclusive"] = BoolBinding("EndInclusive", endInclusive)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: new ExecutableActivityStructure(
@@ -169,52 +169,19 @@ public sealed class ForRuntimeTests
 
     private static RuntimeInputBinding IntBinding(string name, int value) =>
         new(
-            inputName: name,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Int32" });
+            name,
+            new ValueTypeDescriptor("Int32"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(new ValueTypeDescriptor("Int32"), JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
 
     private static RuntimeInputBinding BoolBinding(string name, bool value) =>
         new(
-            inputName: name,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Boolean" });
-
-    private sealed class ForActivityConstructor : IActivityConstructor<ForDescriptor>
-    {
-        public static string ConsumerKeyValue => typeof(ForDescriptor).FullName!;
-        public string ConsumerKey => ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            Construct(new ForDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(
-            ForDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
-        {
-            var activity = new ForActivity();
-            if (inputs is not null)
-            {
-                if (inputs.TryGetValue("Start", out var start))
-                    activity.Start = (InputArgument<int>)start;
-                if (inputs.TryGetValue("End", out var end))
-                    activity.End = (InputArgument<int>)end;
-                if (inputs.TryGetValue("Step", out var step))
-                    activity.Step = (InputArgument<int>)step;
-                if (inputs.TryGetValue("EndInclusive", out var endInclusive))
-                    activity.EndInclusive = (InputArgument<bool>)endInclusive;
-            }
-
-            return new(activity);
-        }
-    }
+            name,
+            new ValueTypeDescriptor("Boolean"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(new ValueTypeDescriptor("Boolean"), JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
 
     private sealed record ForDescriptor;
 }

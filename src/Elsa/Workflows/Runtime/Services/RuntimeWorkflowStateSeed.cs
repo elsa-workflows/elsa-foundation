@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
 /// Turns workflow variables and inputs into persisted runtime state at workflow start, mirroring how
-/// activity outputs become durable values (see <c>ActivityOutputPublisher.NewDurableValueChange</c>). Each
+/// activity results become immutable completion records owned by the producing invocation. Each
 /// seeded value is a <see cref="DurableValueState"/> tagged with <see cref="RuntimeMetadataKeys.VariableName"/>
 /// or <see cref="RuntimeMetadataKeys.InputName"/> so that
 /// <see cref="RuntimeInputBindingStateProjection.ProjectWorkflowVariables"/> /
@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// </remarks>
 public static class RuntimeWorkflowStateSeed
 {
-    // Reserved durable-value-id namespace for seeded workflow state. Activity-output captures derive their
+    // Reserved durable-value-id namespace for seeded workflow state. Other durable values derive their
     // value ids from the authored output reference, so a structural collision is only possible if a
     // compiler ever emitted an output reference literally prefixed "variable:" / "input:". Projection also
     // disambiguates by metadata key (VariableName / InputName), so a collision would have to share both the
@@ -112,7 +112,7 @@ public static class RuntimeWorkflowStateSeed
     /// Builds the durable-value changes that persist named workflow outputs assigned by the <c>SetOutput</c>
     /// leaf control activity (#260). Each output is captured as an inline <c>Instance</c>-lifecycle durable
     /// value tagged with <see cref="RuntimeMetadataKeys.OutputName"/> under a reserved
-    /// <see cref="OutputValueIdPrefix"/> value id, the same shape an activity-output capture takes, so it is
+    /// <see cref="OutputValueIdPrefix"/> value id so it is
     /// durably queryable after the run. A later assignment of the same name upserts the same durable value.
     /// Null collection is treated as empty.
     /// </summary>

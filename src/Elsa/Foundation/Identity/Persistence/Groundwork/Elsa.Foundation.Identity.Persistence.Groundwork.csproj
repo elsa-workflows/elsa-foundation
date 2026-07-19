@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Core\Elsa.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
   </ItemGroup>
 

@@ -1,4 +1,8 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -31,7 +35,9 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         typeof(IRuntimeExecutionOwnershipService),
         typeof(IRuntimeCheckpointCommitStore),
         typeof(IRuntimePostCommitOutboxStore),
+        typeof(IPostCommitOutboxLookupStore),
         typeof(IRuntimePostCommitOutboxProcessor),
+        typeof(IWorkflowOutputSource),
         typeof(IWorkflowDrainOrchestrator),
         typeof(WorkflowSchedulerCommandRouter),
         typeof(IRuntimeWorkflowExecutionPipeline),
@@ -45,6 +51,29 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         typeof(IWorkflowExecutableRootWriteLeaseManager),
         typeof(IWorkflowExecutableReferenceGarbageCollector)
     ];
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddWorkflowRuntime_keeps_expression_consumers_inside_the_per_work_scope(bool registerExpressionsFirst)
+    {
+        var services = new ServiceCollection();
+        if (registerExpressionsFirst)
+            AddExpressionServices(services);
+        services.AddWorkflowRuntime();
+        if (!registerExpressionsFirst)
+            AddExpressionServices(services);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        using var scope = provider.CreateScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerDrainer>());
+        Assert.Contains(
+            scope.ServiceProvider.GetServices<IWorkflowSchedulerWorkHandler>(),
+            handler => handler is WorkflowStartActivitySchedulerWorkHandler);
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRuntimeActivityInputMaterializer>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<WorkflowIntrinsicExecutor>());
+    }
 
     [Fact]
     public void AddWorkflowRuntime_registers_the_default_executable_input_validator()
@@ -122,6 +151,44 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.Equal(
             ServiceLifetime.Singleton,
             Assert.Single(services, candidate => candidate.ServiceType == typeof(IWorkflowExecutableStore)).Lifetime);
+    }
+
+    [Fact]
+    public void AddWorkflowRuntime_ClaimsTheInMemoryTestScopeProviderIdempotently()
+    {
+        var services = new ServiceCollection();
+
+        services.AddWorkflowRuntime();
+        services.AddWorkflowRuntime();
+
+        var registration = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(WorkflowTestScopeProviderRegistration));
+        var claim = Assert.IsType<WorkflowTestScopeProviderRegistration>(registration.ImplementationInstance);
+        Assert.Equal(typeof(InMemoryWorkflowTestScopeStore), claim.ProviderType);
+        Assert.True(claim.IsInMemoryDefault);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeAdmissionStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+    }
+
+    [Fact]
+    public void TestScopeProviderGuard_RejectsConflictingDurableProvidersInEitherOrder()
+    {
+        AssertConflict(typeof(FakeFirstTestScopeProvider), typeof(FakeSecondTestScopeProvider));
+        AssertConflict(typeof(FakeSecondTestScopeProvider), typeof(FakeFirstTestScopeProvider));
+
+        static void AssertConflict(Type first, Type second)
+        {
+            var services = new ServiceCollection();
+            services.ClaimWorkflowTestScopeProvider(first);
+
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => services.ClaimWorkflowTestScopeProvider(second));
+
+            Assert.Contains(first.FullName!, exception.Message, StringComparison.Ordinal);
+            Assert.Contains(second.FullName!, exception.Message, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -266,12 +333,46 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         ReplaceScoped<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>(services);
     }
 
+    private static void AddExpressionServices(IServiceCollection services)
+    {
+        services.AddScoped<IPortableExpressionEvaluator, StubPortableExpressionEvaluator>();
+        services.AddSingleton<IWellKnownTypeRegistry, StubWellKnownTypeRegistry>();
+    }
+
     private sealed class ReplacementStartPolicy : IWorkflowExecutableStartPolicy
     {
         public ValueTask<WorkflowExecutableStartDecision> EvaluateAsync(
             WorkflowExecutableStartPolicyContext context,
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(WorkflowExecutableStartDecision.Allow());
+    }
+
+    private sealed class StubPortableExpressionEvaluator : IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
+            ValueTask.FromResult(JsonSerializer.SerializeToElement<object?>(null));
+    }
+
+    private sealed class StubWellKnownTypeRegistry : IWellKnownTypeRegistry
+    {
+        public void RegisterType(Type type, string alias) => throw new NotSupportedException();
+
+        public bool TryGetAlias(Type type, out string alias)
+        {
+            alias = "String";
+            return type == typeof(string);
+        }
+
+        public bool TryGetType(string alias, out Type type) => TryGetTypeOrDefault(alias, out type);
+        public IEnumerable<Type> ListTypes() => [typeof(string)];
+        public string GetAliasOrDefault(Type type) => type == typeof(string) ? "String" : type.FullName!;
+        public Type GetTypeOrDefault(string alias) => TryGetTypeOrDefault(alias, out var type) ? type : typeof(object);
+
+        public bool TryGetTypeOrDefault(string alias, out Type type)
+        {
+            type = typeof(string);
+            return StringComparer.Ordinal.Equals(alias, "String");
+        }
     }
 
     private static void ReplaceScoped<TService, TImplementation>(IServiceCollection services)
@@ -288,6 +389,10 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         public ConcurrentQueue<Guid> Disposed { get; } = new();
         public ConcurrentQueue<string> Partitions { get; } = new();
     }
+
+    private sealed class FakeFirstTestScopeProvider;
+
+    private sealed class FakeSecondTestScopeProvider;
 
     private sealed class ScopeTrackingSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IDisposable
     {

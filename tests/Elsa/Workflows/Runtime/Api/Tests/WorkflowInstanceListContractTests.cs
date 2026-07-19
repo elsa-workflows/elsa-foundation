@@ -34,7 +34,7 @@ public sealed class WorkflowInstanceListContractTests
             "Status", "DefinitionId", "CorrelationId", "Take", "Cursor",
             "WorkflowExecutionId", "ArtifactId", "From", "To", "RunKind");
         AssertProperties(response,
-            "Items", "PreviousCursor", "NextCursor", "HasPrevious", "HasNext", "Count", "TotalCount");
+            "Items", "NextCursor", "HasNext", "Count", "TotalCount");
         var item = response.GetProperty("Items")!.PropertyType.GetGenericArguments().Single();
         AssertProperties(item, "RunKind");
         Assert.Contains(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
@@ -95,7 +95,7 @@ public sealed class WorkflowInstanceListContractTests
         public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
             Request = Assert.IsType<ListWorkflowInstances>(request);
-            return Task.FromResult((T)(object)new WorkflowInstanceListView([], null, null, false, false, 0, 0));
+            return Task.FromResult((T)(object)new WorkflowInstanceListView([], null, false, 0, 0));
         }
     }
 }

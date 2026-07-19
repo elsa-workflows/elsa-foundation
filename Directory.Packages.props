@@ -5,6 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageVersion Include="Acornima" Version="1.6.1" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0-preview.13" />
     <PackageVersion Include="Cronos" Version="0.13.0" />
@@ -19,15 +21,16 @@
     <PackageVersion Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.79" />
     <PackageVersion Include="Elsa.Platform.PackageManifests" Version="0.0.1-preview.58" />
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />
-    <PackageVersion Include="Groundwork.Core" Version="0.0.1-preview.60" />
-    <PackageVersion Include="Groundwork.DiagnosticRecords" Version="0.0.1-preview.60" />
-    <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.60" />
-    <PackageVersion Include="Groundwork.MongoDb" Version="0.0.1-preview.60" />
-    <PackageVersion Include="Groundwork.PostgreSql" Version="0.0.1-preview.60" />
-    <PackageVersion Include="Groundwork.Sqlite" Version="0.0.1-preview.60" />
-    <PackageVersion Include="Groundwork.SqlServer" Version="0.0.1-preview.60" />
+    <PackageVersion Include="Groundwork.Core" Version="0.0.1-preview.64" />
+    <PackageVersion Include="Groundwork.DiagnosticRecords" Version="0.0.1-preview.64" />
+    <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.64" />
+    <PackageVersion Include="Groundwork.MongoDb" Version="0.0.1-preview.64" />
+    <PackageVersion Include="Groundwork.PostgreSql" Version="0.0.1-preview.64" />
+    <PackageVersion Include="Groundwork.Sqlite" Version="0.0.1-preview.64" />
+    <PackageVersion Include="Groundwork.SqlServer" Version="0.0.1-preview.64" />
     <PackageVersion Include="GitHub.Copilot.SDK" Version="1.0.4" />
     <PackageVersion Include="Anthropic" Version="12.32.0" />
+    <PackageVersion Include="JsonSchema.Net" Version="9.2.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.5.1" />
     <PackageVersion Include="Jint" Version="4.9.1" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.Abstractions" Version="2.3.11" />
@@ -43,6 +46,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Routing.Abstractions" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.StaticFiles" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.1" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
@@ -58,6 +62,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />

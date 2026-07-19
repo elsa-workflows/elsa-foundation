@@ -30,7 +30,7 @@ public sealed class GroundworkPersistenceCoverageTests
     }
 
     [Fact]
-    public void Workflow_dispatch_persistence_is_explicitly_deferred_to_678()
+    public void Workflow_dispatch_persistence_has_an_explicit_ledger_mapping()
     {
         var findings = Reconcile(
             ReadLedger(),
@@ -40,7 +40,7 @@ public sealed class GroundworkPersistenceCoverageTests
     }
 
     [Fact]
-    public void Deferred_workflow_dispatch_persistence_cannot_be_registered_without_replacing_the_deferral()
+    public void Workflow_dispatch_registration_matches_its_manifest_storage_unit()
     {
         var findings = Reconcile(
             ReadLedger(),
@@ -53,11 +53,10 @@ public sealed class GroundworkPersistenceCoverageTests
                         "IWorkflowDispatchStore",
                         "GroundworkWorkflowDispatchStore",
                         "WorkflowDispatchDocumentKind")
-                ]));
+                ],
+                manifestStorageUnits: [ManifestUnit("runtime", "WorkflowDispatchDocumentKind")]));
 
-        Assert.Equal(
-            ["GroundworkWorkflowDispatchStore (IWorkflowDispatchStore): Groundwork persistence is explicitly deferred to #678; remove the deferral and add a coverage-ledger mapping before registration."],
-            findings);
+        Assert.Empty(findings);
     }
 
     [Fact]
@@ -94,13 +93,11 @@ public sealed class GroundworkPersistenceCoverageTests
                     "iam",
                     "IProviderConfigurationStore",
                     "GroundworkProviderConfigurationStore",
-                    "ProviderConfigurationTenantDocumentKind",
-                    "ProviderConfigurationGlobalDocumentKind")
+                    "IdentityProviderConfigurationDocumentKind")
             ],
             manifestStorageUnits:
             [
-                ManifestUnit("iam", "ProviderConfigurationTenantDocumentKind"),
-                ManifestUnit("iam", "ProviderConfigurationGlobalDocumentKind")
+                ManifestUnit("iam", "IdentityProviderConfigurationDocumentKind")
             ]);
 
         var findings = Reconcile(ledger, inventory);
@@ -204,9 +201,9 @@ public sealed class GroundworkPersistenceCoverageTests
     }
 
     [Theory]
-    [InlineData("iam-user", "IUserStore", "GroundworkUserStore", "UserDocumentKind")]
-    [InlineData("iam-role", "IRoleStore", "GroundworkRoleStore", "RoleDocumentKind")]
-    [InlineData("iam-external-identity", "IExternalIdentityStore", "GroundworkExternalIdentityStore", "ExternalIdentityDocumentKind")]
+    [InlineData("iam-user", "IUserStore", "GroundworkUserStore", "IdentityUserDocumentKind")]
+    [InlineData("iam-role", "IRoleStore", "GroundworkRoleStore", "IdentityRoleDocumentKind")]
+    [InlineData("iam-external-identity", "IExternalIdentityStore", "GroundworkExternalIdentityStore", "ExternalLoginDocumentKind")]
     public void Exact_pre_existing_644_local_duplicate_is_a_shrink_only_baseline(
         string entryId,
         string contract,
@@ -245,15 +242,79 @@ public sealed class GroundworkPersistenceCoverageTests
                     "iam",
                     "IUserStore",
                     "GroundworkReplacementUserStore",
-                    "UserDocumentKind")
+                    "IdentityUserDocumentKind")
             ],
-            manifestStorageUnits: [ManifestUnit("iam", "UserDocumentKind")]);
+            manifestStorageUnits: [ManifestUnit("iam", "IdentityUserDocumentKind")]);
 
         var findings = Reconcile(ledger, inventory);
 
         Assert.Equal(
-            ["iam-user: new local #644 duplicate 'GroundworkReplacementUserStore' / 'UserDocumentKind' is forbidden; the exact pre-existing duplicate baseline is shrink-only."],
+            ["iam-user: new local #644 duplicate 'GroundworkReplacementUserStore' / 'IdentityUserDocumentKind' is forbidden; the exact pre-existing duplicate baseline is shrink-only."],
             findings);
+    }
+
+    [Fact]
+    public void Spec095_replaces_the_legacy_iam_document_authority_units()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "src",
+            "Elsa",
+            "Foundation",
+            "Identity",
+            "Persistence",
+            "Groundwork",
+            "IdentityStorageManifest.cs"));
+
+        var legacyUnits = new[]
+            {
+                "public const string UserDocumentKind",
+                "public const string RoleDocumentKind",
+                "public const string ExternalIdentityDocumentKind",
+                "public const string TenantMembershipDocumentKind"
+            }
+            .Where(source.Contains)
+            .ToArray();
+
+        Assert.True(
+            legacyUnits.Length == 0,
+            "Spec 095 must replace the legacy IAM document authority units with the ASP.NET Core Identity authority units: " +
+            string.Join(", ", legacyUnits));
+    }
+
+    [Fact]
+    public void Unified_groundwork_provider_registration_does_not_select_identity_implicitly()
+    {
+        var providerRegistrations = Directory
+            .EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa", "Persistence", "Groundwork"), "*UnifiedRegistration.cs", SearchOption.AllDirectories)
+            .Select(path => (Path: Path.GetRelativePath(RepoRoot, path).Replace('\\', '/'), Source: File.ReadAllText(path)))
+            .Where(candidate => candidate.Source.Contains("AddGroundworkIdentityStores", StringComparison.Ordinal))
+            .Select(candidate => candidate.Path)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            providerRegistrations.Length == 0,
+            "Unified Groundwork providers must expose substrate only; Identity must be selected by the explicit ASP.NET Core Identity Groundwork feature. Offending files: " +
+            string.Join(", ", providerRegistrations));
+    }
+
+    [Fact]
+    public void Unified_groundwork_provider_projects_do_not_reference_identity_implementations()
+    {
+        var providerProjects = Directory
+            .EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa", "Persistence", "Groundwork"), "*.Unified.csproj", SearchOption.AllDirectories)
+            .Select(path => (Path: Path.GetRelativePath(RepoRoot, path).Replace('\\', '/'), Source: File.ReadAllText(path)))
+            .Where(candidate => candidate.Source.Contains("Foundation\\Identity", StringComparison.Ordinal) ||
+                                candidate.Source.Contains("Foundation/Identity", StringComparison.Ordinal))
+            .Select(candidate => candidate.Path)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            providerProjects.Length == 0,
+            "Unified Groundwork provider projects must not directly reference Identity implementations. Offending projects: " +
+            string.Join(", ", providerProjects));
     }
 
     [Fact]
@@ -298,13 +359,13 @@ public sealed class GroundworkPersistenceCoverageTests
         var ledger = ReadLedger();
         Entry(ledger, "iam-user")["status"] = "implemented";
         var inventory = Inventory(
-            registrations: [Registration("iam", "IUserStore", "GroundworkUserStore", "UserDocumentKind")],
-            manifestStorageUnits: [ManifestUnit("iam", "UserDocumentKind")]);
+            registrations: [Registration("iam", "IUserStore", "GroundworkUserStore", "IdentityUserDocumentKind")],
+            manifestStorageUnits: [ManifestUnit("iam", "IdentityUserDocumentKind")]);
 
         var findings = Reconcile(ledger, inventory);
 
         Assert.Equal(
-            ["iam-user: external-authority row at status 'implemented' cannot retain local parallel storage unit 'UserDocumentKind'."],
+            ["iam-user: external-authority row at status 'implemented' cannot retain local parallel storage unit 'IdentityUserDocumentKind'."],
             findings);
     }
 

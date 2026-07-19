@@ -48,6 +48,9 @@ public sealed class WorkflowsPublishingApiFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(PublicationSnapshotReviewService));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(TimeProvider));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
+        // The delete-preflight contribution: permanent definition deletion must veto while a publication is live.
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.IWorkflowDefinitionPermanentDeletionGuard));
     }
 
     [Fact]

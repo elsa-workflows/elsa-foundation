@@ -1,7 +1,9 @@
 using System.Reflection;
 using CShells.Features;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Core.Exceptions;
@@ -130,20 +132,15 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
                 continue;
             }
 
-            foreach (var property in properties)
+            foreach (var property in properties.Where(property => ActivityInputPropertyResolver.FindAttribute(property) is not null))
+                yield return TypeReferenceFactory.Decompose(property.PropertyType).ElementType;
+
+            foreach (var resultType in GetActivityResultTypes(activityType))
             {
-                if (!IsArgumentProperty(property.PropertyType))
-                    continue;
-
-                var valueType = GetArgumentValueType(property.PropertyType);
-                if (valueType is null)
-                    continue;
-
-                // Decompose collections (T[]/List<T>/HashSet<T>) to the element type — the registry stores the
-                // ELEMENT alias; the collection shape is encoded separately (TypeReference.CollectionKind /
-                // the converter's []/List<>/HashSet<> wrapper).
-                var (elementType, _) = TypeReferenceFactory.Decompose(valueType);
-                yield return elementType;
+                yield return TypeReferenceFactory.Decompose(resultType).ElementType;
+                foreach (var property in resultType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                             .Where(property => property.GetCustomAttribute<OutputAttribute>(inherit: true) is not null))
+                    yield return TypeReferenceFactory.Decompose(property.PropertyType).ElementType;
             }
         }
     }
@@ -210,31 +207,14 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
         }
     }
 
-    private static bool IsArgumentProperty(Type propertyType) =>
-        DerivesFrom(propertyType, typeof(InputArgument)) || DerivesFrom(propertyType, typeof(OutputArgument));
-
     private static bool IsActivityType(Type type) =>
         type is { IsClass: true, IsAbstract: false } && typeof(IActivity).IsAssignableFrom(type);
 
-    private static bool DerivesFrom(Type? type, Type baseType)
-    {
-        for (var current = type; current is not null; current = current.BaseType)
-            if (current == baseType)
-                return true;
-
-        return false;
-    }
-
-    // Mirrors ClrAssemblyScanner.GetArgumentValueType: the first generic base with a single type argument is the
-    // value type (InputArgument<T>/OutputArgument<T>).
-    private static Type? GetArgumentValueType(Type? propertyType)
-    {
-        for (var current = propertyType; current is not null; current = current.BaseType)
-            if (current.IsGenericType && current.GetGenericArguments() is [var single])
-                return single;
-
-        return null;
-    }
+    private static IEnumerable<Type> GetActivityResultTypes(Type activityType) =>
+        activityType.GetInterfaces()
+            .Where(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IActivityResult<>))
+            .Select(candidate => candidate.GetGenericArguments()[0])
+            .Distinct();
 
     private static bool IsRecoverableReflectionException(Exception exception) =>
         exception is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException or ReflectionTypeLoadException;

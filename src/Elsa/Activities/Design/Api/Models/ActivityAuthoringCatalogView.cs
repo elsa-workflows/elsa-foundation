@@ -31,6 +31,7 @@ public sealed record ActivityInputDescriptorView(
     string? Category,
     bool IsBrowsable,
     bool IsRequired,
+    bool IsNullable,
     string? UiHint,
     JsonElement? DefaultValue,
     string? DefaultSyntax,

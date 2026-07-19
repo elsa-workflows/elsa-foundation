@@ -23,6 +23,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     private readonly IWorkflowExecutableSourceReferenceStore _sourceReferenceStore;
     private readonly IExecutableActivityTemplateStore _activityTemplateStore;
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
+    private readonly IWorkflowDispatchRetentionRootStore? _workflowDispatchRootStore;
     private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _artifactCreationGracePeriod;
     private readonly TimeSpan _deletionGuardTimeout;
@@ -58,6 +59,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             sourceReferenceStore,
             new InMemoryExecutableActivityTemplateStore(),
             workflowExecutionStateStore,
+            null,
             Microsoft.Extensions.Options.Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
             timeProvider,
             logger)
@@ -76,6 +78,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             sourceReferenceStore,
             activityTemplateStore,
             workflowExecutionStateStore,
+            null,
             Microsoft.Extensions.Options.Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
             timeProvider,
             logger)
@@ -89,7 +92,15 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         IOptions<WorkflowExecutableGarbageCollectionOptions> options,
         TimeProvider timeProvider,
         ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
-        : this(executableStore, sourceReferenceStore, new InMemoryExecutableActivityTemplateStore(), workflowExecutionStateStore, options, timeProvider, logger)
+        : this(
+            executableStore,
+            sourceReferenceStore,
+            new InMemoryExecutableActivityTemplateStore(),
+            workflowExecutionStateStore,
+            null,
+            options,
+            timeProvider,
+            logger)
     {
     }
 
@@ -98,6 +109,47 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
         IExecutableActivityTemplateStore activityTemplateStore,
         IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider,
+        ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
+        : this(
+            executableStore,
+            sourceReferenceStore,
+            activityTemplateStore,
+            workflowExecutionStateStore,
+            null,
+            options,
+            timeProvider,
+            logger)
+    {
+    }
+
+    public WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowDispatchRetentionRootStore? workflowDispatchRootStore,
+        IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider,
+        ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
+        : this(
+            executableStore,
+            sourceReferenceStore,
+            new InMemoryExecutableActivityTemplateStore(),
+            workflowExecutionStateStore,
+            workflowDispatchRootStore,
+            options,
+            timeProvider,
+            logger)
+    {
+    }
+
+    public WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowDispatchRetentionRootStore? workflowDispatchRootStore,
         IOptions<WorkflowExecutableGarbageCollectionOptions> options,
         TimeProvider timeProvider,
         ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
@@ -121,6 +173,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         _sourceReferenceStore = sourceReferenceStore;
         _activityTemplateStore = activityTemplateStore;
         _workflowExecutionStateStore = workflowExecutionStateStore;
+        _workflowDispatchRootStore = workflowDispatchRootStore;
         _timeProvider = timeProvider;
         _artifactCreationGracePeriod = artifactCreationGracePeriod;
         _deletionGuardTimeout = deletionGuardTimeout;
@@ -139,8 +192,8 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         try
         {
             protectedArtifactIds = await LoadProtectedClosureAsync(executables, templates, now, cancellationToken);
-            var executionRootIds = await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
-            executionProtectedArtifactIds = ResolveProtectedClosure(executables, executionRootIds);
+            var runtimeRootIds = await ListRuntimeRootIdsAsync(cancellationToken);
+            executionProtectedArtifactIds = ResolveProtectedClosure(executables, runtimeRootIds);
         }
         catch (Exception exception)
         {
@@ -238,7 +291,12 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             }
 
             if (await _executableStore.DeleteAsync(deletionGuard, _timeProvider.GetUtcNow(), cancellationToken))
+            {
                 deletedArtifactCount++;
+                _logger.LogInformation(
+                    "Reference GC permanently deleted unreferenced workflow executable artifact {ArtifactId}",
+                    artifactId);
+            }
         }
 
         var templateIds = templates
@@ -289,7 +347,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         CancellationToken cancellationToken)
     {
         var sourceRoots = await _sourceReferenceStore.ListAsync(liveOnly: true, now: now, cancellationToken: cancellationToken);
-        var executionRootIds = await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+        var runtimeRootIds = await ListRuntimeRootIdsAsync(cancellationToken);
         var executableIds = executables.Select(executable => executable.Identity.ArtifactId).ToHashSet(StringComparer.Ordinal);
         var templateIds = templates.Select(template => template.TemplateId).ToHashSet(StringComparer.Ordinal);
         var sourceRootIds = sourceRoots
@@ -309,9 +367,17 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 
         var rootIds = sourceRootIds
             .Where(executableIds.Contains)
-            .Concat(executionRootIds)
+            .Concat(runtimeRootIds)
             .ToArray();
         return ResolveProtectedClosure(executables, rootIds);
+    }
+
+    private async ValueTask<IReadOnlyCollection<string>> ListRuntimeRootIdsAsync(CancellationToken cancellationToken)
+    {
+        var roots = (await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken)).ToList();
+        if (_workflowDispatchRootStore is not null)
+            roots.AddRange(await _workflowDispatchRootStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
+        return roots;
     }
 
     private static HashSet<string> ResolveProtectedClosure(

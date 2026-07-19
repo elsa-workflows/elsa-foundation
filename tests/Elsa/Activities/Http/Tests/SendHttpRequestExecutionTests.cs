@@ -5,6 +5,7 @@ using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Serialization.SystemText.Services;
@@ -47,7 +48,7 @@ public sealed class SendHttpRequestExecutionTests
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
             NewSendNode(expectedStatusCodes: new[] { 201, 202 })));
 
-        run.AssertOutcomes(NodeId, "201");
+        run.AssertOutcomes(NodeId, HttpActivityOutcomes.Matched);
         run.AssertWorkflowCompleted();
     }
 
@@ -105,33 +106,85 @@ public sealed class SendHttpRequestExecutionTests
     {
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {
-            ["Url"] = LiteralBinding("Url", new Uri("https://example.test/resource"), "System.Uri"),
-            ["Method"] = LiteralBinding("Method", "GET", "System.String")
+            ["Url"] = LiteralBinding("Url", new Uri("https://example.test/resource"), typeof(Uri)),
+            ["Method"] = LiteralBinding("Method", "GET", typeof(string))
         };
 
         if (expectedStatusCodes is not null)
             inputBindings["ExpectedStatusCodes"] = LiteralBinding(
                 "ExpectedStatusCodes",
                 expectedStatusCodes,
-                "System.Collections.Generic.ICollection`1[[System.Int32]]");
+                typeof(ICollection<int>));
+
+        var activityType = TypeAliasConvention.CanonicalAlias(typeof(SendHttpRequest));
+        var resultType = TypeAliasConvention.CanonicalAlias(typeof(SendHttpRequestResult));
+        var descriptorPayload = ClrConstruction.Payload(Serializer, typeof(SendHttpRequest));
+        var inputContracts = inputBindings.Keys.Select(key => new ActivityInputContract(
+            key,
+            key,
+            key switch
+            {
+                "Url" => ValueType(typeof(Uri)),
+                "Method" => ValueType(typeof(string)),
+                "ExpectedStatusCodes" => ValueType(typeof(ICollection<int>)),
+                _ => throw new InvalidOperationException($"Unknown test input '{key}'.")
+            },
+            isRequired: key == "Url",
+            isNullable: key != "Url",
+            hasDefault: false,
+            defaultValue: null,
+            ActivityValuePolicy.Default));
+        var contract = new ActivityContract(
+            activityType,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            descriptorPayload,
+            inputContracts,
+            new ActivityResultContract(
+                new ValueTypeDescriptor(resultType),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                []),
+            [
+                ActivityOutcomes.Done,
+                HttpActivityOutcomes.Matched,
+                HttpActivityOutcomes.Unmatched,
+                HttpActivityOutcomes.Failed,
+                HttpActivityOutcomes.Timeout
+            ],
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, activityType));
 
         return new ExecutableNode(
             executableNodeId: NodeId,
             authoredActivityId: "authored-send-http",
-            activityType: typeof(SendHttpRequest).FullName!,
+            activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(ClrConstruction.ConsumerKey, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(Serializer, typeof(SendHttpRequest))),
+            descriptorType: ClrConstruction.DescriptorType,
+            descriptorPayload: descriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: contract);
     }
 
-    private static RuntimeInputBinding LiteralBinding(string inputName, object value, string typeName) =>
+    private static RuntimeInputBinding LiteralBinding(string inputName, object value, Type type)
+    {
+        var valueType = ValueType(type);
+        return
         new(
-            inputName: inputName,
+            inputKey: inputName,
+            targetType: valueType,
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
             source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName });
+            literal: ValueEnvelope.Inline(
+                valueType,
+                JsonSerializer.SerializeToElement(value, type),
+                ValueProtectionPolicy.InstanceInline));
+    }
+
+    private static ValueTypeDescriptor ValueType(Type type) =>
+        TypeReferenceFactory.FromClrType(type, TypeAliasConvention.CanonicalAlias) is { } reference
+            ? new ValueTypeDescriptor(reference.Alias, reference.CollectionKind)
+            : throw new InvalidOperationException($"Could not describe '{type}'.");
 
     private static Elsa.Serialization.Core.IPayloadSerializer Serializer =>
         TestPayloadSerializers.NewPayloadSerializer();

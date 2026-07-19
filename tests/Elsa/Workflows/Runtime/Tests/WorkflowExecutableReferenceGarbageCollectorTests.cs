@@ -117,6 +117,42 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.Null(await _executableStore.FindAsync("artifact-1"));
     }
 
+    [Theory]
+    [InlineData(WorkflowDispatchStatus.Pending)]
+    [InlineData(WorkflowDispatchStatus.Started)]
+    public async Task Sweep_keeps_artifact_pinned_by_nonterminal_dispatch(WorkflowDispatchStatus status)
+    {
+        const string artifactId = "artifact-dispatched";
+        await _executableStore.SaveAsync(Executable(artifactId));
+        var dispatchStore = new InMemoryWorkflowDispatchStore();
+        var identity = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        var pending = new WorkflowDispatchRecord(
+            identity.DispatchId,
+            "parent-1",
+            "activity-1",
+            identity.ChildWorkflowExecutionId,
+            new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:test"),
+            new WorkflowExecutableSourceProvenance("source-1", "WorkflowDefinitionVersion", "version-1", "1.0.0", "definition-1", "version-1", "1.0.0", "publication-1", null),
+            WorkflowDispatchMode.FireAndForget,
+            WorkflowDispatchStatus.Pending,
+            null,
+            null,
+            new WorkflowExecutionPartition("default"),
+            WorkflowRunKind.PublishedRun,
+            WorkflowExecutionAuthoritySnapshot.CreateRoot("test"),
+            [],
+            _now,
+            _now);
+        await dispatchStore.SaveAsync(pending);
+        if (status == WorkflowDispatchStatus.Started)
+            await dispatchStore.SaveAsync(pending.TransitionTo(status, _now.AddSeconds(1)));
+
+        var result = await NewGarbageCollector(dispatchStore).SweepAsync(_now);
+
+        Assert.Equal(0, result.DeletedArtifactCount);
+        Assert.NotNull(await _executableStore.FindAsync(artifactId));
+    }
+
     [Fact]
     public async Task Sweep_RetainsReusableActivityTemplateUntilItsFinalExecutionRootIsRemoved()
     {
@@ -269,11 +305,13 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.Contains("artifact-missing@sha256:missing", exception.Message, StringComparison.Ordinal);
     }
 
-    private WorkflowExecutableReferenceGarbageCollector NewGarbageCollector() =>
+    private WorkflowExecutableReferenceGarbageCollector NewGarbageCollector(
+        IWorkflowDispatchRetentionRootStore? dispatchRootStore = null) =>
         new(
             _executableStore,
             _sourceReferenceStore,
             _workflowExecutionStateStore,
+            dispatchRootStore,
             Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
             TimeProvider.System,
             NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
@@ -336,7 +374,6 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
                     RuntimeActivityDescriptor.InitialSchemaVersion,
                     JsonSerializer.SerializeToElement(new { type = "test" })),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,

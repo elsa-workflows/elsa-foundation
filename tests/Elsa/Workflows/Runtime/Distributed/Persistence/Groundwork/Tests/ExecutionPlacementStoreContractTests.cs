@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Xunit;
 
@@ -117,15 +118,22 @@ public sealed class ExecutionPlacementStoreContractTests
 
     [Theory]
     [MemberData(nameof(Providers))]
-    public async Task List_ReturnsAllStoredLeases_OrderedByExecutionId(string provider)
+    public async Task ListOwned_ReturnsOnlyLiveOwnerLeasesInEarliestExpiryOrderWithinTheRequestedBound(string provider)
     {
         await using var harness = await DistributedStoreHarness.CreateAsync(provider);
-        await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now, "wf-b"), Now);
-        await harness.PlacementStore.TryClaimAsync(Claim(NodeB, Now, "wf-a"), Now);
+        await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now, "wf-later"), Now);
+        await harness.PlacementStore.TryClaimAsync(
+            new ExecutionPlacementClaim("wf-first", NodeA, Now, Now.AddSeconds(10)),
+            Now);
+        await harness.PlacementStore.TryClaimAsync(
+            new ExecutionPlacementClaim("wf-expired", NodeA, Now, Now.AddSeconds(1)),
+            Now);
+        await harness.PlacementStore.TryClaimAsync(Claim(NodeB, Now, "wf-foreign"), Now);
 
-        var leases = await harness.PlacementStore.ListAsync();
+        var leases = await harness.PlacementStore.ListOwnedAsync(
+            new ExecutionPlacementLeaseListRequest(NodeA, Now.AddSeconds(2), take: 1));
 
-        Assert.Equal(new[] { "wf-a", "wf-b" }, leases.Select(lease => lease.WorkflowExecutionId).ToArray());
+        Assert.Equal("wf-first", Assert.Single(leases).WorkflowExecutionId);
     }
 
     private static ExecutionPlacementClaim Claim(string ownerId, DateTimeOffset requestedAt, string executionId = ExecutionId) =>

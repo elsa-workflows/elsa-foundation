@@ -83,6 +83,7 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
             input.Category,
             input.IsBrowsable ?? true,
             input.IsRequired,
+            input.IsNullable,
             input.UiHint,
             input.DefaultValue,
             input.DefaultSyntax,

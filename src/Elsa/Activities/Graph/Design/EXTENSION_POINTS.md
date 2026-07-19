@@ -8,7 +8,8 @@ This project owns the Design-time provider for reusable activity graphs. The can
 |---|---|---|---|
 | Activity graph Design provider | `elsa.activity-graph` | `GraphActivitiesDesignFeature` registers one `GraphActivityProvider` and exposes the same instance through `IActivityProvider`, `IActivityTemplateProviderCompiler`, and `IActivityTemplateDependencyDiscoverer` | Implemented |
 | Provider reference rewriting | `elsa.activity-graph` | `GraphActivitiesDesignFeature` registers `GraphActivityProviderReferenceRewriter : IActivityProviderReferenceRewriter` | Implemented |
-| Provider manifest schema | `1` | `ActivityGraphManifest` parsing and canonical serialization | Implemented by T024 |
+| Provider manifest schema | `1` | `ActivityGraphManifest` parsing and canonical serialization | Implemented |
+| Runtime boundary contract | `elsa.graph-activity` / `1` | Pinned `RuntimeActivityDescriptor` and value-flow `ActivityContract` | Implemented |
 
 The provider may reference provider-neutral Design and Runtime Core contracts to compile executable material. It must not reference the graph Runtime implementation, Runtime API, or a concrete persistence provider.
 
@@ -32,8 +33,6 @@ The owning replacement and composition rules remain in the
 `ActivityDiagnosticOrderer.Order(IEnumerable<ActivityDiagnostic>)` applies the stable public diagnostic
 ordering before results leave the provider boundary.
 
-`ActivityTemplateCompilation.ExecutableRoot` is currently a `JsonElement`. The graph provider returns a canonical authored root through that seam; Publishing must reconcile it to the reviewed typed executable-node model before the seam is considered final.
-
 ## Events
 
 None.
@@ -42,3 +41,7 @@ None.
 
 - Mediator or notification handlers: none.
 - Startup initializers, background tasks, or hosted services: none.
+
+`ActivityTemplateCompilation.ExecutableRoot` is a typed `ExecutableNode`. The graph provider pins its
+stable descriptor, value-flow contract, dynamic input/result projection schema, and exact runtime
+requirements before Publishing hashes and places the immutable template.

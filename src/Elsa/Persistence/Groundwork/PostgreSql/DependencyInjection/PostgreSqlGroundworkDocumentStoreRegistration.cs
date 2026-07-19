@@ -1,6 +1,5 @@
 using CShells.Lifecycle;
 using Groundwork.Documents.Store;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Serialization;
@@ -36,12 +35,6 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
             return services;
 
         services.AddGroundworkStoreSessions();
-        services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
-        services.AddScoped<IGroundworkWorkflowExecutionStatePageQuery>(sp => new PostgreSqlWorkflowExecutionStatePageQuery(
-            connectionString,
-            sp.GetRequiredService<IGroundworkRuntimeDocumentSerializer>(),
-            sp.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            sp.GetRequiredService<GroundworkWorkflowExecutionStatePageRouteSource>()));
         services.AddSingleton(sp => new PostgreSqlGroundworkDocumentStoreInitializer(
             connectionString,
             autoApplyOnStartup,

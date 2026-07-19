@@ -437,18 +437,18 @@ public sealed class WorkflowExecutableInspectorTests
     public async Task DetailScrubsSourcePayloadWhilePublishingProjectionReturnsStructuredBindingWithoutSummaryParsing()
     {
         var binding = new RuntimeInputBinding(
-            "Text",
+            "text-input-key",
+            new ValueTypeDescriptor("String"),
+            ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(
                 "JavaScript",
                 "return variables.orderId;",
                 new RuntimeValueTypeDescriptor("clr", "System.String, System.Private.CoreLib", null)),
-            metadata: new Dictionary<string, string> { ["typeName"] = "System.String, System.Private.CoreLib" },
-            inputKey: "text-input-key",
-            isSensitive: false);
+            metadata: new Dictionary<string, string> { ["typeName"] = "System.String, System.Private.CoreLib" });
         await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding>
         {
-            ["Text"] = binding
+            ["text-input-key"] = binding
         }));
         await _referenceStore.SaveAsync(Reference("source-1", WorkflowExecutableReferenceScope.Published, _now, "1.0.0") with
         {
@@ -465,7 +465,7 @@ public sealed class WorkflowExecutableInspectorTests
         var detail = await _inspector.GetAsync("artifact-1");
 
         var projected = Assert.Single(detail!.RootActivity.InputBindings);
-        Assert.Equal("Text", projected.InputName);
+        Assert.Equal("text-input-key", projected.InputName);
         Assert.Equal("text-input-key", projected.InputKey);
         Assert.False(projected.IsSensitive);
         Assert.Equal("Expression", projected.Source);
@@ -487,12 +487,15 @@ public sealed class WorkflowExecutableInspectorTests
     public async Task InputSourcesRedactSensitiveAuthoredAndCompiledPayloads()
     {
         var binding = new RuntimeInputBinding(
-            "Secret",
+            "secret-key",
+            new ValueTypeDescriptor("String"),
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true),
             RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement("must-not-leak"),
-            inputKey: "secret-key",
-            isSensitive: true);
-        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["Secret"] = binding }));
+            literal: ValueEnvelope.Inline(
+                new ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement("must-not-leak"),
+                new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true)));
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["secret-key"] = binding }));
         await _referenceStore.SaveAsync(Reference("source-sensitive", WorkflowExecutableReferenceScope.Published, _now, "1.0.0") with
         {
             AuthoredInputs = [new WorkflowExecutableAuthoredInputRecord("executable-root", "secret-key", "Literal", JsonSerializer.SerializeToElement("must-not-leak"), true)]
@@ -506,6 +509,101 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Equal("redacted", Assert.Single(sources.CompiledInputs).AccessState);
         Assert.Null(Assert.Single(sources.CompiledInputs).Binding.LiteralValue);
         Assert.DoesNotContain("must-not-leak", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InputSourcesExposeResolvedConversionPlansForNonSensitiveCompiledBindings()
+    {
+        var plan = new ValueConversionPlan(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.FormattedContent,
+            new ValueTypeDescriptor("String"),
+            new ValueTypeDescriptor("Elsa.Any"),
+            ValueConversionMode.Json,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.json", "1"),
+            ValueConversionLimits.Default,
+            options: null);
+        var binding = new RuntimeInputBinding(
+            "payload",
+            new ValueTypeDescriptor("Elsa.Any"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.WorkflowRequest,
+            workflowRequest: new RuntimeWorkflowRequestReference("payload"),
+            conversionPlan: plan);
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["payload"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-conversion", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", "source-conversion");
+
+        var conversion = Assert.Single(sources!.CompiledInputs).Binding.ConversionPlan!;
+        Assert.Equal(ValueConversionMode.Json, conversion.Mode);
+        Assert.Equal(ValueRepresentation.FormattedContent, conversion.SourceRepresentation);
+        Assert.Equal("String", conversion.SourceType.Alias);
+        Assert.Equal("Elsa.Any", conversion.TargetType.Alias);
+        Assert.Equal("elsa.json", conversion.Profile!.Id);
+        Assert.Equal("1", conversion.Profile.Version);
+        Assert.Equal(plan.Fingerprint, conversion.Fingerprint);
+    }
+
+    [Fact]
+    public async Task InputSourcesRedactConversionPlansForSensitiveCompiledBindings()
+    {
+        var plan = ValueConversionPlan.Identity(new ValueTypeDescriptor("String"), ValueRepresentation.TextValue);
+        var binding = new RuntimeInputBinding(
+            "secret-key",
+            new ValueTypeDescriptor("String"),
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true),
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(
+                new ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement("secret"),
+                new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true)),
+            conversionPlan: plan);
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["secret-key"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-sensitive-conversion", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", "source-sensitive-conversion");
+
+        Assert.Null(Assert.Single(sources!.CompiledInputs).Binding.ConversionPlan);
+    }
+
+    [Fact]
+    public async Task DetailExposesOutputCaptureConversionPlansForPublishedExecutableInspection()
+    {
+        var plan = new ValueConversionPlan(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.FormattedContent,
+            new ValueTypeDescriptor("String"),
+            new ValueTypeDescriptor("Acme.Customer"),
+            ValueConversionMode.Xml,
+            ValueConversionOperation.Profile,
+            new ValueConversionProfileReference("elsa.xml", "1"),
+            ValueConversionLimits.Default,
+            options: null);
+        var capture = new RuntimeOutputCapture(
+            "body",
+            "customer",
+            new RuntimeValueTypeDescriptor("alias", "Acme.Customer", null),
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            captureOnSuccessfulCompletion: true,
+            conversionPlan: plan);
+        await _executableStore.SaveAsync(Executable(
+            _now,
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture> { ["body"] = capture }));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        var projected = Assert.Single(detail!.RootActivity.OutputCaptures!);
+        Assert.Equal("body", projected.OutputName);
+        Assert.Equal("customer", projected.ValueId);
+        Assert.Equal("Acme.Customer", projected.Type.Id);
+        Assert.Equal("Instance", projected.Lifecycle);
+        Assert.Equal("Inline", projected.Storage);
+        Assert.Equal(ValueConversionMode.Xml, projected.ConversionPlan!.Mode);
+        Assert.Equal("elsa.xml", projected.ConversionPlan.Profile!.Id);
+        Assert.Equal(plan.Fingerprint, projected.ConversionPlan.Fingerprint);
     }
 
     [Fact]
@@ -597,6 +695,7 @@ public sealed class WorkflowExecutableInspectorTests
         JsonElement? descriptor = null,
         ExecutableActivityStructure? structure = null,
         IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
+        IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
         WorkflowExecutableInputContract? inputContract = null,
         IReadOnlyCollection<WorkflowExecutableDependency>? dependencies = null) =>
         new(
@@ -608,7 +707,7 @@ public sealed class WorkflowExecutableInspectorTests
                     RuntimeActivityDescriptor.InitialSchemaVersion,
                     descriptor ?? JsonSerializer.SerializeToElement(new { })),
                 inputBindings ?? new Dictionary<string, RuntimeInputBinding>(),
-                new Dictionary<string, RuntimeOutputCapture>(),
+                outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>(),
                 new Dictionary<string, string>(),
                 structure: structure),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),

@@ -95,7 +95,6 @@ public sealed class GroundworkWorkflowExecutionRetentionTests
             fixture.DocumentStore,
             serializer ?? GroundworkTestSerialization.Serializer,
             GroundworkTestAccess.DefaultAccessContextAccessor,
-            null,
             fixture.BoundedDocumentStore);
 
     private static WorkflowExecutionState State(

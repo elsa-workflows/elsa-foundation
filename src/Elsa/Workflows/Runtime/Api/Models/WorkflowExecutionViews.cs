@@ -6,9 +6,7 @@ namespace Elsa.Workflows.Runtime.Api.Models;
 
 public sealed record WorkflowInstanceListView(
     IReadOnlyCollection<WorkflowInstanceSummaryView> Items,
-    string? PreviousCursor,
     string? NextCursor,
-    bool HasPrevious,
     bool HasNext,
     int Count,
     int TotalCount);

@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
@@ -477,7 +478,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
             ValueTask.FromResult(new ExecutableCompilationEnrichment(rootActivity, dependencies));
     }
 
-    private sealed class ResumeProbeActivity
+    private sealed class ResumeProbeActivity : IActivityResult<ActivityUnit>
     {
         [ResumeTarget("resume-target:probe")]
         public ValueTask OnResumeAsync() => ValueTask.CompletedTask;
@@ -540,7 +541,10 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         new("Text", new ArgumentValue(reference, "Variable"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
-        ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null, false)]);
+        ActivityVersion(
+            id,
+            "Test.WriteLine",
+            [new InputDefinition(inputName, inputName, inputType, null, inputName, null, IsNullable: true)]);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey, IReadOnlyCollection<InputDefinition>? inputs = null) =>
         new("1.0.0", "activity-definition-1")
@@ -556,7 +560,12 @@ public sealed class WorkflowExecutableCompilerGoldenTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(
+                id switch
+                {
+                    "activity-probe" => TypeAliasConvention.CanonicalAlias(typeof(ResumeProbeActivity)),
+                    _ => TestActivityAliases.ForActivityVersionId(id)
+                })),
             Inputs = inputs ?? []
         };
 

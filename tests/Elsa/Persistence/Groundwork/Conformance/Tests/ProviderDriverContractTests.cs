@@ -1,7 +1,12 @@
 using System.Reflection;
 using System.Text.Json;
+using Elsa.Foundation.Identity.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Conformance.Tests.Probes;
 using Elsa.Persistence.Groundwork.Testing;
+using Groundwork.Core.Scoping;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Microsoft.Data.SqlClient;
 using Xunit;
 
@@ -55,6 +60,90 @@ public class ProviderDriverContractTests
         await AssertDisposeAndReopenAsync(driver);
         await AssertProcessRestartAsync(driver);
         await AssertSanitizedEvidenceAsync(driver);
+    }
+
+    [Fact]
+    public async Task Sqlite_physical_driver_can_open_selected_identity_manifest_with_explicit_scope()
+    {
+        await using var driver = new SqliteGroundworkProviderDriver();
+        await driver.InitializeAsync(CancellationToken.None);
+        await driver.ResetPhysicalAsync([new IdentityGroundworkStorageManifestSource()], CancellationToken.None);
+
+        await using (var tenantA = await driver.OpenPhysicalClientAsync(
+                         DocumentStoreAccess.Scoped(new StorageScope("tenant-a")),
+                         CancellationToken.None))
+        {
+            var saved = await tenantA.DocumentStore.SaveAsync(
+                new SaveDocumentRequest(
+                    IdentityStorageManifest.IdentityUserDocumentKind,
+                    "user-1",
+                    IdentityStorageManifest.SchemaVersion,
+                    """
+                    {
+                      "normalizedUserName": "ALICE",
+                      "normalizedEmail": "ALICE@example.test",
+                      "normalizedUserNameKey": "tenant-a:ALICE",
+                      "normalizedEmailKey": "tenant-a:ALICE@example.test"
+                    }
+                    """,
+                    ExpectedVersion: 0),
+                CancellationToken.None);
+
+            Assert.Equal(DocumentStoreWriteStatus.Saved, saved.Status);
+            Assert.NotNull(await tenantA.DocumentStore.LoadAsync(
+                IdentityStorageManifest.IdentityUserDocumentKind,
+                "user-1",
+                CancellationToken.None));
+        }
+
+        await using var tenantB = await driver.OpenPhysicalClientAsync(
+            DocumentStoreAccess.Scoped(new StorageScope("tenant-b")),
+            CancellationToken.None);
+        Assert.Null(await tenantB.DocumentStore.LoadAsync(
+            IdentityStorageManifest.IdentityUserDocumentKind,
+            "user-1",
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public void Identity_restart_probe_protocol_round_trips_and_redacts_payloads()
+    {
+        var user = new AspNetCoreIdentityRestartProbeUser(
+            "tenant-a",
+            "user-1",
+            "alice",
+            "ALICE",
+            "alice@example.test",
+            "ALICE@EXAMPLE.TEST",
+            "Alice");
+        var request = AspNetCoreIdentityRestartProbe.DuplicateCreate(user);
+        var command = new GroundworkProcessProbeCommand(
+            GroundworkProcessProbeProtocol.CurrentVersion,
+            new string('a', 64),
+            "sqlite",
+            "groundwork-sqlite",
+            "1.0.0",
+            IdentityStorageManifest.IdentityUserDocumentKind,
+            request,
+            new GroundworkProcessProbeState(FixtureConnectionString()));
+
+        var serialized = GroundworkProcessProbeProtocol.SerializeCommand(command);
+        var roundTrip = GroundworkProcessProbeProtocol.DeserializeCommand(serialized);
+        var payload = AspNetCoreIdentityRestartProbe.DecodePayload(roundTrip.Request.Value!);
+        var observation = new AspNetCoreIdentityRestartProbeObservation(
+            AspNetCoreIdentityRestartProbeOperation.DuplicateCreate,
+            "duplicate-rejected",
+            "user-1",
+            "DuplicateUserName",
+            1);
+
+        Assert.Equal(GroundworkProcessProbeOperation.IdentityDuplicateCreate, roundTrip.Request.Operation);
+        Assert.Equal(AspNetCoreIdentityRestartProbeOperation.DuplicateCreate, payload.Operation);
+        Assert.Equal("ALICE", payload.User.NormalizedUserName);
+        Assert.Equal(AspNetCoreIdentityRestartProbe.ObservationDigest(observation), GroundworkProcessProbeProtocol.ComputeSha256(AspNetCoreIdentityRestartProbe.EncodeObservation(observation)));
+        Assert.DoesNotContain("tenant-a", request.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("user-1", request.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(FixtureConnectionString(), command.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -288,6 +377,125 @@ public class ProviderDriverContractTests
         await controller.ReachAsync(cancellationWindow, CancellationToken.None);
 
         Assert.Equal([failureWindow, failureWindow, cancellationWindow, cancellationWindow], controller.ReachedWindows);
+    }
+
+    [Fact]
+    public async Task Identity_failure_decorator_rolls_back_before_commit_and_preserves_the_injected_failure()
+    {
+        var inner = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var failures = new GroundworkFailureController();
+        var store = new GroundworkFailureInjectingDocumentStore(inner, inner, inner.Access, failures);
+        failures.FailAt(GroundworkFailureInjectingDocumentStore.BeforeUnderlyingCommit);
+        await using var unitOfWork = await store.BeginAsync(
+            new DocumentCommitScope([IdentityStorageManifest.IdentityUserDocumentKind]),
+            CancellationToken.None);
+        await unitOfWork.SaveAsync(
+            new SaveDocumentRequest(
+                IdentityStorageManifest.IdentityUserDocumentKind,
+                "rolled-back-user",
+                IdentityStorageManifest.SchemaVersion,
+                "{}",
+                ExpectedVersion: 0),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<InjectedGroundworkFailureException>(() =>
+            unitOfWork.CommitAsync(CancellationToken.None));
+
+        Assert.Equal(GroundworkFailureInjectingDocumentStore.BeforeUnderlyingCommit, exception.Window);
+        Assert.Null(await inner.LoadAsync(
+            IdentityStorageManifest.IdentityUserDocumentKind,
+            "rolled-back-user",
+            CancellationToken.None));
+        Assert.Equal(
+            [GroundworkFailureInjectingDocumentStore.BeforeUnderlyingCommit],
+            failures.ReachedWindows);
+    }
+
+    [Fact]
+    public async Task Identity_failure_decorator_throws_after_durable_commit_without_rolling_back()
+    {
+        var inner = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var failures = new GroundworkFailureController();
+        var store = new GroundworkFailureInjectingDocumentStore(inner, inner, inner.Access, failures);
+        failures.FailAt(GroundworkFailureInjectingDocumentStore.AfterUnderlyingCommit);
+        await using var unitOfWork = await store.BeginAsync(
+            new DocumentCommitScope([IdentityStorageManifest.IdentityUserDocumentKind]),
+            CancellationToken.None);
+        await unitOfWork.SaveAsync(
+            new SaveDocumentRequest(
+                IdentityStorageManifest.IdentityUserDocumentKind,
+                "committed-user",
+                IdentityStorageManifest.SchemaVersion,
+                "{}",
+                ExpectedVersion: 0),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<InjectedGroundworkFailureException>(() =>
+            unitOfWork.CommitAsync(CancellationToken.None));
+
+        Assert.Equal(GroundworkFailureInjectingDocumentStore.AfterUnderlyingCommit, exception.Window);
+        Assert.NotNull(await inner.LoadAsync(
+            IdentityStorageManifest.IdentityUserDocumentKind,
+            "committed-user",
+            CancellationToken.None));
+        Assert.Equal(
+            [
+                GroundworkFailureInjectingDocumentStore.BeforeUnderlyingCommit,
+                GroundworkFailureInjectingDocumentStore.AfterUnderlyingCommit
+            ],
+            failures.ReachedWindows);
+    }
+
+    [Theory]
+    [InlineData("before-provider-decision", false)]
+    [InlineData("during-provider-decision", true)]
+    [InlineData("after-durable-decision-before-caller-acknowledgement", true)]
+    public async Task Runtime_failure_profile_instruments_direct_provider_decisions(
+        string windowId,
+        bool decisionIsDurable)
+    {
+        var inner = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var failures = new GroundworkFailureController();
+        var windows = GroundworkDocumentStoreFailureWindows.OperationalRuntime;
+        var store = new GroundworkFailureInjectingDocumentStore(
+            inner,
+            inner,
+            inner.Access,
+            failures,
+            windows);
+        var window = new GroundworkFailureWindow(windowId);
+        failures.FailAt(window);
+
+        var exception = await Assert.ThrowsAsync<InjectedGroundworkFailureException>(() =>
+            store.SaveAsync(
+                new SaveDocumentRequest(
+                    IdentityStorageManifest.IdentityUserDocumentKind,
+                    "runtime-window-user",
+                    IdentityStorageManifest.SchemaVersion,
+                    "{}",
+                    ExpectedVersion: 0),
+                CancellationToken.None));
+
+        Assert.Equal(window, exception.Window);
+        Assert.Equal(decisionIsDurable, await inner.LoadAsync(
+            IdentityStorageManifest.IdentityUserDocumentKind,
+            "runtime-window-user",
+            CancellationToken.None) is not null);
+    }
+
+    [Fact]
+    public void Identity_failure_decorator_rejects_a_bounded_store_from_another_access_scope()
+    {
+        var inner = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new GroundworkFailureInjectingDocumentStore(
+                inner,
+                inner,
+                DocumentStoreAccess.Scoped(new StorageScope("another-tenant")),
+                new GroundworkFailureController()));
+
+        Assert.Contains("same access scope", exception.Message, StringComparison.Ordinal);
     }
 
     private static GroundworkProviderDriver CreateDriver(string providerIdentity, string driverTypeName)

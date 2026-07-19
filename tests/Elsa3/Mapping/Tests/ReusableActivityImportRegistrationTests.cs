@@ -125,7 +125,7 @@ public sealed class ReusableActivityImportRegistrationTests
     public async Task Single_definition_importer_routes_reusable_sources_to_collection_import()
     {
         var mapper = new Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(null!, null!, null!);
-        var importer = new Elsa3WorkflowDefinitionImporter(mapper);
+        var importer = new Elsa3WorkflowDefinitionImporter(mapper, null!, null!);
         var source = ReusableActivityImportFixtures.Workflow(
             "reusable",
             "reusable-v1",

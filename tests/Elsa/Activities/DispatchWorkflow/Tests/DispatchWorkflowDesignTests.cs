@@ -250,6 +250,41 @@ public sealed class DispatchWorkflowDesignTests
     }
 
     [Fact]
+    public async Task Test_run_parent_pins_the_live_published_child_and_ignores_test_run_child_source()
+    {
+        var node = DispatchNode("dispatch-node", "child-definition");
+        var publishedChild = Executable("published-child-artifact", "child-definition", DispatchNode("published-root", "unused"));
+        var testRunChild = Executable("test-run-child-artifact", "child-definition", DispatchNode("test-run-root", "unused"));
+        var publishedSource = Source("published-child-source", "child-definition", publishedChild.Identity.ArtifactId, WorkflowExecutableReferenceScope.Published);
+        var testRunSource = Source("test-run-child-source", "child-definition", testRunChild.Identity.ArtifactId, WorkflowExecutableReferenceScope.TestRun);
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await executables.SaveAsync(publishedChild);
+        await executables.SaveAsync(testRunChild);
+        await references.SaveAsync(publishedSource);
+        await references.SaveAsync(testRunSource);
+        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+        var context = Context(node) with
+        {
+            Request = new WorkflowExecutableCompileRequest(
+                "parent-version",
+                WorkflowExecutableReferenceScope.TestRun,
+                Now,
+                Now,
+                Now.AddMinutes(5),
+                "artifact-")
+        };
+
+        var contribution = await pinSource.GetContributionAsync(
+            new ExecutableCompilationContext(context.Request, context.Source, context.RootActivity));
+        var dependency = Assert.Single(contribution.Dependencies);
+
+        Assert.Equal(publishedChild.Identity.ArtifactId, dependency.ArtifactId);
+        Assert.Equal(publishedChild.Identity.ArtifactHash, dependency.ArtifactHash);
+        Assert.NotEqual(testRunChild.Identity.ArtifactId, dependency.ArtifactId);
+    }
+
+    [Fact]
     public async Task Pin_contribution_rejects_missing_and_inconsistent_executables()
     {
         var node = DispatchNode("dispatch-node", "child-definition");
@@ -514,8 +549,13 @@ public sealed class DispatchWorkflowDesignTests
             {
                 ["WorkflowDefinitionId"] = new(
                     "WorkflowDefinitionId",
+                    ValueType(typeof(string)),
+                    ValueProtectionPolicy.InstanceInline,
                     RuntimeInputBindingSource.Literal,
-                    JsonSerializer.SerializeToElement(definitionId))
+                    literal: ValueEnvelope.Inline(
+                        ValueType(typeof(string)),
+                        JsonSerializer.SerializeToElement(definitionId),
+                        ValueProtectionPolicy.InstanceInline))
             },
             new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string> { ["authoredNodeId"] = nodeId });
@@ -524,7 +564,15 @@ public sealed class DispatchWorkflowDesignTests
         DispatchNodeWithInputs(
             nodeId,
             definitionId,
-            new RuntimeInputBinding("Inputs", RuntimeInputBindingSource.Literal, inputs));
+            new RuntimeInputBinding(
+                "Inputs",
+                ValueType(typeof(IReadOnlyDictionary<string, JsonElement>)),
+                ValueProtectionPolicy.InstanceInline,
+                RuntimeInputBindingSource.Literal,
+                literal: ValueEnvelope.Inline(
+                    ValueType(typeof(IReadOnlyDictionary<string, JsonElement>)),
+                    inputs,
+                    ValueProtectionPolicy.InstanceInline)));
 
     private static ExecutableNode DispatchNodeWithDynamicInputs(string nodeId, string definitionId) =>
         DispatchNodeWithInputs(
@@ -532,8 +580,16 @@ public sealed class DispatchWorkflowDesignTests
             definitionId,
             new RuntimeInputBinding(
                 "Inputs",
+                ValueType(typeof(IReadOnlyDictionary<string, JsonElement>)),
+                ValueProtectionPolicy.InstanceInline,
                 RuntimeInputBindingSource.Expression,
                 expression: new RuntimeExpressionBinding("JavaScript", "dynamicInputs")));
+
+    private static ValueTypeDescriptor ValueType(Type type)
+    {
+        var reference = TypeReferenceFactory.FromClrType(type, TypeAliasConvention.CanonicalAlias);
+        return new ValueTypeDescriptor(reference.Alias, reference.CollectionKind);
+    }
 
     private static ExecutableNode DispatchNodeWithInputs(
         string nodeId,

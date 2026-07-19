@@ -42,6 +42,10 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionPlacementService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>());
         Assert.Contains(provider.GetServices<IRecurringTask>(), task => task is ExecutionPlacementPumpTask);
+        var distributionEvidence = Assert.Single(
+            provider.GetServices<IWorkflowDispatchDurabilityEvidence>(),
+            evidence => evidence.Component == WorkflowDispatchDurabilityComponents.Distribution);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.ProcessLocal, distributionEvidence.Level);
     }
 
     [Fact]
@@ -140,8 +144,8 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
 
         Assert.Equal(1, await transportA.CountPendingAsync("same-execution"));
         Assert.Equal(1, await transportB.CountPendingAsync("same-execution"));
-        Assert.Equal(["same-execution"], await transportA.ListPendingExecutionIdsAsync(now));
-        Assert.Equal(["same-execution"], await transportB.ListPendingExecutionIdsAsync(now));
+        Assert.Equal(["same-execution"], await transportA.ListPendingExecutionIdsAsync(now, 10));
+        Assert.Equal(["same-execution"], await transportB.ListPendingExecutionIdsAsync(now, 10));
     }
 
     [Fact]
@@ -257,6 +261,21 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         Assert.Equal(TimeSpan.FromMinutes(2), pump.MaxBackoffInterval);
         Assert.Equal(14, pump.MaxExecutionsPerSweep);
         Assert.Equal(7, pump.TransportLeaseBatchSize);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(501)]
+    public void RejectsFeatureAndPumpLimitsOutsideTheDeclaredMaximum(int maximum)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new WorkflowsRuntimeDistributedFeature { MaxExecutionsPerSweep = maximum });
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new WorkflowsRuntimeDistributedFeature { TransportLeaseBatchSize = maximum });
+
+        var options = new ExecutionPlacementPumpOptions();
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.MaxExecutionsPerSweep = maximum);
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.TransportLeaseBatchSize = maximum);
     }
 
     [Fact]
@@ -400,6 +419,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
 
         public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
             DateTimeOffset now,
+            int maxItems,
             CancellationToken cancellationToken = default) => new(Array.Empty<string>());
 
         public ValueTask<int> CountPendingAsync(
@@ -457,6 +477,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
 
         public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
             DateTimeOffset requestedAt,
+            int maxItems,
             CancellationToken cancellationToken = default) =>
             new(new[] { "same-execution" });
 

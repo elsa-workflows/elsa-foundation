@@ -30,6 +30,36 @@ public class GroundworkActivityExecutionHierarchyStoreTests
     }
 
     [Fact]
+    public async Task SaveAsync_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var seedStore = Store(documentStore);
+        await seedStore.SaveAsync(Record("outer", "outer", null, 1, boundary: true));
+        await seedStore.SaveAsync(Record("child-a", "outer", "outer", 2));
+
+        var competingStore = Store(documentStore);
+        var interceptingStore = new InterceptingDocumentStore(documentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind, request.DocumentKind);
+                Assert.Equal(DocumentId.Compose("wf", "child-a"), request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(Record("child-a", "outer", "outer", 3));
+            }
+        };
+        var store = Store(interceptingStore);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.SaveAsync(Record("child-a", "outer", "outer", 4)).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.Message, StringComparison.Ordinal);
+        var page = await seedStore.ReadPageAsync(Query(limit: 10));
+        var winner = Assert.Single(page!.Items, item => item.ActivityExecutionId == "child-a");
+        Assert.Equal(3, winner.ExecutionSequence);
+    }
+
+    [Fact]
     public async Task Nested_Boundary_Aggregate_Is_Rebuilt_From_Durable_Relations()
     {
         var store = Store();
@@ -43,9 +73,9 @@ public class GroundworkActivityExecutionHierarchyStoreTests
         Assert.Equal(ActivityExecutionHierarchyAggregateStatus.Completed, boundary.Aggregate.Status);
     }
 
-    private static GroundworkActivityExecutionHierarchyStore Store()
+    private static GroundworkActivityExecutionHierarchyStore Store(IDocumentStore? documents = null)
     {
-        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        documents ??= new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         return new(documents, GroundworkTestSerialization.Serializer,
             new HmacActivityExecutionHierarchyCursorCodec(Options.Create(new ActivityExecutionHierarchyCursorOptions
             {

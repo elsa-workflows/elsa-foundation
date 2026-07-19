@@ -16,12 +16,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions.JavaS
 **Known implementations (shipped):**
 - `Elsa.Expressions.JavaScript.Rendering` — `CommonDeclarationContributor` *(intra-domain — default, registers common built-in declarations)*
 - `Elsa.Http.JavaScript` — `HttpTypeDeclarationContributor` *(cross-domain — adds HTTP-related types)*
-- `Elsa.Workflows.Design.JavaScript` — `ActivityOutputFunctionDeclarationContributor` *(cross-domain)*
-- `Elsa.Workflows.Design.JavaScript` — `OutcomeFunctionDeclarationContributor` *(cross-domain)*
-- `Elsa.Workflows.Design.JavaScript` — `WorkflowFunctionDeclarationContributor` *(cross-domain)*
-- `Elsa.Workflows.Design.JavaScript` — `WorkflowVariablesDeclarationContributor` *(cross-domain)*
-- `Elsa.Workflows.Design.JavaScript` — `WorkflowInputFunctionDeclarationContributor` *(cross-domain)*
-- `Elsa.Workflows.Design.JavaScript` — `WorkflowVariableFunctionDeclarationContributor` *(cross-domain)*
+- `Elsa.Workflows.Design.JavaScript` — `BindingPureArgsDeclarationContributor` *(cross-domain — exposes only immutable `args` for canonical binding expressions)*
 
 ---
 

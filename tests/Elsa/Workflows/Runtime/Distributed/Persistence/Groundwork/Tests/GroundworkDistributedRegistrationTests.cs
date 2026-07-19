@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
@@ -48,5 +49,13 @@ public sealed class GroundworkDistributedRegistrationTests
 
         Assert.IsType<GroundworkExecutionPlacementStore>(scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>());
         Assert.IsType<GroundworkExecutionCommandTransport>(scope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>());
+        var distributionEvidence = scope.ServiceProvider
+            .GetServices<IWorkflowDispatchDurabilityEvidence>()
+            .Where(evidence => evidence.Component is
+                WorkflowDispatchDurabilityComponents.Distribution or
+                WorkflowDispatchDurabilityComponents.DistributionPersistence)
+            .ToDictionary(evidence => evidence.Component, evidence => evidence.Level, StringComparer.Ordinal);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.ProcessLocal, distributionEvidence[WorkflowDispatchDurabilityComponents.Distribution]);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, distributionEvidence[WorkflowDispatchDurabilityComponents.DistributionPersistence]);
     }
 }

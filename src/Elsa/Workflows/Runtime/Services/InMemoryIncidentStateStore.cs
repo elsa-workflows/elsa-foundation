@@ -78,6 +78,17 @@ public sealed class InMemoryIncidentStateStore : IIncidentStateStore
         }
     }
 
+    /// <summary>
+    /// Returns one stable snapshot of every in-memory incident. Operational read models use this to evaluate
+    /// the complete volatile store without issuing one query per workflow execution.
+    /// </summary>
+    public ValueTask<IReadOnlyCollection<IncidentState>> ListAllAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+            return ValueTask.FromResult<IReadOnlyCollection<IncidentState>>(_states.Values.ToArray());
+    }
+
     private IncidentState[] ListByWorkflowExecution(string workflowExecutionId) =>
         _states
             .Where(item => item.Key.WorkflowExecutionId == workflowExecutionId)

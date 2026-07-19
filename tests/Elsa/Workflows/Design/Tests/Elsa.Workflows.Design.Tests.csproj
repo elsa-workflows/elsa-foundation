@@ -19,11 +19,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Rendering\Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Mediator\Elsa.Mediator.csproj" />
@@ -33,6 +35,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Locking\Core\Elsa.Locking.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\EFCore\Elsa.Workflows.Design.Persistence.EFCore.csproj" />
@@ -42,6 +45,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Reconciliation\Git\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>

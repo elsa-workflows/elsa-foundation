@@ -10,7 +10,8 @@ public sealed class ExecutionPlacementOptions
     /// <summary>
     /// Stable identity of this host/process as a placement owner. Distinct per node; written onto placement leases and
     /// transport lease holders so a surviving node can distinguish its own claims from a peer's. Defaults to a
-    /// machine + process identity stable for the lifetime of the process.
+    /// machine + process identity stable for the lifetime of the process. It must satisfy
+    /// <see cref="Elsa.Workflows.Runtime.Distributed.Contracts.DistributedRuntimeIdentityConstraints"/>.
     /// </summary>
     public string NodeId { get; set; } = $"node:{Environment.MachineName}:{Environment.ProcessId}";
 

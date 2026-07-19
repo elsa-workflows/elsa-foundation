@@ -73,7 +73,10 @@ public sealed class ExecutableNodeMetadataEnricher(IInlineEventPublisher eventPu
             node.ChildSlots.Select(slot => new ExecutableChildSlot(
                 slot.Name,
                 slot.Activities.Select(child => Rebuild(child, metadata)).ToArray())).ToArray(),
-            node.Structure);
+            node.Structure,
+            node.ActivityContract,
+            node.IntrinsicKind,
+            node.IntrinsicVariable);
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)
     {

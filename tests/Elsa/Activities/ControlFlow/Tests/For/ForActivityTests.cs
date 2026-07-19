@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,13 +24,13 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 2, end: 5, step: 1);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-body", request.ExecutableNodeId);
         Assert.Equal("actexec-for", request.SchedulingActivityExecutionId);
         Assert.Equal("2", request.SchedulingProvenance.IterationId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -37,11 +38,11 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 3, end: 3, step: 1);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -49,10 +50,10 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 0, end: 3, step: 1, includeBody: false);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsComplete);
     }
 
     [Fact]
@@ -68,13 +69,13 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 0, end: 3, step: 1);
 
-        await new ForActivity().OnChildCompletedAsync(
+        var continuation = await ((ForActivity)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-0", "node-body", [ActivityOutcomes.Done], completedChildIterationId: "0"));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal("node-body", request.ExecutableNodeId);
         Assert.Equal("1", request.SchedulingProvenance.IterationId);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -82,12 +83,12 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 0, end: 3, step: 1);
 
-        await new ForActivity().OnChildCompletedAsync(
+        var continuation = await ((ForActivity)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-2", "node-body", [ActivityOutcomes.Done], completedChildIterationId: "2"));
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -95,12 +96,12 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 0, end: 10, step: 1);
 
-        await new ForActivity().OnChildCompletedAsync(
+        var continuation = await ((ForActivity)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-0", "node-body", [ForActivity.BreakOutcome], completedChildIterationId: "0"));
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -108,7 +109,7 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 5, end: 0, step: -1);
 
-        await new ForActivity().OnChildCompletedAsync(
+        await ((ForActivity)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-body-5", "node-body", [ActivityOutcomes.Done], completedChildIterationId: "5"));
 
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
@@ -135,33 +136,19 @@ public sealed class ForActivityTests : IDisposable
             .AsTask());
     }
 
-    [Fact]
-    public async Task Execute_Throws_WhenRuntimeContextIsMissing()
-    {
-        var context = new NonRuntimeActivityExecutionContext(_serviceProvider, new ForActivity());
-
-        await Assert.ThrowsAsync<ForExecutionException>(() => ((IActivity)new ForActivity()).ExecuteAsync(context).AsTask());
-    }
-
-    private async ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        await ((IActivity)context.Activity).ExecuteAsync(context);
+    private static ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
+        ((IRuntimeStructuralActivity)context.Activity).ExecuteStructureAsync(context);
 
     private SimpleActivityExecutionContext NewContext(int start, int end, int step, bool includeBody = true)
     {
-        var startInput = new InputArgument<int>(new Variable("Start", start));
-        var endInput = new InputArgument<int>(new Variable("End", end));
-        var stepInput = new InputArgument<int>(new Variable("Step", step));
         var activity = new ForActivity
         {
-            Id = "actexec-for",
-            NodeId = "node-for",
-            Start = startInput,
-            End = endInput,
-            Step = stepInput
+            Start = start,
+            End = end,
+            Step = step
         };
 
         var context = new SimpleActivityExecutionContext(
-            _serviceProvider,
             activity,
             CancellationToken.None,
             "wfexec-1",
@@ -169,9 +156,6 @@ public sealed class ForActivityTests : IDisposable
             NewWorkItem(),
             NewForNode(includeBody),
             NewRunningState());
-        context.Set(startInput.MemoryBlockReference(), start);
-        context.Set(endInput.MemoryBlockReference(), end);
-        context.Set(stepInput.MemoryBlockReference(), step);
         return context;
     }
 
@@ -203,7 +187,6 @@ public sealed class ForActivityTests : IDisposable
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: structure);
@@ -245,34 +228,4 @@ public sealed class ForActivityTests : IDisposable
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
-    private sealed class NonRuntimeActivityExecutionContext(IServiceProvider serviceProvider, IActivity activity) : IActivityExecutionContext
-    {
-        public Elsa.Expressions.Core.Contracts.IExpressionExecutionContext ExpressionExecutionContext => null!;
-        public IActivity Activity { get; } = activity;
-        public IActivityExecutionContext ParentActivityExecutionContext => null!;
-        public CancellationToken CancellationToken => CancellationToken.None;
-
-        public TService GetRequiredService<TService>() where TService : notnull =>
-            serviceProvider.GetRequiredService<TService>();
-
-        public T? Get<T>(InputArgument<T>? input) => default;
-
-        public void Set<T>(OutputArgument<T>? output, T? value, string? outputName = null)
-        {
-        }
-
-        public IAsyncEnumerable<ActivityOutputs> GetActivityOutputs() => AsyncEnumerable.Empty<ActivityOutputs>();
-
-        public void SetOutcomes(string[] outcomes)
-        {
-        }
-
-        public IEnumerable<string> GetOutcomes() => [];
-
-        public void CreateBookmark(ActivityBookmarkRequest request)
-        {
-        }
-
-        public IReadOnlyCollection<ActivityBookmarkRequest> GetBookmarkRequests() => [];
-    }
 }

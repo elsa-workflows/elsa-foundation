@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Distributed.Contracts;
+
 namespace Elsa.Workflows.Runtime.Distributed.Models;
 
 /// <summary>
@@ -22,8 +24,8 @@ public sealed class ExecutionPlacementLease
         DateTimeOffset acquiredAt,
         DateTimeOffset expiresAt)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
 
         if (placementToken <= 0)
             throw new ArgumentOutOfRangeException(nameof(placementToken), "Placement token must be greater than zero.");

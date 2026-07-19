@@ -1,3 +1,6 @@
+using System.Collections.ObjectModel;
+using System.Text.Json.Serialization;
+
 namespace Elsa.Activities.Http.Models;
 
 /// <summary>
@@ -29,10 +32,63 @@ namespace Elsa.Activities.Http.Models;
 /// derived value is identical to what the middleware would have persisted.
 /// </para>
 /// </remarks>
-public sealed record HttpRequestModel(
-    string Path,
-    string Method,
-    IDictionary<string, string[]> Headers,
-    IDictionary<string, string[]> Query,
-    string? Body,
-    IDictionary<string, string>? RouteData = null);
+public sealed class HttpRequestModel
+{
+    /// <summary>Creates a request model from the mutable collection shape exposed by ASP.NET Core.</summary>
+    public HttpRequestModel(
+        string Path,
+        string Method,
+        IDictionary<string, string[]> Headers,
+        IDictionary<string, string[]> Query,
+        string? Body,
+        IDictionary<string, string>? RouteData = null)
+        : this(
+            Path,
+            Method,
+            Headers.ToDictionary(item => item.Key, item => (IReadOnlyList<string>)item.Value, StringComparer.OrdinalIgnoreCase),
+            Query.ToDictionary(item => item.Key, item => (IReadOnlyList<string>)item.Value, StringComparer.OrdinalIgnoreCase),
+            Body,
+            RouteData is null ? null : new Dictionary<string, string>(RouteData, StringComparer.OrdinalIgnoreCase))
+    {
+    }
+
+    /// <summary>Creates the persistable wire document and snapshots every collection.</summary>
+    [JsonConstructor]
+    public HttpRequestModel(
+        string Path,
+        string Method,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? Headers,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? Query,
+        string? Body,
+        IReadOnlyDictionary<string, string>? RouteData = null)
+    {
+        this.Path = Path;
+        this.Method = Method;
+        this.Headers = SnapshotValues(Headers);
+        this.Query = SnapshotValues(Query);
+        this.Body = Body;
+        this.RouteData = Snapshot(RouteData);
+    }
+
+    public string Path { get; }
+    public string Method { get; }
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> Headers { get; }
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> Query { get; }
+    public string? Body { get; }
+    public IReadOnlyDictionary<string, string> RouteData { get; }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> SnapshotValues(
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? source)
+    {
+        var snapshot = (source ?? new Dictionary<string, IReadOnlyList<string>>())
+            .ToDictionary(
+                item => item.Key,
+                item => (IReadOnlyList<string>)Array.AsReadOnly(item.Value?.ToArray() ?? []),
+                StringComparer.OrdinalIgnoreCase);
+        return new ReadOnlyDictionary<string, IReadOnlyList<string>>(snapshot);
+    }
+
+    private static IReadOnlyDictionary<string, string> Snapshot(IReadOnlyDictionary<string, string>? source) =>
+        new ReadOnlyDictionary<string, string>(
+            new Dictionary<string, string>(source ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase));
+}

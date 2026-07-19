@@ -1,17 +1,9 @@
 # Elsa.Workflows.Runtime.JavaScript
 
-Bridges the workflows runtime and the JavaScript expression engine. Injects runtime-context functions (workflow variables, activity outputs, workflow inputs) into the script execution context, and copies variable mutations back after execution.
+Hosts the runtime endpoint for explicit JavaScript activity execution. The endpoint uses the typed
+`IJavaScriptScriptEvaluator` contract from `Elsa.Expressions.JavaScript.Core`: callers provide script
+source plus one JSON argument document and receive a JSON result.
 
-## Cross-domain contributions
-
-This feature implements contributor interfaces from other domains:
-
-- **`IScriptPreProcessor`** *(Core — `Elsa.Expressions.JavaScript.Core`)* — multiple pre-processors inject workflow-runtime context into the JavaScript environment before each script runs (variable functions, workflow functions, activity-output accessors, workflow-input accessors, variables-context setup). Aggregated by `PreProcessScript` in `Elsa.Expressions.JavaScript`.
-  - Known impls: `WorkflowVariablesContextPreProcessor` and others.
-  - Catalog: [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../../../Expressions/JavaScript/EXTENSION_POINTS.md)
-
-- **`IScriptPostProcessor`** *(Core — `Elsa.Expressions.JavaScript.Core`)* — `CopyVariablesToWorkflowContext` propagates any variable mutations made inside the script back into the workflow execution context. Aggregated by `PostProcessScript` in `Elsa.Expressions.JavaScript`.
-  - Catalog: [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../../../Expressions/JavaScript/EXTENSION_POINTS.md)
-
-- **`IActivityCompletionHandler`** *(Core — `Elsa.Activities.Runtime.Core`)* — `ActivityCompletionHandler` (test support implementation for JS-context activity completion in unit tests).
-  - Catalog: [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../EXTENSION_POINTS.md)
+This package does not participate in canonical expression binding evaluation. It injects no workflow
+variables, inputs, outputs, services, configuration, or mutable execution context into scripts, and
+it performs no variable write-back. Workflow-visible mutation remains a separate runtime intrinsic.

@@ -55,7 +55,6 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkResumeDispatcher));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkConsumptionCheckpointService));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IDurableValueStateStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeActivityOutputRegister));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IIncidentStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExecutionLivenessStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowHoldStateStore));
@@ -124,7 +123,6 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<IBookmarkResumeDispatcher>();
         provider.GetRequiredService<IBookmarkConsumptionCheckpointService>();
         provider.GetRequiredService<IDurableValueStateStore>();
-        provider.GetRequiredService<IRuntimeActivityOutputRegister>();
         provider.GetRequiredService<IIncidentStateStore>();
         provider.GetRequiredService<IExecutionLivenessStateStore>();
         provider.GetRequiredService<IWorkflowHoldStateStore>();
@@ -150,6 +148,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<IRuntimePayloadCapturePolicy>();
         provider.GetRequiredService<IRuntimeInputBindingResolver>();
         provider.GetRequiredService<IRuntimeActivityInputMaterializer>();
+        provider.GetRequiredService<WorkflowIntrinsicExecutor>();
         provider.GetRequiredService<IRuntimeExecutionIdGenerator>();
         provider.GetRequiredService<IWorkflowStartDispatcher>();
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is NoopWorkflowSchedulerDrainObserver);
@@ -157,7 +156,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         var schedulerWorkHandlers = provider.GetServices<IWorkflowSchedulerWorkHandler>().ToArray();
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowStartSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowScheduleActivitySchedulerWorkHandler);
-        Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowStartActivitySchedulerWorkHandler);
+        Assert.Contains(schedulerWorkHandlers, handler =>
+            StringComparer.Ordinal.Equals(handler.Name, WorkflowStartActivitySchedulerWorkHandler.HandlerName));
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowCompleteActivitySchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowCreateBookmarkSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowCheckpointSchedulerWorkHandler);
@@ -171,9 +171,11 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowScheduleActivitySchedulerWorkHandler));
         Assert.True(
             Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowScheduleActivitySchedulerWorkHandler) <
-            Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowStartActivitySchedulerWorkHandler));
+            Array.FindIndex(schedulerWorkHandlers, handler =>
+                StringComparer.Ordinal.Equals(handler.Name, WorkflowStartActivitySchedulerWorkHandler.HandlerName)));
         Assert.True(
-            Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowStartActivitySchedulerWorkHandler) <
+            Array.FindIndex(schedulerWorkHandlers, handler =>
+                StringComparer.Ordinal.Equals(handler.Name, WorkflowStartActivitySchedulerWorkHandler.HandlerName)) <
             Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowCompleteActivitySchedulerWorkHandler));
         Assert.True(
             Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowCompleteActivitySchedulerWorkHandler) <

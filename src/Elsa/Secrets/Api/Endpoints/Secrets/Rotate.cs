@@ -18,7 +18,14 @@ internal sealed class Rotate(ISecretManager secretManager) : ElsaEndpoint<Rotate
 
     public override async Task HandleAsync(RotateSecretApiRequest request, CancellationToken cancellationToken)
     {
-        var secret = await secretManager.RotateAsync(request.Name, new RotateSecretRequest
+        var tenantId = SecretEndpointTenant.Resolve(User);
+        if (tenantId is null)
+        {
+            await Send.ForbiddenAsync(cancellationToken);
+            return;
+        }
+
+        var secret = await secretManager.RotateAsync(tenantId, request.Name, new RotateSecretRequest
         {
             Value = request.Value,
             ConfigurationKey = request.ConfigurationKey,

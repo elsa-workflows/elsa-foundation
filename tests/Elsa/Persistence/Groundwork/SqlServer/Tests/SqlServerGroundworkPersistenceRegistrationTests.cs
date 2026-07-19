@@ -1,23 +1,32 @@
-using System.Reflection;
+using CShells;
+using CShells.Features;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.SqlServer.DependencyInjection;
+using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.SqlServer.Unified;
 using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Documents.Scoping;
 using Groundwork.SqlServer;
+using Groundwork.SqlServer.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 using static Elsa.Persistence.Groundwork.RegistrationTests.GroundworkProviderRegistrationAssertions;
@@ -39,6 +48,7 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
     public void Runtime_feature_registers_builds_and_resolves_the_SQL_Server_startup_leaf()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         var feature = new SqlServerGroundworkRuntimePersistenceShellFeature
         {
             ConnectionString = ConnectionString
@@ -53,10 +63,11 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
     }
 
     [Fact]
-    public void Unified_feature_registers_builds_and_resolves_the_selected_seven_family_startup_leaf()
+    public void Unified_feature_registers_the_seven_provider_families_without_selecting_identity()
     {
         var services = new ServiceCollection();
-        var feature = new SqlServerGroundworkUnifiedPersistenceShellFeature
+        services.AddLogging();
+        var feature = new SqlServerGroundworkUnifiedPersistenceShellFeature(CreateBareShellContext())
         {
             ConnectionString = ConnectionString
         };
@@ -67,20 +78,116 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
         AssertRepresentativeFamilyContracts(
             services,
             typeof(IBookmarkStateStore),
-            typeof(IUserStore),
             typeof(ISecretRepository),
             typeof(IExecutionPlacementStore),
             typeof(IWorkflowDefinitionStore),
             typeof(IActivityDefinitionStore),
-            typeof(IPublicationRecordStore));
+            typeof(IPublicationRecordStore),
+            typeof(IStudioPreferenceStore));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IUserStore));
         AssertRegistrationDiagnosticsAreSanitized(services, RegistrationSecret, ConnectionString);
         Assert.False(typeof(SqlServerGroundworkUnifiedPersistenceShellFeature).IsSealed);
+    }
+
+    private static ShellFeatureContext CreateBareShellContext() =>
+        new(new ShellSettings(new ShellId("sqlserver-registration"), ["GroundworkUnifiedPersistenceSqlServer"]), []);
+
+    [Fact]
+    public async Task Dispatch_physical_routes_fit_SQL_Server_index_limits_without_connecting()
+    {
+        var capabilityReport = SqlServerGroundworkCapabilities.Runtime();
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            capabilityReport,
+            new GroundworkProviderTopologySnapshot(
+                capabilityReport.Provider.Name,
+                "sqlserver",
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                }),
+            SqlServerGroundworkCapabilities.PhysicalNames);
+
+        var dispatchRoutes = source.PhysicalTarget.Routes
+            .Where(route => route.StorageUnit.Value is
+                ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind or
+                ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind)
+            .ToArray();
+        var manifest = source.CreateManifest();
+        var dispatchManifest = manifest with
+        {
+            StorageUnits = manifest.StorageUnits
+                .Where(unit => dispatchRoutes.Any(route => route.StorageUnit == unit.Identity))
+                .ToArray()
+        };
+        var store = new SqlServerPhysicalDocumentStore(
+            ConnectionString,
+            dispatchManifest,
+            dispatchRoutes,
+            DocumentStoreAccess.Global);
+
+        Assert.Equal(2, dispatchRoutes.Length);
+        Assert.NotNull(store);
+    }
+
+    [Theory]
+    [InlineData(ElsaRuntimeStorageManifest.BookmarkStateDocumentKind)]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind)]
+    public async Task Stimulus_lookup_routes_fit_SQL_Server_index_limits_without_connecting(string documentKind)
+    {
+        var capabilityReport = SqlServerGroundworkCapabilities.Runtime();
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            capabilityReport,
+            new GroundworkProviderTopologySnapshot(
+                capabilityReport.Provider.Name,
+                "sqlserver",
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                }),
+            SqlServerGroundworkCapabilities.PhysicalNames);
+
+        var routes = source.PhysicalTarget.Routes
+            .Where(route => StringComparer.Ordinal.Equals(route.StorageUnit.Value, documentKind))
+            .ToArray();
+        var manifest = source.CreateManifest();
+        var scopedManifest = manifest with
+        {
+            StorageUnits = manifest.StorageUnits
+                .Where(unit => routes.Any(route => route.StorageUnit == unit.Identity))
+                .ToArray()
+        };
+        var store = new SqlServerPhysicalDocumentStore(
+            ConnectionString,
+            scopedManifest,
+            routes,
+            DocumentStoreAccess.Global);
+
+        Assert.Single(routes);
+        Assert.NotNull(store);
+    }
+
+    [Fact]
+    public async Task Explicit_identity_schema_and_feature_register_the_matching_SQL_Server_composition()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkSqlServerUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
+            ConnectionString);
+        services.AddFoundationAspNetCoreIdentityGroundwork();
+
+        await using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
+        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
+            provider.GetRequiredService<global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource>());
     }
 
     [Fact]
     public async Task Identity_only_provider_leaf_resolves_without_runtime_history_services()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddGroundworkIdentityStores();
         services.AddSqlServerGroundworkDocumentStore(ConnectionString);
 
@@ -120,18 +227,15 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
     }
 
     [Fact]
-    public void SQL_Server_history_query_uses_bounded_TOP_syntax_and_no_LIMIT_clause()
+    public void SQL_Server_history_paging_has_no_provider_specific_Elsa_source()
     {
-        var source = File.ReadAllText(Path.Combine(
+        Assert.False(File.Exists(Path.Combine(
             FindRepositoryRoot(),
-            "src/Elsa/Persistence/Groundwork/SqlServer/SqlServerWorkflowExecutionStatePageQuery.cs"));
-
-        Assert.Contains("TOP (@pageLimit)", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("\n        LIMIT ", source, StringComparison.OrdinalIgnoreCase);
+            "src/Elsa/Persistence/Groundwork/SqlServer/SqlServerWorkflowExecutionStatePageQuery.cs")));
     }
 
     [Fact]
-    public async Task SQL_Server_history_query_uses_the_exact_transformed_admitted_route_names()
+    public async Task SQL_Server_history_query_uses_the_transformed_common_physical_route()
     {
         var services = new ServiceCollection();
         services.AddSingleton(new GroundworkStorageNamingPolicyOptions(
@@ -160,26 +264,21 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
                 SqlServerGroundworkCapabilities.PhysicalNames);
         var route = Assert.Single(composition.PhysicalTarget.Routes.Where(candidate =>
             candidate.StorageUnit.Value == ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
-        var query = provider.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>();
-        query.Bind(route);
+        var historyPath = Assert.Single(route.CandidateQueryPaths.Where(candidate =>
+            candidate.QueryIdentities.Contains(
+                ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery,
+                StringComparer.Ordinal)));
+        var historyIndex = Assert.Single(route.Indexes.Where(candidate =>
+            candidate.Identity == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryOrderIndex));
 
-        var pageTable = ReadProtectedString(query, "PageTableExpression");
-        var pageColumns = ReadProtectedString(query, "PageSelectColumns");
-        var canonicalJson = ReadProtectedString(query, "CanonicalJsonExpression");
-        var pageSql = (string)query.GetType()
-            .GetMethod("BuildPageSelectSql", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(query, ["1 = 1", "1 ASC"])!;
-
+        Assert.Equal(PhysicalStorageForm.PhysicalEntityTable, route.Form);
         Assert.NotEqual("groundwork_documents", route.PrimaryStorage.Name.Identifier);
         Assert.NotEqual("content_json", route.Envelope.CanonicalJson.Identifier);
-        Assert.Contains($"[{route.PrimaryStorage.Name.Identifier}] d", pageTable, StringComparison.Ordinal);
-        Assert.Contains($"[{route.Envelope.Id.Identifier}]", pageColumns, StringComparison.Ordinal);
-        Assert.Contains($"[{route.Envelope.SchemaVersion.Identifier}]", pageColumns, StringComparison.Ordinal);
-        Assert.Contains($"[{route.Envelope.Version.Identifier}]", pageColumns, StringComparison.Ordinal);
-        Assert.Contains($"[{route.Envelope.CanonicalJson.Identifier}]", pageColumns, StringComparison.Ordinal);
-        Assert.Contains($"[{route.Envelope.CanonicalJson.Identifier}]", canonicalJson, StringComparison.Ordinal);
-        Assert.Contains(pageTable, pageSql, StringComparison.Ordinal);
-        Assert.Contains(pageColumns, pageSql, StringComparison.Ordinal);
+        Assert.True(historyPath.IsScaleBearing);
+        Assert.Equal(historyIndex.Name, historyPath.IndexName);
+        Assert.Contains(route.ProjectedColumns, projection =>
+            projection.Definition.Path ==
+            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField);
     }
 
     [Fact]
@@ -203,17 +302,4 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
         return directory?.FullName ?? throw new DirectoryNotFoundException("Could not locate the repository root.");
     }
 
-    private static string ReadProtectedString(object instance, string propertyName)
-    {
-        for (var type = instance.GetType(); type is not null; type = type.BaseType)
-        {
-            var property = type.GetProperty(
-                propertyName,
-                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-            if (property is not null)
-                return (string)property.GetValue(instance)!;
-        }
-
-        throw new MissingMemberException(instance.GetType().FullName, propertyName);
-    }
 }

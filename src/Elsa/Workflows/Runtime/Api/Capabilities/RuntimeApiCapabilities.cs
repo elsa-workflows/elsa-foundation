@@ -30,7 +30,10 @@ public static class RuntimeApiCapabilities
             new("activity-execution-incidents", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true),
             new("activity-execution-value-evidence", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true),
             new("activity-execution-value-payload", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload", templated: true),
-            new("workflow-incidents", "runtime/workflows/instances/{workflowExecutionId}/incidents", templated: true)
+            new("workflow-incidents", "runtime/workflows/instances/{workflowExecutionId}/incidents", templated: true),
+            new("workflow-dispatches", "runtime/workflows/dispatches"),
+            new("workflow-dispatch", "runtime/workflows/dispatches/{dispatchId}", templated: true),
+            new("workflow-dispatch-redrive", "runtime/workflows/dispatches/{dispatchId}/redrive", templated: true)
         ],
         SourceFeatureId);
 }

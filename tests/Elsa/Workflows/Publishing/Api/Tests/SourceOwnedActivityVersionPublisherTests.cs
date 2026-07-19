@@ -33,6 +33,7 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         Assert.Equal(commit.ExecutableTemplate.TemplateHash, commit.Publication.TemplateHash);
         Assert.True(Assert.Single(commit.Publication.Contract.Inputs).IsNullable);
         Assert.False(Assert.Single(commit.Publication.Contract.Outputs).IsNullable);
+        Assert.Equal(ActivityDefinitionVersionResolutionKind.AuthorableActivity, commit.Publication.ResolutionKind);
     }
 
     [Fact]

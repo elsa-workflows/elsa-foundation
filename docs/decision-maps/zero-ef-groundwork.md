@@ -90,6 +90,20 @@ How should the established `StorageUnit`, `PhysicalizationPolicy`, `Portable`, `
 
 In progress as [Groundwork #28](https://github.com/valence-works/Groundwork/issues/28). Produce a focused vocabulary/API report in the Groundwork repository and link it here.
 
+## version-aware-codecs: Where Does Payload Version Evolution Belong?
+
+Blocked by: none
+Status: resolved
+Type: Research
+
+### Question
+
+Should version-aware serialization, payload policies, concrete codecs, and upcasters be provider-neutral Groundwork capabilities, provider-specific mechanics, or Elsa-owned behavior?
+
+### Answer
+
+Groundwork owns only the generic version-aware codec contract and provider integration delivered through [Groundwork PR #88](https://github.com/valence-works/Groundwork/pull/88), with provider-native ordered query explanations from Groundwork PR #89, certified provider-neutral keyset continuation from Groundwork PR #93, bounded residual predicates from Groundwork PR #95, portable substring search keys from Groundwork PR #96, and provider-native latest-per-key execution from Groundwork PR #97, consumed at `0.0.1-preview.64`. Elsa provider packages own marker-gated per-kind version policies, legacy-stamp parsing, JSON options, and concrete upcasters; Elsa core modules remain Groundwork-free. Every payload-shape change increments its durable kind/manifest version, retains deterministic golden fixtures, and invalidates prior composition fingerprints. Provider evidence must be regenerated from the exact Groundwork and Elsa heads; the accepted `preview.60` Identity matrix is immutable historical evidence and cannot prove the current `preview.64` boundary.
+
 ## session-concurrency: What Session Lifecycle Replaces The Singleton Gated Connection?
 
 Blocked by: none
@@ -116,7 +130,7 @@ Which ASP.NET Core Identity and OpenIddict store contracts, indexes, concurrency
 
 ### Answer
 
-Implement the framework-facing stores in concrete foundation packages over Groundwork while keeping Elsa identity contracts Groundwork-free. ASP.NET Core Identity fits ordinary entity documents and units of work; the replacement implements only complete optional store capabilities and does not expose `IQueryableUserStore`, `IQueryableRoleStore`, or passkeys in the first slice. OpenIddict's application, authorization, scope, and token stores fit entity documents, but require compound/typed/multi-value indexes, range queries, bulk prune/revoke, storage-boundary tenancy, and four-provider UoW/OCC conformance. Its generic `IQueryable` delegate overloads are an explicit capability boundary: provide a bounded adapter translator or fail them immediately; never load all documents. The exact interfaces, queries, indexes, relationships, concurrency translations, seeding/normalization behavior, registration changes, and conformance suite are recorded in the [Identity/OpenIddict Groundwork contract inventory](../reports/identity-openiddict-groundwork-contract-inventory.md).
+Implement the framework-facing stores in concrete foundation packages over Groundwork while keeping Elsa identity contracts Groundwork-free. ASP.NET Core Identity fits ordinary entity documents and units of work; the replacement implements only complete optional store capabilities and does not expose `IQueryableUserStore`, `IQueryableRoleStore`, or passkeys in the first slice. Spec 095 supplies the implemented and remediated #644 ASP.NET Core Identity candidate and the v1.1 `iam-normalized-lookup-update` contract. Exact-candidate correctness evidence against Groundwork `0.0.1-preview.60` and Identity storage manifest v1.0.4 is accepted for all four supported provider topologies; the EF baseline is non-executed, and #646 owns real same-provider EF execution, equality, and timing. This does not complete OpenIddict, host switching, or #647 deletion. OpenIddict's application, authorization, scope, and token stores fit entity documents, but require compound/typed/multi-value indexes, range queries, bulk prune/revoke, storage-boundary tenancy, and four-provider UoW/OCC conformance. Its generic `IQueryable` delegate overloads are an explicit capability boundary: provide a bounded adapter translator or fail them immediately; never load all documents. The exact interfaces, queries, indexes, relationships, concurrency translations, seeding/normalization behavior, registration changes, and conformance suite are recorded in the [Identity/OpenIddict Groundwork contract inventory](../reports/identity-openiddict-groundwork-contract-inventory.md).
 
 ## diagnostic-storage: What Specialized Groundwork Primitive Fits Diagnostics?
 
@@ -144,7 +158,7 @@ What exact portable manifest/API represents envelope fields, canonical JSON, ser
 
 ### Answer
 
-Pending.
+Spec 095 supplies the current v1.1 Identity workload contract for #646: `iam-normalized-lookup-update` with fixed input fingerprint `5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9` and public result digest `32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc`. These hashes define the provider-neutral contract, not executed EF equality or performance evidence. Exact-candidate `preview.60` Groundwork provider artifacts are accepted, and #646 still owns real EF execution, equality, timing methodology, EF/Groundwork physical-form comparison, raw benchmark artifacts, reports, and pass/redesign/blocked verdicts.
 
 ## unified-query-planner: How Does One Query Contract Select A Physical Plan?
 
@@ -228,7 +242,7 @@ What dependency-ordered Elsa slices migrate design, runtime, IAM, diagnostics, I
 
 ### Answer
 
-Pending. Resolve each store family into independently grabbable issues with only its specific released upstream dependencies. Design, runtime, IAM, diagnostics, Identity, and OpenIddict may migrate independently while EF remains a temporary oracle.
+Resolve each store family into independently grabbable issues with only its specific released upstream dependencies. Design, runtime, IAM, diagnostics, Identity, and OpenIddict may migrate independently while EF remains a temporary oracle. Identity #644 now has accepted `preview.60` exact-candidate Groundwork artifacts and may feed #646; its checked-in EF contract baseline is deliberately non-executed. OpenIddict remains a separate migration lane.
 
 ## ef-removal: When May The EF Implementation Family Be Deleted?
 

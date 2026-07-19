@@ -1,5 +1,7 @@
 # Runtime Activity Invocation Boundary
 
+> **Current status (2026-07-16): invocation sequencing remains, while its construction and value-flow mechanism is superseded by [spec 095](../095-value-flow-redesign/spec.md).** Invocation now reuses a committed input snapshot, acquires a transient activation lease, and commits one closed typed transition.
+
 **Feature Branch**: `codex/runtime-activity-invocation-boundary`
 **Created**: 2026-06-11
 **Input**: Runtime Execution Seam next slice after Runtime activity start state transition.

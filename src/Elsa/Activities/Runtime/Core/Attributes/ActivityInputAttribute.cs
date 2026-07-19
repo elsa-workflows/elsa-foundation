@@ -6,6 +6,9 @@ namespace Elsa.Activities.Runtime.Core.Attributes;
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
 public sealed class ActivityInputAttribute : Attribute
 {
+    /// <summary>The stable contract key. Defaults to the CLR property name when omitted.</summary>
+    public string? Key { get; init; }
+
     /// <summary>The input's relative presentation order within the activity property list.</summary>
     public float Order { get; init; }
 

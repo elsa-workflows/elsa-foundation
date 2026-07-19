@@ -15,7 +15,7 @@ separate add-don't-replace seams; see the Runtime catalog linked below.
 | Contract | Built-in default | Replace when |
 |---|---|---|
 | `IWorkflowExecutableCompiler` | `WorkflowExecutableCompiler` (scoped) | Compilation, artifact hashing, validation, or executable projection differs. |
-| `IWorkflowTestRunStore` | `InMemoryWorkflowTestRunStore` (singleton) | Test-run results need shared/durable retention. |
+| `IWorkflowTestRunStore` | `InMemoryWorkflowTestRunStore` (singleton) | Test-run projections need shared/durable retention. Runtime owns the matching scope lifecycle; expiry opens an operation scope and closes Runtime before removing the projection. |
 | `IActivityDraftTestRunStore` | `InMemoryActivityDraftTestRunStore` (singleton) | Activity draft Test Run receipts, idempotency, and status lookup must survive restart. The Groundwork Publishing package replaces this default. |
 | `IActivityDraftTestRunCancellationPolicy` | `DefaultActivityDraftTestRunCancellationPolicy` (singleton) | A host needs to suppress or further constrain cancellation while advertising the effective capability truthfully. |
 | `IPublicationSlotStore` | `InMemoryPublicationSlotStore` (singleton) | Slot authority and revision CAS must survive restart. |

@@ -7,6 +7,8 @@ public static class RuntimeCheckpointNames
     public const string WorkflowStarted = nameof(WorkflowStarted);
     public const string ActivityScheduled = nameof(ActivityScheduled);
     public const string ActivityStarted = nameof(ActivityStarted);
+    public const string ActivityAttemptClaimed = nameof(ActivityAttemptClaimed);
+    public const string IntrinsicCompleted = nameof(IntrinsicCompleted);
     public const string ActivityCompleted = nameof(ActivityCompleted);
     public const string ActivitySuspended = nameof(ActivitySuspended);
     public const string ActivityCancelled = nameof(ActivityCancelled);

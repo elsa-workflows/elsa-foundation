@@ -43,6 +43,9 @@ public sealed class DispatchPinSource(
         if (dispatchNodes.Length == 0)
             return new ExecutableCompilationContribution();
 
+        if (context.Request.Scope is not (WorkflowExecutableReferenceScope.Published or WorkflowExecutableReferenceScope.TestRun))
+            throw new ArgumentException($"DispatchWorkflow is not supported in executable scope '{context.Request.Scope}'.");
+
         var references = await sourceReferenceStore.ListAsync(
             WorkflowExecutableReferenceScope.Published,
             liveOnly: true,

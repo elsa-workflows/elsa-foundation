@@ -3,14 +3,20 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Secrets.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -25,21 +31,31 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests;
 /// <summary>
 /// End-to-end proof of the headline goal against <b>PostgreSQL</b>: one host-selected database backs every Elsa
 /// module. The host composes a single feature (<c>AddGroundworkPostgreSqlUnifiedPersistence</c>) which
-/// materializes all seven selected feature manifests into <b>one</b> PostgreSQL database and points every
+/// materializes the six provider-level feature manifests into <b>one</b> PostgreSQL database and points every
 /// family's neutral ports at it. Nothing here is PostgreSQL- or Groundwork-specific except the one host
 /// registration call. Skips gracefully when Docker is unavailable.
 /// </summary>
 [Collection(PostgresContainerCollection.Name)]
 public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixture fixture)
 {
-    private async Task<ServiceProvider> BuildHostAsync()
+    private async Task<ServiceProvider> BuildHostAsync(bool withIdentity = false)
     {
         var connectionString = await fixture.CreateIsolatedDatabaseAsync();
-        var provider = new ServiceCollection()
+        var services = new ServiceCollection()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
-            .AddSingleton<ISystemClock, FakeSystemClock>()
-            .AddGroundworkPostgreSqlUnifiedPersistence(connectionString)
-            .BuildServiceProvider();
+            .AddSingleton<ISystemClock, FakeSystemClock>();
+        if (withIdentity)
+        {
+            services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
+                connectionString);
+            services.AddFoundationAspNetCoreIdentityGroundwork();
+        }
+        else
+        {
+            services.AddGroundworkPostgreSqlUnifiedPersistence(connectionString);
+        }
+
+        var provider = services.BuildServiceProvider();
         await provider.ApplyPostgreSqlGroundworkSchemaAsync(connectionString);
         // A bare provider has no host lifecycle; drive runtime admission after explicit schema application.
         await provider.InitializeGroundworkStoreAsync();
@@ -59,9 +75,9 @@ public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixtur
         // One provider instance backs everything.
         Assert.Same(store1, store2);
 
-        // Runtime, IAM, secrets and distributed-runtime lanes resolve from the standalone unified registration.
+        // Runtime, secrets and distributed-runtime lanes resolve from the standalone unified registration.
         Assert.NotNull(provider.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore>());
-        Assert.NotNull(provider.GetRequiredService<IUserStore>());
+        Assert.Null(provider.GetService<IUserStore>());
         Assert.NotNull(provider.GetRequiredService<ISecretRepository>());
         Assert.NotNull(provider.GetRequiredService<IExecutionPlacementStore>());
 
@@ -69,6 +85,43 @@ public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixtur
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>());
+        Assert.NotNull(provider.GetRequiredService<IStudioPreferenceStore>());
+        Assert.NotNull(provider.GetRequiredService<ISecretRepository>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowRunHealthDataSource>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowPortfolioDataSource>());
+    }
+
+    [SkippableFact]
+    public async Task Studio_preferences_round_trip_with_cas_on_postgresql()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+
+        await using var provider = await BuildHostAsync();
+        await using var scope = provider.CreateAsyncScope();
+        var preferences = scope.ServiceProvider.GetRequiredService<IStudioPreferenceStore>();
+        var key = new StudioPreferenceKey("user-1", "tenant-1", "studio-1", "dashboard");
+        using var value = JsonDocument.Parse("{\"refreshIntervalMinutes\":5}");
+
+        var created = await preferences.WriteAsync(key, new(1, value.RootElement.Clone()), StudioPreferenceWriteCondition.MustNotExist, DateTimeOffset.UtcNow);
+        var stale = await preferences.WriteAsync(key, new(1, value.RootElement.Clone()), StudioPreferenceWriteCondition.MustNotExist, DateTimeOffset.UtcNow);
+
+        Assert.Equal(StudioPreferenceStoreWriteStatus.Saved, created.Status);
+        Assert.Equal("rev-1", created.Document!.Revision);
+        Assert.Equal(StudioPreferenceStoreWriteStatus.Conflict, stale.Status);
+        Assert.Equal("rev-1", (await preferences.FindAsync(key))!.Revision);
+    }
+
+    [SkippableFact]
+    public async Task Explicit_identity_schema_and_feature_admit_and_resolve_on_the_unified_PostgreSQL_target()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+
+        await using var provider = await BuildHostAsync(withIdentity: true);
+        await using var scope = provider.CreateAsyncScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
+        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
+            provider.GetRequiredService<global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource>());
     }
 
     [SkippableFact]

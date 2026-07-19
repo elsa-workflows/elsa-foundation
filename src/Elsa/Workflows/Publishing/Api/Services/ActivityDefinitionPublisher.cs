@@ -7,6 +7,7 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Constants;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
@@ -90,13 +91,13 @@ public sealed class ActivityDefinitionPublisher(
     IIdentityGenerator identityGenerator,
     TimeProvider timeProvider,
     IActivityPublicationReceiptStore? receiptStore = null,
-    IActivityConstructorRegistry? activityConstructors = null,
+    IEnumerable<IActivityActivationStrategy>? activityActivationStrategies = null,
     IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null) : IActivityDefinitionPublisher
 {
     private readonly IActivityPublicationReceiptStore _receiptStore =
         receiptStore ?? new InMemoryActivityPublicationReceiptStore();
     private readonly ActivityPublicationReviewPolicy _reviewPolicy =
-        new(activityConstructors, storageDrivers);
+        new(activityActivationStrategies, storageDrivers);
 
     public async Task<ActivityPublicationPreflightView> PreflightAsync(
         PreflightActivityDefinitionPublicationRequest request,
@@ -832,6 +833,7 @@ public sealed class ActivityDefinitionPublisher(
             DefinitionId = definition.Id,
             Version = version,
             ActivityTypeKey = definition.ActivityTypeKey,
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
             SourceDraftId = draft.Id,
             SourceVersionId = draft.SourceVersionId,
             Contract = draft.State.Contract,

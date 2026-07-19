@@ -17,7 +17,14 @@ internal sealed class Picker(ISecretManager secretManager) : ElsaEndpoint<Secret
 
     public override async Task HandleAsync(SecretPickerRequest request, CancellationToken cancellationToken)
     {
-        var page = await secretManager.ListAsync(new SecretQuery
+        var tenantId = SecretEndpointTenant.Resolve(User);
+        if (tenantId is null)
+        {
+            await Send.ForbiddenAsync(cancellationToken);
+            return;
+        }
+
+        var page = await secretManager.ListAsync(tenantId, new SecretQuery
         {
             Search = request.Search,
             TypeNames = request.TypeNames,

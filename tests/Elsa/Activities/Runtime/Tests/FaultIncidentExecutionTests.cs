@@ -1,13 +1,13 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime;
-using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,13 +31,14 @@ public sealed class FaultIncidentExecutionTests
         await using var provider = NewProvider(["actexec-fault"]);
         var executable = NewExecutable("Boom!");
 
-        // The agent must accept and drain without the FaultActivityException propagating to the caller.
+        // The agent must accept and drain without fault control flow propagating to the caller.
         await ExecuteAsync(provider, executable);
 
         var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
         var faultState = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-fault");
         Assert.Equal(ActivityExecutionStatus.Faulted, faultState.Status);
-        Assert.Equal("ActivityFaulted", faultState.SubStatus);
+        Assert.Equal("ActivityReturnedFault", faultState.SubStatus);
+        Assert.Equal("workflow.fault", faultState.Fault!.Code);
 
         var incidents = await provider.GetRequiredService<IIncidentStateStore>().ListBlockingAsync("wfexec-1");
         var incident = Assert.Single(incidents);
@@ -67,67 +68,19 @@ public sealed class FaultIncidentExecutionTests
         Assert.Equal("The workflow faulted.", incident.Message);
     }
 
-    [Fact]
-    public async Task Missing_consumer_records_recoverable_deployment_incident_without_activity_retry_or_workflow_fault()
-    {
-        await using var provider = NewProvider(["actexec-missing"], registerFaultConstructor: false);
-        var executable = NewMissingConsumerExecutable();
-
-        await ExecuteAsync(provider, executable);
-
-        var state = Assert.Single(await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1"));
-        Assert.Equal(ActivityExecutionStatus.Waiting, state.Status);
-        Assert.Equal(ActivityActivationFailureHandler.IncidentFailureType, state.SubStatus);
-        Assert.Equal(0, state.FaultCount);
-        var incident = Assert.Single(await provider.GetRequiredService<IIncidentStateStore>().ListBlockingAsync("wfexec-1"));
-        Assert.Equal(ActivityActivationFailureHandler.IncidentFailureType, incident.FailureType);
-        Assert.Equal("false", incident.Metadata[ActivityActivationFailureHandler.RetryEligibleMetadataKey]);
-        Assert.Equal("sample.missing", incident.Metadata[ActivityActivationFailureHandler.ConsumerKeyMetadataKey]);
-        var workflow = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
-        Assert.Equal(WorkflowExecutionStatus.Running, workflow!.Status);
-        Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-    }
-
-    [Fact]
-    public async Task Missing_storage_driver_records_distinct_recoverable_deployment_incident()
-    {
-        await using var provider = NewProvider(["actexec-driver"], registerFaultConstructor: false, registerStorageFailureConstructor: true);
-        var executable = NewStorageFailureExecutable();
-
-        await ExecuteAsync(provider, executable);
-
-        var state = Assert.Single(await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1"));
-        Assert.Equal(ActivityExecutionStatus.Waiting, state.Status);
-        Assert.Equal(0, state.FaultCount);
-        var incident = Assert.Single(await provider.GetRequiredService<IIncidentStateStore>().ListBlockingAsync("wfexec-1"));
-        Assert.Equal(ActivityActivationFailureHandler.IncidentFailureType, incident.FailureType);
-        Assert.Equal("sample.external", incident.Metadata[ActivityActivationFailureHandler.StorageDriverKeyMetadataKey]);
-        Assert.Equal(RuntimeActivationCapabilityKind.DurableValueStorageDriver.ToString(), incident.Metadata[ActivityActivationFailureHandler.CapabilityKindMetadataKey]);
-        Assert.False(incident.Metadata.ContainsKey(ActivityActivationFailureHandler.ConsumerKeyMetadataKey));
-        Assert.Equal(WorkflowExecutionStatus.Running, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1"))!.Status);
-        Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-    }
-
-    private ServiceProvider NewProvider(
-        IEnumerable<string> activityExecutionIds,
-        bool registerFaultConstructor = true,
-        bool registerStorageFailureConstructor = false)
+    private ServiceProvider NewProvider(IEnumerable<string> activityExecutionIds)
     {
         var services = new ServiceCollection();
-        if (registerFaultConstructor)
-            services.AddSingleton<IActivityConstructor, FaultActivityConstructor>();
-        if (registerStorageFailureConstructor)
-            services.AddSingleton<IActivityConstructor, StorageFailureActivityConstructor>();
         services.AddSingleton<IRuntimeExecutionIdGenerator>(new DeterministicRuntimeExecutionIdGenerator(activityExecutionIds));
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
+        services.AddSingleton<IActivityActivator, FaultActivityActivator>();
 
         return services.BuildServiceProvider();
     }
 
     private async Task ExecuteAsync(ServiceProvider provider, WorkflowExecutable executable)
     {
-        await ActivityConstructorTestHost.InitializeAsync(provider);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var agent = await provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest("wfexec-1"));
@@ -140,23 +93,39 @@ public sealed class FaultIncidentExecutionTests
 
     private WorkflowExecutable NewExecutable(string? message)
     {
-        var inputBindings = new Dictionary<string, RuntimeInputBinding>();
-        if (message is not null)
-            inputBindings["Message"] = new RuntimeInputBinding(
-                inputName: "Message",
+        var stringType = new ValueTypeDescriptor("String");
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            ["message"] = new RuntimeInputBinding(
+                inputKey: "message",
+                targetType: stringType,
+                effectivePolicy: ValueProtectionPolicy.InstanceInline,
                 source: RuntimeInputBindingSource.Literal,
-                literalValue: JsonSerializer.SerializeToElement(message),
-                metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String" });
+                literal: message is null
+                    ? ValueEnvelope.Null(stringType, ValueProtectionPolicy.InstanceInline)
+                    : ValueEnvelope.Inline(stringType, JsonSerializer.SerializeToElement(message), ValueProtectionPolicy.InstanceInline))
+        };
+        using var descriptor = JsonDocument.Parse("""{"type":"fault"}""");
+        var contract = new ActivityContract(
+            typeof(Fault).FullName!,
+            "1.0.0",
+            "test/fault",
+            descriptor.RootElement,
+            [new ActivityInputContract("message", nameof(Fault.Message), stringType, false, true, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement("test/fault", typeof(Fault).FullName!));
 
         var root = new ExecutableNode(
             executableNodeId: "node-fault",
             authoredActivityId: "authored-fault",
             activityType: typeof(Fault).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor(FaultActivityConstructor.ConsumerKeyValue, RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new FaultDescriptor())),
+            descriptorType: "test/fault",
+            descriptorPayload: descriptor.RootElement,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: contract);
 
         return new WorkflowExecutable(
             identity: NewIdentity(),
@@ -164,47 +133,6 @@ public sealed class FaultIncidentExecutionTests
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
             compatibilityMetadata: new Dictionary<string, string>());
-    }
-
-    private WorkflowExecutable NewMissingConsumerExecutable()
-    {
-        var root = new ExecutableNode(
-            "node-missing",
-            "authored-missing",
-            "sample.missing",
-            "1.0.0",
-            new RuntimeActivityDescriptor("sample.missing", "1", JsonSerializer.SerializeToElement(new { })),
-            new Dictionary<string, RuntimeInputBinding>(),
-            new Dictionary<string, RuntimeOutputCapture>(),
-            new Dictionary<string, string>());
-        return new WorkflowExecutable(
-            NewIdentity(),
-            root,
-            new Dictionary<string, WorkflowExecutableResumeTarget>(),
-            _now,
-            new Dictionary<string, string>(),
-            [new RuntimeRequirement("sample.missing", "1")]);
-    }
-
-    private WorkflowExecutable NewStorageFailureExecutable()
-    {
-        var root = new ExecutableNode(
-            "node-driver",
-            "authored-driver",
-            "sample.storage-failure",
-            "1.0.0",
-            new RuntimeActivityDescriptor(StorageFailureActivityConstructor.ConsumerKeyValue, "1", JsonSerializer.SerializeToElement(new { })),
-            new Dictionary<string, RuntimeInputBinding>(),
-            new Dictionary<string, RuntimeOutputCapture>(),
-            new Dictionary<string, string>());
-        return new WorkflowExecutable(
-            NewIdentity(),
-            root,
-            new Dictionary<string, WorkflowExecutableResumeTarget>(),
-            _now,
-            new Dictionary<string, string>(),
-            [new RuntimeRequirement(StorageFailureActivityConstructor.ConsumerKeyValue, "1")],
-            [new RuntimeStorageDriverRequirement("sample.external")]);
     }
 
     private WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
@@ -240,49 +168,21 @@ public sealed class FaultIncidentExecutionTests
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
-    private sealed class FaultActivityConstructor : IActivityConstructor<FaultDescriptor>
+    private sealed class FaultActivityActivator : IActivityActivator
     {
-        public static string ConsumerKeyValue => typeof(FaultDescriptor).FullName!;
-        public string ConsumerKey => ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            Construct(new FaultDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(
-            FaultDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationRequest request,
+            CancellationToken cancellationToken = default)
         {
-            var activity = new Fault();
-            if (inputs is not null && inputs.TryGetValue("Message", out var messageInput))
-                activity.Message = (InputArgument<string>)messageInput;
-            return new(activity);
+            var value = request.Inputs.Values["message"];
+            var activity = new Fault
+            {
+                Message = value.Presence == ValuePresence.ExplicitNull
+                    ? null
+                    : value.InlineValue!.Value.GetString()
+            };
+            return ValueTask.FromResult(new ActivityActivationLease(activity));
         }
-    }
-
-    private sealed record FaultDescriptor;
-
-    private sealed class StorageFailureActivity : CodeActivity
-    {
-        protected override void Execute(IActivityExecutionContext context) =>
-            throw new RuntimeDurableValueStorageDriverNotFoundException("sample.external");
-    }
-
-    private sealed class StorageFailureActivityConstructor : IActivityConstructor<object>
-    {
-        public const string ConsumerKeyValue = "sample.storage-failure";
-        public string ConsumerKey => ConsumerKeyValue;
-
-        public ValueTask<IActivity> Construct(
-            object descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) => new(new StorageFailureActivity());
     }
 
     private sealed class DeterministicRuntimeExecutionIdGenerator(IEnumerable<string> activityExecutionIds) : IRuntimeExecutionIdGenerator

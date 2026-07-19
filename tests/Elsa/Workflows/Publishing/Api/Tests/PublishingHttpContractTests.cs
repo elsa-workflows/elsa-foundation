@@ -232,7 +232,7 @@ public sealed class PublishingHttpContractTests
             new InMemoryWorkflowExecutableSourceReferenceStore(),
             new InMemoryWorkflowExecutableStore(),
             new InMemoryExecutableActivityTemplateStore(),
-            new ActivityConstructorRegistry(),
+            [],
             new RuntimeDurableValueStorageDriverRegistry([]),
             TimeProvider.System);
         var handler = new RunRuntimeRequirementPreflightRequestHandler(service);

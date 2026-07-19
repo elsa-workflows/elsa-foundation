@@ -16,9 +16,9 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
 /// Pins that the WorkflowsDesign Sqlite migration chain applies cleanly, end to end, on a fresh
-/// database — Initial → AddWorkflowDefinitionSoftDelete → DropWorkflowDefinitionDraftValidations —
-/// and that the <c>WorkflowDefinitionDraftValidations</c> table (dropped by the last migration,
-/// since validation errors became derived state) is absent afterwards.
+/// database — Initial → AddWorkflowDefinitionSoftDelete → DropWorkflowDefinitionDraftValidations →
+/// AddWorkflowDefinitionSourceOwnership — and that the <c>WorkflowDefinitionDraftValidations</c>
+/// table (dropped mid-chain, since validation errors became derived state) is absent afterwards.
 /// </summary>
 /// <remarks>
 /// Deliberately a standalone fixture: <c>WorkflowsDesignTestHost</c> uses <c>EnsureCreated</c> (which
@@ -46,13 +46,14 @@ public sealed class MigrationSmokeTests
 
         using var ctx = new WorkflowsDesignDbContext(options, provider);
 
-        // Applies all three migrations, in order, on the fresh in-memory database.
+        // Applies the full migration chain, in order, on the fresh in-memory database.
         var applied = ctx.Database.GetMigrations().ToArray();
         var expected = new[]
         {
             "20260529114555_Initial",
             "20260618012500_AddWorkflowDefinitionSoftDelete",
             "20260705185806_DropWorkflowDefinitionDraftValidations",
+            "20260719080000_AddWorkflowDefinitionSourceOwnership",
         };
         Assert.Equal(expected, applied);
 
@@ -94,6 +95,9 @@ public sealed class MigrationSmokeTests
         EnsureHistoryTable(connection);
         StampHistory(connection, "20260529114555_Initial");
         StampHistory(connection, "20260618012500_AddWorkflowDefinitionSoftDelete");
+        // Stamped too: EnsureCreated already built the current model (IsSourceOwned included), so the
+        // add-column migration must not re-run — the drop stays the only pending migration.
+        StampHistory(connection, "20260719080000_AddWorkflowDefinitionSourceOwnership");
 
         Assert.False(TableExists(connection, "WorkflowDefinitionDraftValidations"));
 

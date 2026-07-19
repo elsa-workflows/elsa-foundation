@@ -57,10 +57,6 @@ public sealed class GroundworkPersistenceLifetimeTests
             "IGroundworkStoreSessionSource",
             "This interface aliases the same provider-owned static session source; access selection remains an argument to each invocation and is never retained."),
         new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkStoreSessionRegistration.cs",
-            "GroundworkWorkflowExecutionStatePageRouteSource",
-            "Provider startup publishes one immutable admitted physical route; scoped page-query adapters hold all request access and operation state."),
-        new(
             "src/Elsa/Persistence/Groundwork/Sqlite/DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs",
             "SqliteGroundworkDocumentStoreInitializer",
             "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),

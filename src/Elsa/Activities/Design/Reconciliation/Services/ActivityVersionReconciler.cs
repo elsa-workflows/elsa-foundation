@@ -29,8 +29,8 @@ namespace Elsa.Activities.Design.Reconciliation.Services;
 ///    with immutable provenance (including ProvisioningHash).
 /// 4. If <c>(DefinitionId, Version)</c> is already persisted, compute the incoming hash
 ///    and compare to the persisted ProvisioningHash:
-///    - Hashes differ → <see cref="ActivityVersionHashMismatchException"/> (the source is
-///      broken — same logical identity, different content).
+///    - Any hash difference → <see cref="ActivityVersionHashMismatchException"/> (the source
+///      is broken — same logical identity, different content).
 ///    - Hashes match → skip or throw per the <see cref="DuplicateHandling"/> option.
 ///
 /// No per-pass mutating state is carried by any entity in this domain. Source disappearance

@@ -18,87 +18,27 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         string executableNodeId,
         string? schedulingActivityExecutionId = null,
         IReadOnlyDictionary<string, string>? metadata = null,
-        ActivitySchedulingProvenance? schedulingProvenance = null);
+        ActivitySchedulingProvenance? schedulingProvenance = null,
+        LoopIterationScopeRequest? iterationFrame = null);
 
     IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests();
-
-    void CompleteCompositeActivity(IEnumerable<string>? outcomeNames = null);
-
-    bool CompositeCompletionRequested { get; }
-    IReadOnlyCollection<string> CompositeCompletionOutcomeNames { get; }
-
-    void DeferCompositeCompletion();
-
-    bool CompositeCompletionDeferred { get; }
-
-    /// <summary>
-    /// Requests that the whole workflow run end now with a successful outcome, regardless of any remaining
-    /// scheduled work. Used by the <c>Finish</c>/<c>Complete</c> leaf control activity. The engine drains this
-    /// on the leaf execution path and commits a terminal <c>WorkflowCompleted</c> checkpoint in place of the
-    /// usual activity-completed propagation.
-    /// </summary>
-    void FinishWorkflow(IEnumerable<string>? outcomeNames = null);
-
-    bool FinishWorkflowRequested { get; }
-
-    IReadOnlyCollection<string> FinishWorkflowOutcomeNames { get; }
-
-    /// <summary>
-    /// Requests that the workflow instance correlation id be set to <paramref name="correlationId"/>. Used by
-    /// the <c>Correlate</c> leaf control activity. The engine drains this on the leaf execution path and folds
-    /// the new correlation id into the activity-completed checkpoint's workflow-execution state change. A null
-    /// or blank value clears the correlation id.
-    /// </summary>
-    void SetCorrelationId(string? correlationId);
-
-    bool CorrelationIdAssignmentRequested { get; }
-
-    string? RequestedCorrelationId { get; }
-
-    /// <summary>
-    /// Requests that the workflow instance name be set to <paramref name="instanceName"/>. Used by the
-    /// <c>SetName</c> leaf control activity. The engine drains this on the leaf execution path and folds the
-    /// new name into the activity-completed checkpoint's workflow-execution state change (under the
-    /// <see cref="Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.InstanceName"/> system-metadata
-    /// key), mirroring how <see cref="SetCorrelationId"/> persists the correlation id. A null or blank value
-    /// clears the instance name.
-    /// </summary>
-    void SetInstanceName(string? instanceName);
-
-    bool InstanceNameAssignmentRequested { get; }
-
-    string? RequestedInstanceName { get; }
-
-    /// <summary>
-    /// Requests that the workflow output named <paramref name="outputName"/> be set to
-    /// <paramref name="value"/>. Used by the <c>SetOutput</c> leaf control activity. The engine drains this on
-    /// the leaf execution path and folds the value into the activity-completed checkpoint as an
-    /// <see cref="Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OutputName"/>-tagged durable value
-    /// — the same durable/output channel activity outputs use — so the workflow output is durably persisted.
-    /// A blank name is ignored. A later assignment of the same name overwrites the earlier one.
-    /// </summary>
-    void SetWorkflowOutput(string outputName, object? value);
-
-    bool WorkflowOutputAssignmentRequested { get; }
-
-    IReadOnlyDictionary<string, object?> RequestedWorkflowOutputs { get; }
-
-    /// <summary>Records an ordinary activity output by its stable runtime name.</summary>
-    void RecordActivityOutput(string outputName, object? value);
 }
 
 /// <summary>
-/// Additive capability implemented by runtime activity contexts that can stage a cross-execution workflow dispatch.
-/// Keeping this separate from <see cref="IRuntimeActivityExecutionContext"/> preserves compatibility for existing
-/// third-party context implementations while allowing dispatch-aware activities and handlers to require the seam.
+/// Narrow activity-facing capability for staging one cross-execution workflow dispatch.
+/// This is a specialized orchestration command, not a workflow-value or service-location channel.
 /// </summary>
-public interface IWorkflowDispatchStagingContext
+public interface IWorkflowDispatchStager
 {
-    /// <summary>
-    /// Stages one cross-execution workflow dispatch for the activity-completed checkpoint. The runtime commits the
-    /// lifecycle record and start intent atomically with the activity result; activities must never deliver it inline.
-    /// </summary>
     void StageWorkflowDispatch(WorkflowDispatchCheckpointRequest request);
+}
 
-    WorkflowDispatchCheckpointRequest? WorkflowDispatchRequest { get; }
+/// <summary>
+/// Engine-facing side of the workflow-dispatch staging seam.
+/// Requests are isolated by runtime invocation identity because transient activities can be activated in child scopes.
+/// </summary>
+public interface IWorkflowDispatchStagingAccessor
+{
+    void Reset(string workflowExecutionId, string activityExecutionId);
+    WorkflowDispatchCheckpointRequest? TakeWorkflowDispatch(string workflowExecutionId, string activityExecutionId);
 }

@@ -16,10 +16,19 @@ public sealed class GroundworkActivityExecutionHierarchyStore(
     public async ValueTask SaveAsync(ActivityExecutionHierarchyRecord record, CancellationToken cancellationToken = default)
     {
         Validate(record);
-        await SaveDocumentAsync(
-            DocumentId.Compose(record.WorkflowExecutionId, record.ActivityExecutionId),
+        var documentId = DocumentId.Compose(record.WorkflowExecutionId, record.ActivityExecutionId);
+        var existing = await LoadByLogicalIdentityAsync(record.WorkflowExecutionId, record.ActivityExecutionId, cancellationToken);
+        var result = await SaveDocumentAsync(
+            documentId,
             new HierarchyDocument(record.WorkflowExecutionId, record.ExecutionScopeId, record.ActivityExecutionId, record.ExecutionSequence, record),
-            cancellationToken);
+            cancellationToken,
+            expectedVersion: existing?.Version ?? 0);
+        if (result.Status != DocumentStoreWriteStatus.Saved)
+        {
+            if (result.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                await LoadByLogicalIdentityAsync(record.WorkflowExecutionId, record.ActivityExecutionId, cancellationToken);
+            throw new InvalidOperationException($"Groundwork rejected activity execution hierarchy record '{record.ActivityExecutionId}' in workflow execution '{record.WorkflowExecutionId}' with status '{result.Status}'.");
+        }
     }
 
     public async ValueTask<ActivityExecutionHierarchyPage?> ReadPageAsync(ActivityExecutionHierarchyQuery query, CancellationToken cancellationToken = default)
@@ -60,6 +69,26 @@ public sealed class GroundworkActivityExecutionHierarchyStore(
             cancellationToken);
     }
 
+    private async ValueTask<LoadedActivityExecutionHierarchyRecord?> LoadByLogicalIdentityAsync(
+        string workflowExecutionId,
+        string activityExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var envelope = await Store.LoadAsync(DocumentKind, DocumentId.Compose(workflowExecutionId, activityExecutionId), cancellationToken);
+        if (envelope is null)
+            return null;
+
+        var record = Serializer.Deserialize<HierarchyDocument>(envelope).Record;
+        if (!StringComparer.Ordinal.Equals(record.WorkflowExecutionId, workflowExecutionId)
+            || !StringComparer.Ordinal.Equals(record.ActivityExecutionId, activityExecutionId))
+        {
+            throw new InvalidOperationException(
+                $"Groundwork physical document identity collision detected for activity execution hierarchy record '{activityExecutionId}' in workflow execution '{workflowExecutionId}'.");
+        }
+
+        return new LoadedActivityExecutionHierarchyRecord(record, envelope.Version);
+    }
+
     private static void Validate(ActivityExecutionHierarchyRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -75,4 +104,6 @@ public sealed class GroundworkActivityExecutionHierarchyStore(
         string ActivityExecutionId,
         long ExecutionSequence,
         ActivityExecutionHierarchyRecord Record);
+
+    private sealed record LoadedActivityExecutionHierarchyRecord(ActivityExecutionHierarchyRecord Record, long Version);
 }

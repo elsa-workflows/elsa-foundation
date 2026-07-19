@@ -1,12 +1,11 @@
+using System.Text.Json;
 using Elsa.Api.FastEndpoints.Abstractions;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript;
 
-internal sealed class Endpoint(IServiceProvider serviceProvider, ILogger<Endpoint> logger) : ElsaEndpoint<RequestModel>
+internal sealed class Endpoint(IJavaScriptScriptEvaluator evaluator, ILogger<Endpoint> logger) : ElsaEndpoint<RequestModel>
 {
     public override void Configure()
     {
@@ -28,15 +27,9 @@ internal sealed class Endpoint(IServiceProvider serviceProvider, ILogger<Endpoin
 
         try
         {
-            var scriptInput = new InputArgument<string>(
-                new BlockReference(req.Script)
-            );
-            var activity = new Activity(scriptInput);
-            var executionContext = new ScriptExecutionContext(serviceProvider);
-
-            await ((IActivity)activity).ExecuteAsync(executionContext);
-
-            var result = executionContext.Get(activity.Result);
+            var arguments = JsonSerializer.SerializeToElement(new { });
+            var result = await evaluator.EvaluateAsync(
+                new JavaScriptScriptEvaluationRequest(req.Script, arguments, ct));
 
             await Send.ResponseAsync(
                 new { success = true, value = result },

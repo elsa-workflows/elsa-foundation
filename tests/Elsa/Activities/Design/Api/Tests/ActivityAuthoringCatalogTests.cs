@@ -64,8 +64,16 @@ public sealed class ActivityAuthoringCatalogTests
             "ContainerStructure",
             "AuthoringTemplate");
 
-        var input = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
-        AssertProperties(input, "ReferenceKey", "Name", "Type");
+        var inputDescriptor = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
+        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "IsNullable");
+        Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsNullable")!.PropertyType);
+        var inputConstructor = inputDescriptor.GetConstructors().Single();
+        Assert.Equal(14, inputConstructor.GetParameters().Length);
+        var nullability = Assert.Single(inputConstructor.GetParameters(), parameter =>
+            StringComparer.OrdinalIgnoreCase.Equals(parameter.Name, "IsNullable"));
+        Assert.False(nullability.HasDefaultValue);
+        Assert.Contains(inputDescriptor.GetMethods(), method =>
+            method.Name == "Deconstruct" && method.GetParameters().Length == 14);
     }
 
     [Fact]

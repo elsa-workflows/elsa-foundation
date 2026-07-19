@@ -446,6 +446,7 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         string identity,
         IReadOnlyCollection<(string Unit, string DocumentKind, string Table)> units)
     {
+#pragma warning disable GW0001 // preview.57 has no non-obsolete StorageUnit constructor; PhysicalStorage below is authoritative.
         var storageUnits = units.Select(item => new StorageUnit(
             new StorageUnitIdentity(item.Unit),
             item.DocumentKind,
@@ -463,6 +464,7 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.DedicatedDocumentTable(item.Table)))
         }).ToArray();
+#pragma warning restore GW0001
         return new StorageManifest(
             new StorageManifestIdentity(identity),
             new StorageManifestOwner("elsa.tests"),

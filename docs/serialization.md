@@ -84,45 +84,51 @@ must be able to evolve without silently breaking already-suspended workflows. Th
   directly; a version below the kind's minimum-readable boundary, an unrecognized/non-positive version, or a future version throws
   Groundwork's structured `DocumentSchemaVersionException`, naming the kind, stamp, parsed version, and
   supported range — never a silent default-valued hydrate.
-- **Pre-GA is current-only.** `ElsaRuntimeDocumentVersions` sets minimum-readable equal to current for every
-  Runtime kind, and `GroundworkRuntimeDocumentSerializer` passes an empty `IDocumentJsonUpcaster` collection to
-  Groundwork's codec. There is no Elsa upcaster interface, registry, or historical compatibility chain. Older
-  generations are rejected before their content is deserialized.
-- **Groundwork retains the future migration capability.** After a released shape exists, a compatible in-place
-  or rolling upgrade may deliberately retain an older minimum-readable version, contribute explicit Groundwork
-  `IDocumentJsonUpcaster` steps, and keep every supported fixture. Groundwork's codec validates such a chain
-  eagerly at construction. That future composition must be introduced explicitly; it is not active pre-GA.
+- **Clean baseline, with one explicit rolling window.** `ElsaRuntimeDocumentVersions` sets
+  minimum-readable equal to current for every Runtime kind except `executableActivityTemplate`.
+  Workflow executable v6 is a clean baseline that requires explicit input nullability. Executable activity
+  template v2 retains v1 and upcasts the legacy nested runtime descriptor into the split consumer/schema/payload
+  fields used by `ExecutableNode`. There is no Elsa upcaster interface, registry, or generic historical
+  compatibility chain.
+- **Groundwork owns migration capability.** A compatible in-place or rolling upgrade may deliberately retain
+  an older minimum-readable version, contribute explicit Groundwork `IDocumentJsonUpcaster` steps, and keep
+  every supported fixture. Groundwork's codec validates such a chain eagerly at construction. Each supported
+  window must be composed explicitly rather than reintroducing an Elsa-specific codec or registry.
 - **A CI fixture gate freezes the format.** Committed golden fixtures
   (`tests/Elsa/Persistence/Groundwork/Tests/Fixtures/v<n>/<kind>.json`) capture the exact content JSON
   each store writes for a canonical instance. A drift test re-serializes the canonical instance and
   compares it **semantically** (parsed and normalized, so incidental formatting differences are
-  ignored) to the committed current-version fixture. Pre-GA, each kind keeps only that current fixture. Any
-  state-record field add/rename/remove/retype without a
+  ignored) to the committed current-version fixture. Each clean-baseline kind keeps only that current
+  fixture; executable activity templates retain their supported v1 and v2 fixtures. Any state-record field
+  add/rename/remove/retype without a
   version bump fails the drift test.
 
 ### How to change a persisted runtime state record
 
-Before GA, in the same change:
+For a clean-break pre-GA change, in the same change:
 
-1. Bump that kind's current version in `ElsaRuntimeDocumentVersions`; its minimum-readable version advances
-   with it automatically.
+1. Bump that kind's current version in `ElsaRuntimeDocumentVersions`; keep its minimum-readable version at
+   current.
 2. Replace the kind's golden fixture with `Fixtures/v<new>/<kind>.json`; do not retain historical fixtures or
    add an Elsa compatibility shim.
 3. Treat installations carrying the older generation as reset-and-republish upgrades.
 
-After a public release, choose the migration policy explicitly. A compatible in-place or rolling upgrade keeps
-the older minimum-readable boundary, adds Groundwork `IDocumentJsonUpcaster` contributions for every required
-step, and retains every supported historical fixture. An intentionally incompatible change advances the
-minimum-readable boundary and documents the required persistence reset.
+For an explicitly supported compatible in-place or rolling upgrade, keep the older minimum-readable
+boundary, add Groundwork `IDocumentJsonUpcaster` contributions for every required step, and retain every
+supported historical fixture. An intentionally incompatible change advances the minimum-readable boundary
+and documents the required persistence reset. Executable activity template v1-to-v2 is the supported rolling
+window under this rule.
 
 ### Pre-GA clean-baseline reset
 
-Every Runtime document kind currently admits only its current fixture. In particular,
-`workflowExecutable`, `workflowExecutableSourceReference`, and `workflowExecutionState` are current and
-minimum-readable version 4; activity-execution state and inspection documents, scheduler work items, workflow
-trigger bindings, and recurring schedules are current and minimum-readable version 2; unchanged kinds remain
-at version 1. Executable v4 includes the reusable-activity input contract and direct dependency snapshot;
-source-reference v4 includes tenant scope; workflow-execution v4 includes dispatch nesting depth.
+Every Runtime document kind except `executableActivityTemplate` currently admits only its current fixture.
+`workflowExecutable` is current and minimum-readable version 6; input nullability is explicit and required.
+`executableActivityTemplate` is current version 2 and minimum-readable version 1; its identity v1-to-v2
+upcaster normalizes nested runtime descriptors without changing their consumer identity or payload.
+`workflowExecutableSourceReference` and `workflowExecutionState` are current and minimum-readable version 4;
+activity-execution state is version 4; activity-execution inspection, scheduler work items, workflow trigger
+bindings, recurring schedules, and durable timers are version 2; unchanged kinds remain at version 1.
+Source-reference v4 includes tenant scope; workflow-execution v4 includes dispatch nesting depth.
 
 If an installation carries any older Runtime generation, reset the complete Runtime and Publishing Groundwork
 persistence sets atomically while preserving Design and Activities data, then republish workflows before
@@ -200,13 +206,12 @@ scope for this wave — a heavy durable dedup store was explicitly out of scope.
 
 A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Groundwork
 bridge as every other runtime kind — the **`workflowExecutable`** document kind (current and
-minimum-readable version 4 in
+minimum-readable version 6 in
 [`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs)),
 written by
 [`GroundworkWorkflowExecutableStore`](../src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutableStore.cs)
-over the `IWorkflowExecutableStore` seam, with sole supported golden fixture
-`Fixtures/v4/workflowExecutable.json`. Version 4 includes the executable input contract and direct
-dependency snapshot required by reusable-activity compilation. The
+over the `IWorkflowExecutableStore` seam, with one clean v6 golden fixture. Version 6 includes
+the pinned activity contract and explicit input-nullability data required by typed value flow. The
 `InMemory` executable store registered by `WorkflowsPublishingApiFeature` is a `TryAdd` default that the
 Groundwork runtime-persistence feature overrides; when durable persistence is composed, publishing is durable
 by construction. The `PublishWorkflowRequestHandler` saves the compiled artifact and then builds its trigger

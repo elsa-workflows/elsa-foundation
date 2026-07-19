@@ -8,9 +8,9 @@ internal sealed class GroundworkPersistenceReconciler
     private static readonly IReadOnlySet<LocalDuplicateBaseline> Existing644Duplicates =
         new HashSet<LocalDuplicateBaseline>
         {
-            new("iam", "IUserStore", "GroundworkUserStore", "UserDocumentKind"),
-            new("iam", "IRoleStore", "GroundworkRoleStore", "RoleDocumentKind"),
-            new("iam", "IExternalIdentityStore", "GroundworkExternalIdentityStore", "ExternalIdentityDocumentKind")
+            new("iam", "IUserStore", "GroundworkUserStore", "IdentityUserDocumentKind"),
+            new("iam", "IRoleStore", "GroundworkRoleStore", "IdentityRoleDocumentKind"),
+            new("iam", "IExternalIdentityStore", "GroundworkExternalIdentityStore", "ExternalLoginDocumentKind")
         };
 
     private readonly IReadOnlyList<GroundworkPersistenceRowMapping> _mappings;
@@ -360,37 +360,74 @@ internal sealed class GroundworkPersistenceReconciler
         Map("runtime", "IRuntimeCheckpointCommitStore", "runtime-checkpoint-commit", "CheckpointCommitDocumentKind"),
         Map("runtime", "IRuntimeDiagnosticsSettingsStore", "runtime-diagnostics-settings", "RuntimeDiagnosticsSettingsDocumentKind"),
         Map("runtime", "IRuntimePostCommitOutboxStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
+        Map("runtime", "IPostCommitOutboxLookupStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
+        Map("runtime", "IRuntimePostCommitOutboxClaimStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
+        Map("runtime", "IRuntimePostCommitOutboxClaimCompletionStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
+        Map("runtime", "IRuntimePostCommitOutboxClaimCompletionStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IRuntimePostCommitOutboxClaimCompletionStore", "runtime-post-commit-outbox", "WorkflowExecutionStateDocumentKind"),
+        Map("runtime", "IWorkflowDispatchStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchQueryStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchDeleteStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchRetentionRootStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchAdmissionStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchCancellationStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchRedriveStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowDispatchRedriveStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
+        Map("runtime", "IWorkflowTestScopeStore", "runtime-post-commit-outbox", "WorkflowTestScopeDocumentKind"),
+        Map("runtime", "IWorkflowTestScopeAdmissionStore", "runtime-post-commit-outbox", "WorkflowTestScopeDocumentKind"),
+        Map("runtime", "IWorkflowTestScopeAdmissionStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowTestScopeCleanupStore", "runtime-post-commit-outbox", "WorkflowTestScopeDocumentKind"),
+        Map("runtime", "IWorkflowTestScopeCleanupStore", "runtime-post-commit-outbox", "WorkflowDispatchDocumentKind"),
+        Map("runtime", "IWorkflowTestScopeCleanupStore", "runtime-post-commit-outbox", "PostCommitOutboxDocumentKind"),
         Map("runtime", "ISchedulerStateStore", "runtime-scheduler-state", "SchedulerStateDocumentKind"),
         Map("runtime", "IWorkflowExecutableSourceReferenceStore", "runtime-executable-source-reference", "WorkflowExecutableSourceReferenceDocumentKind"),
         Map("runtime", "IWorkflowExecutableSourceReferenceWriter", "runtime-executable-source-reference", "WorkflowExecutableSourceReferenceDocumentKind"),
         Map("runtime", "IWorkflowExecutableStore", "runtime-workflow-executable", "WorkflowExecutableDocumentKind"),
         Map("runtime", "IExecutableActivityTemplateStore", "runtime-workflow-executable", "ExecutableActivityTemplateDocumentKind"),
+        Map("runtime", "IExecutableActivityTemplateStore", "runtime-workflow-executable", "ExecutableActivityTemplateHashClaimDocumentKind"),
         Map("runtime", "IExecutableActivityTemplateWriter", "runtime-workflow-executable", "ExecutableActivityTemplateDocumentKind"),
+        Map("runtime", "IExecutableActivityTemplateWriter", "runtime-workflow-executable", "ExecutableActivityTemplateHashClaimDocumentKind"),
         Map("runtime", "IWorkflowExecutionStateStore", "runtime-workflow-execution-state", "WorkflowExecutionStateDocumentKind"),
         Map("runtime", "IWorkflowHoldStateStore", "runtime-workflow-hold-state", "WorkflowHoldStateDocumentKind"),
         Map("runtime", "IWorkflowSchedulerPoisonStore", "runtime-scheduler-poison", "SchedulerPoisonDocumentKind"),
         Map("runtime", "IWorkflowSchedulerWorkQueue", "runtime-scheduler-work-queue", "SchedulerWorkItemDocumentKind"),
         Map("runtime", "IWorkflowTriggerBindingStore", "runtime-trigger-binding", "WorkflowTriggerBindingDocumentKind"),
         Map("runtime", null, "runtime-publication-projection-state", "PublicationProjectionStateDocumentKind"),
-        Map("iam", "IUserStore", "iam-user", "UserDocumentKind"),
-        Map("iam", "IRoleStore", "iam-role", "RoleDocumentKind"),
-        Map("iam", "IApplicationStore", "iam-application", "ApplicationDocumentKind"),
-        Map("iam", "ICredentialStore", "iam-credential", "CredentialDocumentKind"),
-        Map("iam", "IExternalIdentityStore", "iam-external-identity", "ExternalIdentityDocumentKind"),
-        Map("iam", "IClaimMappingStore", "iam-claim-mapping", "ClaimMappingDocumentKind"),
-        Map("iam", "IProviderConfigurationStore", "iam-provider-configuration-tenant", "ProviderConfigurationTenantDocumentKind"),
-        Map("iam", "IProviderConfigurationStore", "iam-provider-configuration-global", "ProviderConfigurationGlobalDocumentKind"),
-        Map("iam", "ITenantMembershipStore", "iam-tenant-membership", "TenantMembershipDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "IdentityUserDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "UserClaimDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "UserRoleDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "UserTokenDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "UserNameReservationDocumentKind"),
+        Map("iam", "IUserStore", "iam-user", "EmailReservationDocumentKind"),
+        Map("iam", null, "iam-user", "IdentityMutationReceiptDocumentKind"),
+        Map("iam", "IRevisionAwareUserStore", "iam-user", "IdentityUserDocumentKind"),
+        Map("iam", "IRoleStore", "iam-role", "IdentityRoleDocumentKind"),
+        Map("iam", "IRoleStore", "iam-role", "RoleClaimDocumentKind"),
+        Map("iam", "IRoleStore", "iam-role", "RoleNameReservationDocumentKind"),
+        Map("iam", "IRevisionAwareRoleStore", "iam-role", "IdentityRoleDocumentKind"),
+        Map("iam", "IApplicationStore", "iam-application", "IdentityApplicationDocumentKind"),
+        Map("iam", "ICredentialStore", "iam-credential", "IdentityCredentialDocumentKind"),
+        Map("iam", "IExternalIdentityStore", "iam-external-identity", "ExternalLoginDocumentKind"),
+        Map("iam", "IRevisionAwareExternalIdentityStore", "iam-external-identity", "ExternalLoginDocumentKind"),
+        Map("iam", "IClaimMappingStore", "iam-claim-mapping", "IdentityClaimMappingDocumentKind"),
+        Map("iam", "IRevisionAwareClaimMappingStore", "iam-claim-mapping", "IdentityClaimMappingDocumentKind"),
+        Map("iam", "IProviderConfigurationStore", "iam-provider-configuration-tenant", "IdentityProviderConfigurationDocumentKind"),
+        Map("iam", "IProviderConfigurationStore", "iam-provider-configuration-global", "IdentityProviderConfigurationDocumentKind"),
+        Map("iam", "IRevisionAwareProviderConfigurationStore", "iam-provider-configuration-tenant", "IdentityProviderConfigurationDocumentKind"),
+        Map("iam", "IRevisionAwareProviderConfigurationStore", "iam-provider-configuration-global", "IdentityProviderConfigurationDocumentKind"),
+        Map("iam", "ITenantMembershipStore", "iam-tenant-membership", "IdentityTenantMembershipDocumentKind"),
+        Map("iam", "IRevisionAwareTenantMembershipStore", "iam-tenant-membership", "IdentityTenantMembershipDocumentKind"),
         Map("secrets", "ISecretRepository", "secrets-repository", "SecretDocumentKind"),
+        Map("secrets", "IRevisionAwareSecretRepository", "secrets-repository", "SecretDocumentKind"),
+        Map("secrets", "IPagedSecretRepository", "secrets-repository", "SecretDocumentKind"),
         Map("distributed-runtime", "IExecutionPlacementStore", "distributed-execution-placement", "ExecutionPlacementDocumentKind"),
-        Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandTransportDocumentKind")
+        Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandTransportDocumentKind"),
+        Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandStreamHeadDocumentKind")
     ];
 
     private static readonly GroundworkDeferredPersistenceContract[] DeferredContracts =
     [
-        // #676 introduces the in-memory projection and rejects non-empty Groundwork checkpoint changes.
-        // #678 owns the provider-backed storage unit, restart convergence, and permanent ledger row.
-        new("IWorkflowDispatchStore", "#678")
+        new("IExternalPayloadStore", "the host-selected external payload provider")
     ];
 
     private static GroundworkPersistenceRowMapping Map(

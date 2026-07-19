@@ -2,6 +2,7 @@ using CShells.Lifecycle;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Abstractions.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -27,6 +28,7 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.TryAddSingleton<IPermissionPolicyNameFormatter, PermissionPolicyNameFormatter>();
         services.AddRequirePermissionPolicyProvider();
         services.TryAddScoped<IClaimsNormalizer, DefaultClaimsNormalizer>();
+        services.TryAddScoped<IIdentityEmailUniquenessPolicy, OptionsIdentityEmailUniquenessPolicy>();
         services.TryAddScoped<IClaimMappingRuleEvaluator, ClaimMappingRuleEvaluator>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, DefaultIdentityPermissionCatalog>());
         services.TryAddSingleton<IPermissionCatalog, CompositePermissionCatalog>();

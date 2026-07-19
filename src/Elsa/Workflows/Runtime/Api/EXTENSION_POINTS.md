@@ -9,6 +9,8 @@
 | `IWorkflowExecutableStore` | Lists and loads immutable executable artifacts for inspection and execution. Persistence providers replace the in-memory implementation. |
 | `IWorkflowExecutableReferenceStore` | Supplies read-only source provenance. Mutation remains with Publishing operations. |
 | `IWorkflowExecutionStateStore` | Supplies instance, activity-execution, and incident projections and retained executable roots. |
+| `IWorkflowDispatchStore` | Supplies exact detached-dispatch lookup while preserving the original #676 store contract. |
+| `IWorkflowDispatchQueryStore` | Additive bounded query capability used for parent/child/status dispatch inspection; tenant scope comes from provider access context, never request input. |
 | `WorkflowExecutableInspector` | Assembles stable executable and provenance views from Runtime-owned stores. It is registered with `TryAddScoped`, so a host may replace its projection strategy. |
 | `IActivityExecutionInspectionAuthorizationContext` | Separately authorizes structural inspection, redacted value evidence, and raw captured-value payload resolution. Its authorization profile participates in cursor binding. |
 | `IActivityExecutionValuePayloadReader` | Owns the non-disclosing raw-payload resolution result contract. The feature registers only this contract; hosts may replace the implementation without coupling request handlers to the default reader. Resolution fails closed unless the authorization context supplies a stable attributable audit subject. |
@@ -18,7 +20,7 @@
 
 The Runtime API also dispatches through the engine contracts composed by `AddWorkflowRuntime()`. Those execution, checkpoint, actor, trigger, scheduling, retention, and recovery seams are documented in the [Runtime domain extension catalog](../EXTENSION_POINTS.md); this API catalog does not duplicate them.
 
-Optional stimulus/trigger providers are additive contributors to Runtime routing. Executable/reference/execution stores are single-owner persistence ports and must be replaced deliberately.
+Optional stimulus/trigger providers are additive contributors to Runtime routing. Executable/reference/execution/dispatch stores are single-owner persistence ports and must be replaced deliberately. Dispatch endpoints always map records to `WorkflowDispatchView`; replacing a store does not widen the safe API projection.
 
 Activity-execution detail exposes capture truth and stable evidence identities but never embeds raw captured payloads. Clients resolve a payload through the dedicated `value-evidence/{evidenceId}/payload` capability only after the separate payload-resolution authorization and audit path succeeds.
 

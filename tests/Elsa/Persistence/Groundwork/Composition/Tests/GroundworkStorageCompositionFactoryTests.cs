@@ -1,5 +1,7 @@
 using Elsa.Events.Core.Contracts;
+using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Secrets.Persistence.Groundwork;
@@ -79,6 +81,40 @@ public sealed class GroundworkStorageCompositionFactoryTests
         var reverseException = Assert.Throws<InvalidOperationException>(() =>
             reverse.AddGroundworkStorageComposition<RuntimeDeploymentSchema>());
         Assert.Equal(exception.Message, reverseException.Message);
+    }
+
+    [Fact]
+    public void Reference_deployment_schema_selects_identity_only_through_the_identity_variant()
+    {
+        var defaultManifest = new GroundworkAllFeaturesDeploymentSchema().CreateManifest();
+        var identityManifest = new GroundworkAllFeaturesWithIdentityDeploymentSchema().CreateManifest();
+
+        Assert.DoesNotContain(
+            defaultManifest.StorageUnits,
+            unit => unit.Identity.Value == IdentityStorageManifest.IdentityUserDocumentKind);
+        Assert.Contains(
+            identityManifest.StorageUnits,
+            unit => unit.Identity.Value == IdentityStorageManifest.IdentityUserDocumentKind);
+        Assert.Contains(
+            identityManifest.StorageUnits,
+            unit => unit.Identity.Value == ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
+        Assert.True(identityManifest.StorageUnits.Count > defaultManifest.StorageUnits.Count);
+    }
+
+    [Fact]
+    public void Identity_reference_deployment_schema_registers_as_the_exact_runtime_authority()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkStorageComposition<GroundworkAllFeaturesWithIdentityDeploymentSchema>();
+
+        using var provider = services.BuildServiceProvider();
+        var source = provider.GetRequiredService<global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource>();
+        var manifest = source.CreateManifest();
+
+        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(source);
+        Assert.Contains(
+            manifest.StorageUnits,
+            unit => unit.Identity.Value == IdentityStorageManifest.IdentityUserDocumentKind);
     }
 
     [Fact]

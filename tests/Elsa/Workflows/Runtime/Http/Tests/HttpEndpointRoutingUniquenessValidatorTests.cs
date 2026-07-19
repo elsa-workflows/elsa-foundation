@@ -37,7 +37,8 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
 
         await Validator().ValidateAsync(Snapshot(replacement));
 
-        var authoritative = Assert.Single(await _store.ListByStimulusAsync(replacement.StimulusType, replacement.StimulusHash));
+        var authoritative = Assert.Single((await _store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery(replacement.StimulusType, replacement.StimulusHash))).Items);
         Assert.Equal("publication-current", authoritative.PublicationId);
         Assert.Equal("slot-default", authoritative.SlotId);
     }

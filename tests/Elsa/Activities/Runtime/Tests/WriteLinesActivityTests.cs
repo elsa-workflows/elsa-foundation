@@ -1,7 +1,6 @@
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -23,7 +22,7 @@ public sealed class WriteLinesActivityTests : IDisposable
     [Fact]
     public async Task Execute_WritesEachLine_InOrder()
     {
-        var lines = new[] { "first", "second", "third" };
+        var lines = new List<string> { "first", "second", "third" };
         var output = await RunAsync(lines);
 
         Assert.Equal(lines, SplitLines(output));
@@ -43,26 +42,39 @@ public sealed class WriteLinesActivityTests : IDisposable
         var writeLines = new WriteLines();
         var context = NewContext(writeLines);
 
-        var output = await ConsoleCapture.RunAsync(() => ((IActivity)writeLines).ExecuteAsync(context));
+        ActivityTransition? transition = null;
+        var output = await ConsoleCapture.RunAsync(async () => transition = await ((IActivity)writeLines).ExecuteAsync(context.ToActivityExecutionContext()));
 
         Assert.Equal(string.Empty, output);
+        Assert.Equal(ActivityUnit.Value, Assert.IsAssignableFrom<IActivityCompletionTransition<ActivityUnit>>(transition).Result);
     }
 
     public void Dispose() => _serviceProvider.Dispose();
 
-    private async Task<string> RunAsync(ICollection<string> lines)
+    private async Task<string> RunAsync(List<string> lines)
     {
-        var input = new InputArgument<ICollection<string>>(new Variable("Lines", lines));
-        var writeLines = new WriteLines { Lines = input };
+        await using var activation = await TypedActivityTestActivation.ActivateAsync<WriteLines>(
+            _serviceProvider,
+            new Dictionary<string, object?> { [nameof(WriteLines.Lines)] = lines });
+        var writeLines = Assert.IsType<WriteLines>(activation.Activity);
         var context = NewContext(writeLines);
-        context.Set(input.MemoryBlockReference(), lines);
+        ActivityTransition? transition = null;
 
-        return await ConsoleCapture.RunAsync(() => ((IActivity)writeLines).ExecuteAsync(context));
+        var output = await ConsoleCapture.RunAsync(async () => transition = await ((IActivity)writeLines).ExecuteAsync(context.ToActivityExecutionContext()));
+        Assert.Equal(ActivityUnit.Value, Assert.IsAssignableFrom<IActivityCompletionTransition<ActivityUnit>>(transition).Result);
+        Assert.Equal(lines, writeLines.Lines);
+        return output;
     }
 
     private static string[] SplitLines(string output) =>
         output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
-    private SimpleActivityExecutionContext NewContext(IActivity activity) =>
-        new(_serviceProvider, activity, CancellationToken.None);
+    private SimpleActivityExecutionContext NewContext(IActivity activity)
+    {
+        return new(
+            activity,
+            CancellationToken.None,
+            invocationId: "invocation-write-lines",
+            executableNodeId: "node-write-lines");
+    }
 }

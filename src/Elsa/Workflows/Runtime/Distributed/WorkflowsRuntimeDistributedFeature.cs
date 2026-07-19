@@ -4,6 +4,7 @@ using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Options;
@@ -38,7 +39,10 @@ namespace Elsa.Workflows.Runtime.Distributed;
     DependsOn = new object[] { "Tasks" })]
 public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
 {
-    [ManifestSetting(DisplayName = "Node ID", Description = "Stable identity of this node as a placement owner. Defaults to a machine/process-derived value.", Category = "Runtime")]
+    private int _maxExecutionsPerSweep = 100;
+    private int _transportLeaseBatchSize = 100;
+
+    [ManifestSetting(DisplayName = "Node ID", Description = "Stable identity of this node as a placement owner, up to 128 well-formed UTF-16 code units. Defaults to a machine/process-derived value.", Category = "Runtime")]
     public string? NodeId { get; set; }
 
     [ManifestSetting(DisplayName = "Lease duration (seconds)", Description = "Placement and transport visibility lease TTL. A node that stops renewing within this window loses its executions to a survivor.", Category = "Runtime", DefaultValue = "30")]
@@ -51,10 +55,22 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
     public double MaxBackoffIntervalMinutes { get; set; } = 5;
 
     [ManifestSetting(DisplayName = "Max executions per sweep", Description = "Hard cap on executions claimed and re-driven per sweep, bounding dispatch bursts.", Category = "Runtime", DefaultValue = "100")]
-    public int MaxExecutionsPerSweep { get; set; } = 100;
+    public int MaxExecutionsPerSweep
+    {
+        get => _maxExecutionsPerSweep;
+        set => _maxExecutionsPerSweep = DistributedRuntimeQueryLimits.ValidateTake(
+            value,
+            nameof(MaxExecutionsPerSweep));
+    }
 
     [ManifestSetting(DisplayName = "Transport lease batch size", Description = "Maximum transport items leased per owned execution per sweep.", Category = "Runtime", DefaultValue = "100")]
-    public int TransportLeaseBatchSize { get; set; } = 100;
+    public int TransportLeaseBatchSize
+    {
+        get => _transportLeaseBatchSize;
+        set => _transportLeaseBatchSize = DistributedRuntimeQueryLimits.ValidateTake(
+            value,
+            nameof(TransportLeaseBatchSize));
+    }
 
     public void ConfigureServices(IServiceCollection services)
     {
@@ -88,6 +104,8 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         services.TryAddScoped<IExecutionCommandTransport>(sp => new InMemoryExecutionCommandTransport(
             sp.GetRequiredService<InMemoryExecutionCommandTransportState>(),
             sp.GetRequiredService<IPersistenceAccessContextAccessor>()));
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, ProcessLocalDistributionEvidence>());
 
         // Compose the in-process provider as the local-drain engine, then replace the single active actor provider
         // registration with the distributed one (S=2.6 single active provider). Keeping the in-process provider as a
@@ -106,5 +124,11 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
             sp.GetRequiredService<IOptions<ExecutionPlacementPumpOptions>>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ILogger<ExecutionPlacementPumpTask>>()));
+    }
+
+    private sealed class ProcessLocalDistributionEvidence : IWorkflowDispatchDurabilityEvidence
+    {
+        public string Component => WorkflowDispatchDurabilityComponents.Distribution;
+        public WorkflowDispatchDurabilityLevel Level => WorkflowDispatchDurabilityLevel.ProcessLocal;
     }
 }

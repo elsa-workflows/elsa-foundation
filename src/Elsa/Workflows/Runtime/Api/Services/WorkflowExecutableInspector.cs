@@ -129,8 +129,8 @@ public sealed class WorkflowExecutableInspector(
         var compiledInputs = executable.Nodes
             .SelectMany(node => node.InputBindings.Values.Select(binding => new WorkflowExecutableCompiledInputView(
                 node.ExecutableNodeId,
-                Binding(binding, includeSourceDetails: !binding.IsSensitive),
-                binding.IsSensitive ? "redacted" : "allowed")))
+                Binding(binding, includeSourceDetails: !binding.EffectivePolicy.IsSensitive),
+                binding.EffectivePolicy.IsSensitive ? "redacted" : "allowed")))
             .ToArray();
 
         return new WorkflowExecutableInputSourcesView(
@@ -213,7 +213,23 @@ public sealed class WorkflowExecutableInspector(
             node.Structure?.Kind,
             node.InputBindings.Values.OrderBy(binding => binding.InputName, StringComparer.Ordinal).Select(binding => Binding(binding, includeSourceDetails)).ToArray(),
             node.ChildSlots.Select(slot => new WorkflowExecutableChildSlotView(slot.Name, slot.Activities.Select(child => Node(child, includeSourceDetails)).ToArray())).ToArray(),
-            ProjectConnections(node));
+            ProjectConnections(node),
+            node.OutputCaptures.Values
+                .OrderBy(capture => capture.OutputName, StringComparer.Ordinal)
+                .Select(OutputCapture)
+                .ToArray());
+
+    private static WorkflowExecutableOutputCaptureView OutputCapture(RuntimeOutputCapture capture) =>
+        new(
+            capture.OutputName,
+            capture.ValueId,
+            capture.Type,
+            capture.Lifecycle.ToString(),
+            capture.Storage.ToString(),
+            capture.StorageDriverKey,
+            capture.CaptureOnSuccessfulCompletion,
+            capture.ConversionPlan,
+            capture.Metadata);
 
     // The immutable executable structure is activity-owned, so Runtime API does not deserialize it through an
     // activity-module type. It projects only the compact endpoint shape understood by inspection clients and skips
@@ -264,12 +280,13 @@ public sealed class WorkflowExecutableInspector(
             binding.Source.ToString(),
             includeSourceDetails ? Preview(binding) : null,
             binding.InputKey,
-            binding.IsSensitive,
+            binding.EffectivePolicy.IsSensitive,
             includeSourceDetails ? binding.LiteralValue : null,
             includeSourceDetails ? binding.Expression : null,
-            includeSourceDetails ? binding.ActivityOutput : null,
-            includeSourceDetails ? binding.DurableValue : null,
-            includeSourceDetails ? binding.Reference : null,
+            includeSourceDetails ? binding.WorkflowRequest : null,
+            includeSourceDetails ? binding.Variable : null,
+            includeSourceDetails ? binding.ActivityResult : null,
+            includeSourceDetails ? binding.ConversionPlan : null,
             includeSourceDetails ? binding.Metadata : null);
 
     private static WorkflowExecutableInputContractView? InputContract(WorkflowExecutableInputContract? contract) =>
@@ -292,9 +309,9 @@ public sealed class WorkflowExecutableInspector(
         {
             RuntimeInputBindingSource.Literal when binding.LiteralValue is { } value => value.GetRawText(),
             RuntimeInputBindingSource.Expression when binding.Expression is { } expression => $"{expression.Language}: {expression.Expression}",
-            RuntimeInputBindingSource.ActivityOutput => binding.ActivityOutput?.OutputName,
-            RuntimeInputBindingSource.DurableValue => binding.DurableValue?.ValueId,
-            RuntimeInputBindingSource.Reference => binding.Reference?.ReferenceId,
+            RuntimeInputBindingSource.WorkflowRequest => binding.WorkflowRequest?.MemberKey,
+            RuntimeInputBindingSource.VariableRead => binding.Variable?.VariableKey,
+            RuntimeInputBindingSource.ActivityResult => binding.ActivityResult?.ProjectionKey,
             _ => null
         };
         return text is null || text.Length <= PreviewLength ? text : $"{text[..PreviewLength]}…";

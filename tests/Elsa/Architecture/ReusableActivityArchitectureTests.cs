@@ -121,20 +121,26 @@ public sealed class ReusableActivityArchitectureTests
     }
 
     [Fact]
-    public void Runtime_activity_construction_uses_stable_wire_identity_only()
+    public void Runtime_activity_activation_uses_stable_wire_identity_only()
     {
         var descriptor = File.ReadAllText(FullPath(
             "src/Elsa/Activities/Runtime/Core/Models/RuntimeActivityDescriptor.cs"));
-        var constructor = File.ReadAllText(FullPath(
-            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityConstructor.cs"));
+        var activationStrategy = File.ReadAllText(FullPath(
+            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityActivationStrategy.cs"));
+        var activator = File.ReadAllText(FullPath(
+            "src/Elsa/Activities/Runtime/Contracts/IActivityActivator.cs"));
         var executableNode = File.ReadAllText(FullPath(
             "src/Elsa/Workflows/Runtime/Core/Models/ExecutableNode.cs"));
 
         Assert.Contains("ConsumerKey", descriptor, StringComparison.Ordinal);
         Assert.Contains("SchemaVersion", descriptor, StringComparison.Ordinal);
-        Assert.DoesNotContain("DescriptorType", constructor, StringComparison.Ordinal);
-        Assert.DoesNotContain("DescriptorType", executableNode, StringComparison.Ordinal);
-        Assert.DoesNotContain("DescriptorPayload", executableNode, StringComparison.Ordinal);
+        Assert.Contains("IActivityActivationStrategy", activationStrategy, StringComparison.Ordinal);
+        Assert.Contains("RuntimeActivityDescriptor", activationStrategy, StringComparison.Ordinal);
+        Assert.Contains("DescriptorSchemaVersion", executableNode, StringComparison.Ordinal);
+        Assert.Contains("DescriptorPayload", executableNode, StringComparison.Ordinal);
+        Assert.DoesNotContain("AssemblyQualifiedName", activationStrategy, StringComparison.Ordinal);
+        Assert.DoesNotContain("AssemblyQualifiedName", activator, StringComparison.Ordinal);
+        Assert.DoesNotContain("AssemblyQualifiedName", executableNode, StringComparison.Ordinal);
     }
 
     [Fact]

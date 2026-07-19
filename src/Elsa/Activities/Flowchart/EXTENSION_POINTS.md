@@ -2,7 +2,7 @@
 
 ## Scoped execution seam
 
-`FlowchartExecutionEngine` is the activity-owned scoped execution seam. It owns Flowchart runtime state mutation, child scheduling metadata, arrival recording, implicit join evaluation, loop/race scope creation, diagnostics, and deferred composite completion.
+`FlowchartExecutionEngine` is the activity-owned scoped execution seam. It owns Flowchart runtime state mutation, child scheduling metadata, arrival recording, implicit join evaluation, loop/race scope creation, diagnostics, and deferred composite completion. Its durable snapshot is staged as one typed, versioned structural private-state document; it does not patch the activity metadata bag.
 
 The scoped execution model is intentionally not an extension point directly: custom gateway behavior crosses the public policy contract below, and `FlowchartExecutionEngine` remains the authority that validates and applies policy commands.
 
@@ -44,10 +44,11 @@ This module also exposes these activity-owned contracts:
 
 ## Consumed runtime contracts
 
-`Flowchart` implements two runtime parent-callback contracts (`Elsa.Activities.Runtime.Core.Contracts`):
+`Flowchart` implements the engine-only structural execution protocol (`Elsa.Workflows.Runtime.Core.Contracts`):
 
-- `IActivityChildCompletionHandler` — invoked when a child completes; routes through `FlowchartExecutionEngine.OnChildCompletedAsync` to follow outbound connections, evaluate implicit/parallel joins, and complete the composite when no active or waiting paths remain.
-- `IActivityChildFaultHandler` — invoked when a child branch faults (#308); routes through `FlowchartExecutionEngine.OnChildFaultedAsync`. Because a flowchart join requires every inbound branch, a faulted inbound branch can never let the join fire, so the flowchart faults deterministically (surfacing a composite incident) instead of hanging — mirroring the `Parallel` fork/join composite. The faulted leaf keeps its own blocking incident.
+- `IRuntimeStructuralActivity` — starts the flowchart, schedules its initial children, and returns a `RuntimeStructuralContinuation` describing whether the runtime must complete, defer, fault, or cancel the composite.
+- `IRuntimeActivityChildCompletionHandler` — invoked when a child completes; routes through `FlowchartExecutionEngine.OnChildCompletedAsync` to follow outbound connections, evaluate implicit/parallel joins, and return the next continuation decision.
+- `IRuntimeActivityChildFaultHandler` — invoked when a child branch faults (#308); routes through `FlowchartExecutionEngine.OnChildFaultedAsync`. Because a flowchart join requires every inbound branch, a faulted inbound branch can never let the join fire, so the returned decision faults the flowchart deterministically (surfacing a composite incident) instead of hanging — mirroring the `Parallel` fork/join composite. The faulted leaf keeps its own blocking incident.
 
 ## Cross-domain contributions
 

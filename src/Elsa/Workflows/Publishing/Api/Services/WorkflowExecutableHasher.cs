@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
@@ -83,12 +84,63 @@ public sealed class WorkflowExecutableHasher
 
         var payload = input.Value.Source switch
         {
-            RuntimeInputBindingSource.Expression => $"{input.Value.Source}:{input.Value.Expression?.Language}:{input.Value.Expression?.Expression}",
-            _ => input.Value.LiteralValue?.GetRawText()
+            RuntimeInputBindingSource.Literal when input.Value.Literal is not null => FormatEnvelope(input.Value.Literal),
+            RuntimeInputBindingSource.WorkflowRequest =>
+                $"request:{input.Value.WorkflowRequest?.MemberKey}:{input.Value.WorkflowRequest?.Path}",
+            RuntimeInputBindingSource.VariableRead =>
+                $"variable:{input.Value.Variable?.DeclaringScopeId}:{input.Value.Variable?.VariableKey}",
+            RuntimeInputBindingSource.ActivityResult =>
+                $"result:{input.Value.ActivityResult?.ProducerScopeId}:{input.Value.ActivityResult?.ProducerExecutableNodeId}:{input.Value.ActivityResult?.ProjectionKey}:{input.Value.ActivityResult?.IsOptional}",
+            RuntimeInputBindingSource.Expression => FormatExpression(input.Value.Expression),
+            _ => CanonicalJson(input.Value.LiteralValue)
         };
 
-        var sensitivity = input.Value.IsSensitive ? "[sensitive=true]" : string.Empty;
-        return $"{input.Key}={payload}[{metadata}]{sensitivity}";
+        var conversion = input.Value.ConversionPlan is null ? string.Empty : $":conversion={input.Value.ConversionPlan.Fingerprint}";
+        return $"{input.Key}:{FormatType(input.Value.TargetType)}:{FormatPolicy(input.Value.EffectivePolicy)}={payload}[{metadata}]{conversion}";
+    }
+
+    private static string FormatEnvelope(ValueEnvelope envelope)
+    {
+        var externalMetadata = envelope.ExternalReference is null
+            ? string.Empty
+            : string.Join(',', envelope.ExternalReference.Metadata
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .Select(item => $"{item.Key}={item.Value}"));
+        var payload = envelope.InlineValue.HasValue
+            ? CanonicalJson(envelope.InlineValue)
+            : envelope.ExternalReference is null
+                ? string.Empty
+                : $"{envelope.ExternalReference.StorageProfile}:{envelope.ExternalReference.Locator}[{externalMetadata}]";
+
+        return $"{envelope.Presence}:{FormatType(envelope.Type)}:{FormatPolicy(envelope.Policy)}:{payload}";
+    }
+
+    private static string FormatExpression(RuntimeExpressionBinding? expression)
+    {
+        if (expression is null)
+            return string.Empty;
+
+        var metadata = string.Join(',', expression.Metadata
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key}={item.Value}"));
+        var resultType = expression.ResultType is null
+            ? string.Empty
+            : $"{expression.ResultType.Kind}:{expression.ResultType.Id}:{CanonicalJson(expression.ResultType.Schema)}";
+        var parameters = string.Join(',', expression.Parameters
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key}={CanonicalJson(JsonSerializer.SerializeToElement(item.Value, typeof(Elsa.Expressions.Core.Models.ExpressionParameterBinding)))}"));
+        return $"expression:{expression.Language}:{expression.Expression}:{resultType}:{expression.CapabilityProfile}:{CanonicalJson(expression.Options)}:({parameters})[{metadata}]";
+    }
+
+    private static string FormatType(Elsa.Primitives.Models.ValueTypeDescriptor type) =>
+        $"{type.Alias}:{type.CollectionKind}:{type.SchemaVersion}:{CanonicalJson(type.Schema)}";
+
+    private static string FormatPolicy(ValueProtectionPolicy policy)
+    {
+        var metadata = string.Join(',', policy.Metadata
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key}={item.Value}"));
+        return $"{policy.Lifecycle}:{policy.Storage}:{policy.IsSensitive}:{policy.RequiresEncryption}:{policy.RedactionMode}:{policy.RetentionPolicy}[{metadata}]";
     }
 
     private static string FormatOutputCapture(KeyValuePair<string, RuntimeOutputCapture> output)
@@ -98,8 +150,9 @@ public sealed class WorkflowExecutableHasher
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select(item => $"{item.Key}={item.Value}"));
         var schema = capture.Type.Schema?.GetRawText() ?? string.Empty;
+        var conversion = capture.ConversionPlan is null ? string.Empty : $":conversion={capture.ConversionPlan.Fingerprint}";
         return $"{output.Key}={capture.OutputName}:{capture.ValueId}:{capture.Type.Kind}:{capture.Type.Id}:{schema}:" +
-               $"{capture.Lifecycle}:{capture.Storage}:{capture.StorageDriverKey}:{capture.CaptureOnSuccessfulCompletion}[{metadata}]";
+               $"{capture.Lifecycle}:{capture.Storage}:{capture.StorageDriverKey}:{capture.CaptureOnSuccessfulCompletion}[{metadata}]{conversion}";
     }
 
     private static string FormatNode(ExecutableNode node)
@@ -113,12 +166,19 @@ public sealed class WorkflowExecutableHasher
             }));
         var structure = node.Structure is null
             ? string.Empty
-            : $"{node.Structure.Kind}:{node.Structure.SchemaVersion}:{node.Structure.Payload.GetRawText()}";
+            : $"{node.Structure.Kind}:{node.Structure.SchemaVersion}:{CanonicalJson(node.Structure.Payload)}";
+        var intrinsic = node.IntrinsicKind is null
+            ? string.Empty
+            : $"intrinsic:{node.IntrinsicKind}:{node.IntrinsicVariable?.DeclaringScopeId}:{node.IntrinsicVariable?.VariableKey}";
         var outputCaptures = string.Join(',', node.OutputCaptures
             .OrderBy(output => output.Key, StringComparer.Ordinal)
             .Select(FormatOutputCapture));
         var outputCapturePayload = outputCaptures.Length == 0 ? string.Empty : $":outputs={outputCaptures}";
-        return $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{node.Descriptor.Payload.GetRawText()}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}";
+        var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{CanonicalJson(node.Descriptor.Payload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}";
+        var nodeShape = intrinsic.Length == 0 ? legacyShape : $"{legacyShape}:{intrinsic}";
+        return node.ActivityContract is null
+            ? nodeShape
+            : $"{nodeShape}:contract:{node.ActivityContract.SchemaFingerprint}";
     }
 
     private static void WriteBehavioralPayload(
@@ -224,9 +284,28 @@ public sealed class WorkflowExecutableHasher
             foreach (var (key, value) in binding.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal))
                 writer.WriteString(key, value);
             writer.WriteEndObject();
+            if (binding.ConversionPlan is not null)
+                writer.WriteString("conversionPlanFingerprint", binding.ConversionPlan.Fingerprint);
             writer.WriteEndObject();
         }
         writer.WriteEndArray();
+
+        var outputConversionPlans = node.OutputCaptures
+            .Where(output => output.Value.ConversionPlan is not null)
+            .OrderBy(output => output.Key, StringComparer.Ordinal)
+            .ToArray();
+        if (outputConversionPlans.Length > 0)
+        {
+            writer.WriteStartArray("outputConversionPlans");
+            foreach (var (outputName, capture) in outputConversionPlans)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", outputName);
+                writer.WriteString("fingerprint", capture.ConversionPlan!.Fingerprint);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+        }
 
         writer.WriteStartArray("childSlots");
         foreach (var slot in node.ChildSlots.OrderBy(slot => slot.Name, StringComparer.Ordinal))
@@ -267,6 +346,24 @@ public sealed class WorkflowExecutableHasher
                 break;
         }
     }
+
+    private static string CanonicalJson(JsonElement? element)
+    {
+        if (!element.HasValue)
+            return string.Empty;
+
+        var node = JsonNode.Parse(element.Value.GetRawText());
+        return node is null ? "null" : SortNode(node).ToJsonString();
+    }
+
+    private static JsonNode SortNode(JsonNode node) => node switch
+    {
+        JsonObject obj => new JsonObject(obj
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => KeyValuePair.Create(item.Key, item.Value is null ? null : SortNode(item.Value)))),
+        JsonArray array => new JsonArray(array.Select(item => item is null ? null : SortNode(item)).ToArray()),
+        _ => node.DeepClone()
+    };
 
     private static IEnumerable<ExecutableNode> FlattenExecutableActivities(ExecutableNode rootActivity)
     {

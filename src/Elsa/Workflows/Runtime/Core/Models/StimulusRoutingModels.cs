@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -36,7 +37,9 @@ public sealed class StimulusDispatchRequest
         string requestedBy = "runtime.stimulus",
         IReadOnlyDictionary<string, string>? metadata = null,
         IReadOnlyCollection<WorkflowTriggerBinding>? matchedTriggerBindings = null,
-        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null)
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
+        ValueTypeDescriptor? payloadType = null,
+        string? providerId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
@@ -47,6 +50,10 @@ public sealed class StimulusDispatchRequest
 
         if (idempotencyKey is not null && string.IsNullOrWhiteSpace(idempotencyKey))
             throw new ArgumentException("Idempotency key cannot be blank when provided.", nameof(idempotencyKey));
+        if ((payloadType is null) != (providerId is null))
+            throw new ArgumentException("Typed stimulus delivery metadata requires both a payload type and provider ID.");
+        if (providerId is not null && string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("Typed stimulus provider ID cannot be blank.", nameof(providerId));
 
         StimulusType = stimulusType;
         StimulusHash = stimulusHash;
@@ -58,6 +65,8 @@ public sealed class StimulusDispatchRequest
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         MatchedTriggerBindings = matchedTriggerBindings;
         DispatchOptions = dispatchOptions;
+        PayloadType = payloadType;
+        ProviderId = providerId;
     }
 
     public string StimulusType { get; }
@@ -85,10 +94,10 @@ public sealed class StimulusDispatchRequest
     /// The matching start-trigger bindings, when the caller already fetched them for its own purposes (e.g. the
     /// HTTP endpoint middleware fetches the claimant set for its ambiguity guard and per-endpoint options). When
     /// supplied on a start-routing request the router reuses this set instead of issuing its own identical
-    /// <c>ListByStimulusAsync(type, hash)</c> lookup — one durable read per request instead of two. Null means
-    /// the router fetches the set itself (the default for callers that do not pre-resolve it). The set must be
-    /// the complete match for <see cref="StimulusType"/>/<see cref="StimulusHash"/>; a partial set would silently
-    /// under-start.
+    /// <c>ListAllByStimulusAsync(type, hash)</c> traversal — one bounded traversal per request instead of two.
+    /// Null means the router fetches the set itself (the default for callers that do not pre-resolve it). The
+    /// set must be the complete match for <see cref="StimulusType"/>/<see cref="StimulusHash"/>; a partial set
+    /// would silently under-start.
     /// </summary>
     public IReadOnlyCollection<WorkflowTriggerBinding>? MatchedTriggerBindings { get; }
 
@@ -110,6 +119,12 @@ public sealed class StimulusDispatchRequest
     /// options). <c>null</c> ⇒ the dispatchers fall back to <see cref="WorkflowExecutionCommandDispatchOptions.Default"/>.
     /// </remarks>
     public WorkflowExecutionCommandDispatchOptions? DispatchOptions { get; }
+
+    /// <summary>The declared typed payload contract forwarded only to resume delivery validation.</summary>
+    public ValueTypeDescriptor? PayloadType { get; }
+
+    /// <summary>The adapter identity that validated and produced <see cref="Input"/>.</summary>
+    public string? ProviderId { get; }
 
     public IReadOnlyDictionary<string, string> BuildDispatchMetadata()
     {

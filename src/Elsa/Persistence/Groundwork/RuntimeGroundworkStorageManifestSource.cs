@@ -18,7 +18,7 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(ElsaRuntimeStorageManifest.Create());
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
 
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity,
@@ -31,14 +31,29 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 typeof(IActivityExecutionInspectionStore),
                 typeof(IActivityExecutionInspectionWriter),
                 typeof(IWorkflowExecutionStateStore),
+                typeof(IWorkflowTestScopeStore),
+                typeof(IWorkflowTestScopeAdmissionStore),
+                typeof(IWorkflowTestScopeCleanupStore),
                 typeof(IDurableValueStateStore),
                 typeof(ISchedulerStateStore),
                 typeof(IExecutionLivenessStateStore),
+                typeof(IRuntimeRecoveryScanner),
                 typeof(IWorkflowHoldStateStore),
                 typeof(IIncidentStateStore),
                 typeof(IRuntimeCheckpointCommitStore),
                 typeof(IRuntimePostCommitOutboxStore),
+                typeof(IPostCommitOutboxLookupStore),
+                typeof(IRuntimePostCommitOutboxClaimStore),
+                typeof(IRuntimePostCommitOutboxClaimCompletionStore),
+                typeof(IWorkflowDispatchStore),
+                typeof(IWorkflowDispatchQueryStore),
+                typeof(IWorkflowDispatchDeleteStore),
+                typeof(IWorkflowDispatchRetentionRootStore),
+                typeof(IWorkflowDispatchAdmissionStore),
+                typeof(IWorkflowDispatchCancellationStore),
+                typeof(IWorkflowDispatchRedriveStore),
                 typeof(IWorkflowSchedulerWorkQueue),
+                typeof(IWorkflowSchedulerPoisonStore),
                 typeof(IDurableTimerStore),
                 typeof(IWorkflowTriggerBindingStore),
                 typeof(IRecurringTriggerScheduleStore)

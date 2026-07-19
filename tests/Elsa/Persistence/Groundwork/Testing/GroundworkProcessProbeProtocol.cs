@@ -280,11 +280,15 @@ public sealed class GroundworkProcessProbeRunner
             throw new InvalidOperationException("The process-probe result does not match the launch descriptor.");
         if (!string.Equals(result.SchemaVersion, launchDescriptor.ProtocolVersion, StringComparison.Ordinal))
             throw new InvalidOperationException("The process-probe result does not match the protocol version.");
-        if (request.PayloadSha256 is not null &&
+        if (ShouldEchoPayloadDigest(request.Operation) &&
+            request.PayloadSha256 is not null &&
             !string.Equals(result.PayloadSha256, request.PayloadSha256, StringComparison.Ordinal))
             throw new InvalidOperationException("The process-probe result does not match the requested payload digest.");
         return result;
     }
+
+    private static bool ShouldEchoPayloadDigest(GroundworkProcessProbeOperation operation) =>
+        operation is GroundworkProcessProbeOperation.Save;
 
     public static string ResolveHelperAssemblyPath()
     {

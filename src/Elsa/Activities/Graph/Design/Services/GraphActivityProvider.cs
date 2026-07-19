@@ -5,11 +5,13 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Graph.Design.Models;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 
 namespace Elsa.Activities.Graph.Design.Services;
 
@@ -65,7 +67,7 @@ public sealed class GraphActivityProvider(
 
     public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(
         ActivityProviderManifest manifest,
-        ActivityContract contract,
+        DesignActivityContract contract,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -106,6 +108,7 @@ public sealed class GraphActivityProvider(
             .ThenBy(x => x.VersionId, StringComparer.Ordinal)
             .ToArray();
         var descriptorPayload = BuildBoundaryPayload(graph, request.Contract, nodes, directDependencies);
+        var runtimeContract = BuildRuntimeContract(request, descriptorPayload);
         var executableRoot = new ExecutableNode(
             "graph-boundary",
             "graph-boundary",
@@ -114,7 +117,8 @@ public sealed class GraphActivityProvider(
             new RuntimeActivityDescriptor(RuntimeConsumerKey, RuntimeDescriptorSchemaVersion, descriptorPayload),
             new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal),
             new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal),
-            new Dictionary<string, string>(StringComparer.Ordinal));
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            activityContract: runtimeContract);
         var descriptorBytes = Encoding.UTF8.GetByteCount(descriptorPayload.GetRawText());
         var maximumDepth = nodes.Count == 0 ? 0 : nodes.Max(x => x.Depth);
         var measurements = new ActivityResourceMeasurements(
@@ -269,7 +273,7 @@ public sealed class GraphActivityProvider(
 
     private void ValidateGraph(
         ActivityGraphManifest graph,
-        ActivityContract contract,
+        DesignActivityContract contract,
         ActivityDiagnosticSubject subject,
         ICollection<ActivityDiagnostic> diagnostics)
     {
@@ -657,7 +661,7 @@ public sealed class GraphActivityProvider(
 
     private static JsonElement BuildBoundaryPayload(
         ActivityGraphManifest graph,
-        ActivityContract contract,
+        DesignActivityContract contract,
         IReadOnlyList<GraphNode> nodes,
         IReadOnlyList<ActivityResolvedDependency> dependencies)
     {
@@ -717,6 +721,51 @@ public sealed class GraphActivityProvider(
             requiredOutputReferenceKeys = contract.Outputs.Where(x => x.IsRequired).Select(x => x.ReferenceKey).Order(StringComparer.Ordinal).ToArray()
         };
         return Canonicalize(JsonSerializer.SerializeToElement(plan, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    }
+
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract BuildRuntimeContract(
+        ActivityTemplateCompilationRequest request,
+        JsonElement descriptorPayload)
+    {
+        var inputPolicy = ActivityValuePolicy.Default;
+        var resultPolicy = ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result };
+        var inputs = request.Contract.Inputs.Select(input => new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+            input.ReferenceKey,
+            input.Name,
+            new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind),
+            input.IsRequired,
+            input.IsNullable,
+            input.Default is not null,
+            input.Default?.Value,
+            inputPolicy));
+        var projections = request.Contract.Outputs.Select(output => new ActivityResultProjectionContract(
+            output.ReferenceKey,
+            output.ReferenceKey,
+            new ValueTypeDescriptor(output.Type.Alias, output.Type.CollectionKind),
+            output.IsRequired,
+            resultPolicy,
+            output.SourceRepresentation));
+        var outcomes = request.Contract.Outcomes
+            .Where(outcome => outcome.IsEmitted)
+            .Select(outcome => outcome.Name)
+            .ToArray();
+
+        return new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+            request.ActivityTypeKey,
+            request.CandidateVersion,
+            WellKnownRuntimeActivityConsumers.GraphActivity,
+            descriptorPayload,
+            inputs,
+            new ActivityResultContract(
+                new ValueTypeDescriptor("Object"),
+                isRequired: true,
+                resultPolicy,
+                projections,
+                ValueRepresentation.StructuredValue),
+            outcomes,
+            new ActivityActivationRequirement(
+                WellKnownRuntimeActivityConsumers.GraphActivity,
+                WellKnownRuntimeActivityConsumers.GraphActivity));
     }
 
     private static JsonElement ReadCanonicalArray(JsonElement node, string propertyName)

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
@@ -46,8 +47,8 @@ public sealed class GroundworkWorkflowExecutableStoreTests
 
         // Compiled input binding survives.
         var binding = child.InputBindings["to"];
-        Assert.Equal(RuntimeInputBindingSource.DurableValue, binding.Source);
-        Assert.Equal("customerEmail", binding.DurableValue!.ValueId);
+        Assert.Equal(RuntimeInputBindingSource.WorkflowRequest, binding.Source);
+        Assert.Equal("customerEmail", binding.WorkflowRequest!.MemberKey);
 
         // Raw descriptor payload survives as JSON.
         Assert.Equal("Send", found.RootActivity.Descriptor.Payload.GetProperty("kind").GetString());
@@ -87,6 +88,29 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         var found = await store.FindAsync("artifact-1");
         Assert.Equal("1", found!.Identity.ArtifactVersion);
         Assert.Single(await store.ListAsync());
+    }
+
+    [Fact]
+    public async Task SaveAsync_UsesCreateOnlyWrite_And_DoesNotOverwriteConcurrentWinner()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var competingStore = new GroundworkWorkflowExecutableStore(documentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(documentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, request.DocumentKind);
+                Assert.Equal("artifact-1", request.Id);
+                Assert.Equal(0, request.ExpectedVersion);
+                await competingStore.SaveAsync(Executable("artifact-1", artifactVersion: "winner"));
+            }
+        };
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(interceptingStore, GroundworkTestSerialization.Serializer);
+
+        await store.SaveAsync(Executable("artifact-1", artifactVersion: "loser"));
+
+        var winner = await competingStore.FindAsync("artifact-1");
+        Assert.Equal("winner", winner!.Identity.ArtifactVersion);
     }
 
     [Theory]
@@ -355,6 +379,91 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     }
 
     [Fact]
+    public async Task SourceReferenceStore_ScopedList_UsesDeclaredScopeRoute()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IWorkflowExecutableSourceReferenceStore store =
+            new GroundworkWorkflowExecutableSourceReferenceStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                queries);
+
+        await store.ListAsync(scope: WorkflowExecutableReferenceScope.Published);
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, query.DocumentKind);
+        Assert.Equal(ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByScopeQuery, query.QueryIdentity);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(ElsaRuntimeStorageManifest.ScopeField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+        Assert.Equal(WorkflowExecutableReferenceScope.Published.ToString(), Assert.Single(comparison.Values));
+    }
+
+    [Fact]
+    public async Task SourceReferenceStore_DeleteExpiredOrRetired_UsesDeclaredGcRoutes()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IWorkflowExecutableSourceReferenceStore store =
+            new GroundworkWorkflowExecutableSourceReferenceStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                queries);
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+
+        await store.DeleteExpiredOrRetiredAsync(now);
+
+        Assert.Collection(
+            queries.Observed,
+            expired =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.ListExpiredWorkflowExecutableSourceReferencesQuery, expired.QueryIdentity);
+                var comparison = Assert.Single(Assert.Single(expired.Clauses).Comparisons);
+                Assert.Equal(ElsaRuntimeStorageManifest.ExpiresAtField, comparison.Path);
+                Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
+                Assert.Equal(now, DateTimeOffset.Parse(Assert.Single(comparison.Values)!));
+                Assert.Equal(ElsaRuntimeStorageManifest.ExpiresAtField, Assert.Single(expired.Order).Path);
+            },
+            retired =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.ListRetiredWorkflowExecutableSourceReferencesQuery, retired.QueryIdentity);
+                var comparison = Assert.Single(Assert.Single(retired.Clauses).Comparisons);
+                Assert.Equal(ElsaRuntimeStorageManifest.IsRetiredField, comparison.Path);
+                Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+                Assert.Equal(bool.TrueString, Assert.Single(comparison.Values));
+            });
+    }
+
+    [Fact]
+    public async Task SourceReferenceStore_UnreferencedArtifacts_UsesArtifactRoutePerCandidate()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IWorkflowExecutableSourceReferenceStore store =
+            new GroundworkWorkflowExecutableSourceReferenceStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                queries);
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+
+        await store.ListUnreferencedArtifactIdsAsync(["artifact-1", "artifact-1", "artifact-2"], now);
+
+        Assert.Equal(2, queries.Observed.Count);
+        Assert.Equal(
+            new[] { "artifact-1", "artifact-2" },
+            queries.Observed.Select(query => Assert.Single(Assert.Single(query.Clauses).Comparisons).Values.Single()!).ToArray());
+        Assert.All(queries.Observed, query =>
+        {
+            Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, query.DocumentKind);
+            Assert.Equal(ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByArtifactQuery, query.QueryIdentity);
+            var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+            Assert.Equal(ElsaRuntimeStorageManifest.ArtifactIdField, comparison.Path);
+            Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+        });
+    }
+
+    [Fact]
     public void Serialization_Omits_Derived_Node_Projections()
     {
         var json = GroundworkTestSerialization.Serializer.SerializeForComparison(Executable("artifact-1"));
@@ -417,11 +526,12 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["to"] = new(
-                    inputName: "to",
-                    source: RuntimeInputBindingSource.DurableValue,
-                    durableValue: new RuntimeDurableValueReference("customerEmail"))
+                    inputKey: "to",
+                    targetType: new ValueTypeDescriptor("String"),
+                    effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                    source: RuntimeInputBindingSource.WorkflowRequest,
+                    workflowRequest: new RuntimeWorkflowRequestReference("customerEmail"))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string> { ["role"] = "leaf" });
 
         var root = new ExecutableNode(
@@ -431,7 +541,6 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SequenceDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("""{ "kind": "Send" }""")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot("Body", [child])]);
 
@@ -487,6 +596,26 @@ public sealed class GroundworkWorkflowExecutableStoreTests
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
+
+    private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
+    {
+        public List<DocumentQuery> Observed { get; } = [];
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            Observed.Add(query);
+            return Task.FromResult(new DocumentQueryResult([], 0));
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
 
     /// <summary>
     /// Forces the two competing transitions to read the same document version before either CAS write,

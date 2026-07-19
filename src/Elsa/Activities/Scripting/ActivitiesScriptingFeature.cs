@@ -6,10 +6,9 @@ namespace Elsa.Activities.Scripting;
 
 /// <summary>
 /// Scripting activities: <see cref="Activities.RunJavaScript"/>, which executes an authored JavaScript script
-/// through the shared Jint evaluator (W16). The activity type is resolved by the runtime's
-/// <c>ClrActivityConstructor</c> — no per-type DI registration is required — so this feature adds no services of
-/// its own; it declares the dependency on the JavaScript Jint engine feature (which registers
-/// <c>IJavaScriptEvaluator</c>) so composing this feature yields a working <see cref="Activities.RunJavaScript"/>.
+/// through the isolated Jint script evaluator. The activity is transiently activated through DI, which
+/// constructor-injects the evaluator before Runtime hydrates its plain input properties. This feature declares
+/// the JavaScript Jint dependency and otherwise adds no service-locator or workflow-value surface.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]
@@ -25,7 +24,6 @@ public sealed class ActivitiesScriptingFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        // RunJavaScript is a CLR activity constructed by the runtime; the JavaScript evaluator it depends on is
-        // registered by the JavaScriptJintEngine feature declared above. No additional services are required.
+        // The JavaScriptJintEngine feature supplies IJavaScriptScriptEvaluator for constructor injection.
     }
 }

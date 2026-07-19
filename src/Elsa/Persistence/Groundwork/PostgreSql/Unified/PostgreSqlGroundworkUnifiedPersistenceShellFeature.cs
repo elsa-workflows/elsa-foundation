@@ -6,10 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Persistence.Groundwork.PostgreSql.Unified;
 
 /// <summary>
-/// Opt-in host feature that backs all seven shipped Elsa persistence families with one Groundwork
-/// PostgreSQL target: workflow runtime, identity, secrets, distributed runtime, workflows design,
-/// activities design, and workflows publishing. Runtime, design, and domain code remain
-/// provider-neutral.
+/// Opt-in host feature that backs the six provider-level Elsa persistence families with one Groundwork
+/// PostgreSQL target: workflow runtime, secrets, distributed runtime, workflows design, activities design,
+/// and workflows publishing. Identity remains an explicit host selection.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
@@ -18,10 +17,15 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistencePostgreSql",
     DisplayName = "Groundwork PostgreSQL Unified Persistence",
-    Description = "Backs all seven shipped Elsa persistence families with one admission-gated Groundwork PostgreSQL target. Apply schema through Groundwork.Tool before host startup; compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
+    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork PostgreSQL target; Identity remains an explicit host selection. Apply schema through Groundwork.Tool before host startup; compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public sealed class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
+    private readonly ShellFeatureContext _context;
+
+    public PostgreSqlGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context) =>
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+
     public const string DefaultConnectionString = "Host=localhost;Port=5432;Database=elsa;Username=postgres;Password=postgres";
 
     [ManifestSetting(
@@ -40,6 +44,6 @@ public sealed class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellF
     public void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
-        services.AddGroundworkPostgreSqlUnifiedPersistence(connectionString, AutoApplySchemaOnStartup);
+        services.AddGroundworkPostgreSqlUnifiedPersistence(connectionString, _context, AutoApplySchemaOnStartup);
     }
 }

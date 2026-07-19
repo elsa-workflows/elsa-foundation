@@ -167,6 +167,23 @@ public sealed class DurableTimerPumpTaskTests
     }
 
     [Fact]
+    public async Task ConcurrentSweeps_DispatchOneSuccessfulOwner()
+    {
+        var store = new InMemoryDurableTimerStore();
+        await store.SaveAsync(Timer("timer-1", TimeSpan.FromMinutes(-1)));
+        var dispatcher = new FakeDispatcher(Result(BookmarkResumeDispatchStatus.Duplicate));
+        var (first, _) = CreatePump(store, dispatcher);
+        var (second, _) = CreatePump(store, dispatcher);
+
+        await Task.WhenAll(
+            first.ExecuteAsync(CancellationToken.None),
+            second.ExecuteAsync(CancellationToken.None));
+
+        Assert.Single(dispatcher.Requests);
+        Assert.Null(await store.FindAsync("wfexec-1", "timer-1"));
+    }
+
+    [Fact]
     public async Task CurrentSweepInterval_ResetsToBaseline_AfterCleanSweep()
     {
         var store = new ThrowingTimerStore();

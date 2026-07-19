@@ -107,7 +107,11 @@ public sealed class GroundworkExecutionLivenessStateStore(
     internal static string OwnershipStateId(string workflowExecutionId) => $"ownership:{workflowExecutionId}";
 
     private static ExecutionLivenessStateDocument NewDocument(ExecutionLivenessState state) =>
-        new(ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind, state.WorkflowExecutionId, state);
+        new(
+            ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
+            state.WorkflowExecutionId,
+            state.ExecutionLease is not null || state.Heartbeat is not null,
+            state);
 
     private static void ValidateState(ExecutionLivenessState state)
     {
@@ -136,5 +140,6 @@ public sealed class GroundworkExecutionLivenessStateStore(
     internal sealed record ExecutionLivenessStateDocument(
         string Collection,
         string WorkflowExecutionId,
+        bool HasOperationalOwner,
         ExecutionLivenessState State);
 }

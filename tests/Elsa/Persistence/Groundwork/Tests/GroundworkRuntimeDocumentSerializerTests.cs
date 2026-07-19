@@ -36,13 +36,19 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Theory]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind)]
     [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind)]
     [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)]
     public void Version_4_Runtime_Kinds_Use_A_Clean_Baseline(string kind)
     {
         Assert.Equal(4, ElsaRuntimeDocumentVersions.CurrentFor(kind));
         Assert.Equal(4, ElsaRuntimeDocumentVersions.MinimumReadableFor(kind));
+    }
+
+    [Fact]
+    public void WorkflowExecutable_Uses_A_Clean_V6_Baseline()
+    {
+        Assert.Equal(6, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        Assert.Equal(6, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
     }
 
     // --- Read path: current version round-trips ---
@@ -79,13 +85,13 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     public static TheoryData<string, string> UnsupportedHistoricalVersions()
     {
         var data = new TheoryData<string, string>();
-        foreach (var (documentKind, currentVersion) in ElsaRuntimeDocumentVersions.All)
+        foreach (var documentKind in ElsaRuntimeDocumentVersions.All.Keys)
         {
             var minimumReadableVersion = ElsaRuntimeDocumentVersions.MinimumReadableFor(documentKind);
             if (minimumReadableVersion == 1)
                 continue;
 
-            for (var version = 1; version < currentVersion; version++)
+            for (var version = 1; version < minimumReadableVersion; version++)
                 data.Add(documentKind, ElsaRuntimeDocumentVersions.Stamp(version));
         }
 
@@ -134,6 +140,71 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
             "1",
             contentJson)));
         Assert.False(Serializer.IsCurrentVersion(Envelope("2", contentJson)));
+    }
+
+    [Fact]
+    public void ExecutableActivityTemplateV1ToV2Upcaster_rewrites_nested_descriptors_recursively()
+    {
+        var content = JsonNode.Parse("""
+            {
+              "template": {
+                "root": {
+                  "descriptor": {
+                    "consumerKey": "root-consumer",
+                    "schemaVersion": "1",
+                    "payload": { "kind": "root" }
+                  },
+                  "childSlots": [
+                    {
+                      "activities": [
+                        {
+                          "descriptor": {
+                            "consumerKey": "child-consumer",
+                            "schemaVersion": "2",
+                            "payload": { "kind": "child" }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+            """)!.AsObject();
+
+        var result = new ExecutableActivityTemplateDocumentV1ToV2Upcaster().Upcast(content);
+        var root = Assert.IsType<JsonObject>(result["template"]!["root"]);
+        var child = Assert.IsType<JsonObject>(root["childSlots"]![0]!["activities"]![0]);
+
+        Assert.Null(root["descriptor"]);
+        Assert.Equal("root-consumer", root["descriptorType"]!.GetValue<string>());
+        Assert.Equal("1", root["descriptorSchemaVersion"]!.GetValue<string>());
+        Assert.Equal("root", root["descriptorPayload"]!["kind"]!.GetValue<string>());
+        Assert.Null(child["descriptor"]);
+        Assert.Equal("child-consumer", child["descriptorType"]!.GetValue<string>());
+        Assert.Equal("2", child["descriptorSchemaVersion"]!.GetValue<string>());
+        Assert.Equal("child", child["descriptorPayload"]!["kind"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Frozen_v5_codec_rejects_a_v6_workflow_executable_before_deserialization()
+    {
+        const string kind = ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind;
+        var codec = new VersionedJsonDocumentCodec(
+            [new DocumentSchemaVersionPolicy(kind, 5, 5)],
+            [],
+            new DocumentSchemaVersionFormat(
+                (documentKind, schemaVersion) => ElsaRuntimeDocumentVersions.Parse(documentKind, schemaVersion),
+                (_, version) => ElsaRuntimeDocumentVersions.Stamp(version)));
+
+        var exception = Assert.Throws<DocumentSchemaVersionException>(
+            () => codec.Deserialize<JsonObject>(Envelope(kind, "6", "not-json")));
+
+        Assert.Equal(DocumentSchemaVersionFailure.Future, exception.Failure);
+        Assert.Equal(kind, exception.DocumentKind);
+        Assert.Equal(6, exception.ParsedVersion);
+        Assert.Equal(5, exception.CurrentVersion);
+        Assert.Null(exception.InnerException);
     }
 
     private static BookmarkState Bookmark() => new(

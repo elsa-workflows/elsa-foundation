@@ -18,7 +18,14 @@ internal sealed class Update(ISecretManager secretManager) : ElsaEndpoint<Update
 
     public override async Task HandleAsync(UpdateSecretApiRequest request, CancellationToken cancellationToken)
     {
-        var secret = await secretManager.UpdateAsync(request.Name, new UpdateSecretMetadataRequest
+        var tenantId = SecretEndpointTenant.Resolve(User);
+        if (tenantId is null)
+        {
+            await Send.ForbiddenAsync(cancellationToken);
+            return;
+        }
+
+        var secret = await secretManager.UpdateAsync(tenantId, request.Name, new UpdateSecretMetadataRequest
         {
             DisplayName = request.DisplayName,
             Description = request.Description

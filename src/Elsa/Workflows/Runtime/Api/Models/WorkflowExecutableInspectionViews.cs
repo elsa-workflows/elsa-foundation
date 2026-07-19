@@ -190,7 +190,8 @@ public sealed record WorkflowExecutableNodeView(
     string? StructureKind,
     IReadOnlyCollection<WorkflowExecutableInputBindingView> InputBindings,
     IReadOnlyCollection<WorkflowExecutableChildSlotView> ChildSlots,
-    IReadOnlyCollection<WorkflowExecutableConnectionView> Connections);
+    IReadOnlyCollection<WorkflowExecutableConnectionView> Connections,
+    IReadOnlyCollection<WorkflowExecutableOutputCaptureView>? OutputCaptures = null);
 
 public sealed record WorkflowExecutableConnectionEndpointView(string NodeId, string? Port);
 
@@ -206,9 +207,21 @@ public sealed record WorkflowExecutableInputBindingView(
     bool IsSensitive = false,
     JsonElement? LiteralValue = null,
     RuntimeExpressionBinding? Expression = null,
-    RuntimeActivityOutputReference? ActivityOutput = null,
-    RuntimeDurableValueReference? DurableValue = null,
-    RuntimeReferenceValue? Reference = null,
+    RuntimeWorkflowRequestReference? WorkflowRequest = null,
+    RuntimeVariableReference? Variable = null,
+    RuntimeActivityResultReference? ActivityResult = null,
+    ValueConversionPlan? ConversionPlan = null,
+    IReadOnlyDictionary<string, string>? Metadata = null);
+
+public sealed record WorkflowExecutableOutputCaptureView(
+    string OutputName,
+    string ValueId,
+    RuntimeValueTypeDescriptor Type,
+    string Lifecycle,
+    string Storage,
+    string StorageDriverKey,
+    bool CaptureOnSuccessfulCompletion,
+    ValueConversionPlan? ConversionPlan,
     IReadOnlyDictionary<string, string>? Metadata = null);
 
 public sealed record WorkflowExecutableAuthoredInputView(

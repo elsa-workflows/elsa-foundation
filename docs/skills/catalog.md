@@ -212,9 +212,9 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 ### Refresh Generated Maps
 
-**Use when:** map inputs changed, map freshness is uncertain, or a workflow needs current navigation facts.
+**Use when:** the user explicitly requests a map refresh or authorizes one as part of an approved task.
 
-**Workflow:** check `docs/maps/manifest.json` if present. If a map is invoked and relevant inputs are dirty, changed, or freshness is uncertain, run the narrowest map generator that fits the task before using the map as evidence. Use the split scripts from [../../AGENTS.md](../../AGENTS.md#refresh-generated-maps). Review generated findings reports before continuing; if they expose drift that makes the current work unsafe, stop and tell the user. Record findings in reports rather than hand-editing generated facts.
+**Workflow:** check `docs/maps/manifest.json` if present. When the user authorizes a refresh, run the narrowest map generator that fits the task before using the map as evidence. Use the split scripts from [../../AGENTS.md](../../AGENTS.md#refresh-generated-maps). Review generated findings reports before continuing; if they expose drift that makes the current work unsafe, stop and tell the user. Record findings in reports rather than hand-editing generated facts. When no explicit refresh was requested, report freshness concerns without running a generator.
 
 **Output:** refreshed map snapshots and any report-worthy findings.
 

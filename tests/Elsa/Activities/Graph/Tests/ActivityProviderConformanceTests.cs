@@ -2,16 +2,14 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Core.Exceptions;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Runtime.Services;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
+using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 
 namespace Elsa.Activities.Graph.Tests;
 
@@ -50,22 +48,7 @@ public sealed class ActivityProviderConformanceTests
         Assert.Throws<InvalidOperationException>(() => new ActivityTemplateProviderCompilerRegistry([new ScriptProvider(), new DuplicateScriptProvider()]));
     }
 
-    [Fact]
-    public void Constructor_startup_batch_is_atomic_when_a_consumer_schema_is_duplicated()
-    {
-        var registry = new ActivityConstructorRegistry();
-
-        Assert.Throws<DuplicateActivityConstructorException>(() => registry.AddAll([
-            new TestConstructor("sample.unique", "1"),
-            new TestConstructor("sample.duplicate", "1"),
-            new TestConstructor("sample.duplicate", "1")
-        ]));
-
-        Assert.Empty(registry.GetSupportedSchemaVersions("sample.unique"));
-        Assert.Throws<UnknownActivityConsumerException>(() => registry.Resolve("sample.unique", "1"));
-    }
-
-    private static ActivityContract Contract() => new(
+    private static DesignActivityContract Contract() => new(
         "1",
         [new("input", "Input", new TypeReference("string"), false, false, null, "elsa.json")],
         [],
@@ -95,7 +78,7 @@ public sealed class ActivityProviderConformanceTests
 
         public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(
             ActivityProviderManifest manifest,
-            ActivityContract contract,
+            DesignActivityContract contract,
             CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyList<ActivityDiagnostic>>([]);
 
         public ValueTask<ActivityManifestMigration> MigrateAsync(ActivityManifestMigrationRequest request, CancellationToken cancellationToken = default) =>
@@ -128,16 +111,4 @@ public sealed class ActivityProviderConformanceTests
     }
 
     private sealed class DuplicateScriptProvider : ScriptProvider;
-
-    private sealed class TestConstructor(string consumerKey, params string[] schemas) : IActivityConstructor
-    {
-        public string ConsumerKey { get; } = consumerKey;
-        public IReadOnlySet<string> SupportedSchemaVersions { get; } = schemas.ToHashSet(StringComparer.Ordinal);
-
-        public ValueTask<IActivity> ConstructAsync(
-            RuntimeActivityDescriptor descriptor,
-            IReadOnlyDictionary<string, InputArgument> inputs,
-            IReadOnlyDictionary<string, OutputArgument> outputs,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
-    }
 }

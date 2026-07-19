@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -89,6 +90,31 @@ public sealed class ReusableActivityFoundationalContractTests
         Assert.False(Assert.Single(restoredDraft.Contract.Outputs).IsNullable);
         Assert.True(Assert.Single(restoredVersion.Contract.Inputs).IsNullable);
         Assert.False(Assert.Single(restoredVersion.Contract.Outputs).IsNullable);
+    }
+
+    [Fact]
+    public void PublicContractView_RoundTripsOutputSourceRepresentation()
+    {
+        var contract = new ActivityContract(
+            "1",
+            [],
+            [
+                new ActivityOutputContract(
+                    "payload",
+                    "Payload",
+                    new TypeReference("String"),
+                    true,
+                    false,
+                    "elsa.json",
+                    SourceRepresentation: ValueRepresentation.FormattedContent)
+            ],
+            []);
+
+        var view = contract.ToView();
+        var roundTripped = view.ToDomain();
+
+        Assert.Equal(ValueRepresentation.FormattedContent, view.Outputs.Single().SourceRepresentation);
+        Assert.Equal(ValueRepresentation.FormattedContent, roundTripped.Outputs.Single().SourceRepresentation);
     }
 
     [Fact]

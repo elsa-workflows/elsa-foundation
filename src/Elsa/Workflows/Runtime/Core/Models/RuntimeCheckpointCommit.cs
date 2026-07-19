@@ -63,11 +63,44 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections = null,
         IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox = null,
         IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups = null)
+        : this(
+            workflowExecution,
+            scheduler,
+            activityExecutions,
+            bookmarks,
+            durableValues,
+            incidents,
+            operational,
+            workflowDispatches,
+            activityExecutionInspections,
+            postCommitOutbox,
+            activityScopeCleanups,
+            null,
+            null)
+    {
+    }
+
+    public RuntimeCheckpointStateChangeSet(
+        RuntimeStateChange<WorkflowExecutionState>? workflowExecution,
+        RuntimeStateChange<SchedulerState>? scheduler,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> activityExecutions,
+        IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
+        IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
+        IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> operational,
+        IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>>? workflowDispatches,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections,
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox,
+        IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups,
+        IReadOnlyCollection<WorkflowDispatchCancellationRequest>? workflowDispatchCancellations,
+        IReadOnlyCollection<ConsumedSchedulerWorkItem>? consumedSchedulerWorkItems = null)
     {
         activityExecutionInspections ??= [];
         postCommitOutbox ??= [];
         workflowDispatches ??= [];
         activityScopeCleanups ??= [];
+        workflowDispatchCancellations ??= [];
+        consumedSchedulerWorkItems ??= [];
         ValidateStateIdMatches(activityExecutions, state => state.Execution.ActivityExecutionId, "Activity execution state change StateId must match ActivityExecutionState.Execution.ActivityExecutionId.", nameof(activityExecutions));
         ValidateStateIdMatches(bookmarks, state => state.BookmarkId, "Bookmark state change StateId must match BookmarkState.BookmarkId.", nameof(bookmarks));
         ValidateStateIdMatches(activityExecutionInspections, state => state.ActivityExecutionId, "Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.", nameof(activityExecutionInspections));
@@ -88,6 +121,8 @@ public sealed class RuntimeCheckpointStateChangeSet
         PostCommitOutbox = postCommitOutbox;
         ActivityScopeCleanups = activityScopeCleanups;
         WorkflowDispatches = workflowDispatches;
+        WorkflowDispatchCancellations = NormalizeCancellations(workflowDispatchCancellations);
+        ConsumedSchedulerWorkItems = NormalizeConsumedSchedulerWorkItems(consumedSchedulerWorkItems);
     }
 
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
@@ -102,6 +137,17 @@ public sealed class RuntimeCheckpointStateChangeSet
 
     /// <summary>Workflow-dispatch lifecycle records applied atomically with their checkpoint and outbox intent.</summary>
     public IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>> WorkflowDispatches { get; }
+
+    /// <summary>Query-independent parent-cancellation requests resolved by the provider at commit time.</summary>
+    public IReadOnlyCollection<WorkflowDispatchCancellationRequest> WorkflowDispatchCancellations { get; }
+
+    /// <summary>
+    /// Claimed scheduler work items to delete inside this checkpoint's atomic unit-of-work (WU-1 / spec 105). Folding the
+    /// claimed item's fence-checked delete here replaces the drainer's separate post-dispatch acknowledgement, so a
+    /// single-commit drain step performs one durable transaction instead of two. Deletion is owner+token fence-checked so
+    /// a stale claimant's commit fails claim-lost rather than deleting successor-owned work.
+    /// </summary>
+    public IReadOnlyCollection<ConsumedSchedulerWorkItem> ConsumedSchedulerWorkItems { get; }
 
     /// <summary>
     /// Pending post-commit outbox items, applied atomically with the rest of the change set. Built by the
@@ -125,7 +171,103 @@ public sealed class RuntimeCheckpointStateChangeSet
             WorkflowDispatches,
             ActivityExecutionInspections,
             postCommitOutbox,
-            ActivityScopeCleanups);
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations,
+            ConsumedSchedulerWorkItems);
+
+    /// <summary>Returns a copy with the supplied workflow-dispatch lifecycle changes.</summary>
+    public RuntimeCheckpointStateChangeSet WithWorkflowDispatches(
+        IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>> workflowDispatches) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            workflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations,
+            ConsumedSchedulerWorkItems);
+
+    /// <summary>Returns a copy with the supplied provider-resolved dispatch cancellation requests.</summary>
+    public RuntimeCheckpointStateChangeSet WithWorkflowDispatchCancellations(
+        IReadOnlyCollection<WorkflowDispatchCancellationRequest> workflowDispatchCancellations) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            WorkflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            workflowDispatchCancellations,
+            ConsumedSchedulerWorkItems);
+
+    /// <summary>Returns a copy with the supplied claimed scheduler work items folded in for atomic consumption.</summary>
+    public RuntimeCheckpointStateChangeSet WithConsumedSchedulerWorkItems(
+        IReadOnlyCollection<ConsumedSchedulerWorkItem> consumedSchedulerWorkItems) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            WorkflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations,
+            consumedSchedulerWorkItems);
+
+    private static IReadOnlyCollection<ConsumedSchedulerWorkItem> NormalizeConsumedSchedulerWorkItems(
+        IReadOnlyCollection<ConsumedSchedulerWorkItem> items)
+    {
+        var normalized = new Dictionary<string, ConsumedSchedulerWorkItem>(StringComparer.Ordinal);
+        foreach (var item in items)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+            ArgumentException.ThrowIfNullOrWhiteSpace(item.WorkflowExecutionId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(item.WorkItemId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(item.ClaimOwnerId);
+            if (normalized.TryGetValue(item.WorkItemId, out var existing) && existing != item)
+            {
+                throw new ArgumentException(
+                    $"Consumed scheduler work item '{item.WorkItemId}' occurs more than once with conflicting fence state.",
+                    nameof(items));
+            }
+            normalized[item.WorkItemId] = item;
+        }
+        return normalized.Values.OrderBy(item => item.WorkItemId, StringComparer.Ordinal).ToArray();
+    }
+
+    private static IReadOnlyCollection<WorkflowDispatchCancellationRequest> NormalizeCancellations(
+        IReadOnlyCollection<WorkflowDispatchCancellationRequest> requests)
+    {
+        var normalized = new Dictionary<string, WorkflowDispatchCancellationRequest>(StringComparer.Ordinal);
+        foreach (var request in requests)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            if (normalized.TryGetValue(request.DispatchId, out var existing) &&
+                !WorkflowDispatchCancellationRequest.Equivalent(existing, request))
+            {
+                throw new ArgumentException(
+                    $"Workflow dispatch cancellation request '{request.DispatchId}' occurs more than once with conflicting state.",
+                    nameof(requests));
+            }
+            normalized[request.DispatchId] = request;
+        }
+        return normalized.Values.OrderBy(request => request.DispatchId, StringComparer.Ordinal).ToArray();
+    }
 
     private static void ValidateStateIdMatches<TState>(
         IReadOnlyCollection<RuntimeStateChange<TState>> changes,
@@ -146,6 +288,8 @@ public sealed record RuntimeStateChange<TState>(
 
 public sealed class RuntimePostCommitIntent
 {
+    public const int MaximumKindLength = 230;
+
     [JsonConstructor]
     public RuntimePostCommitIntent(
         string intentId,
@@ -161,7 +305,7 @@ public sealed class RuntimePostCommitIntent
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        ValidateKind(kind, nameof(kind));
 
         if (dependsOnWaitRegistrationId is not null && string.IsNullOrWhiteSpace(dependsOnWaitRegistrationId))
             throw new ArgumentException("A wait registration dependency cannot be blank.", nameof(dependsOnWaitRegistrationId));
@@ -195,6 +339,17 @@ public sealed class RuntimePostCommitIntent
     public string? DependsOnWaitRegistrationId { get; }
     public RuntimeWaitDependentIntentFailurePolicy? WaitFailurePolicy { get; }
     public bool IsWaitDependent => !string.IsNullOrWhiteSpace(DependsOnWaitRegistrationId);
+
+    internal static void ValidateKind(string kind, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind, parameterName);
+        if (kind.Length > MaximumKindLength)
+        {
+            throw new ArgumentException(
+                $"A runtime post-commit intent kind must be at most {MaximumKindLength} UTF-16 code units.",
+                parameterName);
+        }
+    }
 }
 
 public enum RuntimeWaitDependentIntentFailurePolicy

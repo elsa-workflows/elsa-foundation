@@ -49,7 +49,14 @@ using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
+using Elsa.Attention.Api;
+using Elsa.Modularity.Attention;
+using Elsa.Secrets.Attention;
+using Elsa.Studio.Preferences.Api;
+using Elsa.Studio.Preferences.Core;
+using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Api;
@@ -57,6 +64,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Attention;
+using Elsa.Workflows.Runtime.Tracing;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
@@ -73,6 +82,12 @@ builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange:
 // keys + a seeded well-known admin, while Production hardens to durable stores, a persistent signing key
 // (secret), and a configured initial admin (password supplied as a secret — never committed).
 builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
+// WebApplication.CreateBuilder adds environment variables before these shell files. Re-add the environment and
+// command-line providers after the shell layers so container environment variables override shells.json, while
+// explicit command-line arguments retain the highest precedence.
+builder.Configuration
+    .AddEnvironmentVariables()
+    .AddCommandLine(args);
 var configuration = builder.Configuration;
 
 // Console log streaming is a process-global, host-level diagnostic (not a shell feature): capture is a static tee on
@@ -170,7 +185,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // and enablable via shell configuration.
             typeof(Elsa.Expressions.JavaScript.JavaScriptFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Jint.JintFeature).Assembly,
-            typeof(Elsa.Expressions.JavaScript.Libraries.JavaScriptLibrariesFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature).Assembly,
             typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,
             typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
@@ -250,11 +264,25 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(ApiSecurityFeature).Assembly,
+            typeof(AttentionApiFeature).Assembly,
+            typeof(StudioPreferencesFeature).Assembly,
+            typeof(StudioPreferencesApiFeature).Assembly,
+            typeof(StudioPreferencesGroundworkPersistenceFeature).Assembly,
+            typeof(WorkflowsDashboardFeature).Assembly,
 
             typeof(ModularityApiFeature).Assembly,
+            typeof(ModularityAttentionFeature).Assembly,
+            typeof(SecretsAttentionFeature).Assembly,
+            typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(SqliteStructuredLogsPersistenceShellFeature).Assembly,
-            typeof(OpenTelemetryFeature).Assembly
+            typeof(OpenTelemetryFeature).Assembly,
+
+            // Engine self-instrumentation (MS-9): puts the WorkflowsRuntimeTracing feature in the catalog so it can be
+            // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The host-local
+            // OpenTelemetryEngineTracingBridge feature (below, in WithHostAssemblies) subscribes that source and forwards
+            // the spans into the OpenTelemetry ingestion store so Studio's timing view is populated.
+            typeof(WorkflowsRuntimeTracingFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)

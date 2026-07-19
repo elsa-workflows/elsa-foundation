@@ -12,6 +12,7 @@ namespace Elsa.Secrets.Tests;
 
 public sealed class SecretAuditTests : IDisposable
 {
+    private const string TenantId = "tenant-1";
     private readonly RecordingSecretAuditSink _auditSink = new();
     private readonly ServiceProvider _provider;
     private readonly ISecretManager _manager;
@@ -31,13 +32,14 @@ public sealed class SecretAuditTests : IDisposable
     [Fact]
     public async Task Lifecycle_And_Resolve_Emit_Audit_Records_Without_Values()
     {
-        await _manager.CreateAsync(new CreateSecretRequest { Name = "payments.api", Value = "audit-secret-value" });
-        await _manager.TestAsync("payments.api");
-        await _resolver.ResolveAsync(new SecretReference("payments.api"));
+        await _manager.CreateAsync(TenantId, new CreateSecretRequest { Name = "payments.api", Value = "audit-secret-value" });
+        await _manager.TestAsync(TenantId, "payments.api");
+        await _resolver.ResolveAsync(TenantId, new SecretReference("payments.api"));
 
         Assert.Contains(_auditSink.Records, x => x.Operation == "create" && x.Outcome == "succeeded");
         Assert.Contains(_auditSink.Records, x => x.Operation == "test" && x.Outcome == "succeeded");
         Assert.Contains(_auditSink.Records, x => x.Operation == "resolve" && x.Outcome == "succeeded");
+        Assert.All(_auditSink.Records, x => Assert.Equal(TenantId, x.TenantId));
         Assert.DoesNotContain(_auditSink.Records, x => (x.Reason ?? "").Contains("audit-secret-value", StringComparison.Ordinal));
     }
 
@@ -54,11 +56,11 @@ public sealed class SecretAuditTests : IDisposable
     [Fact]
     public async Task Failed_Operation_Emits_Failed_Audit_Record_Without_Secret_Material()
     {
-        await _manager.CreateAsync(new CreateSecretRequest { Name = "dup.secret", Value = "audit-secret-value" });
+        await _manager.CreateAsync(TenantId, new CreateSecretRequest { Name = "dup.secret", Value = "audit-secret-value" });
         _auditSink.Records.Clear();
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _manager.CreateAsync(new CreateSecretRequest { Name = "dup.secret", Value = "audit-secret-value" }));
+            await _manager.CreateAsync(TenantId, new CreateSecretRequest { Name = "dup.secret", Value = "audit-secret-value" }));
 
         var failure = Assert.Single(_auditSink.Records.Where(x => x.Operation == "create" && x.Outcome == "failed"));
         Assert.Equal("dup.secret", failure.SecretName);

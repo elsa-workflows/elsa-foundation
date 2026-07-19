@@ -14,7 +14,7 @@ Every workload supplies:
 - setup and cleanup rules excluded from timing;
 - exact correctness invariants and deterministic result digest;
 - scale-bearing route and native-plan evidence requirements;
-- same-provider EF oracle operation where one exists;
+- expected EF observable contract where one exists, with real EF execution explicitly owned by #646;
 - relevant Groundwork physical forms to compare;
 - restart/failure preconditions where relevant;
 - provisional acceptance gate or a reviewed workload-specific replacement.
@@ -33,10 +33,35 @@ Timing is invalid until the correctness digest and provider conformance scenario
 | `outbox-drain` | Claim and complete/retry a bounded post-commit batch | One current claim, deterministic due order, stale completion rejected | Post-commit outbox |
 | `due-timer-selection` | Select and advance bounded due timers | Exact due set/order, conditional advancement, no duplicate successful ownership | Durable timers |
 | `recurring-schedule-selection` | Select/advance bounded due recurring schedules | Exact due set/order, publication state consistent, conditional advancement | Recurring schedules, projection state |
-| `iam-normalized-lookup-update` | Tenant-normalized lookup followed by revision-aware update | Tenant-local uniqueness, exact authority, one winner under stale/concurrent update | IAM rows, #644 adapters |
+| `iam-normalized-lookup-update` | Tenant-normalized lookup followed by revision-aware update | Five exact normalized/relationship lookups, current update accepted, stale update rejected, and real provider-native route evidence | IAM rows, #644 adapters |
 | `secret-create-read-list` | Concurrent create, point read, and bounded deterministic list | Exactly one create winner, exact value/version, bounded page and continuation | Secrets repository |
 | `placement-takeover` | Claim, renew, expire, and take over execution placement | One current lease, monotonic version, stale release rejected | Distributed placement |
 | `command-send-lease-ack` | Concurrent send, bounded lease, visibility expiry/re-lease, acknowledgement | Unique identity/sequence, ordered lease, stale ack rejected, no loss after restart | Distributed transport |
+
+The #644 Identity workload definition is versioned in
+[`../workloads/iam-secrets.json`](../workloads/iam-secrets.json) as
+`iam-normalized-lookup-update` v1.1.0. Its provider-neutral correctness handoff executes one canonical user,
+16 noise users, one role, and one user-role link through physical Groundwork Identity storage. It uses input
+fingerprint `5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9` and public result digest
+`32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc`. These hashes define the
+provider-neutral contract; they are not accepted provider evidence. Each provider entry point must capture native
+evidence for the five lookup routes against exactly 100,000 physical records and require one materialized
+candidate. The current Identity shape uses Groundwork physical entity tables. SQLite is mandatory; SQL Server,
+PostgreSQL, and MongoDB use the opt-in external-provider matrix. Spec 095 retains accepted exact-candidate
+Groundwork `preview.60` / Identity manifest v1.0.4 evidence for all four topologies as immutable historical
+provenance. Current execution uses the repository-pinned `preview.64` family and current Identity manifest; no
+historical artifact is linked as an active exact-head pass.
+The committed EF artifact is a non-executed contract baseline only. #646 owns real same-provider EF execution,
+equality, and all timing.
+
+Groundwork PR #88 supplies the generic version-aware codec contract consumed by the current package family.
+Groundwork PR #95 extends the certified provider-neutral keyset continuation introduced in `preview.62` with
+residual predicates over bounded physical routes. Groundwork PR #96 adds the portable substring search keys
+consumed by `preview.63`; Groundwork PR #97 adds provider-native latest-per-key execution consumed by
+`preview.64`. Elsa-specific per-kind version policies, legacy-stamp parsing, JSON
+options, and concrete upcasters remain behind Elsa's provider marker and provider packages so
+core modules remain Groundwork-free. Any codec or manifest change invalidates prior composition fingerprints and
+requires fresh exact-head provider evidence before the workload can feed #646.
 
 FR-030 lists secret create/read and bounded list as one lane; the workload may report point and list operations separately but must return one verdict covering both. Checkpoint bundle sub-operations may also report separately, but the atomic bundle gate cannot be replaced by isolated document timings.
 

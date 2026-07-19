@@ -1,7 +1,9 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Declaration that promotes an execution-local activity output into a declared durable value.
+/// Declaration that promotes an execution-local activity result projection into a declared durable value.
 /// </summary>
 public sealed class RuntimeOutputCapture
 {
@@ -13,7 +15,8 @@ public sealed class RuntimeOutputCapture
         DurableValueStorage storage,
         bool captureOnSuccessfulCompletion,
         IReadOnlyDictionary<string, string>? metadata = null,
-        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json)
+        string storageDriverKey = WellKnownRuntimeDurableValueStorageDrivers.Json,
+        ValueConversionPlan? conversionPlan = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputName);
         ArgumentException.ThrowIfNullOrWhiteSpace(valueId);
@@ -21,9 +24,9 @@ public sealed class RuntimeOutputCapture
 
         if (lifecycle == DurableValueLifecycle.None)
             throw new ArgumentException("Output capture must target a durable value lifecycle.", nameof(lifecycle));
-
         if (storage == DurableValueStorage.None)
             throw new ArgumentException("Output capture must declare a durable storage strategy.", nameof(storage));
+
         ArgumentException.ThrowIfNullOrWhiteSpace(storageDriverKey);
 
         OutputName = outputName;
@@ -34,6 +37,7 @@ public sealed class RuntimeOutputCapture
         CaptureOnSuccessfulCompletion = captureOnSuccessfulCompletion;
         StorageDriverKey = storageDriverKey;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        ConversionPlan = conversionPlan;
     }
 
     public string OutputName { get; }
@@ -44,4 +48,7 @@ public sealed class RuntimeOutputCapture
     public bool CaptureOnSuccessfulCompletion { get; }
     public string StorageDriverKey { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    /// <summary>Null preserves the legacy identity/retyping behavior of artifacts published before conversion plans.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ValueConversionPlan? ConversionPlan { get; }
 }

@@ -2,12 +2,16 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Runtime.Contracts;
+using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Flowchart;
+using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
@@ -16,7 +20,6 @@ using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
 using Elsa.Primitives.Persistence;
-using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
@@ -30,12 +33,16 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
+using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
+using DesignActivityInputContract = Elsa.Activities.Design.Core.Models.ActivityInputContract;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
+using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 using CronActivity = Elsa.Activities.Scheduling.Activities.Cron;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 using TimerActivity = Elsa.Activities.Scheduling.Activities.Timer;
@@ -69,6 +76,7 @@ public sealed class WorkflowExecutableCompilerTests
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
     private readonly ActivityDefinitionVersion _writeLinesActivity = ActivityVersion("activity-write-lines", "Lines", new TypeReference("String", CollectionKind.List));
     private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion("activity-sequence", typeof(SequenceActivity).FullName!);
+    private readonly ActivityDefinitionVersion _flowchartActivity = ActivityVersion("activity-flowchart", typeof(FlowchartActivity).FullName!);
     private readonly ActivityDefinitionVersion _legacyTriggerActivity = LegacyTriggerActivityVersion();
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
 
@@ -96,7 +104,7 @@ public sealed class WorkflowExecutableCompilerTests
     [Fact]
     public async Task Resolves_exact_reusable_version_places_template_and_compiles_expression_default()
     {
-        var contract = new ActivityContract("1", [new ActivityInputContract(
+        var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
             "value", "Value", new TypeReference("Int32"), true,
             false, new("JavaScript", JsonSerializer.SerializeToElement("40 + 2")), "elsa.json")], [new ActivityOutputContract(
             "result", "Result", new TypeReference("Int32"), true, false, "elsa.json")], []);
@@ -107,7 +115,8 @@ public sealed class WorkflowExecutableCompilerTests
             [new ExecutableChildSlot("Graph.Entry", [new ExecutableNode(
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
-                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])]);
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
+            activityContract: BoundaryRuntimeContract(hasValueInput: true));
         var template = new ExecutableActivityTemplate(
             "template-reusable", "hash-reusable", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -118,6 +127,7 @@ public sealed class WorkflowExecutableCompilerTests
             DefinitionId = "definition-reusable",
             Version = "3.2.1",
             ActivityTypeKey = "activity.reusable",
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
             Contract = contract,
             Provider = new("test", "1", JsonSerializer.SerializeToElement(new { })),
             TemplateId = template.TemplateId,
@@ -148,7 +158,7 @@ public sealed class WorkflowExecutableCompilerTests
             new FakeActivityVersionStore([]),
             _activityStructureService,
             TestWellKnownTypeRegistry.Create(),
-            new ReusablePublicationStore(publication),
+            new SinglePublicationStore(publication),
             new ReusableTemplateReader(template),
             new ReusableSourceReader(sourceReference),
             sidecars);
@@ -157,7 +167,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         Assert.Equal("activity.reusable", executable.RootActivity.ActivityType);
         Assert.Matches("^node-[0-9a-f]{64}$", executable.RootActivity.ExecutableNodeId);
-        var binding = executable.RootActivity.InputBindings["Value"];
+        var binding = executable.RootActivity.InputBindings["value"];
         Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
         Assert.Equal("JavaScript", binding.Expression!.Language);
         Assert.Equal("40 + 2", binding.Expression.Expression);
@@ -177,12 +187,79 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task Reusable_output_capture_preserves_a_custom_driver_and_non_serializable_value_through_runtime_completion()
+    public async Task Source_owned_flowchart_publication_compiles_authored_children_as_ordinary_structure()
+    {
+        var root = FlowchartNode("flowchart-0affb8fb", [Node("writeline-1a75fea9", Text("hello"))]);
+        var publication = SourceOwnedPublication(
+            _flowchartActivity,
+            ActivityDefinitionVersionResolutionKind.AuthorableActivity);
+        var compiler = CompilerWithPublication(root, publication, _writeLineActivity, _flowchartActivity);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal("flowchart-0affb8fb", executable.RootActivity.ExecutableNodeId);
+        Assert.Equal(FlowchartActivity.StructureKind, executable.RootActivity.Structure?.Kind);
+        Assert.Equal("writeline-1a75fea9", Assert.Single(executable.RootActivity.ChildSlots).Activities.Single().ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task Legacy_source_owned_sequence_publication_compiles_authored_children_as_ordinary_structure()
+    {
+        var root = SequenceNode("sequence-source-owned", [Node("write-line", Text("hello"))]);
+        var publication = SourceOwnedPublication(
+            _sequenceActivity,
+            ActivityDefinitionVersionResolutionKind.Unspecified);
+        var compiler = CompilerWithPublication(root, publication, _writeLineActivity, _sequenceActivity);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal("sequence-source-owned", executable.RootActivity.ExecutableNodeId);
+        Assert.Equal(SequenceActivity.StructureKind, executable.RootActivity.Structure?.Kind);
+        Assert.Equal("write-line", Assert.Single(executable.RootActivity.ChildSlots).Activities.Single().ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task Reusable_template_boundary_with_authored_children_remains_rejected()
+    {
+        var publication = new ActivityDefinitionVersionPublication
+        {
+            Id = "version-reusable-with-authored-children",
+            DefinitionVersionId = "version-reusable-with-authored-children",
+            DefinitionId = "definition-reusable-with-authored-children",
+            Version = "1.0.0",
+            ActivityTypeKey = "activity.reusable",
+            SourceDraftId = "draft-reusable-with-authored-children",
+            Contract = new DesignActivityContract("1", [], [], []),
+            Provider = new("test", "1", JsonSerializer.SerializeToElement(new { })),
+            TemplateId = "template-reusable-with-authored-children",
+            TemplateHash = "hash-reusable-with-authored-children",
+            SourceReferenceId = "source-reusable-with-authored-children",
+            ProviderFingerprint = "fingerprint",
+            DirectDependencyCount = 0,
+            ClosedTemplateCount = 0,
+            RuntimeRequirements = []
+        };
+        var root = SequenceNode(
+            "use-reusable-with-authored-children",
+            [Node("authored-child", Text("not allowed"))],
+            activityVersionId: publication.DefinitionVersionId);
+        var compiler = CompilerWithPublication(root, publication);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Equal(
+            "Reusable activity node 'use-reusable-with-authored-children' cannot contain authored child activities; its structure is supplied by the exact published activity template.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task Reusable_output_capture_preserves_a_custom_driver_and_persistable_value_through_runtime_completion()
     {
         var driver = new OpaqueOutputStorageDriver();
         var storageDrivers = new RuntimeDurableValueStorageDriverRegistry(
             [new JsonRuntimeDurableValueStorageDriver(), driver]);
-        var contract = new ActivityContract(
+        var contract = new DesignActivityContract(
             "1",
             [],
             [new("result", "Result", new TypeReference("Object"), true, false, driver.DriverKey)],
@@ -203,7 +280,8 @@ public sealed class WorkflowExecutableCompilerTests
             [new ExecutableChildSlot("Graph.Entry", [new ExecutableNode(
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
-                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])]);
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
+            activityContract: BoundaryRuntimeContract(hasValueInput: false));
         var template = new ExecutableActivityTemplate(
             "template-custom", "hash-custom", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -232,7 +310,7 @@ public sealed class WorkflowExecutableCompilerTests
                 "layout-custom", ActivityInvocationOrigin.Empty, template.TemplateHash,
                 [new("local-root", "local-root", "local-root", 0, 0)], [])]));
         var placer = new ActivityTemplatePlacer(
-            new ReusablePublicationStore(publication),
+            new SinglePublicationStore(publication),
             new ReusableTemplateReader(template),
             new ReusableSourceReader(sourceReference),
             new Sha256ActivityPlacementHasher());
@@ -250,7 +328,7 @@ public sealed class WorkflowExecutableCompilerTests
             placed.ResumeTargets,
             DateTimeOffset.UnixEpoch,
             new Dictionary<string, string>());
-        var opaque = new OpaqueOutput(() => { });
+        var opaque = new OpaqueOutput("opaque");
 
         var captured = await CompleteReusableBoundaryAsync(executable, storageDrivers, opaque);
         var projections = await RuntimeInputBindingStateProjection.ProjectAllAsync([captured], storageDrivers);
@@ -275,6 +353,121 @@ public sealed class WorkflowExecutableCompilerTests
         var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
 
         Assert.Equal("pinned-value", executable.RootActivity.Metadata["runtime.pin"]);
+    }
+
+    [Fact]
+    public async Task Metadata_enrichment_preserves_pinned_activity_contracts()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("hello")));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(workflowVersion),
+            new FakeActivityVersionStore([_writeLineActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            metadataEnricher: MetadataEnricher(new FixedMetadataSource("write-one", "runtime.pin", "pinned-value")));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        // The enricher rebuilds every node to merge metadata claims; the rebuild must carry the pinned
+        // activity contract through, or the runtime start handler faults with VF-ACT-001 on dispatch.
+        Assert.Equal("pinned-value", executable.RootActivity.Metadata["runtime.pin"]);
+        Assert.NotNull(executable.RootActivity.ActivityContract);
+    }
+
+    [Fact]
+    public async Task Clr_node_with_unresolvable_type_alias_fails_publication()
+    {
+        var ghost = GhostAliasActivityVersion();
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("write-ghost", ghost.Id, [], []))),
+            new FakeActivityVersionStore([ghost]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-ACT-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("write-ghost", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Test.UnregisteredActivity", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Clr_node_without_a_typed_result_fails_publication()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(ContractlessActivity), TypeAliasConvention.CanonicalAlias(typeof(ContractlessActivity)));
+        var contractless = ContractlessActivityVersion();
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("run-contractless", contractless.Id, [], []))),
+            new FakeActivityVersionStore([contractless]),
+            _activityStructureService,
+            registry);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-ACT-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("run-contractless", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Enrichment_that_drops_pinned_contracts_fails_publication()
+    {
+        // The VF-ACT-001 gate runs on the final tree, so a metadata enricher that rebuilds nodes without
+        // their pinned contracts is caught at publish time instead of poisoning runtime dispatch.
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("hello")));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(workflowVersion),
+            new FakeActivityVersionStore([_writeLineActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            metadataEnricher: new ContractStrippingEnricher());
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-ACT-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("write-one", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Metadata_enrichment_preserves_intrinsic_identity()
+    {
+        var value = new RuntimeInputBinding(
+            WorkflowIntrinsicInputKeys.Value,
+            new ValueTypeDescriptor("System.String"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(
+                new ValueTypeDescriptor("System.String"),
+                JsonSerializer.SerializeToElement("updated"),
+                ValueProtectionPolicy.InstanceInline));
+        var intrinsic = new ExecutableNode(
+            "node-set", "set", "elsa.intrinsic.set", "1.0.0",
+            new RuntimeActivityDescriptor("intrinsic", "1", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding> { [value.InputName] = value },
+            new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference("target", "scope-root"));
+        var root = new ExecutableNode(
+            "root", "root", "test.container", "1.0.0",
+            new RuntimeActivityDescriptor("test.container", "1", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot("Body", [intrinsic])]);
+        var source = new WorkflowExecutableCompileSource(
+            "definition-1", "version-1", "1.0.0",
+            new WorkflowDefinitionState([], null, [], [], null),
+            "WorkflowDefinitionVersion", "version-1", null);
+
+        var enrichment = await MetadataEnricher(new FixedMetadataSource("node-set", "runtime.pin", "pinned-value"))
+            .EnrichCompilationAsync(NewRequest(DateTimeOffset.UtcNow), source, root);
+
+        var enriched = Assert.Single(Assert.Single(enrichment.RootActivity.ChildSlots).Activities);
+        Assert.Equal("pinned-value", enriched.Metadata["runtime.pin"]);
+        Assert.Equal(WorkflowIntrinsicKind.Set, enriched.IntrinsicKind);
+        Assert.Equal("target", enriched.IntrinsicVariable?.VariableKey);
     }
 
     [Fact]
@@ -699,8 +892,8 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.NotNull(expression);
         Assert.Equal("JavaScript", expression!.Language);
         Assert.Equal("\"Hello \" + \"World\"", expression.Expression);
-        Assert.StartsWith("System.String", expression.ResultType?.Id, StringComparison.Ordinal);
-        Assert.StartsWith("System.String", binding.Metadata["typeName"], StringComparison.Ordinal);
+        Assert.Equal("String", expression.ResultType?.Id);
+        Assert.Equal("String", binding.TargetType.Alias);
         Assert.Equal("Text", binding.Metadata["referenceKey"]);
     }
 
@@ -723,15 +916,10 @@ public sealed class WorkflowExecutableCompilerTests
             ArtifactIdPrefix: "artifact-"));
 
         var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
-        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        Assert.Equal(RuntimeInputBindingSource.VariableRead, binding.Source);
         Assert.Null(binding.LiteralValue);
-        var expression = binding.Expression;
-        Assert.NotNull(expression);
-        Assert.Equal("Variable", expression!.Language);
-
-        var parsed = JsonSerializer.Deserialize<JsonElement>(expression.Expression);
-        Assert.Equal("var-counter", parsed.GetProperty("referenceKey").GetString());
-        Assert.Equal("node-sequence", parsed.GetProperty("declaringScopeId").GetString());
+        Assert.Equal("var-counter", binding.Variable?.VariableKey);
+        Assert.Equal("node-sequence", binding.Variable?.DeclaringScopeId);
     }
 
     [Fact]
@@ -750,10 +938,9 @@ public sealed class WorkflowExecutableCompilerTests
             ArtifactIdPrefix: "artifact-"));
 
         var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
-        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
-        Assert.Equal("Variable", binding.Expression!.Language);
-        var parsed = JsonSerializer.Deserialize<JsonElement>(binding.Expression.Expression);
-        Assert.Equal("var-counter", parsed.GetProperty("referenceKey").GetString());
+        Assert.Equal(RuntimeInputBindingSource.VariableRead, binding.Source);
+        Assert.Equal("var-counter", binding.Variable?.VariableKey);
+        Assert.Equal(Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId, binding.Variable?.DeclaringScopeId);
     }
 
     [Fact]
@@ -828,7 +1015,7 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("Text", binding.InputName);
         Assert.Equal("Hello World!", binding.LiteralValue?.GetString());
         Assert.Equal("Text", binding.Metadata["referenceKey"]);
-        Assert.StartsWith("System.String", binding.Metadata["typeName"], StringComparison.Ordinal);
+        Assert.Equal("String", binding.TargetType.Alias);
     }
 
     [Fact]
@@ -848,11 +1035,11 @@ public sealed class WorkflowExecutableCompilerTests
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-"));
 
-        var materialized = await new RuntimeActivityInputMaterializer().MaterializeInputsAsync(executable.RootActivity);
+        var materialized = await MaterializeInputsAsync(executable, "write-hello", now);
 
-        var textInput = Assert.Single(materialized);
-        Assert.Equal("Text", textInput.Name);
-        Assert.Equal("Hello World!", textInput.Value);
+        var textInput = Assert.Single(materialized.Values);
+        Assert.Equal("Text", textInput.Key);
+        Assert.Equal("Hello World!", textInput.Value.InlineValue?.Deserialize<string>());
     }
 
     [Fact]
@@ -873,10 +1060,10 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
         Assert.Equal(JsonValueKind.Array, binding.LiteralValue?.ValueKind);
 
-        var materialized = await new RuntimeActivityInputMaterializer().MaterializeInputsAsync(executable.RootActivity);
+        var materialized = await MaterializeInputsAsync(executable, "write-lines", now);
 
-        var linesInput = Assert.Single(materialized);
-        var lines = Assert.IsAssignableFrom<ICollection<string>>(linesInput.Value);
+        var linesInput = Assert.Single(materialized.Values);
+        var lines = Assert.IsAssignableFrom<ICollection<string>>(linesInput.Value.InlineValue?.Deserialize<string[]>());
         Assert.Equal(["Hello", "World"], lines);
     }
 
@@ -970,11 +1157,11 @@ public sealed class WorkflowExecutableCompilerTests
 
         var structure = executable.RootActivity.Structure;
         Assert.NotNull(structure);
-        var executableStructure = structure!.Payload.Deserialize<SequenceExecutableStructure>(
+        var executableStructure = structure!.Payload.Deserialize<RuntimeVariableStructureProjection>(
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.NotNull(executableStructure);
         var materializedVariable = Assert.Single(executableStructure!.Variables);
-        Assert.Equal("var-counter", materializedVariable.ReferenceKey);
+        Assert.Equal("var-counter", materializedVariable.VariableKey);
         Assert.Equal("Counter", materializedVariable.Name);
     }
 
@@ -1016,6 +1203,20 @@ public sealed class WorkflowExecutableCompilerTests
         await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(NewRequest(now)).AsTask());
     }
 
+    private static ValueTask<ActivityInputSnapshot> MaterializeInputsAsync(
+        WorkflowExecutable executable,
+        string invocationId,
+        DateTimeOffset materializedAt) =>
+        new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create())
+            .MaterializeSnapshotAsync(
+                executable.RootActivity,
+                invocationId,
+                new RuntimeInputBindingResolutionContext(
+                    "workflow-execution-test",
+                    invocationId,
+                    executable: executable),
+                materializedAt);
+
     private static async Task<DurableValueState> CompleteReusableBoundaryAsync(
         WorkflowExecutable executable,
         IRuntimeDurableValueStorageDriverRegistry storageDrivers,
@@ -1043,16 +1244,41 @@ public sealed class WorkflowExecutableCompilerTests
             activityExecutionInspectionWriter: inspectionStore);
 
         await executableStore.SaveAsync(executable);
-        await activityStore.SaveAsync(RuntimeState(boundaryExecutionId, boundary, ActivityExecutionStatus.Running));
+        var boundaryContract = boundary.ActivityContract
+            ?? throw new InvalidOperationException("The reusable boundary must carry its pinned runtime activity contract.");
+        var boundaryState = RuntimeState(boundaryExecutionId, boundary, ActivityExecutionStatus.Running) with
+        {
+            ContractIdentity = new ActivityInvocationContractIdentity(
+                boundaryContract.ActivityTypeKey,
+                boundaryContract.ContractVersion,
+                boundaryContract.SchemaFingerprint),
+            InputSnapshot = new ActivityInputSnapshot(
+                boundaryExecutionId,
+                boundaryContract.SchemaFingerprint,
+                "sha256:reusable-boundary-bindings",
+                new Dictionary<string, ValueEnvelope>(),
+                DateTimeOffset.UtcNow.AddMinutes(-2)),
+            Attempts =
+            [
+                new ActivityAttempt(
+                    $"{boundaryExecutionId}:attempt:1",
+                    boundaryExecutionId,
+                    1,
+                    ActivityAttemptReason.Initial,
+                    DateTimeOffset.UtcNow.AddMinutes(-2),
+                    DateTimeOffset.UtcNow.AddMinutes(-1),
+                    transitionKind: Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend)
+            ]
+        };
+        await activityStore.SaveAsync(boundaryState);
         await activityStore.SaveAsync(RuntimeState(childExecutionId, child, ActivityExecutionStatus.Completed, boundaryExecutionId));
 
         var services = new ServiceCollection();
-        services.AddScoped<IActivityFactory>(_ => new FixedActivityFactory(new OutputtingCompositeActivity(outputValue)));
-        services.AddSingleton<IExpressionEvaluator, ConstantExpressionEvaluator>();
+        services.AddScoped<IActivityActivator>(_ => new FixedActivityActivator(new OutputtingCompositeActivity(outputValue)));
         services.AddSingleton<IWorkflowExecutableStore>(executableStore);
         services.AddSingleton<IActivityExecutionStateStore>(activityStore);
+        services.AddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(schedulerQueue);
-        services.AddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
         services.AddSingleton(storageDrivers);
         services.AddSingleton<IDurableValueStateStore>(durableStore);
         services.AddSingleton<IIncidentStateStore>(incidentStore);
@@ -1063,11 +1289,12 @@ public sealed class WorkflowExecutableCompilerTests
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
+        services.AddSingleton<ActivityCompletionProjector>();
+        services.AddSingleton<RuntimeOutputCaptureProjector>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ActivityFaultIncidentRecorder>();
         await using var provider = services.BuildServiceProvider();
         var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
-            new RuntimeActivityInputMaterializer(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             TimeProvider.System);
         var now = DateTimeOffset.UtcNow;
@@ -1136,44 +1363,22 @@ public sealed class WorkflowExecutableCompilerTests
         AggregateFaultCount: 0,
         Metadata: new Dictionary<string, string>());
 
-    private sealed class ConstantExpressionEvaluator : IExpressionEvaluator
+    private sealed class FixedActivityActivator(IActivity activity) : IActivityActivator
     {
-        public ValueTask<T?> EvaluateAsync<T>(
-            IExpression expression,
-            IExpressionExecutionContext context,
-            IExpressionEvaluatorOptions? options = default) =>
-            ValueTask.FromResult((T?)(object)42);
-
-        public ValueTask<object?> EvaluateAsync(
-            IExpression expression,
-            Type returnType,
-            IExpressionExecutionContext context,
-            IExpressionEvaluatorOptions? options = default) =>
-            ValueTask.FromResult<object?>(42);
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityActivationLease(activity));
     }
 
-    private sealed class FixedActivityFactory(IActivity activity) : IActivityFactory
+    private sealed class OutputtingCompositeActivity(object? outputValue) :
+        StructuralActivity,
+        IRuntimeActivityChildCompletionHandler,
+        IRuntimeActivityCheckpointParticipant
     {
-        public ValueTask<IActivity> Create(
-            RuntimeActivityDescriptor descriptor,
-            IReadOnlyDictionary<string, InputArgument>? inputs,
-            IReadOnlyDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken = default) => ValueTask.FromResult(activity);
-    }
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
 
-    private sealed class OutputtingCompositeActivity(object? outputValue) : IActivity, IActivityChildCompletionHandler, IRuntimeActivityCheckpointParticipant
-    {
-        public string Id { get; set; } = string.Empty;
-        public string NodeId { get; set; } = string.Empty;
-        public string? Name { get; set; }
-        public string Type { get; set; } = "test.boundary";
-        public string Version { get; set; } = "1";
-        public Dictionary<string, object> CustomProperties { get; set; } = new();
-        public Dictionary<string, object> SyntheticProperties { get; set; } = new();
-        public Dictionary<string, object> Metadata { get; set; } = new();
-        public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
-        public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context) => ValueTask.CompletedTask;
         public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
             IRuntimeActivityExecutionContext context,
             IReadOnlyDictionary<string, object?> effectiveInputs,
@@ -1181,21 +1386,19 @@ public sealed class WorkflowExecutableCompilerTests
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>([]);
 
-        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareCompletionCheckpointAsync(
+        public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
             IRuntimeActivityExecutionContext context,
             IReadOnlyCollection<DurableValueState> persistedValues,
             DateTimeOffset capturedAt,
             CancellationToken cancellationToken = default)
-        {
-            context.RecordActivityOutput("Result", outputValue);
-            context.CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>([]);
-        }
+            => ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
+                [],
+                ActivityTransition.Complete(outputValue, ActivityOutcomes.Done)));
     }
 
-    private sealed class OpaqueOutput(Action callback)
+    private sealed class OpaqueOutput(string value)
     {
-        public Action Callback { get; } = callback;
+        public string Value { get; } = value;
     }
 
     private sealed class OpaqueOutputStorageDriver : IRuntimeDurableValueStorageDriver
@@ -1314,9 +1517,9 @@ public sealed class WorkflowExecutableCompilerTests
 
     private readonly ActivityDefinitionVersion _resumeProbeActivity = ActivityVersion("activity-probe", typeof(ResumeProbeActivity).FullName!);
 
-    // A minimal type carrying a [ResumeTarget] handler. The compiler reflects the attribute off the node's
-    // resolved CLR type, so the type need not be a full activity for this indexing test.
-    private sealed class ResumeProbeActivity
+    // A minimal type carrying a [ResumeTarget] handler plus the typed-result marker the publish-time
+    // contract gate requires of every resolvable CLR activity.
+    private sealed class ResumeProbeActivity : IActivityResult<ActivityUnit>
     {
         [ResumeTarget("resume-target:probe")]
         public ValueTask OnResumeAsync() => ValueTask.CompletedTask;
@@ -1332,6 +1535,17 @@ public sealed class WorkflowExecutableCompilerTests
             _activityStructureService,
             registry);
     }
+
+    private WorkflowExecutableCompiler CompilerWithPublication(
+        ActivityNode root,
+        ActivityDefinitionVersionPublication publication,
+        params ActivityDefinitionVersion[] activityVersions) =>
+        TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(root)),
+            new FakeActivityVersionStore([.. activityVersions]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            new SinglePublicationStore(publication));
 
     private static WorkflowDefinitionVersion WorkflowVersion(
         ActivityNode? rootActivity,
@@ -1371,16 +1585,87 @@ public sealed class WorkflowExecutableCompilerTests
     private static ActivityNode SequenceNode(
         string nodeId,
         IReadOnlyCollection<ActivityNode> activities,
-        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null) =>
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null,
+        string activityVersionId = "activity-sequence") =>
         new(
             nodeId,
-            "activity-sequence",
+            activityVersionId,
             Inputs: [],
             Outputs: [],
             Structure: new ActivityNodeStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
+
+    private static ActivityNode FlowchartNode(string nodeId, IReadOnlyCollection<ActivityNode> activities) =>
+        new(
+            nodeId,
+            "activity-flowchart",
+            Inputs: [],
+            Outputs: [],
+            Structure: new ActivityNodeStructure(
+                FlowchartActivity.StructureKind,
+                FlowchartActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new FlowchartAuthoredStructure(activities))));
+
+    private static ActivityDefinitionVersionPublication SourceOwnedPublication(
+        ActivityDefinitionVersion version,
+        ActivityDefinitionVersionResolutionKind resolutionKind) => new()
+    {
+        Id = version.Id,
+        DefinitionVersionId = version.Id,
+        DefinitionId = version.DefinitionId,
+        Version = version.Version,
+        ActivityTypeKey = version.Definition!.ActivityTypeKey,
+        ResolutionKind = resolutionKind,
+        Contract = new DesignActivityContract("1", [], [], []),
+        Provider = new(version.ProviderKey, version.ProviderSchemaVersion, version.DescriptorPayload),
+        TemplateId = "source-owned-template",
+        TemplateHash = "source-owned-hash",
+        SourceReferenceId = "source-owned-reference",
+        ProviderFingerprint = "source-owned-fingerprint",
+        DirectDependencyCount = 0,
+        ClosedTemplateCount = 0,
+        RuntimeRequirements = []
+    };
+
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract BoundaryRuntimeContract(bool hasValueInput)
+    {
+        var descriptor = JsonSerializer.SerializeToElement(new { plan = 1 });
+        var valueType = new ValueTypeDescriptor("Object");
+        var inputs = hasValueInput
+            ? new[]
+            {
+                new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+                    "value",
+                    "Value",
+                    new ValueTypeDescriptor("Int32"),
+                    isRequired: true,
+                    isNullable: false,
+                    hasDefault: false,
+                    defaultValue: null,
+                    policy: ActivityValuePolicy.Default)
+            }
+            : [];
+        return new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+            "test.boundary",
+            "1",
+            "test.boundary",
+            descriptor,
+            inputs,
+            new ActivityResultContract(
+                valueType,
+                isRequired: true,
+                policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
+                projections: [new ActivityResultProjectionContract(
+                    "Result",
+                    "$",
+                    valueType,
+                    isRequired: true,
+                    policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result })]),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement("test.boundary", "test"));
+    }
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
@@ -1395,7 +1680,10 @@ public sealed class WorkflowExecutableCompilerTests
         new("Lines", new ArgumentValue(JsonSerializer.SerializeToElement(lines), "Object"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
-        ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null, false)]);
+        ActivityVersion(
+            id,
+            "Test.WriteLine",
+            [new InputDefinition(inputName, inputName, inputType, null, inputName, null, IsNullable: true)]);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey, IReadOnlyCollection<InputDefinition>? inputs = null) =>
         new("1.0.0", "activity-definition-1")
@@ -1411,9 +1699,78 @@ public sealed class WorkflowExecutableCompilerTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(
+                id switch
+                {
+                    "activity-probe" => TypeAliasConvention.CanonicalAlias(typeof(ResumeProbeActivity)),
+                    _ => TestActivityAliases.ForActivityVersionId(id)
+                })),
             Inputs = inputs ?? []
         };
+
+    private static ActivityDefinitionVersion GhostAliasActivityVersion() =>
+        ClrActivityVersion("activity-ghost", "Test.Ghost", "Test.UnregisteredActivity");
+
+    private static ActivityDefinitionVersion ContractlessActivityVersion() =>
+        ClrActivityVersion("activity-contractless", "Test.Contractless", TypeAliasConvention.CanonicalAlias(typeof(ContractlessActivity)));
+
+    private static ActivityDefinitionVersion ClrActivityVersion(string id, string activityTypeKey, string typeAlias) =>
+        new("1.0.0", $"{id}-definition")
+        {
+            Id = id,
+            Definition = new ActivityDefinition
+            {
+                Id = $"{id}-definition",
+                ActivityTypeKey = activityTypeKey,
+                Category = "Test"
+            },
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(typeAlias)),
+            Inputs = []
+        };
+
+    // Resolvable CLR type that declares no IActivityResult<T>: contract projection yields null, which the
+    // publish-time VF-ACT-001 gate must refuse.
+    private sealed class ContractlessActivity;
+
+    private sealed class ContractStrippingEnricher : IExecutableNodeMetadataEnricher
+    {
+        public async ValueTask<ExecutableNode> EnrichAsync(
+            WorkflowExecutableCompileRequest request,
+            WorkflowExecutableCompileSource source,
+            ExecutableNode rootActivity,
+            CancellationToken cancellationToken = default) =>
+            (await EnrichCompilationAsync(request, source, rootActivity, cancellationToken)).RootActivity;
+
+        public ValueTask<ExecutableCompilationEnrichment> EnrichCompilationAsync(
+            WorkflowExecutableCompileRequest request,
+            WorkflowExecutableCompileSource source,
+            ExecutableNode rootActivity,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ExecutableCompilationEnrichment(Strip(rootActivity), []));
+
+        private static ExecutableNode Strip(ExecutableNode node) => new(
+            node.ExecutableNodeId,
+            node.AuthoredActivityId,
+            node.ActivityType,
+            node.ActivityTypeVersion,
+            node.Descriptor,
+            node.InputBindings,
+            node.OutputCaptures,
+            node.Metadata,
+            node.ChildSlots.Select(slot => new ExecutableChildSlot(
+                slot.Name,
+                slot.Activities.Select(Strip).ToArray())).ToArray(),
+            node.Structure);
+    }
+
+    private sealed class RuntimeVariableStructureProjection
+    {
+        public IReadOnlyCollection<RuntimeVariableDeclaration> Variables { get; init; } = [];
+    }
 
     private static ActivityDefinitionVersion LegacyTriggerActivityVersion() =>
         LegacyTriggerActivityVersion(typeof(LegacyTriggerActivity));
@@ -1440,7 +1797,7 @@ public sealed class WorkflowExecutableCompilerTests
         };
 
     [TriggerActivity]
-    private sealed class LegacyTriggerActivity
+    private sealed class LegacyTriggerActivity : IActivityResult<ActivityUnit>
     {
         public const string ActivityType = "Elsa.Test.LegacyTrigger";
     }
@@ -1450,6 +1807,7 @@ public sealed class WorkflowExecutableCompilerTests
         var services = new ServiceCollection();
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
         new ActivitiesSequenceFeature().ConfigureServices(services);
+        new ActivitiesFlowchartFeature().ConfigureServices(services);
 
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
     }
@@ -1513,7 +1871,7 @@ public sealed class WorkflowExecutableCompilerTests
             ValueTask.FromResult<IReadOnlyCollection<string>>([]);
     }
 
-    private sealed class ReusablePublicationStore(ActivityDefinitionVersionPublication publication) : IActivityDefinitionVersionPublicationStore
+    private sealed class SinglePublicationStore(ActivityDefinitionVersionPublication publication) : IActivityDefinitionVersionPublicationStore
     {
         public Task<ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) => Task.FromResult(definitionVersionId == publication.DefinitionVersionId ? publication : null);
         public Task<IReadOnlyList<ActivityDefinitionVersionPublication>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ActivityDefinitionVersionPublication>>(definitionId == publication.DefinitionId ? [publication] : []);
