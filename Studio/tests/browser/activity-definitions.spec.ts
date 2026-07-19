@@ -721,6 +721,62 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await expect(runDetails).toContainText("invoice-write");
   await expect(runDetails.getByText("Boundary lifecycle")).toHaveCount(1);
 
+  await runDetails.getByRole("tab", { name: /Runtime Evidence/ }).click();
+  await expect(runDetails).toContainText("Committed through sequence 5");
+  const descendant = runDetails.getByRole("treeitem", { name: /descendant-execution-1/ });
+  await expect(descendant).toBeVisible();
+  await descendant.focus();
+  await page.keyboard.press("Enter");
+  await expect(runDetails).toContainText("Canonical execution descendant-execution-1");
+  await expect(runDetails).toContainText("Cancelling is nonterminal");
+  await expect(runDetails).toContainText("bookmark-attempt-2");
+  await expect(runDetails).toContainText("incident-attempt-2");
+  await expect(runDetails.getByText("Captured", { exact: true })).toBeVisible();
+  await expect(runDetails.getByText("Redacted", { exact: true })).toBeVisible();
+  await expect(runDetails.getByText("Not captured", { exact: true })).toBeVisible();
+  await expect(runDetails.getByText("Capture failed", { exact: true })).toBeVisible();
+  await expect(runDetails.getByText("Payload reference", { exact: true })).toBeVisible();
+  await expect(runDetails.getByRole("button", { name: /Reveal|Download/ })).toHaveCount(0);
+  await runDetails.getByRole("button", { name: /Previous attempt.*faulted-execution-1/ }).click();
+  await expect(runDetails).toContainText("Canonical execution faulted-execution-1");
+  await expect(runDetails).toContainText("incident-attempt-1");
+  await expect(runDetails).toContainText("Original fault remains inspectable");
+  const historicalLoop = runDetails.getByRole("treeitem", { name: /loop-execution-1/ });
+  await expect(historicalLoop).toContainText("iteration loop-7");
+  await expect(historicalLoop).toContainText("Contoso.RemovedActivity");
+  await historicalLoop.click();
+  await expect(runDetails).toContainText("Canonical execution detail is unavailable");
+  await runDetails.getByRole("tab", { name: "Pinned structure" }).click();
+  await expect(runDetails).toContainText("Pinned historical layout");
+  await expect(runDetails).toContainText("workflow-source-1");
+  await runDetails.getByRole("tab", { name: /Runtime Evidence/ }).click();
+
+  const nestedBoundary = runDetails.getByRole("treeitem", { name: /nested-boundary-execution-1/ });
+  await nestedBoundary.getByRole("button", { name: "Open boundary" }).click();
+  await expect(runDetails).toContainText("Execution nested-boundary-execution-1");
+  await expect(runDetails).toContainText("nested-source-reference");
+  await runDetails.getByRole("tab", { name: /Runtime Evidence/ }).click();
+  await expect(runDetails).toContainText("Committed through sequence 6");
+  await expect(runDetails.getByRole("treeitem", { name: /nested-child-execution-1/ })).toBeVisible();
+
+  await runDetails.getByRole("button", { name: /InvoiceEvaluator.*Execution boundary-execution-1/ }).click();
+  await expect(runDetails).toContainText("Committed through sequence 5");
+  await expect(runDetails).toContainText("Canonical execution detail is unavailable");
+  await expect(runDetails).toContainText("Contoso.RemovedActivity");
+
+  await runDetails.getByRole("button", { name: "Load next committed page" }).click();
+  await expect(runDetails).toContainText("Loaded evidence is stale");
+  await expect(runDetails).toContainText("Committed through sequence 5");
+  await expect(runDetails).toContainText("loop-execution-1");
+  await runDetails.getByRole("button", { name: "Restart from first page" }).click();
+  await expect(runDetails).toContainText("Committed through sequence 6");
+
+  await runDetails.getByRole("button", { name: "Load next committed page" }).click();
+  await expect(runDetails).toContainText("Loaded evidence is stale");
+  await expect(runDetails).toContainText("Committed through sequence 6");
+  await runDetails.getByRole("button", { name: "Restart from first page" }).click();
+  await expect(runDetails).toContainText("Committed through sequence 7");
+
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
@@ -1610,6 +1666,7 @@ async function mockReusableBoundaryJourney(page: Page) {
     draftReads: 0,
     submittedRoot: null
   };
+  let boundarySnapshotReads = 0;
   let workflowDraft = {
     id: "workflow-draft-1",
     definitionId: "workflow-definition-1",
@@ -1644,9 +1701,9 @@ async function mockReusableBoundaryJourney(page: Page) {
         contractVersion: "1",
         links: [
           { rel: "workflow-execute", href: "runtime/executables/{artifactId}/execute", templated: true },
-          { rel: "activity-execution", href: "runtime/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true },
-          { rel: "activity-execution-descendants", href: "runtime/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants", templated: true },
-          { rel: "activity-execution-layout", href: "runtime/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout", templated: true }
+          { rel: "activity-execution", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true },
+          { rel: "activity-execution-descendants", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants", templated: true },
+          { rel: "activity-execution-layout", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout", templated: true }
         ]
       }
     ] })
@@ -1733,45 +1790,118 @@ async function mockReusableBoundaryJourney(page: Page) {
       body: JSON.stringify({ workflowExecutionId: "workflow-execution-1" })
     });
   });
-  await page.route("**/runtime/instances/workflow-execution-1/activity-executions/boundary-execution-1", route => route.fulfill({
+  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/boundary-execution-1", route => route.fulfill({
     status: 200,
     contentType: "application/json",
     body: JSON.stringify(boundaryInspection())
   }));
-  await page.route(/\/runtime\/instances\/workflow-execution-1\/activity-executions\/boundary-execution-1\/descendants\?limit=100$/, route => route.fulfill({
+  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/descendant-execution-1", route => route.fulfill({
     status: 200,
     contentType: "application/json",
+    body: JSON.stringify(descendantInspection())
+  }));
+  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/faulted-execution-1", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(faultedAttemptInspection())
+  }));
+  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/loop-execution-1", route => route.fulfill({
+    status: 403,
+    contentType: "application/problem+json",
     body: JSON.stringify({
-      root: {
-        workflowExecutionId: "workflow-execution-1",
-        activityExecutionId: "boundary-execution-1",
-        executionScopeId: "scope-invoice",
-        definitionVersionId: "published-version-1",
-        templateHash: "sha256:invoice-v2"
-      },
-      committedThroughSequence: 3,
-      effectiveLimit: 100,
-      items: [{
-        activityExecutionId: "descendant-execution-1",
-        workflowExecutionId: "workflow-execution-1",
-        executableNodeId: "invoice-write",
-        authoredActivityId: "write",
-        activityType: "Elsa.WriteLine",
-        activityTypeVersion: "1",
-        status: "Completed",
-        executionSequence: 2,
-        scheduledAt: "2026-07-17T10:00:01Z",
-        relativeDepth: 1,
-        outcomeNames: [],
-        bookmarkCount: 0,
-        incidentCount: 0,
-        blockingIncidentCount: 0,
-        metadata: {}
-      }],
-      nextCursor: null
+      errorCode: "activity.execution.values.forbidden",
+      detail: "Value evidence is not authorized for this execution."
     })
   }));
-  await page.route("**/runtime/instances/workflow-execution-1/activity-executions/boundary-execution-1/layout", route => route.fulfill({
+  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/nested-boundary-execution-1", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(nestedBoundaryInspection())
+  }));
+  await page.route(/\/runtime\/workflows\/instances\/workflow-execution-1\/activity-executions\/boundary-execution-1\/descendants\?/, route => {
+    const url = new URL(route.request().url());
+    const cursor = url.searchParams.get("cursor");
+    expect(url.searchParams.get("limit")).toBe("100");
+    expect(url.searchParams.get("include")).toBe("outcomes,bookmarks,incidents");
+    if (cursor === "cursor-expired") {
+      return route.fulfill({
+        status: 410,
+        contentType: "application/problem+json",
+        body: JSON.stringify({
+          errorCode: "activity.cursor.expired",
+          detail: "The hierarchy snapshot expired; restart from the first page."
+        })
+      });
+    }
+    if (cursor === "cursor-binding-mismatch") {
+      return route.fulfill({
+        status: 409,
+        contentType: "application/problem+json",
+        body: JSON.stringify({
+          errorCode: "activity.cursor.binding-mismatch",
+          detail: "The hierarchy cursor no longer matches the current request."
+        })
+      });
+    }
+
+    boundarySnapshotReads += 1;
+    const watermark = boundarySnapshotReads === 1 ? 5 : boundarySnapshotReads === 2 ? 6 : 7;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        root: {
+          workflowExecutionId: "workflow-execution-1",
+          activityExecutionId: "boundary-execution-1",
+          executionScopeId: "scope-invoice",
+          definitionVersionId: "published-version-1",
+          templateHash: "sha256:invoice-v2"
+        },
+        committedThroughSequence: watermark,
+        effectiveLimit: 100,
+        items: [
+          {
+            ...hierarchyBrowserItem("faulted-execution-1", "invoice-write", "Elsa.WriteLine", 2),
+            status: "Faulted",
+            attempt: {
+              attemptNumber: 1,
+              firstAttemptActivityExecutionId: "faulted-execution-1",
+              previousAttemptActivityExecutionId: null,
+              totalAttempts: 2
+            },
+            incidentCount: 1,
+            blockingIncidentCount: 1
+          },
+          {
+            ...hierarchyBrowserItem("descendant-execution-1", "invoice-write", "Elsa.WriteLine", 3),
+            status: "Cancelling",
+            attempt: {
+              attemptNumber: 2,
+              firstAttemptActivityExecutionId: "faulted-execution-1",
+              previousAttemptActivityExecutionId: "faulted-execution-1",
+              totalAttempts: 2
+            },
+            bookmarkCount: 1,
+            incidentCount: 1
+          },
+          {
+            ...hierarchyBrowserItem("loop-execution-1", "removed-loop", "Contoso.RemovedActivity", 4),
+            iterationId: "loop-7"
+          },
+          {
+            ...hierarchyBrowserItem("nested-boundary-execution-1", "nested-boundary", "Contoso.NestedEvaluator", 5),
+            boundary: nestedBoundaryInspection().boundary
+          }
+        ],
+        nextCursor: watermark === 5
+          ? "cursor-expired"
+          : watermark === 6
+            ? "cursor-binding-mismatch"
+            : null
+      })
+    });
+  });
+  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/boundary-execution-1/layout", route => route.fulfill({
     status: 200,
     contentType: "application/json",
     body: JSON.stringify({
@@ -1788,6 +1918,51 @@ async function mockReusableBoundaryJourney(page: Page) {
         executableNodeId: "invoice-write",
         x: 120,
         y: 80,
+        hasPinnedGeometry: true
+      }],
+      connections: [],
+      nestedBoundaries: [{
+        activityExecutionId: "nested-boundary-execution-1",
+        executableNodeId: "nested-boundary",
+        templateHash: "sha256:nested-v1",
+        layoutAvailable: true
+      }]
+    })
+  }));
+  await page.route(/\/runtime\/workflows\/instances\/workflow-execution-1\/activity-executions\/nested-boundary-execution-1\/descendants\?limit=100&include=outcomes%2Cbookmarks%2Cincidents$/, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      root: {
+        workflowExecutionId: "workflow-execution-1",
+        activityExecutionId: "nested-boundary-execution-1",
+        executionScopeId: "scope-nested",
+        definitionVersionId: "nested-version-1",
+        templateHash: "sha256:nested-v1"
+      },
+      committedThroughSequence: 6,
+      effectiveLimit: 100,
+      items: [hierarchyBrowserItem("nested-child-execution-1", "nested-write", "Elsa.WriteLine", 6)],
+      nextCursor: null
+    })
+  }));
+  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/nested-boundary-execution-1/layout", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      workflowExecutionId: "workflow-execution-1",
+      activityExecutionId: "nested-boundary-execution-1",
+      artifactId: "workflow-artifact-1",
+      sourceReferenceId: "nested-source-reference",
+      selection: "ExecutedReference",
+      boundaryOrigin: [{ kind: "TemplateBoundary", id: "nested-version-1" }],
+      templateHash: "sha256:nested-v1",
+      nodes: [{
+        templateNodeId: "template-nested-write",
+        authoredActivityId: "nested-write",
+        executableNodeId: "nested-write",
+        x: 80,
+        y: 60,
         hasPinnedGeometry: true
       }],
       connections: [],
@@ -1862,15 +2037,15 @@ function boundaryInspection() {
       invocationOrigin: [{ kind: "TemplateBoundary", id: "published-version-1" }],
       executionScopeId: "scope-invoice",
       hasChildren: true,
-      directChildCount: 1,
-      committedDescendantCount: 1,
+      directChildCount: 2,
+      committedDescendantCount: 2,
       aggregate: {
         status: "Completed",
-        total: 1,
+        total: 2,
         scheduled: 0,
         running: 0,
         suspended: 0,
-        completed: 1,
+        completed: 2,
         faulted: 0,
         cancelled: 0,
         blockingIncidentCount: 0,
@@ -1879,6 +2054,187 @@ function boundaryInspection() {
       },
       layoutAvailable: true
     }
+  };
+}
+
+function descendantInspection() {
+  const { boundary: _boundary, ...root } = boundaryInspection();
+  return {
+    ...root,
+    activityExecutionId: "descendant-execution-1",
+    executableNodeId: "invoice-write",
+    authoredActivityId: "write",
+    activityType: "Elsa.WriteLine",
+    activityTypeVersion: "1",
+    status: "Cancelling",
+    completedAt: null,
+    executionSequence: 3,
+    attempt: {
+      attemptNumber: 2,
+      firstAttemptActivityExecutionId: "faulted-execution-1",
+      previousAttemptActivityExecutionId: "faulted-execution-1",
+      totalAttempts: 2
+    },
+    provenance: {
+      ...root.provenance,
+      parentActivityExecutionId: "boundary-execution-1",
+      schedulingActivityExecutionId: "boundary-execution-1"
+    },
+    bookmarks: [{
+      bookmarkId: "bookmark-attempt-2",
+      resumeTargetId: "resume-target",
+      stimulusType: "Message",
+      stimulusHash: "sha256:message",
+      createdAt: "2026-07-17T10:00:01Z",
+      metadata: {}
+    }],
+    incidents: [{
+      incidentId: "incident-attempt-2",
+      severity: "Warning",
+      status: "Observed",
+      resolutionAction: "Cleanup",
+      failureType: "Cancellation",
+      message: "Cancellation cleanup is still running.",
+      createdAt: "2026-07-17T10:00:02Z",
+      isBlocking: false,
+      metadata: {}
+    }],
+    valueSnapshots: [
+      browserEvidenceValue("Captured value", {
+        state: "captured",
+        snapshot: { kind: "string", preview: "visible" }
+      }),
+      browserEvidenceValue("Secret", {
+        state: "captured",
+        captureReason: "Protected by runtime diagnostics policy.",
+        isSensitive: true,
+        snapshot: { kind: "redacted", reason: "sensitive-name", displayName: "Redacted value" }
+      }),
+      browserEvidenceValue("Not captured value", {
+        state: "notCaptured",
+        captureMode: "None",
+        captureReason: "Capture policy omitted this value."
+      }),
+      browserEvidenceValue("Capture failed value", {
+        state: "captureFailed",
+        failure: { code: "capture.failed", message: "Serializer failed." }
+      }),
+      browserEvidenceValue("Protected payload", {
+        state: "captured",
+        snapshot: {
+          kind: "payloadReference",
+          referenceKind: "blob",
+          referenceId: "protected-reference",
+          displayName: "Protected runtime payload",
+          resolution: { canResolve: false, reason: "Separate authorization required." }
+        }
+      })
+    ]
+  };
+}
+
+function faultedAttemptInspection() {
+  return {
+    ...descendantInspection(),
+    activityExecutionId: "faulted-execution-1",
+    status: "Faulted",
+    completedAt: "2026-07-17T10:00:01Z",
+    executionSequence: 2,
+    attempt: {
+      attemptNumber: 1,
+      firstAttemptActivityExecutionId: "faulted-execution-1",
+      previousAttemptActivityExecutionId: null,
+      totalAttempts: 2
+    },
+    bookmarks: [],
+    incidents: [{
+      incidentId: "incident-attempt-1",
+      severity: "Error",
+      status: "Blocking",
+      resolutionAction: "Retry",
+      failureType: "Fault",
+      message: "Original fault remains inspectable after retry.",
+      createdAt: "2026-07-17T10:00:01Z",
+      isBlocking: true,
+      metadata: {}
+    }],
+    valueSnapshots: []
+  };
+}
+
+function browserEvidenceValue(name: string, partial: Record<string, unknown>) {
+  return {
+    name,
+    subject: "ActivityInput",
+    captureMode: "DiagnosticSnapshot",
+    capturedAt: "2026-07-17T10:00:01Z",
+    captureReason: null,
+    isSensitive: false,
+    snapshot: null,
+    failure: null,
+    metadata: {},
+    ...partial
+  };
+}
+
+function nestedBoundaryInspection() {
+  const root = boundaryInspection();
+  return {
+    ...root,
+    activityExecutionId: "nested-boundary-execution-1",
+    executableNodeId: "nested-boundary",
+    authoredActivityId: "nested-boundary",
+    activityType: "Contoso.NestedEvaluator",
+    activityTypeVersion: "1.0.0",
+    executionSequence: 5,
+    provenance: {
+      ...root.provenance,
+      parentActivityExecutionId: "boundary-execution-1",
+      schedulingActivityExecutionId: "boundary-execution-1",
+      executionScopeId: "scope-nested"
+    },
+    boundary: {
+      ...root.boundary,
+      definitionId: "nested-definition",
+      definitionVersionId: "nested-version-1",
+      version: "1.0.0",
+      templateHash: "sha256:nested-v1",
+      invocationOrigin: [{ kind: "TemplateBoundary", id: "nested-version-1" }],
+      executionScopeId: "scope-nested",
+      directChildCount: 1,
+      committedDescendantCount: 1,
+      aggregate: {
+        ...root.boundary.aggregate,
+        total: 1,
+        completed: 1,
+        lastExecutionSequence: 4
+      }
+    }
+  };
+}
+
+function hierarchyBrowserItem(
+  activityExecutionId: string,
+  executableNodeId: string,
+  activityType: string,
+  executionSequence: number
+) {
+  return {
+    activityExecutionId,
+    workflowExecutionId: "workflow-execution-1",
+    executableNodeId,
+    authoredActivityId: executableNodeId,
+    activityType,
+    activityTypeVersion: "1",
+    status: "Completed",
+    executionSequence,
+    scheduledAt: "2026-07-17T10:00:01Z",
+    relativeDepth: 1,
+    outcomeNames: [],
+    bookmarkCount: 0,
+    incidentCount: 0,
+    blockingIncidentCount: 0,
+    metadata: {}
   };
 }
 
