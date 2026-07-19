@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Engine-level workflow execution benchmark for the 2-node (Flowchart root + WriteLine) workflow.
+
+    CI EXCLUSION: this project lives under benchmarks/, NOT tests/. Both CI test filters
+    (.github/workflows/ci.yml fast PR gate and .github/workflows/integration.yml nightly gate)
+    select test projects with `find tests -name '*.csproj'`, so a project outside tests/ is
+    never run by either gate. It IS still part of Elsa.Server.slnx, so the full-solution build
+    in ci.yml compiles it (semantic-merge / compile-break protection) without executing it.
+    Run it explicitly with `dotnet test` against this project when measuring engine performance.
+
+    The tests carry no hard latency assertions (which would flake in CI) — they only assert the
+    workflow completed and emit p50/p95 timings via ITestOutputHelper.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Groundwork.Core" />
+    <PackageReference Include="Groundwork.Documents" />
+    <PackageReference Include="Groundwork.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared in-process execution harness (real agent/dispatcher/scheduler-drainer). -->
+    <ProjectReference Include="..\..\..\..\..\tests\Elsa\Activities\Testing\Elsa.Activities.Testing.csproj" />
+    <!-- Flowchart activity + feature + structure models for the root composite. -->
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <!-- Durable Groundwork runtime store bridges + SQLite document store + storage manifest. -->
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
+    <!-- Public test-support: RuntimeTestBoundedDocumentStore + GroundworkTestAccess (bounded-query
+         adapter + access bindings for driving the runtime stores over a raw SQLite document store). -->
+    <ProjectReference Include="..\..\..\..\..\tests\Elsa\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+  </ItemGroup>
+
+</Project>
