@@ -47,6 +47,15 @@ public sealed class AuthoringEndpointContractTests
         AssertProperties(response, "Options");
     }
 
+    [Fact]
+    public void Paged_workflow_definitions_have_a_stable_additive_contract()
+    {
+        var (request, response) = EndpointContract("design/workflows/definitions/page");
+
+        AssertProperties(request, "PageSize", "ContinuationToken", "SearchTerm", "State");
+        AssertProperties(response, "Items", "NextContinuationToken");
+    }
+
     private static (Type Request, Type Response) EndpointContract(string route) => EndpointContract(FindEndpoint(route));
 
     private static (Type Request, Type Response) EndpointContract(BaseEndpoint endpoint)

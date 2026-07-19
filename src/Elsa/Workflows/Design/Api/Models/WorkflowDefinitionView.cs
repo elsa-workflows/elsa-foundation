@@ -14,3 +14,7 @@ public sealed record WorkflowDefinitionView(
 );
 
 public sealed record WorkflowDefinitionListView(IReadOnlyCollection<WorkflowDefinitionView> Items);
+
+public sealed record WorkflowDefinitionPageView(
+    IReadOnlyCollection<WorkflowDefinitionView> Items,
+    string? NextContinuationToken);
