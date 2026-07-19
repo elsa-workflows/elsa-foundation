@@ -211,6 +211,13 @@
   <Folder Name="/src/Elsa/Secrets/Persistence/">
     <Project Path="src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Tagging/">
+    <Project Path="src/Elsa/Tagging/Api/Elsa.Tagging.Api.csproj" />
+    <Project Path="src/Elsa/Tagging/Core/Elsa.Tagging.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Tagging/Persistence/">
+    <Project Path="src/Elsa/Tagging/Persistence/Groundwork/Elsa.Tagging.Persistence.Groundwork.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Serialization/Core/" />
   <Folder Name="/src/Elsa/Serialization/SystemText/" />
   <Folder Name="/src/Elsa/Tasks/">
@@ -427,6 +434,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Secrets/">
     <Project Path="tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Tagging/">
+    <Project Path="tests/Elsa/Tagging/Tests/Elsa.Tagging.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Serialization/">
     <Project Path="tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj" />
