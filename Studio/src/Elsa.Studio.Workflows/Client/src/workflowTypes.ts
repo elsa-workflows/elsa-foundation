@@ -11,6 +11,8 @@ export interface WorkflowDefinitionsResponse {
   page?: number;
   pageSize?: number;
   totalCount?: number;
+  nextContinuationToken?: string | null;
+  isPaged?: boolean;
 }
 
 export interface WorkflowExecutablesResponse {

@@ -8,7 +8,7 @@ import { formatDate } from "../workflowFormatting";
 import { getDialogs } from "./dialogs";
 import { defaultDefinitionPageSize } from "./constants";
 import type { CreateWorkflowDraft } from "./editorTypes";
-import { dispatchAiAction, findAiAction, getCreateInitialState, getTotalPages, pageItems } from "./editorHelpers";
+import { dispatchAiAction, findAiAction, getCreateInitialState, getTotalPages } from "./editorHelpers";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
 import { CreateWorkflowDialog } from "./CreateWorkflowDialog";
@@ -23,6 +23,8 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const [status, setStatus] = useState("");
   const [definitions, setDefinitions] = useState<WorkflowDefinitionDetails["definition"][]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [nextContinuationTokens, setNextContinuationTokens] = useState<Record<number, string>>({});
+  const [usesCursorPaging, setUsesCursorPaging] = useState(false);
   const [selectedDefinitionIds, setSelectedDefinitionIds] = useState<Set<string>>(() => new Set());
   const [createDraft, setCreateDraft] = useState<CreateWorkflowDraft | null>(null);
   const [creating, setCreating] = useState(false);
@@ -30,6 +32,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const selectVisibleRef = useRef<HTMLInputElement | null>(null);
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
+  const continuationToken = nextContinuationTokens[page];
   const suggestMetadataAction = findAiAction(ai, "weaver.workflows.suggest-create-metadata");
   const explainDefinitionAction = findAiAction(ai, "weaver.workflows.explain-definition");
   const selectedVisibleCount = visibleDefinitionIds.filter(id => selectedDefinitionIds.has(id)).length;
@@ -39,24 +42,40 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
     setState("loading");
     setError("");
     try {
-      const response = await listDefinitions(context, { search, state: listState, page, pageSize });
-      const backendPaged = typeof response.totalCount === "number";
-      const effectiveTotalCount = response.totalCount ?? response.definitions.length;
-      const effectiveTotalPages = getTotalPages(effectiveTotalCount, pageSize);
-
-      if (effectiveTotalCount > 0 && page > effectiveTotalPages) {
-        setPage(effectiveTotalPages);
-        return;
+      const response = await listDefinitions(context, {
+        search,
+        state: listState,
+        page,
+        pageSize,
+        continuationToken
+      });
+      if (response.isPaged) {
+        setDefinitions(response.definitions);
+        setUsesCursorPaging(true);
+        setNextContinuationTokens(current => {
+          const next = Object.fromEntries(
+            Object.entries(current).filter(([storedPage]) => Number(storedPage) <= page)
+          ) as Record<number, string>;
+          if (response.nextContinuationToken) next[page + 1] = response.nextContinuationToken;
+          return next;
+        });
+      } else {
+        const effectiveTotalCount = response.totalCount;
+        const effectiveTotalPages = getTotalPages(effectiveTotalCount, pageSize);
+        if (effectiveTotalCount > 0 && page > effectiveTotalPages) {
+          setPage(effectiveTotalPages);
+          return;
+        }
+        setDefinitions(response.definitions);
+        setTotalCount(effectiveTotalCount);
+        setUsesCursorPaging(false);
       }
-
-      setDefinitions(backendPaged ? response.definitions : pageItems(response.definitions, page, pageSize));
-      setTotalCount(effectiveTotalCount);
       setState("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setState("failed");
     }
-  }, [context, search, listState, page, pageSize]);
+  }, [context, search, listState, page, pageSize, continuationToken]);
 
   useEffect(() => {
     void load();
@@ -147,12 +166,21 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const changeListState = (nextState: DefinitionListState) => {
     setListState(nextState);
     setPage(1);
+    setNextContinuationTokens({});
     clearSelection();
   };
 
   const changeSearch = (value: string) => {
     setSearch(value);
     setPage(1);
+    setNextContinuationTokens({});
+    clearSelection();
+  };
+
+  const changePageSize = (value: number) => {
+    setPageSize(value);
+    setPage(1);
+    setNextContinuationTokens({});
     clearSelection();
   };
 
@@ -305,12 +333,11 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
           <DefinitionPager
             page={page}
             pageSize={pageSize}
-            totalCount={totalCount}
+            totalCount={usesCursorPaging ? undefined : totalCount}
+            itemCount={definitions.length}
+            hasNextPage={Boolean(nextContinuationTokens[page + 1])}
             onPageChange={setPage}
-            onPageSizeChange={value => {
-              setPageSize(value);
-              setPage(1);
-            }}
+            onPageSizeChange={changePageSize}
           />
         </>
       ) : null}
