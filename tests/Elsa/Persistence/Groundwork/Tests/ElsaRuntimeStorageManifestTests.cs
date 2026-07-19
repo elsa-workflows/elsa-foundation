@@ -317,6 +317,16 @@ public sealed class ElsaRuntimeStorageManifestTests
             RuntimePostCommitIntent.MaximumKindLength,
             physical.ProjectedColumns.Single(column =>
                 column.LogicalName == ElsaRuntimeStorageManifest.ByOutboxIntentKindIndex).Length);
+        Assert.Equal(
+            IndexPhysicalizationPolicy.Portable,
+            unit.Indexes.Single(index =>
+                index.Identity == ElsaRuntimeStorageManifest.ByOutboxItemIdIndex).Physicalization);
+        Assert.DoesNotContain(
+            physical.ProjectedColumns,
+            column => column.LogicalName == ElsaRuntimeStorageManifest.ByOutboxItemIdIndex);
+        Assert.DoesNotContain(
+            physical.Indexes,
+            index => index.LogicalName == ElsaRuntimeStorageManifest.ByOutboxItemIdIndex);
         var immediatePhysicalIndex = Assert.Single(
             physical.Indexes,
             index => index.LogicalName == immediate.IndexIdentity);

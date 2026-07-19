@@ -563,7 +563,12 @@ public static class ElsaRuntimeStorageManifest
                     DateTime(ByOutboxAvailableAtIndex, PostCommitOutboxAvailableAtField),
                     DateTime(ByOutboxVisibleAfterIndex, PostCommitOutboxVisibleAfterField),
                     DateTime(ByOutboxRecordedAtIndex, PostCommitOutboxRecordedAtField),
-                    Keyword(ByOutboxItemIdIndex, PostCommitOutboxItemIdField),
+                    // Exact lookup uses the collision-safe physical document identity. Keeping this
+                    // portable avoids imposing an index-key length limit on nested scheduler identities.
+                    Keyword(
+                        ByOutboxItemIdIndex,
+                        PostCommitOutboxItemIdField,
+                        physicalization: IndexPhysicalizationPolicy.Portable),
                     Keyword(ByOutboxIntentKindIndex, PostCommitOutboxIntentKindField)
                 ],
                 [
@@ -749,7 +754,11 @@ public static class ElsaRuntimeStorageManifest
         sortSupport,
         QueryPagingSupport.Offset);
 
-    private static IndexDeclaration Keyword(string identity, string field, bool isUnique = false) => new(
+    private static IndexDeclaration Keyword(
+        string identity,
+        string field,
+        bool isUnique = false,
+        IndexPhysicalizationPolicy physicalization = IndexPhysicalizationPolicy.Optimized) => new(
         identity,
         [new IndexField(field)],
         IndexValueKind.Keyword,
@@ -757,7 +766,7 @@ public static class ElsaRuntimeStorageManifest
         true,
         MissingValueBehavior.Excluded,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-        IndexPhysicalizationPolicy.Optimized);
+        physicalization);
 
     private static IndexDeclaration Number(string identity, string field) => new(
         identity,
