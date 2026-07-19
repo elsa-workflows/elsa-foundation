@@ -13,6 +13,18 @@ public interface IWorkflowSchedulerWorkQueue
     /// </summary>
     bool SupportsClaimTransitions => false;
 
+    /// <summary>
+    /// Records a scheduler work item for its workflow execution and returns the queued item.
+    /// </summary>
+    /// <remarks>
+    /// Providers MUST make this operation idempotent by work-item identity (ADR 0031). Re-enqueueing an item
+    /// whose <see cref="RuntimeSchedulerWorkItem.WorkItemId"/> already exists for the same
+    /// <see cref="RuntimeSchedulerWorkItem.WorkflowExecutionId"/> MUST return (and keep) the already-queued item
+    /// and MUST NOT append a duplicate — enqueue is create-only by the <c>(WorkflowExecutionId, WorkItemId)</c>
+    /// identity. This queue-level de-duplication is the primary redelivery-safety guarantee the in-process fast
+    /// path and outbox redelivery sweeps rely on; per-handler idempotency is defense-in-depth, not a substitute
+    /// for it. Both shipped providers conform, and the guarantee is covered by provider conformance tests.
+    /// </remarks>
     ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default);
     /// <summary>Returns one finite, deterministic page of work for the requested workflow execution.</summary>
     ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default);
