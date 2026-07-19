@@ -21,6 +21,7 @@
           },
           "DiagnosticsOpenTelemetry": {},
           "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite": {},
+          "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsStructuredLogs": {},
           "DiagnosticsStructuredLogsPersistenceEFCoreSqlite": {},
           "Events": {},
@@ -153,6 +154,7 @@
             "Mode": "Coalesced",
             "MaxSegmentCheckpoints": 50
           },
+          "WorkflowsRuntimeTracing": {},
           "WorkflowsRuntimeTriggers": {}
         },
         "Configuration": {
