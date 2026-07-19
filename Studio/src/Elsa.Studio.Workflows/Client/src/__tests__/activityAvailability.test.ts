@@ -11,6 +11,8 @@ import {
   groupAvailabilityEntriesByCategory,
   isAvailabilityDraftDirty,
   isRuleTargetEnabled,
+  normalizeActivityAvailabilityDiagnostics,
+  normalizeActivityAvailabilitySettings,
   normalizeAvailabilityMode,
   setRuleTargetEnabled,
   summarizeAvailabilityArguments,
@@ -32,6 +34,7 @@ describe("getAvailabilityStateName", () => {
     expect(getAvailabilityStateName(0)).toBe("Available");
     expect(getAvailabilityStateName(2)).toBe("HiddenByManagementSettings");
     expect(getAvailabilityStateName("RemovedFromCatalog")).toBe("RemovedFromCatalog");
+    expect(getAvailabilityStateName("blockedByHostBaseline")).toBe("BlockedByHostBaseline");
     expect(getAvailabilityStateName(undefined)).toBe("Available");
   });
 });
@@ -72,6 +75,7 @@ describe("draft + mode helpers", () => {
   it("normalizes modes and payloads", () => {
     expect(normalizeAvailabilityMode(1)).toBe("Only");
     expect(normalizeAvailabilityMode("AllExcept")).toBe("AllExcept");
+    expect(normalizeAvailabilityMode("only")).toBe("Only");
     expect(getAvailabilityModePayload("Only")).toBe(1);
     expect(getAvailabilityModePayload("AllExcept")).toBe(0);
   });
@@ -84,6 +88,38 @@ describe("draft + mode helpers", () => {
   it("toggles list values and keeps them sorted", () => {
     expect(toggleListValue(["b"], "a")).toEqual(["a", "b"]);
     expect(toggleListValue(["a", "b"], "a")).toEqual(["b"]);
+  });
+});
+
+describe("activity availability wire normalization", () => {
+  it("canonicalizes camel-case settings and diagnostics enums", () => {
+    const settings = normalizeActivityAvailabilitySettings({
+      scope: "host-default",
+      mode: "allExcept",
+      rules: { activityTypes: [], sets: [] }
+    });
+    const result = normalizeActivityAvailabilityDiagnostics({
+      items: [{
+        activityDefinitionId: "def-1",
+        activityTypeKey: "Elsa.WriteLine",
+        displayName: "Write Line",
+        category: "Primitives",
+        state: "blockedByHostBaseline",
+        layer: "hostBaseline",
+        referenceKind: "activityType",
+        referenceName: "Elsa.WriteLine",
+        reason: "Blocked"
+      }],
+      sets: []
+    });
+
+    expect(settings.mode).toBe("AllExcept");
+    expect(result.items[0]).toEqual(expect.objectContaining({
+      state: "BlockedByHostBaseline",
+      layer: "HostBaseline",
+      referenceKind: "ActivityType"
+    }));
+    expect(getAvailabilityActivityEntries(result)).toHaveLength(1);
   });
 });
 

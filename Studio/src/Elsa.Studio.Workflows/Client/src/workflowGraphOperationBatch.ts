@@ -87,7 +87,7 @@ export function applyWorkflowGraphOperationBatch(
     if (kind === "set-activity-property") {
       const activity = findOperationActivity(nextDraft, parameters.activityId, temporaryReferences, addedActivities);
       if (!activity) throw new Error("Weaver batch referenced an unknown activity property target.");
-      setActivityProperty(activity, readString(parameters.propertyName) ?? "Value", parameters.value ?? "");
+      setActivityProperty(activity, readString(parameters.propertyName) ?? "Value", parameters.value ?? "", catalog);
       continue;
     }
 
@@ -198,16 +198,31 @@ function disconnectActivities(draft: WorkflowDraft, parameters: Record<string, u
   });
 }
 
-function setActivityProperty(activity: ActivityNode, propertyName: string, value: unknown) {
+function setActivityProperty(activity: ActivityNode, propertyName: string, value: unknown, catalog: ActivityCatalogItem[]) {
   // A structured value (collection or object) must be authored as an Object expression so the backend
   // JSON-deserializes it into the target type; a scalar rides the Literal path. Same rule toWireArgument
   // in activityInputWire enforces at the wire boundary, applied here so the in-memory model is correct
   // at the source instead of relying on the boundary to retrofit it.
   const structured = isRecord(value);
-  activity[camelize(propertyName)] = {
+  activity[resolveInputPropertyKey(activity, propertyName, catalog)] = {
     typeName: typeof value === "string" ? "String" : "Object",
     expression: { type: structured ? "Object" : "Literal", value }
   };
+}
+
+// Weaver names properties loosely (referenceKey, display name, or its camelCase form); resolve to the
+// catalog input's stable referenceKey so AI-authored values land on the same in-memory key the editor
+// and wire contract use. Falls back to camelize for activities without catalog input metadata.
+function resolveInputPropertyKey(activity: ActivityNode, propertyName: string, catalog: ActivityCatalogItem[]): string {
+  const inputs = catalog.find(item => item.activityVersionId === activity.activityVersionId)?.inputs ?? [];
+  for (const input of inputs) {
+    if (!isRecord(input) || typeof input.referenceKey !== "string" || !input.referenceKey.trim()) continue;
+    const name = typeof input.name === "string" ? input.name : "";
+    if (propertyName === input.referenceKey || (name && (propertyName === name || camelize(propertyName) === camelize(name)))) {
+      return input.referenceKey;
+    }
+  }
+  return camelize(propertyName);
 }
 
 function findOperationActivity(draft: WorkflowDraft, activityId: unknown, references: Map<string, string>, added: Map<string, ActivityNode>) {

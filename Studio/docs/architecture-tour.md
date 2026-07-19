@@ -47,7 +47,7 @@ A Studio module crosses two related boundaries:
 
 In the browser, [`loader.ts`](../src/Elsa.Studio.Web/Client/src/app/loader.ts) checks host and SDK version compatibility, loads versioned styles, imports each ESM entry, and invokes `register(api)`. [`registry.ts`](../src/Elsa.Studio.Web/Client/src/app/registry.ts) creates the host and backend endpoint contexts plus the Slot registries defined by the [`ElsaStudioModuleApi`](../src/Elsa.Studio.Web/Client/src/sdk/index.ts).
 
-Slots define accepted Contribution shapes, ownership, ordering, and local admission rules. Module Policy and Host Policy can further restrict availability. A representative full-stack path is the [Weather Forecast feature](../src/Elsa.Studio.Samples.WeatherForecast/WeatherForecastStudioFeature.cs), its [manifest contributor](../src/Elsa.Studio.Samples.WeatherForecast/Handlers/ContributeWeatherForecastStudioModule.cs), and its frontend [`register` function](../src/Elsa.Studio.Samples.WeatherForecast/Client/src/module.tsx).
+Slots define accepted Contribution shapes, ownership, ordering, and local admission rules. Module Policy and Host Policy can further restrict availability. A representative full-stack path is the [Weather Forecast feature](../src/Elsa.Studio.Samples.WeatherForecast/WeatherForecastStudioFeature.cs) (whose `[StudioModule]` attribute declares the module manifest declaratively) and its frontend [`register` function](../src/Elsa.Studio.Samples.WeatherForecast/Client/src/module.tsx).
 
 The domain vocabulary and governance model are maintained in [`CONTEXT.md`](../CONTEXT.md) and [ADR 0001](adr/0001-use-slots-and-contributions-for-studio-extensibility.md).
 
@@ -64,7 +64,7 @@ Route order and navigation order are deterministic. Contribution order and stabl
 The module API exposes two endpoint contexts:
 
 - `api.host` targets the Studio origin. It is used for Studio-owned surfaces such as module discovery, module and feature management, theme management, Studio diagnostics, and server-side bridge endpoints.
-- `api.backend` targets `Studio:BackendBaseUrl`, surfaced without secrets through [`StudioRuntimeScript`](../src/Elsa.Studio.Web/StudioRuntimeScript.cs) and read by [`runtime.ts`](../src/Elsa.Studio.Web/Client/src/app/runtime.ts). When no backend URL is configured, it resolves to the Studio origin.
+- `api.backend` targets the browser-facing `Studio:BackendBaseUrl`, surfaced without secrets through [`StudioRuntimeScript`](../src/Elsa.Studio.Web/StudioRuntimeScript.cs) and read by [`runtime.ts`](../src/Elsa.Studio.Web/Client/src/app/runtime.ts). When no backend URL is configured, it resolves to the Studio origin. Server-side authentication and privileged relays use `Studio:BackendServerBaseUrl`, falling back to `Studio:BackendBaseUrl` for single-URL deployments.
 
 Workflow, Secrets, and other Elsa-domain modules normally call their backend APIs through `api.backend`. Studio administration calls Studio-owned endpoints through `api.host`. Privileged backend host-control operations go through [`StudioBackendManagementBridge`](../src/Elsa.Studio.Web/StudioBackendManagementBridge.cs) or its related relays: the browser sends only the user credential, and Studio attaches the server-side management key on the Studio-to-backend call. The management key is never emitted in `/studio-runtime.js`.
 

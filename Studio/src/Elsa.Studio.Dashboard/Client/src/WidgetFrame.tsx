@@ -21,9 +21,21 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
 }) {
   const runtime = useDashboardWidget(widget, settings, refreshIntervalMs, api.runtime.dashboard?.widgetTimeoutMs ?? 10_000, cacheScopeKey, active);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [bodyResetVersion, setBodyResetVersion] = useState(0);
   useEffect(() => { if (globalRefreshVersion > 0) void runtime.refresh(); }, [globalRefreshVersion]); // eslint-disable-line react-hooks/exhaustive-deps
-  const Body = widget.component;
   const snapshot = runtime.state.status === "ready" || runtime.state.status === "refreshing" ? runtime.state.snapshot : undefined;
+  const bodyResetKey = React.useMemo(
+    () => ({ widget, cacheScopeKey, settings, size, updatedAt: "updatedAt" in runtime.state ? runtime.state.updatedAt : undefined, bodyResetVersion }),
+    [bodyResetVersion, cacheScopeKey, runtime.state, settings, size, widget]
+  );
+  const retryBody = () => {
+    setBodyResetVersion(version => version + 1);
+    if (widget.load) void runtime.refresh();
+  };
+  const bodyVisible =
+    runtime.state.status === "ready" ||
+    runtime.state.status === "refreshing" ||
+    (runtime.state.status === "idle" && !widget.load);
   return <article className="dashboard-widget" data-size={size} aria-labelledby={`${widget.id}-title`} aria-busy={runtime.state.status === "loading" || runtime.state.status === "refreshing"}>
     <header className="dashboard-widget-header">
       <div><h3 id={`${widget.id}-title`}>{widget.title}{pinned ? <span className="dashboard-widget-pinned">Pinned</span> : null}</h3>{widget.description ? <p>{widget.description}</p> : null}</div>
@@ -41,7 +53,11 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
     <div className="dashboard-widget-body">
       {runtime.state.status === "loading" ? <div role="status">Loading…</div> : null}
       {runtime.state.status === "error" || runtime.state.status === "timedOut" ? <div role="alert">{runtime.state.error} <button type="button" onClick={() => void runtime.refresh()}>Retry</button></div> : null}
-      {runtime.state.status === "idle" || runtime.state.status === "ready" || runtime.state.status === "refreshing" ? <Body snapshot={snapshot} settings={settings} size={size} /> : null}
+      {bodyVisible ? (
+        <WidgetBodyBoundary title={widget.title} resetKey={bodyResetKey} onRetry={retryBody}>
+          <DashboardWidgetBody widget={widget} snapshot={snapshot} settings={settings} size={size} />
+        </WidgetBodyBoundary>
+      ) : null}
     </div>
     {runtime.state.status === "ready" || runtime.state.status === "refreshing" ? <footer>
       Updated {formatTime(runtime.state.updatedAt)}
@@ -50,6 +66,56 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
     </footer> : null}
     {settingsOpen && widget.settings ? <WidgetSettings api={api} widget={widget} value={settings} onSave={value => { onSettings(value); setSettingsOpen(false); }} onClose={() => setSettingsOpen(false)} /> : null}
   </article>;
+}
+
+function DashboardWidgetBody({ widget, snapshot, settings, size }: {
+  widget: StudioDashboardWidgetContribution;
+  snapshot: unknown;
+  settings: unknown;
+  size: StudioDashboardWidgetSize;
+}) {
+  if (widget.isEmpty?.(snapshot, settings)) {
+    return (
+      <div className="dashboard-widget-empty" role="status">
+        <strong>{widget.emptyState?.title ?? "No data available"}</strong>
+        {widget.emptyState?.description ? <span>{widget.emptyState.description}</span> : null}
+      </div>
+    );
+  }
+
+  const Body = widget.component;
+  return <Body snapshot={snapshot} settings={settings} size={size} />;
+}
+
+class WidgetBodyBoundary extends React.Component<{
+  children: React.ReactNode;
+  title: string;
+  resetKey: object;
+  onRetry(): void;
+}, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidUpdate(previous: Readonly<{ resetKey: object }>) {
+    if (this.state.failed && previous.resetKey !== this.props.resetKey) {
+      this.setState({ failed: false });
+    }
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div role="alert">
+          {this.props.title} could not be rendered. <button type="button" onClick={this.props.onRetry}>Retry</button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 function formatTime(value: number) { return new Date(value).toLocaleTimeString(); }

@@ -1,4 +1,10 @@
-import type { StudioActivityDescriptor, StudioActivityInputOption, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
+import type {
+  StudioActivityDescriptor,
+  StudioActivityInputOption,
+  StudioExpressionDescriptor,
+  StudioWorkflowRunInputDescriptor,
+  StudioWorkflowRunInputTypeMetadata
+} from "@elsa-workflows/studio-sdk";
 
 export interface WorkflowDefinitionsResponse {
   definitions: WorkflowDefinitionSummary[];
@@ -24,7 +30,7 @@ export interface WorkflowDefinitionSummary {
   versionCount: number;
 }
 
-export type DefinitionListState = "active" | "deleted";
+export type DefinitionListState = "active" | "deleted" | "all";
 
 export interface WorkflowDefinitionDetails {
   definition: WorkflowDefinitionSummary;
@@ -115,7 +121,12 @@ export interface ActivityCatalogItem {
   iconColor?: string | null;
   inputs: unknown[];
   outputs: unknown[];
-  designFacets: unknown[];
+  designFacets?: unknown[];
+  available?: boolean;
+  availabilityReason?: string | null;
+  ports?: unknown[];
+  containerStructure?: Record<string, unknown> | null;
+  authoringTemplate?: ActivityNode;
 }
 
 export type ActivityDescriptor = StudioActivityDescriptor;
@@ -282,7 +293,7 @@ export const collectionKinds: CollectionKind[] = ["Single", "Array", "List", "Ha
 // The type of an authored Variable/Input/Output. `alias` is a stable element-type identifier
 // (bare for framework primitives like "String"/"Int32"; dotted for module types like
 // "Elsa.Http.HttpRequest") — never a namespace/assembly/version. Unknown aliases round-trip unchanged.
-export interface ArgumentType {
+export interface ArgumentType extends StudioWorkflowRunInputTypeMetadata {
   alias: string;
   collectionKind: CollectionKind;
 }
@@ -340,7 +351,7 @@ export interface WorkflowManagementCapabilities {
 // on `type.collectionKind` (the legacy `isArray` boolean is gone). `referenceKey` is the stable identity
 // (a required positional on the backend InputDefinition). The backend InputDefinition has no default
 // value member, so no `defaultValue`/`defaultSyntax` is carried; `isRequired` is a first-class flag.
-export interface WorkflowInput {
+export interface WorkflowInput extends StudioWorkflowRunInputDescriptor {
   referenceKey: string;
   name: string;
   type: ArgumentType;
@@ -371,7 +382,7 @@ export interface WorkflowOutput {
   [key: string]: unknown;
 }
 
-// A selectable argument element type from GET /descriptors/variables (typed-argument-model contract).
+// A selectable argument element type from the Expressions domain's variable-types capability.
 // `alias` is the join key against a stored `type.alias`; `defaultEditor` is an open hint for the
 // default-value editor (text/number/checkbox/date/none — tolerate unknown values). `typeName` is a
 // legacy fallback for older backends that returned it instead of `alias`.
@@ -392,12 +403,13 @@ export interface VariableTypeDescriptorsResponse {
 export interface CreateDefinitionRequest {
   name: string;
   description?: string | null;
-  rootKind: "sequence" | "flowchart";
-  rootActivityVersionId?: string | null;
+  initialState?: WorkflowDefinitionState | null;
+  layout?: DesignMetadataRecord[];
 }
 
 export interface PromoteDraftResponse {
-  versionId: string;
+  id: string;
+  version: string;
 }
 
 export interface PublishedWorkflowResponse {
@@ -415,7 +427,10 @@ export interface StartWorkflowDraftTestRunRequest {
   snapshotId: string;
   state: WorkflowDefinitionState;
   artifactVersion?: string | null;
+  inputs?: WorkflowExecutionInputs;
 }
+
+export type WorkflowExecutionInputs = Record<string, unknown>;
 
 export interface WorkflowTestRunView {
   testRunId: string;
@@ -434,7 +449,7 @@ export interface WorkflowTestRunView {
 // An artifact row in the executables list (backend WorkflowExecutableRowView, elsa-foundation#598 P1).
 // Rows are content-addressed artifacts; the flat Definition*/Published*/Source* fields mirror the newest
 // reference for backward compatibility, and `references` carries every Source Reference newest-first.
-// `references` is optional because the legacy /_demo endpoint returns the flat shape only.
+// `references` remains optional while Runtime's canonical summary and detailed provenance views converge.
 export interface WorkflowExecutableSummary {
   artifactId: string;
   artifactVersion: string;
@@ -464,6 +479,10 @@ export type WorkflowExecutableListScope = "published" | "test-runs" | "all";
 export interface WorkflowExecutableReference {
   sourceReferenceId: string;
   artifactId: string;
+  /**
+   * Canonical executable-source discriminator. Runtime API v1 may also emit the deprecated `sourceType`
+   * compatibility alias, but Studio deliberately does not model or consume it; the alias is removed in v2.
+   */
   sourceKind?: string | null;
   sourceId?: string | null;
   sourceVersion?: string | null;
@@ -476,6 +495,37 @@ export interface WorkflowExecutableReference {
   expiresAt?: string | null;
   deletedAt?: string | null;
   deletedReason?: string | null;
+  publicationId?: string | null;
+  slotId?: string | null;
+  authoredInputs?: WorkflowExecutableAuthoredInput[] | null;
+  authoredInputsAccess?: string | null;
+}
+
+export interface WorkflowExecutableAuthoredInput {
+  executableNodeId: string;
+  inputKey: string;
+  expressionType?: string | null;
+  value?: unknown;
+  isSensitive?: boolean;
+  accessState?: string | null;
+  access?: string | null;
+}
+
+export interface WorkflowExecutableCompiledInput {
+  executableNodeId: string;
+  binding: WorkflowExecutableInputBinding;
+  accessState?: string | null;
+  access?: string | null;
+}
+
+export interface WorkflowExecutableInputSources {
+  artifactId: string;
+  sourceReferenceId: string;
+  accessState?: string | null;
+  /** Compatibility alias emitted by early Foundation previews. */
+  access?: string | null;
+  authoredInputs: WorkflowExecutableAuthoredInput[];
+  compiledInputs: WorkflowExecutableCompiledInput[];
 }
 
 // Compact flowchart wiring projected with an executable node. Endpoints refer to authored node ids;
@@ -511,8 +561,24 @@ export interface WorkflowExecutableChildSlot {
 
 export interface WorkflowExecutableInputBinding {
   inputName: string;
+  inputKey?: string | null;
   source: string;
+  isSensitive?: boolean;
+  literalValue?: unknown;
+  expression?: WorkflowExecutableExpressionBinding | null;
+  activityOutput?: Record<string, unknown> | null;
+  durableValue?: Record<string, unknown> | null;
+  reference?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
   summary?: string | null;
+  [key: string]: unknown;
+}
+
+export interface WorkflowExecutableExpressionBinding extends Record<string, unknown> {
+  language: string;
+  expression: string;
+  resultType?: unknown;
+  metadata?: Record<string, unknown> | null;
 }
 
 // The reference the detail endpoint rendered the Layout Sidecar from, and how it was chosen:
@@ -521,6 +587,8 @@ export interface WorkflowExecutableChosenReference {
   sourceReferenceId: string;
   selection: string;
   layout: DesignMetadataRecord[];
+  authoredInputs?: WorkflowExecutableAuthoredInput[] | null;
+  authoredInputsAccess?: string | null;
 }
 
 // The executable detail response (plan §3): identity block, Execution Material node tree, the chosen
@@ -562,6 +630,12 @@ export interface WorkflowInstanceSummary {
   correlationId?: string | null;
   parentWorkflowExecutionId?: string | null;
   tenantId?: string | null;
+  sourceReferenceId?: string | null;
+  publicationId?: string | null;
+  slotId?: string | null;
+  sourceKind?: string | null;
+  sourceId?: string | null;
+  sourceVersion?: string | null;
   activityCount: number;
   incidentCount: number;
 }
@@ -646,6 +720,22 @@ export interface ActivityExecutionInspectionValueSnapshot {
   captureReason: string;
   isSensitive: boolean;
   metadata: Record<string, string>;
+  inputKey?: string | null;
+  evaluationId?: string | null;
+  evaluationPhase?: string | null;
+  evaluationSequence?: number | null;
+  /** Compatibility aliases emitted by early Foundation previews. */
+  phase?: string | null;
+  sequence?: number | null;
+  accessState?: string | null;
+  access?: string | null;
+  failure?: ActivityInputEvaluationFailure | null;
+}
+
+export interface ActivityInputEvaluationFailure {
+  code?: string | null;
+  message?: string | null;
+  incidentId?: string | null;
 }
 
 export type DiagnosticSnapshotNode =

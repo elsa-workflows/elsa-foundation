@@ -1,5 +1,6 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Studio.Core.Attributes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Studio.Diagnostics.StructuredLogs;
@@ -8,6 +9,7 @@ namespace Elsa.Studio.Diagnostics.StructuredLogs;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Diagnostics")]
 [ManifestFeatureCategory("Structured Logs")]
+[StudioModule("structured-logs", "Structured logs", "1.0.4", "navigation", "routes", "panels", "http", "sse", "diagnostics")]
 [ShellFeature(
     name: "StructuredLogsStudio",
     DisplayName = "Structured logs module",
@@ -17,6 +19,5 @@ public sealed class DiagnosticsStructuredLogsStudioFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddDiagnosticsStructuredLogsStudio();
     }
 }

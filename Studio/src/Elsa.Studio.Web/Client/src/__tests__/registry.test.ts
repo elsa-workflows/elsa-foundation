@@ -61,6 +61,7 @@ describe("studio registry", () => {
     expect(api.dashboardWidgets.slot.id).toBe(studioSlotIds.dashboardWidgets);
     expect(api.workflowDesigner.panels.slot.id).toBe(studioSlotIds.workflowDesignerPanels);
     expect(api.propertyEditors.slot.id).toBe(studioSlotIds.propertyEditors);
+    expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
     expect(api.agent.promptStarters.slot.id).toBe(studioSlotIds.agentPromptStarters);
     expect(api.agent.toolSlots.slot.id).toBe(studioSlotIds.agentToolSlots);
     expect(api.agent.toolContracts.slot.id).toBe(studioSlotIds.agentToolContracts);
@@ -250,13 +251,15 @@ describe("studio registry", () => {
       id: "javascript.inline",
       order: 10,
       supports: context => context.syntax === "JavaScript",
-      surfaces: { inline: () => null }
+      surfaces: { inline: () => null },
+      sourceRenderer: { compact: () => null, expanded: () => null }
     };
 
     api.expressionEditors.add(expandedEditor);
     api.expressionEditors.add(inlineEditor);
 
     expect(api.expressionEditors.list()).toEqual([inlineEditor, expandedEditor]);
+    expect(api.expressionEditors.list()[0]?.sourceRenderer).toBe(inlineEditor.sourceRenderer);
   });
 
   it("preserves navigation icon colors", () => {
@@ -371,7 +374,7 @@ describe("studio registry", () => {
     })));
     const client = createEndpointContext("https://foundation.example/").http;
 
-    const request = client.getJson("/_elsa/workflow-management/definitions");
+    const request = client.getJson("/design/workflows/definitions");
     const expectation = expect(request).rejects.toThrow("backend API is responding");
     await vi.advanceTimersByTimeAsync(10000);
 

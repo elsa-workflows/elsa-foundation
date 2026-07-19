@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import { AnonymousAuthProvider } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, AuthProvider, type AuthProviderManager, type AuthSession } from "@elsa-workflows/studio-sdk";
 import { DashboardPage } from "../DashboardPage";
 import { DashboardPreferenceStore, reconcileDashboardPreferences } from "../dashboardPreferences";
 import { register } from "../module";
@@ -45,6 +45,44 @@ describe("dashboard widget contract", () => {
     flushSync(() => root.unmount());
   });
 
+  it("times out even when a contribution consumes the abort without rejecting", async () => {
+    const api = stubApi();
+    api.dashboardWidgets.add(widget({
+      timeoutMs: 10,
+      load: ({ signal }) => new Promise(resolve => {
+        signal.addEventListener("abort", () => resolve({ ignoredAbort: true }), { once: true });
+      }),
+      component: () => <span>Late widget body</span>
+    }));
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    flushSync(() => root.render(<AnonymousAuthProvider><DashboardPage api={api} /></AnonymousAuthProvider>));
+
+    await waitUntil(() => container.textContent?.includes("The widget timed out.") === true);
+    expect(container.textContent).not.toContain("Late widget body");
+    flushSync(() => root.unmount());
+  });
+
+  it("renders a contribution's empty result with the host-owned empty state", async () => {
+    const api = stubApi();
+    const Body = vi.fn(() => <span>Module body</span>);
+    api.dashboardWidgets.add(widget({
+      load: async () => [],
+      isEmpty: snapshot => Array.isArray(snapshot) && snapshot.length === 0,
+      emptyState: { title: "No workflow runs", description: "Runs will appear after the first dispatch." },
+      component: Body
+    }));
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    flushSync(() => root.render(<AnonymousAuthProvider><DashboardPage api={api} /></AnonymousAuthProvider>));
+
+    await waitUntil(() => container.textContent?.includes("No workflow runs") === true);
+    expect(container.textContent).toContain("Runs will appear after the first dispatch.");
+    expect(container.querySelector(".dashboard-widget-empty")?.getAttribute("role")).toBe("status");
+    expect(Body).not.toHaveBeenCalled();
+    flushSync(() => root.unmount());
+  });
+
   it("clears scoped snapshot data when the Dashboard surface unmounts", async () => {
     const api = stubApi();
     const load = vi.fn(async () => ({ total: 12 }));
@@ -70,6 +108,63 @@ describe("dashboard widget contract", () => {
       { id: "workflows.runs", visible: true, size: "wide", settingsSchemaVersion: 1, settings: { range: "7d" } },
       { id: "missing.widget", visible: false, size: "small" }
     ]);
+  });
+
+  it("purges known unauthorized widget identities while retaining unloaded modules", () => {
+    const result = reconcileDashboardPreferences({ refreshIntervalMs: 300_000, autoAddNewWidgets: true, widgets: [
+      { id: "workflows.runs", visible: true, size: "wide" },
+      { id: "secrets.attention", visible: true, size: "wide", settings: { secretScope: "production" } },
+      { id: "missing.widget", visible: false, size: "small", settings: { retained: true } }
+    ] }, [widget()], [], undefined, new Set(["secrets.attention"]));
+
+    expect(result.widgets.map(entry => entry.id)).toEqual(["workflows.runs", "missing.widget"]);
+    expect(result.widgets.find(entry => entry.id === "missing.widget")?.settings).toEqual({ retained: true });
+  });
+
+  it("removes revoked widget metadata from the next canonical preference write", async () => {
+    const api = stubApi();
+    api.dashboardWidgets.add(widget());
+    api.dashboardWidgets.add(widget({
+      id: "secrets.attention",
+      title: "Secrets attention",
+      permissions: ["secrets.read"],
+      settings: {
+        schemaVersion: 1,
+        defaults: { secretScope: "all" },
+        descriptors: [],
+        validate: value => value as { secretScope: string }
+      }
+    }));
+    const stored = {
+      namespace: "dashboard",
+      schemaVersion: 1,
+      revision: "rev-1",
+      value: {
+        refreshIntervalMs: 300_000 as const,
+        autoAddNewWidgets: true,
+        widgets: [
+          { id: "workflows.runs", visible: true, size: "wide" as const, settingsSchemaVersion: 1, settings: { range: "7d" } },
+          { id: "secrets.attention", visible: true, size: "wide" as const, settingsSchemaVersion: 1, settings: { secretScope: "production" } },
+          { id: "missing.widget", visible: false, size: "small" as const, settings: { retained: true } }
+        ]
+      }
+    };
+    const getJson = vi.fn(async () => stored);
+    const putJson = vi.fn(async (_url, body) => ({ ...stored, value: (body as { value: typeof stored.value }).value, revision: "rev-2" }));
+    const http = api.backend.http as unknown as { getJson: typeof getJson; putJson: typeof putJson };
+    http.getJson = getJson;
+    http.putJson = putJson;
+    const manager = authenticatedManager({ permissions: [] });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    flushSync(() => root.render(<AuthProvider manager={manager}><DashboardPage api={api} /></AuthProvider>));
+
+    await waitUntil(() => putJson.mock.calls.length === 1);
+    const saved = putJson.mock.calls[0][1] as { value: typeof stored.value };
+    expect(saved.value.widgets.map(entry => entry.id)).toEqual(["workflows.runs", "missing.widget"]);
+    expect(JSON.stringify(saved)).not.toContain("secrets.attention");
+    expect(JSON.stringify(saved)).not.toContain("production");
+    flushSync(() => root.unmount());
   });
 
   it("lets host policy force a personally hidden widget visible", () => {
@@ -131,3 +226,25 @@ describe("dashboard widget contract", () => {
     vi.unstubAllGlobals();
   });
 });
+
+function authenticatedManager(overrides: Partial<AuthSession> = {}): AuthProviderManager {
+  const session: AuthSession = {
+    status: "authenticated",
+    subject: "alice",
+    tenantId: "tenant-a",
+    roles: [],
+    permissions: [],
+    ...overrides
+  };
+
+  return {
+    getSession: () => session,
+    getCapabilities: async () => ({ ownershipMode: "foundation-owned", providers: [] }),
+    initialize: async () => session,
+    login: async () => undefined,
+    handleCallback: async () => session,
+    logout: async () => undefined,
+    getAccessToken: async () => "token",
+    refresh: async () => session
+  };
+}

@@ -62,6 +62,28 @@ describe("activity property values", () => {
     expect(camelize("URL")).toBe("uRL");
   });
 
+  it("keys authored values by the descriptor's referenceKey verbatim, not the display name", () => {
+    const descriptor = { ...textDescriptor, name: "CustomerId", referenceKey: "customer-id" };
+    const updated = writeInputValue(activity("write"), descriptor, { typeName: "System.String", expression: { type: "Literal", value: "42" } });
+
+    expect(updated["customer-id"]).toEqual({ typeName: "System.String", expression: { type: "Literal", value: "42" } });
+    expect("customerId" in updated).toBe(false);
+    expect(readWrappedInput(updated, descriptor).expression.value).toBe("42");
+  });
+
+  it("stores a WriteLine-style lowercase referenceKey under that exact key", () => {
+    const descriptor = { ...textDescriptor, referenceKey: "text" };
+    const updated = writeInputValue(activity("write"), descriptor, { typeName: "System.String", expression: { type: "Literal", value: "Hello" } });
+
+    expect(updated.text).toEqual({ typeName: "System.String", expression: { type: "Literal", value: "Hello" } });
+    expect("Text" in updated).toBe(false);
+  });
+
+  it("falls back to the camelized display name when the descriptor has no referenceKey", () => {
+    const updated = writeInputValue(activity("write"), { ...textDescriptor, referenceKey: "  " }, "Raw");
+    expect("text" in updated).toBe(true);
+  });
+
   it("updates nested activities without mutating unrelated branches", () => {
     const left = activity("left");
     const target = activity("target");

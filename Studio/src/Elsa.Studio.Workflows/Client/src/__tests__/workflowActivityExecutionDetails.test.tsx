@@ -1,9 +1,9 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getActivityExecutionInspection } from "../api/workflows";
+import { getActivityExecutionInspection } from "../api/runtime";
 import {
   WorkflowActivityExecutionDetails,
   WorkflowIncidentList,
@@ -20,14 +20,16 @@ import type {
   WorkflowDefinitionVersionDetails,
   WorkflowInstanceDetails
 } from "../workflowTypes";
+import type { ExecutableGraphNodeFacts } from "../executableGraph";
 import { flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
 
-vi.mock("../api/workflows", async importOriginal => ({
-  ...(await importOriginal<typeof import("../api/workflows")>()),
+vi.mock("../api/runtime", async importOriginal => ({
+  ...(await importOriginal<typeof import("../api/runtime")>()),
   getActivityExecutionInspection: vi.fn()
 }));
 
 let active: { root: Root; container: HTMLElement } | null = null;
+let restoreClipboard: (() => void) | null = null;
 
 afterEach(() => {
   if (active) {
@@ -35,6 +37,8 @@ afterEach(() => {
     active.container.remove();
     active = null;
   }
+  restoreClipboard?.();
+  restoreClipboard = null;
   vi.mocked(getActivityExecutionInspection).mockReset();
 });
 
@@ -61,6 +65,15 @@ async function waitFor(assertion: () => void) {
   }
 
   throw lastError;
+}
+
+function installClipboard(writeText: (value: string) => Promise<void>) {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  restoreClipboard = () => {
+    if (descriptor) Object.defineProperty(navigator, "clipboard", descriptor);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  };
 }
 
 const context = {} as StudioEndpointContext;
@@ -200,7 +213,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       .find(section => section.querySelector("h4")?.textContent?.includes("Inputs"));
     expect(inputSection?.querySelectorAll("[role=listitem]")).toHaveLength(1);
     expect(inputSection?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("1");
-    expect(inputSection?.querySelector(".wf-runtime-capture-mode")?.textContent).toBe("Diagnostic Snapshot");
+    expect(inputSection?.querySelector(".wf-runtime-capture-mode")?.textContent).toBe("Paired evidence");
     expect(inputSection?.querySelector(".wf-runtime-input .wf-runtime-capture-mode")).toBeNull();
   });
 
@@ -227,13 +240,147 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.textContent).not.toContain("null");
   });
 
+  it("pairs runtime evidence with pinned authored source and structured compiled behavior", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([
+      {
+        name: "Message",
+        subject: "ActivityInput",
+        inputKey: "message-key",
+        evaluationId: "invoke-1",
+        phase: "invoke",
+        sequence: 1,
+        captureMode: "DiagnosticSnapshot",
+        state: "captured",
+        type: { typeName: "System.String" },
+        capturedAt: "2026-07-09T10:00:01Z",
+        snapshot: { kind: "string", preview: "Hello at runtime", length: 16, truncated: false },
+        captureReason: "Diagnostic snapshot captured.",
+        isSensitive: false,
+        access: "visible",
+        metadata: {}
+      }
+    ]));
+    const executableNodeFacts: ExecutableGraphNodeFacts = {
+      executableNodeId: "node-1",
+      authoredActivityId: "write-line",
+      activityType: activity.activityType,
+      activityTypeVersion: activity.activityTypeVersion,
+      structureKind: null,
+      available: true,
+      authoredInputsAccess: "visible",
+      authoredInputs: [{ executableNodeId: "node-1", inputKey: "message-key", expressionType: "JavaScript", value: "variables.message" }],
+      inputBindings: [{
+        inputKey: "message-key",
+        inputName: "Message",
+        source: "Expression",
+        expression: { language: "JavaScript", expression: "variables.message" },
+        summary: "legacy summary must not render"
+      }]
+    };
+    const expressionEditor: StudioExpressionEditorContribution = {
+      id: "test.javascript",
+      supports: context => context.syntax === "JavaScript",
+      surfaces: {},
+      sourceRenderer: {
+        compact: ({ context }) => <strong>{String(context.value)}</strong>,
+        expanded: ({ context }) => <strong>JavaScript source: {String(context.value)}</strong>
+      }
+    };
+    const pairedCatalog: ActivityCatalogItem[] = [{
+      ...catalog[0]!,
+      inputs: [{ referenceKey: "message-key", name: "Message", displayName: "Message", typeName: "System.String" }]
+    }];
+
+    const container = render(
+      <WorkflowActivityExecutionDetails
+        context={context}
+        activity={activity}
+        activityCatalog={pairedCatalog}
+        executableNodeFacts={executableNodeFacts}
+        expressionEditors={[expressionEditor]}
+      />
+    );
+
+    await waitFor(() => expect(container.textContent).toContain("Hello at runtime"));
+    expect(container.textContent).toContain("Evaluated at runtime");
+    expect(container.textContent).toContain("JavaScript source: variables.message");
+    expect(container.textContent).toContain("Compiled binding (Expression)");
+    expect(container.textContent).not.toContain("legacy summary must not render");
+    expect([...container.querySelectorAll(".wf-instance-section > h4, .wf-instance-section > header h4")].map(item => item.textContent?.replace(/\d+$/, "")))
+      .toEqual(expect.arrayContaining(["Inputs", "Outputs"]));
+  });
+
+  it("keeps authored source hidden when source access is denied while runtime evidence remains visible", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([{
+      name: "Message",
+      subject: "ActivityInput",
+      inputKey: "message-key",
+      evaluationId: "invoke-1",
+      phase: "invoke",
+      sequence: 1,
+      captureMode: "DiagnosticSnapshot",
+      state: "captured",
+      type: { typeName: "System.String" },
+      capturedAt: "2026-07-09T10:00:01Z",
+      snapshot: { kind: "string", preview: "Allowed runtime evidence", length: 24, truncated: false },
+      captureReason: "Captured.",
+      isSensitive: false,
+      access: "visible",
+      metadata: {}
+    }]));
+
+    const container = render(
+      <WorkflowActivityExecutionDetails
+        context={context}
+        activity={activity}
+        activityCatalog={[{ ...catalog[0]!, inputs: [{ referenceKey: "message-key", name: "Message", typeName: "System.String" }] }]}
+        executableNodeFacts={{
+          executableNodeId: "node-1",
+          authoredActivityId: "write-line",
+          activityType: activity.activityType,
+          activityTypeVersion: activity.activityTypeVersion,
+          structureKind: null,
+          available: true,
+          authoredInputsAccess: "permissionHidden",
+          authoredInputs: [],
+          inputBindings: []
+        }}
+      />
+    );
+
+    await waitFor(() => expect(container.textContent).toContain("Allowed runtime evidence"));
+    expect(container.textContent).toContain("Authored source is hidden by source permissions.");
+  });
+
   it("shows an empty state when no input snapshots exist", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
 
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
-    await waitFor(() => expect(container.textContent).toContain("No runtime input snapshots were recorded for this execution."));
+    await waitFor(() => expect(container.textContent).toContain("No declared inputs, pinned bindings, or runtime input evidence are available for this execution."));
     expect(container.textContent).toContain("No runtime output snapshots were recorded for this execution.");
+  });
+
+  it("prioritizes an activity summary and copies every metadata value", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const writeText = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
+    installClipboard(writeText);
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+    const overview = container.querySelector<HTMLElement>(".wf-activity-overview")!;
+
+    expect(overview.querySelector("h4")?.textContent).toBe("Write Line");
+    expect(overview.querySelectorAll(".wf-activity-summary-grid .wf-activity-meta-item")).toHaveLength(3);
+    expect(container.querySelector(".wf-activity-execution-details")?.hasAttribute("open")).toBe(false);
+    expect(container.querySelectorAll(".wf-copy-button")).toHaveLength(10);
+
+    const executionIdCopy = container.querySelector<HTMLButtonElement>("[aria-label='Copy activity execution ID']")!;
+    executionIdCopy.click();
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("ae-1");
+      expect(overview.querySelector("[role=status]")?.textContent).toBe("Copied activity execution ID.");
+    });
   });
 
   it("renders redaction, truncation, permission-hidden, and payload reference markers", async () => {
@@ -405,5 +552,38 @@ describe("buildInstanceCanvas", () => {
     const overlaid = descended.nodes.find(node => node.id === "wl-1")!;
     expect(overlaid.data.runtime?.status).toBe("Completed");
     expect(descended.nodes.find(node => node.id === "wl-2")!.data.runtime).toBeUndefined();
+  });
+
+  it("renders a projected Flowchart connection as a focusable, named run-canvas edge", () => {
+    const connectedRoot = flowchartNode("fc-connected", [leafNode("wl-1"), leafNode("wl-2")]);
+    connectedRoot.structure = {
+      ...connectedRoot.structure!,
+      payload: {
+        ...connectedRoot.structure!.payload,
+        connections: [{ source: { nodeId: "wl-1", port: "Done" }, target: { nodeId: "wl-2" } }]
+      }
+    };
+    const connectedVersion: WorkflowDefinitionVersionDetails = {
+      ...definitionVersion,
+      state: { rootActivity: connectedRoot },
+      layout: [{ nodeId: "wl-1", x: 100, y: 120 }, { nodeId: "wl-2", x: 480, y: 120 }]
+    };
+
+    const canvas = buildInstanceCanvas(connectedVersion, instanceCatalog, instanceDetails([]), null, [], () => {});
+
+    expect(canvas.nodes.map(node => ({ id: node.id, position: node.position }))).toEqual([
+      { id: "wl-1", position: { x: 100, y: 120 } },
+      { id: "wl-2", position: { x: 480, y: 120 } }
+    ]);
+    expect(canvas.edges).toHaveLength(1);
+    expect(canvas.edges[0]).toMatchObject({
+      source: "wl-1",
+      target: "wl-2",
+      sourceHandle: "Done",
+      focusable: true,
+      ariaRole: "button",
+      ariaLabel: "Connection from Write Line (wl-1), Done output, to Write Line (wl-2). Not selected.",
+      domAttributes: { "aria-pressed": false }
+    });
   });
 });

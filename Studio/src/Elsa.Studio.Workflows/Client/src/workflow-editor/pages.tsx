@@ -1,16 +1,20 @@
-import React, { useCallback, useEffect, useState } from "react";
-import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
-import { WorkflowEditor } from "./WorkflowEditor";
-import { WorkflowDefinitions } from "./WorkflowDefinitions";
-import { WorkflowExecutables } from "./WorkflowExecutables";
-import { WorkflowExecutableInspectorWorkbench } from "./WorkflowExecutableInspector";
-import { WorkflowInstances, WorkflowInstanceDetailsWorkbench } from "./WorkflowInstances";
+import React, { lazy, useCallback, useEffect, useState } from "react";
+import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
+
+const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
+const WorkflowDefinitions = lazy(() => import("./WorkflowDefinitions").then(module => ({ default: module.WorkflowDefinitions })));
+const WorkflowExecutables = lazy(() => import("./WorkflowExecutables").then(module => ({ default: module.WorkflowExecutables })));
+const WorkflowExecutableInspectorWorkbench = lazy(() => import("./WorkflowExecutableInspector").then(module => ({ default: module.WorkflowExecutableInspectorWorkbench })));
+const WorkflowInstances = lazy(() => import("./WorkflowInstances").then(module => ({ default: module.WorkflowInstances })));
+const WorkflowInstanceDetailsWorkbench = lazy(() => import("./WorkflowInstances").then(module => ({ default: module.WorkflowInstanceDetailsWorkbench })));
 
 export function WorkflowManagementPage({
   context,
   ai,
   propertyEditors,
   expressionEditors,
+  runInputEditors,
   workflowDesignerPanels,
   autosaveEnabledByDefault
 }: {
@@ -18,6 +22,7 @@ export function WorkflowManagementPage({
   ai: StudioAiContributionApi;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
+  runInputEditors: StudioWorkflowRunInputEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   autosaveEnabledByDefault?: boolean;
 }) {
@@ -36,15 +41,21 @@ export function WorkflowManagementPage({
   };
 
   return definitionId
-    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+    ? (
+      <WorkflowLazyBoundary label="workflow designer">
+        <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} runInputEditors={runInputEditors} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+      </WorkflowLazyBoundary>
+    )
     : (
       <WorkflowsPageFrame title="Definitions">
-        <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
+        <WorkflowLazyBoundary label="workflow definitions">
+          <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
+        </WorkflowLazyBoundary>
       </WorkflowsPageFrame>
     );
 }
 
-export function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+export function WorkflowExecutablesPage({ context, ai, runInputEditors }: { context: StudioEndpointContext; ai: StudioAiContributionApi; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
   const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
 
   useEffect(() => {
@@ -69,12 +80,14 @@ export function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpoi
 
   return (
     <WorkflowsPageFrame title="Executables">
-      <WorkflowExecutables context={context} ai={ai} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
+      <WorkflowLazyBoundary label="workflow executables">
+        <WorkflowExecutables context={context} ai={ai} runInputEditors={runInputEditors} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
+      </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
 }
 
-export function WorkflowExecutableInspectorPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }: { context: StudioEndpointContext; ai: StudioAiContributionApi; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
   const [location, setLocation] = useState(readExecutableInspectorLocation);
 
   useEffect(() => {
@@ -100,43 +113,70 @@ export function WorkflowExecutableInspectorPage({ context, ai }: { context: Stud
 
   return (
     <WorkflowsPageFrame title="Executable Inspector">
-      <WorkflowExecutableInspectorWorkbench
-        context={context}
-        ai={ai}
-        artifactId={location.artifactId}
-        sourceReferenceId={location.sourceReferenceId}
-        onSelectReference={selectReference}
-      />
+      <WorkflowLazyBoundary label="executable inspector">
+        <WorkflowExecutableInspectorWorkbench
+          context={context}
+          ai={ai}
+          runInputEditors={runInputEditors}
+          artifactId={location.artifactId}
+          sourceReferenceId={location.sourceReferenceId}
+          onSelectReference={selectReference}
+        />
+      </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
 }
 
-export function WorkflowInstancesPage({ context }: { context: StudioEndpointContext }) {
+export function WorkflowInstancesPage({ context, navigate }: { context: StudioEndpointContext; navigate(path: string): void }) {
   return (
     <WorkflowsPageFrame title="Runs">
-      <WorkflowInstances context={context} />
+      <WorkflowLazyBoundary label="workflow runs">
+        <WorkflowInstances context={context} navigate={navigate} />
+      </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
 }
 
-export function WorkflowInstanceDetailsPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [], navigate }: {
+  context: StudioEndpointContext;
+  ai: StudioAiContributionApi;
+  expressionEditors?: StudioExpressionEditorContribution[];
+  navigate(path: string): void;
+}) {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
 
   return (
-    <WorkflowsPageFrame title="Run">
-      <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId={workflowExecutionId} />
+    <WorkflowsPageFrame
+      title="Run"
+      workbench
+      context={workflowExecutionId ? (
+        <div className="wf-page-context">
+          <span>Workflow Instance ID</span>
+          <code title={workflowExecutionId}>{workflowExecutionId}</code>
+        </div>
+      ) : null}
+    >
+      <WorkflowLazyBoundary label="workflow run">
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} navigate={navigate} />
+      </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
 }
 
-function WorkflowsPageFrame({ title, children }: { title: string; children: React.ReactNode }) {
+function WorkflowsPageFrame({ title, context, workbench = false, children }: {
+  title: string;
+  context?: React.ReactNode;
+  workbench?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="wf-page">
+    <section className={workbench ? "wf-page wf-page--run-workbench" : "wf-page"}>
       <div className="wf-page-header">
         <div>
           <span className="wf-kicker">Workflow management</span>
           <h2>{title}</h2>
         </div>
+        {context}
       </div>
       {children}
     </section>

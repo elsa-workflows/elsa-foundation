@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#05080b">
+  <title>Elsa 4 Progress — Meeting Brief</title>
+  <style>
+    :root {
+      --bg: #05080b;
+      --panel: rgba(15, 20, 25, .72);
+      --panel-strong: rgba(17, 23, 29, .92);
+      --line: rgba(255,255,255,.12);
+      --line-strong: rgba(255,255,255,.22);
+      --text: #f5f8fb;
+      --muted: #98a6b3;
+      --dim: #61707b;
+      --cyan: #75e5f7;
+      --mint: #8ef0bd;
+      --amber: #ffc77c;
+      --coral: #ff8198;
+      --violet: #b7b8ff;
+      --shadow: 0 28px 90px rgba(0,0,0,.42);
+      --radius: 10px;
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-width: 320px; min-height: 100%; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 82% 8%, rgba(117,229,247,.11), transparent 28rem),
+        radial-gradient(circle at 8% 94%, rgba(142,240,189,.07), transparent 30rem),
+        linear-gradient(145deg, #090d12 0%, #030507 54%, #071016 100%);
+      color: var(--text);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .7;
+      background-image:
+        linear-gradient(rgba(255,255,255,.034) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: linear-gradient(180deg, #000 0%, transparent 92%);
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .045;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+      mix-blend-mode: screen;
+    }
+
+    button { font: inherit; }
+    button:focus-visible, a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
+    .app-shell { position: relative; z-index: 1; display: grid; grid-template-rows: auto 1fr auto; min-height: 100vh; padding: 20px 28px 18px; }
+    .topbar, .bottombar { width: min(1400px, 100%); margin: 0 auto; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 48px; }
+    .brand { display: inline-flex; align-items: center; gap: 11px; color: var(--text); text-decoration: none; }
+    .brand-mark { display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid rgba(117,229,247,.55); border-radius: 7px; background: linear-gradient(135deg, rgba(117,229,247,.2), rgba(117,229,247,.04)); color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: -.08em; box-shadow: 0 0 24px rgba(117,229,247,.12); }
+    .brand-copy { display: grid; gap: 1px; }
+    .brand-copy strong { font-size: 12px; letter-spacing: .13em; text-transform: uppercase; }
+    .brand-copy span, .meta { color: var(--muted); font-size: 11px; }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .top-actions button, .bottombar button { min-height: 30px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.055); color: var(--muted); padding: 0 10px; cursor: pointer; transition: border-color .2s ease, color .2s ease, background .2s ease; }
+    .top-actions button:hover, .bottombar button:hover { border-color: var(--line-strong); color: var(--text); background: rgba(255,255,255,.09); }
+    .top-actions .counter { border-color: transparent; background: transparent; color: var(--dim); cursor: default; }
+
+    .deck-wrap { display: grid; place-items: center; min-height: 0; padding: 12px 0; }
+    .deck { width: min(1400px, 100%); height: min(78vh, 790px); min-height: 520px; }
+    .slide { display: none; position: relative; height: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(135deg, rgba(255,255,255,.065), transparent 28%), linear-gradient(160deg, rgba(14, 20, 26, .96), rgba(4, 7, 10, .97)); box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.07); }
+    .slide.active { display: grid; animation: enter .38s ease both; }
+    @keyframes enter { from { opacity: 0; transform: translateY(8px) scale(.995); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .slide::before { content: attr(data-number); position: absolute; right: 3.2%; bottom: -8%; color: rgba(255,255,255,.028); font-size: clamp(11rem, 24vw, 23rem); font-weight: 800; line-height: .8; letter-spacing: -.12em; pointer-events: none; }
+    .slide::after { content: ""; position: absolute; top: 0; right: 0; width: 46%; height: 1px; background: linear-gradient(90deg, transparent, rgba(117,229,247,.62)); }
+    .slide-inner { position: relative; z-index: 1; display: grid; align-content: center; width: min(1160px, calc(100% - 100px)); margin: 0 auto; padding: 46px 0; }
+
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; color: var(--cyan); font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 22px; height: 1px; background: currentColor; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { max-width: 900px; margin-top: 18px; font-size: clamp(3.5rem, 8vw, 8.5rem); line-height: .88; letter-spacing: -.075em; font-weight: 760; }
+    h2 { max-width: 820px; margin-top: 14px; font-size: clamp(2.3rem, 5.5vw, 5.4rem); line-height: .94; letter-spacing: -.065em; font-weight: 730; }
+    h3 { font-size: 16px; line-height: 1.15; letter-spacing: -.015em; }
+    .lede { max-width: 680px; margin-top: 25px; color: var(--muted); font-size: clamp(1rem, 1.4vw, 1.2rem); line-height: 1.55; }
+    .fine { color: var(--dim); font-size: 11px; line-height: 1.5; }
+
+    .hero { grid-template-columns: minmax(0, 1.3fr) minmax(270px, .7fr); gap: 6%; align-items: center; }
+    .hero-rail { display: grid; gap: 15px; padding-left: 30px; border-left: 1px solid var(--line); }
+    .hero-rail strong { display: block; color: var(--mint); font-size: 39px; line-height: 1; letter-spacing: -.06em; }
+    .hero-rail span { color: var(--muted); font-size: 12px; }
+    .hero-rail .rail-line { width: 100%; height: 1px; background: linear-gradient(90deg, var(--mint), transparent); }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 32px; }
+    .chip { display: inline-flex; align-items: center; min-height: 27px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.05); color: var(--muted); padding: 0 10px; font-size: 11px; }
+    .chip.cyan { border-color: rgba(117,229,247,.28); background: rgba(117,229,247,.09); color: var(--cyan); }
+    .chip.mint { border-color: rgba(142,240,189,.26); background: rgba(142,240,189,.08); color: var(--mint); }
+    .chip.amber { border-color: rgba(255,199,124,.3); background: rgba(255,199,124,.08); color: var(--amber); }
+
+    .section-head { display: grid; gap: 5px; margin-bottom: 28px; }
+    .section-head p { color: var(--muted); font-size: 13px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .panel { border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.045); padding: 20px; }
+    .panel strong { display: block; margin-bottom: 8px; font-size: 12px; color: var(--text); }
+    .panel p { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .panel .panel-mark { display: grid; place-items: center; width: 30px; height: 30px; margin-bottom: 22px; border: 1px solid currentColor; border-radius: 7px; font-size: 12px; font-weight: 800; }
+    .panel[data-tone="cyan"] .panel-mark { color: var(--cyan); background: rgba(117,229,247,.1); }
+    .panel[data-tone="mint"] .panel-mark { color: var(--mint); background: rgba(142,240,189,.1); }
+    .panel[data-tone="amber"] .panel-mark { color: var(--amber); background: rgba(255,199,124,.1); }
+    .panel[data-tone="violet"] .panel-mark { color: var(--violet); background: rgba(183,184,255,.1); }
+
+    .lifecycle { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin-top: 38px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .lifecycle-step { position: relative; min-height: 190px; padding: 22px 17px 18px; border-right: 1px solid var(--line); }
+    .lifecycle-step:last-child { border-right: 0; }
+    .lifecycle-step::before { content: ""; position: absolute; top: -5px; left: 17px; width: 9px; height: 9px; border: 1px solid var(--cyan); border-radius: 50%; background: var(--bg); box-shadow: 0 0 0 5px rgba(117,229,247,.08); }
+    .lifecycle-step b { display: block; color: var(--cyan); font-size: 11px; letter-spacing: .09em; text-transform: uppercase; }
+    .lifecycle-step h3 { margin-top: 25px; }
+    .lifecycle-step p { margin-top: 9px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .lifecycle-step:nth-child(2)::before { border-color: var(--violet); }
+    .lifecycle-step:nth-child(2) b { color: var(--violet); }
+    .lifecycle-step:nth-child(3)::before { border-color: var(--mint); }
+    .lifecycle-step:nth-child(3) b { color: var(--mint); }
+    .lifecycle-step:nth-child(4)::before { border-color: var(--amber); }
+    .lifecycle-step:nth-child(4) b { color: var(--amber); }
+    .lifecycle-step:nth-child(5)::before { border-color: var(--coral); }
+    .lifecycle-step:nth-child(5) b { color: var(--coral); }
+
+    .split { grid-template-columns: minmax(0, 1.05fr) minmax(280px, .95fr); gap: 38px; align-items: center; }
+    .bullet-list { display: grid; gap: 11px; margin: 25px 0 0; padding: 0; list-style: none; }
+    .bullet-list li { display: grid; grid-template-columns: 9px 1fr; gap: 11px; align-items: start; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .bullet-list li::before { content: ""; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 14px rgba(117,229,247,.55); }
+    .bullet-list li strong { color: var(--text); font-weight: 650; }
+    .terminal { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,.35); box-shadow: 0 20px 50px rgba(0,0,0,.2); }
+    .terminal-bar { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.035); }
+    .terminal-bar i { width: 7px; height: 7px; border-radius: 50%; background: var(--coral); }
+    .terminal-bar i:nth-child(2) { background: var(--amber); }
+    .terminal-bar i:nth-child(3) { background: var(--mint); }
+    .terminal-bar span { margin-left: 6px; color: var(--dim); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .terminal-body { display: grid; gap: 12px; padding: 20px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .terminal-row { display: grid; grid-template-columns: 85px 1fr; gap: 12px; }
+    .terminal-row b { color: var(--dim); font-weight: 500; }
+    .terminal-row span { color: var(--muted); }
+    .terminal-row .good { color: var(--mint); }
+    .terminal-row .warn { color: var(--amber); }
+
+    .stack { display: grid; gap: 8px; margin-top: 28px; }
+    .stack-row { display: grid; grid-template-columns: 150px 1fr auto; align-items: center; gap: 16px; min-height: 54px; border-bottom: 1px solid var(--line); }
+    .stack-row:first-child { border-top: 1px solid var(--line); }
+    .stack-row b { color: var(--text); font-size: 12px; }
+    .stack-row span { color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .status { display: inline-flex; align-items: center; gap: 6px; color: var(--mint); font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; white-space: nowrap; }
+    .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 12px currentColor; }
+    .status.amber { color: var(--amber); }
+    .slide[data-number="08"] .section-head { margin-bottom: 16px; }
+    .slide[data-number="08"] h2 { max-width: 880px; font-size: clamp(2.2rem, 4.6vw, 4.7rem); }
+    .slide[data-number="08"] .stack { margin-top: 16px; gap: 0; }
+    .slide[data-number="08"] .stack-row { min-height: 48px; }
+
+    .big-quote { max-width: 1000px; margin-top: 38px; padding: 26px 0 0 25px; border-left: 2px solid var(--mint); color: var(--text); font-size: clamp(1.5rem, 3vw, 3rem); line-height: 1.08; letter-spacing: -.04em; }
+    .big-quote em { color: var(--mint); font-style: normal; }
+    .closing { align-content: center; }
+    .closing h2 { max-width: 980px; }
+    .closing .lede { max-width: 650px; }
+    .closing .source-line { margin-top: 40px; color: var(--dim); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+    .bottombar { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 39px; }
+    .progress { display: flex; align-items: center; gap: 7px; }
+    .progress button { width: 28px; min-height: 6px; height: 6px; padding: 0; border: 0; border-radius: 99px; background: rgba(255,255,255,.15); }
+    .progress button.active { width: 42px; background: var(--cyan); box-shadow: 0 0 14px rgba(117,229,247,.45); }
+    .nav-controls { display: flex; align-items: center; gap: 7px; }
+    .nav-controls button { display: inline-flex; align-items: center; justify-content: center; min-width: 33px; padding: 0 9px; }
+    .nav-controls .next { border-color: rgba(117,229,247,.35); color: var(--cyan); }
+    .notes { display: none; position: fixed; right: 22px; bottom: 68px; z-index: 5; width: min(390px, calc(100vw - 44px)); border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel-strong); box-shadow: var(--shadow); padding: 16px; }
+    .notes.visible { display: block; }
+    .notes b { display: block; margin-bottom: 7px; color: var(--amber); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+    .notes p { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .help { display: none; position: fixed; inset: 0; z-index: 4; place-items: center; background: rgba(0,0,0,.62); backdrop-filter: blur(8px); }
+    .help.visible { display: grid; }
+    .help-card { width: min(420px, calc(100vw - 40px)); border: 1px solid var(--line-strong); border-radius: 9px; background: var(--panel-strong); padding: 22px; box-shadow: var(--shadow); }
+    .help-card h2 { margin: 0; font-size: 24px; }
+    .help-card ul { display: grid; gap: 9px; margin: 18px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 12px; }
+    .help-card kbd { display: inline-grid; min-width: 25px; place-items: center; margin-right: 6px; border: 1px solid var(--line-strong); border-radius: 4px; background: rgba(255,255,255,.07); color: var(--text); padding: 2px 5px; font: 11px ui-monospace, monospace; }
+
+    @media (max-width: 900px) {
+      body { overflow: auto; }
+      .app-shell { min-height: 100svh; padding: 14px 14px 12px; }
+      .deck-wrap { padding: 10px 0; }
+      .deck { height: auto; min-height: 0; }
+      .slide { min-height: calc(100svh - 142px); }
+      .slide-inner { width: min(100% - 46px, 680px); padding: 34px 0; }
+      .hero, .split { grid-template-columns: 1fr; gap: 28px; }
+      .hero-rail { display: flex; flex-wrap: wrap; align-items: center; border-left: 0; border-top: 1px solid var(--line); padding: 20px 0 0; }
+      .hero-rail .rail-line { display: none; }
+      .hero-rail strong { font-size: 30px; }
+      .lifecycle { grid-template-columns: 1fr; border-bottom: 0; }
+      .lifecycle-step { min-height: 0; border-right: 0; border-bottom: 1px solid var(--line); padding-left: 30px; }
+      .lifecycle-step:last-child { border-bottom: 0; }
+      .lifecycle-step::before { left: 0; }
+      .grid-3, .grid-2 { grid-template-columns: 1fr; }
+      .stack-row { grid-template-columns: 1fr; gap: 5px; padding: 12px 0; }
+      .stack-row .status { justify-self: start; }
+      h1 { font-size: clamp(3.4rem, 15vw, 6rem); }
+      h2 { font-size: clamp(2.25rem, 11vw, 4.2rem); }
+      .bottombar { flex-wrap: wrap; justify-content: center; padding-top: 4px; }
+      .meta { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+    @media print {
+      body { overflow: visible; background: #fff; color: #111; }
+      body::before, body::after, .topbar, .bottombar, .notes, .help { display: none !important; }
+      .app-shell { display: block; padding: 0; }
+      .deck-wrap, .deck { display: block; height: auto; }
+      .slide, .slide.active { display: grid; break-after: page; height: 100vh; min-height: 0; border: 0; border-radius: 0; box-shadow: none; color: #111; background: #fff; }
+      .slide::before { color: rgba(0,0,0,.04); }
+      .slide::after { background: #111; }
+      .eyebrow, .panel .panel-mark, .status, .lifecycle-step b { color: #176c79 !important; }
+      .lede, .panel p, .lifecycle-step p, .stack-row span, .fine { color: #495057; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#slide-1" aria-label="Elsa 4 progress, first slide">
+        <span class="brand-mark" aria-hidden="true">E</span>
+        <span class="brand-copy"><strong>Elsa 4</strong><span>Progress brief</span></span>
+      </a>
+      <div class="top-actions">
+        <span class="meta">Foundation + Studio · 16 Jul 2026</span>
+        <button type="button" id="help-button" aria-label="Show keyboard help">?</button>
+        <button type="button" id="notes-button" aria-label="Show speaker notes">Notes</button>
+        <span class="counter" id="counter" aria-live="polite">01 / 09</span>
+      </div>
+    </header>
+
+    <div class="deck-wrap">
+      <div class="deck" aria-live="polite">
+        <section class="slide active" id="slide-1" data-number="01" data-note="Open with the main message: Elsa 4 is becoming an inspectable, modular application platform—not just a workflow runtime.">
+          <div class="slide-inner hero">
+            <div>
+              <span class="eyebrow">Meeting brief · tomorrow</span>
+              <h1>Elsa 4 is becoming a platform.</h1>
+              <p class="lede">The engine, Studio, diagnostics, persistence, extension model, and Weaver are converging into one modular foundation for building and operating workflows.</p>
+              <div class="hero-meta"><span class="chip cyan">Implemented slices</span><span class="chip mint">Working end to end</span><span class="chip amber">Next wave visible</span></div>
+            </div>
+            <div class="hero-rail" aria-label="Presentation summary">
+              <div><strong>04</strong><span>surfaces moving together</span></div>
+              <div class="rail-line"></div>
+              <div><strong>01</strong><span>shared contract boundary</span></div>
+              <div class="rail-line"></div>
+              <div><strong>∞</strong><span>extension paths ahead</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="slide" id="slide-2" data-number="02" data-note="Use this as the framing slide. The value is in the connected lifecycle, not any one isolated feature.">
+          <div class="slide-inner">
+            <div class="section-head"><span class="eyebrow">The shape of the work</span><h2>One lifecycle. Five connected layers.</h2><p>Design, publish, run, inspect, and extend without losing the contract between them.</p></div>
+            <div class="lifecycle" aria-label="Elsa 4 workflow lifecycle">
+              <div class="lifecycle-step"><b>01 · Design</b><h3>Author</h3><p>Definitions, drafts, versions, typed inputs, activity catalog, and validation.</p></div>
+              <div class="lifecycle-step"><b>02 · Publish</b><h3>Compile</h3><p>Turn design state into content-addressed executable artifacts and source references.</p></div>
+              <div class="lifecycle-step"><b>03 · Runtime</b><h3>Execute</h3><p>Schedule, checkpoint, resume, complete, fault, recover, and persist state.</p></div>
+              <div class="lifecycle-step"><b>04 · Evidence</b><h3>Inspect</h3><p>See instances, incidents, bookmarks, logs, traces, values, and provenance.</p></div>
+              <div class="lifecycle-step"><b>05 · Platform</b><h3>Extend</h3><p>Add modules, themes, packages, activities, tools, providers, and Studio surfaces.</p></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="slide" id="slide-3" data-number="03" data-note="The Studio is no longer just a designer. Call out the extensibility boundary and the fact that modules can contribute routes, panels, editors, diagnostics, and assistant capabilities.">
+          <div class="slide-inner">
+            <div class="section-head"><span class="eyebrow">Elsa Foundation Studio</span><h2>The Studio is now a modular workbench.</h2><p>ASP.NET Core hosts a React/Vite shell; CShells and Nuplane decide what is active; the SDK decides how modules contribute.</p></div>
+            <div class="grid-3">
+              <article class="panel" data-tone="cyan"><div class="panel-mark">S</div><strong>Shell & module protocol</strong><p>Dynamic manifests, deterministic loading, host/backend endpoint contexts, feature management, module diagnostics, and package discovery.</p></article>
+              <article class="panel" data-tone="mint"><div class="panel-mark">W</div><strong>Workflow workbench</strong><p>Designer, property editors, expression modules, executables, test runs, instances, runtime inspection, and activity availability.</p></article>
+              <article class="panel" data-tone="amber"><div class="panel-mark">+</div><strong>Contributions everywhere</strong><p>Routes, navigation, dashboard widgets, panels, settings, editors, diagnostics, Weaver tools, and proposal renderers.</p></article>
+            </div>
+            <div class="hero-meta"><span class="chip cyan">Workflows</span><span class="chip">Secrets</span><span class="chip">OpenTelemetry</span><span class="chip">Structured logs</span><span class="chip">Console stream</span><span class="chip">Weaver</span><span class="chip">Extension Builder</span></div>
+          </div>
+        </section>
+
+        <section class="slide" id="slide-4" data-number="04" data-note="This is the strongest product story: a user can move from authoring to a published artifact to a concrete run and evidence about what happened.">
+          <div class="slide-inner">
+            <div class="section-head"><span class="eyebrow">Workflow product surface</span><h2>From draft to evidence.</h2><p>The Studio can now tell a much more complete story about a workflow’s life.</p></div>
+            <div class="stack" aria-label="Workflow product capabilities">
+              <div class="stack-row"><b>Authoring</b><span>Definitions, drafts, versions, graph editing, variables, typed arguments, activity catalog, JS/Liquid expressions.</span><span class="status">Implemented</span></div>
+              <div class="stack-row"><b>Publishing</b><span>Preflight validation, publication slots, executable compilation, artifact identity, source references, executable inspection.</span><span class="status">Implemented</span></div>
+              <div class="stack-row"><b>Operations</b><span>Run lists, instance details, activity execution inspection, incidents, bookmarks, outputs, and test runs.</span><span class="status">Implemented</span></div>
+              <div class="stack-row"><b>Value evidence</b><span>Bounded diagnostic snapshots, redaction, truncation, permission states, and runtime diagnostics settings.</span><span class="status">Implemented</span></div>
+              <div class="stack-row"><b>Input provenance</b><span>Pair the authored binding with the value received at runtime, including phase, sequence, failures, and sensitivity.</span><span class="status amber">In progress</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="slide" id="slide-5" data-number="05" data-note="Emphasize that runtime work is about durable behavior and operational trust: checkpoints, single-writer execution, recovery, and inspection projections.">
+          <div class="slide-inner split">
+            <div>
+              <span class="eyebrow">Foundation runtime</span>
+              <h2>A runtime built for durable behavior.</h2>
+              <ul class="bullet-list">
+                <li><span><strong>Execution spine:</strong> scheduler queues, drain, single-writer execution, activity invocation, completion, and continuation scheduling.</span></li>
+                <li><span><strong>Durability:</strong> checkpoint commit boundaries, post-commit outbox, state projections, recovery scanning, and domain retry policy.</span></li>
+                <li><span><strong>Control flow:</strong> bookmarks, resume, volatile waits, timers, triggers, HTTP endpoints, flowcharts, sequences, and composites.</span></li>
+                <li><span><strong>Operational state:</strong> incidents, holds, pause boundaries, execution liveness, scheduling provenance, and inspection read models.</span></li>
+              </ul>
+            </div>
+            <div class="terminal" aria-label="Runtime system status illustration">
+              <div class="terminal-bar"><i></i><i></i><i></i><span>runtime-observer</span></div>
+              <div class="terminal-body">
+                <div class="terminal-row"><b>dispatch</b><span class="good">accepted · workflow-start</span></div>
+                <div class="terminal-row"><b>execution</b><span>single-writer actor · fenced</span></div>
+                <div class="terminal-row"><b>checkpoint</b><span class="good">committed · sequence 184</span></div>
+                <div class="terminal-row"><b>evidence</b><span>snapshot · policy bounded</span></div>
+                <div class="terminal-row"><b>recovery</b><span class="warn">scanner ready · no incidents</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="slide" id="slide-6" data-number="06" data-note="This is the extensibility and ecosystem slide. Extension Builder is especially useful to mention as the bridge from trusted code changes to runtime capabilities.">
+          <div class="slide-inner">
+            <div class="section-head"><span class="eyebrow">Platform surface</span><h2>Build the next capability inside the product.</h2><p>Elsa 4 is making extension work visible, governed, and increasingly self-service.</p></div>
+            <div class="grid-3">
+              <article class="panel" data-tone="violet"><div class="panel-mark">01</div><strong>Module boundary</strong><p>Opt-in features and packaged modules can contribute backend services, endpoints, ESM assets, routes, panels, and settings.</p></article>
+              <article class="panel" data-tone="cyan"><div class="panel-mark">02</div><strong>Extension Builder</strong><p>Trusted teams can create or edit .NET workspaces, build/test/pack, inspect diagnostics, promote packages, and roll back runtime versions.</p></article>
+              <article class="panel" data-tone="mint"><div class="panel-mark">03</div><strong>Package-first delivery</strong><p>Nuplane-loadable packages, feed management, manifest inspection, feature activation, runtime reload, and contribution visibility.</p></article>
+            </div>
+            <div class="big-quote">The Studio is becoming an <em>authoring surface for Elsa itself</em>—not only for workflows.</div>
+          </div>
+        </section>
+
+        <section class="slide" id="slide-7" data-number="07" data-note="Frame Weaver as a safe assistance layer: grounded context, read-only inspection, proposals, and review. Diagnostics are the other half of the trust story.">
+          <div class="slide-inner split">
+            <div>
+              <span class="eyebrow">Assistance + observability</span>
+              <h2>Make complex systems explainable.</h2>
+              <p class="lede">Weaver brings contextual assistance into Studio; diagnostics make the underlying runtime legible to operators.</p>
+              <div class="hero-meta"><span class="chip mint">Grounded context</span><span class="chip cyan">Read-only tools</span><span class="chip amber">Reviewed proposals</span></div>
+            </div>
+            <div class="grid-2">
+              <article class="panel" data-tone="mint"><div class="panel-mark">W</div><strong>Weaver</strong><p>Explain workflows, inspect executables and instances, identify risks, and propose safe graph updates for review.</p></article>
+              <article class="panel" data-tone="cyan"><div class="panel-mark">↗</div><strong>OpenTelemetry</strong><p>Trace overview, distributed spans, waterfall inspection, attributes, filtering, and copy/export paths.</p></article>
+              <article class="panel" data-tone="amber"><div class="panel-mark">≋</div><strong>Structured logs</strong><p>Recent logs, sources, filters, live stream, pause/replay behavior, exceptions, scopes, and detail inspection.</p></article>
+              <article class="panel" data-tone="violet"><div class="panel-mark">▤</div><strong>Safe evidence</strong><p>Snapshots are bounded, policy-governed, redacted, and explicit about unavailable or protected data.</p></article>
+            </div>
+          </div>
+        </section>
+
+        <section class="slide" id="slide-8" data-number="08" data-note="Be candid here. These are not vague ideas; they are active work units with source changes and tracked tasks in the two repositories.">
+          <div class="slide-inner">
+            <div class="section-head"><span class="eyebrow">Under construction</span><h2>The next wave is about provenance, hardening, and governance.</h2><p>Current work is focused on making the platform safer to operate at scale.</p></div>
+            <div class="stack" aria-label="Current work under construction">
+              <div class="stack-row"><b>Run evidence workbench</b><span>Stable input identity, authored sidecars, evaluation history, security boundaries, and responsive run-detail layout.</span><span class="status amber">Active now</span></div>
+              <div class="stack-row"><b>Groundwork persistence</b><span>Design persistence migration, bounded query routes, atomic write units, provider conformance, and runtime store hardening.</span><span class="status amber">Active</span></div>
+              <div class="stack-row"><b>Runtime pipeline</b><span>Middleware contribution DX, deterministic pipeline plans, replacement/removal semantics, and execution-spine decomposition.</span><span class="status amber">Active</span></div>
+              <div class="stack-row"><b>Identity & permissions</b><span>Studio user/role/provider management, claim mappings, legacy migration, and full host-control authorization coverage.</span><span class="status amber">Next wave</span></div>
+              <div class="stack-row"><b>Weaver backend</b><span>Provider setup, end-to-end backend validation, browser proof, and broader provider/harness integration.</span><span class="status amber">Next wave</span></div>
+              <div class="stack-row"><b>Payload references</b><span>Provider-backed reveal/download, audit, storage integration, retention, and future reference resolution.</span><span class="status amber">Deferred follow-up</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="slide" id="slide-9" data-number="09" data-note="Close with the concise summary. Invite discussion around which next wave matters most for the Elsa 4 milestone.">
+          <div class="slide-inner closing">
+            <span class="eyebrow">The headline</span>
+            <h2>Elsa 4 has moved from a workflow engine refactor toward an inspectable, modular application platform.</h2>
+            <p class="lede">The important progress is not one feature—it is the connection between authoring, executable identity, durable runtime behavior, safe evidence, Studio extensibility, and governed assistance.</p>
+            <p class="source-line">Grounded in local elsa-foundation + elsa-foundation-studio source, specs, and checked task state.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <footer class="bottombar">
+      <div class="progress" id="progress" aria-label="Slide navigation"></div>
+      <div class="nav-controls">
+        <button type="button" id="prev" aria-label="Previous slide">←</button>
+        <button type="button" id="next" class="next" aria-label="Next slide">Next&nbsp; →</button>
+      </div>
+    </footer>
+  </main>
+
+  <aside class="notes" id="notes" aria-live="polite"><b>Speaker notes</b><p id="note-copy"></p></aside>
+  <div class="help" id="help" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="help-card">
+      <h2 id="help-title">Presentation controls</h2>
+      <ul>
+        <li><kbd>←</kbd><kbd>→</kbd> Move between slides</li>
+        <li><kbd>Home</kbd><kbd>End</kbd> Jump to first or last slide</li>
+        <li><kbd>N</kbd> Toggle speaker notes</li>
+        <li><kbd>?</kbd> Toggle this help</li>
+        <li><kbd>Esc</kbd> Close overlays</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const slides = [...document.querySelectorAll('.slide')];
+      const progress = document.querySelector('#progress');
+      const counter = document.querySelector('#counter');
+      const notes = document.querySelector('#notes');
+      const noteCopy = document.querySelector('#note-copy');
+      const help = document.querySelector('#help');
+      let index = Math.max(0, Math.min(slides.length - 1, Number(location.hash.replace('#slide-', '')) - 1 || 0));
+
+      slides.forEach((slide, i) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.setAttribute('aria-label', `Go to slide ${i + 1}`);
+        button.addEventListener('click', () => show(i));
+        progress.append(button);
+      });
+
+      function show(nextIndex) {
+        index = (nextIndex + slides.length) % slides.length;
+        slides.forEach((slide, i) => {
+          slide.classList.toggle('active', i === index);
+          slide.setAttribute('aria-hidden', i === index ? 'false' : 'true');
+        });
+        [...progress.children].forEach((button, i) => button.classList.toggle('active', i === index));
+        counter.textContent = `${String(index + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
+        noteCopy.textContent = slides[index].dataset.note;
+        history.replaceState(null, '', `#slide-${index + 1}`);
+      }
+
+      function closeOverlays() {
+        notes.classList.remove('visible');
+        help.classList.remove('visible');
+      }
+
+      document.querySelector('#prev').addEventListener('click', () => show(index - 1));
+      document.querySelector('#next').addEventListener('click', () => show(index + 1));
+      document.querySelector('#notes-button').addEventListener('click', () => { help.classList.remove('visible'); notes.classList.toggle('visible'); });
+      document.querySelector('#help-button').addEventListener('click', () => { notes.classList.remove('visible'); help.classList.toggle('visible'); });
+      help.addEventListener('click', event => { if (event.target === help) help.classList.remove('visible'); });
+      document.addEventListener('keydown', event => {
+        if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') { event.preventDefault(); show(index + 1); return; }
+        if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); show(index - 1); return; }
+        if (event.key === 'Home') { event.preventDefault(); show(0); return; }
+        if (event.key === 'End') { event.preventDefault(); show(slides.length - 1); return; }
+        if (event.key.toLowerCase() === 'n') { notes.classList.toggle('visible'); help.classList.remove('visible'); return; }
+        if (event.key === '?') { help.classList.toggle('visible'); notes.classList.remove('visible'); return; }
+        if (event.key === 'Escape') closeOverlays();
+      });
+      show(index);
+    })();
+  </script>
+</body>
+</html>

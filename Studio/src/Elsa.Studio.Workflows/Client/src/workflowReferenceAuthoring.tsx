@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
-import type { ScopedVariableAnalysisStatus } from "./api/workflows";
+import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
 import { describeCollectionType, formatTypeName } from "./activityProperties";
 import type { ArgumentType, VisibleVariableView, WorkflowDefinitionState, WorkflowInput } from "./workflowTypes";
 

@@ -22,6 +22,7 @@ import {
   type ScopeFrame
 } from "../workflowAdapter";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
+import { decorateWorkflowCanvasElements } from "../workflow-editor/workflowAccessibility";
 import { writeLine } from "./fixtures";
 
 // The sequence/flowchart variants below deliberately have NO design facets, and this file's forEach
@@ -194,6 +195,44 @@ describe("workflow adapter", () => {
     expect(getChildSlots(normalized!, forEachActivity)[0]).toMatchObject({ label: "Body", cardinality: "single" });
   });
 
+  it("persists the only eligible Flowchart activity as its start node", () => {
+    const root = flowchartRoot([node("first")]);
+
+    const normalized = normalizeActivityStructures(root, [flowchartActivity]);
+
+    expect(normalized?.structure?.payload.startNodeId).toBe("first");
+  });
+
+  it("persists an explicit null start for an empty Flowchart", () => {
+    const normalized = normalizeActivityStructures(flowchartRoot([]), [flowchartActivity]);
+
+    expect(normalized?.structure?.payload).toHaveProperty("startNodeId", null);
+  });
+
+  it("chooses the first authored activity for an unconnected multi-node Flowchart", () => {
+    const normalized = normalizeActivityStructures(flowchartRoot([node("first"), node("second")]), [flowchartActivity]);
+
+    expect(normalized?.structure?.payload.startNodeId).toBe("first");
+  });
+
+  it("preserves an explicitly authored eligible Flowchart start node", () => {
+    const root = flowchartRoot([node("first"), node("selected")]);
+    root.structure!.payload.startNodeId = "selected";
+
+    const normalized = normalizeActivityStructures(root, [flowchartActivity]);
+
+    expect(normalized?.structure?.payload.startNodeId).toBe("selected");
+  });
+
+  it("reassigns a deleted Flowchart start node to the first remaining activity", () => {
+    const root = flowchartRoot([node("first"), node("deleted")]);
+    root.structure!.payload.startNodeId = "deleted";
+
+    const updated = replaceSlotActivities(root, getChildSlots(root)[0], [node("first")]);
+
+    expect(updated.structure?.payload.startNodeId).toBe("first");
+  });
+
   it("updates repeatable collection child slots without replacing authored collection items", () => {
     const switchActivity: ActivityCatalogItem = {
       ...writeLine,
@@ -347,6 +386,43 @@ describe("workflow adapter", () => {
     expect(canvas.edges).toHaveLength(1);
     expect(canvas.edges[0]).toMatchObject({ source: "a", target: "b", sourceHandle: "Done" });
     expect(canvas.edges[0].targetHandle).toBeUndefined();
+  });
+
+  it("gives authoring nodes and connections meaningful accessible identities and selection state", () => {
+    const root: ActivityNode = {
+      nodeId: "root",
+      activityVersionId: flowchartActivity.activityVersionId,
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: flowchartStructureKind,
+        schemaVersion: "1.0.0",
+        payload: {
+          activities: [node("write-line-1"), node("write-line-2")],
+          connections: [{ source: { nodeId: "write-line-1", port: "Done" }, target: { nodeId: "write-line-2" } }]
+        }
+      }
+    };
+    const canvas = buildCanvas(firstScope(root), [writeLine], []);
+    canvas.nodes[0].selected = true;
+    canvas.edges[0].selected = true;
+
+    const accessible = decorateWorkflowCanvasElements(canvas.nodes, canvas.edges);
+
+    expect(accessible.nodes[0]).toMatchObject({
+      ariaRole: "button",
+      ariaLabel: "Write Line. Node ID: write-line-1. Activity type: Elsa.Activities.Primitives.Activities.WriteLine. Category: Primitives. Execution type: Action. State: authoring. Selected.",
+      domAttributes: { "aria-pressed": true }
+    });
+    expect(accessible.nodes[1]).toMatchObject({
+      ariaRole: "button",
+      domAttributes: { "aria-pressed": false }
+    });
+    expect(accessible.edges[0]).toMatchObject({
+      ariaRole: "button",
+      ariaLabel: "Connection from Write Line (write-line-1), Done output, to Write Line (write-line-2). Selected.",
+      domAttributes: { "aria-pressed": true }
+    });
   });
 
   it("preserves flowchart connection metadata and vertices while syncing ports", () => {

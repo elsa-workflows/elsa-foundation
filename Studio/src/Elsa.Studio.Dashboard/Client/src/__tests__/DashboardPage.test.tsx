@@ -46,6 +46,34 @@ describe("DashboardPage", () => {
     flushSync(() => root.unmount());
   });
 
+  it("isolates a widget render failure and recovers through the host retry", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const api = stubApi();
+    let shouldThrow = true;
+    api.dashboardWidgets.add(widget({
+      id: "failing",
+      title: "Failing widget",
+      component: () => {
+        if (shouldThrow) throw new Error("render failed");
+        return <span>Recovered body</span>;
+      }
+    }));
+    api.dashboardWidgets.add(widget({ id: "healthy", title: "Healthy widget", component: () => <span>Healthy body</span> }));
+    const { container, root } = render(api);
+
+    await waitUntil(() => container.textContent?.includes("Failing widget could not be rendered.") === true);
+    expect(container.textContent).toContain("Healthy body");
+    expect(container.querySelector('button[aria-label="Hide Failing widget"]')).not.toBeNull();
+
+    shouldThrow = false;
+    clickText(container, "Retry");
+
+    await waitUntil(() => container.textContent?.includes("Recovered body") === true);
+    expect(container.textContent).toContain("Healthy body");
+    expect(consoleError).toHaveBeenCalled();
+    flushSync(() => root.unmount());
+  });
+
   it("does not load while hidden and resumes when the Dashboard becomes visible", async () => {
     const hidden = Object.getOwnPropertyDescriptor(document, "hidden");
     Object.defineProperty(document, "hidden", { configurable: true, value: true });

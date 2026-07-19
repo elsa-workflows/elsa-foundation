@@ -1,15 +1,16 @@
 # Triage Labels
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+GitHub is the source of truth for this repository's labels. Verify the current set before applying one:
 
-| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
-| -------------------------- | -------------------- | ---------------------------------------- |
-| `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
-| `needs-info`               | `needs-info`         | Waiting on reporter for more information |
-| `ready-for-agent`          | `ready-for-agent`    | Fully specified, ready for an AFK agent  |
-| `ready-for-human`          | `ready-for-human`    | Requires human implementation            |
-| `wontfix`                  | `wontfix`            | Will not be actioned                     |
+```shell
+gh label list --repo elsa-workflows/elsa-foundation-studio
+```
 
-When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
+The workflow-specific labels currently defined are:
 
-Edit the right-hand column to match whatever vocabulary you actually use.
+| Label | Meaning |
+| --- | --- |
+| `ready-for-agent` | Fully specified and ready for an AFK agent |
+| `wontfix` | Will not be actioned |
+
+There are no dedicated `needs-triage`, `needs-info`, or `ready-for-human` labels. Do not invent or apply missing labels when a skill uses one of those canonical roles; describe the state in a comment and use an existing standard label only when its meaning is an exact fit.

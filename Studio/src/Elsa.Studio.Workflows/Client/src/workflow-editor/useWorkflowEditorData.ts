@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioActivityDescriptor, StudioEndpointContext, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnostics, ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
-import {
-  getDefinition,
-  listActivities,
-  listActivityAvailabilityDiagnostics,
-  listActivityDescriptors,
-  listExpressionDescriptors
-} from "../api/workflows";
+import { getDefinition } from "../api/workflowDesign";
+import { listActivities } from "../api/activityDesign";
+import { listExpressionDescriptors } from "../api/expressions";
 
 interface WorkflowEditorDataParams {
   context: StudioEndpointContext;
@@ -21,7 +17,8 @@ interface WorkflowEditorDataParams {
 }
 
 // Loads (and reloads, after a promote) everything the editor renders around the draft: the definition
-// details, the activity catalog, and the descriptor/availability/expression metadata. The draft itself
+// details, the normalized authoring catalog, and expression metadata. Activity descriptors and
+// availability are projected from that one catalog response. The draft itself
 // is handed to the document reducer via loadDraft; the rest is returned as local state.
 export function useWorkflowEditorData({ context, definitionId, resetHistory, loadDraft, markSaved, setError }: WorkflowEditorDataParams) {
   const [details, setDetails] = useState<WorkflowDefinitionDetails | null>(null);
@@ -65,18 +62,9 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
 
   const reload = useCallback(async () => {
     setError("");
-    const [nextDetails, nextCatalog, nextDescriptors, nextAvailability] = await Promise.all([
+    const [nextDetails, nextCatalog] = await Promise.all([
       getDefinition(context, definitionId),
       listActivities(context),
-      listActivityDescriptors(context).then(
-        descriptors => ({ ok: true as const, descriptors }),
-        () => ({ ok: false as const, descriptors: [] as StudioActivityDescriptor[] })
-      ),
-      // Non-essential: drives only the non-blocking availability warnings, so failure is tolerated.
-      listActivityAvailabilityDiagnostics(context).then(
-        diagnostics => diagnostics,
-        () => null
-      ),
       reloadExpressionDescriptors()
     ]);
     const nextDraft = nextDetails.draft ?? null;
@@ -84,10 +72,11 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     markSaved(nextDraft);
     resetHistory(nextDraft);
     loadDraft(nextDraft);
-    setCatalog(nextCatalog.activities ?? []);
-    setActivityDescriptors(nextDescriptors.descriptors);
-    setAvailabilityDiagnostics(nextAvailability);
-    setDescriptorStatus(nextDescriptors.ok ? "ready" : "failed");
+    const activities = nextCatalog.activities ?? [];
+    setCatalog(activities);
+    setActivityDescriptors(activities.map(toActivityDescriptor));
+    setAvailabilityDiagnostics(null);
+    setDescriptorStatus("ready");
   }, [context, definitionId, resetHistory, loadDraft, markSaved, reloadExpressionDescriptors, setError]);
 
   useEffect(() => {
@@ -108,5 +97,24 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     descriptorStatus,
     reload,
     reloadExpressionDescriptors
+  };
+}
+
+function toActivityDescriptor(activity: ActivityCatalogItem): StudioActivityDescriptor {
+  const name = activity.activityTypeKey.split(".").at(-1) ?? activity.activityTypeKey;
+  const numericVersion = Number(activity.version);
+  return {
+    typeName: activity.activityTypeKey,
+    name,
+    version: Number.isFinite(numericVersion) ? numericVersion : undefined,
+    category: activity.category,
+    displayName: activity.displayName,
+    description: activity.description,
+    kind: activity.executionType as StudioActivityDescriptor["kind"],
+    inputs: activity.inputs as StudioActivityDescriptor["inputs"],
+    outputs: activity.outputs as StudioActivityDescriptor["outputs"],
+    ports: (activity.ports ?? []) as StudioActivityDescriptor["ports"],
+    isContainer: Boolean(activity.containerStructure),
+    isBrowsable: activity.available !== false
   };
 }

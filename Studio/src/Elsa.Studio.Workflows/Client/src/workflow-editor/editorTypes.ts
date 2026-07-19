@@ -9,8 +9,7 @@ export type CreateWorkflowKind = "sequence" | "flowchart";
 export interface CreateWorkflowDraft {
   name: string;
   description: string;
-  rootKind: CreateWorkflowKind;
-  rootActivityVersionId?: string | null;
+  rootActivityVersionId: string | null;
 }
 
 export const createWorkflowRootOptions: { value: CreateWorkflowKind; label: string; hint: string }[] = [
@@ -27,7 +26,7 @@ export type CanvasView = "designer" | "code" | "properties";
 
 export type WorkflowEdge = Edge<WorkflowEdgeData>;
 
-export type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "testRunPreparing" | "testRunStarting";
+export type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "publicationPreflight" | "publishing" | "testRunPreparing" | "testRunStarting";
 
 export interface WorkflowTestRunState {
   draftSignature: string;
@@ -94,4 +93,3 @@ export interface WorkflowInstanceInspectionData {
   definitionVersionError: string;
   activityCatalog: ActivityCatalogItem[];
 }
-

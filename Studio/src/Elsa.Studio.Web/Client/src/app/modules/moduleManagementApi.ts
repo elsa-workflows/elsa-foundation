@@ -261,7 +261,7 @@ export function labelForBackendRegistryStatus(status: BackendRegistryUnavailable
 
 function defaultBackendRegistryDetail(status: BackendRegistryUnavailableKind): string {
   switch (status) {
-    case "unconfigured": return "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Server module management.";
+    case "unconfigured": return "Privileged host management is not configured on the Studio host. Set Studio:BackendServerBaseUrl (or Studio:BackendBaseUrl for a shared URL) and Studio:BackendModuleManagementApiKey to enable Server module management.";
     case "unauthorized": return "The backend rejected the Studio management credential.";
     case "unreachable": return "The privileged host-management surface could not be reached.";
     case "degraded": return "The privileged host-management surface is degraded.";

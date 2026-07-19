@@ -1,8 +1,9 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, DesignMetadataRecord, IncidentStateSummary } from "./workflowTypes";
+import { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
-export const flowchartStructureKind = "elsa.flowchart.structure";
+export { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
@@ -366,6 +367,17 @@ export function getChildSlots(activity: ActivityNode, catalog?: ActivityCatalogL
 }
 
 export function readStructureDesignFacet(activity: ActivityCatalogItem | null | undefined): StructureDesignFacet | null {
+  if (activity?.containerStructure && activity.authoringTemplate?.structure) {
+    const payload = readStructureDesignFacetPayload(activity.containerStructure);
+    if (payload) {
+      return {
+        kind: activity.authoringTemplate.structure.kind,
+        schemaVersion: activity.authoringTemplate.structure.schemaVersion,
+        payload
+      };
+    }
+  }
+
   for (const facet of activity?.designFacets ?? []) {
     if (!isRecord(facet)) continue;
     const kind = typeof facet.kind === "string" ? facet.kind : "";
@@ -666,7 +678,7 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
       [slot.childProperty]: nextValue
     };
 
-    return {
+    return normalizeFlowchartStartNode({
       ...activity,
       structure: {
         ...activity.structure,
@@ -675,10 +687,10 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
           [slot.collectionProperty]: nextCollection
         }
       }
-    };
+    });
   }
 
-  return {
+  return normalizeFlowchartStartNode({
     ...activity,
     structure: {
       ...activity.structure,
@@ -687,7 +699,7 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
         [slot.property]: nextValue
       }
     }
-  };
+  });
 }
 
 export function syncCanvasToScope(scope: CanvasScope, nodes: Node<WorkflowNodeData>[], edges: Edge[], additionalActivities: ActivityNode[] = []) {
@@ -729,13 +741,16 @@ export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[]) {
 }
 
 export function createActivityNode(activity: ActivityCatalogItem, nodeId: string): ActivityNode {
-  return {
-    nodeId,
-    activityVersionId: activity.activityVersionId,
-    inputs: [],
-    outputs: [],
-    structure: createStructureForActivity(activity)
-  };
+  const template = activity.authoringTemplate ? structuredClone(activity.authoringTemplate) : null;
+  return template
+    ? { ...template, nodeId, activityVersionId: activity.activityVersionId, structure: createStructureForActivity(activity) }
+    : {
+        nodeId,
+        activityVersionId: activity.activityVersionId,
+        inputs: [],
+        outputs: [],
+        structure: createStructureForActivity(activity)
+      };
 }
 
 export function normalizeActivityStructures(root: ActivityNode | null | undefined, catalog: ActivityCatalogLookup): ActivityNode | null {
@@ -753,7 +768,7 @@ export function normalizeActivityStructures(root: ActivityNode | null | undefine
     }
   }
 
-  return next;
+  return normalizeFlowchartStartNode(next);
 }
 
 export function getActivityDisplay(activity: ActivityCatalogItem) {

@@ -1,3 +1,5 @@
+import type { ActivityCatalogItem } from "../workflowTypes";
+import { findCompositionActivity } from "./editorHelpers";
 import { createWorkflowRootOptions, type CreateWorkflowKind } from "./editorTypes";
 
 // The Flowchart / Sequence title + hint block shared by the two "choose a container" surfaces:
@@ -13,23 +15,28 @@ function RootOptionBody({ label, hint }: { label: string; hint: string }) {
 }
 
 // Radio-group variant used inside the Create Workflow dialog (one root activity is selected).
-export function WorkflowRootRadioCards({ value, onChange }: {
-  value: CreateWorkflowKind;
-  onChange(value: CreateWorkflowKind): void;
+export function WorkflowRootRadioCards({ catalog, value, onChange }: {
+  catalog: ActivityCatalogItem[];
+  value: string | null;
+  onChange(value: string): void;
 }) {
   return (
     <div className="wf-root-cards" role="radiogroup" aria-label="Root activity">
       {createWorkflowRootOptions.map(option => {
-        const checked = value === option.value;
+        const activity = findCompositionActivity(catalog, option.value);
+        const checked = value
+          ? value === activity?.activityVersionId
+          : option.value === "flowchart";
         return (
-          <label key={option.value} className="wf-root-card" data-checked={checked || undefined}>
+          <label key={option.value} className="wf-root-card" data-checked={checked || undefined} aria-disabled={!activity || undefined}>
             <input
               type="radio"
               name="wf-root-kind"
               aria-label={option.label}
-              value={option.value}
+              value={activity?.activityVersionId ?? ""}
               checked={checked}
-              onChange={() => onChange(option.value)}
+              disabled={!activity}
+              onChange={() => activity && onChange(activity.activityVersionId)}
             />
             <RootOptionBody label={option.label} hint={option.hint} />
           </label>

@@ -76,3 +76,38 @@ body {
   height: 800px;
   flex: 0 0 800px;
 }
+
+.browser-run-shell {
+  display: grid;
+  height: 100vh;
+  grid-template-rows: 56px minmax(0, 1fr) 104px;
+  background: var(--studio-app-bg);
+  color: var(--studio-text);
+}
+
+.browser-run-shell-header,
+.browser-run-console {
+  display: flex;
+  align-items: center;
+  border-block: 1px solid var(--studio-border);
+  background: var(--studio-surface);
+  padding-inline: 18px;
+}
+
+.browser-run-content {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.browser-run-content > .wf-page--run-workbench {
+  min-height: 0;
+  flex: 1;
+}
+
+.browser-run-content .wf-instance-canvas,
+.browser-run-content .wf-instance-section {
+  min-height: 0;
+  flex: 1;
+  padding: 16px;
+}

@@ -67,14 +67,15 @@ describe("weaver workflows module", () => {
       expect(tool?.execute).toBeTypeOf("function");
     });
 
-    it("executes against the workflow-management detail endpoint via the module's endpoint context", async () => {
+    it("executes against the Runtime executable-detail capability via the module's endpoint context", async () => {
       const api = testApi();
       register(api);
       const tool = api.ai.tools.list().find(item => item.name === "get-executable-detail");
 
       const detail = await tool!.execute!({ artifactId: "artifact/1" });
 
-      expect(api.backend.http.getJson).toHaveBeenCalledWith("/_elsa/workflow-management/executables/artifact%2F1");
+      expect(api.backend.http.getJson).toHaveBeenCalledWith("/capabilities");
+      expect(api.backend.http.getJson).toHaveBeenCalledWith("/runtime/workflows/executables/artifact%2F1");
       expect(detail).toEqual({ artifactId: "artifact/1" });
     });
 
@@ -83,7 +84,7 @@ describe("weaver workflows module", () => {
 
       await getExecutableDetail(context, { artifactId: "artifact-1", sourceReferenceId: "ref 1" });
 
-      expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/workflow-management/executables/artifact-1?ref=ref%201");
+      expect(context.http.getJson).toHaveBeenCalledWith("/runtime/workflows/executables/artifact-1?ref=ref%201");
     });
 
     it("rejects a missing artifact id without calling the endpoint", async () => {
@@ -126,6 +127,15 @@ function endpointContext(): StudioEndpointContext {
     http: {
       requestJson: vi.fn(),
       getJson: vi.fn(async (url: string) => {
+        if (url === "/capabilities") {
+          return {
+            capabilities: [{
+              id: "elsa.api.runtime",
+              contractVersion: "1",
+              links: [{ rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true }]
+            }]
+          };
+        }
         const artifactId = decodeURIComponent(url.split("/").pop()!.split("?")[0]);
         return { artifactId };
       }),

@@ -7,6 +7,7 @@ import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { createObjectExpressionEditorContribution } from "../objectExpressionEditor";
 import { activityInputOptionsDescriptor } from "./fixtures/activityInputOptions";
 import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
+import { clearApiCapabilityCache } from "../api/capabilities";
 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -19,10 +20,31 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  clearApiCapabilityCache();
   flushSync(() => root.unmount());
   container.remove();
   vi.useRealTimers();
 });
+
+function optionsContext(postJson: ReturnType<typeof vi.fn>) {
+  return {
+    baseUrl: "options-test",
+    http: {
+      getJson: vi.fn(async () => ({
+        capabilities: [{
+          id: "elsa.api.workflow-design",
+          contractVersion: "1",
+          links: [{
+            rel: "activity-input-options",
+            href: "design/workflows/activities/{activityVersionId}/inputs/{inputName}/options",
+            templated: true
+          }]
+        }]
+      })),
+      postJson
+    }
+  } as unknown as StudioEndpointContext;
+}
 
 const editor: StudioActivityPropertyEditorContribution = {
   id: "test.options",
@@ -82,7 +104,7 @@ describe("dynamic activity input options", () => {
   it("distinguishes unresolved provider options from a resolved empty result", async () => {
     let resolveRequest!: (value: unknown) => void;
     const postJson = vi.fn(() => new Promise(resolve => { resolveRequest = resolve; }));
-    const context = { http: { postJson } } as unknown as StudioEndpointContext;
+    const context = optionsContext(postJson);
 
     renderPanel(context, activity("Customer"));
     await vi.advanceTimersByTimeAsync(0);
@@ -97,7 +119,7 @@ describe("dynamic activity input options", () => {
   it("loads on open, debounces dependency refresh, and cancels the superseded request", async () => {
     const requests: Array<{ signal: AbortSignal; resolve(value: unknown): void }> = [];
     const postJson = vi.fn((_url, _body, init) => new Promise(resolve => requests.push({ signal: init.signal, resolve })));
-    const context = { http: { postJson } } as unknown as StudioEndpointContext;
+    const context = optionsContext(postJson);
 
     renderPanel(context, activity("Customer"));
     await vi.advanceTimersByTimeAsync(0);
@@ -120,7 +142,7 @@ describe("dynamic activity input options", () => {
   it("ignores a superseded request that resolves after the current request", async () => {
     const requests: Array<{ resolve(value: unknown): void }> = [];
     const postJson = vi.fn(() => new Promise(resolve => requests.push({ resolve })));
-    const context = { http: { postJson } } as unknown as StudioEndpointContext;
+    const context = optionsContext(postJson);
 
     renderPanel(context, activity("Customer"));
     await vi.advanceTimersByTimeAsync(0);
@@ -140,7 +162,7 @@ describe("dynamic activity input options", () => {
 
   it("refreshes when only a dependency's wrapped expression syntax changes", async () => {
     const postJson = vi.fn(async () => ({ options: [{ label: "Name", value: "name" }] }));
-    const context = { http: { postJson } } as unknown as StudioEndpointContext;
+    const context = optionsContext(postJson);
 
     renderPanel(context, activity("Customer", "Literal"));
     await vi.advanceTimersByTimeAsync(0);
@@ -157,7 +179,7 @@ describe("dynamic activity input options", () => {
     const postJson = vi.fn()
       .mockRejectedValueOnce(new Error("provider failed"))
       .mockResolvedValueOnce({ options: [{ label: "Name", value: "name" }] });
-    const context = { http: { postJson } } as unknown as StudioEndpointContext;
+    const context = optionsContext(postJson);
 
     renderPanel(context, activity("Customer"));
     await vi.advanceTimersByTimeAsync(0);
@@ -173,7 +195,7 @@ describe("dynamic activity input options", () => {
 
   it("keeps an Object collection Contribution disabled while dynamic options load or fail", async () => {
     const postJson = vi.fn(() => new Promise((_resolve, reject) => reject(new Error("provider failed"))));
-    const context = { http: { postJson } } as unknown as StudioEndpointContext;
+    const context = optionsContext(postJson);
     const node = {
       ...activity("Customer"),
       field: {

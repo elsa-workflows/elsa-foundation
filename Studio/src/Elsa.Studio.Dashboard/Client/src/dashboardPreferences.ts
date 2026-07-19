@@ -52,7 +52,8 @@ export function reconcileDashboardPreferences(
   preferences: DashboardPreferences,
   contributions: StudioDashboardWidgetContribution[],
   pinnedWidgetIds: readonly string[] = [],
-  onSettingsReset: (widgetId: string) => void = () => undefined
+  onSettingsReset: (widgetId: string) => void = () => undefined,
+  excludedWidgetIds: ReadonlySet<string> = new Set()
 ): DashboardPreferences {
   const byId = new Map(preferences.widgets.map(entry => [entry.id, entry]));
   const pinned = new Set(pinnedWidgetIds);
@@ -68,7 +69,6 @@ export function reconcileDashboardPreferences(
           const migrated = widget.settings.migrate?.(settings, settingsSchemaVersion ?? 0);
           settings = migrated ?? widget.settings.defaults;
           reset = migrated == null;
-          settingsSchemaVersion = widget.settings.schemaVersion;
         }
         const validated = widget.settings.validate(settings ?? widget.settings.defaults);
         if (validated == null) {
@@ -87,7 +87,13 @@ export function reconcileDashboardPreferences(
     return { id: widget.id, visible: pinned.has(widget.id) || (stored?.visible ?? (preferences.autoAddNewWidgets && widget.defaultVisible)), size: validSize, settings, settingsSchemaVersion };
   });
   const knownIds = new Set(contributions.map(widget => widget.id));
-  return { ...preferences, widgets: [...known, ...preferences.widgets.filter(entry => !knownIds.has(entry.id))] };
+  return {
+    ...preferences,
+    widgets: [
+      ...known,
+      ...preferences.widgets.filter(entry => !knownIds.has(entry.id) && !excludedWidgetIds.has(entry.id))
+    ]
+  };
 }
 
 export class DashboardPreferenceStore {

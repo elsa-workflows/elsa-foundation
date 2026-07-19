@@ -3,8 +3,8 @@
 **/obj/
 artifacts/
 
-# Node / frontend tooling (frontend assets are prebuilt and committed under wwwroot,
-# so the Docker build never runs the pnpm/vite pipeline)
+# Node / frontend tooling (frontend assets are generated before the Docker build and
+# copied from the build context under each project's wwwroot)
 **/node_modules/
 **/dist/
 **/build/

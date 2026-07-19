@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "@elsa-workflows/studio-code-editor";
-import { JavaScriptExpandedEditor, JavaScriptInlineEditor, register } from "../module";
+import { JavaScriptExpandedEditor, JavaScriptInlineEditor, JavaScriptSourceRenderer, register } from "../module";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 
 describe("JavaScript expression editor module", () => {
@@ -18,6 +18,23 @@ describe("JavaScript expression editor module", () => {
     expect(contribution.supports(context("Literal"))).toBe(false);
     expect(contribution.surfaces.inline).toBe(JavaScriptInlineEditor);
     expect(contribution.surfaces.expanded).toBe(JavaScriptExpandedEditor);
+    expect(contribution.sourceRenderer?.compact).toBe(JavaScriptSourceRenderer);
+    expect(contribution.sourceRenderer?.expanded).toBe(JavaScriptSourceRenderer);
+  });
+
+  it("renders authorized authored JavaScript without evaluating it", () => {
+    const rendered = JavaScriptSourceRenderer({
+      context: {
+        expressionType: "JavaScript",
+        value: "variables.customer.email",
+        metadata: {},
+        isSensitive: false,
+        surface: "compact"
+      }
+    }) as React.ReactElement;
+
+    expect(rendered.type).toBe("code");
+    expect(rendered.props.children).toBe("variables.customer.email");
   });
 
   it("renders inline and expanded editors through the public contribution contract", async () => {

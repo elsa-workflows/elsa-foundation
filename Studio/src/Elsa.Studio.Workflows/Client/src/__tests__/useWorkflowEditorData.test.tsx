@@ -4,10 +4,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { useWorkflowEditorData } from "../workflow-editor/useWorkflowEditorData";
+import { clearApiCapabilityCache } from "../api/capabilities";
 
 let active: { root: Root; container: HTMLElement } | null = null;
 
 afterEach(() => {
+  clearApiCapabilityCache();
   vi.clearAllMocks();
   if (!active) return;
   flushSync(() => active!.root.unmount());
@@ -18,20 +20,27 @@ afterEach(() => {
 function createApi(expressionResponses: Array<unknown | Error>) {
   let expressionAttempt = 0;
   const getJson = vi.fn(async (path: string) => {
+    if (path === "/capabilities") {
+      return {
+        capabilities: [
+          { id: "elsa.api.workflow-design", contractVersion: "1", links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" }] },
+          { id: "elsa.api.activity-design", contractVersion: "1", links: [{ rel: "activity-catalog", href: "design/activities/catalog" }] },
+          { id: "elsa.api.expressions", contractVersion: "1", links: [{ rel: "expression-descriptors", href: "expressions/descriptors" }] }
+        ]
+      };
+    }
     if (path.endsWith("/definitions/definition-1")) {
       return {
         definition: { id: "definition-1", name: "Test", createdAt: "", lastModifiedAt: "", versionCount: 0 },
         versions: []
       };
     }
-    if (path.endsWith("/activities")) return { activities: [] };
-    if (path.endsWith("/descriptors/activities")) return [];
-    if (path.endsWith("/descriptors/expression-descriptors")) {
+    if (path.includes("/design/activities/catalog")) return { activities: [] };
+    if (path.endsWith("/expressions/descriptors")) {
       const response = expressionResponses[Math.min(expressionAttempt++, expressionResponses.length - 1)];
       if (response instanceof Error) throw response;
       return await response;
     }
-    if (path.endsWith("/activities/availability/diagnostics")) return { items: [], sets: [] };
     throw new Error(`Unexpected GET ${path}`);
   });
   return { context: { baseUrl: "", http: { getJson } } as unknown as StudioEndpointContext, getJson };

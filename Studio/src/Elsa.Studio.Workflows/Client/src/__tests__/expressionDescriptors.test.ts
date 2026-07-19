@@ -1,12 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { listExpressionDescriptors } from "../api/workflows";
+import { clearApiCapabilityCache } from "../api/capabilities";
 
 function context(response: unknown) {
-  const getJson = vi.fn().mockResolvedValue(response);
-  return { value: { http: { getJson } } as never, getJson };
+  const getJson = vi.fn()
+    .mockResolvedValueOnce({ capabilities: [{
+      id: "elsa.api.expressions",
+      contractVersion: "1",
+      links: [{ rel: "expression-descriptors", href: "expressions/descriptors" }]
+    }] })
+    .mockResolvedValueOnce(response);
+  return { value: { baseUrl: `test://expressions-${Math.random()}`, http: { getJson } } as never, getJson };
 }
 
 describe("listExpressionDescriptors", () => {
+  afterEach(clearApiCapabilityCache);
+
   it.each([
     ["an empty response", {}],
     ["an empty items collection", { items: [] }],
@@ -15,7 +24,8 @@ describe("listExpressionDescriptors", () => {
     const api = context(response);
 
     await expect(listExpressionDescriptors(api.value)).resolves.toEqual([]);
-    expect(api.getJson).toHaveBeenCalledTimes(1);
+    expect(api.getJson).toHaveBeenCalledTimes(2);
+    expect(api.getJson).toHaveBeenLastCalledWith("/expressions/descriptors");
   });
 
   it("returns the backend descriptors unchanged", async () => {

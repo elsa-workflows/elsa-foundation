@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { javaScriptLanguageAdapter, StudioCodeEditor } from "@elsa-workflows/studio-code-editor";
-import type { ElsaStudioModuleApi, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioExpressionEditorProps, StudioExpressionSourceRendererProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
 const javaScriptSyntax = "JavaScript";
@@ -13,8 +13,18 @@ export function register(api: ElsaStudioModuleApi) {
     surfaces: {
       inline: JavaScriptInlineEditor,
       expanded: JavaScriptExpandedEditor
+    },
+    sourceRenderer: {
+      compact: JavaScriptSourceRenderer,
+      expanded: JavaScriptSourceRenderer
     }
   });
+}
+
+export function JavaScriptSourceRenderer({ context }: StudioExpressionSourceRendererProps) {
+  return context.isSensitive
+    ? <span>Protected JavaScript source</span>
+    : <code>{formatSourceValue(context.value)}</code>;
 }
 
 export function JavaScriptInlineEditor({ value, disabled, initialFocus, onChange }: StudioExpressionEditorProps) {
@@ -67,4 +77,9 @@ export function JavaScriptExpandedEditor({ descriptor, value, disabled, onChange
 
 function formatValue(value: unknown) {
   return value == null ? "" : String(value);
+}
+
+function formatSourceValue(value: unknown) {
+  const source = formatValue(value);
+  return source.length > 4_000 ? `${source.slice(0, 3_997)}...` : source;
 }

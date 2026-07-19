@@ -82,6 +82,37 @@ describe("workflow graph operation batch", () => {
       }
     });
   });
+
+  it("resolves a property name to the catalog input's referenceKey when they diverge", () => {
+    const writeLine: ActivityCatalogItem = {
+      ...activity("write-line-v1", "Elsa.WriteLine", "Write Line"),
+      inputs: [{ referenceKey: "text", name: "Text", typeName: "System.String" }]
+    };
+
+    const result = applyWorkflowGraphOperationBatch(workflowDraft(), {
+      schemaVersion: "elsa.workflow-graph-operation-batch.v1",
+      workflowDefinitionId: "definition-1",
+      baseRevision: "rev-1",
+      operations: [
+        {
+          id: "op-add-write-line",
+          kind: "add-activity",
+          parameters: { activityId: "temp:activity:write-line-1", activityType: "Elsa.WriteLine", displayName: "Write Line" },
+          temporaryReferences: ["temp:activity:write-line-1"]
+        },
+        { id: "op-set-root", kind: "set-root", parameters: { activityId: "temp:activity:write-line-1" } },
+        {
+          id: "op-set-text",
+          kind: "set-activity-property",
+          parameters: { activityId: "temp:activity:write-line-1", propertyName: "Text", value: "Hello" }
+        }
+      ]
+    }, [writeLine]);
+
+    const root = result.draft.state.rootActivity as Record<string, unknown>;
+    expect(root.text).toMatchObject({ expression: { type: "Literal", value: "Hello" } });
+    expect("Text" in root).toBe(false);
+  });
 });
 
 function workflowDraft(overrides: Partial<WorkflowDraft> = {}): WorkflowDraft {

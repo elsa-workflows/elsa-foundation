@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
-import { updateDraft } from "../api/workflows";
+import { updateDraft } from "../api/workflowDesign";
 import { autosaveDelayMs } from "./constants";
 import { getDraftSignature } from "./editorHelpers";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
@@ -21,6 +21,7 @@ interface WorkflowPersistenceParams {
 // the baseline so a freshly loaded draft doesn't immediately autosave.
 export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefault = true, editDraft, setStatus, setError }: WorkflowPersistenceParams) {
   const [autosaveEnabled, setAutosaveEnabled] = useState(autosaveEnabledByDefault);
+  const [autosavePaused, setAutosavePaused] = useState(false);
   const lastSavedDraftSignatureRef = useRef("");
   const saveRequestIdRef = useRef(0);
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
@@ -62,7 +63,7 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
   }, [context, editDraft, setStatus, setError]);
 
   useEffect(() => {
-    if (!autosaveEnabled || !draft) return;
+    if (!autosaveEnabled || autosavePaused || !draft) return;
 
     const draftSignature = getDraftSignature(draft);
     if (draftSignature === lastSavedDraftSignatureRef.current) return;
@@ -73,7 +74,7 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
     }, autosaveDelayMs);
 
     return () => window.clearTimeout(timeoutId);
-  }, [autosaveEnabled, draft, saveDraft, setStatus]);
+  }, [autosaveEnabled, autosavePaused, draft, saveDraft, setStatus]);
 
-  return { saveDraft, autosaveEnabled, setAutosaveEnabled, markSaved };
+  return { saveDraft, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { listVariableTypeDescriptors } from "./api/workflows";
+import { listVariableTypeDescriptors } from "./api/expressions";
 import { formatDate } from "./workflowFormatting";
 import {
   argumentNameKeys,

@@ -9,7 +9,7 @@ import {
   resolveScopeOwner,
   type ScopeFrame
 } from "../workflowAdapter";
-import { useScopedVariableAnalysis } from "../api/workflows";
+import { useScopedVariableAnalysis } from "../api/workflowDesign";
 import { supportsScopedVariables } from "../scopedVariables";
 import { indexActivityDescriptors, resolveActivityDescriptor } from "./editorHelpers";
 import type { WorkflowNodeAvailabilityLookup } from "./editorTypes";

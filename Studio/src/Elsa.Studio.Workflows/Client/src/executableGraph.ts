@@ -6,6 +6,8 @@ import type {
   WorkflowExecutableChildSlot,
   WorkflowExecutableConnection,
   WorkflowExecutableConnectionEndpoint,
+  WorkflowExecutableAuthoredInput,
+  WorkflowExecutableCompiledInput,
   WorkflowExecutableInputBinding,
   WorkflowExecutableNode
 } from "./workflowTypes";
@@ -31,6 +33,8 @@ export interface ExecutableGraphNodeFacts {
   structureKind: string | null;
   available: boolean;
   inputBindings: WorkflowExecutableInputBinding[];
+  authoredInputs: WorkflowExecutableAuthoredInput[];
+  authoredInputsAccess: string | null;
 }
 
 export interface ExecutableActivityGraph {
@@ -38,13 +42,27 @@ export interface ExecutableActivityGraph {
   factsByNodeId: Map<string, ExecutableGraphNodeFacts>;
 }
 
-export function buildExecutableActivityGraph(root: WorkflowExecutableNode, catalog: ActivityCatalogItem[]): ExecutableActivityGraph {
+export function buildExecutableActivityGraph(
+  root: WorkflowExecutableNode,
+  catalog: ActivityCatalogItem[],
+  authoredInputs: WorkflowExecutableAuthoredInput[] = [],
+  compiledInputs: WorkflowExecutableCompiledInput[] = [],
+  authoredInputsAccess: string | null = null
+): ExecutableActivityGraph {
   const catalogByType = new Map<string, ActivityCatalogItem[]>();
   for (const item of catalog) {
     catalogByType.set(item.activityTypeKey, [...(catalogByType.get(item.activityTypeKey) ?? []), item]);
   }
 
   const factsByNodeId = new Map<string, ExecutableGraphNodeFacts>();
+  const authoredInputsByNodeId = new Map<string, WorkflowExecutableAuthoredInput[]>();
+  for (const input of authoredInputs) {
+    authoredInputsByNodeId.set(input.executableNodeId, [...(authoredInputsByNodeId.get(input.executableNodeId) ?? []), input]);
+  }
+  const compiledInputsByNodeId = new Map<string, WorkflowExecutableInputBinding[]>();
+  for (const input of compiledInputs) {
+    compiledInputsByNodeId.set(input.executableNodeId, [...(compiledInputsByNodeId.get(input.executableNodeId) ?? []), input.binding]);
+  }
 
   const adapt = (node: WorkflowExecutableNode): ActivityNode => {
     const catalogItem = resolveExecutableCatalogItem(node, catalogByType);
@@ -56,7 +74,9 @@ export function buildExecutableActivityGraph(root: WorkflowExecutableNode, catal
       activityTypeVersion: node.activityTypeVersion,
       structureKind: node.structureKind ?? null,
       available: !!catalogItem,
-      inputBindings: node.inputBindings ?? []
+      inputBindings: compiledInputsByNodeId.get(node.executableNodeId) ?? node.inputBindings ?? [],
+      authoredInputs: authoredInputsByNodeId.get(node.executableNodeId) ?? [],
+      authoredInputsAccess
     });
 
     return {
@@ -71,6 +91,18 @@ export function buildExecutableActivityGraph(root: WorkflowExecutableNode, catal
   };
 
   return { root: adapt(root), factsByNodeId };
+}
+
+export function findExecutableNodeFacts(
+  graph: ExecutableActivityGraph | null | undefined,
+  identity: { executableNodeId?: string | null; authoredActivityId?: string | null } | null | undefined
+) {
+  if (!graph || !identity) return undefined;
+  if (identity.authoredActivityId) {
+    const byAuthoredId = graph.factsByNodeId.get(identity.authoredActivityId);
+    if (byAuthoredId) return byAuthoredId;
+  }
+  return [...graph.factsByNodeId.values()].find(fact => fact.executableNodeId === identity.executableNodeId);
 }
 
 // True when the graph node was minted for a catalog miss ("not available in this environment").

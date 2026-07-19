@@ -760,6 +760,21 @@ textarea:focus {
   overflow: hidden;
 }
 
+/* Run detail is a route-owned workbench. Keep list pages on the normal padded/scrolling
+   surface while this one consumes the shell cell left above the bottom panel. */
+.content:has(> .wf-page--run-workbench) {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.content > .wf-page--run-workbench {
+  min-height: 0;
+  flex: 1;
+}
+
 /* The Extension Builder workspace is a full-bleed IDE: drop the content padding so the
    shell fills the whole area (the home view keeps the normal padded layout). */
 .content:has(> .extension-builder-page-workspace) {
@@ -4034,6 +4049,96 @@ textarea:focus {
   height: 15px;
 }
 
+/* Material Design theme: flat color fields, compact 4px geometry, and purposeful elevation. */
+html[data-theme="material-design"] .sidebar {
+  border-right: 0;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  z-index: 3;
+}
+
+html[data-theme="material-design"] .topbar {
+  border-bottom: 0;
+  background: var(--sidebar);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: none;
+}
+
+html[data-theme="material-design"][data-theme-mode="light"] .topbar {
+  background: var(--accent);
+}
+
+html[data-theme="material-design"][data-theme-mode="light"] .topbar h1,
+html[data-theme="material-design"][data-theme-mode="light"] .topbar .breadcrumb {
+  color: var(--accent-foreground);
+}
+
+html[data-theme="material-design"][data-theme-mode="light"] .topbar .breadcrumb {
+  opacity: 0.84;
+}
+
+html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > a,
+html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > button {
+  border-color: color-mix(in srgb, var(--accent-foreground) 22%, transparent);
+  background: color-mix(in srgb, var(--accent-foreground) 8%, transparent);
+  color: var(--accent-foreground);
+}
+
+html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > a:hover,
+html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > button:hover {
+  border-color: color-mix(in srgb, var(--accent-foreground) 32%, transparent);
+  background: color-mix(in srgb, var(--accent-foreground) 12%, transparent);
+  color: var(--accent-foreground);
+}
+
+html[data-theme="material-design"][data-theme-mode="light"] .console-stream-panel,
+html[data-theme="material-design"][data-theme-mode="light"] .console-stream-page {
+  --cs-accent: var(--accent);
+  --cs-accent-text: var(--accent-foreground);
+  --cs-accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+html[data-theme="material-design"] .host-health-strip,
+html[data-theme="material-design"] .admin-card,
+html[data-theme="material-design"] .studio-card,
+html[data-theme="material-design"] .diagnostic-row,
+html[data-theme="material-design"] .empty-state,
+html[data-theme="material-design"] .error-state,
+html[data-theme="material-design"] .studio-inspector,
+html[data-theme="material-design"] .studio-stat-tile {
+  border-color: color-mix(in srgb, var(--border) 76%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+
+html[data-theme="material-design"] .admin-card:hover,
+html[data-theme="material-design"] .studio-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  box-shadow: var(--shadow-md);
+}
+
+html[data-theme="material-design"] .studio-button.studio-button-primary {
+  box-shadow: var(--shadow-sm);
+  letter-spacing: 0.02em;
+  transition:
+    box-shadow var(--transition-fast),
+    filter var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+html[data-theme="material-design"] .studio-button.studio-button-primary:hover:not(:disabled) {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+html[data-theme="material-design"] .studio-button.studio-button-primary:active:not(:disabled) {
+  box-shadow: var(--shadow-sm);
+  transform: translateY(0);
+}
+
+html[data-theme="material-design"] .studio-tabs button {
+  letter-spacing: 0.02em;
+}
+
 html[data-theme="black-glass"] body {
   background: var(--studio-blueprint-bg);
   background-size: var(--studio-blueprint-bg-size);
@@ -4669,6 +4774,20 @@ html[data-theme="brass-instrument"] .bottom-panel-tab-list button.active {
   text-transform: uppercase;
 }
 
+html[data-theme="brass-instrument"] .brand small,
+html[data-theme="brass-instrument"] .nav-heading,
+html[data-theme="brass-instrument"] .breadcrumb {
+  opacity: 0.88;
+}
+
+html[data-theme="brass-instrument"] :is(button, input, select, textarea):disabled {
+  border-color: var(--studio-border);
+  background: var(--studio-surface-muted);
+  box-shadow: none;
+  color: var(--studio-text-muted);
+  opacity: 1;
+}
+
 html[data-theme="brass-instrument"] .sidebar,
 html[data-theme="brass-instrument"] .topbar,
 html[data-theme="brass-instrument"] .bottom-panel,
@@ -4703,6 +4822,7 @@ html[data-theme="walnut-workshop"] .wf-node small {
 }
 
 html[data-theme="walnut-workshop"] .nav-section a.active,
+html[data-theme="walnut-workshop"] .nav-section a:hover,
 html[data-theme="walnut-workshop"] .nav-section a.has-active-child,
 html[data-theme="walnut-workshop"] .bottom-panel-tab-list button.active,
 html[data-theme="walnut-workshop"] .wf-panel-tab-list button.active,

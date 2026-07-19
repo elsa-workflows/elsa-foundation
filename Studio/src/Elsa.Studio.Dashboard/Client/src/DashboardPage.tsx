@@ -10,7 +10,15 @@ const refreshOptions: Array<[DashboardRefreshInterval, string]> = [[0, "Off"], [
 export function DashboardPage({ api }: { api: ElsaStudioModuleApi }) {
   const session = useAuthSession();
   const permissions = usePermissions();
-  const available = useMemo(() => api.dashboardWidgets.list().filter(widget => !widget.permissions?.length || permissions.hasAll(widget.permissions)), [api, permissions]);
+  const registered = useMemo(() => api.dashboardWidgets.list(), [api]);
+  const available = useMemo(
+    () => registered.filter(widget => !widget.permissions?.length || permissions.hasAll(widget.permissions)),
+    [permissions, registered]
+  );
+  const excludedWidgetIds = useMemo(
+    () => new Set(registered.filter(widget => widget.permissions?.length && !permissions.hasAll(widget.permissions)).map(widget => widget.id)),
+    [permissions, registered]
+  );
   const scope = useMemo(() => createPreferenceScope(api, session), [api, session]);
   const cacheScopeKey = useMemo(() => JSON.stringify(scope), [scope]);
   const store = useMemo(() => new DashboardPreferenceStore(api, scope), [api, scope]);
@@ -24,11 +32,15 @@ export function DashboardPage({ api }: { api: ElsaStudioModuleApi }) {
   useEffect(() => { let live = true; setDocument(null); setPreferenceError(null); setSettingsResetWidgetIds([]); void store.load().then(value => {
     if (!live) return;
     const resetIds: string[] = [];
-    const reconciled = { ...value, value: reconcileDashboardPreferences(value.value, available, pinnedWidgetIds, id => resetIds.push(id)) };
+    const reconciled = {
+      ...value,
+      value: reconcileDashboardPreferences(value.value, available, pinnedWidgetIds, id => resetIds.push(id), excludedWidgetIds)
+    };
+    const repaired = JSON.stringify(reconciled.value) !== JSON.stringify(value.value);
     setDocument(reconciled);
     setSettingsResetWidgetIds(resetIds);
-    if (resetIds.length) void store.save(reconciled).then(saved => { if (live) setDocument(saved); }).catch(() => { if (live) setPreferenceError("Repaired widget settings could not be saved."); });
-  }).catch(() => { if (live) setPreferenceError("Dashboard preferences could not be loaded."); }); return () => { live = false; }; }, [available, pinnedWidgetIds, store]);
+    if (repaired) void store.save(reconciled).then(saved => { if (live) setDocument(saved); }).catch(() => { if (live) setPreferenceError("Repaired widget preferences could not be saved."); });
+  }).catch(() => { if (live) setPreferenceError("Dashboard preferences could not be loaded."); }); return () => { live = false; }; }, [available, excludedWidgetIds, pinnedWidgetIds, store]);
   useEffect(() => { const changed = () => setActive(!globalThis.document.hidden); globalThis.document.addEventListener("visibilitychange", changed); return () => globalThis.document.removeEventListener("visibilitychange", changed); }, []);
   useEffect(() => () => clearDashboardWidgetCache(cacheScopeKey), [cacheScopeKey]);
   useEffect(() => retainDashboardWidgetCache(cacheScopeKey, new Set(available.map(widget => widget.id))), [available, cacheScopeKey]);

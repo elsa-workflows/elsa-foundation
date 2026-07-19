@@ -56,6 +56,7 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
     activityEditors: createContributionRegistry({ slot: studioSlots.activityEditors }),
     propertyEditors: createContributionRegistry({ slot: studioSlots.propertyEditors }),
     expressionEditors: createContributionRegistry({ slot: studioSlots.expressionEditors }),
+    workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
     settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
     agent: {
       contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),

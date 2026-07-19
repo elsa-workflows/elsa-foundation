@@ -1,7 +1,10 @@
+using System.Reflection;
 using CShells;
+using CShells.Features;
 using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Models;
 using Elsa.Studio.Api.Options;
+using Elsa.Studio.Core.Attributes;
 using Elsa.Studio.Core.Events;
 using Elsa.Studio.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +14,7 @@ namespace Elsa.Studio.Api.Services;
 
 public sealed class StudioModuleManifestProvider(
     IEnumerable<IStudioEventHandler<OnStudioModuleManifestsCollecting>> handlers,
+    IRuntimeFeatureCatalog runtimeFeatureCatalog,
     IServiceProvider serviceProvider,
     IOptions<StudioApiOptions> options) : IStudioModuleManifestProvider
 {
@@ -70,10 +74,50 @@ public sealed class StudioModuleManifestProvider(
 
     private async Task<CollectionResult> Collect(CancellationToken cancellationToken)
     {
+        // Collect manifests from imperative handlers (backward compat).
         var collection = new OnStudioModuleManifestsCollecting();
 
         foreach (var handler in handlers)
             await handler.Handle(collection, cancellationToken);
+
+        // Discover manifests from [StudioModule] attributes on feature classes.
+        var handlerIds = new HashSet<string>(collection.Manifests.Select(m => m.Id), StringComparer.OrdinalIgnoreCase);
+        var snapshot = await runtimeFeatureCatalog.GetSnapshotAsync(cancellationToken);
+
+        foreach (var descriptor in snapshot.FeatureDescriptors)
+        {
+            if (descriptor.StartupType is not { } featureType)
+                continue;
+
+            var attr = featureType.GetCustomAttribute<StudioModuleAttribute>();
+            if (attr is null)
+                continue;
+
+            var assemblyName = featureType.Assembly.GetName().Name ?? featureType.Assembly.FullName ?? "";
+            var moduleId = assemblyName;
+
+            // Skip if a handler already contributed a manifest with this ID.
+            if (handlerIds.Contains(moduleId))
+                continue;
+
+            var entry = $"/_content/{assemblyName}/studio/modules/{attr.Slug}/module.js?v={attr.Version}";
+            var styles = attr.HasStyles
+                ? [$"/_content/{assemblyName}/studio/modules/{attr.Slug}/module.css?v={attr.Version}"]
+                : Array.Empty<string>();
+
+            collection.Manifests.Add(new StudioModuleManifest(
+                moduleId,
+                attr.DisplayName,
+                attr.Version,
+                entry,
+                styles,
+                attr.RequiredHostVersion,
+                attr.RequiredSdkVersion,
+                attr.Capabilities,
+                descriptor.Id));
+
+            handlerIds.Add(moduleId);
+        }
 
         var studioOptions = options.Value;
         var shellSettings = serviceProvider.GetService<ShellSettings>();

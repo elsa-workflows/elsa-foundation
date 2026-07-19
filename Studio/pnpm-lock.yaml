@@ -245,7 +245,11 @@ importers:
 
   src/Elsa.Studio.Secrets/Client: {}
 
-  src/Elsa.Studio.Weaver.Workflows/Client: {}
+  src/Elsa.Studio.Weaver.Workflows/Client:
+    dependencies:
+      '@elsa-workflows/studio-workflows':
+        specifier: workspace:*
+        version: link:../../Elsa.Studio.Workflows/Client
 
   src/Elsa.Studio.Web/Client:
     dependencies:

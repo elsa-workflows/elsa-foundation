@@ -53,6 +53,7 @@ export function createStudioRegistry(
     activityEditors: createContributionRegistry({ slot: studioSlots.activityEditors }),
     propertyEditors: createContributionRegistry({ slot: studioSlots.propertyEditors }),
     expressionEditors: createContributionRegistry({ slot: studioSlots.expressionEditors }),
+    workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
     settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
     agent: {
       contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),
@@ -76,7 +77,11 @@ export function createStudioRegistry(
 
 function createBackendContext(host: ElsaStudioHostContext, options: CreateStudioRegistryOptions) {
   const backend = createEndpointContext(options.backendBaseUrl ?? host.baseUrl);
-  return options.backendHttp ? { ...backend, http: options.backendHttp } : backend;
+  return {
+    ...backend,
+    ...(options.backendHttp && { http: options.backendHttp }),
+    ...(host.accessTokenFactory && { accessTokenFactory: host.accessTokenFactory })
+  };
 }
 
 function createFeatureAreaRegistry(

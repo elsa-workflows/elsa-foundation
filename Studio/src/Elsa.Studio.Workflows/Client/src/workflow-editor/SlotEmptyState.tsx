@@ -1,7 +1,7 @@
 import { Boxes } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import type { CreateWorkflowKind } from "./editorTypes";
-import { findRootKindActivity } from "./editorHelpers";
+import { findCompositionActivity } from "./editorHelpers";
 import { WorkflowRootButtonCards } from "./WorkflowRootCards";
 
 // Empty-state panel shown on the canvas when the user is inside a slot (frames.length > 0) whose
@@ -16,7 +16,7 @@ export function SlotEmptyState({ slotLabel, catalog, onPickActivity, onBrowseAll
   onBrowseAll(anchor: { clientX: number; clientY: number }): void;
 }) {
   const pickRootKind = (kind: CreateWorkflowKind) => {
-    const activity = findRootKindActivity(catalog, kind);
+    const activity = findCompositionActivity(catalog, kind);
     if (activity) onPickActivity(activity);
   };
 

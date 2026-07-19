@@ -3,11 +3,13 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useScopedVariableAnalysis } from "../api/workflows";
+import { clearApiCapabilityCache } from "../api/capabilities";
 import type { WorkflowDefinitionState } from "../workflowTypes";
 
 let active: { root: Root; container: HTMLElement } | null = null;
 
 afterEach(() => {
+  clearApiCapabilityCache();
   if (active) {
     flushSync(() => active!.root.unmount());
     active.container.remove();
@@ -58,12 +60,20 @@ function context(options: {
 }) {
   const getJson = options.get ?? (options.capabilityError
     ? vi.fn().mockRejectedValue(options.capabilityError)
-    : vi.fn().mockResolvedValue(options.capabilities ?? { scopedVariableAnalysis: true }));
+    : vi.fn().mockResolvedValue({
+        capabilities: [{
+          id: "elsa.api.workflow-design",
+          contractVersion: "1",
+          links: (options.capabilities as { scopedVariableAnalysis?: boolean } | undefined)?.scopedVariableAnalysis === false
+            ? []
+            : [{ rel: "scoped-variable-analysis", href: "design/workflows/scoped-variables/analyze" }]
+        }]
+      }));
   const postJson = options.post ?? vi.fn().mockResolvedValue({
     visibleVariables: [{ referenceKey: "var-1", name: "Counter", scopeId: "workflow", isWorkflowScope: true }],
     shadowingWarnings: []
   });
-  return { value: { baseUrl: "", http: { getJson, postJson } } as never, getJson, postJson };
+  return { value: { baseUrl: "test://scoped-variables", http: { getJson, postJson } } as never, getJson, postJson };
 }
 
 describe("scoped-variable analysis capability gating", () => {
@@ -76,12 +86,12 @@ describe("scoped-variable analysis capability gating", () => {
       expect(container.querySelector("output")?.dataset.status).toBe("ready");
     });
 
-    expect(api.getJson).toHaveBeenCalledWith("/_elsa/workflow-management/capabilities", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(api.getJson).toHaveBeenCalledWith("/capabilities");
     const [path, body] = api.postJson.mock.calls[0];
-    expect(path).toBe("/_elsa/workflow-management/design/scoped-variables/analyze");
+    expect(path).toBe("/design/workflows/scoped-variables/analyze");
     expect(body.nodeId).toBe("root");
     expect(body.state.rootActivity.inputs).toEqual([
-      { referenceKey: "Text", value: { value: "live draft", expressionType: "Literal" } }
+      { referenceKey: "text", value: { value: "live draft", expressionType: "Literal" } }
     ]);
     expect(body.state.rootActivity).not.toHaveProperty("text");
   });

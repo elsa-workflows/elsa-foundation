@@ -17,6 +17,7 @@ public sealed class StudioRuntimeScriptTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Studio:BackendBaseUrl"] = "https://backend.example/",
+                ["Studio:BackendServerBaseUrl"] = "http://elsa-server:8080",
                 ["Studio:HostId"] = "studio-primary",
                 ["Studio:Dashboard:DefaultRefreshIntervalMinutes"] = "15",
                 ["Studio:Dashboard:WidgetTimeoutSeconds"] = "12",
@@ -54,6 +55,7 @@ public sealed class StudioRuntimeScriptTests
         Assert.Contains(StudioRuntimeScript.GlobalName, script);
         Assert.Contains("backendBaseUrl", script);
         Assert.Contains("https://backend.example/", script);
+        Assert.DoesNotContain("http://elsa-server:8080", script);
         Assert.Contains("\"enabled\":true", script);
         Assert.Contains("\"hostId\":\"studio-primary\"", script);
         Assert.Contains("\"defaultRefreshIntervalMs\":900000", script);

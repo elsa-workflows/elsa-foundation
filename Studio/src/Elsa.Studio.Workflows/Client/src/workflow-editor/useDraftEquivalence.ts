@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { listExecutables } from "../api/workflows";
+import { listExecutables } from "../api/runtime";
+import { listPublicationSlots } from "../api/publishing";
 import type { WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
-import { findPublishedEquivalent } from "./editorHelpers";
 
 // Resolves the draft-equivalence signal for the latest test run: the published executable of this
 // definition that shares the test run's artifact id, when one exists. Uses the imperative load pattern
@@ -21,8 +21,18 @@ export function useDraftEquivalence(
     if (!artifactId) return;
 
     let cancelled = false;
-    listExecutables(context).then(
-      executables => { if (!cancelled) setEquivalent(findPublishedEquivalent(artifactId, executables, definitionId)); },
+    Promise.all([listExecutables(context, { scope: "all", includeRetired: true }), listPublicationSlots(context, definitionId)]).then(
+      ([executables, slots]) => {
+        const publication = slots.map(slot => slot.publication).find(candidate =>
+          candidate?.artifactId === artifactId && candidate.status === "active");
+        const executable = publication ? executables.find(candidate => candidate.artifactId === publication.artifactId) : null;
+        if (!cancelled) setEquivalent(executable ? {
+          ...executable,
+          definitionId,
+          definitionVersionId: publication?.versionId ?? "",
+          publishedAt: publication?.activatedAt ?? null
+        } : null);
+      },
       () => { if (!cancelled) setEquivalent(null); }
     );
 

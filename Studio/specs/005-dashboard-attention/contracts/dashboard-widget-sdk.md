@@ -24,6 +24,11 @@ interface StudioDashboardWidgetBodyProps<TSnapshot, TSettings> {
   size: StudioDashboardWidgetSize;
 }
 
+interface StudioDashboardWidgetEmptyState {
+  title?: string;
+  description?: string;
+}
+
 interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSettings = unknown> {
   id: string;
   moduleId: string;
@@ -39,6 +44,8 @@ interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSettings = unk
   timeoutMs?: number;
   settings?: StudioDashboardWidgetSettings<TSettings>;
   load?(context: StudioDashboardWidgetLoadContext<TSettings>): Promise<TSnapshot>;
+  isEmpty?(snapshot: TSnapshot | undefined, settings: TSettings): boolean;
+  emptyState?: StudioDashboardWidgetEmptyState;
   component: React.ComponentType<StudioDashboardWidgetBodyProps<TSnapshot, TSettings>>;
 }
 ```
@@ -52,6 +59,7 @@ legacy components that render their own card/frame are unsupported.
 - Title/frame, semantic size, responsive placement, keyboard layout actions.
 - Loader cancellation, timeout, stale/cache timing, last/next refresh, retry.
 - Loading, refreshing, empty, error, timed-out, and unavailable semantics.
+- Isolation of module render and empty-state predicate failures to one widget.
 - Settings dialog using shared Studio setting descriptors/editors.
 - Preference validation/migration and scoped persistence.
 - Cleanup when registry/session/tenant/host scope changes.

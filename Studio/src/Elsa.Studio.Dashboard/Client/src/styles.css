@@ -12,6 +12,8 @@
 .dashboard-widget[data-size="full"] { grid-column: 1 / -1; }
 .dashboard-widget-header { display: flex; justify-content: space-between; gap: .5rem; padding: 1rem; border-bottom: 1px solid var(--studio-border); }
 .dashboard-widget-body { min-height: 8rem; padding: 1rem; }
+.dashboard-widget-empty { display: grid; gap: .25rem; color: var(--studio-text-muted); }
+.dashboard-widget-empty strong { color: var(--studio-text); }
 .dashboard-widget footer { padding: .5rem 1rem; color: var(--studio-text-muted); border-top: 1px solid var(--studio-border); }
 .dashboard-widget button:focus-visible, .dashboard-widget select:focus-visible, .dashboard-page button:focus-visible, .dashboard-page select:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 .dashboard-settings-backdrop { position: fixed; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--studio-bg) 70%, transparent); z-index: 100; }

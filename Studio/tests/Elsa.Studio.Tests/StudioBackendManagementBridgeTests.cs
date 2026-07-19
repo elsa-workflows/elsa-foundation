@@ -24,6 +24,7 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
     private const string CapabilitiesRoute = "/_elsa/studio/backend-management/extension-builder/capabilities";
     private const string BackendCapabilitiesPath = "/_elsa/extension-builder/capabilities";
     private const string BackendBaseUrl = "https://backend.example";
+    private const string BackendServerBaseUrl = "http://elsa-server:8080";
     private const string ManagementKey = "s3cr3t-management-key";
     private const string TrustedCapabilitiesJson = """{ "canCreateWorkspace": true, "canEditFiles": true, "canBuild": true, "canPromote": false, "canRollback": false }""";
 
@@ -41,6 +42,27 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
         Assert.Single(backend.Requests);
         // The management key rides only on the Studio->backend call.
         Assert.Equal(ManagementKey, backend.Requests[0].ManagementKey);
+    }
+
+    [Fact]
+    public async Task UsesDedicatedServerBaseUrlForStudioToBackendCalls()
+    {
+        var backend = RecordingBackend.RespondingWith(request =>
+        {
+            Assert.Equal("elsa-server", request.RequestUri!.Host);
+            Assert.Equal(8080, request.RequestUri.Port);
+            return JsonOk("""{ "host": { "id": "backend" }, "modules": [] }""");
+        });
+        var client = await StartBridgeHostAsync(
+            backend,
+            backendBaseUrl: BackendBaseUrl,
+            backendServerBaseUrl: BackendServerBaseUrl,
+            managementKey: ManagementKey);
+
+        var status = await GetStatusAsync(client);
+
+        Assert.Equal(StudioBackendManagementStatus.Available, status.Status);
+        Assert.Equal(BackendServerBaseUrl, status.BackendBaseUrl);
     }
 
     [Fact]
@@ -499,11 +521,13 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
         RecordingBackend backend,
         string? backendBaseUrl,
         string? managementKey,
+        string? backendServerBaseUrl = null,
         bool authEnabled = false)
     {
         var settings = new Dictionary<string, string?>
         {
             [StudioBackendManagementOptions.BackendBaseUrlConfigurationKey] = backendBaseUrl,
+            [StudioBackendManagementOptions.BackendServerBaseUrlConfigurationKey] = backendServerBaseUrl,
             [StudioBackendManagementOptions.ManagementApiKeyConfigurationKey] = managementKey,
             ["Studio:Auth:Enabled"] = authEnabled ? "true" : "false"
         };

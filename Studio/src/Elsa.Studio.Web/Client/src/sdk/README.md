@@ -31,6 +31,7 @@ Known host-owned Slot IDs:
 - `workflow.activity.editors`
 - `workflow.activity.property-editors`
 - `workflow.expression-editors`
+- `workflow.run-input.editors`
 - `workflow.designer.node-renderers`
 - `workflow.designer.toolbox-items`
 - `workflow.designer.panels`
@@ -78,9 +79,32 @@ A contribution supplies stable identity and module ownership, supported/default
 sizes, an optional cancellable loader, optional refresh/cache/timeout limits,
 optional versioned settings, and a body component. The body receives the
 host-managed snapshot and validated settings and must not render a competing
-card frame. Data-backed widgets use independently authorized and tenant-scoped
+card frame. Contributions can provide an `isEmpty` predicate and empty-state
+copy so Dashboard, rather than module bodies, renders the standard empty
+semantics. Data-backed widgets use independently authorized and tenant-scoped
 backend resources. Loader-less widgets remain valid and do not participate in
 managed refresh.
+
+## Workflow run-input editor Contributions
+
+Modules register type-aware execution-input controls through
+`api.workflowRunInputEditors`. Match only stable declared metadata such as
+`input.type.alias` and `input.type.collectionKind`; Foundation intentionally
+does not send CLR implementation details or module-private editor metadata.
+
+A Contribution owns its visible control, draft validation, and conversion to
+the JSON value sent on the execution wire. Lower `order` values win when more
+than one Contribution supports an input. Keep `supports`, `validate`, and
+`serialize` deterministic and free of side effects. Studio contains callback
+and render failures, reports an accessible field error, preserves the current
+draft, and switches that field to the built-in primitive or honest JSON
+fallback instead of taking down or permanently blocking the run dialog. After
+a callback failure, the user can review the fallback value and submit again.
+
+The Workflows module exports `createEnumWorkflowRunInputEditorContribution`
+for scalar enums. The registering module supplies the stable type match and
+either a static option catalog or an input-derived option callback. Unsupported
+custom types continue to use JSON entry.
 
 ## Weaver Contributions
 

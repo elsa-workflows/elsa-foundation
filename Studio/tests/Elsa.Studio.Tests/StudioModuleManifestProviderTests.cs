@@ -1,4 +1,6 @@
+using System.Reflection;
 using CShells;
+using CShells.Features;
 using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
@@ -9,10 +11,12 @@ using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.ExpressionEditors.JavaScript;
 using Elsa.Studio.ExpressionEditors.Liquid;
 using Elsa.Studio.FeatureManagement;
+using Elsa.Studio.Attention;
 using Elsa.Studio.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
 using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
+using Elsa.Studio.Workflows.Dashboard;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -37,6 +41,8 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Dashboard");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Attention");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows.Dashboard");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
         Assert.Contains(response.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
@@ -68,8 +74,11 @@ public sealed class StudioModuleManifestProviderTests
 
         var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Equal("Workflows", module.DisplayName);
+        Assert.Equal("1.0.6", module.Version);
         Assert.StartsWith("/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.js", module.Entry, StringComparison.Ordinal);
+        Assert.Contains($"v={module.Version}", module.Entry);
         Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.css", StringComparison.Ordinal));
+        Assert.All(module.Styles, style => Assert.Contains($"v={module.Version}", style));
         Assert.Contains("navigation", module.Capabilities);
         Assert.Contains("routes", module.Capabilities);
         Assert.Contains("workflow-designer", module.Capabilities);
@@ -286,16 +295,22 @@ public sealed class StudioModuleManifestProviderTests
     {
         var services = new ServiceCollection();
         services.AddElsaStudioApi();
-        services.AddConsoleStreamStudio();
-        services.AddDiagnosticsOpenTelemetryStudio();
-        services.AddDiagnosticsStructuredLogsStudio();
-        services.AddJavaScriptExpressionEditorStudio();
-        services.AddLiquidExpressionEditorStudio();
-        services.AddFeatureManagementStudio();
-        services.AddWeaverWorkflowsStudio();
-        services.AddWorkflowsStudio();
-        services.AddDashboardStudio();
-        services.AddWeatherForecastStudioSample();
+
+        // Register a fake runtime feature catalog that surfaces all feature types so the
+        // StudioModuleManifestProvider discovers [StudioModule] attributes via reflection.
+        services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog(
+            typeof(ConsoleStreamStudioFeature),
+            typeof(DiagnosticsOpenTelemetryStudioFeature),
+            typeof(DiagnosticsStructuredLogsStudioFeature),
+            typeof(JavaScriptExpressionEditorStudioFeature),
+            typeof(LiquidExpressionEditorStudioFeature),
+            typeof(FeatureManagementStudioFeature),
+            typeof(WeaverWorkflowsStudioFeature),
+            typeof(WorkflowsStudioFeature),
+            typeof(DashboardStudioFeature),
+            typeof(AttentionStudioFeature),
+            typeof(WorkflowsDashboardStudioFeature),
+            typeof(WeatherForecastStudioFeature)));
 
         // Pin the host/SDK version so these tests are independent of the ambient build version.
         // StudioApiOptions defaults HostVersion/SdkVersion to the Studio API assembly's informational
@@ -314,5 +329,44 @@ public sealed class StudioModuleManifestProviderTests
             services.AddSingleton(new ShellSettings(new("Default"), shellFeatures));
 
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Returns a snapshot whose feature descriptors carry the <see cref="ShellFeatureDescriptor.StartupType"/>
+    /// of each supplied type so that <see cref="Elsa.Studio.Api.Services.StudioModuleManifestProvider"/>
+    /// can reflect <c>[StudioModule]</c> attributes from them.
+    /// </summary>
+    private sealed class FakeRuntimeFeatureCatalog : IRuntimeFeatureCatalog
+    {
+        private readonly RuntimeFeatureCatalogSnapshot _snapshot;
+
+        public FakeRuntimeFeatureCatalog(params Type[] featureTypes)
+        {
+            var descriptors = featureTypes
+                .Select(type =>
+                {
+                    // Extract the feature name from the [ShellFeature] attribute if present, otherwise use the type name.
+                    var shellFeatureAttr = type.GetCustomAttributesData()
+                        .FirstOrDefault(a => a.AttributeType.Name == "ShellFeatureAttribute");
+
+                    var featureName = shellFeatureAttr?.ConstructorArguments.FirstOrDefault().Value as string ?? type.Name;
+
+                    return new ShellFeatureDescriptor { Id = featureName, StartupType = type };
+                })
+                .ToArray();
+
+            _snapshot = new RuntimeFeatureCatalogSnapshot(
+                1,
+                Array.Empty<Assembly>(),
+                descriptors,
+                new Dictionary<string, ShellFeatureDescriptor>(),
+                DateTimeOffset.UtcNow);
+        }
+
+        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
+
+        public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(_snapshot);
     }
 }

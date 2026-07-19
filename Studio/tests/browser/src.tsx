@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { lazy, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
+import { WorkflowLazyBoundary } from "../../src/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
+import { useRunDetailLayout } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
 import type { StudioActivityDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode } from "../../src/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import "../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
@@ -10,6 +12,12 @@ import "./fixture.css";
 const searchParams = new URLSearchParams(window.location.search);
 const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
+const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
+const runDetailFixture = searchParams.get("mode") === "run-detail";
+
+const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
+  window.setTimeout(() => resolve({ default: () => <section aria-label="Deferred workflow designer">Workflow designer ready</section> }), 3_000);
+}));
 
 const expressionDescriptors: StudioExpressionDescriptor[] = [
   { type: "Input", displayName: "Input", editingMode: "reference" },
@@ -121,7 +129,64 @@ function Fixture() {
   );
 }
 
+function LazyBoundaryFixture() {
+  return (
+    <main className="browser-fixture">
+      <h1>Workflow management</h1>
+      <WorkflowLazyBoundary label="workflow designer">
+        <DeferredWorkflowPanel />
+      </WorkflowLazyBoundary>
+    </main>
+  );
+}
+
+function RunDetailFixture() {
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const layout = useRunDetailLayout({ selectedActivityId });
+
+  return (
+    <div className="browser-run-shell">
+      <header className="browser-run-shell-header">Elsa Foundation Studio</header>
+      <div className="content browser-run-content">
+        <section className="wf-page wf-page--run-workbench">
+          <div className="wf-page-header">
+            <div><span className="wf-kicker">Workflow management</span><h2>Run</h2></div>
+            <code>wfexec-browser</code>
+          </div>
+          <div className="wf-toolbar">
+            <button type="button" onClick={() => setSelectedActivityId("activity-1")}>Select activity</button>
+            <button type="button" onClick={() => {
+              layout.closeInspector();
+              setSelectedActivityId(null);
+            }}>Close details</button>
+          </div>
+          <div
+            ref={layout.containerRef}
+            className={layout.workbenchClassName}
+            style={layout.workbenchStyle}
+            data-testid="run-workbench"
+            data-layout-mode={layout.mode}
+          >
+            <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas">
+              <header><h3>Canvas</h3></header>
+              <div className="wf-instance-canvas">Activity graph</div>
+            </section>
+            <div className="wf-side-resize-spacer" />
+            <aside className="wf-instance-inspector" aria-label="Run details">
+              <header><h3>Activity details</h3></header>
+              <div className="wf-instance-section">Evaluated inputs</div>
+            </aside>
+          </div>
+        </section>
+      </div>
+      <footer className="browser-run-console">Console</footer>
+    </div>
+  );
+}
+
 const theme = searchParams.get("theme");
 document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "harbor";
 document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
-createRoot(document.getElementById("root")!).render(<Fixture />);
+createRoot(document.getElementById("root")!).render(
+  runDetailFixture ? <RunDetailFixture /> : lazyBoundaryFixture ? <LazyBoundaryFixture /> : <Fixture />
+);

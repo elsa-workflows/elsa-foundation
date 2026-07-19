@@ -39,7 +39,12 @@ export function useDashboardWidget(
     const abort = new AbortController();
     controller.current = abort;
     const timeoutMs = Math.min(widget.timeoutMs ?? defaultTimeoutMs, defaultTimeoutMs);
-    const timeout = window.setTimeout(() => abort.abort("timeout"), timeoutMs);
+    const timeout = window.setTimeout(() => {
+      abort.abort("timeout");
+      if (request === generation.current) {
+        setState({ status: "timedOut", error: "The widget timed out." });
+      }
+    }, timeoutMs);
     setState(current => current.status === "ready" || current.status === "refreshing"
       ? { ...current, status: "refreshing" }
       : { status: "loading", startedAt: Date.now() });

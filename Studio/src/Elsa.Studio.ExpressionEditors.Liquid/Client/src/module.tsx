@@ -1,6 +1,6 @@
 import React from "react";
 import { StudioCodeEditor, type StudioCodeLanguageAdapter } from "@elsa-workflows/studio-code-editor";
-import type { ElsaStudioModuleApi, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioExpressionEditorProps, StudioExpressionSourceRendererProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
 const liquidSyntax = "Liquid";
@@ -17,8 +17,18 @@ export function register(api: ElsaStudioModuleApi) {
     supports: context => context.syntax === liquidSyntax,
     surfaces: {
       expanded: LiquidExpandedEditor
+    },
+    sourceRenderer: {
+      compact: LiquidSourceRenderer,
+      expanded: LiquidSourceRenderer
     }
   });
+}
+
+export function LiquidSourceRenderer({ context }: StudioExpressionSourceRendererProps) {
+  return context.isSensitive
+    ? <span>Protected Liquid source</span>
+    : <code>{formatSourceValue(context.value)}</code>;
 }
 
 export function LiquidExpandedEditor({ descriptor, value, disabled, onChange }: StudioExpressionEditorProps) {
@@ -48,4 +58,9 @@ export function LiquidExpandedEditor({ descriptor, value, disabled, onChange }: 
 
 function formatValue(value: unknown) {
   return value == null ? "" : String(value);
+}
+
+function formatSourceValue(value: unknown) {
+  const source = formatValue(value);
+  return source.length > 4_000 ? `${source.slice(0, 3_997)}...` : source;
 }

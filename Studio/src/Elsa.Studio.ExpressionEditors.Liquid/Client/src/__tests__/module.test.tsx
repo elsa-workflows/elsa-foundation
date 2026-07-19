@@ -1,7 +1,7 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "@elsa-workflows/studio-code-editor";
-import { LiquidExpandedEditor, register } from "../module";
+import { LiquidExpandedEditor, LiquidSourceRenderer, register } from "../module";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 
 describe("Liquid expression editor module", () => {
@@ -16,6 +16,23 @@ describe("Liquid expression editor module", () => {
     expect(contribution.supports(context("JavaScript"))).toBe(false);
     expect(contribution.surfaces.inline).toBeUndefined();
     expect(contribution.surfaces.expanded).toBe(LiquidExpandedEditor);
+    expect(contribution.sourceRenderer?.compact).toBe(LiquidSourceRenderer);
+    expect(contribution.sourceRenderer?.expanded).toBe(LiquidSourceRenderer);
+  });
+
+  it("renders authorized authored Liquid without evaluating it", () => {
+    const rendered = LiquidSourceRenderer({
+      context: {
+        expressionType: "Liquid",
+        value: "{{ customer.email }}",
+        metadata: {},
+        isSensitive: false,
+        surface: "expanded"
+      }
+    }) as React.ReactElement;
+
+    expect(rendered.type).toBe("code");
+    expect(rendered.props.children).toBe("{{ customer.email }}");
   });
 
   it("leaves unavailable inline surfaces to host fallback resolution", () => {
