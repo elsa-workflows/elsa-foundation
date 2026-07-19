@@ -1,5 +1,6 @@
 using Elsa.Tagging.Core.Contracts;
 using Elsa.Tagging.Core.Models;
+using Elsa.Tagging.Core.Services;
 using Elsa.Tagging.Persistence.Groundwork;
 using Elsa.Tagging.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
@@ -74,6 +75,101 @@ public sealed class GroundworkTagDefinitionStoreTests
         Assert.Equal("ops.tag-250", Assert.Single(definitions).CanonicalKey);
     }
 
+    [Fact]
+    public async Task Controlled_values_are_unique_per_definition_and_listed_by_explicit_order()
+    {
+        var store = new GroundworkControlledTagValueStore(new InMemoryDocumentStore(TaggingStorageManifest.Create()));
+        var production = Controlled("prod", "environment", "production", "Production", 20);
+        var development = Controlled("dev", "environment", "development", "Development", 10);
+
+        Assert.True(await store.TryAddAsync(production));
+        Assert.True(await store.TryAddAsync(development));
+        Assert.False(await store.TryAddAsync(Controlled("duplicate", "environment", "production", "Duplicate", 30)));
+        Assert.True(await store.TryAddAsync(Controlled("other", "team", "production", "Production", 1)));
+
+        var values = await store.ListWithRevisionsAsync(new ControlledTagValueListRequest { TagDefinitionId = "environment", ActiveOnly = false });
+        Assert.Equal(["development", "production"], values.Select(x => x.Value.CanonicalKey));
+        Assert.Equal("production", (await store.FindByCanonicalKeyAsync("environment", "production"))!.CanonicalKey);
+        Assert.Equal("other", (await store.FindWithRevisionAsync("other"))!.Value.Id);
+    }
+
+    [Fact]
+    public async Task Controlled_value_atomic_create_does_not_persist_when_its_audit_already_exists()
+    {
+        var store = new GroundworkControlledTagValueStore(new InMemoryDocumentStore(TaggingStorageManifest.Create()));
+        var value = Controlled("prod", "environment", "production", "Production", 10);
+        var audit = new ControlledTagValueAuditRecord("value-audit", value.Id, value.TagDefinitionId, value.CanonicalKey, "created", DateTimeOffset.UtcNow, "tenant-a", "author", "correlation", null, ControlledTagValueAuditValues.From(value));
+        await store.AppendAsync(audit);
+
+        Assert.Equal(
+            ControlledTagValueCreateResult.Conflict,
+            await store.TryAddWithinLimitAndAppendAuditAsync(value, audit, 0, 100));
+        Assert.Null(await store.FindByCanonicalKeyAsync(value.TagDefinitionId, value.CanonicalKey));
+    }
+
+    [Fact]
+    public async Task Controlled_value_limit_is_enforced_atomically_across_concurrent_creates()
+    {
+        var documents = new InMemoryDocumentStore(TaggingStorageManifest.Create());
+        var definitions = new GroundworkTagDefinitionStore(documents);
+        var values = new GroundworkControlledTagValueStore(documents);
+        var definition = Definition("environment");
+        definition.ValueMode = TagValueMode.Controlled;
+        definition.Cardinality = TagCardinality.Single;
+        Assert.True(await definitions.TryAddAsync(definition));
+        for (var index = 0; index < 99; index++)
+        {
+            Assert.True(await values.TryAddAsync(Controlled(
+                $"seed-{index:D2}",
+                definition.Id,
+                $"seed-{index:D2}",
+                $"Seed {index:D2}",
+                index)));
+        }
+
+        var manager = new DefaultControlledTagValueManager(
+            definitions,
+            values,
+            new AuditContext(),
+            TimeProvider.System,
+            new CoordinatedAtomicChanges(values));
+        var attempts = new[]
+        {
+            Task.Run(() => CreateAsync("candidate-a", "Candidate A")),
+            Task.Run(() => CreateAsync("candidate-b", "Candidate B"))
+        };
+        var outcomes = await Task.WhenAll(attempts);
+
+        Assert.Single(outcomes, outcome => outcome is null);
+        Assert.Single(outcomes, outcome => outcome is InvalidOperationException);
+        Assert.Equal(
+            100,
+            (await values.ListWithRevisionsAsync(new ControlledTagValueListRequest
+            {
+                TagDefinitionId = definition.Id,
+                ActiveOnly = false
+            })).Count);
+
+        async Task<Exception?> CreateAsync(string key, string displayName)
+        {
+            try
+            {
+                await manager.CreateAsync(new CreateControlledTagValueRequest
+                {
+                    TagDefinitionId = definition.Id,
+                    CanonicalKey = key,
+                    DisplayName = displayName,
+                    SortOrder = 100
+                });
+                return null;
+            }
+            catch (Exception exception)
+            {
+                return exception;
+            }
+        }
+    }
+
     private static TagDefinition Definition(string canonicalKey, TagDefinitionStatus status = TagDefinitionStatus.Active) => new()
     {
         Id = canonicalKey + "-id",
@@ -94,4 +190,56 @@ public sealed class GroundworkTagDefinitionStoreTests
         "correlation",
         new TagDefinitionAuditValues("Before", null, null, TagDefinitionStatus.Active),
         new TagDefinitionAuditValues(definition.DisplayName, definition.Description, definition.Color, definition.Status));
+
+    private static ControlledTagValue Controlled(string id, string definitionId, string canonicalKey, string displayName, int sortOrder) => new()
+    {
+        Id = id,
+        TagDefinitionId = definitionId,
+        CanonicalKey = canonicalKey,
+        DisplayName = displayName,
+        SortOrder = sortOrder,
+        CreatedAt = DateTimeOffset.UtcNow
+    };
+
+    private sealed class AuditContext : ITagDefinitionAuditContext
+    {
+        public string Actor => "author";
+        public string CorrelationId => "correlation";
+        public string? TenantId => "tenant-a";
+    }
+
+    private sealed class CoordinatedAtomicChanges(
+        IControlledTagValueAtomicChangeStore inner) : IControlledTagValueAtomicChangeStore
+    {
+        private readonly Barrier barrier = new(2);
+        private int calls;
+
+        public async ValueTask<ControlledTagValueCreateResult> TryAddWithinLimitAndAppendAuditAsync(
+            ControlledTagValue value,
+            ControlledTagValueAuditRecord audit,
+            int expectedCount,
+            int maximumCount,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref calls) <= 2)
+                barrier.SignalAndWait(cancellationToken);
+            return await inner.TryAddWithinLimitAndAppendAuditAsync(
+                value,
+                audit,
+                expectedCount,
+                maximumCount,
+                cancellationToken);
+        }
+
+        public ValueTask<TagDefinitionSaveResult> SaveWithRevisionAndAppendAuditAsync(
+            ControlledTagValue value,
+            string expectedRevision,
+            ControlledTagValueAuditRecord audit,
+            CancellationToken cancellationToken = default) =>
+            inner.SaveWithRevisionAndAppendAuditAsync(
+                value,
+                expectedRevision,
+                audit,
+                cancellationToken);
+    }
 }

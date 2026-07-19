@@ -34,7 +34,8 @@ public sealed class GroundworkSaveWorkflowDefinitionCommand(
                 GroundworkWorkflowDefinitionDocuments.Save(
                     definition,
                     existingDocument?.MarkerProjection ?? GroundworkWorkflowDefinitionTagStore.MarkerProjection([]),
-                    existingEnvelope?.Version)
+                    existingEnvelope?.Version,
+                    existingDocument?.ControlledProjection ?? GroundworkWorkflowDefinitionTagStore.ControlledProjection([]))
             ],
             cancellationToken);
     }

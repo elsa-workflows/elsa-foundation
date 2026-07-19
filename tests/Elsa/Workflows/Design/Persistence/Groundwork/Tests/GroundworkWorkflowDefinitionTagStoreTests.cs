@@ -167,6 +167,31 @@ public sealed class GroundworkWorkflowDefinitionTagStoreTests
         Assert.Contains("\"markerProjection\":\"|tag-a|tag-b|\"", definition.ContentJson);
     }
 
+    [Fact]
+    public async Task Replace_manual_slice_persists_controlled_value_without_putting_it_in_the_marker_projection()
+    {
+        var (documents, store) = await CreateSeededStoreAsync();
+
+        var result = await store.ReplaceManualAsync(new(
+            "workflow-1",
+            "tenant-a",
+            WorkflowDefinitionTagRevision.Initial,
+            ["tag-priority"],
+            "author-1",
+            "correlation-1",
+            ControlledValues: [new("tag-environment", "value-production")]));
+
+        var controlled = Assert.Single(result.TagSet!.Assertions.Where(assertion => assertion.ControlledValueId is not null));
+        Assert.Equal("tag-environment", controlled.TagDefinitionId);
+        Assert.Equal("value-production", controlled.ControlledValueId);
+        var definition = await documents.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            "workflow-1");
+        Assert.NotNull(definition);
+        Assert.Contains("\"markerProjection\":\"|tag-priority|\"", definition.ContentJson);
+        Assert.Contains("\"controlledProjection\":\"|tag-environment=value-production|\"", definition.ContentJson);
+    }
+
     private static async Task<(InMemoryDocumentStore Documents, GroundworkWorkflowDefinitionTagStore Store)>
         CreateSeededStoreAsync()
     {

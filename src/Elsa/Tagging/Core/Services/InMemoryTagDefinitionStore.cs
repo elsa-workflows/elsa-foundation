@@ -75,6 +75,8 @@ internal sealed class InMemoryTagDefinitionStore : ITagDefinitionStore
         Color = definition.Color,
         Status = definition.Status,
         Eligibility = definition.Eligibility,
+        ValueMode = definition.ValueMode,
+        Cardinality = definition.Cardinality,
         CreatedAt = definition.CreatedAt,
         UpdatedAt = definition.UpdatedAt
     };

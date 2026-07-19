@@ -15,6 +15,7 @@ public sealed class DefaultTagDefinitionManager(
     {
         ArgumentNullException.ThrowIfNull(request);
         TagDefinitionConstraints.ValidateCanonicalKey(request.CanonicalKey, request.IsHostProvisioning);
+        TagDefinitionConstraints.ValidateValueSemantics(request.ValueMode, request.Cardinality);
         var displayName = string.IsNullOrWhiteSpace(request.DisplayName) ? request.CanonicalKey : request.DisplayName.Trim();
         TagDefinitionConstraints.ValidateMutableFields(displayName, request.Description, request.Color);
 
@@ -25,6 +26,8 @@ public sealed class DefaultTagDefinitionManager(
             DisplayName = displayName,
             Description = request.Description,
             Color = request.Color,
+            ValueMode = request.ValueMode,
+            Cardinality = request.Cardinality,
             CreatedAt = now
         };
 

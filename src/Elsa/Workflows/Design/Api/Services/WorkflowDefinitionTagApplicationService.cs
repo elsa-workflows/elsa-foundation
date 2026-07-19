@@ -22,7 +22,9 @@ public sealed class WorkflowDefinitionTagApplicationService(
     IDeferredEventPublisher eventPublisher,
     IWorkflowDefinitionTagStore? tagStore = null,
     ITagDefinitionStore? catalog = null,
-    ITagDefinitionCatalogPersistence? catalogPersistence = null)
+    ITagDefinitionCatalogPersistence? catalogPersistence = null,
+    IControlledTagValueStore? controlledValues = null,
+    IControlledTagValueCatalogPersistence? controlledValuePersistence = null)
 {
     public bool IsAvailable =>
         tagStore is not null
@@ -43,6 +45,7 @@ public sealed class WorkflowDefinitionTagApplicationService(
         string workflowDefinitionId,
         string expectedRevision,
         IReadOnlyCollection<string> tagDefinitionIds,
+        IReadOnlyCollection<WorkflowDefinitionControlledTagValue>? controlledTagValues = null,
         CancellationToken cancellationToken = default)
     {
         EnsureAvailable();
@@ -52,8 +55,34 @@ public sealed class WorkflowDefinitionTagApplicationService(
         if (definition.DeletedAt is not null)
             throw new InvalidOperationException("Restore the workflow definition before changing its tags.");
         ArgumentNullException.ThrowIfNull(tagDefinitionIds);
+        controlledTagValues ??= [];
+        if (controlledTagValues.Count > 0
+            && (controlledValues is null || controlledValuePersistence is null))
+            throw new WorkflowDefinitionTaggingUnavailableException();
         if (tagDefinitionIds.Count > 64)
             throw new ArgumentOutOfRangeException(nameof(tagDefinitionIds), "At most 64 marker tags can be assigned to one workflow definition.");
+        if (controlledTagValues.Count > 64)
+            throw new ArgumentOutOfRangeException(nameof(controlledTagValues), "At most 64 controlled tag values can be assigned to one workflow definition.");
+
+        var normalizedControlledValues = controlledTagValues
+            .Select(value =>
+            {
+                value.Validate();
+                return value;
+            })
+            .Distinct()
+            .OrderBy(value => value.TagDefinitionId, StringComparer.Ordinal)
+            .ThenBy(value => value.ControlledValueId, StringComparer.Ordinal)
+            .ToArray();
+        var duplicateDefinitions = normalizedControlledValues
+            .GroupBy(value => value.TagDefinitionId, StringComparer.Ordinal)
+            .Where(group => group.Select(value => value.ControlledValueId).Distinct(StringComparer.Ordinal).Skip(1).Any())
+            .Select(group => group.Key)
+            .ToArray();
+        if (duplicateDefinitions.Length > 0)
+            throw new ArgumentException(
+                "A single-valued controlled tag can have only one manually asserted value.",
+                nameof(controlledTagValues));
 
         var distinctIds = tagDefinitionIds
             .Select(id => id?.Trim() ?? string.Empty)
@@ -64,16 +93,66 @@ public sealed class WorkflowDefinitionTagApplicationService(
         var beforeIds = before.Assertions
             .Select(assertion => assertion.TagDefinitionId)
             .ToHashSet(StringComparer.Ordinal);
-        var catalogDefinitions = await Catalog.ListByIdsAsync(distinctIds, cancellationToken);
+        var beforeManualMarkerIds = before.Assertions
+            .Where(assertion =>
+                StringComparer.Ordinal.Equals(
+                    assertion.OriginKind,
+                    WorkflowDefinitionTagOriginKinds.Manual)
+                && assertion.ControlledValueId is null)
+            .Select(assertion => assertion.TagDefinitionId)
+            .ToHashSet(StringComparer.Ordinal);
+        var beforeManualControlledValues = before.Assertions
+            .Where(assertion =>
+                StringComparer.Ordinal.Equals(
+                    assertion.OriginKind,
+                    WorkflowDefinitionTagOriginKinds.Manual)
+                && assertion.ControlledValueId is not null)
+            .Select(assertion => new WorkflowDefinitionControlledTagValue(
+                assertion.TagDefinitionId,
+                assertion.ControlledValueId!))
+            .ToHashSet();
+        if (beforeManualControlledValues.Count > 0
+            && (controlledValues is null || controlledValuePersistence is null))
+            throw new WorkflowDefinitionTaggingUnavailableException();
+        var requestedDefinitionIds = distinctIds
+            .Concat(normalizedControlledValues.Select(value => value.TagDefinitionId))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var catalogDefinitions = await Catalog.ListByIdsAsync(requestedDefinitionIds, cancellationToken);
         var catalogDefinitionsById = catalogDefinitions.ToDictionary(definition => definition.Id, StringComparer.Ordinal);
         foreach (var tagDefinitionId in distinctIds)
         {
             var definitionRecord = catalogDefinitionsById.GetValueOrDefault(tagDefinitionId)
                 ?? throw new ArgumentException($"Tag definition '{tagDefinitionId}' was not found.", nameof(tagDefinitionIds));
-            if (definitionRecord.Status != TagDefinitionStatus.Active && !beforeIds.Contains(tagDefinitionId))
+            if (definitionRecord.Status != TagDefinitionStatus.Active
+                && !beforeManualMarkerIds.Contains(tagDefinitionId))
                 throw new ArgumentException($"Tag definition '{tagDefinitionId}' is retired.", nameof(tagDefinitionIds));
             if (!definitionRecord.Eligibility.HasFlag(TagDefinitionEligibility.WorkflowDefinition))
                 throw new ArgumentException($"Tag definition '{tagDefinitionId}' cannot target workflow definitions.", nameof(tagDefinitionIds));
+            if (definitionRecord.ValueMode != TagValueMode.Marker)
+                throw new ArgumentException($"Tag definition '{tagDefinitionId}' requires a controlled value.", nameof(tagDefinitionIds));
+        }
+
+        foreach (var controlledValue in normalizedControlledValues)
+        {
+            var definitionRecord = catalogDefinitionsById.GetValueOrDefault(controlledValue.TagDefinitionId)
+                ?? throw new ArgumentException($"Tag definition '{controlledValue.TagDefinitionId}' was not found.", nameof(controlledTagValues));
+            if (definitionRecord.Status != TagDefinitionStatus.Active
+                && !beforeManualControlledValues.Contains(controlledValue))
+                throw new ArgumentException($"Tag definition '{controlledValue.TagDefinitionId}' is retired.", nameof(controlledTagValues));
+            if (!definitionRecord.Eligibility.HasFlag(TagDefinitionEligibility.WorkflowDefinition)
+                || definitionRecord.ValueMode != TagValueMode.Controlled
+                || definitionRecord.Cardinality != TagCardinality.Single)
+                throw new ArgumentException($"Tag definition '{controlledValue.TagDefinitionId}' does not accept a single controlled value.", nameof(controlledTagValues));
+
+            var valueRecord = await ControlledValues.FindWithRevisionAsync(controlledValue.ControlledValueId, cancellationToken);
+            var value = valueRecord?.Value;
+            if (value is null
+                || !StringComparer.Ordinal.Equals(value.TagDefinitionId, controlledValue.TagDefinitionId))
+                throw new ArgumentException("The controlled tag value is unavailable for the requested definition.", nameof(controlledTagValues));
+            var wasAlreadyAssigned = beforeManualControlledValues.Contains(controlledValue);
+            if (value.Status != TagDefinitionStatus.Active && !wasAlreadyAssigned)
+                throw new ArgumentException("The controlled tag value is retired.", nameof(controlledTagValues));
         }
 
         var result = await TagStore.ReplaceManualAsync(new(
@@ -82,11 +161,22 @@ public sealed class WorkflowDefinitionTagApplicationService(
             expectedRevision,
             distinctIds,
             authorization.ActorId,
-            authorization.CorrelationId), cancellationToken);
+            authorization.CorrelationId,
+            ControlledValues: normalizedControlledValues), cancellationToken);
         if (result.Status != WorkflowDefinitionTagReplaceStatus.Saved || result.TagSet is null)
             return result;
 
         var afterIds = result.TagSet.Assertions.Select(x => x.TagDefinitionId).ToHashSet(StringComparer.Ordinal);
+        var beforeControlledValueIds = before.Assertions
+            .Select(assertion => assertion.ControlledValueId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .ToHashSet(StringComparer.Ordinal);
+        var afterControlledValueIds = result.TagSet.Assertions
+            .Select(assertion => assertion.ControlledValueId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .ToHashSet(StringComparer.Ordinal);
         await eventPublisher.Publish(new WorkflowDefinitionTagsChanged(
             workflowDefinitionId,
             definition.TenantId,
@@ -96,7 +186,9 @@ public sealed class WorkflowDefinitionTagApplicationService(
             beforeIds.Except(afterIds, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             WorkflowDefinitionTagOriginKinds.Manual,
             authorization.ActorId,
-            authorization.CorrelationId), cancellationToken);
+            authorization.CorrelationId,
+            afterControlledValueIds.Except(beforeControlledValueIds, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            beforeControlledValueIds.Except(afterControlledValueIds, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()), cancellationToken);
         return result;
     }
 
@@ -107,7 +199,8 @@ public sealed class WorkflowDefinitionTagApplicationService(
             tagSet.Assertions.Select(assertion => new WorkflowDefinitionTagAssertionView(
                 assertion.TagDefinitionId,
                 assertion.OriginKind,
-                assertion.OriginKey)).ToArray(),
+                assertion.OriginKey,
+                assertion.ControlledValueId)).ToArray(),
             canAssign);
 
     public static string Quote(string revision) => $"\"{revision}\"";
@@ -123,6 +216,9 @@ public sealed class WorkflowDefinitionTagApplicationService(
     private ITagDefinitionStore Catalog =>
         catalog ?? throw new WorkflowDefinitionTaggingUnavailableException();
 
+    private IControlledTagValueStore ControlledValues =>
+        controlledValues ?? throw new WorkflowDefinitionTaggingUnavailableException();
+
     private void EnsureAvailable()
     {
         if (!IsAvailable)
@@ -137,7 +233,7 @@ public sealed class WorkflowDefinitionTagApplicationService(
 }
 
 public sealed class WorkflowDefinitionTaggingUnavailableException()
-    : InvalidOperationException("Workflow definition tagging is unavailable because durable tag persistence is not active.");
+    : ServiceUnavailableException("Workflow definition tagging is unavailable because durable tag persistence is not active.");
 
 public sealed record WorkflowDefinitionTagsChanged(
     string WorkflowDefinitionId,
@@ -148,4 +244,6 @@ public sealed record WorkflowDefinitionTagsChanged(
     IReadOnlyCollection<string> RemovedTagDefinitionIds,
     string Origin,
     string ActorId,
-    string CorrelationId) : IEvent;
+    string CorrelationId,
+    IReadOnlyCollection<string>? AddedControlledValueIds = null,
+    IReadOnlyCollection<string>? RemovedControlledValueIds = null) : IEvent;

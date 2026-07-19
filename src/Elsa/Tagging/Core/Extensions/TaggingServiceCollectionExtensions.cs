@@ -12,8 +12,11 @@ public static class TaggingServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<ITagDefinitionStore, InMemoryTagDefinitionStore>();
         services.TryAddScoped<ITagDefinitionAuditStore, NullTagDefinitionAuditStore>();
+        services.TryAddScoped<IControlledTagValueStore, InMemoryControlledTagValueStore>();
+        services.TryAddScoped<IControlledTagValueAuditStore, NullControlledTagValueAuditStore>();
         services.TryAddScoped<ITagDefinitionAuditContext, SystemTagDefinitionAuditContext>();
         services.TryAddScoped<ITagDefinitionManager, DefaultTagDefinitionManager>();
+        services.TryAddScoped<IControlledTagValueManager, DefaultControlledTagValueManager>();
         return services;
     }
 }

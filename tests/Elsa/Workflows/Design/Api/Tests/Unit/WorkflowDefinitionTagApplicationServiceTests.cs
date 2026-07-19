@@ -29,6 +29,68 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
     }
 
     [Fact]
+    public async Task Controlled_assignment_requires_durable_controlled_value_persistence()
+    {
+        var service = new WorkflowDefinitionTagApplicationService(
+            new FakeDefinitionStore(new()
+            {
+                Id = "workflow-1",
+                Name = "Workflow",
+                TenantId = "tenant-a"
+            }),
+            new AuthorizationContext(),
+            new CapturingPublisher(),
+            new FakeTagStore(),
+            Catalog(Controlled("tag-environment")),
+            new DurableCatalogPersistence(),
+            Values(ActiveValue("value-production", "tag-environment")));
+
+        await Assert.ThrowsAsync<WorkflowDefinitionTaggingUnavailableException>(() =>
+            service.ReplaceAsync(
+                "workflow-1",
+                WorkflowDefinitionTagRevision.Initial,
+                [],
+                [new("tag-environment", "value-production")]));
+    }
+
+    [Fact]
+    public async Task Marker_only_replacement_cannot_delete_an_existing_controlled_assignment_without_its_catalog()
+    {
+        var tags = new FakeTagStore
+        {
+            Current = new(
+                "workflow-1",
+                "tenant-a",
+                WorkflowDefinitionTagRevision.Initial,
+                [WorkflowDefinitionTagAssertion.Manual(new WorkflowDefinitionControlledTagValue(
+                    "tag-environment",
+                    "value-production"))])
+        };
+        var service = new WorkflowDefinitionTagApplicationService(
+            new FakeDefinitionStore(new()
+            {
+                Id = "workflow-1",
+                Name = "Workflow",
+                TenantId = "tenant-a"
+            }),
+            new AuthorizationContext(),
+            new CapturingPublisher(),
+            tags,
+            Catalog(Active("tag-priority"), Controlled("tag-environment")),
+            new DurableCatalogPersistence(),
+            Values(ActiveValue("value-production", "tag-environment")));
+
+        await Assert.ThrowsAsync<WorkflowDefinitionTaggingUnavailableException>(() =>
+            service.ReplaceAsync(
+                "workflow-1",
+                WorkflowDefinitionTagRevision.Initial,
+                ["tag-priority"],
+                []));
+
+        Assert.False(tags.Saved);
+    }
+
+    [Fact]
     public async Task Replace_validates_catalog_commits_manual_slice_and_publishes_after_save()
     {
         var tags = new FakeTagStore();
@@ -98,6 +160,150 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
     }
 
     [Fact]
+    public async Task Replace_accepts_one_active_controlled_value_and_publishes_its_stable_identity()
+    {
+        var tags = new FakeTagStore();
+        var events = new CapturingPublisher();
+        var service = CreateService(
+            tags,
+            events,
+            Catalog(Controlled("tag-environment")),
+            values: Values(ActiveValue("value-production", "tag-environment")));
+
+        var result = await service.ReplaceAsync(
+            "workflow-1",
+            WorkflowDefinitionTagRevision.Initial,
+            [],
+            [new("tag-environment", "value-production")]);
+
+        Assert.Equal(WorkflowDefinitionTagReplaceStatus.Saved, result.Status);
+        var assertion = Assert.Single(tags.LastRequest!.ControlledValues!);
+        Assert.Equal("tag-environment", assertion.TagDefinitionId);
+        Assert.Equal("value-production", assertion.ControlledValueId);
+        var changed = Assert.IsType<WorkflowDefinitionTagsChanged>(Assert.Single(events.Events));
+        Assert.Equal(["value-production"], changed.AddedControlledValueIds);
+    }
+
+    [Fact]
+    public async Task Replace_rejects_different_controlled_values_for_one_single_definition_before_store_mutation()
+    {
+        var tags = new FakeTagStore();
+        var service = CreateService(
+            tags,
+            new CapturingPublisher(),
+            Catalog(Controlled("tag-environment")),
+            values: Values(
+                ActiveValue("value-development", "tag-environment"),
+                ActiveValue("value-production", "tag-environment")));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ReplaceAsync(
+            "workflow-1",
+            WorkflowDefinitionTagRevision.Initial,
+            [],
+            [new("tag-environment", "value-development"), new("tag-environment", "value-production")]));
+
+        Assert.False(tags.Saved);
+    }
+
+    [Fact]
+    public async Task Replace_rejects_a_controlled_value_owned_by_another_definition_before_store_mutation()
+    {
+        var tags = new FakeTagStore();
+        var service = CreateService(
+            tags,
+            new CapturingPublisher(),
+            Catalog(Controlled("tag-environment"), Controlled("tag-region")),
+            values: Values(ActiveValue("value-production", "tag-environment")));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ReplaceAsync(
+            "workflow-1",
+            WorkflowDefinitionTagRevision.Initial,
+            [],
+            [new("tag-region", "value-production")]));
+
+        Assert.False(tags.Saved);
+    }
+
+    [Fact]
+    public async Task Retired_controlled_definition_only_allows_retaining_the_exact_manual_value()
+    {
+        var retiredDefinition = Controlled("tag-environment");
+        retiredDefinition.Status = TagDefinitionStatus.Retired;
+        var values = Values(
+            ActiveValue("value-production", "tag-environment"),
+            ActiveValue("value-staging", "tag-environment"));
+        var retainedTags = new FakeTagStore
+        {
+            Current = new(
+                "workflow-1",
+                "tenant-a",
+                WorkflowDefinitionTagRevision.Initial,
+                [WorkflowDefinitionTagAssertion.Manual(new WorkflowDefinitionControlledTagValue(
+                    "tag-environment",
+                    "value-production"))])
+        };
+        var retainedService = CreateService(
+            retainedTags,
+            new CapturingPublisher(),
+            Catalog(retiredDefinition),
+            values);
+
+        var retained = await retainedService.ReplaceAsync(
+            "workflow-1",
+            WorkflowDefinitionTagRevision.Initial,
+            [],
+            [new("tag-environment", "value-production")]);
+
+        Assert.Equal(WorkflowDefinitionTagReplaceStatus.Saved, retained.Status);
+
+        var changedTags = new FakeTagStore
+        {
+            Current = new(
+                "workflow-1",
+                "tenant-a",
+                WorkflowDefinitionTagRevision.Initial,
+                [WorkflowDefinitionTagAssertion.Manual(new WorkflowDefinitionControlledTagValue(
+                    "tag-environment",
+                    "value-production"))])
+        };
+        var changedService = CreateService(
+            changedTags,
+            new CapturingPublisher(),
+            Catalog(retiredDefinition),
+            values);
+        await Assert.ThrowsAsync<ArgumentException>(() => changedService.ReplaceAsync(
+            "workflow-1",
+            WorkflowDefinitionTagRevision.Initial,
+            [],
+            [new("tag-environment", "value-staging")]));
+        Assert.False(changedTags.Saved);
+
+        var policyTags = new FakeTagStore
+        {
+            Current = new(
+                "workflow-1",
+                "tenant-a",
+                WorkflowDefinitionTagRevision.Initial,
+                [new(
+                    "tag-environment",
+                    "policy",
+                    "policy-1",
+                    "value-production")])
+        };
+        var policyService = CreateService(
+            policyTags,
+            new CapturingPublisher(),
+            Catalog(retiredDefinition),
+            values);
+        await Assert.ThrowsAsync<ArgumentException>(() => policyService.ReplaceAsync(
+            "workflow-1",
+            WorkflowDefinitionTagRevision.Initial,
+            [],
+            [new("tag-environment", "value-production")]));
+        Assert.False(policyTags.Saved);
+    }
+
+    [Fact]
     public async Task Deleted_definition_is_readable_but_never_assignable()
     {
         var tags = new FakeTagStore();
@@ -120,6 +326,7 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
         FakeTagStore tags,
         CapturingPublisher events,
         ITagDefinitionStore catalog,
+        IControlledTagValueStore? values = null,
         bool deleted = false) =>
         new(
             new FakeDefinitionStore(new()
@@ -133,7 +340,9 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
             events,
             tags,
             catalog,
-            new DurableCatalogPersistence());
+            new DurableCatalogPersistence(),
+            values,
+            values is null ? null : new DurableControlledValuePersistence());
 
     private static ITagDefinitionStore Catalog(params TagDefinition[] definitions) =>
         new FakeCatalog(definitions);
@@ -154,6 +363,25 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
         return result;
     }
 
+    private static TagDefinition Controlled(string id)
+    {
+        var result = Active(id);
+        result.ValueMode = TagValueMode.Controlled;
+        result.Cardinality = TagCardinality.Single;
+        return result;
+    }
+
+    private static ControlledTagValue ActiveValue(string id, string tagDefinitionId) => new()
+    {
+        Id = id,
+        TagDefinitionId = tagDefinitionId,
+        CanonicalKey = id,
+        DisplayName = id,
+        Status = TagDefinitionStatus.Active
+    };
+
+    private static IControlledTagValueStore Values(params ControlledTagValue[] values) => new FakeControlledValues(values);
+
     private sealed class AuthorizationContext : IWorkflowDefinitionTagAuthorizationContext
     {
         public string ActorId => "author-1";
@@ -162,6 +390,7 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
     }
 
     private sealed class DurableCatalogPersistence : ITagDefinitionCatalogPersistence;
+    private sealed class DurableControlledValuePersistence : IControlledTagValueCatalogPersistence;
 
     private sealed class FakeDefinitionStore(WorkflowDefinition definition) : IWorkflowDefinitionStore
     {
@@ -199,7 +428,9 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
                 request.WorkflowDefinitionId,
                 request.TenantId,
                 WorkflowDefinitionTagRevision.FromVersion(1),
-                request.TagDefinitionIds.Select(WorkflowDefinitionTagAssertion.Manual).ToArray());
+                request.TagDefinitionIds.Select(WorkflowDefinitionTagAssertion.Manual)
+                    .Concat((request.ControlledValues ?? []).Select(WorkflowDefinitionTagAssertion.Manual))
+                    .ToArray());
             return Task.FromResult(new WorkflowDefinitionTagReplaceResult(
                 WorkflowDefinitionTagReplaceStatus.Saved,
                 Current));
@@ -220,6 +451,28 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
         public ValueTask<bool> TryAddAsync(TagDefinition definition, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
         public ValueTask<TagDefinitionSaveResult> SaveWithRevisionAsync(TagDefinition definition, string expectedRevision, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class FakeControlledValues(IEnumerable<ControlledTagValue> values) : IControlledTagValueStore
+    {
+        private readonly Dictionary<string, ControlledTagValue> _items = values.ToDictionary(value => value.Id, StringComparer.Ordinal);
+
+        public ValueTask<ControlledTagValue?> FindByCanonicalKeyAsync(string tagDefinitionId, string canonicalKey, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(_items.Values.SingleOrDefault(value => value.TagDefinitionId == tagDefinitionId && value.CanonicalKey == canonicalKey));
+
+        public ValueTask<ControlledTagValueRevisionedRecord?> FindWithRevisionAsync(string controlledTagValueId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(_items.TryGetValue(controlledTagValueId, out var value)
+                ? new ControlledTagValueRevisionedRecord(value, "value:1")
+                : null);
+
+        public ValueTask<IReadOnlyList<ControlledTagValueRevisionedRecord>> ListWithRevisionsAsync(ControlledTagValueListRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<ControlledTagValueRevisionedRecord>>([]);
+
+        public ValueTask<bool> TryAddAsync(ControlledTagValue value, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<TagDefinitionSaveResult> SaveWithRevisionAsync(ControlledTagValue value, string expectedRevision, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 

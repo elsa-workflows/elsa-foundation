@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork;
 /// </summary>
 public static class WorkflowsDesignStorageManifest
 {
-    public const string SchemaVersion = "1.2.0";
+    public const string SchemaVersion = "1.4.0";
 
     public const string ByCollectionIndex = "by-collection";
     public const string CollectionField = "collection";
@@ -53,6 +53,7 @@ public static class WorkflowsDesignStorageManifest
     public const string WorkflowDefinitionCreatedAtField = "entity.createdAt";
     public const string WorkflowDefinitionLastModifiedAtField = "entity.lastModifiedAt";
     public const string WorkflowDefinitionMarkerProjectionField = "markerProjection";
+    public const string WorkflowDefinitionControlledProjectionField = "controlledProjection";
     public const int WorkflowDefinitionMarkerProjectionLength = 4_000;
 
     public const string WorkflowDefinitionDocumentKind = "workflowDefinition";
@@ -119,7 +120,7 @@ public static class WorkflowsDesignStorageManifest
     /// deliberately ordinary because substring predicates can scan; no-search routes stay scale-bearing.
     /// </summary>
     public static string PageQueryIdentity(WorkflowDefinitionListQuery query) =>
-        (!string.IsNullOrWhiteSpace(query.Filter.SearchTerm) || query.Filter.MarkerTagClauses is { Count: > 0 }, query.SortBy, query.SortDirection) switch
+        (!string.IsNullOrWhiteSpace(query.Filter.SearchTerm) || query.Filter.MarkerTagClauses is { Count: > 0 } || query.Filter.ControlledTagClauses is { Count: > 0 }, query.SortBy, query.SortDirection) switch
         {
             (false, WorkflowDefinitionSortBy.LastModifiedAt, WorkflowDefinitionSortDirection.Desc) => PageByLastModifiedAtDescendingQuery,
             (false, WorkflowDefinitionSortBy.CreatedAt, WorkflowDefinitionSortDirection.Desc) => PageByCreatedAtDescendingQuery,
@@ -163,7 +164,8 @@ public static class WorkflowsDesignStorageManifest
                 new ProjectedColumnDefinition(WorkflowDefinitionDeletedAtField, WorkflowDefinitionDeletedAtField, PortablePhysicalType.DateTime),
                 new ProjectedColumnDefinition(WorkflowDefinitionCreatedAtField, WorkflowDefinitionCreatedAtField, PortablePhysicalType.DateTime, IsNullable: false),
                 new ProjectedColumnDefinition(WorkflowDefinitionLastModifiedAtField, WorkflowDefinitionLastModifiedAtField, PortablePhysicalType.DateTime, IsNullable: false),
-                StringProjection(WorkflowDefinitionMarkerProjectionField, WorkflowDefinitionMarkerProjectionLength)
+                StringProjection(WorkflowDefinitionMarkerProjectionField, WorkflowDefinitionMarkerProjectionLength),
+                StringProjection(WorkflowDefinitionControlledProjectionField, WorkflowDefinitionMarkerProjectionLength)
             ],
             [
                 LegacyCollectionPhysicalIndex(envelope, collectionIndex),
@@ -311,11 +313,18 @@ public static class WorkflowsDesignStorageManifest
             Residual(WorkflowDefinitionDeletedAtField, IndexValueKind.DateTime, PortableQueryOperation.Equal, PortableQueryOperation.NotEqual)
         };
         if (supportsContains)
+        {
             residuals.Add(Residual(
                 WorkflowDefinitionMarkerProjectionField,
                 IndexValueKind.String,
                 PortableQueryOperation.Contains,
                 PortableQueryOperation.NotContains));
+            residuals.Add(Residual(
+                WorkflowDefinitionControlledProjectionField,
+                IndexValueKind.String,
+                PortableQueryOperation.Contains,
+                PortableQueryOperation.NotContains));
+        }
         if (sortField != WorkflowDefinitionNameField)
             residuals.Add(Residual(
                 WorkflowDefinitionNameField,

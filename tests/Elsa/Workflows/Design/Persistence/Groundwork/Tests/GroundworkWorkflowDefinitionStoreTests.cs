@@ -157,7 +157,7 @@ public class GroundworkWorkflowDefinitionStoreTests
             {
                 Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, order.Path);
                 Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
-        });
+            });
     }
 
     [Fact]
@@ -210,6 +210,39 @@ public class GroundworkWorkflowDefinitionStoreTests
         Assert.Equal(expectedId, Assert.Single(page.Items).Id);
     }
 
+    [Theory]
+    [InlineData(WorkflowDefinitionControlledTagOperator.Exists, "value-production", "production")]
+    [InlineData(WorkflowDefinitionControlledTagOperator.Missing, "value-production", "untagged")]
+    [InlineData(WorkflowDefinitionControlledTagOperator.AnyOf, "value-production", "production")]
+    [InlineData(WorkflowDefinitionControlledTagOperator.NoneOf, "value-production", "untagged")]
+    public async Task List_page_filters_controlled_projection_with_authoritative_total(
+        WorkflowDefinitionControlledTagOperator operation,
+        string controlledValueId,
+        string expectedId)
+    {
+        var documents = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        await documents.SaveAsync(ControlledDefinitionSave(
+            new WorkflowDefinition { Id = "production", Name = "Production" },
+            [new("tag-environment", "value-production")]));
+        await documents.SaveAsync(ControlledDefinitionSave(
+            new WorkflowDefinition { Id = "untagged", Name = "Untagged" },
+            []));
+        var store = new GroundworkWorkflowDefinitionStore(documents, documents);
+        var values = operation is WorkflowDefinitionControlledTagOperator.AnyOf or WorkflowDefinitionControlledTagOperator.NoneOf
+            ? new[] { controlledValueId }
+            : null;
+
+        var page = await store.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter
+            {
+                ControlledTagClauses = [new("tag-environment", operation, values)]
+            },
+            WorkflowDefinitionLifecycleScope.All));
+
+        Assert.Equal(1, page.TotalCount);
+        Assert.Equal(expectedId, Assert.Single(page.Items).Id);
+    }
+
     private static SaveDocumentRequest MarkerDefinitionSave(
         WorkflowDefinition definition,
         IReadOnlyCollection<string> tagDefinitionIds) =>
@@ -223,6 +256,23 @@ public class GroundworkWorkflowDefinitionStoreTests
                     collection = WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
                     entity = definition,
                     markerProjection = GroundworkWorkflowDefinitionTagStore.MarkerProjection(tagDefinitionIds)
+                },
+                GroundworkDesignJson.Options));
+
+    private static SaveDocumentRequest ControlledDefinitionSave(
+        WorkflowDefinition definition,
+        IReadOnlyCollection<WorkflowDefinitionControlledTagValue> controlledValues) =>
+        new(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            definition.Id,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            JsonSerializer.Serialize(
+                new
+                {
+                    collection = WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                    entity = definition,
+                    markerProjection = GroundworkWorkflowDefinitionTagStore.MarkerProjection([]),
+                    controlledProjection = GroundworkWorkflowDefinitionTagStore.ControlledProjection(controlledValues)
                 },
                 GroundworkDesignJson.Options));
 

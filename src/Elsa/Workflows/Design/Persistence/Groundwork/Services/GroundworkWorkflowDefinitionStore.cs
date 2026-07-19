@@ -135,6 +135,48 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
                 _ => throw new ArgumentOutOfRangeException(nameof(markerClause.Operator), markerClause.Operator, null)
             }));
         }
+        foreach (var controlledClause in filter.ControlledTagClauses ?? [])
+        {
+            var values = controlledClause.ControlledValueIds ?? [];
+            switch (controlledClause.Operator)
+            {
+                case WorkflowDefinitionControlledTagOperator.Exists:
+                    clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Contains(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionControlledProjectionField,
+                        $"|{controlledClause.TagDefinitionId}=")));
+                    break;
+                case WorkflowDefinitionControlledTagOperator.Missing:
+                    clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.NotContains(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionControlledProjectionField,
+                        $"|{controlledClause.TagDefinitionId}=")));
+                    break;
+                case WorkflowDefinitionControlledTagOperator.AnyOf:
+                    clauses.Add(DocumentQueryClause.AnyOf(values.Select(value =>
+                        DocumentQueryComparison.Contains(
+                            WorkflowsDesignStorageManifest.WorkflowDefinitionControlledProjectionField,
+                            GroundworkWorkflowDefinitionTagStore.ControlledProjectionToken(controlledClause.TagDefinitionId, value))).ToArray()));
+                    break;
+                case WorkflowDefinitionControlledTagOperator.NoneOf:
+                    clauses.AddRange(values.Select(value => DocumentQueryClause.Of(DocumentQueryComparison.NotContains(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionControlledProjectionField,
+                        GroundworkWorkflowDefinitionTagStore.ControlledProjectionToken(controlledClause.TagDefinitionId, value)))));
+                    break;
+                case WorkflowDefinitionControlledTagOperator.Conflicted:
+                    clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Contains(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionControlledProjectionField,
+                        GroundworkWorkflowDefinitionTagStore.ControlledConflictProjectionToken(
+                            controlledClause.TagDefinitionId))));
+                    break;
+                case WorkflowDefinitionControlledTagOperator.NotConflicted:
+                    clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.NotContains(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionControlledProjectionField,
+                        GroundworkWorkflowDefinitionTagStore.ControlledConflictProjectionToken(
+                            controlledClause.TagDefinitionId))));
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(controlledClause.Operator), controlledClause.Operator, null);
+            }
+        }
 
         switch (query.Scope)
         {

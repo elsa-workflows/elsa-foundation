@@ -66,7 +66,8 @@ internal sealed class ReplaceTags(WorkflowDefinitionTagApplicationService servic
                 request.WorkflowDefinitionId,
                 expectedRevision,
                 request.TagDefinitionIds,
-                cancellationToken);
+                request.ControlledValues,
+                cancellationToken: cancellationToken);
             if (result.Status == WorkflowDefinitionTagReplaceStatus.Conflict)
             {
                 HttpContext.Response.StatusCode = 409;
@@ -89,6 +90,12 @@ internal sealed class ReplaceTags(WorkflowDefinitionTagApplicationService servic
         catch (UnauthorizedAccessException exception)
         {
             ThrowError(exception.Message, 403);
+        }
+        catch (WorkflowDefinitionTaggingUnavailableException)
+        {
+            await WorkflowDefinitionTagEndpointResponses.SendUnavailableAsync(
+                HttpContext,
+                cancellationToken);
         }
         catch (ArgumentException exception)
         {
