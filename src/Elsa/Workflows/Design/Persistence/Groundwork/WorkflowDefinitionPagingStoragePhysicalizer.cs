@@ -16,6 +16,7 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
     private const string DeletedAtColumn = "deleted_at";
     private const string NameColumn = "name";
     private const string DescriptionColumn = "description";
+    private const string SearchIdColumn = "search_id";
 
     private static readonly IReadOnlySet<PortableQueryOperation> Equal =
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal };
@@ -58,7 +59,8 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
                 Projected(DefinitionIdColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, PortablePhysicalType.String),
                 Projected(DeletedAtColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, PortablePhysicalType.String),
                 Projected(NameColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionNameField, PortablePhysicalType.String),
-                Projected(DescriptionColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, PortablePhysicalType.String)
+                Projected(DescriptionColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, PortablePhysicalType.String),
+                Projected(SearchIdColumn, WorkflowsDesignStorageManifest.WorkflowDefinitionSearchIdField, PortablePhysicalType.String)
             ],
             envelope,
             [
@@ -103,7 +105,8 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
             [
                 Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, IndexValueKind.String, Equal),
                 Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionNameField, IndexValueKind.String, Contains),
-                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, IndexValueKind.String, Contains)
+                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, IndexValueKind.String, Contains),
+                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionSearchIdField, IndexValueKind.String, Contains)
             ]);
 
         return unit with

@@ -36,6 +36,7 @@ public static class WorkflowsDesignStorageManifest
     public const string WorkflowDefinitionDeletedAtField = "entity.deletedAt";
     public const string WorkflowDefinitionNameField = "entity.name";
     public const string WorkflowDefinitionDescriptionField = "entity.description";
+    public const string WorkflowDefinitionSearchIdField = "searchId";
 
     /// <summary>Constant partition value stamped on every workflow-definition document (see <see cref="ByCollectionIndex"/>).</summary>
     public const string WorkflowDefinitionCollection = "workflowDefinition";

@@ -22,6 +22,15 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
     }
 
     [Fact]
+    public async Task Paged_relation_is_not_advertised_for_a_registered_but_unadmitted_store()
+    {
+        var capabilities = await new WorkflowDesignOperationalCapabilitySource(pageStore: new StubPagedStore { IsAvailable = false })
+            .GetCapabilitiesAsync();
+
+        Assert.DoesNotContain(capabilities.SelectMany(declaration => declaration.Links), link => link.Rel == "workflow-definitions-page");
+    }
+
+    [Fact]
     public async Task Paged_handler_composes_lifecycle_search_page_size_and_continuation()
     {
         var pageStore = new StubPagedStore
@@ -46,8 +55,33 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
         Assert.Equal("definition-1", Assert.Single(response.Items).Id);
     }
 
+    [Theory]
+    [InlineData(null, WorkflowDefinitionPageState.Active)]
+    [InlineData("unexpected", WorkflowDefinitionPageState.Active)]
+    [InlineData("deleted", WorkflowDefinitionPageState.Deleted)]
+    [InlineData("all", WorkflowDefinitionPageState.All)]
+    public async Task Paged_handler_parses_lifecycle_state(string? state, WorkflowDefinitionPageState expected)
+    {
+        var pageStore = new StubPagedStore();
+        var handler = new ListWorkflowDefinitionPageRequestHandler(new PageStoreServiceProvider(pageStore), new EmptyProjectionStore());
+
+        await handler.Handle(new ListWorkflowDefinitionPage(null, null, null, state), CancellationToken.None);
+
+        Assert.Equal(expected, pageStore.Query!.State);
+    }
+
+    [Fact]
+    public async Task Paged_handler_rejects_an_unavailable_runtime_before_processing_the_request()
+    {
+        var handler = new ListWorkflowDefinitionPageRequestHandler(new EmptyServiceProvider(), new EmptyProjectionStore());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.Handle(new ListWorkflowDefinitionPage(null, null, null, null), CancellationToken.None));
+    }
+
     private sealed class StubPagedStore : IWorkflowDefinitionPageStore
     {
+        public bool IsAvailable { get; init; } = true;
         public WorkflowDefinitionPage? Result { get; init; }
         public WorkflowDefinitionPageQuery? Query { get; private set; }
 
@@ -64,6 +98,11 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
     {
         public object? GetService(Type serviceType) =>
             serviceType == typeof(IWorkflowDefinitionPageStore) ? pageStore : null;
+    }
+
+    private sealed class EmptyServiceProvider : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
     }
 
     private sealed class EmptyProjectionStore : IWorkflowDefinitionListProjectionStore

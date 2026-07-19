@@ -39,7 +39,7 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
                 "activity-input-options",
                 "design/workflows/activities/{activityVersionId}/inputs/{inputName}/options",
                 templated: true));
-        if (pageStore is not null)
+        if (pageStore?.IsAvailable == true)
             links.Add(new("workflow-definitions-page", "design/workflows/definitions/page"));
 
         IReadOnlyCollection<ApiCapabilityDeclaration> declarations = links.Count == 0

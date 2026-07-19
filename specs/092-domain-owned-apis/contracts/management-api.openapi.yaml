@@ -63,6 +63,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
     post:
       tags: [Workflow Design]
       operationId: createWorkflowDefinition
@@ -79,6 +80,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowDefinitionDetails'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /design/workflows/definitions/page:
+    get:
+      tags: [Workflow Design]
+      operationId: pageWorkflowDefinitions
+      description: Optional capability relation `workflow-definitions-page`; present only when the selected persistence provider admits the bounded browse route.
+      parameters:
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - name: continuationToken
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Search'
+        - name: state
+          in: query
+          schema: { $ref: '#/components/schemas/DefinitionListState' }
+      responses:
+        '200':
+          description: A bounded definition-summary page and opaque forward continuation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowDefinitionPage' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -983,6 +1013,15 @@ components:
         latestVersionId: { type: [string, 'null'] }
         latestVersion: { type: [string, 'null'] }
         versionCount: { type: integer, minimum: 0 }
+    WorkflowDefinitionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowDefinitionSummary'
+        nextContinuationToken: { type: [string, 'null'] }
     WorkflowDefinitionDetails:
       allOf:
         - $ref: '#/components/schemas/WorkflowDefinitionSummary'

@@ -7,6 +7,7 @@ Groundwork provider catalog for workflow-design persistence replacement contract
 | Contract | Groundwork implementation |
 |---|---|
 | `IWorkflowDefinitionStore` | `GroundworkWorkflowDefinitionStore` |
+| `IWorkflowDefinitionPageStore` | `GroundworkWorkflowDefinitionStore` (only advertises the paged API relation when `IBoundedDocumentStore` is admitted) |
 | `IWorkflowDefinitionVersionStore` | `GroundworkWorkflowDefinitionVersionStore` |
 | `IWorkflowDefinitionDraftStore` | `GroundworkWorkflowDefinitionDraftStore` |
 | `IWorkflowDefinitionVersionLayoutStore` | `GroundworkWorkflowDefinitionVersionLayoutStore` |

@@ -8,6 +8,9 @@ namespace Elsa.Workflows.Design.Persistence.Core.Stores;
 /// </summary>
 public interface IWorkflowDefinitionPageStore
 {
+    /// <summary>Gets whether the active provider has admitted the bounded browse route.</summary>
+    bool IsAvailable { get; }
+
     Task<WorkflowDefinitionPage> QueryPageAsync(
         WorkflowDefinitionPageQuery query,
         CancellationToken cancellationToken = default);

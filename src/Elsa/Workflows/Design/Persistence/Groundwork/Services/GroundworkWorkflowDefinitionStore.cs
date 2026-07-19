@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -52,6 +53,8 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
     public async Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default)
         => await _reads.QueryAsync(filter.ToQuery(), cancellationToken);
 
+    public bool IsAvailable => _boundedStore is not null;
+
     public async Task<WorkflowDefinitionPage> QueryPageAsync(
         WorkflowDefinitionPageQuery query,
         CancellationToken cancellationToken = default)
@@ -87,16 +90,27 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
                 exception);
         }
 
-        var items = result.Documents
-            .Select(envelope => System.Text.Json.JsonSerializer.Deserialize<GroundworkDocument<WorkflowDefinition>>(
-                envelope.ContentJson,
-                GroundworkDesignJson.Options)!.Entity)
-            .ToArray();
+        var items = result.Documents.Select(ReadPageDocument).ToArray();
         return new WorkflowDefinitionPage(items, result.NextContinuation);
     }
 
     private IBoundedDocumentStore BoundedStore => _boundedStore ?? throw new InvalidOperationException(
         "Workflow-definition pages require an admitted bounded document-store runtime.");
+
+    private static WorkflowDefinition ReadPageDocument(DocumentEnvelope envelope)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<GroundworkDocument<WorkflowDefinition>>(
+                envelope.ContentJson,
+                GroundworkDesignJson.Options)?.Entity
+                ?? throw new System.Text.Json.JsonException("The workflow-definition document is empty.");
+        }
+        catch (System.Text.Json.JsonException exception)
+        {
+            throw new WorkflowDefinitionPageDeserializationException(envelope.Id, exception);
+        }
+    }
 
     private static IReadOnlyList<DocumentQueryClause> BuildPageClauses(WorkflowDefinitionPageQuery query)
     {
@@ -119,7 +133,8 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
         {
             clauses.Add(DocumentQueryClause.AnyOf(
                 DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionNameField, query.SearchTerm),
-                DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, query.SearchTerm)));
+                DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, query.SearchTerm),
+                DocumentQueryComparison.Contains(WorkflowsDesignStorageManifest.WorkflowDefinitionSearchIdField, query.SearchTerm)));
         }
 
         return clauses;

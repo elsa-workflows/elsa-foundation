@@ -63,6 +63,16 @@ public sealed class GroundworkWorkflowDefinitionPageStoreTests
     }
 
     [Fact]
+    public async Task Paged_search_matches_definition_ids_as_well_as_names_and_descriptions()
+    {
+        var store = await SeededStoreAsync(Definition("order-123", 0), Definition("other", -1));
+
+        var page = await store.QueryPageAsync(new WorkflowDefinitionPageQuery(10, SearchTerm: "123"));
+
+        Assert.Equal(["order-123"], page.Items.Select(item => item.Id));
+    }
+
+    [Fact]
     public async Task Sqlite_continuations_resume_at_the_keyset_boundary_and_reject_a_reused_search_context()
     {
         await using var database = new TemporarySqliteDatabase();
@@ -115,9 +125,7 @@ public sealed class GroundworkWorkflowDefinitionPageStoreTests
 
     private static Task SaveAsync(IDocumentStore documentStore, WorkflowDefinition definition)
     {
-        var document = new GroundworkDocument<WorkflowDefinition>(
-            WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
-            definition);
+        var document = new { Collection = WorkflowsDesignStorageManifest.WorkflowDefinitionCollection, Entity = definition, SearchId = definition.Id };
         return documentStore.SaveAsync(new SaveDocumentRequest(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             definition.Id,
