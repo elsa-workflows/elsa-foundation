@@ -47,6 +47,25 @@ public sealed class RuntimeSchedulerWorkQueueTests
     }
 
     [Fact]
+    public async Task EnqueueAsync_ReEnqueuingANonHeadItem_KeepsQueueContentsAndOrderUnchanged()
+    {
+        // ADR 0031: redelivery de-duplication is a mandated queue-provider contract — re-enqueueing an
+        // item already present for a workflow execution must add no duplicate and must not reorder the FIFO.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+        await queue.EnqueueAsync(NewWorkItem(3));
+
+        // Redeliver the middle item with a different command payload; the original must win and stay in place.
+        var redelivered = await queue.EnqueueAsync(NewWorkItem(2, commandId: "command-redelivered"));
+
+        var items = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        Assert.Equal(new[] { "work-1", "work-2", "work-3" }, items.Select(item => item.WorkItemId));
+        Assert.Equal("command-2", redelivered.CommandId);
+        Assert.Equal("command-2", items.ElementAt(1).CommandId);
+    }
+
+    [Fact]
     public async Task ListPendingWorkflowExecutionIdsAsync_ReturnsDistinctOrderedBacklog()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();

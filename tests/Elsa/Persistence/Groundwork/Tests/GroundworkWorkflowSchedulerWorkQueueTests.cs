@@ -64,6 +64,29 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
+    public async Task Enqueue_ReEnqueuingANonHeadItem_KeepsQueueContentsAndOrderUnchanged(string provider)
+    {
+        // ADR 0031: redelivery de-duplication is a mandated queue-provider contract — re-enqueueing an item
+        // already present for a workflow execution must add no duplicate and must not reorder the FIFO.
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+        await queue.EnqueueAsync(NewWorkItem(3));
+
+        // Redeliver the middle item with a different command payload; the original must win and stay in place.
+        var redelivered = await queue.EnqueueAsync(NewWorkItem(2, commandId: "command-redelivered"));
+
+        var items = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        Assert.Equal(new[] { "work-1", "work-2", "work-3" }, items.Select(item => item.WorkItemId));
+        Assert.Equal("command-2", redelivered.CommandId);
+        Assert.Equal("command-2", items.ElementAt(1).CommandId);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
     public async Task WorkItemId_Beyond_Portable_Document_Limit_RoundTrips_And_Remains_Idempotent(string provider)
     {
         await using var fixture = CreateStore(provider);
