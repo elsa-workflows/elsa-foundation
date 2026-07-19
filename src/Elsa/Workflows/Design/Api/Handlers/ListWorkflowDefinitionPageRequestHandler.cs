@@ -33,7 +33,7 @@ public sealed class ListWorkflowDefinitionPageRequestHandler(
         query.Validate();
         var folderStore = serviceProvider.GetService<IWorkflowFolderStore>();
         var folderDetailsById = new Dictionary<string, WorkflowFolderDetails>(StringComparer.Ordinal);
-        if (!string.IsNullOrWhiteSpace(query.FolderId))
+        if (query.FolderId is not null)
         {
             if (folderStore?.IsAvailable != true)
                 throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), query.FolderId);

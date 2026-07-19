@@ -31,6 +31,21 @@ public sealed class GroundworkWorkflowFolderStoreTests
         Assert.Equal(["parent"], details.Ancestors.Select(folder => folder.Id));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task Api_handler_rejects_a_blank_parent_instead_of_creating_at_the_root(string parentId)
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.CreatePhysicalized());
+        var folders = new GroundworkWorkflowFolderStore(store, GroundworkTestAccess.AccessContext("tenant-a"), new Clock());
+        var handler = new CreateWorkflowFolderCommandHandler(new FixedIdentityGenerator("child"), folders);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            handler.Handle(new CreateWorkflowFolder("Child", parentId), CancellationToken.None));
+
+        Assert.Empty(store.Snapshot(WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind));
+    }
+
     [Fact]
     public async Task Rejects_an_explicit_foreign_tenant_instead_of_reassigning_it_to_the_ambient_scope()
     {

@@ -17,7 +17,9 @@ public sealed record WorkflowDefinitionPageQuery(
             throw new ArgumentOutOfRangeException(nameof(PageSize), PageSize, "Workflow-definition page size must be between 1 and 100.");
         if (ContinuationToken is not null && string.IsNullOrWhiteSpace(ContinuationToken))
             throw new ArgumentException("The workflow-definition continuation token cannot be blank.", nameof(ContinuationToken));
-        if (!string.IsNullOrWhiteSpace(FolderId) && Unfiled == true)
+        if (FolderId is not null)
+            WorkflowFolderNames.ValidateIdentifier(FolderId, nameof(FolderId));
+        if (FolderId is not null && Unfiled == true)
             throw new ArgumentException("folderId and unfiled cannot be combined.", nameof(FolderId));
     }
 }

@@ -138,6 +138,35 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
             new ListWorkflowDefinitionPage(FolderId: "folder-1", Unfiled: true), CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task Paged_handler_rejects_blank_folder_selectors(string folderId)
+    {
+        var pageStore = new StubPagedStore();
+        var handler = new ListWorkflowDefinitionPageRequestHandler(new PageStoreServiceProvider(pageStore), new EmptyProjectionStore());
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            handler.Handle(new ListWorkflowDefinitionPage(FolderId: folderId), CancellationToken.None));
+
+        Assert.Null(pageStore.Query);
+    }
+
+    [Fact]
+    public async Task Paged_handler_rejects_an_overlong_folder_selector()
+    {
+        var pageStore = new StubPagedStore();
+        var handler = new ListWorkflowDefinitionPageRequestHandler(new PageStoreServiceProvider(pageStore), new EmptyProjectionStore());
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            handler.Handle(
+                new ListWorkflowDefinitionPage(
+                    FolderId: new string('f', WorkflowFolderNames.MaximumIdentifierLength + 1)),
+                CancellationToken.None));
+
+        Assert.Null(pageStore.Query);
+    }
+
     [Fact]
     public async Task Paged_handler_rejects_an_unknown_folder_before_querying_definitions()
     {
