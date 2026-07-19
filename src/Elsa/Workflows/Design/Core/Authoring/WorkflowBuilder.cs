@@ -443,7 +443,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
                     return this;
                 if (argument.Kind == ActivityArgumentKind.Source)
                     sequence.EnsureVisible(argument.Source!.Scope);
-                _inputs[inputKey] = new ArgumentState(inputKey, argument.Lower(inputKey), null, null, null, null);
+                _inputs[inputKey] = new ArgumentState(inputKey, argument.Lower(inputKey), null, null, null, null, argument.Conversion);
                 return this;
             }
 

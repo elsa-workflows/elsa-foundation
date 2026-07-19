@@ -23,7 +23,8 @@ public sealed class RuntimeInputBinding
         RuntimeActivityResultReference? activityResult = null,
         RuntimeExpressionBinding? expression = null,
         IReadOnlyDictionary<string, string>? metadata = null,
-        ValueConversionPlan? conversionPlan = null)
+        ValueConversionPlan? conversionPlan = null,
+        RuntimeValueConversionRequest? conversionRequest = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputKey);
         ArgumentNullException.ThrowIfNull(targetType);
@@ -47,6 +48,7 @@ public sealed class RuntimeInputBinding
         Expression = expression;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         ConversionPlan = conversionPlan;
+        ConversionRequest = conversionRequest;
     }
 
     public string InputName { get; }
@@ -63,6 +65,11 @@ public sealed class RuntimeInputBinding
     public IReadOnlyDictionary<string, string> Metadata { get; }
     /// <summary>Null preserves the legacy identity/retyping behavior of artifacts published before conversion plans.</summary>
     public ValueConversionPlan? ConversionPlan { get; }
+    /// <summary>
+    /// Authored conversion intent retained only until a later publication linker can resolve a source contract.
+    /// Published executable bindings should prefer <see cref="ConversionPlan"/>.
+    /// </summary>
+    public RuntimeValueConversionRequest? ConversionRequest { get; }
 
     private static void ValidateCanonical(
         RuntimeInputBindingSource source,
@@ -97,6 +104,12 @@ public sealed class RuntimeInputBinding
     }
 
 }
+
+public sealed record RuntimeValueConversionRequest(
+    ValueConversionMode Mode,
+    ValueConversionProfileReference? Profile = null,
+    ValueConversionLimits? Limits = null,
+    JsonElement? Options = null);
 
 public enum RuntimeInputBindingSource
 {

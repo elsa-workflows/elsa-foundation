@@ -89,10 +89,16 @@ public sealed class RuntimeOutputCaptureCompiler(
             }
 
             var targetType = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
-            var conversionPlan = resolvedConversionPlanResolver.Resolve(
-                sourceType,
-                sourceRepresentation,
-                targetType);
+            var conversionPlan = output.Conversion is null
+                ? null
+                : resolvedConversionPlanResolver.Resolve(
+                    sourceType,
+                    sourceRepresentation,
+                    targetType,
+                    AuthoredValueConversionMapper.Mode(output.Conversion),
+                    AuthoredValueConversionMapper.Profile(output.Conversion),
+                    AuthoredValueConversionMapper.Limits(output.Conversion),
+                    AuthoredValueConversionMapper.Options(output.Conversion));
             var type = new RuntimeValueTypeDescriptor(
                 variable.Type.Alias,
                 definition.StorageDriverKey,

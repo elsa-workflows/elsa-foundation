@@ -193,7 +193,8 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
         Equals(stored.StorageDriverType, desired.StorageDriverType) &&
         stored.IsSensitive == desired.IsSensitive &&
         StringComparer.Ordinal.Equals(stored.Value.ExpressionType, desired.Value.ExpressionType) &&
-        StringComparer.Ordinal.Equals(CanonicalJson(stored.Value.Value), CanonicalJson(desired.Value.Value));
+        StringComparer.Ordinal.Equals(CanonicalJson(stored.Value.Value), CanonicalJson(desired.Value.Value)) &&
+        StringComparer.Ordinal.Equals(CanonicalJson(stored.Conversion), CanonicalJson(desired.Conversion));
 
     private static string CanonicalJson(object? value) =>
         JsonSerializer.Serialize(value);

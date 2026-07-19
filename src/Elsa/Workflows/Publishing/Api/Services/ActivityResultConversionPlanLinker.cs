@@ -73,7 +73,11 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
         var plan = conversionPlanResolver.Resolve(
             sourceType,
             sourceRepresentation,
-            binding.TargetType);
+            binding.TargetType,
+            binding.ConversionRequest?.Mode ?? ValueConversionMode.Auto,
+            binding.ConversionRequest?.Profile,
+            binding.ConversionRequest?.Limits,
+            binding.ConversionRequest?.Options);
 
         return new RuntimeInputBinding(
             binding.InputName,
