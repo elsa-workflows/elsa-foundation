@@ -1,10 +1,11 @@
-import { ChevronDown, ChevronRight, Folder, FolderPlus, Menu, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderPen, FolderPlus, Menu, Move, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { createWorkflowFolder, getWorkflowFolder, listWorkflowFolders, workflowFoldersPath } from "../api/workflowDesign";
+import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, listWorkflowFolders, workflowFoldersPath } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 import { getDialogs } from "./dialogs";
 import { useDialogFocus } from "./useDialogFocus";
+import { MoveWorkflowFolderDialog, RenameWorkflowFolderDialog } from "./WorkflowFolderMutationDialogs";
 
 export type WorkflowFolderSelection = "all" | "unfiled" | { id: string };
 
@@ -14,11 +15,12 @@ export function selectedFolderId(selection: WorkflowFolderSelection) {
 
 const rootKey = "root";
 
-export function WorkflowFolderNavigation({ context, selection, onSelect, onAvailable, refreshKey = 0 }: {
+export function WorkflowFolderNavigation({ context, selection, onSelect, onAvailable, onFoldersMutated, refreshKey = 0 }: {
   context: StudioEndpointContext;
   selection: WorkflowFolderSelection;
   onSelect(selection: WorkflowFolderSelection): void;
   onAvailable(available: boolean): void;
+  onFoldersMutated?(selection?: WorkflowFolderSelection): Promise<void> | void;
   /** Refreshes loaded folder projections without remounting the tree or discarding its expansion state. */
   refreshKey?: number;
 }) {
@@ -35,13 +37,23 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const [breadcrumbError, setBreadcrumbError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [focusedKey, setFocusedKey] = useState("all");
-  const pendingKeys = useRef(new Set<string>());
+  const [mutationSupport, setMutationSupport] = useState({ rename: false, move: false, deleteEmpty: false });
+  const [mutationDialog, setMutationDialog] = useState<"rename" | "move" | null>(null);
+  const [localRefreshKey, setLocalRefreshKey] = useState(0);
+  const [status, setStatus] = useState("");
+  const inFlightGenerations = useRef<Record<string, number>>({});
+  const loadedPageCounts = useRef<Record<string, number>>({});
+  const nextLoadGeneration = useRef(0);
   const appliedRefreshKey = useRef(refreshKey);
+  const folderPickerButtonRef = useRef<HTMLButtonElement>(null);
+  const renameButtonRef = useRef<HTMLButtonElement>(null);
+  const moveButtonRef = useRef<HTMLButtonElement>(null);
 
-  const loadFolderPage = useCallback(async (parentId?: string, continuationToken?: string | null, append = false) => {
+  const loadFolderPage = useCallback(async (parentId?: string, continuationToken?: string | null, append = false, force = false) => {
     const key = parentId ?? rootKey;
-    if (pendingKeys.current.has(key)) return false;
-    pendingKeys.current.add(key);
+    if (inFlightGenerations.current[key] && !force) return false;
+    const generation = ++nextLoadGeneration.current;
+    inFlightGenerations.current[key] = generation;
     setLoadingKeys(current => new Set(current).add(key));
     setLoadFailures(current => {
       const next = { ...current };
@@ -49,31 +61,48 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       return next;
     });
     try {
-      const page = await listWorkflowFolders(context, { parentId, continuationToken });
-      if (!page) return false;
+      const pageCount = force ? loadedPageCounts.current[key] ?? 1 : 1;
+      const items: WorkflowFolder[] = [];
+      let nextToken = force ? undefined : continuationToken;
+      let nextContinuationToken: string | null = null;
+      let loadedPages = 0;
+      for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+        const page = await listWorkflowFolders(context, { parentId, continuationToken: nextToken });
+        if (inFlightGenerations.current[key] !== generation) return false;
+        if (!page) return false;
+        items.push(...page.items);
+        nextContinuationToken = page.nextContinuationToken;
+        loadedPages += 1;
+        if (!force || !nextContinuationToken) break;
+        nextToken = nextContinuationToken;
+      }
       if (parentId) {
         setChildren(current => ({
           ...current,
-          [parentId]: append ? [...(current[parentId] ?? []), ...page.items] : page.items
+          [parentId]: append ? [...(current[parentId] ?? []), ...items] : items
         }));
       } else {
-        setRoots(current => append ? [...current, ...page.items] : page.items);
+        setRoots(current => append ? [...current, ...items] : items);
       }
-      setContinuations(current => ({ ...current, [key]: page.nextContinuationToken }));
+      loadedPageCounts.current[key] = append ? (loadedPageCounts.current[key] ?? 1) + loadedPages : loadedPages;
+      setContinuations(current => ({ ...current, [key]: nextContinuationToken }));
       return true;
     } catch (caught) {
+      if (inFlightGenerations.current[key] !== generation) return false;
       setLoadFailures(current => ({
         ...current,
         [key]: caught instanceof Error ? caught.message : "Couldn't load folders."
       }));
       return false;
     } finally {
-      pendingKeys.current.delete(key);
-      setLoadingKeys(current => {
-        const next = new Set(current);
-        next.delete(key);
-        return next;
-      });
+      if (inFlightGenerations.current[key] === generation) {
+        delete inFlightGenerations.current[key];
+        setLoadingKeys(current => {
+          const next = new Set(current);
+          next.delete(key);
+          return next;
+        });
+      }
     }
   }, [context]);
 
@@ -92,11 +121,19 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   }, [context, loadFolderPage, onAvailable]);
 
   useEffect(() => {
+    let cancelled = false;
+    void getWorkflowFolderMutationSupport(context)
+      .then(support => { if (!cancelled) setMutationSupport(support); })
+      .catch(() => { if (!cancelled) setMutationSupport({ rename: false, move: false, deleteEmpty: false }); });
+    return () => { cancelled = true; };
+  }, [context]);
+
+  useEffect(() => {
     if (refreshKey === appliedRefreshKey.current) return;
     appliedRefreshKey.current = refreshKey;
     if (!available) return;
-    void loadFolderPage();
-    for (const folderId of expanded) void loadFolderPage(folderId);
+    void loadFolderPage(undefined, undefined, false, true);
+    for (const folderId of expanded) void loadFolderPage(folderId, undefined, false, true);
   }, [available, expanded, loadFolderPage, refreshKey]);
 
   useEffect(() => {
@@ -120,7 +157,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         }
       });
     return () => { cancelled = true; };
-  }, [available, context, refreshKey, selection]);
+  }, [available, context, localRefreshKey, refreshKey, selection]);
 
   const toggle = async (folder: WorkflowFolder) => {
     if (expanded.has(folder.id)) {
@@ -137,6 +174,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
 
   const select = (next: WorkflowFolderSelection) => {
     setError(null);
+    setStatus("");
     setFocusedKey(typeof next === "object" ? `folder:${next.id}` : next);
     onSelect(next);
     setDrawerOpen(false);
@@ -152,9 +190,60 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     if (!name) return;
     try {
       await createWorkflowFolder(context, { name, parentId });
-      await loadFolderPage(parentId ?? undefined);
+      await loadFolderPage(parentId ?? undefined, undefined, false, true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Couldn't create the folder.");
+    }
+  };
+
+  const selectedId = selectedFolderId(selection);
+  const selectedFolder = selectedId ? findFolder(roots, children, selectedId) ?? crumbs.at(-1) : undefined;
+
+  const refreshAfterStructureChange = async (nextSelection?: WorkflowFolderSelection) => {
+    await Promise.all([
+      loadFolderPage(undefined, undefined, false, true),
+      ...Array.from(expanded, folderId => loadFolderPage(folderId, undefined, false, true))
+    ]);
+    setLocalRefreshKey(current => current + 1);
+    await onFoldersMutated?.(nextSelection);
+  };
+
+  const restoreFolderFocus = (key: string) => {
+    requestAnimationFrame(() => {
+      if (window.matchMedia?.("(max-width: 700px)").matches) {
+        folderPickerButtonRef.current?.focus();
+        return;
+      }
+      document.querySelector<HTMLElement>(`.wf-folder-nav [data-tree-key="${key}"]`)?.focus();
+    });
+  };
+
+  const closeMutationDialog = (action: "rename" | "move") => {
+    setMutationDialog(null);
+    requestAnimationFrame(() => (action === "rename" ? renameButtonRef.current : moveButtonRef.current)?.focus());
+  };
+
+  const deleteFolder = async () => {
+    if (!selectedFolder) return;
+    const confirmed = await getDialogs().confirm({
+      message: `Delete empty folder "${selectedFolder.name}"? This cannot be undone.`,
+      confirmLabel: "Delete folder",
+      tone: "danger"
+    });
+    if (!confirmed) return;
+    setError(null);
+    setStatus("");
+    try {
+      await deleteEmptyWorkflowFolder(context, selectedFolder.id);
+      const survivor: WorkflowFolderSelection = selectedFolder.parentId ? { id: selectedFolder.parentId } : "all";
+      const survivorKey = selectedFolder.parentId ? `folder:${selectedFolder.parentId}` : "all";
+      select(survivor);
+      setFocusedKey(survivorKey);
+      await refreshAfterStructureChange(survivor);
+      setStatus(`Deleted folder ${selectedFolder.name}`);
+      restoreFolderFocus(survivorKey);
+    } catch (caught) {
+      setError(`Couldn't delete this folder. ${caught instanceof Error ? caught.message : "The server rejected the request."} Ensure it is empty and you have permission, then try again.`);
     }
   };
 
@@ -187,7 +276,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
 
   return <>
     <div className="wf-folder-mobile-actions">
-      <button type="button" onClick={() => setDrawerOpen(true)} aria-expanded={drawerOpen} aria-controls="workflow-folder-picker"><Menu size={15} /> Folders</button>
+      <button ref={folderPickerButtonRef} type="button" onClick={() => setDrawerOpen(true)} aria-expanded={drawerOpen} aria-controls="workflow-folder-picker"><Menu size={15} /> Folders</button>
     </div>
     {!drawerOpen ? (
       <aside className="wf-folder-nav" aria-label="Workflow folders">
@@ -196,8 +285,34 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       </aside>
     ) : null}
     <WorkflowFolderBreadcrumb crumbs={crumbs} state={breadcrumbState} error={breadcrumbError} selection={selection} onSelect={select} />
+    {selectedFolder && (mutationSupport.rename || mutationSupport.move || mutationSupport.deleteEmpty) ? (
+      <div className="wf-folder-actions" aria-label={`Actions for ${selectedFolder.name}`}>
+        {mutationSupport.rename ? <button ref={renameButtonRef} type="button" onClick={() => setMutationDialog("rename")}><FolderPen size={14} /> Rename</button> : null}
+        {mutationSupport.move ? <button ref={moveButtonRef} type="button" onClick={() => setMutationDialog("move")}><Move size={14} /> Move</button> : null}
+        {mutationSupport.deleteEmpty ? <button type="button" className="danger" onClick={() => void deleteFolder()}><Trash2 size={14} /> Delete</button> : null}
+      </div>
+    ) : null}
     {error ? <div className="wf-alert" role="alert">{error}</div> : null}
+    {status ? <div className="wf-status-line" role="status">{status}</div> : null}
     {drawerOpen ? <FolderDrawer onClose={() => setDrawerOpen(false)} onCreate={createFolder}><FolderTree {...treeProps} /></FolderDrawer> : null}
+    {mutationDialog === "rename" && selectedFolder ? <RenameWorkflowFolderDialog
+      context={context}
+      folder={selectedFolder}
+      onClose={() => closeMutationDialog("rename")}
+      onRenamed={async () => {
+        await refreshAfterStructureChange();
+        setStatus("Folder renamed");
+      }}
+    /> : null}
+    {mutationDialog === "move" && selectedFolder ? <MoveWorkflowFolderDialog
+      context={context}
+      folder={selectedFolder}
+      onClose={() => closeMutationDialog("move")}
+      onMoved={async () => {
+        await refreshAfterStructureChange();
+        setStatus("Folder moved");
+      }}
+    /> : null}
   </>;
 }
 

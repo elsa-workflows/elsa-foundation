@@ -118,6 +118,29 @@ export async function workflowDefinitionFolderMovePath(context: StudioEndpointCo
   }
 }
 
+async function optionalWorkflowFolderMutationPath(
+  context: StudioEndpointContext,
+  relation: "workflow-folder-rename" | "workflow-folder-move" | "workflow-folder-delete-empty",
+  folderId: string
+) {
+  try {
+    return await resolveCapabilityLink(context, capabilityIds.workflowDesign, relation, { folderId });
+  } catch (error) {
+    if (error instanceof ApiCapabilityUnavailableError && error.relation === relation) return null;
+    throw error;
+  }
+}
+
+export async function getWorkflowFolderMutationSupport(context: StudioEndpointContext) {
+  const probeId = "capability-check";
+  const [rename, move, deleteEmpty] = await Promise.all([
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-rename", probeId),
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-move", probeId),
+    optionalWorkflowFolderMutationPath(context, "workflow-folder-delete-empty", probeId)
+  ]);
+  return { rename: !!rename, move: !!move, deleteEmpty: !!deleteEmpty };
+}
+
 export interface WorkflowFolderPage {
   items: WorkflowFolder[];
   nextContinuationToken: string | null;
@@ -144,6 +167,24 @@ export async function createWorkflowFolder(context: StudioEndpointContext, reque
   if (!root) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folders");
   const response = await context.http.postJson<WorkflowFolder | { folder: WorkflowFolder }>(root, request);
   return "folder" in response ? response.folder : response;
+}
+
+export async function renameWorkflowFolder(context: StudioEndpointContext, folderId: string, name: string) {
+  const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-rename", folderId);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-rename");
+  await context.http.postJson<unknown>(path, { name });
+}
+
+export async function moveWorkflowFolder(context: StudioEndpointContext, folderId: string, parentId: string | null) {
+  const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-move", folderId);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-move");
+  await context.http.postJson<unknown>(path, { parentId });
+}
+
+export async function deleteEmptyWorkflowFolder(context: StudioEndpointContext, folderId: string) {
+  const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-delete-empty", folderId);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-delete-empty");
+  await context.http.deleteJson<unknown>(path);
 }
 
 /** Moves one or more definitions to a persisted folder, or to Unfiled when folderId is null. */

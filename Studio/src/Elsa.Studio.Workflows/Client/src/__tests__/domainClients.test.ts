@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
-import { createWorkflowFolder, listDefinitions, listWorkflowFolders } from "../api/workflowDesign";
+import {
+  createWorkflowFolder,
+  deleteEmptyWorkflowFolder,
+  getWorkflowFolderMutationSupport,
+  listDefinitions,
+  listWorkflowFolders,
+  moveWorkflowFolder,
+  renameWorkflowFolder
+} from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { preflightPublication, preflightPublicationSnapshot, startWorkflowDraftTestRun } from "../api/publishing";
 import { getExecutable, getExecutableInputSources, listExecutables, runExecutable } from "../api/runtime";
@@ -157,6 +165,42 @@ describe("canonical domain clients", () => {
 
     expect(page?.items).toEqual([{ id: "folder-2" }]);
     expect(getJson).toHaveBeenCalledWith("/design/workflows/folders?pageSize=100&parentId=folder-parent&continuationToken=opaque-next");
+  });
+
+  it("uses only advertised folder mutation templates and sends the exact mutation contracts", async () => {
+    const folderCapabilities = {
+      capabilities: [{
+        id: "elsa.api.workflow-design",
+        contractVersion: "1",
+        links: [
+          { rel: "workflow-folder-rename", href: "design/workflows/folders/{folderId}/rename", templated: true },
+          { rel: "workflow-folder-move", href: "design/workflows/folders/{folderId}/move", templated: true },
+          { rel: "workflow-folder-delete-empty", href: "design/workflows/folders/{folderId}", templated: true }
+        ]
+      }]
+    };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? folderCapabilities : {});
+    const postJson = vi.fn(async () => ({}));
+    const deleteJson = vi.fn(async () => ({}));
+    const context = createContext({ getJson, postJson, deleteJson });
+
+    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: true, move: true, deleteEmpty: true });
+    await renameWorkflowFolder(context, "folder/a", "Operations");
+    await moveWorkflowFolder(context, "folder/a", null);
+    await deleteEmptyWorkflowFolder(context, "folder/a");
+
+    expect(postJson).toHaveBeenCalledWith("/design/workflows/folders/folder%2Fa/rename", { name: "Operations" });
+    expect(postJson).toHaveBeenCalledWith("/design/workflows/folders/folder%2Fa/move", { parentId: null });
+    expect(deleteJson).toHaveBeenCalledWith("/design/workflows/folders/folder%2Fa");
+    expect(getJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports absent folder mutation relations without probing guessed endpoints", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const context = createContext({ getJson });
+
+    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: false, move: false, deleteEmpty: false });
+    expect(getJson).toHaveBeenCalledTimes(1);
   });
 
   it("uses canonical Activity, Publishing, and Runtime links without probing alternates", async () => {
