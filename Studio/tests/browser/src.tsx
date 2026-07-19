@@ -1,9 +1,10 @@
-import React, { lazy, useState } from "react";
+import React, { lazy, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
 import { WorkflowLazyBoundary } from "../../src/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
+import { WorkflowDefinitions } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
 import { useRunDetailLayout } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
-import type { StudioActivityDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode } from "../../src/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import "../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "../../src/Elsa.Studio.Workflows/Client/src/styles.css";
@@ -14,6 +15,9 @@ const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
 const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const runDetailFixture = searchParams.get("mode") === "run-detail";
+const moveDefinitionsFixture = searchParams.get("mode") === "move-definitions";
+const moveDefinitionsFailureFixture = moveDefinitionsFixture && searchParams.get("move") === "failure";
+const moveDefinitionsFolderSourceFixture = moveDefinitionsFixture && searchParams.get("source") === "folder";
 
 const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
   window.setTimeout(() => resolve({ default: () => <section aria-label="Deferred workflow designer">Workflow designer ready</section> }), 3_000);
@@ -140,6 +144,79 @@ function LazyBoundaryFixture() {
   );
 }
 
+function MoveDefinitionsFixture() {
+  const [moved, setMoved] = useState(false);
+  const movedRef = useRef(false);
+  const destinationRef = useRef<string | null | undefined>(undefined);
+  const movedDefinitionIdRef = useRef<string | undefined>(undefined);
+  const folder = useMemo(() => ({ id: "folder-operations", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" }), []);
+  const definition = (id: string, name: string, folderId: string | null = null) => ({
+    id, name, description: "Browser workflow", createdAt: "2026-07-19T00:00:00Z", lastModifiedAt: movedRef.current ? "2026-07-19T00:01:00Z" : "2026-07-19T00:00:00Z",
+    latestVersion: "1.0.0", versionCount: 1, draftId: null, deletedAt: null, folderId
+  });
+  const context = useMemo(() => ({
+    baseUrl: "browser-move-definitions",
+    http: {
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return { capabilities: [{
+          id: "elsa.api.workflow-design", contractVersion: "1", links: [
+            { rel: "workflow-definitions-page", href: "browser/definition-pages" },
+            { rel: "workflow-folders", href: "browser/folders" },
+            { rel: "workflow-definition-folder-move", href: "browser/definition-placement" }
+          ]
+        }] };
+        if (url.startsWith("/browser/folders/folder-operations")) return { folder, ancestors: [] };
+        if (url.startsWith("/browser/folders")) return { items: [folder], nextContinuationToken: null };
+        if (url.startsWith("/browser/definition-pages")) {
+          (window as Window & { capabilityRequests?: string[] }).capabilityRequests = [
+            ...((window as Window & { capabilityRequests?: string[] }).capabilityRequests ?? []),
+            url
+          ];
+          const query = new URL(url, window.location.origin).searchParams;
+          const folderId = query.get("folderId");
+          const unfiled = query.get("unfiled") === "true";
+          const next = query.get("continuationToken");
+          const movedId = movedDefinitionIdRef.current ?? "definition-browser";
+          const movedName = movedId === "folder-definition-2" ? "Moved folder workflow" : "Moved workflow";
+          if (folderId && moveDefinitionsFolderSourceFixture) {
+            if (movedRef.current) return {
+              items: [
+                definition("folder-definition-1", "Folder remaining workflow", folder.id),
+                ...(destinationRef.current === folderId ? [definition(movedId, movedName, folder.id)] : [])
+              ],
+              nextContinuationToken: null
+            };
+            return next
+              ? { items: [definition("folder-definition-2", "Folder page 2 workflow", folder.id)], nextContinuationToken: null }
+              : { items: [definition("folder-definition-1", "Folder page 1 workflow", folder.id)], nextContinuationToken: "folder-page-2" };
+          }
+          if (folderId) return { items: destinationRef.current === folderId ? [definition(movedId, movedName, folderId)] : [], nextContinuationToken: null };
+          if (unfiled) return { items: destinationRef.current === null ? [definition(movedId, movedName)] : [], nextContinuationToken: null };
+          if (movedRef.current) return { items: [definition(movedId, movedName)], nextContinuationToken: null };
+          return next ? { items: [definition("definition-2", "Second page workflow")], nextContinuationToken: null } : { items: [definition("definition-1", "First page workflow")], nextContinuationToken: "page-2" };
+        }
+        throw new Error(`Unexpected browser fixture request: ${url}`);
+      },
+      postJson: async (url: string, body: unknown) => {
+        (window as Window & { moveRequests?: unknown[] }).moveRequests = [...((window as Window & { moveRequests?: unknown[] }).moveRequests ?? []), { url, body }];
+        if (moveDefinitionsFailureFixture) throw new Error("Destination is currently unavailable.");
+        const placement = body as { definitionIds: string[]; folderId: string | null };
+        movedDefinitionIdRef.current = placement.definitionIds[0];
+        destinationRef.current = placement.folderId;
+        movedRef.current = true;
+        setMoved(true);
+        return {};
+      }
+    }
+  }) as unknown as StudioEndpointContext, [folder]);
+  const ai = useMemo(() => ({ promptActions: { list: () => [] }, dispatchPrompt: () => undefined }) as unknown as StudioAiContributionApi, []);
+
+  return <main className="wf-editor browser-fixture" data-moved={moved}>
+    <h1>Workflow definitions</h1>
+    <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} />
+  </main>;
+}
+
 function RunDetailFixture() {
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const layout = useRunDetailLayout({ selectedActivityId });
@@ -188,5 +265,5 @@ const theme = searchParams.get("theme");
 document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "harbor";
 document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
 createRoot(document.getElementById("root")!).render(
-  runDetailFixture ? <RunDetailFixture /> : lazyBoundaryFixture ? <LazyBoundaryFixture /> : <Fixture />
+  runDetailFixture ? <RunDetailFixture /> : lazyBoundaryFixture ? <LazyBoundaryFixture /> : moveDefinitionsFixture ? <MoveDefinitionsFixture /> : <Fixture />
 );

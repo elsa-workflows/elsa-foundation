@@ -108,6 +108,16 @@ export async function workflowFoldersPath(context: StudioEndpointContext) {
   }
 }
 
+/** Returns the advertised bulk-placement endpoint, never a host-constructed URL. */
+export async function workflowDefinitionFolderMovePath(context: StudioEndpointContext) {
+  try {
+    return await resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-definition-folder-move");
+  } catch (error) {
+    if (error instanceof ApiCapabilityUnavailableError && error.relation === "workflow-definition-folder-move") return null;
+    throw error;
+  }
+}
+
 export interface WorkflowFolderPage {
   items: WorkflowFolder[];
   nextContinuationToken: string | null;
@@ -134,6 +144,16 @@ export async function createWorkflowFolder(context: StudioEndpointContext, reque
   if (!root) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folders");
   const response = await context.http.postJson<WorkflowFolder | { folder: WorkflowFolder }>(root, request);
   return "folder" in response ? response.folder : response;
+}
+
+/** Moves one or more definitions to a persisted folder, or to Unfiled when folderId is null. */
+export async function moveWorkflowDefinitions(
+  context: StudioEndpointContext,
+  request: { definitionIds: string[]; folderId: string | null }
+) {
+  const path = await workflowDefinitionFolderMovePath(context);
+  if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-definition-folder-move");
+  await context.http.postJson<unknown>(path, request);
 }
 
 export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest) {
