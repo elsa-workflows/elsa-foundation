@@ -620,18 +620,21 @@
   opacity: 0.62;
 }
 
-.wf-move-definitions-dialog {
+.wf-move-definitions-dialog,
+.wf-folder-mutation-dialog {
   width: min(620px, 100%);
   max-height: calc(100vh - 40px);
 }
 
-.wf-move-definitions-dialog form {
+.wf-move-definitions-dialog form,
+.wf-folder-mutation-dialog form {
   grid-template-rows: auto minmax(0, 1fr) auto;
   max-height: calc(100vh - 40px);
   overflow: hidden;
 }
 
-.wf-move-dialog-content {
+.wf-move-dialog-content,
+.wf-folder-mutation-content {
   display: grid;
   min-height: 0;
   gap: 10px;
@@ -5743,6 +5746,20 @@ button.wf-reference-select {
 .wf-folder-breadcrumb { min-height: 30px; margin-bottom: 8px; color: var(--wf-muted-text); font-size: var(--wf-text-sm); }
 .wf-folder-breadcrumb button { padding: 0; border: 0; background: transparent; color: var(--wf-accent); font: inherit; }
 .wf-folder-breadcrumb span { margin-left: 6px; }
+.wf-folder-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.wf-folder-actions button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: var(--wf-panel);
+  color: var(--wf-text);
+  font: inherit;
+  padding: 0 9px;
+}
+.wf-folder-actions button.danger { color: var(--wf-danger); }
 .wf-folder-mobile-actions { display: none; }
 .wf-folder-drawer-backdrop { position: fixed; inset: 0; z-index: 30; background: var(--wf-modal-scrim); }
 .wf-folder-drawer { width: min(320px, calc(100vw - 28px)); height: 100%; padding: 16px; background: var(--wf-panel); box-shadow: var(--wf-shadow-overlay); }

@@ -48,9 +48,10 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const selectedVisibleCount = visibleDefinitionIds.filter(id => selectedDefinitionIds.has(id)).length;
   const allVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCount === visibleDefinitionIds.length;
 
-  const load = useCallback(async (options?: { page?: number; continuationToken?: string }) => {
+  const load = useCallback(async (options?: { page?: number; continuationToken?: string; folderSelection?: WorkflowFolderSelection }) => {
     const requestedPage = options?.page ?? page;
     const requestedContinuationToken = options && "continuationToken" in options ? options.continuationToken : continuationToken;
+    const requestedFolderSelection = options && "folderSelection" in options ? options.folderSelection! : folderSelection;
     const generation = ++loadGenerationRef.current;
     setState("loading");
     setError("");
@@ -61,8 +62,8 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
         page: requestedPage,
         pageSize,
         continuationToken: requestedContinuationToken,
-        folderId: folderCapabilityAvailable ? selectedFolderId(folderSelection) : null,
-        unfiled: folderCapabilityAvailable && folderSelection === "unfiled"
+        folderId: folderCapabilityAvailable ? selectedFolderId(requestedFolderSelection) : null,
+        unfiled: folderCapabilityAvailable && requestedFolderSelection === "unfiled"
       });
       if (generation !== loadGenerationRef.current) return;
       if (response.isPaged) {
@@ -189,6 +190,12 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
     setFocusRefreshAfterMove(true);
   };
 
+  const foldersMutated = async (nextFolderSelection?: WorkflowFolderSelection) => {
+    setPage(1);
+    setNextContinuationTokens({});
+    await load({ page: 1, continuationToken: undefined, folderSelection: nextFolderSelection ?? folderSelection });
+  };
+
   const toggleDefinitionSelection = (definitionId: string, selected: boolean) => {
     setSelectedDefinitionIds(current => {
       const next = new Set(current);
@@ -278,7 +285,14 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
 
   return (
     <>
-      <WorkflowFolderNavigation context={context} selection={folderSelection} onSelect={changeFolder} onAvailable={setFolderCapabilityAvailable} refreshKey={folderNavigationRefreshKey} />
+      <WorkflowFolderNavigation
+        context={context}
+        selection={folderSelection}
+        onSelect={changeFolder}
+        onAvailable={setFolderCapabilityAvailable}
+        onFoldersMutated={foldersMutated}
+        refreshKey={folderNavigationRefreshKey}
+      />
       <div className="wf-toolbar">
         <div className="wf-segmented" role="tablist" aria-label="Definition state">
           <button type="button" className={listState === "active" ? "active" : ""} aria-selected={listState === "active"} onClick={() => changeListState("active")}>Active</button>
