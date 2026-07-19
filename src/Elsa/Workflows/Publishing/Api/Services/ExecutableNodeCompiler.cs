@@ -348,8 +348,15 @@ public sealed class ExecutableNodeCompiler(
                 projections,
                 ValueRepresentationDefaults.Infer(new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind))),
             outcomes,
-            new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)));
+            new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)),
+            ResolveSideEffectProfile(activityType));
     }
+
+    // ADR 0032 R1 / spec 107: an unmarked activity is External (fail-safe); only an explicit
+    // [ActivitySideEffectProfile(ReplaySafe)] opts a pure/deterministic activity into a deferrable claim boundary.
+    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) =>
+        activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
+        ?? SideEffectProfile.External;
 
     private static ValueRepresentation ResolveSourceRepresentation(
         OutputAttribute attribute,

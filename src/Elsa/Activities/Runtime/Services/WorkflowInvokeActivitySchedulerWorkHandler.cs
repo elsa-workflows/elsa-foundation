@@ -216,6 +216,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 workItem,
                 invokePayload,
                 state,
+                activityContract.SideEffectProfile,
                 cancellationToken);
             state = activationClaim.State;
             valueFlowAttempt = activationClaim.Attempt;

@@ -51,6 +51,7 @@ namespace Elsa.Activities.While.Activities;
 /// </remarks>
 [ActivityStructure("elsa.while.structure", "1.0.0")]
 [ActivityChildSlot("While.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class While : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string BodySlotName = "While.Body";

@@ -178,6 +178,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 workItem,
                 payload,
                 parentState,
+                parentExecutableNode.ActivityContract!.SideEffectProfile,
                 cancellationToken);
             parentState = activationClaim.State;
             var constructedParent = await ConstructActivityAsync(
