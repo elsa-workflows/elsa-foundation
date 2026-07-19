@@ -391,6 +391,23 @@ public class UnifiedGroundworkHostTests
     }
 
     [Fact]
+    public async Task Activity_management_projection_first_read_runs_on_the_physical_native_route()
+    {
+        // Reproduces the container startup regression: the activity-management projection reader issues a
+        // FirstOrDefault against the provider-native ScaleBearing bounded route. The provider-native runtime
+        // rejects a query that does not declare the terminal operation, so this read faulted
+        // ActivityVersionReconcilerStartupTask with "does not declare result operation 'First'" until the
+        // bounded router began binding the operation. An empty database still forces the read to execute.
+        await using var provider = await BuildHostAsync();
+        await using var scope = provider.CreateAsyncScope();
+        var projections = scope.ServiceProvider.GetRequiredService<IActivityDefinitionManagementProjectionStore>();
+
+        var current = await projections.FindDefinitionAsync("missing-definition", "tenant-1");
+
+        Assert.Null(current);
+    }
+
+    [Fact]
     public async Task Activities_design_reads_run_off_the_same_unified_database()
     {
         await using var provider = await BuildHostAsync();
