@@ -78,6 +78,28 @@ public sealed class ValueConversionPlanResolverTests
     }
 
     [Fact]
+    public void Json_profile_pins_registered_typed_aliases_from_formatted_and_structured_sources()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(CustomerContract), "Acme.Customer");
+        var typedResolver = new ValueConversionPlanResolver(wellKnownTypeRegistry: registry);
+
+        var formatted = typedResolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("Acme.Customer"));
+        var structured = typedResolver.Resolve(
+            Type("JsonNode"),
+            ValueRepresentation.StructuredValue,
+            Type("Acme.Customer", CollectionKind.List));
+        var unregistered = Assert.Throws<ValueConversionPublicationException>(() =>
+            typedResolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("Acme.Unknown")));
+
+        Assert.Equal(ValueConversionOperation.Profile, formatted.Operation);
+        Assert.Equal("elsa.json", formatted.Profile!.Id);
+        Assert.Equal(ValueConversionOperation.Profile, structured.Operation);
+        Assert.Equal(CollectionKind.List, structured.TargetType.CollectionKind);
+        Assert.Contains("registered typed target alias", unregistered.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Transient_values_cannot_be_pinned_across_a_durable_binding()
     {
         var exception = Assert.Throws<ValueConversionPublicationException>(() =>
@@ -142,4 +164,6 @@ public sealed class ValueConversionPlanResolverTests
         new Dictionary<string, RuntimeInputBinding> { ["value"] = binding },
         new Dictionary<string, RuntimeOutputCapture>(),
         new Dictionary<string, string>());
+
+    private sealed record CustomerContract(string Name);
 }

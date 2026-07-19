@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
@@ -9,7 +10,9 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// workflow executable. It deliberately does not inspect value contents or host configuration: those are runtime
 /// concerns and would make a published executable non-reproducible.
 /// </summary>
-public sealed class ValueConversionPlanResolver(IValueConversionProfileRegistry? profileRegistry = null)
+public sealed class ValueConversionPlanResolver(
+    IValueConversionProfileRegistry? profileRegistry = null,
+    IWellKnownTypeRegistry? wellKnownTypeRegistry = null)
 {
     private IValueConversionProfileRegistry ProfileRegistry => profileRegistry ?? BuiltInValueConversionProfileRegistry.Instance;
     public ValueConversionPlan Resolve(
@@ -55,8 +58,8 @@ public sealed class ValueConversionPlanResolver(IValueConversionProfileRegistry?
         if (ValueConversionCompatibility.IsCanonicalAnyTarget(targetType) && sourceRepresentation is ValueRepresentation.TypedValue or ValueRepresentation.StructuredValue or ValueRepresentation.TextValue)
             return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.CanonicalAny, null, limits, options);
 
-        if (sourceRepresentation == ValueRepresentation.FormattedContent &&
-            (ValueConversionCompatibility.IsCanonicalAnyTarget(targetType) || ValueConversionCompatibility.IsJsonObjectTarget(targetType)) &&
+        if (sourceRepresentation is ValueRepresentation.FormattedContent or ValueRepresentation.StructuredValue &&
+            IsJsonProfileTarget(targetType) &&
             ProfileRegistry.TryGet(new ValueConversionProfileReference("elsa.json", "1"), out var jsonDefinition) &&
             jsonDefinition.Supports(sourceRepresentation, targetType))
         {
@@ -69,6 +72,14 @@ public sealed class ValueConversionPlanResolver(IValueConversionProfileRegistry?
                 jsonDefinition.Profile,
                 limits,
                 options);
+        }
+
+        if (sourceRepresentation is ValueRepresentation.FormattedContent or ValueRepresentation.StructuredValue &&
+            !ValueConversionCompatibility.IsCanonicalAnyTarget(targetType) &&
+            !ValueConversionCompatibility.IsJsonObjectTarget(targetType))
+        {
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, profile,
+                "JSON conversion requires a registered typed target alias.");
         }
 
         throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, ExplainAutomaticRejection(sourceType, targetType));
@@ -107,8 +118,27 @@ public sealed class ValueConversionPlanResolver(IValueConversionProfileRegistry?
         if (!definition.Supports(sourceRepresentation, targetType))
             throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile,
                 "the requested profile does not support this source representation and target contract.");
+        if (StringComparer.Ordinal.Equals(pinnedProfile.Id, "elsa.json") && !IsJsonProfileTarget(targetType))
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile,
+                "JSON conversion requires Any, JsonObject, or a registered typed target alias.");
 
         return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.Profile, pinnedProfile, limits, options);
+    }
+
+    private bool IsJsonProfileTarget(ValueTypeDescriptor targetType) =>
+        ValueConversionCompatibility.IsCanonicalAnyTarget(targetType) ||
+        ValueConversionCompatibility.IsJsonObjectTarget(targetType) ||
+        IsRegisteredTypedAlias(targetType);
+
+    private bool IsRegisteredTypedAlias(ValueTypeDescriptor targetType)
+    {
+        if (wellKnownTypeRegistry is null)
+            return false;
+
+        return wellKnownTypeRegistry.TryGetTypeOrDefault(targetType.Alias, out var type) &&
+               type != typeof(object) &&
+               !ValueConversionCompatibility.IsCanonicalAnyTarget(targetType) &&
+               !ValueConversionCompatibility.IsJsonObjectTarget(targetType);
     }
 
     private static ValueConversionPlan Create(
@@ -181,8 +211,8 @@ public sealed class BuiltInValueConversionProfileRegistry : IValueConversionProf
         {
             [("elsa.json", "1")] = new(
                 new ValueConversionProfileReference("elsa.json", "1"),
-                new HashSet<ValueRepresentation> { ValueRepresentation.FormattedContent },
-                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Elsa.Any", "Any", "JsonNode", "JsonObject" })
+                new HashSet<ValueRepresentation> { ValueRepresentation.FormattedContent, ValueRepresentation.StructuredValue },
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "*" })
         };
 
     public bool TryGet(ValueConversionProfileReference profile, out ValueConversionProfileDefinition definition) =>

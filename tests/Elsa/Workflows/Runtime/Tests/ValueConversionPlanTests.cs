@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Serialization.Core;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -240,6 +241,64 @@ public sealed class ValueConversionPlanTests
     }
 
     [Fact]
+    public void Json_profile_converts_formatted_object_content_to_registered_typed_alias()
+    {
+        var plan = JsonPlan(new ValueTypeDescriptor("Acme.Customer"));
+        var converted = TypedExecutor().Convert(
+            ValueEnvelope.Inline(
+                new ValueTypeDescriptor("String"),
+                JsonSerializer.SerializeToElement("""
+                {"name":"Ada","loyaltyPoints":42,"address":{"city":"Brussels"},"orders":[{"id":"A-1","total":19.5}],"age":null}
+                """),
+                ValueProtectionPolicy.InstanceInline),
+            plan);
+
+        Assert.Equal("Ada", converted.InlineValue!.Value.GetProperty("name").GetString());
+        Assert.Equal("Brussels", converted.InlineValue.Value.GetProperty("address").GetProperty("city").GetString());
+        Assert.Equal("A-1", converted.InlineValue.Value.GetProperty("orders")[0].GetProperty("id").GetString());
+        Assert.Equal(JsonValueKind.Null, converted.InlineValue.Value.GetProperty("age").ValueKind);
+    }
+
+    [Fact]
+    public void Json_profile_converts_structured_arrays_to_registered_collection_aliases()
+    {
+        var plan = JsonPlan(
+            new ValueTypeDescriptor("Acme.Customer", CollectionKind.List),
+            sourceRepresentation: ValueRepresentation.StructuredValue,
+            sourceType: new ValueTypeDescriptor("JsonNode"));
+        using var source = JsonDocument.Parse("""[{"name":"Ada","loyaltyPoints":1},{"name":"Lin","loyaltyPoints":2}]""");
+
+        var converted = TypedExecutor().Convert(
+            ValueEnvelope.Inline(new ValueTypeDescriptor("JsonNode"), source.RootElement.Clone(), ValueProtectionPolicy.InstanceInline),
+            plan);
+
+        Assert.Equal("Lin", converted.InlineValue!.Value[1].GetProperty("name").GetString());
+        Assert.Equal(2, converted.InlineValue.Value[1].GetProperty("loyaltyPoints").GetInt64());
+    }
+
+    [Fact]
+    public void Json_profile_reports_typed_member_failures_with_target_contract_and_location()
+    {
+        var executor = TypedExecutor();
+        var plan = JsonPlan(new ValueTypeDescriptor("Acme.Customer"));
+
+        var missing = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            JsonSource("""{"loyaltyPoints":42}"""),
+            plan));
+        var unknown = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            JsonSource("""{"name":"Ada","loyaltyPoints":42,"legacy":true}"""),
+            plan));
+        var numeric = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            JsonSource("""{"name":"Ada","loyaltyPoints":9223372036854775808}"""),
+            plan));
+
+        Assert.Contains("Acme.Customer", missing.Message, StringComparison.Ordinal);
+        Assert.Contains("missing required member 'name' at '$'", missing.Message, StringComparison.Ordinal);
+        Assert.Contains("member 'legacy' at '$'", unknown.Message, StringComparison.Ordinal);
+        Assert.Contains("$.loyaltyPoints", numeric.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Identity_conversion_preserves_an_external_reference_without_materializing_it()
     {
         var type = new ValueTypeDescriptor("String");
@@ -317,15 +376,66 @@ public sealed class ValueConversionPlanTests
     private static ValueConversionPlan JsonPlan(
         ValueTypeDescriptor targetType,
         ValueConversionMode mode = ValueConversionMode.Auto,
-        ValueConversionLimits? limits = null) =>
+        ValueConversionLimits? limits = null,
+        ValueRepresentation sourceRepresentation = ValueRepresentation.FormattedContent,
+        ValueTypeDescriptor? sourceType = null) =>
         new(
             ValueConversionPlan.CurrentSchemaVersion,
-            ValueRepresentation.FormattedContent,
-            new ValueTypeDescriptor("String"),
+            sourceRepresentation,
+            sourceType ?? new ValueTypeDescriptor("String"),
             targetType,
             mode,
             ValueConversionOperation.Profile,
             new ValueConversionProfileReference("elsa.json", "1"),
             limits: limits ?? ValueConversionLimits.Default,
             options: null);
+
+    private static ValueEnvelope JsonSource(string json) =>
+        ValueEnvelope.Inline(
+            new ValueTypeDescriptor("String"),
+            JsonSerializer.SerializeToElement(json),
+            ValueProtectionPolicy.InstanceInline);
+
+    private static RuntimeValueConversionExecutor TypedExecutor() => new(new TestTypeRegistry(
+        new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Acme.Customer"] = typeof(CustomerContract)
+        }));
+
+    private sealed class TestTypeRegistry(IReadOnlyDictionary<string, Type> aliases) : IWellKnownTypeRegistry
+    {
+        public void RegisterType(Type type, string alias) => throw new NotSupportedException();
+        public bool TryGetAlias(Type type, out string alias)
+        {
+            var match = aliases.SingleOrDefault(item => item.Value == type);
+            alias = match.Key!;
+            return match.Value is not null;
+        }
+
+        public bool TryGetType(string alias, out Type type) => aliases.TryGetValue(alias, out type!);
+        public IEnumerable<Type> ListTypes() => aliases.Values;
+        public string GetAliasOrDefault(Type type) => TryGetAlias(type, out var alias) ? alias : type.FullName!;
+        public Type GetTypeOrDefault(string alias) => TryGetType(alias, out var type) ? type : typeof(object);
+        public bool TryGetTypeOrDefault(string alias, out Type type) => TryGetType(alias, out type);
+    }
+
+    private sealed record CustomerContract
+    {
+        public required string Name { get; init; }
+        public long LoyaltyPoints { get; init; }
+        public AddressContract? Address { get; init; }
+        public IReadOnlyList<OrderContract> Orders { get; init; } = [];
+        public int? Age { get; init; }
+    }
+
+    private sealed record AddressContract
+    {
+        public required string City { get; init; }
+    }
+
+    private sealed record OrderContract
+    {
+        public required string Id { get; init; }
+        public decimal Total { get; init; }
+    }
 }

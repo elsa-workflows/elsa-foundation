@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -17,11 +18,12 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// </summary>
 public sealed class RuntimeOutputCaptureCompiler(
     IRuntimeDurableValueStorageDriverRegistry storageDrivers,
-    ValueConversionPlanResolver? conversionPlanResolver = null)
+    ValueConversionPlanResolver? conversionPlanResolver = null,
+    IWellKnownTypeRegistry? wellKnownTypeRegistry = null)
 {
     private const string VariableExpressionType = "Variable";
 
-    private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new();
+    private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
 
     public IReadOnlyDictionary<string, RuntimeOutputCapture> CompileBoundaryOutputs(
         string nodeId,
