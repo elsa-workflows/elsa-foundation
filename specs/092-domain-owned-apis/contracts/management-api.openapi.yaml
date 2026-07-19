@@ -1039,6 +1039,7 @@ components:
       required: true
       schema:
         type: string
+        minLength: 1
         maxLength: 64
     DraftId:
       name: draftId
@@ -1640,7 +1641,7 @@ components:
       type: object
       required: [id, name, normalizedName, createdAt, lastModifiedAt]
       properties:
-        id: { type: string, maxLength: 64 }
+        id: { type: string, minLength: 1, maxLength: 64 }
         parentId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
         name: { type: string, maxLength: 128 }
         normalizedName: { type: string, maxLength: 128 }
@@ -1650,7 +1651,7 @@ components:
       type: object
       required: [id, name]
       properties:
-        id: { type: string, maxLength: 64 }
+        id: { type: string, minLength: 1, maxLength: 64 }
         name: { type: string, maxLength: 128 }
     WorkflowFolderPage:
       type: object
