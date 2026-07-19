@@ -131,3 +131,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [102-dispatch-test-run-scope](../../specs/102-dispatch-test-run-scope/spec.md) | Preserve Dispatch Test-Run Scope | Draft | - | 53 | 0 | retained, out of scope |
 | [103-dispatch-distributed-execution](../../specs/103-dispatch-distributed-execution/spec.md) | Execute DispatchWorkflow Across Distributed Nodes | Draft | - | 32 | 0 | - |
 | [104-dispatch-parent-audit](../../specs/104-dispatch-parent-audit/spec.md) | DispatchWorkflow Parent Audit Remediation | unknown | - | 27 | 0 | retained |
+| [105-drain-step-single-transaction](../../specs/105-drain-step-single-transaction/spec.md) | Single Durable Transaction per Drain Step (fold work-item ack into the checkpoint commit) | Draft | - | 0 | 0 | deferred, out of scope |

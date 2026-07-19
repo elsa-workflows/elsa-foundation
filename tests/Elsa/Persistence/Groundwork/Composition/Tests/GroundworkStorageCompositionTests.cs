@@ -751,6 +751,7 @@ public class GroundworkStorageCompositionTests
         "workflows-design" =>
         [
             typeof(IWorkflowDefinitionStore),
+            typeof(IWorkflowDefinitionPageStore),
             typeof(IWorkflowDefinitionVersionStore),
             typeof(IWorkflowDefinitionDraftStore),
             typeof(IWorkflowDefinitionListProjectionStore),

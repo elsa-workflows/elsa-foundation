@@ -2,6 +2,7 @@ using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Capabilities;
 
@@ -24,7 +25,8 @@ public static class WorkflowDesignApiCapabilities
 /// <summary>Advertises only authoring operations backed by services in the active shell.</summary>
 public sealed class WorkflowDesignOperationalCapabilitySource(
     ScopedVariableAuthoringContract? scopedVariables = null,
-    IEnumerable<IActivityInputOptionsProvider>? inputOptionsProviders = null) : IApiCapabilitySource
+    IEnumerable<IActivityInputOptionsProvider>? inputOptionsProviders = null,
+    IWorkflowDefinitionPageStore? pageStore = null) : IApiCapabilitySource
 {
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
         CancellationToken cancellationToken = default)
@@ -37,6 +39,8 @@ public sealed class WorkflowDesignOperationalCapabilitySource(
                 "activity-input-options",
                 "design/workflows/activities/{activityVersionId}/inputs/{inputName}/options",
                 templated: true));
+        if (pageStore?.IsAvailable == true)
+            links.Add(new("workflow-definitions-page", "design/workflows/definitions/page"));
 
         IReadOnlyCollection<ApiCapabilityDeclaration> declarations = links.Count == 0
             ? []

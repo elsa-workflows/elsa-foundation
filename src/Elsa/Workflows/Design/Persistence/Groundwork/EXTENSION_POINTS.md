@@ -7,6 +7,7 @@ Groundwork provider catalog for workflow-design persistence replacement contract
 | Contract | Groundwork implementation |
 |---|---|
 | `IWorkflowDefinitionStore` | `GroundworkWorkflowDefinitionStore` |
+| `IWorkflowDefinitionPageStore` | `GroundworkWorkflowDefinitionStore` (only advertises the paged API relation when `IBoundedDocumentStore` is admitted) |
 | `IWorkflowDefinitionVersionStore` | `GroundworkWorkflowDefinitionVersionStore` |
 | `IWorkflowDefinitionDraftStore` | `GroundworkWorkflowDefinitionDraftStore` |
 | `IWorkflowDefinitionVersionLayoutStore` | `GroundworkWorkflowDefinitionVersionLayoutStore` |
@@ -22,6 +23,12 @@ Groundwork provider catalog for workflow-design persistence replacement contract
 | `IWorkflowDefinitionLookup` | Core `WorkflowDefinitionLookup` |
 
 `AddGroundworkWorkflowsDesignStores()` removes existing registrations for these contracts before adding the Groundwork implementations, preserving the one-active-implementation replacement-contract rule.
+
+Workflow-definition paging uses a scale-bearing cursor route when no search term is supplied. Name,
+description, and ID substring search uses a separate ordinary bounded cursor route with the same
+`LastModifiedAt DESC, Id ASC` order. The split is required because MongoDB's case-insensitive regular-expression
+semantics cannot be certified as an indexed B-tree operation; both routes still apply provider-side filtering
+before the requested materialization limit.
 
 `IDraftStateDiffEngine` is intentionally absent: per-diff mutation-event publication is retired until an event-sourcing consumer exists, so the engine is no longer registered by this provider (it remains in Core as the tested contract).
 
