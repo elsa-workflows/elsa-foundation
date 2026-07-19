@@ -622,6 +622,20 @@
 
 .wf-move-definitions-dialog {
   width: min(620px, 100%);
+  max-height: calc(100vh - 40px);
+}
+
+.wf-move-definitions-dialog form {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: calc(100vh - 40px);
+  overflow: hidden;
+}
+
+.wf-move-dialog-content {
+  display: grid;
+  min-height: 0;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .wf-dialog-error {
@@ -641,6 +655,8 @@
   margin: 0;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
+  min-height: 0;
+  overflow: hidden;
   padding: 10px;
 }
 
@@ -654,7 +670,7 @@
 .wf-move-folder-list {
   display: grid;
   gap: 3px;
-  max-height: min(44vh, 380px);
+  min-height: 0;
   overflow: auto;
 }
 

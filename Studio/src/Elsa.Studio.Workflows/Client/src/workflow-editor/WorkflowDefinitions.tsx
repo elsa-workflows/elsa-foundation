@@ -48,7 +48,9 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const selectedVisibleCount = visibleDefinitionIds.filter(id => selectedDefinitionIds.has(id)).length;
   const allVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCount === visibleDefinitionIds.length;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { page?: number; continuationToken?: string }) => {
+    const requestedPage = options?.page ?? page;
+    const requestedContinuationToken = options && "continuationToken" in options ? options.continuationToken : continuationToken;
     const generation = ++loadGenerationRef.current;
     setState("loading");
     setError("");
@@ -56,9 +58,9 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
       const response = await listDefinitions(context, {
         search,
         state: listState,
-        page,
+        page: requestedPage,
         pageSize,
-        continuationToken,
+        continuationToken: requestedContinuationToken,
         folderId: folderCapabilityAvailable ? selectedFolderId(folderSelection) : null,
         unfiled: folderCapabilityAvailable && folderSelection === "unfiled"
       });
@@ -68,15 +70,15 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
         setUsesCursorPaging(true);
         setNextContinuationTokens(current => {
           const next = Object.fromEntries(
-            Object.entries(current).filter(([storedPage]) => Number(storedPage) <= page)
+            Object.entries(current).filter(([storedPage]) => Number(storedPage) <= requestedPage)
           ) as Record<number, string>;
-          if (response.nextContinuationToken) next[page + 1] = response.nextContinuationToken;
+          if (response.nextContinuationToken) next[requestedPage + 1] = response.nextContinuationToken;
           return next;
         });
       } else {
         const effectiveTotalCount = response.totalCount;
         const effectiveTotalPages = getTotalPages(effectiveTotalCount, pageSize);
-        if (effectiveTotalCount > 0 && page > effectiveTotalPages) {
+        if (effectiveTotalCount > 0 && requestedPage > effectiveTotalPages) {
           setPage(effectiveTotalPages);
           return;
         }
@@ -177,7 +179,11 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
 
   const movedDefinitions = async () => {
     setFolderNavigationRefreshKey(current => current + 1);
-    await load();
+    // Placement changes both the result set and its cursor ordering (FolderId, LastModifiedAt).
+    // Never reuse the old continuation token: explicitly rebase onto the first page.
+    setPage(1);
+    setNextContinuationTokens({});
+    await load({ page: 1, continuationToken: undefined });
     const count = selectedDefinitionIds.size;
     setStatus(`Moved ${count === 1 ? "1 workflow definition" : `${count} workflow definitions`}`);
     setFocusRefreshAfterMove(true);

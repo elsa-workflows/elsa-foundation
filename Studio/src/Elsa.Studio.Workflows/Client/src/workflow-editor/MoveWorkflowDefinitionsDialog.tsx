@@ -152,20 +152,22 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
             <p>Choose where to place {definitionIds.length === 1 ? "the selected workflow definition" : `${definitionIds.length} selected workflow definitions`}.</p>
           </div>
         </div>
-        {moveError ? <p className="wf-dialog-error" role="alert">{moveError}</p> : null}
-        <fieldset className="wf-move-destination" disabled={moving}>
-          <legend>Destination</legend>
-          <div className="wf-move-folder-list" aria-label="Workflow folder destinations">
-            <div className="wf-move-folder-node">
-              <label className="wf-move-folder-row">
-                <input type="radio" name="workflow-folder-destination" data-destination="unfiled" checked={destinationId === null} onChange={() => setDestinationId(null)} />
-                Unfiled
-              </label>
+        <div className="wf-move-dialog-content">
+          {moveError ? <p className="wf-dialog-error" role="alert">{moveError}</p> : null}
+          <fieldset className="wf-move-destination" disabled={moving}>
+            <legend>Destination</legend>
+            <div className="wf-move-folder-list" aria-label="Workflow folder destinations">
+              <div className="wf-move-folder-node">
+                <label className="wf-move-folder-row">
+                  <input type="radio" name="workflow-folder-destination" data-destination="unfiled" checked={destinationId === null} onChange={() => setDestinationId(null)} />
+                  Unfiled
+                </label>
+              </div>
+              {roots.map(folder => renderFolder(folder))}
+              {renderPageControls()}
             </div>
-            {roots.map(folder => renderFolder(folder))}
-            {renderPageControls()}
-          </div>
-        </fieldset>
+          </fieldset>
+        </div>
         <div className="wf-dialog-actions">
           <button type="button" onClick={onClose} disabled={moving}>Cancel</button>
           <button type="submit" disabled={moving}>{moving ? "Moving…" : "Move"}</button>
