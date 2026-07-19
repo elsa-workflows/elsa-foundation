@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -653,6 +654,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(
         string Collection,
         string WorkflowExecutionId,
         RuntimePostCommitOutboxItem Item,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         string? LogicalOutboxItemId = null);
 
 }

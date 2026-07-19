@@ -34,7 +34,7 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.IncidentStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 3,
+        [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 4,
         [ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 3,
         [ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind] = 1,
@@ -68,6 +68,7 @@ public static class ElsaRuntimeDocumentVersions
         return documentKind switch
         {
             ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => 1,
+            ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => 3,
             _ => currentVersion
         };
     }

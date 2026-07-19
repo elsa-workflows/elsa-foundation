@@ -18,8 +18,8 @@ namespace Elsa.Persistence.Groundwork.Serialization;
 /// These options are deliberately independent of <c>IPayloadSerializer</c>: this is the durability
 /// format of suspended workflow state, frozen by the golden-fixture suite and only changed through
 /// explicit version policy. Workflow executables admit only their current fixture; executable activity
-/// templates retain an explicit compatible upgrade step. Future released shapes may add Groundwork upcasters
-/// and retained fixtures under the same policy. See the
+/// templates and post-commit outbox documents retain explicit compatible upgrade steps. Future released
+/// shapes may add Groundwork upcasters and retained fixtures under the same policy. See the
 /// sanctioned-exception entry in <c>docs/serialization.md</c>.
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentSerializer : IGroundworkRuntimeDocumentSerializer
@@ -42,7 +42,8 @@ public sealed class GroundworkRuntimeDocumentSerializer : IGroundworkRuntimeDocu
                 ElsaRuntimeDocumentVersions.MinimumReadableFor(pair.Key),
                 pair.Value)),
             [
-                new ExecutableActivityTemplateDocumentV1ToV2Upcaster()
+                new ExecutableActivityTemplateDocumentV1ToV2Upcaster(),
+                new PostCommitOutboxDocumentV3ToV4Upcaster()
             ],
             new DocumentSchemaVersionFormat(
                 (documentKind, schemaVersion) => ElsaRuntimeDocumentVersions.Parse(documentKind, schemaVersion),
