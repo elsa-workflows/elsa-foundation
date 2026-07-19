@@ -1,10 +1,12 @@
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Commands;
+using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Services;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using Xunit;
 
@@ -48,6 +50,43 @@ public sealed class DefinitionEndpointSecurityTests
         Assert.Contains(PermissionNames.WorkflowDesignTagsAssign, replace.AllowedPermissions!);
         Assert.Null(get.AnonymousVerbs);
         Assert.Null(replace.AnonymousVerbs);
+    }
+
+    [Theory]
+    [InlineData("GetTags", false)]
+    [InlineData("ReplaceTags", true)]
+    public async Task Direct_tag_routes_return_service_unavailable_without_durable_persistence(
+        string endpointName,
+        bool hasRequest)
+    {
+        var endpointType = typeof(UpdateDefinition).Assembly.GetType(
+            $"{EndpointsNamespace}.{endpointName}",
+            throwOnError: true)!;
+        var service = RuntimeHelpers.GetUninitializedObject(typeof(WorkflowDefinitionTagApplicationService));
+        var create = typeof(Factory).GetMethods()
+            .Single(m => m.Name == nameof(Factory.Create)
+                         && m.IsGenericMethodDefinition
+                         && m.GetParameters() is [var first, var rest]
+                         && first.ParameterType == typeof(Action<DefaultHttpContext>)
+                         && rest.ParameterType == typeof(object[]))
+            .MakeGenericMethod(endpointType);
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        var endpoint = (BaseEndpoint)create.Invoke(
+            null,
+            [(Action<DefaultHttpContext>)(created => created.Response.Body = context.Response.Body), new[] { service }])!;
+        var handle = endpointType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Single(method =>
+                method.Name == "HandleAsync"
+                && method.DeclaringType == endpointType
+                && method.GetParameters().Length == (hasRequest ? 2 : 1));
+        var arguments = hasRequest
+            ? new object[] { new ReplaceWorkflowDefinitionTagsRequest("workflow-1", []), CancellationToken.None }
+            : [CancellationToken.None];
+
+        await (Task)handle.Invoke(endpoint, arguments)!;
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, endpoint.HttpContext.Response.StatusCode);
     }
 
     // D5 sweep (QA finding): endpoints that carried an interim AllowAnonymous() are now permission-guarded.

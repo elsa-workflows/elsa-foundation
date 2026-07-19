@@ -18,17 +18,24 @@ public interface IWorkflowDefinitionTagAuthorizationContext
 
 public sealed class WorkflowDefinitionTagApplicationService(
     IWorkflowDefinitionStore definitionStore,
-    IWorkflowDefinitionTagStore tagStore,
-    ITagDefinitionStore catalog,
     IWorkflowDefinitionTagAuthorizationContext authorization,
-    IDeferredEventPublisher eventPublisher)
+    IDeferredEventPublisher eventPublisher,
+    IWorkflowDefinitionTagStore? tagStore = null,
+    ITagDefinitionStore? catalog = null,
+    ITagDefinitionCatalogPersistence? catalogPersistence = null)
 {
+    public bool IsAvailable =>
+        tagStore is not null
+        && catalog is not null
+        && catalogPersistence is not null;
+
     public async Task<WorkflowDefinitionTagSetView> GetAsync(
         string workflowDefinitionId,
         CancellationToken cancellationToken = default)
     {
+        EnsureAvailable();
         var definition = await GetDefinitionAsync(workflowDefinitionId, cancellationToken);
-        var tagSet = await tagStore.GetAsync(workflowDefinitionId, cancellationToken);
+        var tagSet = await TagStore.GetAsync(workflowDefinitionId, cancellationToken);
         return ToView(tagSet, authorization.CanAssign && definition.DeletedAt is null);
     }
 
@@ -38,6 +45,7 @@ public sealed class WorkflowDefinitionTagApplicationService(
         IReadOnlyCollection<string> tagDefinitionIds,
         CancellationToken cancellationToken = default)
     {
+        EnsureAvailable();
         if (!authorization.CanAssign)
             throw new UnauthorizedAccessException("Workflow definition tag assignment permission is required.");
         var definition = await GetDefinitionAsync(workflowDefinitionId, cancellationToken);
@@ -52,11 +60,11 @@ public sealed class WorkflowDefinitionTagApplicationService(
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        var before = await tagStore.GetAsync(workflowDefinitionId, cancellationToken);
+        var before = await TagStore.GetAsync(workflowDefinitionId, cancellationToken);
         var beforeIds = before.Assertions
             .Select(assertion => assertion.TagDefinitionId)
             .ToHashSet(StringComparer.Ordinal);
-        var catalogDefinitions = await catalog.ListByIdsAsync(distinctIds, cancellationToken);
+        var catalogDefinitions = await Catalog.ListByIdsAsync(distinctIds, cancellationToken);
         var catalogDefinitionsById = catalogDefinitions.ToDictionary(definition => definition.Id, StringComparer.Ordinal);
         foreach (var tagDefinitionId in distinctIds)
         {
@@ -68,7 +76,7 @@ public sealed class WorkflowDefinitionTagApplicationService(
                 throw new ArgumentException($"Tag definition '{tagDefinitionId}' cannot target workflow definitions.", nameof(tagDefinitionIds));
         }
 
-        var result = await tagStore.ReplaceManualAsync(new(
+        var result = await TagStore.ReplaceManualAsync(new(
             workflowDefinitionId,
             definition.TenantId,
             expectedRevision,
@@ -109,12 +117,27 @@ public sealed class WorkflowDefinitionTagApplicationService(
             ? revision[1..^1]
             : throw new ArgumentException("A quoted If-Match revision is required.", nameof(revision));
 
+    private IWorkflowDefinitionTagStore TagStore =>
+        tagStore ?? throw new WorkflowDefinitionTaggingUnavailableException();
+
+    private ITagDefinitionStore Catalog =>
+        catalog ?? throw new WorkflowDefinitionTaggingUnavailableException();
+
+    private void EnsureAvailable()
+    {
+        if (!IsAvailable)
+            throw new WorkflowDefinitionTaggingUnavailableException();
+    }
+
     private async Task<WorkflowDefinition> GetDefinitionAsync(
         string workflowDefinitionId,
         CancellationToken cancellationToken) =>
         await definitionStore.FindByIdAsync(workflowDefinitionId, cancellationToken)
         ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), workflowDefinitionId);
 }
+
+public sealed class WorkflowDefinitionTaggingUnavailableException()
+    : InvalidOperationException("Workflow definition tagging is unavailable because durable tag persistence is not active.");
 
 public sealed record WorkflowDefinitionTagsChanged(
     string WorkflowDefinitionId,

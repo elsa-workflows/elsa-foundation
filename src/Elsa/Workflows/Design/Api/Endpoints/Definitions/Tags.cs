@@ -20,6 +20,12 @@ internal sealed class GetTags(WorkflowDefinitionTagApplicationService service)
 
     public override async Task HandleAsync(CancellationToken cancellationToken)
     {
+        if (!service.IsAvailable)
+        {
+            await WorkflowDefinitionTagEndpointResponses.SendUnavailableAsync(HttpContext, cancellationToken);
+            return;
+        }
+
         try
         {
             var result = await service.GetAsync(Route<string>("workflowDefinitionId")!, cancellationToken);
@@ -46,6 +52,12 @@ internal sealed class ReplaceTags(WorkflowDefinitionTagApplicationService servic
         ReplaceWorkflowDefinitionTagsRequest request,
         CancellationToken cancellationToken)
     {
+        if (!service.IsAvailable)
+        {
+            await WorkflowDefinitionTagEndpointResponses.SendUnavailableAsync(HttpContext, cancellationToken);
+            return;
+        }
+
         try
         {
             var expectedRevision = WorkflowDefinitionTagApplicationService.Unquote(
@@ -86,5 +98,20 @@ internal sealed class ReplaceTags(WorkflowDefinitionTagApplicationService servic
         {
             ThrowError(exception, 409);
         }
+    }
+}
+
+internal static class WorkflowDefinitionTagEndpointResponses
+{
+    public static Task SendUnavailableAsync(HttpContext context, CancellationToken cancellationToken)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        return context.Response.WriteAsJsonAsync(
+            new
+            {
+                code = "workflow-definition-tagging-unavailable",
+                error = "Workflow definition tagging is unavailable because durable tag persistence is not active."
+            },
+            cancellationToken);
     }
 }

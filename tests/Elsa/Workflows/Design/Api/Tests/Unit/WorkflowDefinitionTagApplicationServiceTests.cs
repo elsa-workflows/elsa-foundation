@@ -14,6 +14,21 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 public sealed class WorkflowDefinitionTagApplicationServiceTests
 {
     [Fact]
+    public async Task Service_without_durable_tagging_dependencies_fails_closed()
+    {
+        var service = new WorkflowDefinitionTagApplicationService(
+            new FakeDefinitionStore(new() { Id = "workflow-1", Name = "Workflow" }),
+            new AuthorizationContext(),
+            new CapturingPublisher());
+
+        Assert.False(service.IsAvailable);
+        await Assert.ThrowsAsync<WorkflowDefinitionTaggingUnavailableException>(() =>
+            service.GetAsync("workflow-1"));
+        await Assert.ThrowsAsync<WorkflowDefinitionTaggingUnavailableException>(() =>
+            service.ReplaceAsync("workflow-1", WorkflowDefinitionTagRevision.Initial, []));
+    }
+
+    [Fact]
     public async Task Replace_validates_catalog_commits_manual_slice_and_publishes_after_save()
     {
         var tags = new FakeTagStore();
@@ -114,10 +129,11 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
                 TenantId = "tenant-a",
                 DeletedAt = deleted ? DateTimeOffset.UtcNow : null
             }),
+            new AuthorizationContext(),
+            events,
             tags,
             catalog,
-            new AuthorizationContext(),
-            events);
+            new DurableCatalogPersistence());
 
     private static ITagDefinitionStore Catalog(params TagDefinition[] definitions) =>
         new FakeCatalog(definitions);
@@ -144,6 +160,8 @@ public sealed class WorkflowDefinitionTagApplicationServiceTests
         public string CorrelationId => "correlation-1";
         public bool CanAssign => true;
     }
+
+    private sealed class DurableCatalogPersistence : ITagDefinitionCatalogPersistence;
 
     private sealed class FakeDefinitionStore(WorkflowDefinition definition) : IWorkflowDefinitionStore
     {
