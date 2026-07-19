@@ -36,6 +36,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsSourceOwned")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("LastModifiedAt")
                         .IsRequired()
                         .HasColumnType("TEXT");

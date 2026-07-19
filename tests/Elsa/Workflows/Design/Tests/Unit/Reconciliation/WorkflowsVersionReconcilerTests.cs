@@ -44,6 +44,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         Assert.Single(addDef.Added);
         Assert.Equal("wf-new", addDef.Added[0].Id);
+        // Materialized from a source ⇒ the source owns lifecycle metadata (DeletedAt reconciliation).
+        Assert.True(addDef.Added[0].IsSourceOwned);
         Assert.Single(addVer.Added);
         Assert.Equal("wf-new", addVer.Added[0].DefinitionId);
         Assert.Equal("1.0.0", addVer.Added[0].Version);
@@ -203,9 +205,9 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Incoming_deleted_soft_deletes_definition_without_deleting_versions()
     {
-        // R10/FR-008: definition.json marks the definition deleted → DeletedAt set; no version row removed.
+        // R10/FR-008: definition.json marks a source-owned definition deleted → DeletedAt set; no version row removed.
         var incoming = BuildIncomingVersion(definitionId: "wf-del", version: "1.0.0", name: "Same", deleted: true);
-        var existingDef = new WorkflowDefinition { Id = "wf-del", Name = "Same" }; // live
+        var existingDef = new WorkflowDefinition { Id = "wf-del", Name = "Same", IsSourceOwned = true }; // live
         var existingVersion = new WorkflowDefinitionVersion("wf-del", "1.0.0");
 
         var defs = new StubDefinitionStore().With(existingDef);
@@ -226,9 +228,9 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Incoming_live_undeletes_soft_deleted_definition()
     {
-        // R10: definition.json latest-wins — a source reporting the definition live clears DeletedAt.
+        // R10: definition.json latest-wins — a source reporting a source-owned definition live clears DeletedAt.
         var incoming = BuildIncomingVersion(definitionId: "wf-undel", version: "1.0.0", name: "Same", deleted: false);
-        var existingDef = new WorkflowDefinition { Id = "wf-undel", Name = "Same", DeletedAt = DateTimeOffset.UtcNow.AddDays(-1) };
+        var existingDef = new WorkflowDefinition { Id = "wf-undel", Name = "Same", DeletedAt = DateTimeOffset.UtcNow.AddDays(-1), IsSourceOwned = true };
         var existingVersion = new WorkflowDefinitionVersion("wf-undel", "1.0.0");
 
         var defs = new StubDefinitionStore().With(existingDef);
@@ -241,6 +243,78 @@ public sealed class WorkflowsVersionReconcilerTests
         await reconciler.Reconcile(CancellationToken.None);
 
         var saved = Assert.Single(saveDef.Saved);
+        Assert.Null(saved.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Incoming_deleted_does_not_soft_delete_non_source_owned_definition()
+    {
+        // Guard: a source reporting a catalog-authored (non-source-owned) definition as deleted must NOT
+        // flip DeletedAt — latest-wins soft-delete is scoped to definitions the source materialized itself.
+        var incoming = BuildIncomingVersion(definitionId: "wf-studio", version: "1.0.0", name: "Same", deleted: true);
+        var existingDef = new WorkflowDefinition { Id = "wf-studio", Name = "Same" }; // Studio-authored, live
+        var existingVersion = new WorkflowDefinitionVersion("wf-studio", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var saveDef = new SpySaveDefinitionCommand();
+        var logger = new CapturingLogger<WorkflowsVersionReconciler>();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(),
+            DuplicateHandling.Skip, saveDef, logger);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        // Nothing else changed, so the ignored delete intent results in no write at all.
+        Assert.Empty(saveDef.Saved);
+        Assert.Null(existingDef.DeletedAt);
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("not source-owned"));
+    }
+
+    [Fact]
+    public async Task Incoming_live_does_not_undelete_non_source_owned_definition()
+    {
+        // Guard, other direction: a source may not resurrect a catalog-authored soft-deleted definition.
+        var deletedAt = DateTimeOffset.UtcNow.AddDays(-1);
+        var incoming = BuildIncomingVersion(definitionId: "wf-studio-del", version: "1.0.0", name: "Same", deleted: false);
+        var existingDef = new WorkflowDefinition { Id = "wf-studio-del", Name = "Same", DeletedAt = deletedAt };
+        var existingVersion = new WorkflowDefinitionVersion("wf-studio-del", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(),
+            DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Empty(saveDef.Saved);
+        Assert.Equal(deletedAt, existingDef.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Rename_still_applies_when_delete_intent_is_ignored_on_non_source_owned_definition()
+    {
+        // The ownership guard scopes only DeletedAt: name/description stay latest-wins for every source.
+        var incoming = BuildIncomingVersion(definitionId: "wf-studio-ren", version: "1.0.0", name: "New Name", deleted: true);
+        var existingDef = new WorkflowDefinition { Id = "wf-studio-ren", Name = "Old Name" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-studio-ren", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(),
+            DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var saved = Assert.Single(saveDef.Saved);
+        Assert.Equal("New Name", saved.Name);
         Assert.Null(saved.DeletedAt);
     }
 
