@@ -2,7 +2,12 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Models;
 
-/// <summary>Portable persistence limits for workflow-definition identity and display name.</summary>
+/// <summary>
+/// Portable persistence limits for workflow-definition identity and display name. Groundwork schema version
+/// 1.1 projects both values into bounded paging columns: pre-1.1 documents whose ID or name exceeds 128
+/// characters must be renamed or rekeyed before the schema is applied. The upgrade is intentionally rejected
+/// rather than truncating a value or allowing provider-specific behavior.
+/// </summary>
 public static class WorkflowDefinitionConstraints
 {
     public const int MaximumIdLength = 128;

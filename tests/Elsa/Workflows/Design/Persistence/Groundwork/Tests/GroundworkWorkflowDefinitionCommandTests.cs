@@ -266,6 +266,23 @@ public class GroundworkWorkflowDefinitionCommandTests
         AssertStamped(layout!);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task SubmitWorkflowDefinition_rejects_blank_name(string name)
+    {
+        var command = new GroundworkSubmitWorkflowDefinitionCommand(
+            _identities,
+            _store,
+            Payloads,
+            new EmptyActivityStructureService(),
+            _clock,
+            _accessContext);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            command.Execute(name, null, MinimalState(), CancellationToken.None));
+    }
+
     private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null);
 
     private static WorkflowDefinitionState MinimalState() => new(

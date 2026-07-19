@@ -422,6 +422,73 @@ public sealed class FoundationBoundedQueryContractTests
         Assert.Equal("pre-upgrade", Assert.Single(page.Items).Id);
     }
 
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_projection_upgrade_accepts_the_128_character_boundary(string providerKey)
+    {
+        var id = new string('i', WorkflowDefinitionConstraints.MaximumIdLength);
+        var name = new string('n', WorkflowDefinitionConstraints.MaximumNameLength);
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        await driver.ResetPhysicalAsync([new LegacyWorkflowDesignManifestSource()]);
+        await using (var legacyClient = await driver.OpenPhysicalClientAsync(Access("tenant-a")))
+            await SaveWorkflowDefinitionAsync(legacyClient.DocumentStore, new WorkflowDefinition { Id = id, Name = name });
+
+        await driver.ApplyPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]);
+        await using var upgradedClient = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        var definitions = new GroundworkWorkflowDefinitionStore(upgradedClient.DocumentStore, upgradedClient.BoundedDocumentStore);
+        Assert.Equal(id, Assert.Single((await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter { Id = id }, WorkflowDefinitionLifecycleScope.All,
+            WorkflowDefinitionSortBy.Name, WorkflowDefinitionSortDirection.Asc, 1, 10))).Items).Id);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_projection_upgrade_rejects_129_character_legacy_values_without_data_loss(string providerKey)
+    {
+        var id = new string('i', WorkflowDefinitionConstraints.MaximumIdLength + 1);
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        await driver.ResetPhysicalAsync([new LegacyWorkflowDesignManifestSource()]);
+        await using (var legacyClient = await driver.OpenPhysicalClientAsync(Access("tenant-a")))
+            await SaveWorkflowDefinitionAsync(legacyClient.DocumentStore, new WorkflowDefinition { Id = id, Name = "Legacy" });
+
+        var exception = await Assert.ThrowsAsync<PhysicalProjectionValueValidationException>(() =>
+            driver.ApplyPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]).AsTask());
+        Assert.Equal("GW-PHYSICAL-037", exception.Diagnostic.Code);
+        Assert.Equal("projectedColumns.entity.id", exception.Diagnostic.Target);
+
+        await using var legacyClientAfterRejection = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        var preserved = await legacyClientAfterRejection.DocumentStore.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            id);
+        Assert.NotNull(preserved);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_projection_upgrade_rejects_129_character_legacy_names_without_data_loss(string providerKey)
+    {
+        const string id = "legacy-name-overflow";
+        var name = new string('n', WorkflowDefinitionConstraints.MaximumNameLength + 1);
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        await driver.ResetPhysicalAsync([new LegacyWorkflowDesignManifestSource()]);
+        await using (var legacyClient = await driver.OpenPhysicalClientAsync(Access("tenant-a")))
+            await SaveWorkflowDefinitionAsync(legacyClient.DocumentStore, new WorkflowDefinition { Id = id, Name = name });
+
+        var exception = await Assert.ThrowsAsync<PhysicalProjectionValueValidationException>(() =>
+            driver.ApplyPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]).AsTask());
+        Assert.Equal("GW-PHYSICAL-037", exception.Diagnostic.Code);
+        Assert.Equal("projectedColumns.entity.name", exception.Diagnostic.Target);
+
+        await using var legacyClientAfterRejection = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        var preserved = await legacyClientAfterRejection.DocumentStore.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            id);
+        Assert.NotNull(preserved);
+    }
+
     private sealed class LegacyWorkflowDesignManifestSource : IGroundworkStorageManifestSource
     {
         public string FeatureIdentity => "elsa-workflows-design";

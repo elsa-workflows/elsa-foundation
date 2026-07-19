@@ -30,6 +30,7 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
         WorkflowDefinitionState state,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         WorkflowDefinitionConstraints.ValidateName(name);
         ArgumentNullException.ThrowIfNull(state);
         SubmittedActivityTreeValidator.Validate(state.RootActivity, activityStructureService);

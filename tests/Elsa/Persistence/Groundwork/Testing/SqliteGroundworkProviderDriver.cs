@@ -91,11 +91,11 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
     {
         cancellationToken.ThrowIfCancellationRequested();
         DeleteDatabaseFiles();
-        await ApplyPhysicalCoreAsync(manifestSources ?? [], cancellationToken);
+        await ApplyPhysicalCoreAsync(manifestSources, cancellationToken);
     }
 
     protected override async ValueTask ApplyPhysicalCoreAsync(
-        IReadOnlyCollection<IGroundworkStorageManifestSource> manifestSources,
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

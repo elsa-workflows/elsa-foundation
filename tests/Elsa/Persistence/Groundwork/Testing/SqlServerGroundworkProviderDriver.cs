@@ -93,11 +93,11 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
         CancellationToken cancellationToken)
     {
         await ResetDatabaseAsync(cancellationToken);
-        await ApplyPhysicalCoreAsync(manifestSources ?? [], cancellationToken);
+        await ApplyPhysicalCoreAsync(manifestSources, cancellationToken);
     }
 
     protected override async ValueTask ApplyPhysicalCoreAsync(
-        IReadOnlyCollection<IGroundworkStorageManifestSource> manifestSources,
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
         CancellationToken cancellationToken)
     {
         var source = await CreatePhysicalSchemaSourceAsync(manifestSources, cancellationToken);

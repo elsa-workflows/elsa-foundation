@@ -688,7 +688,7 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
         IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
         CancellationToken cancellationToken);
     protected abstract ValueTask ApplyPhysicalCoreAsync(
-        IReadOnlyCollection<IGroundworkStorageManifestSource> manifestSources,
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
         CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProviderClient> OpenClientCoreAsync(Guid clientId, CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(

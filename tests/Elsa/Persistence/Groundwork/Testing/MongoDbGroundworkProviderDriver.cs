@@ -182,11 +182,11 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
     {
         using var client = new MongoClient(RequiredConnectionString());
         await client.DropDatabaseAsync(_databaseName, cancellationToken);
-        await ApplyPhysicalCoreAsync(manifestSources ?? [], cancellationToken);
+        await ApplyPhysicalCoreAsync(manifestSources, cancellationToken);
     }
 
     protected override async ValueTask ApplyPhysicalCoreAsync(
-        IReadOnlyCollection<IGroundworkStorageManifestSource> manifestSources,
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
         CancellationToken cancellationToken)
     {
         using var client = new MongoClient(RequiredConnectionString());
