@@ -15,6 +15,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IRuntimeExecutionOwnershipService? _ownershipService;
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
+    private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowDrainOrchestrator(
@@ -33,7 +34,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options,
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor)
-        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, TimeProvider.System)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, liveDrainDeliveryAccessor: null, TimeProvider.System)
     {
     }
 
@@ -45,7 +46,22 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
         TimeProvider timeProvider)
-        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, timeProvider)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, liveDrainDeliveryAccessor: null, timeProvider)
+    {
+    }
+
+    // Immediate-mode DI selects this overload (widest satisfiable when no coalescing scope factory is registered) so
+    // the live-drain delivery accessor (WU-2) is injected and the in-memory fast path can engage.
+    public WorkflowDrainOrchestrator(
+        IWorkflowSchedulerDrainer schedulerDrainer,
+        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        WorkflowDrainOrchestratorOptions? options,
+        IRuntimeExecutionOwnershipService? ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
+        TimeProvider timeProvider)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, liveDrainDeliveryAccessor, timeProvider)
     {
     }
 
@@ -57,8 +73,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options,
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory)
-        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory, TimeProvider.System)
+        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory, liveDrainDeliveryAccessor, TimeProvider.System)
     {
     }
 
@@ -70,6 +87,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
@@ -83,6 +101,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _ownershipService = ownershipService;
         _ownershipContextAccessor = ownershipContextAccessor;
         _coalescingScopeFactory = coalescingScopeFactory;
+        _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
@@ -202,9 +221,16 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         RuntimeSchedulerDrainRequest request,
         CancellationToken cancellationToken)
     {
-        // Default path: no coalescing scope factory registered, so the drain runs with Immediate persistence unchanged.
+        // Default path: no coalescing scope factory registered, so the drain runs with Immediate persistence. While this
+        // live drain owns the execution (bounded by the RT-2 single-writer lease), push a delivery scope so the
+        // post-commit outbox processor delivers EnqueueSchedulerWork intents in-memory (idempotent enqueue + direct
+        // Delivered mark) instead of taking the durable claim round-trip (WU-2). The scope is deliberately NOT pushed on
+        // the coalescing path below: there the overlay session is authoritative and folds continuations itself.
         if (_coalescingScopeFactory is null)
         {
+            using var liveDrainScope = _liveDrainDeliveryAccessor is { } accessor
+                ? accessor.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId))
+                : null;
             var plainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
             await NotifyObserversAsync(envelope, plainResult, cancellationToken);
             return plainResult;
