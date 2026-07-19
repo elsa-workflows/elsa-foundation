@@ -1,6 +1,7 @@
 using Elsa.Workflows.Design.Api.Capabilities;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Requests;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Models;
@@ -104,6 +105,105 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
             new ListWorkflowDefinitionPage(FolderId: "folder-1", Unfiled: true), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task Paged_handler_rejects_an_unknown_folder_before_querying_definitions()
+    {
+        var pageStore = new StubPagedStore();
+        var handler = new ListWorkflowDefinitionPageRequestHandler(
+            new PageStoreServiceProvider(pageStore, new StubFolderStore()),
+            new EmptyProjectionStore());
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => handler.Handle(
+            new ListWorkflowDefinitionPage(FolderId: "missing"), CancellationToken.None));
+
+        Assert.Null(pageStore.Query);
+    }
+
+    [Fact]
+    public async Task Global_page_projects_root_to_folder_breadcrumbs_with_one_batched_folder_read()
+    {
+        var pageStore = new StubPagedStore
+        {
+            Result = new WorkflowDefinitionPage(
+                [
+                    new WorkflowDefinition { Id = "definition-1", Name = "One", FolderId = "child" },
+                    new WorkflowDefinition { Id = "definition-2", Name = "Two", FolderId = "child" },
+                    new WorkflowDefinition { Id = "definition-3", Name = "Three" }
+                ],
+                null)
+        };
+        var root = new WorkflowFolder { Id = "root", Name = "Root" };
+        var child = new WorkflowFolder { Id = "child", Name = "Child", ParentFolderId = root.Id };
+        var folderStore = new StubFolderStore(
+            new Dictionary<string, WorkflowFolderDetails>(StringComparer.Ordinal)
+            {
+                [child.Id] = new(child, [root])
+            });
+        var handler = new ListWorkflowDefinitionPageRequestHandler(
+            new PageStoreServiceProvider(pageStore, folderStore),
+            new EmptyProjectionStore());
+
+        var response = await handler.Handle(new ListWorkflowDefinitionPage(), CancellationToken.None);
+
+        Assert.Equal(1, folderStore.BatchReadCount);
+        Assert.All(
+            response.Items.Where(item => item.FolderId == child.Id),
+            item => Assert.Equal(
+                [("root", "Root"), ("child", "Child")],
+                item.FolderBreadcrumb!.Select(folder => (folder.Id, folder.Name))));
+        Assert.Empty(Assert.Single(response.Items, item => item.FolderId is null).FolderBreadcrumb!);
+    }
+
+    [Fact]
+    public async Task Direct_folder_page_composes_every_public_browse_input()
+    {
+        var pageStore = new StubPagedStore();
+        var folder = new WorkflowFolder { Id = "folder-1", Name = "Folder" };
+        var folderStore = new StubFolderStore(
+            new Dictionary<string, WorkflowFolderDetails>(StringComparer.Ordinal)
+            {
+                [folder.Id] = new(folder, [])
+            });
+        var handler = new ListWorkflowDefinitionPageRequestHandler(
+            new PageStoreServiceProvider(pageStore, folderStore),
+            new EmptyProjectionStore());
+
+        await handler.Handle(
+            new ListWorkflowDefinitionPage(7, "token", "orders", "all", folder.Id, false),
+            CancellationToken.None);
+
+        Assert.Equal(
+            new WorkflowDefinitionPageQuery(
+                7,
+                "orders",
+                WorkflowDefinitionPageState.All,
+                "token",
+                folder.Id,
+                false),
+            pageStore.Query);
+        Assert.Equal(1, folderStore.BatchReadCount);
+    }
+
+    [Fact]
+    public async Task Paged_handler_rejects_a_filed_definition_whose_folder_cannot_be_resolved()
+    {
+        var pageStore = new StubPagedStore
+        {
+            Result = new WorkflowDefinitionPage(
+                [new WorkflowDefinition { Id = "definition-1", Name = "Orders", FolderId = "missing" }],
+                null)
+        };
+        var handler = new ListWorkflowDefinitionPageRequestHandler(
+            new PageStoreServiceProvider(pageStore, new StubFolderStore()),
+            new EmptyProjectionStore());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.Handle(new ListWorkflowDefinitionPage(), CancellationToken.None));
+
+        Assert.Contains("definition-1", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("missing", exception.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(null, WorkflowDefinitionPageState.Active)]
     [InlineData("unexpected", WorkflowDefinitionPageState.Active)]
@@ -143,10 +243,16 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
         }
     }
 
-    private sealed class PageStoreServiceProvider(IWorkflowDefinitionPageStore pageStore) : IServiceProvider
+    private sealed class PageStoreServiceProvider(
+        IWorkflowDefinitionPageStore pageStore,
+        IWorkflowFolderStore? folderStore = null) : IServiceProvider
     {
         public object? GetService(Type serviceType) =>
-            serviceType == typeof(IWorkflowDefinitionPageStore) ? pageStore : null;
+            serviceType == typeof(IWorkflowDefinitionPageStore)
+                ? pageStore
+                : serviceType == typeof(IWorkflowFolderStore)
+                    ? folderStore
+                    : null;
     }
 
     private sealed class EmptyServiceProvider : IServiceProvider
@@ -162,11 +268,28 @@ public sealed class WorkflowDefinitionPagingCapabilityTests
             Task.FromResult<IReadOnlyList<WorkflowDefinitionListProjection>>([]);
     }
 
-    private sealed class StubFolderStore : IWorkflowFolderStore
+    private sealed class StubFolderStore(
+        IReadOnlyDictionary<string, WorkflowFolderDetails>? detailsById = null) : IWorkflowFolderStore
     {
+        private readonly IReadOnlyDictionary<string, WorkflowFolderDetails> _detailsById =
+            detailsById ?? new Dictionary<string, WorkflowFolderDetails>(StringComparer.Ordinal);
+
         public bool IsAvailable => true;
+        public int BatchReadCount { get; private set; }
         public Task<WorkflowFolderPage> ListDirectChildrenAsync(WorkflowFolderPageRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<WorkflowFolderDetails?> FindWithAncestorsAsync(string folderId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowFolderDetails?> FindWithAncestorsAsync(string folderId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_detailsById.GetValueOrDefault(folderId));
+        public Task<IReadOnlyDictionary<string, WorkflowFolderDetails>> FindManyWithAncestorsAsync(
+            IReadOnlyCollection<string> folderIds,
+            CancellationToken cancellationToken = default)
+        {
+            BatchReadCount++;
+            IReadOnlyDictionary<string, WorkflowFolderDetails> result = folderIds
+                .Distinct(StringComparer.Ordinal)
+                .Where(_detailsById.ContainsKey)
+                .ToDictionary(id => id, id => _detailsById[id], StringComparer.Ordinal);
+            return Task.FromResult(result);
+        }
         public Task<WorkflowFolder> CreateAsync(WorkflowFolder folder, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 

@@ -151,13 +151,92 @@ public sealed class WorkflowDefinitionPagingProviderContractTests
         }
     }
 
-    private static WorkflowDefinition Definition(string id, bool deleted = false) => new()
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Folder_search_composes_direct_membership_lifecycle_and_context_bound_keyset_paging_on_every_provider(
+        string providerKey)
     {
-        Id = id,
-        Name = "unrelated",
-        LastModifiedAt = Timestamp,
-        DeletedAt = deleted ? Timestamp : null
-    };
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients);
+        await driver.ResetPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]);
+
+        await using var client = await driver.OpenPhysicalClientAsync();
+        await SaveLegacyAsync(client.DocumentStore, Definition("child-a-active", "match", "child"));
+        await SaveLegacyAsync(client.DocumentStore, Definition("child-b-deleted", "match", "child", deleted: true));
+        await SaveLegacyAsync(client.DocumentStore, Definition("child-c-unrelated", "other", "child"));
+        await SaveLegacyAsync(client.DocumentStore, Definition("root-active", "match", "root"));
+        await SaveLegacyAsync(client.DocumentStore, Definition("unfiled-active", "match"));
+        var bounded = new RecordingBoundedDocumentStore(
+            client.BoundedDocumentStore
+            ?? throw new InvalidOperationException("The provider did not expose its admitted bounded-query runtime."));
+        var store = new GroundworkWorkflowDefinitionStore(client.DocumentStore, bounded);
+        var query = new WorkflowDefinitionPageQuery(
+            1,
+            SearchTerm: "match",
+            State: WorkflowDefinitionPageState.All,
+            FolderId: "child");
+
+        var first = await store.QueryPageAsync(query);
+        var continuation = Assert.IsType<string>(first.NextContinuationToken);
+        var second = await store.QueryPageAsync(query with { ContinuationToken = continuation });
+
+        Assert.Equal(["child-a-active"], first.Items.Select(item => item.Id));
+        Assert.Equal(["child-b-deleted"], second.Items.Select(item => item.Id));
+        Assert.Empty(first.Items.Select(item => item.Id).Intersect(second.Items.Select(item => item.Id), StringComparer.Ordinal));
+        Assert.Equal(
+            ["child-a-active", "root-active", "unfiled-active"],
+            (await store.QueryPageAsync(new WorkflowDefinitionPageQuery(10, SearchTerm: "match")))
+            .Items.Select(item => item.Id));
+        Assert.Equal(
+            ["root-active"],
+            (await store.QueryPageAsync(new WorkflowDefinitionPageQuery(
+                10,
+                SearchTerm: "match",
+                State: WorkflowDefinitionPageState.All,
+                FolderId: "root"))).Items.Select(item => item.Id));
+        Assert.Equal(
+            ["unfiled-active"],
+            (await store.QueryPageAsync(new WorkflowDefinitionPageQuery(10, SearchTerm: "match", Unfiled: true)))
+            .Items.Select(item => item.Id));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            store.QueryPageAsync(query with { FolderId = "root", ContinuationToken = continuation }));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            store.QueryPageAsync(query with
+            {
+                State = WorkflowDefinitionPageState.Active,
+                ContinuationToken = continuation
+            }));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            store.QueryPageAsync(query with { SearchTerm = "other", ContinuationToken = continuation }));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            store.QueryPageAsync(query with
+            {
+                FolderId = null,
+                Unfiled = true,
+                ContinuationToken = continuation
+            }));
+        Assert.All(
+            bounded.Observations,
+            observation => Assert.Equal(
+                WorkflowsDesignStorageManifest.SearchWorkflowDefinitionsQuery,
+                observation.Query.QueryIdentity));
+    }
+
+    private static WorkflowDefinition Definition(
+        string id,
+        string name = "unrelated",
+        string? folderId = null,
+        bool deleted = false) => new()
+        {
+            Id = id,
+            Name = name,
+            FolderId = folderId,
+            LastModifiedAt = Timestamp,
+            DeletedAt = deleted ? Timestamp : null
+        };
 
     private static Task SaveLegacyAsync(IDocumentStore store, WorkflowDefinition definition)
     {

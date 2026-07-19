@@ -1,5 +1,4 @@
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
@@ -25,13 +24,6 @@ public sealed class GroundworkWorkflowFolderStore(
     IBoundedDocumentStore? boundedStore = null) : IWorkflowFolderStore
 {
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
-    private readonly GroundworkReadStore<WorkflowFolder> _reads = new(
-        store,
-        WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
-        WorkflowsDesignStorageManifest.ListAllQuery,
-        WorkflowsDesignStorageManifest.CollectionField,
-        WorkflowsDesignStorageManifest.WorkflowFolderCollection,
-        GroundworkDesignJson.Options);
 
     public bool IsAvailable => _boundedStore is not null;
 
@@ -65,25 +57,68 @@ public sealed class GroundworkWorkflowFolderStore(
 
     public async Task<WorkflowFolderDetails?> FindWithAncestorsAsync(string folderId, CancellationToken cancellationToken = default)
     {
-        var folder = await _reads.FirstOrDefaultAsync(Query<WorkflowFolder>.Where(x => x.Id, QueryOp.Equal, folderId), cancellationToken);
-        if (folder is null)
-            return null;
+        var details = await FindManyWithAncestorsAsync([folderId], cancellationToken);
+        return details.GetValueOrDefault(folderId);
+    }
 
-        var ancestors = new List<WorkflowFolder>();
-        var parentId = folder.ParentFolderId;
-        while (parentId is not null)
+    public async Task<IReadOnlyDictionary<string, WorkflowFolderDetails>> FindManyWithAncestorsAsync(
+        IReadOnlyCollection<string> folderIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(folderIds);
+        var requestedIds = folderIds.Distinct(StringComparer.Ordinal).ToArray();
+        var foldersById = new Dictionary<string, WorkflowFolder>(StringComparer.Ordinal);
+        var missingIds = new HashSet<string>(StringComparer.Ordinal);
+        var pendingIds = new Queue<string>(requestedIds);
+        var access = accessContextAccessor.Current;
+        while (pendingIds.TryDequeue(out var folderId))
         {
-            var parent = await _reads.FirstOrDefaultAsync(Query<WorkflowFolder>.Where(x => x.Id, QueryOp.Equal, parentId), cancellationToken);
-            if (parent is null)
-                throw new InvalidOperationException("Workflow-folder ancestry is inconsistent.");
-            ancestors.Add(parent);
-            parentId = parent.ParentFolderId;
-            if (ancestors.Count > WorkflowFolderNames.MaximumDepth)
-                throw new InvalidOperationException("Workflow-folder ancestry exceeds the supported depth.");
+            if (foldersById.ContainsKey(folderId) || missingIds.Contains(folderId))
+                continue;
+            var envelope = await store.LoadAsync(
+                WorkflowsDesignStorageManifest.WorkflowFolderDocumentKind,
+                folderId,
+                cancellationToken);
+            if (envelope is null)
+            {
+                missingIds.Add(folderId);
+                continue;
+            }
+            var folder = ReadFolder(envelope);
+            try
+            {
+                access.EnsureTenantScope(folder.TenantId);
+            }
+            catch (InvalidOperationException)
+            {
+                missingIds.Add(folderId);
+                continue;
+            }
+            foldersById.Add(folderId, folder);
+            if (folder.ParentFolderId is not null)
+                pendingIds.Enqueue(folder.ParentFolderId);
         }
 
-        ancestors.Reverse();
-        return new WorkflowFolderDetails(folder, ancestors);
+        var result = new Dictionary<string, WorkflowFolderDetails>(StringComparer.Ordinal);
+        foreach (var requestedId in requestedIds)
+        {
+            if (!foldersById.TryGetValue(requestedId, out var folder))
+                continue;
+            var ancestors = new List<WorkflowFolder>();
+            var parentId = folder.ParentFolderId;
+            while (parentId is not null)
+            {
+                if (!foldersById.TryGetValue(parentId, out var parent))
+                    throw new InvalidOperationException("Workflow-folder ancestry is inconsistent.");
+                ancestors.Add(parent);
+                parentId = parent.ParentFolderId;
+                if (ancestors.Count > WorkflowFolderNames.MaximumDepth)
+                    throw new InvalidOperationException("Workflow-folder ancestry exceeds the supported depth.");
+            }
+            ancestors.Reverse();
+            result.Add(requestedId, new WorkflowFolderDetails(folder, ancestors));
+        }
+        return result;
     }
 
     public async Task<WorkflowFolder> CreateAsync(WorkflowFolder folder, CancellationToken cancellationToken = default)
@@ -112,7 +147,10 @@ public sealed class GroundworkWorkflowFolderStore(
                 WorkflowsDesignStorageManifest.SchemaVersion,
                 folder,
                 GroundworkDesignJson.Options,
-                access) with { ExpectedVersion = 0 };
+                access) with
+            {
+                ExpectedVersion = 0
+            };
             var result = await unit.SaveAsync(save, cancellationToken);
             if (result.Status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.IdentityConflict)
                 throw new WorkflowFolderSiblingConflictException();
@@ -128,7 +166,10 @@ public sealed class GroundworkWorkflowFolderStore(
                     WorkflowsDesignStorageManifest.SchemaVersion,
                     parent,
                     GroundworkDesignJson.Options,
-                    access) with { ExpectedVersion = envelope.Version }, cancellationToken);
+                    access) with
+                {
+                    ExpectedVersion = envelope.Version
+                }, cancellationToken);
                 if (fence.Status != DocumentStoreWriteStatus.Saved)
                     throw new WorkflowFolderSiblingConflictException();
             }

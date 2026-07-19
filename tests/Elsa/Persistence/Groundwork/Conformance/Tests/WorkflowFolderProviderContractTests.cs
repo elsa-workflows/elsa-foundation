@@ -81,6 +81,8 @@ public sealed class WorkflowFolderProviderContractTests
         var tenantBFolders = Store(tenantBClient, "tenant-b");
         await tenantBFolders.CreateAsync(Folder("root-a", "Alpha"));
         Assert.Equal("root-a", Assert.Single((await tenantBFolders.ListDirectChildrenAsync(new WorkflowFolderPageRequest(null, 10))).Items).Id);
+        Assert.Null(await tenantBFolders.FindWithAncestorsAsync("nested-a"));
+        Assert.Empty(await tenantBFolders.FindManyWithAncestorsAsync(["nested-a"]));
         await Assert.ThrowsAsync<EntityNotFoundException>(() =>
             tenantBFolders.CreateAsync(Folder("cross-tenant-child", "No access", "nested-a")));
     }
@@ -299,7 +301,11 @@ public sealed class WorkflowFolderProviderContractTests
 
             await new GroundworkSaveWorkflowDefinitionCommand(client.DocumentStore, new Clock(), access).Execute(new WorkflowDefinition
             {
-                Id = "soft-deleted", Name = "Soft deleted", TenantId = tenant, FolderId = "child", DeletedAt = DateTimeOffset.UnixEpoch
+                Id = "soft-deleted",
+                Name = "Soft deleted",
+                TenantId = tenant,
+                FolderId = "child",
+                DeletedAt = DateTimeOffset.UnixEpoch
             });
             await Assert.ThrowsAsync<WorkflowFolderRestructureConflictException>(() => command.DeleteEmptyAsync("child"));
             await command.DeleteEmptyAsync("empty");
@@ -430,9 +436,11 @@ public sealed class WorkflowFolderProviderContractTests
             await Store(seed, tenant).CreateAsync(Folder("target", "Target"));
             await new GroundworkSaveWorkflowDefinitionCommand(
                 seed.DocumentStore, new Clock(), GroundworkTestAccess.AccessContext(tenant)).Execute(new WorkflowDefinition
-            {
-                Id = "definition", Name = "Definition", TenantId = tenant
-            });
+                {
+                    Id = "definition",
+                    Name = "Definition",
+                    TenantId = tenant
+                });
         }
 
         await using var deleteClient = await driver.OpenPhysicalClientAsync(Access(tenant));
@@ -476,7 +484,10 @@ public sealed class WorkflowFolderProviderContractTests
             CompleteWithinAsync(() => delete.DeleteEmptyAsync("target")),
             CompleteWithinAsync(() => save.Execute(new WorkflowDefinition
             {
-                Id = "definition", Name = "Definition", TenantId = tenant, FolderId = "target"
+                Id = "definition",
+                Name = "Definition",
+                TenantId = tenant,
+                FolderId = "target"
             })));
 
         AssertSingleSuccess(outcomes);
