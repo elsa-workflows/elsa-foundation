@@ -398,6 +398,28 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
         }
     }
 
+    /// <summary>Applies an additive physical manifest evolution without deleting the provider database.</summary>
+    public async ValueTask ApplyPhysicalAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource> manifestSources,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(manifestSources);
+        await _lifecycleGate.WaitAsync(cancellationToken);
+        try
+        {
+            EnsureInitialized();
+            if (!_clients.IsEmpty)
+                throw new InvalidOperationException("A provider driver cannot apply a physical manifest while client leases are active.");
+            await ApplyPhysicalCoreAsync(manifestSources, cancellationToken);
+            _storeMode = StoreMode.Physical;
+            Failures.Reset();
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
     public ValueTask<GroundworkProviderClient> OpenClientAsync(CancellationToken cancellationToken = default) =>
         OpenTrackedClientAsync(StoreMode.Logical, OpenClientCoreAsync, cancellationToken);
 
@@ -663,6 +685,9 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
     protected abstract ValueTask InitializeCoreAsync(CancellationToken cancellationToken);
     protected abstract ValueTask ResetCoreAsync(CancellationToken cancellationToken);
     protected abstract ValueTask ResetPhysicalCoreAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
+        CancellationToken cancellationToken);
+    protected abstract ValueTask ApplyPhysicalCoreAsync(
         IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
         CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProviderClient> OpenClientCoreAsync(Guid clientId, CancellationToken cancellationToken);

@@ -91,6 +91,14 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
     {
         cancellationToken.ThrowIfCancellationRequested();
         DeleteDatabaseFiles();
+        await ApplyPhysicalCoreAsync(manifestSources, cancellationToken);
+    }
+
+    protected override async ValueTask ApplyPhysicalCoreAsync(
+        IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         var source = await CreatePhysicalSchemaSourceAsync(manifestSources, cancellationToken);
         await using (var connection = new SqliteConnection(RequireConnectionString().ConnectionString))
         {
@@ -390,7 +398,14 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
     private static void EnsureSchemaApplied(PhysicalSchemaApplicationResult result)
     {
         if (result.Outcome is PhysicalSchemaApplicationOutcome.Rejected or PhysicalSchemaApplicationOutcome.AuthorizationRequired)
-            throw new InvalidOperationException($"SQLite physical schema application was not accepted: {result.Outcome}.");
+        {
+            var diagnostics = string.Join(
+                "; ",
+                result.Plan.Diagnostics.Select(diagnostic =>
+                    $"{diagnostic.Code}: {diagnostic.Message}"));
+            throw new InvalidOperationException(
+                $"SQLite physical schema application was not accepted: {result.Outcome}. {diagnostics}");
+        }
     }
 
     private Task<SqliteDocumentStore> CreateStoreAsync(CancellationToken cancellationToken) =>

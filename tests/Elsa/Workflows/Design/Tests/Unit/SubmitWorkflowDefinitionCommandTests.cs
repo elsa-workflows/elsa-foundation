@@ -84,6 +84,19 @@ public sealed class SubmitWorkflowDefinitionCommandTests
         Assert.Contains("root activity", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Execute_rejects_blank_name(string name)
+    {
+        using var host = WorkflowsDesignTestHost.Create();
+        using var scope = host.Services.CreateScope();
+        var command = scope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            command.Execute(name, null, new WorkflowDefinitionState([], null, [], [], null)));
+    }
+
     private static async Task<Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraft> LoadDraft(
         WorkflowsDesignTestHost host,
         WorkflowsDesignDbContext ctx,

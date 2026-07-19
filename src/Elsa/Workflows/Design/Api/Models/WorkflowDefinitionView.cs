@@ -13,4 +13,8 @@ public sealed record WorkflowDefinitionView(
     int VersionCount = 0
 );
 
-public sealed record WorkflowDefinitionListView(IReadOnlyCollection<WorkflowDefinitionView> Items);
+public sealed record WorkflowDefinitionListView(
+    IReadOnlyCollection<WorkflowDefinitionView> Items,
+    int Page,
+    int PageSize,
+    int TotalCount);

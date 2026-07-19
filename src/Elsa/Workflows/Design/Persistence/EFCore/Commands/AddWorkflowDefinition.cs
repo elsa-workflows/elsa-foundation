@@ -1,6 +1,7 @@
 ﻿using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +19,7 @@ public sealed class AddWorkflowDefinition(IIdentityGenerator identityGenerator, 
         IReadOnlyCollection<DesignMetadataRecord> layout,
         CancellationToken cancellationToken)
     {
+        WorkflowDefinitionConstraints.Validate(workflowDefinition);
         await using var dbContext = await factory.CreateDbContextAsync(cancellationToken);
 
         // Create the empty layout sibling alongside the draft (mirrors SubmitWorkflowDefinition) so

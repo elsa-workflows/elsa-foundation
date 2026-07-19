@@ -1,5 +1,6 @@
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Stores;
 
@@ -19,4 +20,10 @@ public interface IWorkflowDefinitionStore
 
     /// <summary>Lists the definitions matching the supplied filter.</summary>
     Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns a server-bounded, deterministically ordered page and its authoritative total count.
+    /// </summary>
+    Task<WorkflowDefinitionPage> ListPageAsync(WorkflowDefinitionListQuery query, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This workflow-definition store does not support server-side paging.");
 }

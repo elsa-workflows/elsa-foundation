@@ -2,6 +2,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
@@ -19,18 +20,19 @@ public sealed class ListDefinitionsRequestHandler(
             Id = request.Id,
             Description = request.Description,
             Name = request.Name,
-            SearchTerm = request.SearchTerm,
-            TenantAgnostic = request.TenantAgnostic
+            SearchTerm = request.SearchTerm
         };
 
-        var definitions = (await store.ListAsync(filter, cancellationToken))
-            .Where(definition => request.State?.ToLowerInvariant() switch
-            {
-                "deleted" => definition.DeletedAt is not null,
-                "all" => true,
-                _ => definition.DeletedAt is null
-            })
-            .ToArray();
+        var listQuery = new WorkflowDefinitionListQuery(
+            filter,
+            ParseScope(request.State),
+            ParseSortBy(request.SortBy),
+            ParseSortDirection(request.SortDirection),
+            request.Page,
+            request.PageSize);
+        listQuery.Validate();
+        var page = await store.ListPageAsync(listQuery, cancellationToken);
+        var definitions = page.Items;
         var projections = await projectionStore.ListByDefinitionIdsAsync(
             definitions.Select(definition => definition.Id).ToArray(),
             cancellationToken);
@@ -53,6 +55,40 @@ public sealed class ListDefinitionsRequestHandler(
                 projection?.LatestVersion,
                 projection?.VersionCount ?? 0);
         }).ToArray();
-        return new WorkflowDefinitionListView(items);
+        return new WorkflowDefinitionListView(items, request.Page, request.PageSize, page.TotalCount);
+    }
+
+    private static WorkflowDefinitionLifecycleScope ParseScope(string? state) => state?.ToLowerInvariant() switch
+    {
+        "deleted" => WorkflowDefinitionLifecycleScope.Deleted,
+        "all" => WorkflowDefinitionLifecycleScope.All,
+        _ => WorkflowDefinitionLifecycleScope.Active
+    };
+
+    private static WorkflowDefinitionSortBy ParseSortBy(string? sortBy)
+    {
+        if (string.IsNullOrWhiteSpace(sortBy))
+            return WorkflowDefinitionSortBy.Name;
+
+        return sortBy.ToLowerInvariant() switch
+        {
+        "name" => WorkflowDefinitionSortBy.Name,
+        "lastmodifiedat" => WorkflowDefinitionSortBy.LastModifiedAt,
+        "createdat" => WorkflowDefinitionSortBy.CreatedAt,
+        _ => throw new ArgumentException("sortBy must be one of: name, lastModifiedAt, createdAt.", nameof(sortBy))
+        };
+    }
+
+    private static WorkflowDefinitionSortDirection ParseSortDirection(string? sortDirection)
+    {
+        if (string.IsNullOrWhiteSpace(sortDirection))
+            return WorkflowDefinitionSortDirection.Asc;
+
+        return sortDirection.ToLowerInvariant() switch
+        {
+        "asc" => WorkflowDefinitionSortDirection.Asc,
+        "desc" => WorkflowDefinitionSortDirection.Desc,
+        _ => throw new ArgumentException("sortDirection must be either asc or desc.", nameof(sortDirection))
+        };
     }
 }

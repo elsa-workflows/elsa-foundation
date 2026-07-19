@@ -102,6 +102,7 @@ public sealed class WorkflowLifecycleHandlerTests
         public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => Task.FromResult(definition);
         public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => Task.FromResult<WorkflowDefinition?>(definition);
         public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<WorkflowDefinition>>([definition]);
+        public Task<WorkflowDefinitionPage> ListPageAsync(WorkflowDefinitionListQuery query, CancellationToken cancellationToken = default) => Task.FromResult(new WorkflowDefinitionPage([definition], 1));
     }
 
     private sealed class RecordingSaveDefinitionCommand : ISaveWorkflowDefinitionCommand

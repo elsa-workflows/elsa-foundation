@@ -1,4 +1,5 @@
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -9,6 +10,8 @@ internal sealed class WorkflowDefinitionConfiguration : IEntityTypeConfiguration
     public void Configure(EntityTypeBuilder<WorkflowDefinition> builder)
     {
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).HasMaxLength(WorkflowDefinitionConstraints.MaximumIdLength);
+        builder.Property(x => x.Name).HasMaxLength(WorkflowDefinitionConstraints.MaximumNameLength);
 
         // The Draft → Definition relationship is configured on the child side
         // (WorkflowDefinitionDraftConfiguration). The Definition no longer holds an inverse

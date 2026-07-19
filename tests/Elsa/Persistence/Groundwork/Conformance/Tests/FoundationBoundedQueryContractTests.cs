@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -5,6 +6,8 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.Groundwork;
@@ -15,6 +18,11 @@ using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Groundwork;
+using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Scoping;
@@ -226,6 +234,285 @@ public sealed class FoundationBoundedQueryContractTests
 
         Assert.Single((await otherTenant.ListPageAsync(Request(skip: 0))).Items);
         Assert.Equal(2, (await repository.ListPageAsync(Request(skip: 0))).TotalCount);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_pages_execute_through_the_declared_physical_route_before_materialization(
+        string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients);
+        await driver.ResetPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]);
+
+        await using var client = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        var bounded = Record(client);
+        var definitions = new GroundworkWorkflowDefinitionStore(client.DocumentStore, bounded);
+        foreach (var index in Enumerable.Range(0, 105).Reverse())
+        {
+            var definition = new WorkflowDefinition
+            {
+                Id = $"definition-{index:D3}",
+                Name = $"definition-{index:D3}"
+            };
+            await client.DocumentStore.SaveAsync(new SaveDocumentRequest(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                definition.Id,
+                WorkflowsDesignStorageManifest.SchemaVersion,
+                JsonSerializer.Serialize(
+                    new GroundworkDocument<WorkflowDefinition>(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                        definition),
+                    GroundworkDesignJson.Options)));
+        }
+
+        var page = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter(),
+            WorkflowDefinitionLifecycleScope.All,
+            WorkflowDefinitionSortBy.Name,
+            WorkflowDefinitionSortDirection.Asc,
+            Page: 2,
+            PageSize: 2));
+
+        Assert.Equal(105, page.TotalCount);
+        Assert.Equal(["definition-002", "definition-003"], page.Items.Select(definition => definition.Id));
+        var observation = Assert.Single(bounded.Observations);
+        Assert.Equal(WorkflowsDesignStorageManifest.PageByNameQuery, observation.Query.QueryIdentity);
+        Assert.Equal(2, observation.Query.Skip);
+        Assert.Equal(2, observation.Query.Take);
+        Assert.InRange(observation.MaterializedDocuments, 0, 2);
+        Assert.Equal(105, observation.TotalCount);
+        Assert.Collection(
+            observation.Query.Order,
+            order => AssertOrder(order, WorkflowsDesignStorageManifest.WorkflowDefinitionNameField),
+            order => AssertOrder(order, WorkflowsDesignStorageManifest.WorkflowDefinitionIdField));
+
+        foreach (var id in new[] { "duplicate-a", "duplicate-b" })
+        {
+            await client.DocumentStore.SaveAsync(new SaveDocumentRequest(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                id,
+                WorkflowsDesignStorageManifest.SchemaVersion,
+                JsonSerializer.Serialize(
+                    new GroundworkDocument<WorkflowDefinition>(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                        new WorkflowDefinition { Id = id, Name = "zeta" }),
+                    GroundworkDesignJson.Options)));
+        }
+
+        var descending = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter(),
+            WorkflowDefinitionLifecycleScope.All,
+            WorkflowDefinitionSortBy.Name,
+            WorkflowDefinitionSortDirection.Desc,
+            Page: 1,
+            PageSize: 3));
+
+        Assert.Equal(["duplicate-a", "duplicate-b", "definition-104"], descending.Items.Select(definition => definition.Id));
+        var descendingObservation = bounded.Observations[^1];
+        Assert.Equal(WorkflowsDesignStorageManifest.PageByNameDescendingQuery, descendingObservation.Query.QueryIdentity);
+        Assert.Equal(3, descendingObservation.Query.Take);
+        Assert.InRange(descendingObservation.MaterializedDocuments, 0, 3);
+        Assert.Collection(
+            descendingObservation.Query.Order,
+            order => AssertOrder(order, WorkflowsDesignStorageManifest.WorkflowDefinitionNameField, PhysicalSortDirection.Descending),
+            order => AssertOrder(order, WorkflowsDesignStorageManifest.WorkflowDefinitionIdField));
+
+        await SaveWorkflowDefinitionAsync(
+            client.DocumentStore,
+            new WorkflowDefinition { Id = "invoice-active", Name = "Invoice Case" });
+        await SaveWorkflowDefinitionAsync(
+            client.DocumentStore,
+            new WorkflowDefinition { Id = "invoice-deleted", Name = "Invoice Deleted", DeletedAt = Now });
+
+        var mixedCaseSearch = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter { SearchTerm = "iNvOiCe" },
+            WorkflowDefinitionLifecycleScope.Active,
+            WorkflowDefinitionSortBy.Name,
+            WorkflowDefinitionSortDirection.Asc,
+            Page: 1,
+            PageSize: 10));
+        var deleted = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter(),
+            WorkflowDefinitionLifecycleScope.Deleted,
+            WorkflowDefinitionSortBy.Name,
+            WorkflowDefinitionSortDirection.Asc,
+            Page: 1,
+            PageSize: 10));
+        var legacy = await definitions.ListAsync(new WorkflowDefinitionFilter { Id = "invoice-active" });
+
+        Assert.Equal(["invoice-active"], mixedCaseSearch.Items.Select(definition => definition.Id));
+        Assert.Equal(["invoice-deleted"], deleted.Items.Select(definition => definition.Id));
+        Assert.Equal(["invoice-active"], legacy.Select(definition => definition.Id));
+
+        await using (var otherTenant = await driver.OpenPhysicalClientAsync(Access("tenant-b")))
+        {
+            await SaveWorkflowDefinitionAsync(
+                otherTenant.DocumentStore,
+                new WorkflowDefinition { Id = "tenant-b-only", Name = "Tenant B Invoice" });
+            var tenantBDefinitions = new GroundworkWorkflowDefinitionStore(
+                otherTenant.DocumentStore,
+                otherTenant.BoundedDocumentStore);
+            Assert.Equal(
+                ["tenant-b-only"],
+                (await tenantBDefinitions.ListPageAsync(new WorkflowDefinitionListQuery(
+                    new WorkflowDefinitionFilter(),
+                    WorkflowDefinitionLifecycleScope.All,
+                    WorkflowDefinitionSortBy.Name,
+                    WorkflowDefinitionSortDirection.Asc,
+                    Page: 1,
+                    PageSize: 10))).Items.Select(definition => definition.Id));
+        }
+
+        Assert.Equal(
+            109,
+            (await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+                new WorkflowDefinitionFilter(),
+                WorkflowDefinitionLifecycleScope.All,
+                WorkflowDefinitionSortBy.Name,
+                WorkflowDefinitionSortDirection.Asc,
+                Page: 1,
+                PageSize: 1))).TotalCount);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_projection_upgrade_backfills_documents_written_under_the_legacy_manifest(
+        string providerKey)
+    {
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        driver.Descriptor.Topology.EnsureSupports(
+            GroundworkTopologyCapabilities.PersistentStorage |
+            GroundworkTopologyCapabilities.IndependentClients);
+
+        await driver.ResetPhysicalAsync([new LegacyWorkflowDesignManifestSource()]);
+        await using (var legacyClient = await driver.OpenPhysicalClientAsync(Access("tenant-a")))
+        {
+            var definition = new WorkflowDefinition { Id = "pre-upgrade", Name = "Pre Upgrade" };
+            await legacyClient.DocumentStore.SaveAsync(new SaveDocumentRequest(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                definition.Id,
+                "1.0.0",
+                JsonSerializer.Serialize(
+                    new GroundworkDocument<WorkflowDefinition>(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                        definition),
+                    GroundworkDesignJson.Options)));
+        }
+
+        await driver.ApplyPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]);
+        await using var upgradedClient = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        var definitions = new GroundworkWorkflowDefinitionStore(
+            upgradedClient.DocumentStore,
+            upgradedClient.BoundedDocumentStore);
+
+        var page = await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter(),
+            WorkflowDefinitionLifecycleScope.All,
+            WorkflowDefinitionSortBy.Name,
+            WorkflowDefinitionSortDirection.Asc,
+            Page: 1,
+            PageSize: 10));
+
+        Assert.Equal(1, page.TotalCount);
+        Assert.Equal("pre-upgrade", Assert.Single(page.Items).Id);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_projection_upgrade_accepts_the_128_character_boundary(string providerKey)
+    {
+        var id = new string('i', WorkflowDefinitionConstraints.MaximumIdLength);
+        var name = new string('n', WorkflowDefinitionConstraints.MaximumNameLength);
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        await driver.ResetPhysicalAsync([new LegacyWorkflowDesignManifestSource()]);
+        await using (var legacyClient = await driver.OpenPhysicalClientAsync(Access("tenant-a")))
+            await SaveWorkflowDefinitionAsync(legacyClient.DocumentStore, new WorkflowDefinition { Id = id, Name = name });
+
+        await driver.ApplyPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]);
+        await using var upgradedClient = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        var definitions = new GroundworkWorkflowDefinitionStore(upgradedClient.DocumentStore, upgradedClient.BoundedDocumentStore);
+        Assert.Equal(id, Assert.Single((await definitions.ListPageAsync(new WorkflowDefinitionListQuery(
+            new WorkflowDefinitionFilter { Id = id }, WorkflowDefinitionLifecycleScope.All,
+            WorkflowDefinitionSortBy.Name, WorkflowDefinitionSortDirection.Asc, 1, 10))).Items).Id);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_projection_upgrade_rejects_129_character_legacy_values_without_data_loss(string providerKey)
+    {
+        var id = new string('i', WorkflowDefinitionConstraints.MaximumIdLength + 1);
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        await driver.ResetPhysicalAsync([new LegacyWorkflowDesignManifestSource()]);
+        await using (var legacyClient = await driver.OpenPhysicalClientAsync(Access("tenant-a")))
+            await SaveWorkflowDefinitionAsync(legacyClient.DocumentStore, new WorkflowDefinition { Id = id, Name = "Legacy" });
+
+        var exception = await Assert.ThrowsAsync<PhysicalProjectionValueValidationException>(() =>
+            driver.ApplyPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]).AsTask());
+        Assert.Equal("GW-PHYSICAL-037", exception.Diagnostic.Code);
+        Assert.Equal("projectedColumns.entity.id", exception.Diagnostic.Target);
+
+        await using var legacyClientAfterRejection = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        var preserved = await legacyClientAfterRejection.DocumentStore.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            id);
+        Assert.NotNull(preserved);
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task Workflow_definition_projection_upgrade_rejects_129_character_legacy_names_without_data_loss(string providerKey)
+    {
+        const string id = "legacy-name-overflow";
+        var name = new string('n', WorkflowDefinitionConstraints.MaximumNameLength + 1);
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        await driver.ResetPhysicalAsync([new LegacyWorkflowDesignManifestSource()]);
+        await using (var legacyClient = await driver.OpenPhysicalClientAsync(Access("tenant-a")))
+            await SaveWorkflowDefinitionAsync(legacyClient.DocumentStore, new WorkflowDefinition { Id = id, Name = name });
+
+        var exception = await Assert.ThrowsAsync<PhysicalProjectionValueValidationException>(() =>
+            driver.ApplyPhysicalAsync([new WorkflowsDesignGroundworkStorageManifestSource()]).AsTask());
+        Assert.Equal("GW-PHYSICAL-037", exception.Diagnostic.Code);
+        Assert.Equal("projectedColumns.entity.name", exception.Diagnostic.Target);
+
+        await using var legacyClientAfterRejection = await driver.OpenPhysicalClientAsync(Access("tenant-a"));
+        var preserved = await legacyClientAfterRejection.DocumentStore.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            id);
+        Assert.NotNull(preserved);
+    }
+
+    private sealed class LegacyWorkflowDesignManifestSource : IGroundworkStorageManifestSource
+    {
+        public string FeatureIdentity => "elsa-workflows-design";
+
+        public async ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var current = await new WorkflowsDesignGroundworkStorageManifestSource()
+                .CreateDeclarationAsync(cancellationToken);
+            var legacy = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(current.Manifest with
+            {
+                Version = new global::Groundwork.Core.Manifests.StorageManifestVersion("1.0.0"),
+                StorageUnits = current.Manifest.StorageUnits
+                    .Select(unit => unit with { PhysicalStorage = null })
+                    .ToArray()
+            });
+            return new GroundworkStorageManifestDeclaration(
+                FeatureIdentity,
+                legacy,
+                current.RequiredStoreContracts,
+                current.RequiredRoutes,
+                current.TopologyRequirements,
+                current.CoverageRows);
+        }
     }
 
     [Theory]
@@ -464,6 +751,17 @@ public sealed class FoundationBoundedQueryContractTests
 
     private static DocumentStoreAccess Access(string scope) =>
         DocumentStoreAccess.Scoped(new StorageScope(scope));
+
+    private static async Task SaveWorkflowDefinitionAsync(IDocumentStore store, WorkflowDefinition definition) =>
+        _ = await store.SaveAsync(new SaveDocumentRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            definition.Id,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            JsonSerializer.Serialize(
+                new GroundworkDocument<WorkflowDefinition>(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                    definition),
+                GroundworkDesignJson.Options)));
 
     private static FixedAccessContextAccessor Accessor(string scope) =>
         new(PersistenceAccessContext.Scoped(new PersistenceScope(scope)));
