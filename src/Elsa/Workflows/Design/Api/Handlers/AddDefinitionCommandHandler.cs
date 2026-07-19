@@ -18,6 +18,8 @@ public sealed class AddDefinitionCommandHandler(
 {
     public async Task<WorkflowDefinitionDetailsView> Handle(AddDefinition command, CancellationToken cancellationToken)
     {
+        if (command.FolderId is { } folderId)
+            WorkflowFolderNames.ValidateIdentifier(folderId, nameof(command.FolderId));
         var definition = definitionFactory.Create(command.Name, command.Description);
         var draft = draftFactory.Create(definition.Id, (command.InitialState ?? new WorkflowDefinitionStateView()).ToState());
         var draftEntity = WorkflowDefinitionDraft.From(draft);
@@ -32,8 +34,6 @@ public sealed class AddDefinitionCommandHandler(
             .ToArray();
 
         var persistenceDefinition = WorkflowDefinition.From(definition);
-        if (command.FolderId is { } folderId)
-            WorkflowFolderNames.ValidateIdentifier(folderId, nameof(command.FolderId));
         persistenceDefinition.FolderId = command.FolderId;
         await addCommand.Execute(
             persistenceDefinition,
