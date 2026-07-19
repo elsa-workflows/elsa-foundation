@@ -7,6 +7,8 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
+using Groundwork.Core.Indexing;
+using Groundwork.Core.Manifests;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +40,16 @@ public sealed class GroundworkWorkflowDefinitionPageStoreTests
             query.Identity == WorkflowsDesignStorageManifest.SearchWorkflowDefinitionsQuery);
         Assert.Equal(BoundedQueryExecutionClass.Ordinary, search.ExecutionClass);
         Assert.Equal(QueryPagingSupport.Cursor, search.PagingSupport);
+        Assert.All(
+            new[] { route, search },
+            declaration =>
+            {
+                var lifecycle = Assert.Single(
+                    declaration.ResidualPredicateFields!,
+                    field => field.Path == WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField);
+                Assert.Contains(PortableQueryOperation.Equal, lifecycle.Operations);
+                Assert.Contains(PortableQueryOperation.NotEqual, lifecycle.Operations);
+            });
     }
 
     [Fact]
@@ -93,6 +105,7 @@ public sealed class GroundworkWorkflowDefinitionPageStoreTests
 
         foreach (var definition in new[] { Definition("d", 0), Definition("b", 0), Definition("a", 0), Definition("c", -1) })
             await SaveAsync(documentStore, definition);
+        await SaveAsync(documentStore, Definition("deleted-123", -2, deleted: true));
 
         var first = await store.QueryPageAsync(new WorkflowDefinitionPageQuery(2));
         var second = await store.QueryPageAsync(new WorkflowDefinitionPageQuery(2, ContinuationToken: first.NextContinuationToken));
@@ -101,6 +114,13 @@ public sealed class GroundworkWorkflowDefinitionPageStoreTests
         Assert.Equal(["d", "c"], second.Items.Select(item => item.Id));
         Assert.NotNull(first.NextContinuationToken);
         Assert.Null(second.NextContinuationToken);
+
+        var deleted = await store.QueryPageAsync(
+            new WorkflowDefinitionPageQuery(2, State: WorkflowDefinitionPageState.Deleted));
+        var searchedDeleted = await store.QueryPageAsync(
+            new WorkflowDefinitionPageQuery(2, SearchTerm: "123", State: WorkflowDefinitionPageState.Deleted));
+        Assert.Equal(["deleted-123"], deleted.Items.Select(item => item.Id));
+        Assert.Equal(["deleted-123"], searchedDeleted.Items.Select(item => item.Id));
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
             store.QueryPageAsync(new WorkflowDefinitionPageQuery(2, SearchTerm: "other", ContinuationToken: first.NextContinuationToken)));
@@ -120,11 +140,14 @@ public sealed class GroundworkWorkflowDefinitionPageStoreTests
         return new GroundworkWorkflowDefinitionStore(documentStore, documentStore);
     }
 
-    private static WorkflowDefinition Definition(string id, int minuteOffset) => new()
+    private static WorkflowDefinition Definition(string id, int minuteOffset, bool deleted = false) => new()
     {
         Id = id,
         Name = id,
-        LastModifiedAt = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero).AddMinutes(minuteOffset)
+        LastModifiedAt = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero).AddMinutes(minuteOffset),
+        DeletedAt = deleted
+            ? new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero).AddMinutes(minuteOffset)
+            : null
     };
 
     private static Task SaveAsync(IDocumentStore documentStore, WorkflowDefinition definition)

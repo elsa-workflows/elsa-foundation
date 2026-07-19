@@ -6,6 +6,6 @@ namespace Elsa.Workflows.Design.Api.Requests;
 public sealed record ListWorkflowDefinitionPage(
     int? PageSize = null,
     string? ContinuationToken = null,
-    string? SearchTerm = null,
+    string? Search = null,
     string? State = null)
     : IRequest<WorkflowDefinitionPageView>;

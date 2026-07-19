@@ -124,7 +124,7 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Equal("design/workflows/definitions/page", relation.Href);
 
         var page = await host.Client.GetFromJsonAsync<WorkflowDefinitionPageView>(
-            "/design/workflows/definitions/page?pageSize=1&searchTerm=definition-42&state=deleted");
+            "/design/workflows/definitions/page?pageSize=1&search=definition-42&state=deleted");
         var item = Assert.Single(page!.Items);
         Assert.Equal("definition-42", item.Id);
         Assert.NotNull(item.DeletedAt);
@@ -140,7 +140,7 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Equal("application/problem+json", malformed.Content.Headers.ContentType?.MediaType);
 
         using var mismatched = await host.Client.GetAsync(
-            "/design/workflows/definitions/page?searchTerm=other&continuationToken=context-token");
+            "/design/workflows/definitions/page?search=other&continuationToken=context-token");
         Assert.Equal(HttpStatusCode.BadRequest, mismatched.StatusCode);
         Assert.Equal("application/problem+json", mismatched.Content.Headers.ContentType?.MediaType);
 

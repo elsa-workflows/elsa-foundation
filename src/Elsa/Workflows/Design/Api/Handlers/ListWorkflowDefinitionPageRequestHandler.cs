@@ -23,7 +23,7 @@ public sealed class ListWorkflowDefinitionPageRequestHandler(
             "Workflow-definition paging is unavailable because the active persistence provider has not admitted its bounded browse route.");
         var query = new WorkflowDefinitionPageQuery(
             Math.Clamp(request.PageSize ?? DefaultPageSize, 1, MaximumPageSize),
-            request.SearchTerm,
+            request.Search,
             ParseState(request.State),
             request.ContinuationToken);
         var page = await pageStore.QueryPageAsync(query, cancellationToken);

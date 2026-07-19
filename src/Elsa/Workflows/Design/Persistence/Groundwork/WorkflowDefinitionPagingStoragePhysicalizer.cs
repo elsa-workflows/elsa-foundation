@@ -17,8 +17,12 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
     private const string NameColumn = "name";
     private const string DescriptionColumn = "description";
 
-    private static readonly IReadOnlySet<PortableQueryOperation> Equal =
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal };
+    private static readonly IReadOnlySet<PortableQueryOperation> Lifecycle =
+        new HashSet<PortableQueryOperation>
+        {
+            PortableQueryOperation.Equal,
+            PortableQueryOperation.NotEqual
+        };
     private static readonly IReadOnlySet<PortableQueryOperation> Contains =
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Contains };
 
@@ -100,7 +104,7 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
             ],
             residualPredicateFields:
             [
-                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, IndexValueKind.String, Equal)
+                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, IndexValueKind.String, Lifecycle)
             ]);
         // Substring matching is finite and provider-materialization-bounded, but MongoDB cannot certify its
         // case-insensitive regex semantics as an indexed B-tree operation. Keep the no-search browse route
@@ -129,7 +133,7 @@ internal static class WorkflowDefinitionPagingStoragePhysicalizer
             ],
             residualPredicateFields:
             [
-                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, IndexValueKind.String, Equal),
+                Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDeletedAtField, IndexValueKind.String, Lifecycle),
                 Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionNameField, IndexValueKind.String, Contains),
                 Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionDescriptionField, IndexValueKind.String, Contains),
                 Residual(WorkflowsDesignStorageManifest.WorkflowDefinitionIdField, IndexValueKind.String, Contains)

@@ -52,7 +52,7 @@ public sealed class AuthoringEndpointContractTests
     {
         var (request, response) = EndpointContract("design/workflows/definitions/page");
 
-        AssertProperties(request, "PageSize", "ContinuationToken", "SearchTerm", "State");
+        AssertProperties(request, "PageSize", "ContinuationToken", "Search", "State");
         AssertProperties(response, "Items", "NextContinuationToken");
     }
 
