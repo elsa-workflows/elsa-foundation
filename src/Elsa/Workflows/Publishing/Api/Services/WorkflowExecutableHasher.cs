@@ -95,7 +95,8 @@ public sealed class WorkflowExecutableHasher
             _ => CanonicalJson(input.Value.LiteralValue)
         };
 
-        return $"{input.Key}:{FormatType(input.Value.TargetType)}:{FormatPolicy(input.Value.EffectivePolicy)}={payload}[{metadata}]";
+        var conversion = input.Value.ConversionPlan is null ? string.Empty : $":conversion={input.Value.ConversionPlan.Fingerprint}";
+        return $"{input.Key}:{FormatType(input.Value.TargetType)}:{FormatPolicy(input.Value.EffectivePolicy)}={payload}[{metadata}]{conversion}";
     }
 
     private static string FormatEnvelope(ValueEnvelope envelope)
@@ -149,8 +150,9 @@ public sealed class WorkflowExecutableHasher
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select(item => $"{item.Key}={item.Value}"));
         var schema = capture.Type.Schema?.GetRawText() ?? string.Empty;
+        var conversion = capture.ConversionPlan is null ? string.Empty : $":conversion={capture.ConversionPlan.Fingerprint}";
         return $"{output.Key}={capture.OutputName}:{capture.ValueId}:{capture.Type.Kind}:{capture.Type.Id}:{schema}:" +
-               $"{capture.Lifecycle}:{capture.Storage}:{capture.StorageDriverKey}:{capture.CaptureOnSuccessfulCompletion}[{metadata}]";
+               $"{capture.Lifecycle}:{capture.Storage}:{capture.StorageDriverKey}:{capture.CaptureOnSuccessfulCompletion}[{metadata}]{conversion}";
     }
 
     private static string FormatNode(ExecutableNode node)
@@ -282,9 +284,28 @@ public sealed class WorkflowExecutableHasher
             foreach (var (key, value) in binding.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal))
                 writer.WriteString(key, value);
             writer.WriteEndObject();
+            if (binding.ConversionPlan is not null)
+                writer.WriteString("conversionPlanFingerprint", binding.ConversionPlan.Fingerprint);
             writer.WriteEndObject();
         }
         writer.WriteEndArray();
+
+        var outputConversionPlans = node.OutputCaptures
+            .Where(output => output.Value.ConversionPlan is not null)
+            .OrderBy(output => output.Key, StringComparer.Ordinal)
+            .ToArray();
+        if (outputConversionPlans.Length > 0)
+        {
+            writer.WriteStartArray("outputConversionPlans");
+            foreach (var (outputName, capture) in outputConversionPlans)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", outputName);
+                writer.WriteString("fingerprint", capture.ConversionPlan!.Fingerprint);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+        }
 
         writer.WriteStartArray("childSlots");
         foreach (var slot in node.ChildSlots.OrderBy(slot => slot.Name, StringComparer.Ordinal))

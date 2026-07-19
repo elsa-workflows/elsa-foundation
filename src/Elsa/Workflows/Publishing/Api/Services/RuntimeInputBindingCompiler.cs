@@ -17,7 +17,9 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// <see cref="WorkflowExecutableCompiler"/> (W30b, #418) so binding compilation is independently
 /// unit-testable and can evolve without touching activity-tree compilation.
 /// </summary>
-public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnownTypeRegistry)
+public sealed class RuntimeInputBindingCompiler(
+    IWellKnownTypeRegistry wellKnownTypeRegistry,
+    ValueConversionPlanResolver? conversionPlanResolver = null)
 {
     private const string LiteralExpressionType = "Literal";
     private const string ObjectExpressionType = "Object";
@@ -26,6 +28,8 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
     private const string ActivityResultExpressionType = "ActivityResult";
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
+
+    private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new();
 
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentState state)
     {
@@ -204,7 +208,11 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             literal: converted is null
                 ? ValueEnvelope.Null(targetType, policy)
                 : ValueEnvelope.Inline(targetType, literal, policy),
-            metadata: BuildInputMetadata(inputDefinition));
+            metadata: BuildInputMetadata(inputDefinition),
+            conversionPlan: resolvedConversionPlanResolver.Resolve(
+                targetType,
+                ValueRepresentationDefaults.Infer(targetType),
+                targetType));
     }
 
     private RuntimeInputBinding CompileObjectInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, ValueProtectionPolicy policy)
@@ -243,7 +251,11 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
                 literal: converted is null
                     ? ValueEnvelope.Null(targetType, policy)
                     : ValueEnvelope.Inline(targetType, literal, policy),
-                metadata: BuildInputMetadata(inputDefinition));
+                metadata: BuildInputMetadata(inputDefinition),
+                conversionPlan: resolvedConversionPlanResolver.Resolve(
+                    targetType,
+                    ValueRepresentationDefaults.Infer(targetType),
+                    targetType));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {

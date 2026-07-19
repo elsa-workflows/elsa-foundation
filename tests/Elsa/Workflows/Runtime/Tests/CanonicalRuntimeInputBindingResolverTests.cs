@@ -56,6 +56,51 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     }
 
     [Fact]
+    public async Task Direct_result_conversion_preserves_the_pinned_source_contract_until_materialization()
+    {
+        var sourceType = new ValueTypeDescriptor("System.UInt32");
+        var targetType = new ValueTypeDescriptor("System.Int64");
+        var plan = new ValueConversionPlan(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.TypedValue,
+            sourceType,
+            targetType,
+            ValueConversionMode.Auto,
+            ValueConversionOperation.NumericWidening,
+            profile: null,
+            limits: null,
+            options: null);
+        var producer = CompletedProducer(ValueEnvelope.Inline(
+            new ValueTypeDescriptor("test/result"),
+            JsonSerializer.SerializeToElement(new { customerId = 7U }),
+            ValueProtectionPolicy.InstanceInline));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            targetType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("producer", "customer-id", "scope:root"),
+            conversionPlan: plan);
+        var context = NewContext(
+            consumer: consumer,
+            runtimeView: [producer, consumer],
+            executable: NewProducerExecutable(projectionType: sourceType));
+
+        var resolved = _resolver.Resolve(binding, context);
+        var snapshot = await new RuntimeActivityInputMaterializer(_resolver)
+            .MaterializeSnapshotAsync(
+                NewConsumerNode(binding, inputType: targetType),
+                consumer.InvocationId,
+                context,
+                DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(sourceType, resolved.Envelope!.Type);
+        Assert.Equal(targetType, snapshot.Values["customer-id"].Type);
+        Assert.Equal(7U, snapshot.Values["customer-id"].InlineValue!.Value.GetUInt32());
+    }
+
+    [Fact]
     public void Resolve_result_projection_preserves_source_protection_policy()
     {
         var policy = new ValueProtectionPolicy(
@@ -296,7 +341,9 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             runtimeView: runtimeView,
             executable: executable);
 
-    private static WorkflowExecutable NewProducerExecutable(ActivityValuePolicy? projectionPolicy = null)
+    private static WorkflowExecutable NewProducerExecutable(
+        ActivityValuePolicy? projectionPolicy = null,
+        ValueTypeDescriptor? projectionType = null)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "producer" });
         var contract = new ActivityContract(
@@ -309,7 +356,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
                 new ValueTypeDescriptor("test/result"),
                 true,
                 ActivityValuePolicy.Default,
-                [new ActivityResultProjectionContract("customer-id", "customerId", StringType, true, projectionPolicy ?? ActivityValuePolicy.Default)]),
+                [new ActivityResultProjectionContract("customer-id", "customerId", projectionType ?? StringType, true, projectionPolicy ?? ActivityValuePolicy.Default)]),
             ["Done"],
             new ActivityActivationRequirement("test", "test/producer"));
         var node = new ExecutableNode(
@@ -330,7 +377,10 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             new Dictionary<string, string>());
     }
 
-    private static ExecutableNode NewConsumerNode(RuntimeInputBinding binding, bool isRequired = true)
+    private static ExecutableNode NewConsumerNode(
+        RuntimeInputBinding binding,
+        bool isRequired = true,
+        ValueTypeDescriptor? inputType = null)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "consumer" });
         var contract = new ActivityContract(
@@ -338,7 +388,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             "1.0.0",
             "test",
             descriptor,
-            [new ActivityInputContract("customer-id", "Customer ID", StringType, isRequired, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract("customer-id", "Customer ID", inputType ?? StringType, isRequired, false, null, ActivityValuePolicy.Default)],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/consumer"));

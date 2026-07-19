@@ -36,7 +36,8 @@ public sealed record ActivityOutputContractView(
     string? Category = null,
     float Order = 0,
     string? UiHint = null,
-    JsonElement? UiSpecifications = null);
+    JsonElement? UiSpecifications = null,
+    ValueRepresentation? SourceRepresentation = null);
 
 public sealed record ActivityOutcomeContractView(
     string ReferenceKey,
@@ -67,7 +68,8 @@ public static class ActivityContractViewMappings
             x.Category,
             x.Order,
             x.UiHint,
-            Clone(x.UiSpecifications))).ToArray(),
+            Clone(x.UiSpecifications),
+            x.SourceRepresentation)).ToArray(),
         view.Outputs.Select(x => new ActivityOutputContract(
             x.ReferenceKey,
             x.Name,
@@ -80,7 +82,8 @@ public static class ActivityContractViewMappings
             x.Category,
             x.Order,
             x.UiHint,
-            Clone(x.UiSpecifications))).ToArray(),
+            Clone(x.UiSpecifications),
+            x.SourceRepresentation)).ToArray(),
         view.Outcomes.Select(x => new ActivityOutcomeContract(x.ReferenceKey, x.Name, x.IsEmitted, x.Description)).ToArray());
 
     public static ActivityContractView ToView(this ActivityContract contract) => new(

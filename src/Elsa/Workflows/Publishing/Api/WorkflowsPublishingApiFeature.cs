@@ -76,6 +76,9 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
         // W30b (#418): WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
         // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
+        services.TryAddSingleton<IValueConversionProfileRegistry>(BuiltInValueConversionProfileRegistry.Instance);
+        services.TryAddScoped<ValueConversionPlanResolver>();
+        services.TryAddScoped<ActivityResultConversionPlanLinker>();
         services.TryAddScoped<RuntimeInputBindingCompiler>();
         services.TryAddScoped<RuntimeOutputCaptureCompiler>();
         services.TryAddScoped<WorkflowExecutableHasher>();
