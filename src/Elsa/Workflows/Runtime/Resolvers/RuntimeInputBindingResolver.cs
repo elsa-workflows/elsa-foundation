@@ -44,7 +44,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         {
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
-                Envelope = Retype(envelope, binding.TargetType)
+                Envelope = Retype(envelope, binding.ConversionPlan?.SourceType ?? binding.TargetType)
             };
         }
 
@@ -157,7 +157,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
     {
         if (string.IsNullOrWhiteSpace(reference.Path))
         {
-            var wholeEnvelope = Retype(source, binding.TargetType);
+            var wholeEnvelope = Retype(source, binding.ConversionPlan?.SourceType ?? binding.TargetType);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = wholeEnvelope
@@ -185,8 +185,8 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         }
 
         var envelope = json.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-            ? ValueEnvelope.Null(binding.TargetType, source.Policy)
-            : ValueEnvelope.Inline(binding.TargetType, json, source.Policy);
+            ? ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, source.Policy)
+            : ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, json, source.Policy);
         return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
         {
             Envelope = envelope

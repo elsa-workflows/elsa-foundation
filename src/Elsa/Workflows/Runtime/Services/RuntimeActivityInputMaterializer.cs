@@ -33,7 +33,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
         _inputBindingResolver = inputBindingResolver;
         _valueConversionExecutor = new RuntimeValueConversionExecutor();
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: null);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: null, _valueConversionExecutor);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore: null);
     }
 
@@ -47,7 +47,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _inputBindingResolver = inputBindingResolver;
         _valueConversionExecutor = new RuntimeValueConversionExecutor();
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -63,7 +63,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _valueConversionExecutor = new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -81,7 +81,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _valueConversionExecutor = new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -101,7 +101,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
         _valueConversionExecutor = valueConversionExecutor;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -160,11 +160,12 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {
-            var type = ResolveInputType(binding, node.ExecutableNodeId, input.Key);
+            var expressionType = binding.ConversionPlan?.SourceType ?? binding.TargetType;
+            var type = ResolveType(expressionType, node.ExecutableNodeId, input.Key);
             var evaluated = await EvaluateExpressionAsync(
                 resolved,
                 type,
-                binding.TargetType,
+                expressionType,
                 binding.EffectivePolicy,
                 node.ExecutableNodeId,
                 input.Key,
@@ -175,9 +176,9 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 type);
             var expressionPolicy = evaluated.EffectivePolicy ?? binding.EffectivePolicy;
             var envelope = materialized is null
-                ? ValueEnvelope.Null(binding.TargetType, expressionPolicy)
+                ? ValueEnvelope.Null(expressionType, expressionPolicy)
                 : ValueEnvelope.Inline(
-                    binding.TargetType,
+                    expressionType,
                     JsonSerializer.SerializeToElement(materialized, materialized.GetType()),
                     expressionPolicy);
             return await ApplyDestinationStorageAsync(
@@ -496,18 +497,23 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
     private Type ResolveInputType(RuntimeInputBinding binding, string nodeId, string inputName)
     {
-        if (binding.TargetType.Alias == "Elsa.Any")
+        return ResolveType(binding.TargetType, nodeId, inputName);
+    }
+
+    private Type ResolveType(ValueTypeDescriptor descriptor, string nodeId, string inputName)
+    {
+        if (descriptor.Alias == "Elsa.Any")
             return typeof(object);
         if (_wellKnownTypeRegistry is null)
-            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares portable type alias '{binding.TargetType.Alias}', but no well-known type registry was supplied.");
+            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares portable type alias '{descriptor.Alias}', but no well-known type registry was supplied.");
 
-        var typeReference = binding.TargetType.ToTypeReference();
+        var typeReference = descriptor.ToTypeReference();
         var resolvedType = TypeReferenceFactory.Resolve(
             typeReference,
             alias => _wellKnownTypeRegistry.TryGetTypeOrDefault(alias, out var type) ? type : typeof(object));
 
-        if (resolvedType == typeof(object) && !string.Equals(binding.TargetType.Alias, "Object", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares unknown portable type alias '{binding.TargetType.Alias}'.");
+        if (resolvedType == typeof(object) && !string.Equals(descriptor.Alias, "Object", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares unknown portable type alias '{descriptor.Alias}'.");
 
         return resolvedType;
     }

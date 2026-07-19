@@ -16,8 +16,11 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// </summary>
 internal sealed class RuntimePortableExpressionEvaluator(
     IPortableExpressionEvaluator? portableExpressionEvaluator,
-    IExternalPayloadStore? externalPayloadStore)
+    IExternalPayloadStore? externalPayloadStore,
+    IRuntimeValueConversionExecutor? valueConversionExecutor = null)
 {
+    private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
+
     public async ValueTask<PortableExpressionEvaluation> EvaluateAsync(
         RuntimeExpressionBinding expression,
         ValueTypeDescriptor targetType,
@@ -141,19 +144,49 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 ActivityResultExpressionParameterBinding result => await ReadActivityResultParameterAsync(result, context, name, nodeId, inputName, cancellationToken),
                 _ => throw new InvalidOperationException($"Portable expression parameter '{name}' on input '{inputName}' uses unsupported binding type '{binding.GetType().Name}'.")
             };
-            values.Add(name, parameter.Value);
-            if (parameter.Policy is not null)
+            var materialized = ApplyParameterConversionPlan(expression, name, parameter, nodeId, inputName);
+            values.Add(name, materialized.Value);
+            if (materialized.Policy is not null)
             {
                 dependencyPolicy = dependencyPolicy is null
-                    ? parameter.Policy
+                    ? materialized.Policy
                     : ValuePolicyCombiner.Combine(
                         dependencyPolicy,
-                        parameter.Policy,
+                        materialized.Policy,
                         $"Portable expression input '{inputName}' on executable node '{nodeId}'");
             }
         }
 
         return new PortableExpressionParameters(values, dependencyPolicy);
+    }
+
+    private PortableExpressionParameter ApplyParameterConversionPlan(
+        RuntimeExpressionBinding expression,
+        string parameterName,
+        PortableExpressionParameter parameter,
+        string nodeId,
+        string inputName)
+    {
+        if (!expression.ParameterConversionPlans.TryGetValue(parameterName, out var plan))
+            return parameter;
+
+        var policy = parameter.Policy ?? ValueProtectionPolicy.InstanceInline;
+        var source = parameter.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            ? ValueEnvelope.Null(plan.SourceType, policy)
+            : ValueEnvelope.Inline(plan.SourceType, parameter.Value, policy);
+        var converted = _valueConversionExecutor.Convert(source, plan);
+        if (converted.Presence == ValuePresence.Absent)
+            throw NewParameterException(parameterName, nodeId, inputName, "converted to an absent value");
+        if (converted.ExternalReference is not null)
+            throw NewParameterException(parameterName, nodeId, inputName, "converted to an external payload that cannot cross the portable expression boundary");
+        if (converted.Policy.Lifecycle == DurableValueLifecycle.None)
+            throw NewParameterException(parameterName, nodeId, inputName, "converted to a transient value that cannot cross the durable expression boundary");
+        if (converted.Presence == ValuePresence.ExplicitNull)
+            return new PortableExpressionParameter(JsonSerializer.SerializeToElement<object?>(null), converted.Policy);
+        if (converted.InlineValue is not { } value)
+            throw NewParameterException(parameterName, nodeId, inputName, "converted without an inline payload");
+
+        return new PortableExpressionParameter(value.Clone(), converted.Policy);
     }
 
     private static JsonElement ReadLiteralParameter(
