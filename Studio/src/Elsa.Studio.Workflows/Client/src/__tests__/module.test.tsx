@@ -309,6 +309,38 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("preserves paged selection across search and page-size changes but resets it for lifecycle changes", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response({
+      items: [definition()],
+      nextContinuationToken: null
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await waitForText(container, "1 selected");
+
+    await fill(container.querySelector<HTMLInputElement>('input[placeholder="Search definitions"]'), "Hello");
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("search=Hello"))).toBe(true));
+    expect(container.textContent).toContain("1 selected");
+    expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
+
+    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("pageSize=25"))).toBe(true));
+    expect(container.textContent).toContain("1 selected");
+    expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
+
+    await click(buttonByText(container, "Deleted"));
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("state=deleted"))).toBe(true));
+    expect(container.textContent).not.toContain("1 selected");
+    expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(false);
+
+    await unmount();
+  });
+
   it("opens the workflow editor when a definition row is clicked", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

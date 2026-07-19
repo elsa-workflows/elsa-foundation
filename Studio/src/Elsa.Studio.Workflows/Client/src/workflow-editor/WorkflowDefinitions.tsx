@@ -174,14 +174,12 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
     setSearch(value);
     setPage(1);
     setNextContinuationTokens({});
-    clearSelection();
   };
 
   const changePageSize = (value: number) => {
     setPageSize(value);
     setPage(1);
     setNextContinuationTokens({});
-    clearSelection();
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
