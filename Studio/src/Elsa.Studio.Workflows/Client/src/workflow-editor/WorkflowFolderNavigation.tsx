@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, Folder, FolderPen, FolderPlus, Menu, Move, Trash2, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, workflowFoldersPath } from "../api/workflowDesign";
+import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, isWorkflowFolderBrowsingAvailable } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 import { getDialogs } from "./dialogs";
 import { useDialogFocus } from "./useDialogFocus";
@@ -14,14 +14,12 @@ export function selectedFolderId(selection: WorkflowFolderSelection) {
   return typeof selection === "object" ? selection.id : null;
 }
 
-export function WorkflowFolderNavigation({ context, selection, onSelect, onAvailable, onFoldersMutated, refreshKey = 0 }: {
+export function WorkflowFolderNavigation({ context, selection, onSelect, onAvailable, onFoldersMutated }: {
   context: StudioEndpointContext;
   selection: WorkflowFolderSelection;
   onSelect(selection: WorkflowFolderSelection): void;
   onAvailable(available: boolean): void;
   onFoldersMutated?(selection?: WorkflowFolderSelection): Promise<void> | void;
-  /** Refreshes loaded folder projections without remounting the tree or discarding its expansion state. */
-  refreshKey?: number;
 }) {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -37,7 +35,6 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const [status, setStatus] = useState("");
   const [pendingChildFocusId, setPendingChildFocusId] = useState<string | null>(null);
   const keyboardExpansionIntents = useRef(new Set<string>());
-  const appliedRefreshKey = useRef(refreshKey);
   const folderPickerButtonRef = useRef<HTMLButtonElement>(null);
   const renameButtonRef = useRef<HTMLButtonElement>(null);
   const moveButtonRef = useRef<HTMLButtonElement>(null);
@@ -45,7 +42,6 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     roots,
     children,
     continuations,
-    loadedKeys,
     loadingKeys,
     loadFailures,
     loadPage: loadFolderPage,
@@ -54,9 +50,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
 
   useEffect(() => {
     let cancelled = false;
-    void workflowFoldersPath(context).then(root => {
+    void isWorkflowFolderBrowsingAvailable(context).then(enabled => {
       if (cancelled) return;
-      const enabled = !!root;
       setAvailable(enabled);
       onAvailable(enabled);
       if (enabled) void loadFolderPage();
@@ -76,14 +71,6 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       .catch(() => { if (!cancelled) setMutationSupport({ rename: false, move: false, deleteEmpty: false }); });
     return () => { cancelled = true; };
   }, [context]);
-
-  useEffect(() => {
-    if (refreshKey === appliedRefreshKey.current) return;
-    appliedRefreshKey.current = refreshKey;
-    if (!available) return;
-    void loadFolderPage(undefined, undefined, { force: true });
-    for (const folderId of expanded) void loadFolderPage(folderId, undefined, { force: true });
-  }, [available, expanded, loadFolderPage, refreshKey]);
 
   useEffect(() => {
     const id = selectedFolderId(selection);
@@ -106,7 +93,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         }
       });
     return () => { cancelled = true; };
-  }, [available, context, localRefreshKey, refreshKey, selection]);
+  }, [available, context, localRefreshKey, selection]);
 
   const toggle = async (folder: WorkflowFolder) => {
     if (expanded.has(folder.id)) {
@@ -148,12 +135,20 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const selectedId = selectedFolderId(selection);
   const selectedFolder = selectedId ? findFolder(roots, children, selectedId) ?? crumbs.at(-1) : undefined;
 
-  const refreshAfterStructureChange = async (nextSelection?: WorkflowFolderSelection) => {
-    invalidatePages([...loadedKeys].filter(folderId => !expanded.has(folderId)));
-    await Promise.all([
-      loadFolderPage(undefined, undefined, { force: true }),
-      ...[...expanded].map(folderId => loadFolderPage(folderId, undefined, { force: true }))
-    ]);
+  const refreshAfterStructureChange = async (
+    affectedParentIds: ReadonlyArray<string | null>,
+    nextSelection?: WorkflowFolderSelection,
+    invalidatedFolderId?: string
+  ) => {
+    const parents = [...new Set(affectedParentIds)];
+    if (invalidatedFolderId) invalidatePages([invalidatedFolderId]);
+    for (const parentId of parents) {
+      if (parentId !== null && !expanded.has(parentId)) {
+        invalidatePages([parentId]);
+      } else {
+        await loadFolderPage(parentId ?? undefined, undefined, { force: true });
+      }
+    }
     setLocalRefreshKey(current => current + 1);
     await onFoldersMutated?.(nextSelection);
   };
@@ -190,7 +185,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       const survivorKey = selectedFolder.parentId ? `folder:${selectedFolder.parentId}` : "all";
       select(survivor);
       setFocusedKey(survivorKey);
-      await refreshAfterStructureChange(survivor);
+      await refreshAfterStructureChange([selectedFolder.parentId ?? null], survivor, selectedFolder.id);
       setStatus(`Deleted folder ${selectedFolder.name}`);
       restoreFolderFocus(survivorKey);
     } catch (caught) {
@@ -254,7 +249,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       folder={selectedFolder}
       onClose={() => closeMutationDialog("rename")}
       onRenamed={async () => {
-        await refreshAfterStructureChange();
+        await refreshAfterStructureChange([selectedFolder.parentId ?? null]);
         setStatus("Folder renamed");
       }}
     /> : null}
@@ -262,8 +257,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       context={context}
       folder={selectedFolder}
       onClose={() => closeMutationDialog("move")}
-      onMoved={async () => {
-        await refreshAfterStructureChange();
+      onMoved={async (parentId, previousParentId) => {
+        await refreshAfterStructureChange([previousParentId, parentId]);
         setStatus("Folder moved");
       }}
     /> : null}

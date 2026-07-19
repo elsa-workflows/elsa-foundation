@@ -42,7 +42,6 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [folderCapability, setFolderCapability] = useState<"unknown" | "available" | "unavailable">("unknown");
-  const [folderNavigationRefreshKey, setFolderNavigationRefreshKey] = useState(0);
   const [moveCapabilityAvailable, setMoveCapabilityAvailable] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [focusRefreshAfterMove, setFocusRefreshAfterMove] = useState(false);
@@ -249,7 +248,6 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   }, [focusRefreshAfterMove, moveDialogOpen]);
 
   const movedDefinitions = async () => {
-    setFolderNavigationRefreshKey(current => current + 1);
     // Placement changes both the result set and its cursor ordering (FolderId, LastModifiedAt).
     // Never reuse the old continuation token: explicitly rebase onto the first page.
     setPage(1);
@@ -353,7 +351,6 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
         onSelect={changeFolder}
         onAvailable={handleFolderAvailability}
         onFoldersMutated={foldersMutated}
-        refreshKey={folderNavigationRefreshKey}
       />
       {folderCapability === "unavailable" && folderSelection !== "all" ? (
         <div className="wf-alert" role="status">

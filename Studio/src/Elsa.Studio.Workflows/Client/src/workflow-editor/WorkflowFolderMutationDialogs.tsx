@@ -56,11 +56,12 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
   context: StudioEndpointContext;
   folder: WorkflowFolder;
   onClose(): void;
-  onMoved(parentId: string | null): Promise<void> | void;
+  onMoved(parentId: string | null, previousParentId: string | null): Promise<void> | void;
 }) {
   const titleId = useId();
   const ref = useRef<HTMLElement>(null);
   const descendantIds = useRef(new Set([folder.id]));
+  const previousParentId = useRef(folder.parentId ?? null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [eligibility, setEligibility] = useState<Record<string, Eligibility>>({});
   const [destinationId, setDestinationId] = useState<string | null>(folder.parentId ?? null);
@@ -116,7 +117,7 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
     setError(null);
     try {
       await moveWorkflowFolder(context, folder.id, destinationId);
-      await onMoved(destinationId);
+      await onMoved(destinationId, previousParentId.current);
       onClose();
     } catch (caught) {
       setError(`Couldn't move this folder. ${caught instanceof Error ? caught.message : "The server rejected the destination."} Choose another available destination or check permissions, then try again.`);

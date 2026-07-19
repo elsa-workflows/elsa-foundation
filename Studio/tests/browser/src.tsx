@@ -284,6 +284,7 @@ function FolderRestructureFixture() {
     { id: "folder-empty", parentId: "folder-archive" as string | null, name: "Empty folder", normalizedName: "empty folder", createdAt: "", lastModifiedAt: "" }
   ]);
   const capabilityAbsent = searchParams.get("capabilities") === "absent";
+  const folderCapabilityAbsent = searchParams.get("capabilities") === "folders-absent";
   const continuationPaging = searchParams.get("paging") === "continuation";
   const rejectedOperation = searchParams.get("failure");
   const definition = useCallback((id: string, name: string, folderId: string | null = null, folderBreadcrumb?: { id: string; name: string }[]) => ({
@@ -322,7 +323,9 @@ function FolderRestructureFixture() {
         if (url === "/capabilities") return { capabilities: [{
           id: "elsa.api.workflow-design", contractVersion: "1", links: [
             { rel: "workflow-definitions-page", href: "browser/restructure/definition-pages" },
-            { rel: "workflow-folders", href: "browser/restructure/folders" },
+            ...(folderCapabilityAbsent ? [] : [
+              { rel: "workflow-folders", href: "browser/restructure/folders" }
+            ]),
             ...(capabilityAbsent ? [] : [
               { rel: "workflow-folder-rename", href: "browser/restructure/folders/{folderId}/rename", templated: true },
               { rel: "workflow-folder-move", href: "browser/restructure/folders/{folderId}/move", templated: true },
@@ -406,7 +409,7 @@ function FolderRestructureFixture() {
         return {};
       }
     }
-  }) as unknown as StudioEndpointContext, [ancestorsOf, capabilityAbsent, continuationPaging, definition, findFolder, rejectedOperation]);
+  }) as unknown as StudioEndpointContext, [ancestorsOf, capabilityAbsent, continuationPaging, definition, findFolder, folderCapabilityAbsent, rejectedOperation]);
   const ai = useMemo(() => ({ promptActions: { list: () => [] }, dispatchPrompt: () => undefined }) as unknown as StudioAiContributionApi, []);
 
   return <main className="wf-editor browser-fixture">

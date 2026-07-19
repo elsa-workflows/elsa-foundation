@@ -3055,6 +3055,31 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("keeps the flat inventory when folders are advertised without bounded definition browsing", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/definitions?")) return response({ items: [definition({ name: "Legacy flat workflow" })] });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?folderId=requested-folder",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "Legacy flat workflow");
+    expect(container.querySelector("[role='tree']")).toBeNull();
+    expect(container.querySelector("[role='status']")?.textContent).toContain(
+      "Workflow folders are unavailable. Showing all workflows while preserving the requested folder context."
+    );
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
+    await unmount();
+  });
+
   it("does not leave definitions suspended when workflow capability discovery fails", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       throw new Error(`Unexpected request ${String(input)}`);
@@ -3964,10 +3989,9 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("renames a selected folder by advertised template and ignores an older expanded-page response", async () => {
+  it("renames a selected folder without refetching its unchanged expanded child projection", async () => {
     let folder = { id: "folder-edit", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
     const staleChild = { id: "folder-stale", parentId: folder.id, name: "Stale child", normalizedName: "stale child", createdAt: "", lastModifiedAt: "" };
-    const freshChild = { id: "folder-fresh", parentId: folder.id, name: "Fresh child", normalizedName: "fresh child", createdAt: "", lastModifiedAt: "" };
     let childRequestCount = 0;
     let resolveStaleChildren: ((value: Response) => void) | undefined;
     let renameRequest: unknown;
@@ -3980,8 +4004,7 @@ describe("workflows module", () => {
       }
       if (url.includes("/folders?pageSize=100&parentId=folder-edit")) {
         childRequestCount += 1;
-        if (childRequestCount === 1) return new Promise<Response>(resolve => { resolveStaleChildren = resolve; });
-        return response({ items: [freshChild], nextContinuationToken: null });
+        return new Promise<Response>(resolve => { resolveStaleChildren = resolve; });
       }
       if (url.includes("/folders/folder-edit")) return response({ folder, ancestors: [] });
       if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
@@ -4005,15 +4028,13 @@ describe("workflows module", () => {
 
     await vi.waitFor(() => expect(renameRequest).toEqual({ name: "Platform operations" }));
     await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
-    await waitForText(container, "Fresh child");
     expect(container.querySelector("[data-folder-id='folder-edit']")?.getAttribute("aria-selected")).toBe("true");
     await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Platform operations"));
     expect(document.activeElement).toBe(rename);
 
     resolveStaleChildren?.(response({ items: [staleChild], nextContinuationToken: null }));
-    await flushPromises();
-    expect(container.textContent).toContain("Fresh child");
-    expect(container.textContent).not.toContain("Stale child");
+    await waitForText(container, "Stale child");
+    expect(childRequestCount).toBe(1);
     expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith("/folders/folder-edit/rename") && (init as RequestInit)?.method === "POST")).toHaveLength(1);
     await unmount();
   });

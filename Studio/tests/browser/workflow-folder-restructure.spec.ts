@@ -127,6 +127,15 @@ test("folder restructuring controls stay absent when mutation relations are not 
   expect(await page.evaluate(() => (window as Window & { folderMutationRequests?: unknown[] }).folderMutationRequests)).toBeUndefined();
 });
 
+test("folder navigation falls back to the flat inventory when folder capabilities are absent", async ({ page }) => {
+  await page.setViewportSize({ width: 980, height: 720 });
+  await page.goto("/?theme=light&mode=folder-restructure&capabilities=folders-absent");
+
+  await expect(page.getByText("All workflow")).toBeVisible();
+  await expect(page.getByRole("tree")).toHaveCount(0);
+  expect(await page.evaluate(() => (window as Window & { folderMutationRequests?: unknown[] }).folderMutationRequests)).toBeUndefined();
+});
+
 test("renaming a continuation-page folder retains its selected and expanded tree context", async ({ page }) => {
   await page.setViewportSize({ width: 980, height: 720 });
   await page.goto("/?theme=light&mode=folder-restructure&paging=continuation");

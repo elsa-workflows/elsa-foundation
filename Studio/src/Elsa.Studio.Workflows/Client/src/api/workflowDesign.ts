@@ -108,6 +108,15 @@ export async function workflowFoldersPath(context: StudioEndpointContext) {
   }
 }
 
+/** Folder-scoped inventory requires both the folder tree and bounded definition browsing relations. */
+export async function isWorkflowFolderBrowsingAvailable(context: StudioEndpointContext) {
+  const [folderRoot, definitionPage] = await Promise.all([
+    workflowFoldersPath(context),
+    definitionPagePath(context)
+  ]);
+  return !!folderRoot && !!definitionPage;
+}
+
 /** Returns the advertised bulk-placement endpoint, never a host-constructed URL. */
 export async function workflowDefinitionFolderMovePath(context: StudioEndpointContext) {
   try {
