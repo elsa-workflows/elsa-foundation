@@ -27,7 +27,6 @@ export function useDialogFocus(
     document.body.style.overflow = "hidden";
     const frame = focusDialogOnOpen ? requestAnimationFrame(() => {
       const dialog = dialogRef.current;
-      if (dialog?.contains(document.activeElement)) return;
       const first = getFocusableElements(dialog)[0];
       if (first) first.focus();
       else dialog?.focus();

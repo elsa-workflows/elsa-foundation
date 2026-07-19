@@ -36,10 +36,6 @@ function collectStaticFiles(entryKey, files = new Set()) {
   const entry = manifest[entryKey];
   if (!entry) throw new Error(`Bundle manifest is missing ${entryKey}.`);
 
-  return collectStaticEntryFiles(entry, files);
-}
-
-function collectStaticEntryFiles(entry, files = new Set()) {
   files.add(entry.file);
   for (const cssFile of entry.css ?? []) files.add(cssFile);
   for (const importedKey of entry.imports ?? []) collectStaticFiles(importedKey, files);
@@ -79,7 +75,7 @@ for (const chunkName of deferredHeavySurfaces) {
 const entryFiles = collectStaticFiles("src/module.tsx");
 const definitionsLandingFiles = new Set(entryFiles);
 collectStaticFiles("src/workflow-editor/pages.tsx", definitionsLandingFiles);
-collectStaticEntryFiles(findChunk("WorkflowDefinitions"), definitionsLandingFiles);
+collectStaticFiles("src/workflow-editor/WorkflowDefinitions.tsx", definitionsLandingFiles);
 const upgradeLandingFiles = new Set(entryFiles);
 collectStaticFiles("src/ActivityUpgradeWorkbenchPage.tsx", upgradeLandingFiles);
 const entryJavaScriptFiles = filesWithExtension(entryFiles, ".js");
