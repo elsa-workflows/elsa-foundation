@@ -8,6 +8,7 @@ using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Models;
@@ -179,6 +180,14 @@ public class GroundworkWorkflowDefinitionCommandTests
         await saveDefinition.Execute(
             new WorkflowDefinition { Id = "definition-1", Name = "Delete me", DeletedAt = _clock.UtcNow },
             CancellationToken.None);
+        await new GroundworkWorkflowDefinitionTagStore(_store, _accessContext, TimeProvider.System)
+            .ReplaceManualAsync(new(
+                "definition-1",
+                null,
+                WorkflowDefinitionTagRevision.Initial,
+                ["tag-a"],
+                "author-1",
+                "correlation-1"));
         var draftId = await createDraft.Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
         var versionStore = VersionStore();
         var promote = PromoteCommand();
@@ -203,6 +212,9 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.NotEqual(draftId, secondDraftId);
         Assert.Null(await versionStore.FindByIdAsync(versionId));
         Assert.Null(await VersionLayoutStore().FindByVersionIdAsync(versionId));
+        Assert.Null(await _store.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionTagSetDocumentKind,
+            "definition-1"));
     }
 
     [Fact]

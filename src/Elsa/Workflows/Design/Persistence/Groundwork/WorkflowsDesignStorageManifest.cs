@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork;
 /// </summary>
 public static class WorkflowsDesignStorageManifest
 {
-    public const string SchemaVersion = "1.1.0";
+    public const string SchemaVersion = "1.2.0";
 
     public const string ByCollectionIndex = "by-collection";
     public const string CollectionField = "collection";
@@ -73,6 +73,11 @@ public static class WorkflowsDesignStorageManifest
     /// <summary>Constant partition value stamped on every workflow-definition-version-layout document (see <see cref="ByCollectionIndex"/>).</summary>
     public const string WorkflowDefinitionVersionLayoutCollection = "workflowDefinitionVersionLayout";
 
+    public const string WorkflowDefinitionTagSetDocumentKind = "workflowDefinitionTagSet";
+    public const string WorkflowDefinitionTagSetCollection = "workflowDefinitionTagSet";
+    public const string WorkflowDefinitionTagAuditDocumentKind = "workflowDefinitionTagAudit";
+    public const string WorkflowDefinitionTagAuditCollection = "workflowDefinitionTagAudit";
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-design"),
         new StorageManifestOwner("elsa.workflows.design"),
@@ -92,6 +97,16 @@ public static class WorkflowsDesignStorageManifest
             Unit(
                 WorkflowDefinitionVersionLayoutDocumentKind,
                 "Workflow definition version layout",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query(ListAllQuery, ByCollectionIndex)]),
+            Unit(
+                WorkflowDefinitionTagSetDocumentKind,
+                "Workflow definition tag set",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query(ListAllQuery, ByCollectionIndex)]),
+            Unit(
+                WorkflowDefinitionTagAuditDocumentKind,
+                "Workflow definition tag audit",
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query(ListAllQuery, ByCollectionIndex)])
         ],
