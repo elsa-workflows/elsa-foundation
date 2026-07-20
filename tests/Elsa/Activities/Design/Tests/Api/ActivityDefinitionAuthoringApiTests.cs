@@ -44,6 +44,23 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "UpgradePlans.Apply", "POST", "design/activities/upgrade-plans/{planId}/apply" }
     };
 
+    [Fact]
+    public void Activity_design_capability_advertises_management_authoring_picker_and_recommendation_relations()
+    {
+        var links = Elsa.Activities.Design.Api.Capabilities.ActivityDesignApiCapabilities.StaticDeclaration.Links;
+
+        Assert.Contains(links, x => x.Rel == "recommended-activity-definitions" && x.Href == "design/activities/definitions/picker" && !x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-recommendation" && x.Href == "design/activities/definitions/{definitionId}/recommendation" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-authoring-capabilities" && x.Href == "design/activities/authoring-capabilities" && !x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definitions" && x.Href == "design/activities/definitions" && !x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition" && x.Href == "design/activities/definitions/{definitionId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-drafts" && x.Href == "design/activities/definitions/{definitionId}/drafts" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-draft" && x.Href == "design/activities/drafts/{draftId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-versions" && x.Href == "design/activities/definitions/{definitionId}/versions" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-definition-version" && x.Href == "design/activities/versions/{versionId}" && x.Templated);
+        Assert.Contains(links, x => x.Rel == "activity-version-diff" && x.Href == "design/activities/versions/{fromVersionId}/diff/{toVersionId}" && x.Templated);
+    }
+
     [Theory]
     [MemberData(nameof(Routes))]
     public void Endpoint_routes_match_the_reviewed_wire_contract(string endpointName, string verb, string route)
