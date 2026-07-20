@@ -399,6 +399,23 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
+    public void Implemented_rows_reject_misfiled_provider_evidence_before_they_are_complete()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        var record = EvidenceRecord(EntryId, "sqlite", "ordinary-round-trip");
+        record["coverageEntryId"] = "runtime-checkpoint-commit";
+        WriteEvidenceArtifacts([record]);
+        entry["providerEvidence"]!["sqlite"] = new JsonArray(record);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"{EntryId}: sqlite evidence record 'ordinary-round-trip' declares coverage entry 'runtime-checkpoint-commit'.",
+            findings);
+    }
+
+    [Fact]
     public void Evidence_complete_requires_provider_native_query_evidence()
     {
         var ledger = ReadLedger();
@@ -690,9 +707,13 @@ public sealed class GroundworkCoverageLedgerTests
     private static GroundworkCoverageLedgerValidator CreateEvidenceValidator() =>
         new(SchemaPath, ExpectedEntryIds, TestEvidenceRoot);
 
-    private static JsonObject ReadLedger() =>
-        JsonNode.Parse(File.ReadAllText(LedgerPath))?.AsObject()
-        ?? throw new InvalidOperationException($"Coverage ledger '{LedgerPath}' is empty.");
+    private static JsonObject ReadLedger()
+    {
+        var ledger = JsonNode.Parse(File.ReadAllText(LedgerPath))?.AsObject()
+                     ?? throw new InvalidOperationException($"Coverage ledger '{LedgerPath}' is empty.");
+        StageCurrentEvidenceArtifacts(ledger);
+        return ledger;
+    }
 
     private static JsonObject ReadImmutableActivationLedger()
     {
@@ -815,6 +836,31 @@ public sealed class GroundworkCoverageLedgerTests
                 GroundworkEvidenceArtifactContract.ArtifactPayload(record).ToJsonString());
             record["evidenceSha256"] = GroundworkEvidenceArtifactContract.FileSha256(evidencePath);
         }
+    }
+
+    private static void StageCurrentEvidenceArtifacts(JsonObject ledger)
+    {
+        foreach (var record in Entries(ledger)
+                     .SelectMany(entry => entry["providerEvidence"]!.AsObject().SelectMany(provider =>
+                         provider.Value!.AsArray().OfType<JsonObject>()))
+                     .Where(record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion))
+        {
+            StageArtifact(record["evidence"]!.GetValue<string>());
+            if (record["nativeEvidence"]?.GetValue<string>() is { } nativeEvidence)
+                StageArtifact(nativeEvidence);
+        }
+    }
+
+    private static void StageArtifact(string relativePath)
+    {
+        var sourcePath = Path.Combine(
+            RepoRoot,
+            "specs",
+            "094-harden-groundwork-stores",
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+        var targetPath = ArtifactPath(relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+        File.Copy(sourcePath, targetPath, overwrite: true);
     }
 
     private static string ArtifactPath(string relativePath) => Path.Combine(

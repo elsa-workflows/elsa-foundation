@@ -154,6 +154,190 @@
         "process-restart-same-database"
       ],
       "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-bookmark-state",
+      "family": "runtime",
+      "contract": "IBookmarkStateStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "implemented",
+      "initialGap": "Four-provider bounded-route execution passes; restart, concurrency, and checked-in result evidence remain.",
+      "performanceWorkload": "bookmark-lookup",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-bookmark",
+        "list-by-workflow-bounded",
+        "list-by-stimulus-and-type-bounded",
+        "list-by-stimulus-type-bounded"
+      ],
+      "concurrencySemantics": [
+        "expected-version-save",
+        "expected-version-delete",
+        "checkpoint-bundle-write"
+      ],
+      "atomicBoundary": "One bookmark document for direct mutation; checkpoint-owned changes join the checkpoint unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkBookmarkStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/ElsaRuntimeStorageManifestTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-durable-timer",
+      "family": "runtime",
+      "contract": "IDurableTimerStore",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "implemented",
+      "initialGap": "Due selection and advancement lack provider-atomic four-provider evidence.",
+      "performanceWorkload": "due-timer-selection",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-timer",
+        "list-due-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-existing-wins",
+        "expected-version-delete",
+        "conditional-due-claim"
+      ],
+      "atomicBoundary": "One timer transition per identity; a claimed occurrence is decided by one expected-version mutation.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableTimerStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
+        "tests/Elsa/Workflows/Runtime/Scheduling/Tests/DurableTimerPumpTaskTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-durable-value-state",
+      "family": "runtime",
+      "contract": "IDurableValueStateStore",
+      "outcome": "ordinary-document",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "implemented",
+      "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
+      "performanceWorkload": "checkpoint-commit",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-value",
+        "list-by-workflow-bounded"
+      ],
+      "concurrencySemantics": [
+        "expected-version-save",
+        "expected-version-delete",
+        "checkpoint-bundle-write"
+      ],
+      "atomicBoundary": "One durable-value document for direct mutation; checkpoint-owned changes join the checkpoint unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-execution-liveness",
+      "family": "runtime",
+      "contract": "IExecutionLivenessStateStore; IRuntimeExecutionOwnershipService; IRuntimeRecoveryScanner",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "implemented",
+      "initialGap": "Ownership transitions and recovery scans are not one bounded provider-atomic path.",
+      "performanceWorkload": "recovery-scan",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-workflow-and-state",
+        "list-by-workflow-bounded",
+        "list-recovery-candidates-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-or-expected-version-ownership-acquire",
+        "conditional-heartbeat",
+        "conditional-release",
+        "strictly-increasing-fence"
+      ],
+      "atomicBoundary": "The ownership record CAS and fence allocation form one provider-atomic transition.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
         "sqlite": [
           {
             "scenarioId": "concurrencySemantic:strictly-increasing-fence",
@@ -233,35 +417,129 @@
       },
       "requiredPerformanceVerdict": "pass",
       "dependency": "none",
-      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
+      "deliveryOwner": "#645/boundary-5-checkpoint",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs"
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeRecoveryScannerTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeRecoveryBoundedRouteTests.cs",
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimeExecutionOwnershipTests.cs",
+        "tests/Elsa/Workflows/Runtime/Tests/RuntimeRecoveryScannerTests.cs"
       ]
     },
     {
-      "id": "runtime-bookmark-state",
+      "id": "runtime-incident-state",
       "family": "runtime",
-      "contract": "IBookmarkStateStore",
-      "outcome": "ordinary-document",
+      "contract": "IIncidentStateStore",
+      "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#645",
       "status": "implemented",
-      "initialGap": "Four-provider bounded-route execution passes; restart, concurrency, and checked-in result evidence remain.",
-      "performanceWorkload": "bookmark-lookup",
+      "initialGap": "Create-once and revision behavior lacks race/restart evidence.",
+      "performanceWorkload": "recovery-scan",
       "accessPolicy": "ordinary",
       "queryShapes": [
-        "find-by-workflow-and-bookmark",
+        "find-by-workflow-and-incident",
         "list-by-workflow-bounded",
-        "list-by-stimulus-and-type-bounded",
-        "list-by-stimulus-type-bounded"
+        "list-blocking-by-workflow-bounded"
       ],
       "concurrencySemantics": [
-        "expected-version-save",
-        "expected-version-delete",
-        "checkpoint-bundle-write"
+        "create-only-try-add",
+        "expected-version-save"
       ],
-      "atomicBoundary": "One bookmark document for direct mutation; checkpoint-owned changes join the checkpoint unit of work.",
+      "atomicBoundary": "One incident document; create-only admission selects the winner.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-recurring-trigger-schedule",
+      "family": "runtime",
+      "contract": "IRecurringTriggerScheduleStore",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "implemented",
+      "initialGap": "Due and publication queries filter client-side and schedule transitions race.",
+      "performanceWorkload": "recurring-schedule-selection",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "find-by-schedule",
+        "list-by-publication-bounded",
+        "list-due-bounded"
+      ],
+      "concurrencySemantics": [
+        "create-only-or-expected-version-save",
+        "compare-and-swap-advance",
+        "conditional-publication-activation"
+      ],
+      "atomicBoundary": "Prepared schedules and publication projection state change in one Groundwork unit of work; occurrence advance is one CAS.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "dependency": "none",
+      "deliveryOwner": "#645/boundary-8-operational-stores",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRecurringTriggerScheduleStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
+      ]
+    },
+    {
+      "id": "runtime-checkpoint-commit",
+      "family": "runtime",
+      "contract": "IRuntimeCheckpointCommitStore",
+      "outcome": "specialized-primitive",
+      "scope": "tenant-scoped",
+      "authority": "#645",
+      "status": "implemented",
+      "initialGap": "Fence validation has a TOCTOU window and correctness relies on process-local locks.",
+      "performanceWorkload": "checkpoint-commit",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "idempotency-marker-by-commit-key"
+      ],
+      "concurrencySemantics": [
+        "strictly-increasing-fence",
+        "atomic-stale-fence-rejection",
+        "create-only-idempotency-marker",
+        "expected-version-state-changes"
+      ],
+      "atomicBoundary": "Ownership fence validation/touch, checkpoint state, outbox state, and commit marker are one provider unit of work.",
       "failureWindows": [
         "before-provider-decision",
         "during-provider-decision",
@@ -759,356 +1037,6 @@
       },
       "requiredPerformanceVerdict": "pass",
       "dependency": "none",
-      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
-      "behavioralBaseline": [
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkBookmarkStateStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/ElsaRuntimeStorageManifestTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs"
-      ]
-    },
-    {
-      "id": "runtime-durable-timer",
-      "family": "runtime",
-      "contract": "IDurableTimerStore",
-      "outcome": "operational-store",
-      "scope": "tenant-scoped",
-      "authority": "#645",
-      "status": "implemented",
-      "initialGap": "Due selection and advancement lack provider-atomic four-provider evidence.",
-      "performanceWorkload": "due-timer-selection",
-      "accessPolicy": "ordinary",
-      "queryShapes": [
-        "find-by-workflow-and-timer",
-        "list-due-bounded"
-      ],
-      "concurrencySemantics": [
-        "create-only-existing-wins",
-        "expected-version-delete",
-        "conditional-due-claim"
-      ],
-      "atomicBoundary": "One timer transition per identity; a claimed occurrence is decided by one expected-version mutation.",
-      "failureWindows": [
-        "before-provider-decision",
-        "during-provider-decision",
-        "after-durable-decision-before-caller-acknowledgement"
-      ],
-      "restartScenarios": [
-        "dispose-and-reopen-same-database",
-        "process-restart-same-database"
-      ],
-      "providerEvidence": {
-        "sqlite": [
-          {
-            "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
-            "sourceScenarioId": "runtime-checkpoint-idempotency",
-            "coverageEntryId": "runtime-post-commit-outbox",
-            "provider": "sqlite",
-            "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.77",
-            "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "ee80f551817a8de617d225bb0731b6304a189d475c5c0d56bae7e805076f5897",
-            "executionPath": "provider-driver/sqlite/runtime-post-commit-outbox/6d576dc01c828264",
-            "clients": 2,
-            "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
-            "outcome": "pass",
-            "concurrencySemantic": "checkpoint-bundle-write",
-            "evidence": "evidence/sqlite/runtime-post-commit-outbox/6d576dc01c828264.json",
-            "evidenceSha256": "eaeea8864a22da64fcb181373d6086672a0b38e556d5ab713c985d9d9b973bfb"
-          }
-        ],
-        "sqlserver": [
-          {
-            "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
-            "sourceScenarioId": "runtime-checkpoint-idempotency",
-            "coverageEntryId": "runtime-post-commit-outbox",
-            "provider": "sqlserver",
-            "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.77",
-            "topology": "real-sqlserver-container",
-            "manifestFingerprint": "763e99195f0abb5ed4afe9b5e6a92f6312fdba96d162e5b587dd6597e7e1d902",
-            "executionPath": "provider-driver/sqlserver/runtime-post-commit-outbox/6d576dc01c828264",
-            "clients": 2,
-            "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
-            "outcome": "pass",
-            "concurrencySemantic": "checkpoint-bundle-write",
-            "evidence": "evidence/sqlserver/runtime-post-commit-outbox/6d576dc01c828264.json",
-            "evidenceSha256": "95d1bb50834bbe380a301b2dab1acfa1ceb024f17cf5c9da0b3b1cf81f5bff3e"
-          }
-        ],
-        "postgresql": [
-          {
-            "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
-            "sourceScenarioId": "runtime-checkpoint-idempotency",
-            "coverageEntryId": "runtime-post-commit-outbox",
-            "provider": "postgresql",
-            "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.77",
-            "topology": "real-postgresql-container",
-            "manifestFingerprint": "94e1833779d9a68ca2002856eff6bb56403f8006425cfabb469d17c026661bfe",
-            "executionPath": "provider-driver/postgresql/runtime-post-commit-outbox/6d576dc01c828264",
-            "clients": 2,
-            "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
-            "outcome": "pass",
-            "concurrencySemantic": "checkpoint-bundle-write",
-            "evidence": "evidence/postgresql/runtime-post-commit-outbox/6d576dc01c828264.json",
-            "evidenceSha256": "887de82b4438d12e6d826f34a0784e3906c6b4aff60acb3ca31d6529b7ae645c"
-          }
-        ],
-        "mongodb": [
-          {
-            "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
-            "sourceScenarioId": "runtime-checkpoint-idempotency",
-            "coverageEntryId": "runtime-post-commit-outbox",
-            "provider": "mongodb",
-            "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.77",
-            "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "b429ba81780ec85441466ecc7aa495c8908ae7d182ba76a1cd1725659d00c21a",
-            "executionPath": "provider-driver/mongodb/runtime-post-commit-outbox/6d576dc01c828264",
-            "clients": 2,
-            "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
-            "outcome": "pass",
-            "concurrencySemantic": "checkpoint-bundle-write",
-            "evidence": "evidence/mongodb/runtime-post-commit-outbox/6d576dc01c828264.json",
-            "evidenceSha256": "058d68919d25daf0015aec2d4e5be1feba654a10f6960de7f7faa1c2b8644766"
-          }
-        ]
-      },
-      "requiredPerformanceVerdict": "pass",
-      "dependency": "none",
-      "deliveryOwner": "#645/boundary-8-operational-stores",
-      "behavioralBaseline": [
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableTimerStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
-        "tests/Elsa/Workflows/Runtime/Scheduling/Tests/DurableTimerPumpTaskTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
-      ]
-    },
-    {
-      "id": "runtime-durable-value-state",
-      "family": "runtime",
-      "contract": "IDurableValueStateStore",
-      "outcome": "ordinary-document",
-      "scope": "tenant-scoped",
-      "authority": "#645",
-      "status": "implemented",
-      "initialGap": "Four-provider restart and optimistic-concurrency evidence is absent.",
-      "performanceWorkload": "checkpoint-commit",
-      "accessPolicy": "ordinary",
-      "queryShapes": [
-        "find-by-workflow-and-value",
-        "list-by-workflow-bounded"
-      ],
-      "concurrencySemantics": [
-        "expected-version-save",
-        "expected-version-delete",
-        "checkpoint-bundle-write"
-      ],
-      "atomicBoundary": "One durable-value document for direct mutation; checkpoint-owned changes join the checkpoint unit of work.",
-      "failureWindows": [
-        "before-provider-decision",
-        "during-provider-decision",
-        "after-durable-decision-before-caller-acknowledgement"
-      ],
-      "restartScenarios": [
-        "dispose-and-reopen-same-database",
-        "process-restart-same-database"
-      ],
-      "providerEvidence": {
-        "sqlite": [],
-        "sqlserver": [],
-        "postgresql": [],
-        "mongodb": []
-      },
-      "requiredPerformanceVerdict": "pass",
-      "dependency": "none",
-      "deliveryOwner": "#645/boundary-5-checkpoint-and-boundary-7-queries",
-      "behavioralBaseline": [
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs"
-      ]
-    },
-    {
-      "id": "runtime-execution-liveness",
-      "family": "runtime",
-      "contract": "IExecutionLivenessStateStore; IRuntimeExecutionOwnershipService; IRuntimeRecoveryScanner",
-      "outcome": "operational-store",
-      "scope": "tenant-scoped",
-      "authority": "#645",
-      "status": "implemented",
-      "initialGap": "Ownership transitions and recovery scans are not one bounded provider-atomic path.",
-      "performanceWorkload": "recovery-scan",
-      "accessPolicy": "ordinary",
-      "queryShapes": [
-        "find-by-workflow-and-state",
-        "list-by-workflow-bounded",
-        "list-recovery-candidates-bounded"
-      ],
-      "concurrencySemantics": [
-        "create-only-or-expected-version-ownership-acquire",
-        "conditional-heartbeat",
-        "conditional-release",
-        "strictly-increasing-fence"
-      ],
-      "atomicBoundary": "The ownership record CAS and fence allocation form one provider-atomic transition.",
-      "failureWindows": [
-        "before-provider-decision",
-        "during-provider-decision",
-        "after-durable-decision-before-caller-acknowledgement"
-      ],
-      "restartScenarios": [
-        "dispose-and-reopen-same-database",
-        "process-restart-same-database"
-      ],
-      "providerEvidence": {
-        "sqlite": [],
-        "sqlserver": [],
-        "postgresql": [],
-        "mongodb": []
-      },
-      "requiredPerformanceVerdict": "pass",
-      "dependency": "none",
-      "deliveryOwner": "#645/boundary-5-checkpoint",
-      "behavioralBaseline": [
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeRecoveryScannerTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeRecoveryBoundedRouteTests.cs",
-        "tests/Elsa/Workflows/Runtime/Tests/RuntimeExecutionOwnershipTests.cs",
-        "tests/Elsa/Workflows/Runtime/Tests/RuntimeRecoveryScannerTests.cs"
-      ]
-    },
-    {
-      "id": "runtime-incident-state",
-      "family": "runtime",
-      "contract": "IIncidentStateStore",
-      "outcome": "operational-store",
-      "scope": "tenant-scoped",
-      "authority": "#645",
-      "status": "implemented",
-      "initialGap": "Create-once and revision behavior lacks race/restart evidence.",
-      "performanceWorkload": "recovery-scan",
-      "accessPolicy": "ordinary",
-      "queryShapes": [
-        "find-by-workflow-and-incident",
-        "list-by-workflow-bounded",
-        "list-blocking-by-workflow-bounded"
-      ],
-      "concurrencySemantics": [
-        "create-only-try-add",
-        "expected-version-save"
-      ],
-      "atomicBoundary": "One incident document; create-only admission selects the winner.",
-      "failureWindows": [
-        "before-provider-decision",
-        "during-provider-decision",
-        "after-durable-decision-before-caller-acknowledgement"
-      ],
-      "restartScenarios": [
-        "dispose-and-reopen-same-database",
-        "process-restart-same-database"
-      ],
-      "providerEvidence": {
-        "sqlite": [],
-        "sqlserver": [],
-        "postgresql": [],
-        "mongodb": []
-      },
-      "requiredPerformanceVerdict": "pass",
-      "dependency": "none",
-      "deliveryOwner": "#645/boundary-8-operational-stores",
-      "behavioralBaseline": [
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeStateStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
-      ]
-    },
-    {
-      "id": "runtime-recurring-trigger-schedule",
-      "family": "runtime",
-      "contract": "IRecurringTriggerScheduleStore",
-      "outcome": "operational-store",
-      "scope": "tenant-scoped",
-      "authority": "#645",
-      "status": "implemented",
-      "initialGap": "Due and publication queries filter client-side and schedule transitions race.",
-      "performanceWorkload": "recurring-schedule-selection",
-      "accessPolicy": "ordinary",
-      "queryShapes": [
-        "find-by-schedule",
-        "list-by-publication-bounded",
-        "list-due-bounded"
-      ],
-      "concurrencySemantics": [
-        "create-only-or-expected-version-save",
-        "compare-and-swap-advance",
-        "conditional-publication-activation"
-      ],
-      "atomicBoundary": "Prepared schedules and publication projection state change in one Groundwork unit of work; occurrence advance is one CAS.",
-      "failureWindows": [
-        "before-provider-decision",
-        "during-provider-decision",
-        "after-durable-decision-before-caller-acknowledgement"
-      ],
-      "restartScenarios": [
-        "dispose-and-reopen-same-database",
-        "process-restart-same-database"
-      ],
-      "providerEvidence": {
-        "sqlite": [],
-        "sqlserver": [],
-        "postgresql": [],
-        "mongodb": []
-      },
-      "requiredPerformanceVerdict": "pass",
-      "dependency": "none",
-      "deliveryOwner": "#645/boundary-8-operational-stores",
-      "behavioralBaseline": [
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRecurringTriggerScheduleStoreTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkDurableResumptionCrashTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeTransitionContractTests.cs",
-        "tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeFailureWindowTests.cs"
-      ]
-    },
-    {
-      "id": "runtime-checkpoint-commit",
-      "family": "runtime",
-      "contract": "IRuntimeCheckpointCommitStore",
-      "outcome": "specialized-primitive",
-      "scope": "tenant-scoped",
-      "authority": "#645",
-      "status": "implemented",
-      "initialGap": "Fence validation has a TOCTOU window and correctness relies on process-local locks.",
-      "performanceWorkload": "checkpoint-commit",
-      "accessPolicy": "ordinary",
-      "queryShapes": [
-        "idempotency-marker-by-commit-key"
-      ],
-      "concurrencySemantics": [
-        "strictly-increasing-fence",
-        "atomic-stale-fence-rejection",
-        "create-only-idempotency-marker",
-        "expected-version-state-changes"
-      ],
-      "atomicBoundary": "Ownership fence validation/touch, checkpoint state, outbox state, and commit marker are one provider unit of work.",
-      "failureWindows": [
-        "before-provider-decision",
-        "during-provider-decision",
-        "after-durable-decision-before-caller-acknowledgement"
-      ],
-      "restartScenarios": [
-        "dispose-and-reopen-same-database",
-        "process-restart-same-database"
-      ],
-      "providerEvidence": {
-        "sqlite": [],
-        "sqlserver": [],
-        "postgresql": [],
-        "mongodb": []
-      },
-      "requiredPerformanceVerdict": "pass",
-      "dependency": "none",
       "deliveryOwner": "#645/boundary-5-checkpoint",
       "behavioralBaseline": [
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.cs",
@@ -1200,10 +1128,82 @@
         "process-restart-same-database"
       ],
       "providerEvidence": {
-        "sqlite": [],
-        "sqlserver": [],
-        "postgresql": [],
-        "mongodb": []
+        "sqlite": [
+          {
+            "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+            "sourceScenarioId": "runtime-checkpoint-idempotency",
+            "coverageEntryId": "runtime-post-commit-outbox",
+            "provider": "sqlite",
+            "providerIdentity": "groundwork-sqlite",
+            "providerVersion": "0.0.1-preview.77",
+            "topology": "file-backed-distinct-connections",
+            "manifestFingerprint": "ee80f551817a8de617d225bb0731b6304a189d475c5c0d56bae7e805076f5897",
+            "executionPath": "provider-driver/sqlite/runtime-post-commit-outbox/6d576dc01c828264",
+            "clients": 2,
+            "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
+            "outcome": "pass",
+            "concurrencySemantic": "checkpoint-bundle-write",
+            "evidence": "evidence/sqlite/runtime-post-commit-outbox/6d576dc01c828264.json",
+            "evidenceSha256": "eaeea8864a22da64fcb181373d6086672a0b38e556d5ab713c985d9d9b973bfb"
+          }
+        ],
+        "sqlserver": [
+          {
+            "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+            "sourceScenarioId": "runtime-checkpoint-idempotency",
+            "coverageEntryId": "runtime-post-commit-outbox",
+            "provider": "sqlserver",
+            "providerIdentity": "groundwork-sqlserver",
+            "providerVersion": "0.0.1-preview.77",
+            "topology": "real-sqlserver-container",
+            "manifestFingerprint": "763e99195f0abb5ed4afe9b5e6a92f6312fdba96d162e5b587dd6597e7e1d902",
+            "executionPath": "provider-driver/sqlserver/runtime-post-commit-outbox/6d576dc01c828264",
+            "clients": 2,
+            "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
+            "outcome": "pass",
+            "concurrencySemantic": "checkpoint-bundle-write",
+            "evidence": "evidence/sqlserver/runtime-post-commit-outbox/6d576dc01c828264.json",
+            "evidenceSha256": "95d1bb50834bbe380a301b2dab1acfa1ceb024f17cf5c9da0b3b1cf81f5bff3e"
+          }
+        ],
+        "postgresql": [
+          {
+            "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+            "sourceScenarioId": "runtime-checkpoint-idempotency",
+            "coverageEntryId": "runtime-post-commit-outbox",
+            "provider": "postgresql",
+            "providerIdentity": "groundwork-postgresql",
+            "providerVersion": "0.0.1-preview.77",
+            "topology": "real-postgresql-container",
+            "manifestFingerprint": "94e1833779d9a68ca2002856eff6bb56403f8006425cfabb469d17c026661bfe",
+            "executionPath": "provider-driver/postgresql/runtime-post-commit-outbox/6d576dc01c828264",
+            "clients": 2,
+            "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
+            "outcome": "pass",
+            "concurrencySemantic": "checkpoint-bundle-write",
+            "evidence": "evidence/postgresql/runtime-post-commit-outbox/6d576dc01c828264.json",
+            "evidenceSha256": "887de82b4438d12e6d826f34a0784e3906c6b4aff60acb3ca31d6529b7ae645c"
+          }
+        ],
+        "mongodb": [
+          {
+            "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+            "sourceScenarioId": "runtime-checkpoint-idempotency",
+            "coverageEntryId": "runtime-post-commit-outbox",
+            "provider": "mongodb",
+            "providerIdentity": "groundwork-mongodb",
+            "providerVersion": "0.0.1-preview.77",
+            "topology": "transaction-capable-replica-set",
+            "manifestFingerprint": "b429ba81780ec85441466ecc7aa495c8908ae7d182ba76a1cd1725659d00c21a",
+            "executionPath": "provider-driver/mongodb/runtime-post-commit-outbox/6d576dc01c828264",
+            "clients": 2,
+            "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
+            "outcome": "pass",
+            "concurrencySemantic": "checkpoint-bundle-write",
+            "evidence": "evidence/mongodb/runtime-post-commit-outbox/6d576dc01c828264.json",
+            "evidenceSha256": "058d68919d25daf0015aec2d4e5be1feba654a10f6960de7f7faa1c2b8644766"
+          }
+        ]
       },
       "requiredPerformanceVerdict": "pass",
       "dependency": "none",

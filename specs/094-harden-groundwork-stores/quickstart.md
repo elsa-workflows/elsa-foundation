@@ -23,10 +23,10 @@ The repository's current Groundwork family is `0.0.1-preview.77`; do not combine
 family. Elsa owns only its per-kind policies, legacy-stamp parsing, JSON options, and concrete upcasters behind
 the Elsa provider marker.
 
-The checked-in provider evidence remains the prior `0.0.1-preview.76` generation until the explicit publishers
-below are rerun and their attachments are mechanically imported. Those artifacts are historical provenance, not
-current `preview.77` pass evidence; the ledger/package exact-generation architecture gate remains open until that
-refresh is complete.
+The checked-in checkpoint/fence attachment includes the reviewed `0.0.1-preview.77` four-provider slice for
+`runtime-checkpoint-commit`, `runtime-execution-liveness`, and `runtime-post-commit-outbox`. The remaining
+`preview.76` artifacts are historical provenance, not current `preview.77` pass evidence. A partial attachment
+does not advance a row to evidence-complete or close the package-generation readiness gate.
 
 ## 1. Inspect the frozen denominator
 
@@ -157,6 +157,11 @@ ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE=1 \
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
   --configuration Release --no-build \
   --filter 'FullyQualifiedName=Elsa.Persistence.Groundwork.Conformance.Tests.RuntimeProviderEvidencePublicationTests.Publish_the_catalog_validated_runtime_provider_evidence_slice'
+
+ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE=1 \
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  --configuration Release --no-build \
+  --filter 'FullyQualifiedName=Elsa.Persistence.Groundwork.Conformance.Tests.RuntimeProviderEvidencePublicationTests.Publish_the_checkpoint_and_fence_provider_evidence_slice'
 
 ELSA_PUBLISH_GROUNDWORK_IAM_SECRETS_EVIDENCE=1 \
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \

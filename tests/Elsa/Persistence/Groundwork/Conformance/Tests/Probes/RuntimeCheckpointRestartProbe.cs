@@ -47,6 +47,10 @@ internal static class RuntimeCheckpointRestartProbe
             .FindAsync(payload.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken);
         var inspection = await new GroundworkActivityExecutionInspectionStore(store, serializer)
             .FindAsync(payload.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken);
+        var hierarchy = await store.LoadAsync(
+            ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind,
+            DocumentId.Compose(payload.WorkflowExecutionId, payload.ActivityExecutionId),
+            cancellationToken);
         var scheduler = await new GroundworkSchedulerStateStore(store, serializer)
             .FindAsync(payload.WorkflowExecutionId, cancellationToken);
         var bookmark = await new GroundworkBookmarkStateStore(store, serializer)
@@ -70,6 +74,7 @@ internal static class RuntimeCheckpointRestartProbe
         if (workflow?.WorkflowExecutionId != payload.WorkflowExecutionId) missing.Add("workflow");
         if (activity?.Execution.ActivityExecutionId != payload.ActivityExecutionId) missing.Add("activity");
         if (inspection?.ActivityExecutionId != payload.ActivityExecutionId) missing.Add("inspection");
+        if (hierarchy is null) missing.Add("hierarchy");
         if (scheduler?.WorkflowExecutionId != payload.WorkflowExecutionId) missing.Add("scheduler");
         if (bookmark?.BookmarkId != payload.BookmarkId) missing.Add("bookmark");
         if (value?.DurableValueId != payload.DurableValueId) missing.Add("durable-value");
