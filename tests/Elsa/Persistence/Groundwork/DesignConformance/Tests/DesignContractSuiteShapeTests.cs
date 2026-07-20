@@ -37,7 +37,8 @@ public class DesignContractSuiteShapeTests
             "System.Security.Cryptography",
             "System.Text.Json",
             "xunit.assert",
-            "xunit.core"
+            "xunit.core",
+            "Xunit.SkippableFact"
         ],
         StringComparer.Ordinal);
 
@@ -47,6 +48,7 @@ public class DesignContractSuiteShapeTests
             "Microsoft.NET.Test.Sdk",
             "coverlet.collector",
             "xunit",
+            "Xunit.SkippableFact",
             "xunit.runner.visualstudio"
         ],
         StringComparer.OrdinalIgnoreCase);
@@ -75,7 +77,8 @@ public class DesignContractSuiteShapeTests
             "xunit.abstractions",
             "xunit.assert",
             "xunit.extensibility.core",
-            "xunit.extensibility.execution"
+            "xunit.extensibility.execution",
+            "Xunit.SkippableFact"
         ],
         StringComparer.OrdinalIgnoreCase);
 
@@ -102,6 +105,8 @@ public class DesignContractSuiteShapeTests
     {
         Assert.True(typeof(WorkflowDesignContractSuite).IsAbstract);
         Assert.True(typeof(ActivityDesignContractSuite).IsAbstract);
+        Assert.True(typeof(DesignAtomicityContractSuite).IsAbstract);
+        Assert.True(typeof(DesignIsolationAndRestartContractSuite).IsAbstract);
 
         var referencedAssemblies = Assembly.GetExecutingAssembly()
             .GetReferencedAssemblies()
@@ -126,6 +131,108 @@ public class DesignContractSuiteShapeTests
             "fixture signature assembly",
             signatureTypes.Select(type => type.Assembly.GetName().Name!),
             AllowedAssemblyNames);
+    }
+
+    [Fact]
+    public void Isolation_suite_declares_the_complete_provider_neutral_contract_matrix()
+    {
+        var scenarioNames = typeof(DesignIsolationAndRestartContractSuite)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Where(method => method.GetCustomAttribute<FactAttribute>() is not null)
+            .Select(method => method.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            new[]
+            {
+                nameof(DesignIsolationAndRestartContractSuite.Cross_scope_same_identity_point_read_snapshots_survive_restart),
+                nameof(DesignIsolationAndRestartContractSuite.Duplicate_workflow_and_activity_identities_are_rejected_within_a_scope),
+                nameof(DesignIsolationAndRestartContractSuite.Foreign_point_reads_are_indistinguishable_from_missing_identities),
+                nameof(DesignIsolationAndRestartContractSuite.Foreign_scope_point_writes_are_rejected_without_mutating_either_scope),
+                nameof(DesignIsolationAndRestartContractSuite.Reusable_activity_draft_rejects_a_stale_expected_revision_without_replacing_state_or_layout),
+                nameof(DesignIsolationAndRestartContractSuite.Same_point_identities_resolve_only_their_own_scope),
+                nameof(DesignIsolationAndRestartContractSuite.Single_scope_point_read_snapshot_survives_restart),
+                nameof(DesignIsolationAndRestartContractSuite.Workflow_draft_updates_preserve_the_intentional_last_writer_wins_policy)
+            }.Order(StringComparer.Ordinal),
+            scenarioNames);
+        Assert.All(
+            typeof(DesignIsolationAndRestartContractSuite)
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+                .Where(method => method.GetCustomAttribute<FactAttribute>() is not null),
+            method => Assert.NotNull(method.GetCustomAttribute<SkippableFactAttribute>()));
+    }
+
+    [Fact]
+    public void Atomicity_suite_declares_the_complete_provider_neutral_contract_matrix()
+    {
+        var scenarioNames = typeof(DesignAtomicityContractSuite)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Where(method => method.GetCustomAttribute<FactAttribute>() is not null)
+            .Select(method => method.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            new[]
+            {
+                nameof(DesignAtomicityContractSuite.Cancellation_rolls_back_and_propagates_cancellation),
+                nameof(DesignAtomicityContractSuite.Duplicate_delivery_does_not_duplicate_the_domain_outcome),
+                nameof(DesignAtomicityContractSuite.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry),
+                nameof(DesignAtomicityContractSuite.Non_success_provider_decision_rolls_back_all_staged_parts),
+                nameof(DesignAtomicityContractSuite.Partial_staging_failure_leaves_no_visible_partial_aggregate),
+                nameof(DesignAtomicityContractSuite.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result),
+                nameof(DesignAtomicityContractSuite.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation)
+            }.Order(StringComparer.Ordinal),
+            scenarioNames);
+        Assert.All(
+            typeof(DesignAtomicityContractSuite)
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+                .Where(method => method.GetCustomAttribute<FactAttribute>() is not null),
+            method => Assert.NotNull(method.GetCustomAttribute<SkippableFactAttribute>()));
+    }
+
+    [Fact]
+    public void Contract_profiles_pin_the_complete_target_and_legacy_ef_oracle_applicability_matrix()
+    {
+        var target = DesignPersistenceContractProfiles.Target;
+        Assert.Equal("target", target.Name);
+        Assert.Equal(Enum.GetValues<DesignPersistenceContractScenario>().Order(), target.Applicability.Keys.Order());
+        Assert.All(target.Applicability.Values, applicability => Assert.True(applicability.IsApplicable));
+        Assert.All(target.Applicability.Values, applicability => Assert.Null(applicability.NotApplicableReason));
+
+        var legacyEfOracle = DesignPersistenceContractProfiles.LegacyEfOracle;
+        Assert.Equal("legacy-ef-oracle", legacyEfOracle.Name);
+        var expected = new Dictionary<DesignPersistenceContractScenario, string?>
+        {
+            [DesignPersistenceContractScenario.AtomicityPartialStagingFailure] = null,
+            [DesignPersistenceContractScenario.AtomicityNonSuccessProviderDecision] = "Legacy EF commands expose provider failures as exceptions, not a provider-decision non-success result.",
+            [DesignPersistenceContractScenario.AtomicityCancellation] = null,
+            [DesignPersistenceContractScenario.AtomicityLostAcknowledgement] = "Legacy EF commands do not persist an operation ledger that can reconcile acknowledgement loss.",
+            [DesignPersistenceContractScenario.AtomicityExactReplay] = "Legacy EF mutation contracts do not accept a caller-stable operation key or persist replay outcomes.",
+            [DesignPersistenceContractScenario.AtomicityKeyReuseConflict] = "Legacy EF mutation contracts do not accept a caller-stable operation key or compare canonical request fingerprints.",
+            [DesignPersistenceContractScenario.AtomicityDuplicateDelivery] = "Legacy EF mutation contracts have no durable operation ledger to suppress duplicate delivery outcomes.",
+            [DesignPersistenceContractScenario.IsolationSamePointIdentities] = "Legacy EF identity keys are global and cannot represent the target scope-local same-identity semantics.",
+            [DesignPersistenceContractScenario.IsolationForeignPointReads] = "Legacy EF fixtures do not bind point reads to a storage scope and therefore cannot prove target non-disclosure.",
+            [DesignPersistenceContractScenario.IsolationForeignScopeWrites] = "Legacy EF fixtures do not bind writes to a storage scope and therefore cannot prove target cross-scope rejection.",
+            [DesignPersistenceContractScenario.IsolationDuplicateIdentities] = null,
+            [DesignPersistenceContractScenario.IsolationReusableActivityDraftOcc] = "Legacy EF reusable activity drafts do not expose the target expected-revision replace contract.",
+            [DesignPersistenceContractScenario.IsolationWorkflowDraftLastWriterWins] = null,
+            [DesignPersistenceContractScenario.IsolationSingleScopeRestart] = null,
+            [DesignPersistenceContractScenario.IsolationCrossScopeSameIdentityRestart] = "Legacy EF identity keys are global and cannot represent cross-scope same-identity restart isolation."
+        };
+
+        Assert.Equal(expected.Keys.Order(), legacyEfOracle.Applicability.Keys.Order());
+
+        foreach (var (scenario, reason) in expected)
+        {
+            var applicability = legacyEfOracle.GetApplicability(scenario);
+            Assert.Equal(reason is null, applicability.IsApplicable);
+            Assert.Equal(reason, applicability.NotApplicableReason);
+        }
+
+        Assert.Equal(5, legacyEfOracle.Applicability.Values.Count(applicability => applicability.IsApplicable));
+        Assert.Equal(10, legacyEfOracle.Applicability.Values.Count(applicability => !applicability.IsApplicable));
     }
 
     [Fact]
@@ -177,7 +284,7 @@ public class DesignContractSuiteShapeTests
     }
 
     [Fact]
-    public void Fixture_exposes_staging_and_actual_event_observation_but_no_reconciliation_shortcut()
+    public void Fixture_exposes_staging_event_observation_and_provider_neutral_atomicity_controls()
     {
         var fixtureType = typeof(IDesignPersistenceContractFixture);
 
@@ -187,6 +294,50 @@ public class DesignContractSuiteShapeTests
         var observation = fixtureType.GetMethod(nameof(IDesignPersistenceContractFixture.ReadObservedEventsAsync));
         Assert.NotNull(observation);
         Assert.Equal(typeof(Task<IReadOnlyList<IEvent>>), observation!.ReturnType);
+
+        var armFault = fixtureType.GetMethod(nameof(IDesignPersistenceContractFixture.ArmAtomicityFaultAsync));
+        Assert.NotNull(armFault);
+        Assert.Equal(typeof(Task<IDesignAtomicityFaultLease>), armFault!.ReturnType);
+
+        var operation = fixtureType.GetMethod(nameof(IDesignPersistenceContractFixture.ExecuteAtomicityOperationAsync));
+        Assert.NotNull(operation);
+        Assert.Equal(typeof(Task<DesignAtomicityOperationResult>), operation!.ReturnType);
+
+        var snapshot = fixtureType.GetMethod(nameof(IDesignPersistenceContractFixture.ReadAtomicitySnapshotAsync));
+        Assert.NotNull(snapshot);
+        Assert.Equal(typeof(Task<DesignAtomicitySnapshot>), snapshot!.ReturnType);
+
+        var snapshotProperties = typeof(DesignAtomicitySnapshot).GetProperties();
+        Assert.Equal(typeof(string), snapshotProperties.Single(x => x.Name == "CanonicalAggregateStateFingerprint").PropertyType);
+        Assert.Equal(typeof(string), snapshotProperties.Single(x => x.Name == "AuthoritativeDurableResultFingerprint").PropertyType);
+
+        Assert.Equal(
+            new[]
+            {
+                DesignAtomicityFaultPhase.AfterStagedWrite,
+                DesignAtomicityFaultPhase.BeforeProviderDecision,
+                DesignAtomicityFaultPhase.AfterDurableDecision
+            },
+            Enum.GetValues<DesignAtomicityFaultPhase>());
+        Assert.Equal(
+            new[]
+            {
+                DesignAtomicityFaultAction.Throw,
+                DesignAtomicityFaultAction.Cancel,
+                DesignAtomicityFaultAction.ReturnNonSuccess
+            },
+            Enum.GetValues<DesignAtomicityFaultAction>());
+        Assert.Throws<ArgumentException>(() => new DesignAtomicityFaultPlan(
+            DesignAtomicityFaultPhase.AfterDurableDecision,
+            DesignAtomicityFaultAction.ReturnNonSuccess));
+        _ = new DesignAtomicityFaultPlan(DesignAtomicityFaultPhase.AfterDurableDecision, DesignAtomicityFaultAction.Throw);
+        _ = new DesignAtomicityFaultPlan(DesignAtomicityFaultPhase.AfterDurableDecision, DesignAtomicityFaultAction.Cancel);
+
+        var requestProperties = typeof(DesignAtomicityOperationRequest).GetProperties();
+        Assert.Equal(typeof(DesignAtomicityOperationKey), requestProperties.Single(x => x.Name == "OperationKey").PropertyType);
+        Assert.Equal(typeof(DesignCanonicalRequestFingerprint), requestProperties.Single(x => x.Name == "CanonicalRequestFingerprint").PropertyType);
+        Assert.NotNull(typeof(DesignAtomicityContractSuite).GetProperty("ContractProfile", BindingFlags.Instance | BindingFlags.NonPublic));
+        Assert.NotNull(typeof(DesignIsolationAndRestartContractSuite).GetProperty("ContractProfile", BindingFlags.Instance | BindingFlags.NonPublic));
     }
 
     private static IEnumerable<Type> ExpandType(Type type)

@@ -86,7 +86,7 @@ If implementation inventory finds another public design persistence contract, it
 2. Multi-document domain transitions use one provider transaction/UoW and become fully visible together.
 3. Every staged result is inspected; any non-success or exception rolls back the whole UoW.
 4. Expected-version conflicts do not change canonical JSON, projections, related documents, or operation ledgers.
-5. Retried requests use deterministic operation identity and canonical fingerprint. Reuse with a different request is a conflict; replay of an acknowledged or acknowledgement-lost commit returns the authoritative prior outcome.
+5. Every retryable mutation request carries an explicit caller-stable operation/idempotency key. The key is separate from the canonical fingerprint derived from the mutation material. Exact key-plus-fingerprint replay of an acknowledged or acknowledgement-lost commit returns the authoritative prior outcome; reuse of the key with a different fingerprint is a conflict with no mutation.
 6. Insert uniqueness and version identity include storage scope.
 7. Domain events retain their established publication phase and failure policy. A storage retry does not publish a duplicate outcome event.
 8. MongoDB composition advertises multi-document design writes only on a transaction-capable deployment.
