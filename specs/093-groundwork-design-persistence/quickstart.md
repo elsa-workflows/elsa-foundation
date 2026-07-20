@@ -85,13 +85,13 @@ dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.
 #### Stable-candidate verification
 
 The latest tested source/test candidate is
-`f269a165d7cdc8e2582c375a42e9d9b4fe6163c7`. Verification completed at
-`2026-07-20T12:43:05+02:00` (CEST, `Europe/Amsterdam`) with these exact results:
+`e83ae80617216c10d2dca8f7388adce54b7d5d3f`. Verification completed at
+`2026-07-20T13:02:50+02:00` (CEST, `Europe/Amsterdam`) with these exact results:
 
 - `dotnet test tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj -c Release --no-restore`
-  — passed `71/71` (`0` failed, `0` skipped).
+  — passed `84/84` (`0` failed, `0` skipped).
 - `dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
-  — passed `625/625` (`0` failed, `0` skipped).
+  — passed `626/626` (`0` failed, `0` skipped).
 - `dotnet test tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
   — passed `52/52` (`0` failed, `0` skipped).
 - `dotnet test tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
@@ -106,6 +106,8 @@ The latest tested source/test candidate is
   — passed `490/490` (`0` failed, `0` skipped).
 - `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore`
   — passed `251/251` (`0` failed, `0` skipped).
+- `dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603`
+  — succeeded with `0` errors and `39` existing warnings.
 
 The architecture ratchet used the complete repository assets restored earlier in the
 work unit. The documentation-only follow-up changes only this quickstart. The commands
