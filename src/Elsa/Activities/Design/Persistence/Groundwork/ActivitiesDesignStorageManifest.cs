@@ -46,6 +46,24 @@ public static class ActivitiesDesignStorageManifest
     public const string ManagementDraftStatusField = "entity.status";
     public const string ManagementVersionLifecycleField = "entity.lifecycle";
     public const string ListAllQuery = "list-all";
+    public const string ActivityDefinitionIdField = "entity.id";
+    public const string ActivityDefinitionTypeKeyField = "entity.activityTypeKey";
+    public const string ActivityDefinitionCategoryField = "entity.category";
+    public const string ActivityDefinitionDisplayNameField = "entity.displayName";
+    public const string ActivityDefinitionDescriptionField = "entity.description";
+    public const string ActivityDefinitionVersionIdField = "entity.id";
+    public const string ActivityDefinitionVersionDefinitionIdField = "entity.definitionId";
+    public const string ActivityDefinitionVersionSemVerSortKeyField = "entity.semVerSortKey";
+    public const string FindActivityDefinitionByIdQuery = "find-activity-definition-by-id";
+    public const string ListActivityDefinitionsByIdQuery = "list-activity-definitions-by-id";
+    public const string ListActivityDefinitionsByTypeKeyQuery = "list-activity-definitions-by-type-key";
+    public const string ListActivityDefinitionsByCategoryQuery = "list-activity-definitions-by-category";
+    public const string ListActivityDefinitionsByDisplayNameQuery = "list-activity-definitions-by-display-name";
+    public const string ListActivityDefinitionsByDescriptionQuery = "list-activity-definitions-by-description";
+    public const string SearchActivityDefinitionsQuery = "search-activity-definitions";
+    public const string FindActivityDefinitionVersionByIdQuery = "find-activity-definition-version-by-id";
+    public const string ListActivityDefinitionVersionsByDefinitionQuery = "list-activity-definition-versions-by-definition";
+    public const string FindActivityDefinitionVersionByDefinitionAndSortKeyQuery = "find-activity-definition-version-by-definition-and-sort-key";
 
     public const string ActivityDefinitionDocumentKind = "activityDefinition";
 
@@ -122,16 +140,8 @@ public static class ActivitiesDesignStorageManifest
         new StorageManifestOwner("elsa.activities.design"),
         new StorageManifestVersion(SchemaVersion),
         [
-            Unit(
-                ActivityDefinitionDocumentKind,
-                "Activity definition",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query(ListAllQuery, ByCollectionIndex)]),
-            Unit(
-                ActivityDefinitionVersionDocumentKind,
-                "Activity definition version",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query(ListAllQuery, ByCollectionIndex)]),
+            ActivityDefinitionUnit(),
+            ActivityDefinitionVersionUnit(),
             Unit(
                 ActivityAvailabilitySettingsDocumentKind,
                 "Activity availability settings",
@@ -267,6 +277,251 @@ public static class ActivitiesDesignStorageManifest
         ],
         new HashSet<string> { "optimistic-concurrency" },
         []);
+
+    private static StorageUnit ActivityDefinitionUnit()
+    {
+        var logicalIndexes = new[]
+        {
+            LogicalIndex(ByCollectionIndex, [CollectionField, DocumentIdField]),
+            LogicalIndex("activity-definition-by-id-point", [DocumentIdField], unique: true),
+            LogicalIndex("activity-definition-by-id", [ActivityDefinitionIdField]),
+            LogicalIndex("activity-definition-by-type-key", [ActivityDefinitionTypeKeyField, ActivityDefinitionIdField]),
+            LogicalIndex("activity-definition-by-category", [ActivityDefinitionCategoryField, ActivityDefinitionIdField]),
+            LogicalIndex("activity-definition-by-display-name", [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField]),
+            LogicalIndex("activity-definition-by-description", [ActivityDefinitionDescriptionField, ActivityDefinitionIdField]),
+            LogicalIndex("activity-definition-by-search", [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField])
+        };
+        var physicalIndexes = new[]
+        {
+            PhysicalIndex(ByCollectionIndex, "collection", "id_comparison_key"),
+            PointLookupIndex("activity-definition-by-id-point"),
+            PhysicalIndex("activity-definition-by-id", "activity_definition_id"),
+            PhysicalIndex("activity-definition-by-type-key", "activity_type_key", "activity_definition_id"),
+            PhysicalIndex("activity-definition-by-category", "category", "activity_definition_id"),
+            PhysicalIndex("activity-definition-by-display-name", "display_name", "activity_definition_id"),
+            PhysicalIndex("activity-definition-by-description", "description", "activity_definition_id"),
+            PhysicalIndex("activity-definition-by-search", "display_name", "activity_definition_id")
+        };
+        var documentResults = new[]
+        {
+            BoundedQueryResultOperation.Documents,
+            BoundedQueryResultOperation.Count,
+            BoundedQueryResultOperation.First,
+            BoundedQueryResultOperation.Any
+        };
+        var queries = new[]
+        {
+            BoundedQuery(
+                ListAllQuery,
+                ByCollectionIndex,
+                [Predicate(CollectionField, PortableQueryOperation.Equal)],
+                QueryPagingSupport.Offset,
+                QuerySortSupport.Ascending,
+                [BoundedQueryResultOperation.Documents],
+                sortFields: [new BoundedQuerySortField(DocumentIdField, PhysicalSortDirection.Ascending)]),
+            BoundedQuery(
+                FindActivityDefinitionByIdQuery,
+                "activity-definition-by-id-point",
+                [Predicate(DocumentIdField, PortableQueryOperation.Equal)],
+                QueryPagingSupport.None,
+                QuerySortSupport.None,
+                [BoundedQueryResultOperation.First, BoundedQueryResultOperation.Any]),
+            BoundedQuery(
+                ListActivityDefinitionsByIdQuery,
+                "activity-definition-by-id",
+                [
+                    Predicate(
+                        ActivityDefinitionIdField,
+                        PortableQueryOperation.Equal,
+                        PortableQueryOperation.In,
+                        PortableQueryOperation.Contains)
+                ],
+                QueryPagingSupport.Offset,
+                QuerySortSupport.Ascending,
+                documentResults,
+                supportsDisjunction: true,
+                sortFields: DefinitionSort(ActivityDefinitionIdField),
+                residualPredicateFields: DefinitionResiduals(ActivityDefinitionIdField)),
+            BoundedQuery(
+                ListActivityDefinitionsByTypeKeyQuery,
+                "activity-definition-by-type-key",
+                [
+                    Predicate(
+                        ActivityDefinitionTypeKeyField,
+                        PortableQueryOperation.Equal,
+                        PortableQueryOperation.In,
+                        PortableQueryOperation.Contains)
+                ],
+                QueryPagingSupport.Offset,
+                QuerySortSupport.Ascending,
+                documentResults,
+                supportsDisjunction: true,
+                sortFields: DefinitionSort(ActivityDefinitionTypeKeyField),
+                residualPredicateFields: DefinitionResiduals(ActivityDefinitionTypeKeyField)),
+            BoundedQuery(
+                ListActivityDefinitionsByCategoryQuery,
+                "activity-definition-by-category",
+                [
+                    Predicate(
+                        ActivityDefinitionCategoryField,
+                        PortableQueryOperation.Equal,
+                        PortableQueryOperation.Contains)
+                ],
+                QueryPagingSupport.Offset,
+                QuerySortSupport.Ascending,
+                documentResults,
+                supportsDisjunction: true,
+                sortFields: DefinitionSort(ActivityDefinitionCategoryField),
+                residualPredicateFields: DefinitionResiduals(ActivityDefinitionCategoryField)),
+            BoundedQuery(
+                ListActivityDefinitionsByDisplayNameQuery,
+                "activity-definition-by-display-name",
+                [
+                    Predicate(
+                        ActivityDefinitionDisplayNameField,
+                        PortableQueryOperation.Equal,
+                        PortableQueryOperation.Contains)
+                ],
+                QueryPagingSupport.Offset,
+                QuerySortSupport.Ascending,
+                documentResults,
+                supportsDisjunction: true,
+                sortFields: DefinitionSort(ActivityDefinitionDisplayNameField),
+                residualPredicateFields: DefinitionResiduals(ActivityDefinitionDisplayNameField)),
+            BoundedQuery(
+                ListActivityDefinitionsByDescriptionQuery,
+                "activity-definition-by-description",
+                [
+                    Predicate(
+                        ActivityDefinitionDescriptionField,
+                        PortableQueryOperation.Equal,
+                        PortableQueryOperation.Contains)
+                ],
+                QueryPagingSupport.Offset,
+                QuerySortSupport.Ascending,
+                documentResults,
+                supportsDisjunction: true,
+                sortFields: DefinitionSort(ActivityDefinitionDescriptionField),
+                residualPredicateFields: DefinitionResiduals(ActivityDefinitionDescriptionField)),
+            BoundedQuery(
+                SearchActivityDefinitionsQuery,
+                "activity-definition-by-search",
+                [
+                    Predicate(
+                        ActivityDefinitionDisplayNameField,
+                        PortableQueryOperation.Equal,
+                        PortableQueryOperation.Contains)
+                ],
+                QueryPagingSupport.Offset,
+                QuerySortSupport.Ascending,
+                documentResults,
+                supportsDisjunction: true,
+                sortFields: DefinitionSort(ActivityDefinitionDisplayNameField),
+                residualPredicateFields: DefinitionResiduals(ActivityDefinitionDisplayNameField))
+        };
+
+        return ExplicitPhysicalUnit(
+            ActivityDefinitionDocumentKind,
+            "Activity definition",
+            [
+                Column("collection", CollectionField, false),
+                Column("activity_definition_id", ActivityDefinitionIdField, false),
+                Column("activity_type_key", ActivityDefinitionTypeKeyField, false),
+                Column("category", ActivityDefinitionCategoryField, false),
+                Column("display_name", ActivityDefinitionDisplayNameField),
+                Column("description", ActivityDefinitionDescriptionField)
+            ],
+            logicalIndexes,
+            physicalIndexes,
+            queries);
+    }
+
+    private static StorageUnit ActivityDefinitionVersionUnit()
+    {
+        var logicalIndexes = new[]
+        {
+            LogicalIndex(ByCollectionIndex, [CollectionField, DocumentIdField]),
+            LogicalIndex("activity-definition-version-by-id-point", [DocumentIdField], unique: true),
+            LogicalIndex(
+                "activity-definition-versions-by-definition",
+                [
+                    ActivityDefinitionVersionDefinitionIdField,
+                    ActivityDefinitionVersionSemVerSortKeyField,
+                    ActivityDefinitionVersionIdField
+                ]),
+            LogicalIndex(
+                "activity-definition-version-by-definition-and-sort-key",
+                [ActivityDefinitionVersionDefinitionIdField, ActivityDefinitionVersionSemVerSortKeyField])
+        };
+        var physicalIndexes = new[]
+        {
+            PhysicalIndex(ByCollectionIndex, "collection", "id_comparison_key"),
+            PointLookupIndex("activity-definition-version-by-id-point"),
+            PhysicalIndex(
+                "activity-definition-versions-by-definition",
+                "definition_id",
+                "sem_ver_sort_key",
+                "version_id"),
+            PhysicalIndex(
+                "activity-definition-version-by-definition-and-sort-key",
+                "definition_id",
+                "sem_ver_sort_key")
+        };
+        var queries = new[]
+        {
+            BoundedQuery(
+                ListAllQuery,
+                ByCollectionIndex,
+                [Predicate(CollectionField, PortableQueryOperation.Equal)],
+                QueryPagingSupport.Offset,
+                QuerySortSupport.Ascending,
+                [BoundedQueryResultOperation.Documents],
+                sortFields: [new BoundedQuerySortField(DocumentIdField, PhysicalSortDirection.Ascending)]),
+            BoundedQuery(
+                FindActivityDefinitionVersionByIdQuery,
+                "activity-definition-version-by-id-point",
+                [Predicate(DocumentIdField, PortableQueryOperation.Equal)],
+                QueryPagingSupport.None,
+                QuerySortSupport.None,
+                [BoundedQueryResultOperation.First, BoundedQueryResultOperation.Any]),
+            BoundedQuery(
+                ListActivityDefinitionVersionsByDefinitionQuery,
+                "activity-definition-versions-by-definition",
+                [
+                    Predicate(
+                        ActivityDefinitionVersionDefinitionIdField,
+                        PortableQueryOperation.Equal,
+                        PortableQueryOperation.In)
+                ],
+                QueryPagingSupport.Offset,
+                QuerySortSupport.Ascending,
+                [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count],
+                sortFields: ActivityDefinitionVersionSort()),
+            BoundedQuery(
+                FindActivityDefinitionVersionByDefinitionAndSortKeyQuery,
+                "activity-definition-version-by-definition-and-sort-key",
+                [
+                    Predicate(ActivityDefinitionVersionDefinitionIdField, PortableQueryOperation.Equal),
+                    Predicate(ActivityDefinitionVersionSemVerSortKeyField, PortableQueryOperation.Equal)
+                ],
+                QueryPagingSupport.None,
+                QuerySortSupport.None,
+                [BoundedQueryResultOperation.First, BoundedQueryResultOperation.Any])
+        };
+
+        return ExplicitPhysicalUnit(
+            ActivityDefinitionVersionDocumentKind,
+            "Activity definition version",
+            [
+                Column("collection", CollectionField, false),
+                Column("version_id", ActivityDefinitionVersionIdField, false),
+                Column("definition_id", ActivityDefinitionVersionDefinitionIdField, false),
+                Column("sem_ver_sort_key", ActivityDefinitionVersionSemVerSortKeyField, false)
+            ],
+            logicalIndexes,
+            physicalIndexes,
+            queries);
+    }
 
     private static StorageUnit Unit(
         string documentKind,
@@ -447,6 +702,164 @@ public static class ActivitiesDesignStorageManifest
                 boundedQueries)
         };
     }
+
+    private static StorageUnit ExplicitPhysicalUnit(
+        string documentKind,
+        string label,
+        ProjectedColumnDefinition[] columns,
+        LogicalIndexDeclaration[] logicalIndexes,
+        PhysicalIndexDefinition[] physicalIndexes,
+        BoundedQueryDeclaration[] boundedQueries)
+    {
+        var unit = BaseUnit(documentKind, label, LifecyclePolicy.Mutable);
+        return unit with
+        {
+            PhysicalStorage = new StorageUnitPhysicalStorage(
+                StorageUnitProvisioningMode.Declared,
+                PhysicalStoragePolicy.Explicit(
+                    PhysicalTableDefinition.PhysicalEntityTable(documentKind, columns, indexes: physicalIndexes)),
+                logicalIndexes,
+                boundedQueries)
+        };
+    }
+
+    private static LogicalIndexDeclaration LogicalIndex(
+        string identity,
+        string[] fields,
+        bool unique = false) =>
+        new(
+            identity,
+            fields.Select(field => new IndexField(field, IndexValueKind.Keyword)).ToArray(),
+            IndexValueKind.Keyword,
+            unique,
+            MissingValueBehavior.Excluded);
+
+    private static PhysicalIndexDefinition PhysicalIndex(string identity, params string[] columns) =>
+        new(
+            identity,
+            [
+                new PhysicalIndexColumnDefinition("storage_scope", 0),
+                .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1))
+            ],
+            missingValueBehavior: MissingValueBehavior.Excluded);
+
+    private static PhysicalIndexDefinition PointLookupIndex(string identity) =>
+        new(
+            identity,
+            [
+                new PhysicalIndexColumnDefinition("storage_scope", 0),
+                new PhysicalIndexColumnDefinition("id_lookup_key", 1),
+                new PhysicalIndexColumnDefinition("id_comparison_key", 2)
+            ],
+            isUnique: true,
+            missingValueBehavior: MissingValueBehavior.Excluded);
+
+    private static BoundedQueryDeclaration BoundedQuery(
+        string identity,
+        string index,
+        BoundedQueryPredicateField[] predicates,
+        QueryPagingSupport paging,
+        QuerySortSupport sort,
+        BoundedQueryResultOperation[] results,
+        bool supportsDisjunction = false,
+        BoundedQuerySortField[]? sortFields = null,
+        BoundedQueryResidualPredicateField[]? residualPredicateFields = null) =>
+        new(
+            identity,
+            index,
+            predicates
+                .SelectMany(predicate => predicate.Operations)
+                .Concat(residualPredicateFields?.SelectMany(predicate => predicate.Operations) ?? [])
+                .ToHashSet(),
+            sort,
+            paging,
+            BoundedQueryExecutionClass.ScaleBearing,
+            supportsDisjunction,
+            supportsTotalCount: results.Contains(BoundedQueryResultOperation.Count),
+            sortFields: sortFields,
+            predicateFields: predicates,
+            resultOperations: results.ToHashSet(),
+            residualPredicateFields: residualPredicateFields);
+
+    private static BoundedQueryResidualPredicateField[] DefinitionResiduals(params string[] excludedPaths)
+    {
+        var fields = new[]
+        {
+            (
+                Path: ActivityDefinitionIdField,
+                Operations: new[] { PortableQueryOperation.Equal, PortableQueryOperation.In, PortableQueryOperation.Contains }),
+            (
+                Path: ActivityDefinitionTypeKeyField,
+                Operations: new[] { PortableQueryOperation.Equal, PortableQueryOperation.In, PortableQueryOperation.Contains }),
+            (
+                Path: ActivityDefinitionCategoryField,
+                Operations: new[] { PortableQueryOperation.Equal, PortableQueryOperation.Contains }),
+            (
+                Path: ActivityDefinitionDisplayNameField,
+                Operations: new[] { PortableQueryOperation.Equal, PortableQueryOperation.Contains }),
+            (
+                Path: ActivityDefinitionDescriptionField,
+                Operations: new[] { PortableQueryOperation.Equal, PortableQueryOperation.Contains })
+        };
+
+        return fields
+            .Where(field => !excludedPaths.Contains(field.Path, StringComparer.Ordinal))
+            .Select(field => ResidualPredicate(field.Path, field.Operations))
+            .ToArray();
+    }
+
+    public static IReadOnlyList<DocumentQueryOrder> ActivityDefinitionIdOrder { get; } =
+        [new(ActivityDefinitionIdField, PhysicalSortDirection.Ascending)];
+
+    public static IReadOnlyList<DocumentQueryOrder> ActivityDefinitionTypeKeyOrder { get; } =
+    [
+        new(ActivityDefinitionTypeKeyField, PhysicalSortDirection.Ascending),
+        new(ActivityDefinitionIdField, PhysicalSortDirection.Ascending)
+    ];
+
+    public static IReadOnlyList<DocumentQueryOrder> ActivityDefinitionCategoryOrder { get; } =
+    [
+        new(ActivityDefinitionCategoryField, PhysicalSortDirection.Ascending),
+        new(ActivityDefinitionIdField, PhysicalSortDirection.Ascending)
+    ];
+
+    public static IReadOnlyList<DocumentQueryOrder> ActivityDefinitionDisplayNameOrder { get; } =
+    [
+        new(ActivityDefinitionDisplayNameField, PhysicalSortDirection.Ascending),
+        new(ActivityDefinitionIdField, PhysicalSortDirection.Ascending)
+    ];
+
+    public static IReadOnlyList<DocumentQueryOrder> ActivityDefinitionDescriptionOrder { get; } =
+    [
+        new(ActivityDefinitionDescriptionField, PhysicalSortDirection.Ascending),
+        new(ActivityDefinitionIdField, PhysicalSortDirection.Ascending)
+    ];
+
+    public static IReadOnlyList<DocumentQueryOrder> ActivityDefinitionSearchOrder { get; } =
+        ActivityDefinitionDisplayNameOrder;
+
+    public static IReadOnlyList<DocumentQueryOrder> ActivityDefinitionVersionOrder { get; } =
+    [
+        new(ActivityDefinitionVersionDefinitionIdField, PhysicalSortDirection.Ascending),
+        new(ActivityDefinitionVersionSemVerSortKeyField, PhysicalSortDirection.Ascending),
+        new(ActivityDefinitionVersionIdField, PhysicalSortDirection.Ascending)
+    ];
+
+    private static BoundedQuerySortField[] DefinitionSort(string primaryField) =>
+        primaryField == ActivityDefinitionIdField
+            ? [new BoundedQuerySortField(ActivityDefinitionIdField, PhysicalSortDirection.Ascending)]
+            :
+            [
+                new BoundedQuerySortField(primaryField, PhysicalSortDirection.Ascending),
+                new BoundedQuerySortField(ActivityDefinitionIdField, PhysicalSortDirection.Ascending)
+            ];
+
+    private static BoundedQuerySortField[] ActivityDefinitionVersionSort() =>
+    [
+        new(ActivityDefinitionVersionDefinitionIdField, PhysicalSortDirection.Ascending),
+        new(ActivityDefinitionVersionSemVerSortKeyField, PhysicalSortDirection.Ascending),
+        new(ActivityDefinitionVersionIdField, PhysicalSortDirection.Ascending)
+    ];
 
     private static ProjectedColumnDefinition Column(
         string name,

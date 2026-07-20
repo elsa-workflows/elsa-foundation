@@ -1,5 +1,6 @@
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -10,9 +11,9 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 /// <summary>
 /// Groundwork (document) implementation of <see cref="IWorkflowDefinitionVersionStore"/>, the document-store
-/// counterpart of <c>EFCoreWorkflowDefinitionVersionStore</c>. Both translate the named read operations into
-/// the closed <see cref="Query{TEntity}"/> spec; this one executes it against a Groundwork
-/// <see cref="IDocumentStore"/> via <see cref="GroundworkReadStore{TEntity}"/>.
+/// counterpart of <c>EFCoreWorkflowDefinitionVersionStore</c>. It translates each closed
+/// <see cref="Query{TEntity}"/> shape to an explicitly admitted Groundwork route and executes it through one
+/// access-bound store session.
 /// <para>
 /// This is the first <b>rich</b> design aggregate on the document path: its authored
 /// <c>WorkflowDefinitionState</c> is serialized via <see cref="IPayloadSerializer"/> (the same serializer
@@ -23,24 +24,22 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 /// </summary>
 public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefinitionVersionStore
 {
-    private readonly GroundworkReadStore<WorkflowDefinitionVersion> _reads;
+    private readonly GroundworkNamedQueryAccess<WorkflowDefinitionVersion> _reads;
     private readonly IWorkflowDefinitionStore _definitions;
 
     public GroundworkWorkflowDefinitionVersionStore(
         IDocumentStore store,
         IWorkflowDefinitionStore definitions,
         IPayloadSerializer payloadSerializer,
-        IBoundedDocumentStore? boundedStore = null)
+        IBoundedDocumentStore? boundedStore = null,
+        IGroundworkStoreSessionFactory? sessions = null)
     {
-        _reads = new GroundworkReadStore<WorkflowDefinitionVersion>(
+        _reads = new GroundworkNamedQueryAccess<WorkflowDefinitionVersion>(
             store,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            WorkflowsDesignStorageManifest.ListAllQuery,
-            WorkflowsDesignStorageManifest.CollectionField,
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             boundedStore,
-            collectionOrder: WorkflowsDesignStorageManifest.DeterministicDocumentOrder);
+            sessions);
         _definitions = definitions;
     }
 
@@ -49,7 +48,10 @@ public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefiniti
            ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), versionId);
 
     public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default)
-        => _reads.FirstOrDefaultAsync(ById(versionId), cancellationToken);
+        => _reads.ExecuteAsync(
+            acrossScopes: false,
+            (executor, token) => executor.LoadAsync(versionId, token),
+            cancellationToken);
 
     public async Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default)
     {
@@ -63,22 +65,33 @@ public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefiniti
     }
 
     public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default)
-        => _reads.FirstOrDefaultAsync(
-            Query<WorkflowDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId)
-                .OrderByDescending(x => x.SemVerSortKey),
+        => _reads.ExecuteAsync(
+            acrossScopes: false,
+            (executor, token) => executor.FirstOrDefaultAsync(
+                WorkflowsDesignStorageManifest.FindLatestVersionQuery,
+                Query<WorkflowDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId)
+                    .OrderByDescending(x => x.SemVerSortKey),
+                WorkflowsDesignStorageManifest.WorkflowDefinitionLatestVersionOrder,
+                token),
             cancellationToken);
 
-    public async Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default)
-        => await _reads.QueryAsync(
-            Query<WorkflowDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId),
+    public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default)
+        => _reads.ExecuteAsync(
+            acrossScopes: false,
+            (executor, token) => executor.QueryAsync(
+                WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery,
+                Query<WorkflowDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId),
+                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionOrder,
+                token),
             cancellationToken);
 
     public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default)
-        => _reads.AnyAsync(
-            Query<WorkflowDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId)
-                .And(x => x.SemVerSortKey, QueryOp.Equal, semVerSortKey),
+        => _reads.ExecuteAsync(
+            acrossScopes: false,
+            (executor, token) => executor.AnyAsync(
+                WorkflowsDesignStorageManifest.FindVersionByDefinitionAndSortKeyQuery,
+                Query<WorkflowDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId)
+                    .And(x => x.SemVerSortKey, QueryOp.Equal, semVerSortKey),
+                token),
             cancellationToken);
-
-    private static Query<WorkflowDefinitionVersion> ById(string versionId)
-        => Query<WorkflowDefinitionVersion>.Where(x => x.Id, QueryOp.Equal, versionId);
 }

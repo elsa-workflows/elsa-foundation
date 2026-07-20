@@ -4,6 +4,8 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Exceptions;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -21,7 +23,10 @@ public class GroundworkActivityDefinitionVersionStoreTests
     private const string SchemaVersion = ActivitiesDesignStorageManifest.SchemaVersion;
     private static readonly FakePayloadSerializer Payloads = new();
 
-    private static async Task<(GroundworkActivityDefinitionVersionStore Store, InMemoryDocumentStore Raw)> SeededAsync(
+    private static async Task<(
+        GroundworkActivityDefinitionVersionStore Store,
+        InMemoryDocumentStore Raw,
+        RecordingBoundedDocumentStore Bounded)> SeededAsync(
         ActivityDefinition[] definitions,
         params ActivityDefinitionVersion[] versions)
     {
@@ -47,7 +52,11 @@ public class GroundworkActivityDefinitionVersionStoreTests
         }
 
         var definitionStore = new GroundworkActivityDefinitionStore(raw);
-        return (new GroundworkActivityDefinitionVersionStore(raw, definitionStore, Payloads), raw);
+        var bounded = new RecordingBoundedDocumentStore(raw);
+        return (
+            new GroundworkActivityDefinitionVersionStore(raw, definitionStore, Payloads, bounded),
+            raw,
+            bounded);
     }
 
     private static ActivityDefinition Definition(string id, string typeKey = "Acme.Send") =>
@@ -69,7 +78,7 @@ public class GroundworkActivityDefinitionVersionStoreTests
     [Fact]
     public async Task Get_round_trips_descriptor_payload_and_facets()
     {
-        var (store, _) = await SeededAsync([Definition("def1")], Version("v1", "def1", withFacet: true));
+        var (store, _, _) = await SeededAsync([Definition("def1")], Version("v1", "def1", withFacet: true));
 
         var result = await store.GetAsync("v1");
 
@@ -83,14 +92,14 @@ public class GroundworkActivityDefinitionVersionStoreTests
     [Fact]
     public async Task Get_throws_when_absent()
     {
-        var (store, _) = await SeededAsync([Definition("def1")], Version("v1", "def1"));
+        var (store, _, _) = await SeededAsync([Definition("def1")], Version("v1", "def1"));
         await Assert.ThrowsAsync<EntityNotFoundException>(() => store.GetAsync("missing"));
     }
 
     [Fact]
     public async Task GetWithDefinition_loads_owning_definition_via_second_read()
     {
-        var (store, _) = await SeededAsync([Definition("def1", "Acme.Send")], Version("v1", "def1"));
+        var (store, _, _) = await SeededAsync([Definition("def1", "Acme.Send")], Version("v1", "def1"));
 
         var result = await store.GetWithDefinitionAsync("v1");
 
@@ -104,7 +113,7 @@ public class GroundworkActivityDefinitionVersionStoreTests
     {
         // GetWithDefinitionAsync must use the same not-found convention as GetAsync (and the
         // 404-mapping infrastructure / FindVersion assume) rather than ArgumentException (issue #417 item 8).
-        var (store, _) = await SeededAsync([Definition("def1")], Version("v1", "def1"));
+        var (store, _, _) = await SeededAsync([Definition("def1")], Version("v1", "def1"));
 
         await Assert.ThrowsAsync<EntityNotFoundException>(() => store.GetWithDefinitionAsync("missing"));
     }
@@ -114,7 +123,7 @@ public class GroundworkActivityDefinitionVersionStoreTests
     {
         var v1 = Version("v1", "def1", "1.0.0");
         var v2 = Version("v2", "def1", "2.0.0");
-        var (store, _) = await SeededAsync([Definition("def1")], v1, v2);
+        var (store, _, _) = await SeededAsync([Definition("def1")], v1, v2);
 
         var result = await store.FindByDefinitionAndSortKeyAsync("def1", v2.SemVerSortKey);
 
@@ -125,7 +134,7 @@ public class GroundworkActivityDefinitionVersionStoreTests
     [Fact]
     public async Task ListByDefinition_returns_only_matching_definition()
     {
-        var (store, _) = await SeededAsync(
+        var (store, _, _) = await SeededAsync(
             [Definition("def1"), Definition("def2")],
             Version("v1", "def1"), Version("v2", "def1"), Version("v3", "def2"));
 
@@ -138,7 +147,7 @@ public class GroundworkActivityDefinitionVersionStoreTests
     [Fact]
     public async Task List_returns_every_version()
     {
-        var (store, _) = await SeededAsync(
+        var (store, _, _) = await SeededAsync(
             [Definition("def1"), Definition("def2")],
             Version("v1", "def1"), Version("v2", "def2"));
 
@@ -150,7 +159,7 @@ public class GroundworkActivityDefinitionVersionStoreTests
     [Fact]
     public async Task Stored_document_omits_persistence_artifacts()
     {
-        var (_, raw) = await SeededAsync([Definition("def1")], Version("v1", "def1"));
+        var (_, raw, _) = await SeededAsync([Definition("def1")], Version("v1", "def1"));
 
         var json = (await raw.LoadAsync(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, "v1"))!.ContentJson;
@@ -162,5 +171,36 @@ public class GroundworkActivityDefinitionVersionStoreTests
         Assert.DoesNotContain("designFacetsSource", json);
         Assert.DoesNotContain("rowNumber", json);
         Assert.DoesNotContain("\"definition\"", json); // navigation excluded
+    }
+
+    [Fact]
+    public async Task Version_reads_use_the_compound_named_routes_and_empty_batches_do_no_io()
+    {
+        var version = Version("v1", "def1");
+        var (store, _, bounded) = await SeededAsync([Definition("def1")], version);
+
+        await store.FindByDefinitionAndSortKeyAsync("def1", version.SemVerSortKey);
+        var first = Assert.Single(bounded.Queries);
+        Assert.Equal(
+            ActivitiesDesignStorageManifest.FindActivityDefinitionVersionByDefinitionAndSortKeyQuery,
+            first.QueryIdentity);
+        Assert.Equal(BoundedQueryResultOperation.First, first.ResultOperation);
+
+        bounded.Queries.Clear();
+        await store.ListByDefinitionIdsAsync(["def1", "def1"]);
+        Assert.All(
+            bounded.Queries,
+            query =>
+            {
+                Assert.Equal(
+                    ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery,
+                    query.QueryIdentity);
+                Assert.Equal(BoundedQueryResultOperation.Documents, query.ResultOperation);
+                Assert.Equal(ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder, query.Order);
+            });
+
+        bounded.Queries.Clear();
+        Assert.Empty(await store.ListByDefinitionIdsAsync([]));
+        Assert.Empty(bounded.Queries);
     }
 }
