@@ -305,6 +305,17 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void Server_catalogs_workflow_design_validations_required_by_dashboard()
+    {
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
+        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+
+        Assert.Contains("Elsa.Workflows.Design.Validations", references);
+        Assert.Contains("typeof(WorkflowDesignValidationsFeature).Assembly", program, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Workflows_runtime_core_does_not_use_authored_workflow_models()
     {
         string[] forbiddenPatterns =

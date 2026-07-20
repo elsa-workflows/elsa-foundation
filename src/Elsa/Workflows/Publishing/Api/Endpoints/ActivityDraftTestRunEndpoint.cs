@@ -22,10 +22,11 @@ internal sealed class ActivityDraftTestRunEndpoint(
 
     public override async Task HandleAsync(StartActivityDraftTestRun request, CancellationToken cancellationToken)
     {
+        var routedRequest = request with { DraftId = Route<string>("draftId")! };
         await ActivityDraftTestRunEndpointResponse.WriteAsync(
             HttpContext,
             logger,
-            () => requestSender.Send(request, cancellationToken),
+            () => requestSender.Send(routedRequest, cancellationToken),
             202,
             cancellationToken);
     }
@@ -34,7 +35,7 @@ internal sealed class ActivityDraftTestRunEndpoint(
 internal sealed class GetActivityDraftTestRunEndpoint(
     IRequestSender requestSender,
     ILogger<GetActivityDraftTestRunEndpoint> logger)
-    : ElsaEndpoint<GetActivityDraftTestRun, ActivityDraftTestRunView>
+    : ElsaEndpointWithoutRequest<ActivityDraftTestRunView>
 {
     public override void Configure()
     {
@@ -42,11 +43,13 @@ internal sealed class GetActivityDraftTestRunEndpoint(
         ConfigurePermissions(PermissionNames.WorkflowPublishingManage);
     }
 
-    public override Task HandleAsync(GetActivityDraftTestRun request, CancellationToken cancellationToken) =>
+    public override Task HandleAsync(CancellationToken cancellationToken) =>
         ActivityDraftTestRunEndpointResponse.WriteAsync(
             HttpContext,
             logger,
-            () => requestSender.Send(request, cancellationToken),
+            () => requestSender.Send(
+                new GetActivityDraftTestRun(Route<string>("testRunId")!),
+                cancellationToken),
             200,
             cancellationToken);
 }
@@ -54,7 +57,7 @@ internal sealed class GetActivityDraftTestRunEndpoint(
 internal sealed class GetActivityDraftTestRunByIdempotencyKeyEndpoint(
     IRequestSender requestSender,
     ILogger<GetActivityDraftTestRunByIdempotencyKeyEndpoint> logger)
-    : ElsaEndpoint<GetActivityDraftTestRunByIdempotencyKey, ActivityDraftTestRunView>
+    : ElsaEndpointWithoutRequest<ActivityDraftTestRunView>
 {
     public override void Configure()
     {
@@ -62,11 +65,15 @@ internal sealed class GetActivityDraftTestRunByIdempotencyKeyEndpoint(
         ConfigurePermissions(PermissionNames.WorkflowPublishingManage);
     }
 
-    public override Task HandleAsync(GetActivityDraftTestRunByIdempotencyKey request, CancellationToken cancellationToken) =>
+    public override Task HandleAsync(CancellationToken cancellationToken) =>
         ActivityDraftTestRunEndpointResponse.WriteAsync(
             HttpContext,
             logger,
-            () => requestSender.Send(request, cancellationToken),
+            () => requestSender.Send(
+                new GetActivityDraftTestRunByIdempotencyKey(
+                    Route<string>("draftId")!,
+                    Route<string>("idempotencyKey")!),
+                cancellationToken),
             200,
             cancellationToken);
 }
@@ -74,7 +81,7 @@ internal sealed class GetActivityDraftTestRunByIdempotencyKeyEndpoint(
 internal sealed class CancelActivityDraftTestRunEndpoint(
     IRequestSender requestSender,
     ILogger<CancelActivityDraftTestRunEndpoint> logger)
-    : ElsaEndpoint<CancelActivityDraftTestRun, ActivityDraftTestRunView>
+    : ElsaEndpointWithoutRequest<ActivityDraftTestRunView>
 {
     public override void Configure()
     {
@@ -82,11 +89,13 @@ internal sealed class CancelActivityDraftTestRunEndpoint(
         ConfigurePermissions(PermissionNames.WorkflowPublishingManage);
     }
 
-    public override Task HandleAsync(CancelActivityDraftTestRun request, CancellationToken cancellationToken) =>
+    public override Task HandleAsync(CancellationToken cancellationToken) =>
         ActivityDraftTestRunEndpointResponse.WriteAsync(
             HttpContext,
             logger,
-            () => requestSender.Send(request, cancellationToken),
+            () => requestSender.Send(
+                new CancelActivityDraftTestRun(Route<string>("testRunId")!),
+                cancellationToken),
             202,
             cancellationToken);
 }

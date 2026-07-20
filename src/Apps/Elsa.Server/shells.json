@@ -152,6 +152,7 @@
           "Tasks": {},
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
+          "WorkflowDesignValidations": {},
           "WorkflowsDashboard": {},
           "WorkflowsRuntimeAttention": {},
           "WorkflowsPublishingApi": {},

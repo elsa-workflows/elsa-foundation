@@ -126,6 +126,42 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
     }
 
     [Fact]
+    public async Task Point_lookups_select_the_first_result_operation_declared_by_the_physical_route()
+    {
+        var documents = new TemporalProjectionDocumentStore();
+        var writer = new GroundworkActivityManagementProjectionWriter(documents, new ImmediateDistributedLockProvider());
+        var changedAt = new DateTimeOffset(2026, 7, 17, 8, 45, 0, TimeSpan.Zero);
+        var definition = Definition("Point lookup", changedAt);
+        var authoring = Authoring(changedAt);
+
+        await CommitAsync(documents, await writer.PrepareAsync(new(
+            changedAt,
+            [new(definition, authoring)],
+            [],
+            [])));
+
+        documents.ResetQueries();
+        var updatedAt = changedAt.AddMinutes(1);
+        definition.LastModifiedAt = updatedAt;
+        authoring.LastModifiedAt = updatedAt;
+        await using var update = await writer.PrepareAsync(new(
+            updatedAt,
+            [new(definition, authoring)],
+            [],
+            []));
+        var currentQuery = Assert.Single(documents.Queries);
+        Assert.Equal(ActivitiesDesignStorageManifest.ManagementDefinitionCurrentQuery, currentQuery.QueryIdentity);
+        Assert.Equal(BoundedQueryResultOperation.First, currentQuery.ResultOperation);
+
+        documents.ResetQueries();
+        var found = await Reader(documents).FindDefinitionAsync(definition.Id, definition.TenantId);
+        Assert.NotNull(found);
+        var definitionQuery = Assert.Single(documents.Queries);
+        Assert.Equal(ActivitiesDesignStorageManifest.ManagementDefinitionsQuery, definitionQuery.QueryIdentity);
+        Assert.Equal(BoundedQueryResultOperation.First, definitionQuery.ResultOperation);
+    }
+
+    [Fact]
     public async Task Provider_applies_visibility_search_sort_page_and_exact_count_with_more_than_500_noise_rows()
     {
         var documents = new TemporalProjectionDocumentStore();

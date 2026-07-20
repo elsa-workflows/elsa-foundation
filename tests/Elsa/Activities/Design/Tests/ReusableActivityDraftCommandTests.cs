@@ -943,6 +943,24 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
+    public async Task Validation_can_be_repeated_for_the_same_exact_revision()
+    {
+        var harness = new Harness(invalidValidation: true);
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var draftId = created.Draft.DraftId;
+
+        await harness.Service.ValidateDraftAsync(new(draftId, 1), default);
+        var first = await ((IActivityDraftValidationStore)harness.Stores).FindAsync(draftId, 1);
+        var repeated = await harness.Service.ValidateDraftAsync(new(draftId, 1), default);
+        var stored = await ((IActivityDraftValidationStore)harness.Stores).FindAsync(draftId, 1);
+
+        Assert.NotNull(first);
+        Assert.Equal(first!.Id, stored!.Id);
+        Assert.Equal(1, repeated.Revision);
+        Assert.Equal("activity.test.invalid", Assert.Single(repeated.Diagnostics).Code);
+    }
+
+    [Fact]
     public async Task Discard_requires_the_exact_active_revision()
     {
         var harness = new Harness();

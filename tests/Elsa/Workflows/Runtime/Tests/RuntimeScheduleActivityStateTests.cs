@@ -86,6 +86,32 @@ public sealed class RuntimeScheduleActivityStateTests
     }
 
     [Fact]
+    public async Task HandleAsync_NormalizesPlacedActivityDefinitionProvenanceToItsNewExecutionScope()
+    {
+        var executable = NewExecutable(opensExecutionScope: true);
+        await _executableStore.SaveAsync(executable);
+        var handler = NewHandler();
+        var inheritedProvenance = ActivitySchedulingProvenance.From(
+            "wfexec-1",
+            parentActivityExecutionId: "actexec-parent",
+            schedulingActivityExecutionId: "actexec-parent",
+            branchId: null,
+            iterationId: null,
+            executionPathId: null,
+            executionScopeId: "parent-scope",
+            schedulingCause: RuntimeScheduleActivityCommandPayload.ActivityCompletionReason);
+
+        await handler.HandleAsync(NewScheduleWorkItem(
+            executable.Identity,
+            schedulingProvenance: inheritedProvenance));
+
+        var state = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        Assert.Equal("actexec-1", state.ExecutionScopeId);
+        Assert.Equal(state.ExecutionScopeId, state.Provenance.ExecutionScopeId);
+        Assert.Equal("actexec-parent", state.Provenance.ParentActivityExecutionId);
+    }
+
+    [Fact]
     public async Task HandleAsync_ThroughPipeline_StagesTheCommitForTheCheckpointSlot_InsteadOfCommittingInline()
     {
         // Move 2: the pipeline overload runs in the Invoke slot and stages its commit; the Checkpoint slot commits it.
@@ -325,7 +351,8 @@ public sealed class RuntimeScheduleActivityStateTests
         WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.ScheduleActivity,
         string executableNodeId = "node-start",
         JsonElement? payload = null,
-        bool includePayload = true)
+        bool includePayload = true,
+        ActivitySchedulingProvenance? schedulingProvenance = null)
     {
         var resolvedPayload = includePayload
             ? payload ?? JsonSerializer.SerializeToElement(new RuntimeScheduleActivityCommandPayload(
@@ -333,7 +360,8 @@ public sealed class RuntimeScheduleActivityStateTests
                 executableNodeId,
                 "actexec-1",
                 RuntimeScheduleActivityCommandPayload.WorkflowStartReason,
-                "actexec-parent"))
+                "actexec-parent",
+                schedulingProvenance: schedulingProvenance))
             : (JsonElement?)null;
 
         return new RuntimeSchedulerWorkItem(
@@ -351,10 +379,13 @@ public sealed class RuntimeScheduleActivityStateTests
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
 
-    private static WorkflowExecutable NewExecutable() =>
-        NewExecutable(["node-start"]);
+    private static WorkflowExecutable NewExecutable(bool opensExecutionScope = false) =>
+        NewExecutable(["node-start"], opensExecutionScope: opensExecutionScope);
 
-    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string>? startNodeIds = null)
+    private static WorkflowExecutable NewExecutable(
+        IReadOnlyCollection<string> nodeIds,
+        IReadOnlyCollection<string>? startNodeIds = null,
+        bool opensExecutionScope = false)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var nodes = nodeIds.Select(nodeId => new ExecutableNode(
@@ -364,7 +395,9 @@ public sealed class RuntimeScheduleActivityStateTests
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>())).ToArray();
+            metadata: opensExecutionScope
+                ? new Dictionary<string, string> { ["activity.definitionVersionId"] = "activity-version-1" }
+                : new Dictionary<string, string>())).ToArray();
 
         return new(
             identity: NewIdentity(),
