@@ -69,6 +69,12 @@ public sealed class GroundworkStoreSession : IAsyncDisposable
     private PrivilegedCompletion? _privilegedCompletion;
     private Task? _disposeTask;
 
+    /// <summary>
+    /// Creates an access-bound session over already-authorized resources. Ordinary sessions omit both audit
+    /// arguments; privileged sessions must provide the emitter and acquisition audit as a complete pair.
+    /// Prefer <see cref="IGroundworkStoreSessionFactory"/> when opening provider resources from an Elsa access
+    /// context.
+    /// </summary>
     public GroundworkStoreSession(
         DocumentStoreAccess access,
         GroundworkStoreSessionResources resources,

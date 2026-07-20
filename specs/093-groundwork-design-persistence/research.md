@@ -123,9 +123,9 @@ T020 creates and maintains this ledger at class granularity. Every feature class
 | `GroundworkStorageCompositionRegistration` | DI registration | T061 | idempotence and deployment-authority tests | T061: resolve the complete registered composition surface | Assigned to T061 |
 | `GroundworkPhysicalSchemaManifestSource` | Readiness/schema bridge | T061 | Schema CLI and host tests | T061: ready/pending/drift, executor failure, cancellation, inspect-only/no-auto-apply | Assigned to T061 |
 | `GroundworkPersistenceAccessMapper` | Scope mapper | T016 | Not a feature | `GroundworkStoreSessionFactoryTests.Mapper_*` | Covered |
-| `GroundworkStoreSession` | Session lifecycle | T016 | Factory/provider registration tests | disposal/audit branches are covered indirectly; direct construction awaits the recorded §2.23.3 public-surface decision | Open: T020 ratification |
-| `GroundworkScopedDocumentStore` | Scoped store adapter | T016 | Runtime/provider registration tests | `GroundworkScopedDocumentStoreTests` covers every document/bounded operation, ordinary scope injection, failure, cancellation, Begin failure, and UoW retention | Covered except nested UoW direct-construction decision |
-| `SessionDocumentUnitOfWork` | UoW/session lifetime adapter | T016 | Via `GroundworkScopedDocumentStore.BeginAsync` | disposal behavior is covered indirectly; direct construction awaits the recorded §2.23.3 public-surface decision | Open: T020 ratification |
+| `GroundworkStoreSession` | Session lifecycle | T016 | Factory/provider registration tests | `GroundworkScopedDocumentStoreTests.Public_session_constructor_*` covers ordinary and privileged construction, dependency-pair validation, cleanup failure, audit, and repeated disposal | Covered; the public constructor is the ratified §2.23.3 seam, while the factory remains preferred for access-context acquisition |
+| `GroundworkScopedDocumentStore` | Scoped store adapter | T016 | Runtime/provider registration tests | `GroundworkScopedDocumentStoreTests` covers every document/bounded operation, ordinary scope injection, failure, cancellation, Begin failure, and UoW retention | Covered |
+| `SessionUnitOfWork` | UoW/session lifetime adapter | T016 | Via `GroundworkScopedDocumentStore.BeginAsync` | `GroundworkScopedDocumentStoreTests.Public_session_unit_of_work_*` covers every forwarded operation, null dependencies, ordered and idempotent disposal, and both single- and double-failure cleanup paths | Covered; the public adapter is the ratified §2.23.3 seam |
 | `GroundworkStoreSessionSource` | Resource publisher | T016 | Runtime/provider registration tests | `GroundworkStoreSessionSourceTests` publication/disposal race branches | Covered |
 | `GroundworkStoreSessionFactory` | Session factory | T017 | Runtime/provider registration tests | ordinary/privileged mapping, authority rejection, cleanup, audit, cancellation, and terminal outcomes | Covered |
 | `GroundworkQueryTranslator<TEntity>` | Query translator | T015 | Not a feature | operators, clause structure, JSON names/scalars, ordering, terminals, invalid selectors, non-scalars, and serialization failures | Covered |
@@ -136,6 +136,11 @@ T020 creates and maintains this ledger at class granularity. Every feature class
 | `GroundworkDesignAtomicWrite` and workflow/activity command implementations | Command/UoW implementations | T035 | T035 store/command registration | T035: success, provider failure, rollback, retry/lost acknowledgement, cancellation, replay fingerprint, scope, exactly-once events | Assigned to T035 |
 | `GroundworkSchemaReadinessTask` and schema-tool adapters | Readiness implementations | T061 | T061 feature/host composition | T061: ready/pending/drift, no apply/fallback, failure, cancellation | Assigned to T061 |
 | SQLite/PostgreSQL/SQL Server/MongoDB provider registrations, initializers, target compilers, and shell features | Provider materialization | T062 | T062 one §2.23.1 resolution test per concrete feature/provider | T062 direct provider branches and exact target evidence | Assigned to T062 |
+
+The session and unit-of-work direct suites live in the base `Elsa.Persistence.Groundwork.Tests` project because
+their public APIs belong to the base Groundwork assembly rather than the Querying assembly. Querying remains a
+separate regression gate. This preserves the T020 requirement for direct public-surface coverage without adding
+a reverse or test-only dependency solely to place the tests under the originally named directory.
 
 ## Resolved Dependencies
 
