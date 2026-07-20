@@ -167,9 +167,14 @@ public sealed class GroundworkCoalescingCrashConvergenceTests
                 workflowExecutionId: "wfexec-1")));
 
             // The sweep's own RunSchedulerWork redrive envelope lands behind the completing dispatch and is stranded
-            // by the drainer's terminal-status guard (#293) — deliberately never dispatched. Prove it is inert: a
-            // further sweep leaves the converged terminal state untouched.
-            await sweep.SweepAsync(new RuntimeResumptionSweepRequest());
+            // by the drainer's terminal-status guard (#293) — never dispatched. A further sweep now finds the execution
+            // terminal and purges that residue instead of re-driving it (spec 113): the converged terminal state stays
+            // untouched, and the stranded item no longer keeps the completed execution discoverable.
+            var secondSweep = await sweep.SweepAsync(new RuntimeResumptionSweepRequest());
+            Assert.Equal(1, secondSweep.TerminalExecutionsPurged);
+            Assert.Empty(secondSweep.Dispatches);
+            Assert.Empty(await recovered.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                .ListPendingWorkflowExecutionIdsAsync(10));
             Assert.Equal(controlSnapshot, await SnapshotActivityStateAsync(recovered));
             Assert.Equal(
                 WorkflowExecutionStatus.Completed,
@@ -224,7 +229,8 @@ public sealed class GroundworkCoalescingCrashConvergenceTests
             provider.GetRequiredService<IRuntimeRecoveryScanner>(),
             provider.GetRequiredService<IWorkflowExecutionActorProvider>(),
             provider.GetRequiredService<IRuntimeExecutionIdGenerator>(),
-            provider.GetRequiredService<TimeProvider>());
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<IWorkflowExecutionStateStore>());
 
     private static WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
         new(

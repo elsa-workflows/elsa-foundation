@@ -167,10 +167,12 @@ public sealed class RuntimeResumptionPumpTask : IRecurringTask
         ApplyPerExecutionBackoff(persistenceScope, result, options, now);
         if (result.DidWork && _logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug(
-                "Resumption sweep delivered {Delivered}/{Attempted} outbox items and re-drove {Dispatches} execution(s)",
+                "Resumption sweep delivered {Delivered}/{Attempted} outbox items, re-drove {Dispatches} execution(s), and purged {PurgedItems} residual work item(s) from {PurgedExecutions} terminal execution(s)",
                 result.OutboxDeliveredCount,
                 result.OutboxAttemptedCount,
-                result.Dispatches.Count);
+                result.Dispatches.Count,
+                result.PurgedWorkItemCount,
+                result.TerminalExecutionsPurged);
     }
 
     private IReadOnlySet<string> SnapshotExcluded(

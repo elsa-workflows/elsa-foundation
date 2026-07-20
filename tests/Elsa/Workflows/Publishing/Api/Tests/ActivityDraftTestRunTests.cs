@@ -736,7 +736,8 @@ public sealed class ActivityDraftTestRunTests
             provider.GetRequiredService<IRuntimeRecoveryScanner>(),
             provider.GetRequiredService<IWorkflowExecutionActorProvider>(),
             provider.GetRequiredService<IRuntimeExecutionIdGenerator>(),
-            provider.GetRequiredService<TimeProvider>());
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<IWorkflowExecutionStateStore>());
         await service.SweepAsync(new());
     }
 
