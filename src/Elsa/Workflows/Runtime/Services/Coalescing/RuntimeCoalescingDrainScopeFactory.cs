@@ -13,6 +13,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
     IRuntimeCoalescingSessionAccessor sessionAccessor,
     RuntimeCheckpointCommitter checkpointCommitter,
     CoalescingInner<IWorkflowSchedulerWorkQueue> innerQueue,
+    CoalescingInner<IRuntimePostCommitOutboxStore> innerOutboxStore,
     CoalescingRuntimeCheckpointPersistenceOptions options,
     TimeProvider timeProvider) : IRuntimeCoalescingDrainScopeFactory
 {
@@ -26,7 +27,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
             ? new CoalescingRuntimeCheckpointPersistenceOptions { MaxSegmentCheckpoints = cap }
             : options;
 
-        var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, sessionOptions);
+        var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, sessionOptions, innerOutboxStore.Value);
         var handle = sessionAccessor.Push(session);
         return new Scope(session, handle, checkpointCommitter, timeProvider);
     }
@@ -46,8 +47,10 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
                 return;
 
             // Active but empty: the drain consumed queue items without buffering any deferred checkpoint. Reconcile the
-            // durable queue with the overlay consumption and end the segment; no folded commit is required.
-            if (!session.HasBufferedChanges)
+            // durable queue with the overlay consumption and end the segment; no folded commit is required — unless an
+            // earlier cap flush left durably persisted outbox items whose overlay outcome still has to be written back,
+            // in which case the (empty-state) flush commit below carries that reconciliation.
+            if (!session.HasBufferedChanges && !session.RequiresDurableOutboxReconciliation)
             {
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
                 session.ClearBuffer();
@@ -70,7 +73,11 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
             // Continuation intents (EnqueueSchedulerWork) were consumed in-segment against the overlay outbox and are
             // already Delivered; only still-pending external intents remain. Re-issue them as intents on the flush
             // commit so the committer folds them into the atomic durable write and they deliver post-flush (condition D).
+            // Items an earlier cap flush already persisted durably are excluded: re-issuing them would mint a second
+            // outbox item id for the same intent (the id derives from the commit id) and double-deliver it; their
+            // durable Pending row already is the post-drain delivery source.
             var remainingIntents = session.RemainingPendingOutboxChanges()
+                .Where(change => !session.IsOutboxDurablyPersisted(change.StateId))
                 .Select(change => change.State.Intent)
                 .ToArray();
 
