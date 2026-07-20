@@ -51,6 +51,13 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowEngineTracer>(NullWorkflowEngineTracer.Instance);
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        // Burst-scoped reconstructible cache (ADR 0031 item b, spec 111). The accessor is a singleton AsyncLocal (like
+        // the live-drain/coalescing accessors); the router pushes a scope per drain gated by the kill switch. The reader
+        // is the first consumer — scoped so it composes with whichever IWorkflowExecutableStore the provider registers
+        // (Groundwork RemoveAll+AddScoped the default), reading through the ambient burst scope when one is active.
+        services.TryAddSingleton<RuntimeBurstCacheOptions>();
+        services.TryAddSingleton<IWorkflowBurstScopeAccessor, AsyncLocalWorkflowBurstScopeAccessor>();
+        services.TryAddScoped<IWorkflowExecutableReader, BurstCachedWorkflowExecutableReader>();
         services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
@@ -149,6 +156,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
+        services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
         services.TryAddScoped<IWorkflowDrainOrchestrator, WorkflowDrainOrchestrator>();
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
@@ -210,7 +218,26 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IRuntimeCheckpointCadenceResolver, RuntimeCheckpointCadenceResolver>();
         services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
         services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
-        services.TryAddScoped<RuntimeCheckpointCommitter>();
+        // WU-3 / spec 109: the in-process-hop fast path is on by default. A host or a guardrail test can disable it by
+        // registering RuntimeInProcessHopFastPathOptions { Enabled = false } before this call; the durable deserialize
+        // path then runs everywhere and MUST commit byte-identical state (ADR 0031 follow-up (c)).
+        services.TryAddSingleton<RuntimeInProcessHopFastPathOptions>();
+        // Explicit factory (not greedy ctor selection): the coalescing session accessor is only registered when the
+        // coalescing feature is enabled, so the committer's widest constructor is not always satisfiable by the
+        // container. The factory injects each optional collaborator with GetService so the live-drain accessor and
+        // fast-path options are wired in every configuration.
+        services.TryAddScoped(serviceProvider =>
+            new RuntimeCheckpointCommitter(
+                serviceProvider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>(),
+                serviceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>(),
+                serviceProvider.GetService<IRuntimeExecutionOwnershipContextAccessor>(),
+                serviceProvider.GetService<IWorkflowEngineTracer>(),
+                serviceProvider.GetServices<IRuntimeCheckpointCommitEnricher>(),
+                serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>(),
+                serviceProvider.GetService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
+                serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
+                serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
+                serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>()));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCheckpointEnricher>());
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();

@@ -91,11 +91,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IServiceProvider serviceProvider,
         CancellationToken cancellationToken)
     {
-        var workflowExecutableStore = serviceProvider.GetRequiredService<IWorkflowExecutableStore>();
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var schedulerWorkQueue = serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
 
-        var executable = await workflowExecutableStore.FindAsync(invokePayload.PinnedExecutable.ArtifactId, cancellationToken);
+        // spec 111: burst-cached pinned-executable read (immutable artifact ⇒ one durable read per burst, not per hop).
+        var executable = await PinnedExecutableRead.FindAsync(serviceProvider, invokePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(invokePayload.PinnedExecutable.ArtifactId);
 
@@ -316,6 +316,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same execution.");
             if (structuralContinuation?.IsDeferred == true && childScheduleRequests.Count == 0)
                 throw new InvalidOperationException("An initial structural execution cannot defer without scheduling at least one child activity.");
+            if (context.GetChildSubtreeCancellationRequests().Count > 0)
+                throw new InvalidOperationException("An initial structural execution cannot cancel child subtrees; cancellation requests are only valid during a child-completion evaluation (spec 112).");
+            if (context.GetChildFaultAbsorptionRequests().Count > 0)
+                throw new InvalidOperationException("An initial structural execution cannot absorb child faults; absorption requests are only valid during a child-fault evaluation (spec 115).");
 
             if (returnedTransition is IStatefulActivitySuspensionTransition statefulSuspension)
             {

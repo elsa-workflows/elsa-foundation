@@ -11,11 +11,13 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api.Coalescing;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using Xunit.Abstractions;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
@@ -91,8 +93,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     /// that interaction is documented by the default-cap diagnostic run, not baked into the A/B numbers.
     /// </summary>
     private const int HotLoopSegmentCap = 256;
-    private const string WriteLineNodeId = "node-writeline";
-    private const string FlowchartNodeId = "node-flowchart";
+    private const string WriteLineNodeId = BenchmarkWorkflows.WriteLineNodeId;
 
     // A comfortably large deterministic activity-execution id pool; the graphs here consume far fewer
     // (2-node: 2; hot loop: HotLoopLength + 1 for the flowchart root).
@@ -119,6 +120,53 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             BuildFlowchartWithWriteLine,
             AssertTwoNodeCompleted);
         Report("2-node · in-memory · Immediate (runtime default stores, no fsync)", measurement);
+    }
+
+    // ---- Executable-read cache A/B (ADR 0031 item b / spec 111) --------------------------------------------
+
+    /// <summary>
+    /// Isolates the burst-scoped executable read cache (spec 111): the SAME durable hot-loop and 2-node runs under the
+    /// Coalesced policy, once with the cache disabled and once enabled. Reports p50/p95, durable checkpoint commits/run,
+    /// AND durable executable reads/run — the last is the metric this unit collapses (spec-110 characterization: ~46
+    /// executable reads per 10-activity hot loop, resolving the same immutable pinned artifact every hop). The cache is
+    /// content-addressed and immutable within a drain, so committed durable state is identical either way; only the read
+    /// count and wall time move. Soft-asserts reads-on &lt; reads-off (deterministic here).
+    /// </summary>
+    [Fact]
+    public async Task Durable_Sqlite_ExecutableReadCache_OnVsOff()
+    {
+        var hotLoopOff = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap, burstCache: false),
+            () => BuildHotLoopFlowchart(NewPureLoopNode),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · Coalesced · executable-cache OFF", hotLoopOff);
+
+        var hotLoopOn = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap, burstCache: true),
+            () => BuildHotLoopFlowchart(NewPureLoopNode),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · Coalesced · executable-cache ON", hotLoopOn);
+
+        var twoNodeOff = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, burstCache: false),
+            BuildFlowchartWithWriteLine,
+            AssertTwoNodeCompleted);
+        Report("2-node · Coalesced · executable-cache OFF", twoNodeOff);
+
+        var twoNodeOn = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, burstCache: true),
+            BuildFlowchartWithWriteLine,
+            AssertTwoNodeCompleted);
+        Report("2-node · Coalesced · executable-cache ON", twoNodeOn);
+
+        output.WriteLine(
+            $"=== executable-read summary === hot-loop reads/run: OFF={TypicalReads(hotLoopOff)} ON={TypicalReads(hotLoopOn)}  " +
+            $"2-node reads/run: OFF={TypicalReads(twoNodeOff)} ON={TypicalReads(twoNodeOn)}");
+
+        Assert.True(TypicalReads(hotLoopOn) < TypicalReads(hotLoopOff),
+            $"Expected cache-on reads ({TypicalReads(hotLoopOn)}) < cache-off ({TypicalReads(hotLoopOff)}) for the hot loop.");
+        Assert.True(TypicalReads(twoNodeOn) < TypicalReads(twoNodeOff),
+            $"Expected cache-on reads ({TypicalReads(twoNodeOn)}) < cache-off ({TypicalReads(twoNodeOff)}) for 2-node.");
     }
 
     // ---- Hot-loop A/B: Immediate vs Coalesced (durable), plus the External-leaf reference -------------------
@@ -184,6 +232,45 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             $"Expected ReplaySafe-leaf commits/run ({coalescedCommits}) < External-leaf commits/run ({coalescedExternalCommits}) under Coalesced.");
     }
 
+    // ---- In-process-hop fast path A/B (spec 109, ADR 0031 follow-up (a)) ------------------------------------
+    // Before/after for the in-process-hop payload short-circuit: the same shape measured with the fast path DISABLED
+    // (durable deserialize path everywhere) and ENABLED (default). Step-0 profiling found the per-hop JSON round-trip is
+    // ~0.4% of a durable hop and ~2% of an in-memory hop, so the delta here is expected to be small (often within
+    // run-to-run noise) — the point of the unit is that the short-circuit stays byte-identical (guardrail test), not a
+    // large throughput win. A/B reported for the in-memory 2-node, in-memory hot loop, and durable hot loop.
+
+    [Fact]
+    public async Task FastPathAb_InMemory_2Node()
+    {
+        var off = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: false)), BuildFlowchartWithWriteLine, AssertTwoNodeCompleted);
+        Report("2-node · in-memory · fast-path OFF (before)", off);
+        var on = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: true)), BuildFlowchartWithWriteLine, AssertTwoNodeCompleted);
+        Report("2-node · in-memory · fast-path ON (after)", on);
+    }
+
+    [Fact]
+    public async Task FastPathAb_InMemory_HotLoop()
+    {
+        var off = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: false)), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · in-memory · fast-path OFF (before)", off);
+        var on = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: true)), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · in-memory · fast-path ON (after)", on);
+    }
+
+    [Fact]
+    public async Task FastPathAb_Durable_HotLoop()
+    {
+        // NOTE: durable-SQLite wall time is dominated by fsync + OS-page-cache warmup, which biases whichever
+        // measurement runs second (verified by swapping the order — the effect follows position, not the flag). Read
+        // commits/run (identical) and the guardrail (byte-identical state), not the wall delta, for correctness; the
+        // fast-path wall effect is within warmup noise on these small payloads, matching the Step-0 finding that the
+        // per-hop JSON round-trip is a sub-percent share of a durable hop.
+        var off = await MeasureAsync(() => NewDurableSqliteHarnessAsync(coalesce: false, fastPathEnabled: false), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · durable-sqlite · Immediate · fast-path OFF (before)", off);
+        var on = await MeasureAsync(() => NewDurableSqliteHarnessAsync(coalesce: false, fastPathEnabled: true), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · durable-sqlite · Immediate · fast-path ON (after)", on);
+    }
+
     // ---- Measurement engine ---------------------------------------------------------------------------------
 
     /// <summary>
@@ -200,16 +287,18 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
 
         var walls = new List<double>(IterationCount);
         var commits = new List<long>(IterationCount);
+        var reads = new List<long>(IterationCount);
         for (var iteration = 0; iteration < IterationCount; iteration++)
         {
             var stopwatch = new Stopwatch();
-            var commitCount = await RunOnceAsync(newLease, executableFactory, stopwatch, assert);
+            var (commitCount, readCount) = await RunOnceAsync(newLease, executableFactory, stopwatch, assert);
             walls.Add(stopwatch.Elapsed.TotalMilliseconds);
             if (commitCount is { } value)
                 commits.Add(value);
+            reads.Add(readCount);
         }
 
-        return new Measurement(walls, commits);
+        return new Measurement(walls, commits, reads);
     }
 
     /// <summary>
@@ -217,7 +306,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     /// (dispatch + scheduler drain), then — outside the timed window — counts durable checkpoint commits.
     /// Returns the commit count for durable harnesses, or <c>null</c> for the in-memory harness.
     /// </summary>
-    private async Task<long?> RunOnceAsync(
+    private async Task<(long? Commits, long Reads)> RunOnceAsync(
         Func<ValueTask<HarnessLease>> newLease,
         Func<WorkflowExecutable> executableFactory,
         Stopwatch? stopwatch,
@@ -232,7 +321,8 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
 
         assert(run);
 
-        return lease.Store is null ? null : await CountCheckpointCommitsAsync(lease.Store);
+        var commits = lease.Store is null ? (long?)null : await CountCheckpointCommitsAsync(lease.Store);
+        return (commits, lease.ExecutableReads);
     }
 
     /// <summary>
@@ -344,12 +434,24 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
                              $"min={commits.Min()}  max={commits.Max()}  " +
                              $"(stable={(commits.Min() == commits.Max() ? "yes" : "no")})");
         }
+        if (measurement.Reads.Count > 0)
+        {
+            var reads = measurement.Reads;
+            output.WriteLine($"durable executable reads/run: typical={TypicalReads(measurement)}  " +
+                             $"min={reads.Min()}  max={reads.Max()}  " +
+                             $"(stable={(reads.Min() == reads.Max() ? "yes" : "no")})");
+        }
         output.WriteLine("per-run wall (ms): " + string.Join(", ", measurement.Walls.Select(value => value.ToString("F2"))));
     }
 
     /// <summary>The representative (modal) commit count; commit counts are deterministic so this is the stable value.</summary>
-    private static long TypicalCommits(Measurement measurement) =>
-        measurement.Commits
+    private static long TypicalCommits(Measurement measurement) => Modal(measurement.Commits);
+
+    /// <summary>The representative (modal) executable-read count per run.</summary>
+    private static long TypicalReads(Measurement measurement) => Modal(measurement.Reads);
+
+    private static long Modal(IReadOnlyList<long> values) =>
+        values
             .GroupBy(value => value)
             .OrderByDescending(group => group.Count())
             .ThenBy(group => group.Key)
@@ -365,16 +467,23 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
 
     // ---- Harness construction -------------------------------------------------------------------------------
 
-    private static HarnessLease NewInMemoryLease()
+    private static HarnessLease NewInMemoryLease(bool fastPathEnabled = true)
     {
+        var readCounter = new ExecutableReadCounter();
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(new RuntimeInProcessHopFastPathOptions { Enabled = fastPathEnabled });
+                CountExecutableReads(services, readCounter);
+            })
             .Build(ActivityExecutionIds);
-        return new HarnessLease(harness, store: null, databasePath: null);
+        return new HarnessLease(harness, store: null, databasePath: null, readCounter);
     }
 
-    private static async ValueTask<HarnessLease> NewDurableSqliteHarnessAsync(bool coalesce, int? maxSegmentCheckpoints = null)
+    private static async ValueTask<HarnessLease> NewDurableSqliteHarnessAsync(bool coalesce, int? maxSegmentCheckpoints = null, bool fastPathEnabled = true, bool burstCache = true)
     {
+        var readCounter = new ExecutableReadCounter();
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-engine-bench-{Guid.NewGuid():N}.db");
         var store = await SqliteDocumentStoreFactory.CreateAsync(
             $"Data Source={databasePath}",
@@ -403,114 +512,94 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
                         if (maxSegmentCheckpoints is { } cap)
                             options.MaxSegmentCheckpoints = cap;
                     });
+
+                // spec 109: toggle the in-process hop fast path for the A/B variants.
+                services.AddSingleton(new RuntimeInProcessHopFastPathOptions { Enabled = fastPathEnabled });
+
+                // spec 111: toggle the burst-scoped executable read cache and count durable executable reads.
+                services.RemoveAll<RuntimeBurstCacheOptions>();
+                services.AddSingleton(new RuntimeBurstCacheOptions { Enabled = burstCache });
+                CountExecutableReads(services, readCounter);
             })
             .Build(ActivityExecutionIds);
 
-        return new HarnessLease(harness, store, databasePath);
+        return new HarnessLease(harness, store, databasePath, readCounter);
+    }
+
+    // Wraps the last IWorkflowExecutableStore registration with a shared FindAsync counter (the durable reads the burst
+    // cache exists to save). The counter sits UNDER the burst-cache reader, so a cache hit does not reach it.
+    private static void CountExecutableReads(IServiceCollection services, ExecutableReadCounter readCounter)
+    {
+        services.AddSingleton(readCounter);
+        var descriptor = services.Last(d => d.ServiceType == typeof(IWorkflowExecutableStore));
+        services.Remove(descriptor);
+        services.Add(new ServiceDescriptor(
+            typeof(IWorkflowExecutableStore),
+            sp =>
+            {
+                var inner = (IWorkflowExecutableStore)(descriptor.ImplementationInstance
+                    ?? descriptor.ImplementationFactory?.Invoke(sp)
+                    ?? ActivatorUtilities.CreateInstance(sp, descriptor.ImplementationType!));
+                return new CountingExecutableStore(inner, readCounter);
+            },
+            descriptor.Lifetime));
     }
 
     // ---- Workflow graphs ------------------------------------------------------------------------------------
+    // Thin forwarders onto the shared BenchmarkWorkflows builders (see that type); kept as named locals so the
+    // [Fact] bodies and their documentation above read unchanged.
 
-    /// <summary>Builds the 2-node executable: a Flowchart root whose single start node is a WriteLine leaf.</summary>
-    private static WorkflowExecutable BuildFlowchartWithWriteLine()
+    private static WorkflowExecutable BuildFlowchartWithWriteLine() => BenchmarkWorkflows.TwoNode();
+
+    private static WorkflowExecutable BuildHotLoopFlowchart(Func<int, ExecutableNode> makeLeaf) =>
+        BenchmarkWorkflows.HotLoop(HotLoopLength, makeLeaf);
+
+    private static string LoopNodeId(int index) => BenchmarkWorkflows.LoopNodeId(index);
+
+    private static ExecutableNode NewPureLoopNode(int index) => BenchmarkWorkflows.NoOpLeaf(index);
+
+    private static ExecutableNode NewWriteLineNode(string nodeId, string text) => BenchmarkWorkflows.NewWriteLineNode(nodeId, text);
+
+    /// <summary>A run measurement: per-iteration wall times, per-iteration commit counts (durable only), and executable-read counts.</summary>
+    private sealed record Measurement(IReadOnlyList<double> Walls, IReadOnlyList<long> Commits, IReadOnlyList<long> Reads);
+
+    private sealed class ExecutableReadCounter
     {
-        var writeLine = NewWriteLineNode(WriteLineNodeId, "Hello from the Elsa engine benchmark.");
-        return NewFlowchart([writeLine], connections: [], startNodeId: WriteLineNodeId);
+        private long _count;
+        public long Count => Interlocked.Read(ref _count);
+        public void Increment() => Interlocked.Increment(ref _count);
     }
 
-    /// <summary>
-    /// Builds the hot-loop executable: a Flowchart whose start node begins a straight-line chain of
-    /// <see cref="HotLoopLength"/> leaf activities (leaf shape chosen by <paramref name="makeLeaf"/>), each
-    /// wired to the next by a default-outcome connection.
-    /// </summary>
-    private static WorkflowExecutable BuildHotLoopFlowchart(Func<int, ExecutableNode> makeLeaf)
+    private sealed class CountingExecutableStore(IWorkflowExecutableStore inner, ExecutableReadCounter counter) : IWorkflowExecutableStore
     {
-        var leaves = Enumerable.Range(0, HotLoopLength).Select(makeLeaf).ToArray();
-        var connections = Enumerable.Range(0, HotLoopLength - 1)
-            .Select(index => new FlowchartConnection(
-                new FlowchartEndpoint(leaves[index].ExecutableNodeId),
-                new FlowchartEndpoint(leaves[index + 1].ExecutableNodeId)))
-            .ToArray();
-        return NewFlowchart(leaves, connections, startNodeId: leaves[0].ExecutableNodeId);
+        public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
+        {
+            counter.Increment();
+            return inner.FindAsync(artifactId, cancellationToken);
+        }
+
+        public ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) => inner.SaveAsync(executable, cancellationToken);
+        public ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default) => inner.DeleteAsync(artifactId, cancellationToken);
+        public ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(string artifactId, string leaseId, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.TryAcquireRootWriteLeaseAsync(artifactId, leaseId, expiresAt, now, cancellationToken);
+        public ValueTask<bool> RenewRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.RenewRootWriteLeaseAsync(lease, expiresAt, now, cancellationToken);
+        public ValueTask ReleaseRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, CancellationToken cancellationToken = default) => inner.ReleaseRootWriteLeaseAsync(lease, cancellationToken);
+        public ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(string artifactId, string operationId, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.TryBeginDeletionAsync(artifactId, operationId, expiresAt, now, cancellationToken);
+        public ValueTask<bool> CancelDeletionAsync(WorkflowExecutableDeletionGuard guard, CancellationToken cancellationToken = default) => inner.CancelDeletionAsync(guard, cancellationToken);
+        public ValueTask<bool> DeleteAsync(WorkflowExecutableDeletionGuard guard, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.DeleteAsync(guard, now, cancellationToken);
+        public ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) => inner.ListPageAsync(request, cancellationToken);
     }
-
-    private static WorkflowExecutable NewFlowchart(
-        IReadOnlyCollection<ExecutableNode> leaves,
-        IReadOnlyCollection<FlowchartConnection> connections,
-        string startNodeId)
-    {
-        var root = new ExecutableNode(
-            executableNodeId: FlowchartNodeId,
-            authoredActivityId: "authored-flowchart",
-            activityType: typeof(FlowchartActivity).FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "elsa.flowchart",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, leaves)],
-            structure: new ExecutableActivityStructure(
-                FlowchartActivity.StructureKind,
-                FlowchartActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(
-                    new FlowchartStructure(connections: connections, startNodeId: startNodeId))));
-
-        return WorkflowExecutionHarness.NewExecutable(root);
-    }
-
-    private static string LoopNodeId(int index) => $"node-loop-{index}";
-
-    /// <summary>A pure benchmark-local leaf (<see cref="NoOpStep"/>) for the hot-loop body: no external effect.</summary>
-    private static ExecutableNode NewPureLoopNode(int index) =>
-        new(
-            executableNodeId: LoopNodeId(index),
-            authoredActivityId: $"authored-{LoopNodeId(index)}",
-            activityType: typeof(NoOpStep).FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "clr",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>());
-
-    /// <summary>
-    /// A real <see cref="WriteLine"/> CLR leaf with a literal <c>text</c> input. The activity contract is left
-    /// unset so the harness reflects it from the CLR type (its established path for non-probe CLR nodes).
-    /// </summary>
-    private static ExecutableNode NewWriteLineNode(string nodeId, string text)
-    {
-        var stringType = new ValueTypeDescriptor("String");
-        var binding = new RuntimeInputBinding(
-            inputKey: "text",
-            targetType: stringType,
-            effectivePolicy: ValueProtectionPolicy.InstanceInline,
-            source: RuntimeInputBindingSource.Literal,
-            literal: ValueEnvelope.Inline(
-                stringType,
-                JsonSerializer.SerializeToElement(text),
-                ValueProtectionPolicy.InstanceInline));
-
-        return new ExecutableNode(
-            executableNodeId: nodeId,
-            authoredActivityId: $"authored-{nodeId}",
-            activityType: typeof(WriteLine).FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "clr",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding> { ["text"] = binding },
-            metadata: new Dictionary<string, string>());
-    }
-
-    /// <summary>A run measurement: per-iteration wall times, and (durable harnesses only) per-iteration commit counts.</summary>
-    private sealed record Measurement(IReadOnlyList<double> Walls, IReadOnlyList<long> Commits);
 
     /// <summary>Owns one harness run plus (for the durable variant) its SQLite store and temp database file.</summary>
-    private sealed class HarnessLease(WorkflowExecutionHarness harness, IDocumentStore? store, string? databasePath)
+    private sealed class HarnessLease(WorkflowExecutionHarness harness, IDocumentStore? store, string? databasePath, ExecutableReadCounter readCounter)
         : IAsyncDisposable
     {
         public WorkflowExecutionHarness Harness { get; } = harness;
 
         /// <summary>The durable document store (for commit counting), or <c>null</c> for the in-memory harness.</summary>
         public IDocumentStore? Store { get; } = store;
+
+        /// <summary>Durable executable-store FindAsync calls during the run (the reads the burst cache saves).</summary>
+        public long ExecutableReads => readCounter.Count;
 
         public async ValueTask DisposeAsync()
         {

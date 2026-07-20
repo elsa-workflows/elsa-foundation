@@ -70,7 +70,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeRecoveryScanner(),
             agentProvider,
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(Now));
+            new FixedTimeProvider(Now),
+            new InMemoryWorkflowExecutionStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
 
@@ -277,7 +278,8 @@ public sealed class RuntimeResumptionServiceTests
             recoveryScanner,
             agentProvider,
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(afterLeaseExpiry));
+            new FixedTimeProvider(afterLeaseExpiry),
+            new InMemoryWorkflowExecutionStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(
             leaseTimeout: leaseDuration,
@@ -294,6 +296,98 @@ public sealed class RuntimeResumptionServiceTests
         Assert.Equal("wfexec-window-c", envelope.WorkflowExecutionId);
         Assert.Equal(WorkflowExecutionCommandKind.RunSchedulerWork, envelope.Command.Kind);
     }
+
+    [Fact]
+    public async Task SweepAsync_PurgesResidualWorkForTerminalExecutionInsteadOfRedriving()
+    {
+        // spec 113: the drainer's terminal-status guard strands a RunSchedulerWork item in the durable queue when a
+        // workflow reaches a terminal status. Backlog discovery has no terminal filter, so the completed execution is
+        // surfaced every sweep. Re-driving it would enqueue yet another stranded item and emit a fresh drain span each
+        // tick — perpetual churn. The sweep must instead purge the residue and never re-drive a terminal execution.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewResidualWorkItem("wfexec-terminal", 1));
+        await queue.EnqueueAsync(NewResidualWorkItem("wfexec-terminal", 2));
+        var stateStore = new InMemoryWorkflowExecutionStateStore();
+        await stateStore.SaveAsync(NewState("wfexec-terminal", WorkflowExecutionStatus.Completed));
+        var agentProvider = new FakeAgentProvider();
+        var service = new RuntimeResumptionService(
+            new FakeOutboxProcessor(),
+            queue,
+            new FakeRecoveryScanner(),
+            agentProvider,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now),
+            stateStore);
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        // No re-drive: the terminal execution is never activated and no command envelope is sent.
+        Assert.Empty(result.Dispatches);
+        Assert.Empty(agentProvider.Activations);
+        Assert.Empty(agentProvider.Agent.Envelopes);
+        // The residual work is purged, so backlog discovery can no longer resurface the execution.
+        Assert.Equal(1, result.TerminalExecutionsPurged);
+        Assert.Equal(2, result.PurgedWorkItemCount);
+        Assert.True(result.DidWork);
+        Assert.Empty(await queue.ListPendingWorkflowExecutionIdsAsync(10));
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-terminal"))).Items);
+    }
+
+    [Fact]
+    public async Task SweepAsync_StillRedrivesNonTerminalExecutionWithBacklog()
+    {
+        // Regression guard: a suspended/running execution with genuine backlog must still be re-driven (Window C
+        // recovery). Only terminal executions are purged; non-terminal ones keep their redelivery.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewResidualWorkItem("wfexec-live", 1));
+        var stateStore = new InMemoryWorkflowExecutionStateStore();
+        await stateStore.SaveAsync(NewState("wfexec-live", WorkflowExecutionStatus.Suspended));
+        var agentProvider = new FakeAgentProvider();
+        var service = new RuntimeResumptionService(
+            new FakeOutboxProcessor(),
+            queue,
+            new FakeRecoveryScanner(),
+            agentProvider,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now),
+            stateStore);
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        var dispatch = Assert.Single(result.Dispatches);
+        Assert.Equal("wfexec-live", dispatch.WorkflowExecutionId);
+        Assert.Equal(RuntimeResumptionDispatchOutcome.Accepted, dispatch.Outcome);
+        Assert.Equal(0, result.TerminalExecutionsPurged);
+        Assert.Equal(0, result.PurgedWorkItemCount);
+        Assert.Equal(WorkflowExecutionCommandKind.RunSchedulerWork, Assert.Single(agentProvider.Agent.Envelopes).Command.Kind);
+    }
+
+    private static RuntimeSchedulerWorkItem NewResidualWorkItem(string workflowExecutionId, int index) =>
+        new(
+            workItemId: $"work-{index}",
+            workflowExecutionId: workflowExecutionId,
+            commandId: $"command-{index}",
+            commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+            envelopeId: $"envelope-{index}",
+            idempotencyKey: $"{workflowExecutionId}:command-{index}",
+            enqueuedAt: Now,
+            recordedAt: Now,
+            sequence: index);
+
+    private static WorkflowExecutionState NewState(string workflowExecutionId, WorkflowExecutionStatus status) =>
+        new(
+            WorkflowExecutionId: workflowExecutionId,
+            PinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            Status: status,
+            SubStatus: null,
+            CreatedAt: Now,
+            StartedAt: Now,
+            UpdatedAt: Now,
+            CompletedAt: status.IsTerminal() ? Now : null,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
 
     private static RuntimeRecoveryCandidate NewCandidate(string workflowExecutionId) =>
         new(
@@ -339,13 +433,15 @@ public sealed class RuntimeResumptionServiceTests
                 RecoveryScanner,
                 AgentProvider,
                 new ShortRuntimeExecutionIdGenerator(),
-                new FixedTimeProvider(Now));
+                new FixedTimeProvider(Now),
+                StateStore);
         }
 
         public FakeOutboxProcessor OutboxProcessor { get; } = new();
         public FakeWorkQueue WorkQueue { get; } = new();
         public FakeRecoveryScanner RecoveryScanner { get; } = new();
         public FakeAgentProvider AgentProvider { get; } = new();
+        public InMemoryWorkflowExecutionStateStore StateStore { get; } = new();
         public RuntimeResumptionService Service { get; }
     }
 

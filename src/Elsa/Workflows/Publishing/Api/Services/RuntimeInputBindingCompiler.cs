@@ -232,7 +232,8 @@ public sealed class RuntimeInputBindingCompiler(
                 AuthoredValueConversionMapper.Mode(conversion),
                 AuthoredValueConversionMapper.Profile(conversion),
                 AuthoredValueConversionMapper.Limits(conversion),
-                AuthoredValueConversionMapper.Options(conversion)));
+                AuthoredValueConversionMapper.Options(conversion),
+                InputBindingContext(nodeId, inputDefinition)));
     }
 
     private RuntimeInputBinding CompileFormattedLiteralInput(
@@ -265,7 +266,8 @@ public sealed class RuntimeInputBindingCompiler(
                 AuthoredValueConversionMapper.Mode(conversion),
                 AuthoredValueConversionMapper.Profile(conversion),
                 AuthoredValueConversionMapper.Limits(conversion),
-                AuthoredValueConversionMapper.Options(conversion)));
+                AuthoredValueConversionMapper.Options(conversion),
+                InputBindingContext(nodeId, inputDefinition)));
     }
 
     private RuntimeInputBinding CompileObjectInput(
@@ -317,7 +319,14 @@ public sealed class RuntimeInputBindingCompiler(
                     AuthoredValueConversionMapper.Mode(conversion),
                     AuthoredValueConversionMapper.Profile(conversion),
                     AuthoredValueConversionMapper.Limits(conversion),
-                    AuthoredValueConversionMapper.Options(conversion)));
+                    AuthoredValueConversionMapper.Options(conversion),
+                    InputBindingContext(nodeId, inputDefinition)));
+        }
+        catch (ValueConversionPublicationException)
+        {
+            // A structured conversion rejection already carries the binding context and must not be
+            // masked as a malformed-object syntax error; surface it to publication as-is.
+            throw;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
@@ -465,6 +474,9 @@ public sealed class RuntimeInputBindingCompiler(
         payload.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
+
+    private static ValueConversionBindingContext InputBindingContext(string nodeId, InputDefinition inputDefinition) =>
+        new(nodeId, inputDefinition.ReferenceKey, ValueConversionBindingKind.Input);
 
     private static Dictionary<string, string> BuildInputMetadata(InputDefinition inputDefinition) =>
         new()

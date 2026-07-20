@@ -17,9 +17,9 @@
     {
       "executableNodeId": "delay-1",
       "handlerKey": "OnResumeAsync",
-      "key": "resume-target:probe",
+      "key": "delay-1:resume-target:probe",
       "metadata": [],
-      "resumeTargetId": "resume-target:probe"
+      "resumeTargetId": "delay-1:resume-target:probe"
     }
   ],
   "rootActivity": {

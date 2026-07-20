@@ -11,13 +11,17 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     private readonly IWorkflowDrainOrchestrator _drainCoordinator;
     private readonly TimeProvider _timeProvider;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
+    private readonly IWorkflowBurstScopeAccessor? _burstScopeAccessor;
+    private readonly RuntimeBurstCacheOptions _burstCacheOptions;
 
     public WorkflowSchedulerCommandRouter(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IWorkflowSchedulerDrainPolicy schedulerDrainPolicy,
         IWorkflowDrainOrchestrator drainCoordinator,
         TimeProvider? timeProvider = null,
-        IActivityExecutionStateStore? activityExecutionStateStore = null)
+        IActivityExecutionStateStore? activityExecutionStateStore = null,
+        IWorkflowBurstScopeAccessor? burstScopeAccessor = null,
+        RuntimeBurstCacheOptions? burstCacheOptions = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(schedulerDrainPolicy);
@@ -28,6 +32,8 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         _drainCoordinator = drainCoordinator;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _activityExecutionStateStore = activityExecutionStateStore;
+        _burstScopeAccessor = burstScopeAccessor;
+        _burstCacheOptions = burstCacheOptions ?? new RuntimeBurstCacheOptions();
     }
 
     public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
@@ -71,8 +77,33 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         if (options.AmbientServices is not null)
             drainRequest = drainRequest.WithAmbientServices(options.AmbientServices);
 
-        var drainResult = await _drainCoordinator.DrainAsync(envelope, drainRequest, cancellationToken);
-        return WorkflowExecutionCommandProcessResult.FromDrain(drainResult);
+        // Establish the burst-scoped reconstructible cache for this drain (ADR 0031 item b, spec 111). One command
+        // envelope drives one drain-to-quiescence = one burst, spanning every drain cycle and both cadence branches
+        // (Immediate/Coalesced) inside the orchestrator; two sequential drains of the same execution get separate
+        // scopes, so cache entries never leak across drains. When the kill switch is off (or no accessor is wired) no
+        // scope is pushed and every executable read takes the durable path — byte-identical to the burst-absent path.
+        var burstScope = _burstScopeAccessor is not null && _burstCacheOptions.Enabled
+            ? new WorkflowBurstScope(drainRequest.WorkflowExecutionId)
+            : null;
+
+        if (burstScope is null)
+        {
+            var plainResult = await _drainCoordinator.DrainAsync(envelope, drainRequest, cancellationToken);
+            return WorkflowExecutionCommandProcessResult.FromDrain(plainResult);
+        }
+
+        using (_burstScopeAccessor!.Push(burstScope))
+        {
+            try
+            {
+                var drainResult = await _drainCoordinator.DrainAsync(envelope, drainRequest, cancellationToken);
+                return WorkflowExecutionCommandProcessResult.FromDrain(drainResult);
+            }
+            finally
+            {
+                await burstScope.DisposeAsync();
+            }
+        }
     }
 
     private async ValueTask<string?> ResolveExecutionScopeIdAsync(

@@ -57,6 +57,13 @@ internal sealed class PublishWorkflowEndpoint(IRequestSender requestSender, ILog
         {
             ThrowError(exception.Message, exception.Code == "expected_publication_mismatch" ? 409 : 400);
         }
+        catch (Exception exception) when (ValueConversionPublicationProblems.TryFind(exception, out var conversion))
+        {
+            await ValueConversionPublicationProblems.WriteAsync(
+                HttpContext.Response,
+                ValueConversionPublicationProblems.Create(conversion, HttpContext, request.VersionId),
+                cancellationToken);
+        }
         catch (ArgumentException exception)
         {
             ThrowError(exception.Message, 400);

@@ -16,6 +16,8 @@ public sealed class RuntimeCheckpointCommitter
     private readonly IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> _intentHandlerContributions;
     private readonly IRuntimeConsumedSchedulerWorkClaimAccessor? _consumedWorkClaimAccessor;
     private readonly IRuntimeCoalescingSessionAccessor? _coalescingSessionAccessor;
+    private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
+    private readonly RuntimeInProcessHopFastPathOptions _inProcessHopFastPathOptions;
 
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
@@ -51,7 +53,9 @@ public sealed class RuntimeCheckpointCommitter
         IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers,
         IEnumerable<RuntimePostCommitIntentHandlerContribution> intentHandlerContributions,
         IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
-        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor = null)
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor = null,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
+        RuntimeInProcessHopFastPathOptions? inProcessHopFastPathOptions = null)
     {
         ArgumentNullException.ThrowIfNull(persistencePolicy);
         ArgumentNullException.ThrowIfNull(checkpointCommitStore);
@@ -71,6 +75,8 @@ public sealed class RuntimeCheckpointCommitter
         _intentHandlerContributions = intentHandlerContributions.ToArray();
         _consumedWorkClaimAccessor = consumedWorkClaimAccessor;
         _coalescingSessionAccessor = coalescingSessionAccessor;
+        _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
+        _inProcessHopFastPathOptions = inProcessHopFastPathOptions ?? new RuntimeInProcessHopFastPathOptions();
     }
 
     public async ValueTask<RuntimeCheckpointCommitResult> CommitAsync(
@@ -155,7 +161,37 @@ public sealed class RuntimeCheckpointCommitter
         foreach (var workItemId in storeResult.ConsumedSchedulerWorkItemIds)
             _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
 
+        // WU-3 / spec 109 (ADR 0031 follow-up (a)): the durable outbox item is now committed and authoritative. If a
+        // live drain owns this execution's delivery, hand the still-materialized continuation work items to its
+        // drain-scoped carrier so the scheduler intent dispatcher can enqueue them without re-deserializing the payload
+        // we just persisted. Runs only after the commit succeeds, so a rolled-back commit publishes nothing.
+        PublishInProcessHopWorkItems(commit);
+
         return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
+    }
+
+    // Publishes each committed EnqueueSchedulerWork continuation's materialized work item onto the owning live drain's
+    // in-process-hop carrier. Guards (all must hold): the fast path is enabled; a live-drain delivery scope owns THIS
+    // execution (so the dispatcher will look here rather than deserialize); and no coalescing session owns the execution
+    // (the coalescing overlay is authoritative on continuation delivery, mirroring spec 106 FR-003). When any guard
+    // fails the carrier stays empty and delivery deserializes the durable payload — byte-identical result either way.
+    private void PublishInProcessHopWorkItems(RuntimeCheckpointCommit commit)
+    {
+        if (!_inProcessHopFastPathOptions.Enabled)
+            return;
+        if (commit.PostCommitIntents.Count == 0)
+            return;
+        if (_liveDrainDeliveryAccessor?.Current is not { } scope || !scope.AppliesTo(commit.WorkflowExecutionId))
+            return;
+        if (_coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId))
+            return;
+
+        foreach (var intent in commit.PostCommitIntents)
+        {
+            if (intent.MaterializedSchedulerWorkItem is { } workItem &&
+                StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
+                scope.PublishHopWorkItem(intent.IntentId, workItem);
+        }
     }
 
     private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>

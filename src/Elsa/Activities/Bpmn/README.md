@@ -39,6 +39,14 @@ validation. Later phases add timer/message/signal events, boundary events, event
 multi-instance, compensation, transactions, call activities, expression-based flow conditions, and
 BPMN 2.0 XML interchange.
 
+## Expression-driven gateway conditions
+
+`BpmnDecision` is the expression-condition evaluator leaf: its `Outcome` input is evaluated by the
+runtime's value binding (literal or any bound expression language) and the activity completes with
+the evaluated string as its outcome name. Bind one to an exclusive/inclusive gateway and condition
+the outbound flows on the values the expression can produce; a blank result matches nothing, so
+routing falls through to the default flow (or faults deterministically when none is declared).
+
 ## Behavior contract extension point
 
 Element semantics are extensible through the public `IBpmnElementBehavior` contract. Behaviors

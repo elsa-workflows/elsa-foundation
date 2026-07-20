@@ -140,3 +140,59 @@ inputs.Set(
     ActivityArgument.Value("""{"name":"Grace"}""")
         .WithProfile("partner.customer-json", "3"));
 ```
+
+## Publish and preflight conversion diagnostics
+
+When a binding cannot be resolved to a deterministic conversion plan, the
+`POST publishing/workflows/{versionId}/publish` and
+`POST publishing/workflows/{versionId}/preflight` endpoints reject the request with
+HTTP `400` and an `application/problem+json` body (RFC 7807). Publish and preflight
+return the identical payload. The failing node id, binding reference key, source and
+target contracts, source representation, requested mode, pinned profile, and a stable
+machine-readable `reasonCode` are carried as structured fields, so clients never need to
+parse the human message.
+
+The problem `type` is `https://elsa.dev/problems/VF-COER-001`, the `errorCode` and the
+single diagnostic `code` are both `VF-COER-001`, and the original human message is kept in
+both `detail` and the diagnostic `message`. The diagnostic `subject.id` is the failing node
+id, `location.referenceKey` is the input/output reference key, and `metadata` carries the
+contracts, representation, mode, profile, and reason code:
+
+```json
+{
+  "type": "https://elsa.dev/problems/VF-COER-001",
+  "title": "Workflow publication conversion was rejected",
+  "status": 400,
+  "detail": "VF-COER-001: Cannot resolve conversion from source representation 'TypedValue' and contract 'Int64/Single/schema:none' to target contract 'Int32/Single/schema:none' using mode 'Auto': numeric narrowing or cross-family numeric conversion is lossy under Auto.",
+  "errorCode": "VF-COER-001",
+  "traceId": "0HN...",
+  "diagnostics": [
+    {
+      "code": "VF-COER-001",
+      "severity": "Error",
+      "message": "VF-COER-001: Cannot resolve conversion from source representation 'TypedValue' and contract 'Int64/Single/schema:none' to target contract 'Int32/Single/schema:none' using mode 'Auto': numeric narrowing or cross-family numeric conversion is lossy under Auto.",
+      "subject": { "kind": "ActivityResult", "id": "consumer", "versionId": "workflow-version-1" },
+      "location": { "referenceKey": "value" },
+      "remediation": "numeric narrowing or cross-family numeric conversion is lossy under Auto.",
+      "metadata": {
+        "reasonCode": "AutomaticNumericLossy",
+        "mode": "Auto",
+        "targetType": "Int32/Single/schema:none",
+        "sourceType": "Int64/Single/schema:none",
+        "sourceRepresentation": "TypedValue",
+        "nodeId": "consumer",
+        "referenceKey": "value",
+        "bindingKind": "ActivityResult",
+        "workflowVersionId": "workflow-version-1"
+      }
+    }
+  ]
+}
+```
+
+`reasonCode` is stable across releases (for example `AutomaticNumericLossy`,
+`NoneModeContractMismatch`, `ProfileNotAvailable`, `ProducerNodeMissing`). `profileId` and
+`profileVersion` appear in `metadata` only when a profile is requested; `sourceType` and
+`sourceRepresentation` are omitted when the producer source contract could not be resolved
+(for example an activity-result binding whose producer node is missing). Non-conversion
+publication failures are unchanged and still return a plain `400`.

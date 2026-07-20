@@ -22,6 +22,31 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         LoopIterationScopeRequest? iterationFrame = null);
 
     IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests();
+
+    /// <summary>
+    /// Stages cancellation of one scheduled child's activity-execution subtree (spec 112). Only valid
+    /// during a child-completion/child-fault evaluation with a <c>Defer</c> or <c>Complete</c>
+    /// continuation; applied atomically in the same checkpoint commit as the continuation.
+    /// </summary>
+    void RequestChildSubtreeCancellation(
+        string childActivityExecutionId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null);
+
+    IReadOnlyCollection<RuntimeChildSubtreeCancellationRequest> GetChildSubtreeCancellationRequests();
+
+    /// <summary>
+    /// Stages absorption of the child fault this evaluation is processing (spec 115). Only valid
+    /// during a child-fault evaluation with a <c>Defer</c> or <c>Complete</c> continuation;
+    /// <paramref name="incidentId"/> must name the evaluation's incident. Applied atomically in the
+    /// same checkpoint commit as the continuation.
+    /// </summary>
+    void RequestChildFaultAbsorption(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null);
+
+    IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> GetChildFaultAbsorptionRequests();
 }
 
 /// <summary>

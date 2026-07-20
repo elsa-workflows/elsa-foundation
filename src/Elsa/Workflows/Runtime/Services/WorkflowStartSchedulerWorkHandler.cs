@@ -15,12 +15,14 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowExecutableReader? _executableReader;
 
     public WorkflowStartSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IRuntimeExecutionIdGenerator idGenerator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
@@ -31,6 +33,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         _schedulerWorkQueue = schedulerWorkQueue;
         _idGenerator = idGenerator;
         _timeProvider = timeProvider;
+        _executableReader = executableReader;
     }
 
     public string Name => HandlerName;
@@ -48,7 +51,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         cancellationToken.ThrowIfCancellationRequested();
 
         var startPayload = DeserializeStartPayload(workItem);
-        var executable = await _workflowExecutableStore.FindAsync(startPayload.RequestedArtifactId, cancellationToken);
+        var executable = await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, startPayload.RequestedArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(startPayload.RequestedArtifactId);
 

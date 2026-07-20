@@ -58,7 +58,9 @@ public sealed class ActivityExecutionLayoutReader(
             .ToArray();
         if (nodes.Length == 0)
             nodes = layoutRecords.Where(x => executable.NodesById.ContainsKey(x.ExecutableNodeId)).ToArray();
-        var connections = RuntimeFlowchartLayoutConnectionProjector.Project(executable, nodes);
+        var connections = RuntimeFlowchartLayoutConnectionProjector.Project(executable, nodes)
+            .Concat(RuntimeBpmnLayoutConnectionProjector.Project(executable, nodes))
+            .ToArray();
         var nested = await ReadNestedBoundariesAsync(workflowExecutionId, activityExecutionId, cancellationToken);
         return ActivityExecutionLayoutView.From(new(
             workflowExecutionId,
