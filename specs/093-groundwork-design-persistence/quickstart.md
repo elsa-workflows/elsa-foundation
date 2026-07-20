@@ -85,30 +85,32 @@ dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.
 #### Stable-candidate verification
 
 The latest tested source/test candidate is
-`9a68140fae197a06d43bc3c8245725dff778351f`. Verification completed at
-`2026-07-20T08:22:21+02:00` (CEST, `Europe/Amsterdam`) with these exact results:
+`f269a165d7cdc8e2582c375a42e9d9b4fe6163c7`. Verification completed at
+`2026-07-20T12:43:05+02:00` (CEST, `Europe/Amsterdam`) with these exact results:
 
 - `dotnet test tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj -c Release --no-restore`
-  — passed `59/59` (`0` failed, `0` skipped).
+  — passed `71/71` (`0` failed, `0` skipped).
 - `dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
-  — passed `618/618` (`0` failed, `0` skipped).
-
-The broader cross-suite commands below were last run on source/test candidate
-`17a5a937c3180b843f38ed53a6669ff8cdb8c913` at
-`2026-07-20T08:06:58+02:00` (CEST, `Europe/Amsterdam`):
-
-- `dotnet test tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj -c Release --no-build`
+  — passed `625/625` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
+  — passed `52/52` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
+  — passed `48/48` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj -c Release --no-restore`
+  — passed `88/88` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj -c Release --no-restore`
+  — passed `74/74` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj -c Release --no-restore`
   — passed `354/354` (`0` failed, `0` skipped).
-- `dotnet test tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj -c Release --no-build`
+- `dotnet test tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj -c Release --no-restore`
   — passed `490/490` (`0` failed, `0` skipped).
-- `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-build`
+- `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore`
   — passed `251/251` (`0` failed, `0` skipped).
 
-The architecture ratchet required `dotnet restore Elsa.Server.slnx` before its exact
-`--no-build` command so the repository-wide package scan had complete assets. The
-documentation-only follow-up changes only this quickstart. The commands above were
-not rerun on that documentation commit; their evidence remains attached to the tested
-source/test candidate SHAs stated above.
+The architecture ratchet used the complete repository assets restored earlier in the
+work unit. The documentation-only follow-up changes only this quickstart. The commands
+above are not rerun on that documentation commit; their evidence remains attached to
+the tested source/test candidate SHA stated above.
 
 ## 3. Run the four-provider black-box suite
 
