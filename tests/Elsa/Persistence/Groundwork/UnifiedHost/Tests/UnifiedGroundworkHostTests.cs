@@ -464,7 +464,11 @@ public class UnifiedGroundworkHostTests
     }
 
     private static Task SaveAsync(IDocumentStore store, string kind, string id, string collection) =>
-        store.SaveAsync(new SaveDocumentRequest(kind, id, "1.0.0", $"{{\"collection\":\"{collection}\"}}"));
+        store.SaveAsync(new SaveDocumentRequest(
+            kind,
+            id,
+            "1.0.0",
+            JsonSerializer.Serialize(new { collection, entity = new { id } })));
 
     private sealed class TenantAccessContextAccessor : IPersistenceAccessContextAccessor
     {

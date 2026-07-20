@@ -63,7 +63,7 @@
 
 **Decision**: Before implementation, verify an exact public `0.0.1-preview.76` package/tool family and executable probes for codec admission, physical entity definitions, schema CLI/readiness, typed compound/multivalue/range routes, bounded mutation with native mutation plans, and four-provider CAS/UoW.
 
-**Rationale**: The current worktree still pins preview.72; a local or historical capability claim cannot establish the public integration contract. Linked multivalue projections are permitted only when preview.76 proves the public declaration/execution surface.
+**Rationale**: The audit worktree pinned preview.72 when this prerequisite was recorded; a local or historical capability claim cannot establish the public integration contract. The repository now consumes preview.76, but linked multivalue projections remain permitted only after that public family proves the declaration/execution surface.
 
 **Alternatives considered**:
 
