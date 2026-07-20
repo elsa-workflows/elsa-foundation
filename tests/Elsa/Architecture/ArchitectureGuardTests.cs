@@ -312,7 +312,10 @@ public sealed class ArchitectureGuardTests
         var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
 
         Assert.Contains("Elsa.Workflows.Design.Validations", references);
-        Assert.Contains("typeof(WorkflowDesignValidationsFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains(
+            "typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly",
+            program,
+            StringComparison.Ordinal);
     }
 
     [Fact]
