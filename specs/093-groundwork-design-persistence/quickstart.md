@@ -40,11 +40,19 @@ The shared project now contains abstract, executable-by-inheritance workflow and
 They exercise readiness, scoped lifecycle reads and writes, restart/result-hash parity, draft and
 version layout round-trips, clone provenance, validation rejection, descriptor serialization,
 SemVer identity, missing outcomes, permanent-delete outcomes, and reconciliation idempotency. The
-scenarios reference only Elsa core contracts plus
-`IDesignPersistenceContractFixture`; concrete EF-oracle and provider fixtures remain T025 and
-T051–T054 work. Therefore no provider-parity or oracle result hashes are claimed at this checkpoint.
-The focused Release project restore/build/test completed with `11/11` tests; the executable
-provider scenarios remain pending a concrete fixture inheritance target.
+scenarios reference only Elsa core contracts plus `IDesignPersistenceContractFixture`. The reusable
+source/type boundary—not the future fixture assembly as a whole—is guarded against provider SDK
+references, so T025 and T051–T054 can add concrete fixtures without weakening the shared suites.
+Fixture staging is explicitly non-persisting; the activity suite proves the candidate is absent and
+then resolves and invokes the real `IActivityVersionReconciler`. Captured domain events assert clone,
+validation, discard, and reconciliation outcomes. Canonical restart snapshots contain the authored
+workflow state and activity descriptor, and assert each against the deterministic input before
+comparing restart hashes.
+
+Concrete EF-oracle and provider fixtures remain T025 and T051–T054 work. Therefore no
+provider-parity or oracle result hashes are claimed at this checkpoint. The focused Release project
+restore/build/test completed with `13/13` tests; executable provider scenarios remain pending a
+concrete fixture inheritance target.
 
 No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads
 that define them are T021–T024. T025 runs the EF SQLite oracle, records the canonical

@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Events.Core.Contracts;
 using Elsa.Primitives.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,14 +25,23 @@ public interface IDesignPersistenceContractFixture : IAsyncDisposable
     Task ValidateReadinessAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Runs the provider fixture's normal activity reconciliation entry point with the supplied
-    /// source candidates. The shared suite deliberately knows no reconciliation implementation,
-    /// event publisher, or provider SDK; fixtures translate this call to their composed host.
+    /// Makes the supplied candidates visible to the fixture's normal reconciliation source.
+    /// This method MUST NOT persist candidates or invoke reconciliation; the shared suite verifies
+    /// pre-reconciliation absence and invokes the real domain reconciler from the request scope.
     /// </summary>
-    Task ReconcileActivityVersionsAsync(
+    Task StageActivityReconciliationCandidatesAsync(
         string storageScope,
         IReadOnlyCollection<ActivityDefinitionVersion> candidates,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Clears the event/outcome observation window without changing durable state.</summary>
+    void ClearObservedEvents();
+
+    /// <summary>
+    /// Returns events emitted through the composed domain event infrastructure since the last
+    /// clear. Implementations wait for already-published deferred events to become observable.
+    /// </summary>
+    Task<IReadOnlyList<IEvent>> ReadObservedEventsAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>Creates one durable fixture per mandatory provider without exposing provider SDK types to scenarios.</summary>

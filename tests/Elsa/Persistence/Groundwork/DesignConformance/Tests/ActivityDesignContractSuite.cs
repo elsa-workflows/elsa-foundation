@@ -1,7 +1,9 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Versioning;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +34,10 @@ public abstract class ActivityDesignContractSuite
         }
 
         var beforeRestart = await ReadActivitySnapshotAsync(fixture);
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(DesignPersistenceFixtureData.ActivityVersion().DescriptorPayload),
+            DesignPersistenceFixtureData.ResultHash(beforeRestart.DescriptorPayload));
+
         await fixture.RestartAsync();
         var afterRestart = await ReadActivitySnapshotAsync(fixture);
 
@@ -84,15 +90,48 @@ public abstract class ActivityDesignContractSuite
         await fixture.ValidateReadinessAsync();
 
         var candidate = DesignPersistenceFixtureData.ReconciledActivityVersion();
-        await fixture.ReconcileActivityVersionsAsync(DesignPersistenceFixtureData.ScopeA, [candidate]);
+        await fixture.StageActivityReconciliationCandidatesAsync(DesignPersistenceFixtureData.ScopeA, [candidate]);
+
+        using (var beforeScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
+        {
+            Assert.Null(await beforeScope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>()
+                .FindAsync(new ActivityDefinitionFilter { Id = candidate.DefinitionId }));
+        }
+
+        fixture.ClearObservedEvents();
+        await ReconcileAsync(fixture);
+        await AssertReconciliationEventAsync(fixture, candidate);
         var first = await ReadReconciledSnapshotAsync(fixture, candidate);
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(candidate.DescriptorPayload),
+            DesignPersistenceFixtureData.ResultHash(first.DescriptorPayload));
 
         await fixture.RestartAsync();
-        await fixture.ReconcileActivityVersionsAsync(DesignPersistenceFixtureData.ScopeA, [candidate]);
+        await fixture.StageActivityReconciliationCandidatesAsync(DesignPersistenceFixtureData.ScopeA, [candidate]);
+        fixture.ClearObservedEvents();
+        await ReconcileAsync(fixture);
+        await AssertReconciliationEventAsync(fixture, candidate);
         var second = await ReadReconciledSnapshotAsync(fixture, candidate);
 
         Assert.Equal(DesignPersistenceFixtureData.ResultHash(first), DesignPersistenceFixtureData.ResultHash(second));
         Assert.Equal(1, second.VersionCount);
+    }
+
+    private static async Task ReconcileAsync(IDesignPersistenceContractFixture fixture)
+    {
+        using var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
+        await scope.ServiceProvider.GetRequiredService<IActivityVersionReconciler>().Reconcile(CancellationToken.None);
+    }
+
+    private static async Task AssertReconciliationEventAsync(
+        IDesignPersistenceContractFixture fixture,
+        ActivityDefinitionVersion candidate)
+    {
+        var reconciling = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<OnActivityVersionsReconciling>());
+        var observed = Assert.Single(reconciling.Versions);
+        Assert.Equal(candidate.Id, observed.Id);
+        Assert.Equal(candidate.DefinitionId, observed.DefinitionId);
+        Assert.Equal(candidate.Hash, observed.Hash);
     }
 
     private static async Task<ActivitySnapshot> ReadActivitySnapshotAsync(IDesignPersistenceContractFixture fixture)
@@ -112,7 +151,7 @@ public abstract class ActivityDesignContractSuite
             version.DefinitionId,
             version.Version,
             version.Hash,
-            DesignPersistenceFixtureData.ResultHash(version.DescriptorPayload),
+            version.DescriptorPayload,
             versionDefinition.ActivityTypeKey);
     }
 
@@ -129,7 +168,13 @@ public abstract class ActivityDesignContractSuite
         var versions = await services.GetRequiredService<IActivityDefinitionVersionStore>()
             .ListByDefinitionAsync(definition!.Id);
         var reconciled = Assert.Single(versions);
-        return new ReconciledActivitySnapshot(definition.Id, reconciled.Id, reconciled.Version, reconciled.Hash, versions.Count);
+        return new ReconciledActivitySnapshot(
+            definition.Id,
+            reconciled.Id,
+            reconciled.Version,
+            reconciled.Hash,
+            reconciled.DescriptorPayload,
+            versions.Count);
     }
 
     private sealed record ActivitySnapshot(
@@ -141,8 +186,14 @@ public abstract class ActivityDesignContractSuite
         string VersionDefinitionId,
         string Version,
         string? Hash,
-        string DescriptorHash,
+        JsonElement DescriptorPayload,
         string VersionDefinitionActivityTypeKey);
 
-    private sealed record ReconciledActivitySnapshot(string DefinitionId, string VersionId, string Version, string? Hash, int VersionCount);
+    private sealed record ReconciledActivitySnapshot(
+        string DefinitionId,
+        string VersionId,
+        string Version,
+        string? Hash,
+        JsonElement DescriptorPayload,
+        int VersionCount);
 }

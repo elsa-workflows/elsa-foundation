@@ -51,9 +51,9 @@ public static class DesignPersistenceFixtureData
         SourceCreatedAt = Epoch
     };
 
-    public static WorkflowDefinitionState WorkflowState() => new(
+    public static WorkflowDefinitionState WorkflowState(string rootNodeId = "root") => new(
         Variables: [],
-        RootActivity: new ActivityNode("root", ActivityVersionId, [], []),
+        RootActivity: new ActivityNode(rootNodeId, ActivityVersionId, [], []),
         Inputs: [],
         Outputs: [],
         StrategyOptions: null);

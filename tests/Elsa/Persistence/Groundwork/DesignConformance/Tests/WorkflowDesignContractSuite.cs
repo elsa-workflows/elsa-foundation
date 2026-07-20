@@ -1,10 +1,12 @@
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Persistence.Core;
+using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -39,6 +41,10 @@ public abstract class WorkflowDesignContractSuite
         }
 
         var beforeRestart = await ReadDraftSnapshotAsync(fixture);
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(DesignPersistenceFixtureData.WorkflowState()),
+            DesignPersistenceFixtureData.ResultHash(beforeRestart.State));
+
         await fixture.RestartAsync();
         var afterRestart = await ReadDraftSnapshotAsync(fixture);
 
@@ -97,7 +103,8 @@ public abstract class WorkflowDesignContractSuite
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
 
-        var updatedLayout = new[] { new DesignMetadataRecord("root", 42, 84, 220, 80) };
+        var updatedState = DesignPersistenceFixtureData.WorkflowState("updated-root");
+        var updatedLayout = new[] { new DesignMetadataRecord("updated-root", 42, 84, 220, 80) };
         string promotedVersionId;
         string cloneId;
         using (var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
@@ -110,8 +117,9 @@ public abstract class WorkflowDesignContractSuite
                 DesignPersistenceFixtureData.WorkflowDraftLayout(),
                 CancellationToken.None);
 
+            fixture.ClearObservedEvents();
             await services.GetRequiredService<IUpdateDraftCommand>().Execute(
-                new UpdateDraftRequest(DesignPersistenceFixtureData.WorkflowDraftId, DesignPersistenceFixtureData.WorkflowState(), updatedLayout));
+                new UpdateDraftRequest(DesignPersistenceFixtureData.WorkflowDraftId, updatedState, updatedLayout));
             promotedVersionId = await services.GetRequiredService<IPromoteDraftToVersionCommand>()
                 .Execute(DesignPersistenceFixtureData.WorkflowDraftId);
             cloneId = await services.GetRequiredService<ICloneDraftFromVersionCommand>().Execute(promotedVersionId);
@@ -123,8 +131,15 @@ public abstract class WorkflowDesignContractSuite
 
         Assert.NotNull(draft);
         Assert.Equal(promotedVersionId, draft!.Draft.SourceVersionId);
-        Assert.Equal(DesignPersistenceFixtureData.WorkflowState().RootActivity, draft.Draft.State.RootActivity);
+        Assert.Equal(updatedState.RootActivity, draft.Draft.State.RootActivity);
         Assert.Equal(updatedLayout, draft.Layout);
+
+        var events = await fixture.ReadObservedEventsAsync();
+        var created = Assert.Single(events.OfType<OnDraftCreated>());
+        Assert.Equal(cloneId, created.DraftId);
+        Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, created.WorkflowDefinitionId);
+        Assert.Equal(promotedVersionId, created.SourceVersionId);
+        Assert.Equal(2, events.OfType<OnDraftValidated>().Count());
     }
 
     [Fact]
@@ -161,9 +176,14 @@ public abstract class WorkflowDesignContractSuite
                 DesignPersistenceFixtureData.WorkflowDraftLayout(),
                 CancellationToken.None);
 
+            fixture.ClearObservedEvents();
             await services.GetRequiredService<IDiscardDraftCommand>().Execute(DesignPersistenceFixtureData.WorkflowDraftId);
             Assert.Null(await services.GetRequiredService<IWorkflowDefinitionDraftStore>()
                 .FindByIdAsync(DesignPersistenceFixtureData.WorkflowDraftId));
+
+            var discarded = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<OnDraftDiscarded>());
+            Assert.Equal(DesignPersistenceFixtureData.WorkflowDraftId, discarded.DraftId);
+            Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, discarded.WorkflowDefinitionId);
 
             var definition = await services.GetRequiredService<IWorkflowDefinitionStore>()
                 .GetAsync(DesignPersistenceFixtureData.WorkflowDefinitionId);
@@ -199,7 +219,14 @@ public abstract class WorkflowDesignContractSuite
 
         Assert.NotNull(definition);
         Assert.NotNull(draft);
-        return new WorkflowDraftSnapshot(definition!.Id, definition.Name, definition.Description, draft!.Draft.Id, draft.Draft.WorkflowDefinitionId, draft.Layout);
+        return new WorkflowDraftSnapshot(
+            definition!.Id,
+            definition.Name,
+            definition.Description,
+            draft!.Draft.Id,
+            draft.Draft.WorkflowDefinitionId,
+            draft.Draft.State,
+            draft.Layout);
     }
 
     private sealed record WorkflowDraftSnapshot(
@@ -208,5 +235,6 @@ public abstract class WorkflowDesignContractSuite
         string? Description,
         string DraftId,
         string DraftDefinitionId,
+        WorkflowDefinitionState State,
         IReadOnlyCollection<DesignMetadataRecord> Layout);
 }
