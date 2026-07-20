@@ -151,11 +151,149 @@ public sealed class GroundworkScopedDocumentStoreTests
         Assert.Equal(1, lease.DisposeCount);
     }
 
+    [Fact]
+    public async Task Public_session_constructor_enforces_the_complete_privilege_dependency_pair()
+    {
+        var ordinary = DocumentStoreAccess.Scoped(new StorageScope("tenant-a"));
+        var privileged = GroundworkPersistenceAccessMapper.Map(
+            PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("repair")),
+            PersistenceAccessPolicy.Privileged);
+        var emitter = new RecordingEmitter();
+        var audit = new GroundworkPrivilegedAccessAudit(
+            Guid.NewGuid(),
+            privileged.Kind,
+            "host",
+            "repair");
+
+        await using var ordinarySession = new GroundworkStoreSession(ordinary, Resources(ordinary));
+        var privilegedSession = new GroundworkStoreSession(privileged, Resources(privileged), emitter, audit);
+
+        Assert.Throws<ArgumentException>(() => new GroundworkStoreSession(ordinary, Resources(ordinary), emitter));
+        Assert.Throws<ArgumentException>(() => new GroundworkStoreSession(ordinary, Resources(ordinary), null, audit));
+        Assert.Throws<ArgumentException>(() => new GroundworkStoreSession(privileged, Resources(privileged)));
+        Assert.Throws<ArgumentException>(() => new GroundworkStoreSession(privileged, Resources(privileged), emitter));
+        Assert.Throws<ArgumentException>(() => new GroundworkStoreSession(privileged, Resources(privileged), null, audit));
+
+        await privilegedSession.DisposeAsync();
+        Assert.Equal([(audit, GroundworkPrivilegedAccessOutcome.Abandoned)], emitter.Outcomes);
+    }
+
+    [Fact]
+    public async Task Public_session_constructor_preserves_default_and_cleanup_failure_behavior()
+    {
+        var access = DocumentStoreAccess.Scoped(new StorageScope("tenant-a"));
+        var failure = new InvalidOperationException("lease failed");
+        var lease = new TrackingLease(failure);
+        var session = new GroundworkStoreSession(access, Resources(access, lease));
+
+        Assert.Same(access, session.Access);
+        Assert.Throws<ArgumentNullException>(() => new GroundworkStoreSession(null!, Resources(access)));
+        Assert.Throws<ArgumentNullException>(() => new GroundworkStoreSession(access, null!));
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => session.DisposeAsync().AsTask());
+
+        Assert.Same(failure, actual);
+        Assert.Equal(1, lease.DisposeCount);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => session.DisposeAsync().AsTask());
+        Assert.Equal(1, lease.DisposeCount);
+    }
+
+    [Fact]
+    public async Task Public_session_unit_of_work_forwards_every_operation_and_disposes_in_order_once()
+    {
+        var access = DocumentStoreAccess.Scoped(new StorageScope("tenant-a"));
+        var lease = new TrackingLease();
+        var inner = new TrackingUnitOfWork();
+        var unitOfWork = new SessionUnitOfWork(inner, new GroundworkStoreSession(access, Resources(access, lease)));
+        var save = new SaveDocumentRequest("kind", "id", "1.0.0", "{}");
+        var delete = new DeleteDocumentRequest("kind", "id");
+        using var cancellation = new CancellationTokenSource();
+
+        await unitOfWork.SaveAsync(save, cancellation.Token);
+        await unitOfWork.DeleteAsync(delete, cancellation.Token);
+        await unitOfWork.LoadAsync("kind", "id", cancellation.Token);
+        await unitOfWork.CommitAsync(cancellation.Token);
+        await unitOfWork.RollbackAsync(cancellation.Token);
+        await unitOfWork.DisposeAsync();
+        await unitOfWork.DisposeAsync();
+
+        Assert.Same(save, inner.SaveRequest);
+        Assert.Same(delete, inner.DeleteRequest);
+        Assert.Equal(("kind", "id"), inner.LoadRequest);
+        Assert.All(inner.CancellationTokens, token => Assert.Equal(cancellation.Token, token));
+        Assert.Equal(["save", "delete", "load", "commit", "rollback", "dispose"], inner.Calls);
+        Assert.Equal(1, inner.DisposeCount);
+        Assert.Equal(1, lease.DisposeCount);
+    }
+
+    [Fact]
+    public async Task Public_session_unit_of_work_validates_dependencies_and_preserves_the_primary_disposal_failure()
+    {
+        var access = DocumentStoreAccess.Scoped(new StorageScope("tenant-a"));
+        var unitFailure = new InvalidOperationException("unit failed");
+        var sessionFailure = new InvalidOperationException("session failed");
+        var inner = new TrackingUnitOfWork { DisposeFailure = unitFailure };
+        var unitOfWork = new SessionUnitOfWork(
+            inner,
+            new GroundworkStoreSession(access, Resources(access, new TrackingLease(sessionFailure))));
+
+        Assert.Throws<ArgumentNullException>(() => new SessionUnitOfWork(null!, new GroundworkStoreSession(access, Resources(access))));
+        Assert.Throws<ArgumentNullException>(() => new SessionUnitOfWork(inner, null!));
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => unitOfWork.DisposeAsync().AsTask());
+
+        Assert.Same(unitFailure, actual);
+        Assert.Same(sessionFailure, actual.Data["Elsa.Persistence.Groundwork.SessionDisposalFailure"]);
+        await unitOfWork.DisposeAsync();
+        Assert.Equal(1, inner.DisposeCount);
+    }
+
+    [Fact]
+    public async Task Public_session_unit_of_work_propagates_a_session_disposal_failure_when_the_unit_succeeds()
+    {
+        var access = DocumentStoreAccess.Scoped(new StorageScope("tenant-a"));
+        var sessionFailure = new InvalidOperationException("session failed");
+        var inner = new TrackingUnitOfWork();
+        var unitOfWork = new SessionUnitOfWork(
+            inner,
+            new GroundworkStoreSession(access, Resources(access, new TrackingLease(sessionFailure))));
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => unitOfWork.DisposeAsync().AsTask());
+
+        Assert.Same(sessionFailure, actual);
+        Assert.Equal(1, inner.DisposeCount);
+    }
+
+    [Fact]
+    public async Task Public_session_unit_of_work_propagates_an_inner_disposal_failure_after_cleaning_up_the_session()
+    {
+        var access = DocumentStoreAccess.Scoped(new StorageScope("tenant-a"));
+        var unitFailure = new InvalidOperationException("unit failed");
+        var lease = new TrackingLease();
+        var inner = new TrackingUnitOfWork { DisposeFailure = unitFailure };
+        var unitOfWork = new SessionUnitOfWork(
+            inner,
+            new GroundworkStoreSession(access, Resources(access, lease)));
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => unitOfWork.DisposeAsync().AsTask());
+
+        Assert.Same(unitFailure, actual);
+        Assert.Equal(1, lease.DisposeCount);
+    }
+
     private static GroundworkScopedDocumentStore CreateStore(TrackingSessionSource source)
     {
         var accessor = new FixedAccessContextAccessor(AccessContext);
         var sessions = new GroundworkStoreSessionFactory(accessor, source);
         return new GroundworkScopedDocumentStore(accessor, sessions);
+    }
+
+    private static GroundworkStoreSessionResources Resources(
+        DocumentStoreAccess access,
+        TrackingLease? lease = null)
+    {
+        var store = new TrackingDocumentStore(access, []);
+        return new GroundworkStoreSessionResources(store, store, lease);
     }
 
     private sealed class FixedAccessContextAccessor(PersistenceAccessContext current)
@@ -186,14 +324,14 @@ public sealed class GroundworkScopedDocumentStoreTests
         }
     }
 
-    private sealed class TrackingLease : IAsyncDisposable
+    private sealed class TrackingLease(Exception? failure = null) : IAsyncDisposable
     {
         public int DisposeCount { get; private set; }
 
         public ValueTask DisposeAsync()
         {
             DisposeCount++;
-            return ValueTask.CompletedTask;
+            return failure is null ? ValueTask.CompletedTask : ValueTask.FromException(failure);
         }
     }
 
@@ -330,28 +468,80 @@ public sealed class GroundworkScopedDocumentStoreTests
     private sealed class TrackingUnitOfWork : IDocumentUnitOfWork
     {
         public int DisposeCount { get; private set; }
+        public List<string> Calls { get; } = [];
+        public List<CancellationToken> CancellationTokens { get; } = [];
+        public SaveDocumentRequest? SaveRequest { get; private set; }
+        public DeleteDocumentRequest? DeleteRequest { get; private set; }
+        public (string DocumentKind, string Id)? LoadRequest { get; private set; }
+        public Exception? DisposeFailure { get; init; }
 
         public Task<DocumentStoreWriteResult> SaveAsync(
             SaveDocumentRequest request,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default)
+        {
+            SaveRequest = request;
+            CancellationTokens.Add(cancellationToken);
+            Calls.Add("save");
+            return Task.FromResult(DocumentStoreWriteResult.NotFound);
+        }
 
         public Task<DocumentStoreWriteResult> DeleteAsync(
             DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default)
+        {
+            DeleteRequest = request;
+            CancellationTokens.Add(cancellationToken);
+            Calls.Add("delete");
+            return Task.FromResult(DocumentStoreWriteResult.NotFound);
+        }
 
         public Task<DocumentEnvelope?> LoadAsync(
             string documentKind,
             string id,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default)
+        {
+            LoadRequest = (documentKind, id);
+            CancellationTokens.Add(cancellationToken);
+            Calls.Add("load");
+            return Task.FromResult<DocumentEnvelope?>(null);
+        }
 
-        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            CancellationTokens.Add(cancellationToken);
+            Calls.Add("commit");
+            return Task.CompletedTask;
+        }
 
-        public Task RollbackAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RollbackAsync(CancellationToken cancellationToken = default)
+        {
+            CancellationTokens.Add(cancellationToken);
+            Calls.Add("rollback");
+            return Task.CompletedTask;
+        }
 
         public ValueTask DisposeAsync()
         {
             DisposeCount++;
-            return ValueTask.CompletedTask;
+            Calls.Add("dispose");
+            return DisposeFailure is null ? ValueTask.CompletedTask : ValueTask.FromException(DisposeFailure);
+        }
+    }
+
+    private sealed class RecordingEmitter : IGroundworkPrivilegedAccessEmitter
+    {
+        public List<(GroundworkPrivilegedAccessAudit Audit, GroundworkPrivilegedAccessOutcome Outcome)> Outcomes { get; } = [];
+
+        public GroundworkPrivilegedAccessAudit RecordAcquisition(DocumentStoreAccess access) =>
+            throw new NotSupportedException();
+
+        public void RecordOutcome(
+            GroundworkPrivilegedAccessAudit audit,
+            GroundworkPrivilegedAccessOutcome outcome,
+            Exception? failure = null,
+            Exception? cleanupFailure = null)
+        {
+            Outcomes.Add((audit, outcome));
         }
     }
 }

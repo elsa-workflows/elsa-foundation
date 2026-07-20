@@ -69,15 +69,17 @@ public sealed class GroundworkStoreSession : IAsyncDisposable
     private PrivilegedCompletion? _privilegedCompletion;
     private Task? _disposeTask;
 
-    internal GroundworkStoreSession(
+    public GroundworkStoreSession(
         DocumentStoreAccess access,
         GroundworkStoreSessionResources resources,
-        IGroundworkPrivilegedAccessEmitter? privilegedAccessEmitter,
-        GroundworkPrivilegedAccessAudit? privilegedAccessAudit)
+        IGroundworkPrivilegedAccessEmitter? privilegedAccessEmitter = null,
+        GroundworkPrivilegedAccessAudit? privilegedAccessAudit = null)
     {
         Access = access ?? throw new ArgumentNullException(nameof(access));
         _resources = resources ?? throw new ArgumentNullException(nameof(resources));
-        if (access.IsPrivileged != (privilegedAccessEmitter is not null && privilegedAccessAudit is not null))
+        var hasEmitter = privilegedAccessEmitter is not null;
+        var hasAudit = privilegedAccessAudit is not null;
+        if (access.IsPrivileged ? !hasEmitter || !hasAudit : hasEmitter || hasAudit)
         {
             throw new ArgumentException(
                 "Privileged sessions require an audit emitter and acquisition identity; ordinary sessions require neither.",
