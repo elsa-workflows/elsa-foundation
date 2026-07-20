@@ -19,7 +19,7 @@ public sealed class DesignStorageManifestCurrentSchemaAdmissionTests
     [Fact]
     public async Task Current_design_schema_is_admitted_by_the_host_target_and_restart_is_idempotent()
     {
-        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-current-design-schema-{Guid.NewGuid():N}.db");
+        var databasePath = Path.Join(Path.GetTempPath(), $"elsa-current-design-schema-{Guid.NewGuid():N}.db");
         var connectionString = $"Data Source={databasePath}";
 
         try
