@@ -55,6 +55,56 @@ public sealed class FeatureManagementServiceTests
             service.ApplyAsync(new FeatureApplyRequest("stale", [])));
     }
 
+    [Fact]
+    public async Task ApplyRejectsRequestOmittingEnabledFeatures()
+    {
+        _store.Features["KeepMe"] = Json("{}");
+        _store.Features["AlsoKeepMe"] = Json("{}");
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.ApplyAsync(new FeatureApplyRequest(
+                catalog.Revision,
+                [new("NewFeature", true, Json("{}"))])));
+
+        Assert.Contains("AlsoKeepMe, KeepMe", exception.Message);
+        Assert.True(_store.Features.ContainsKey("KeepMe"));
+        Assert.True(_store.Features.ContainsKey("AlsoKeepMe"));
+        Assert.False(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(0, _refresher.RefreshCount);
+        Assert.Equal(0, _reloader.ReloadCount);
+    }
+
+    [Fact]
+    public async Task ApplyAllowsOmittingDisabledFeatures()
+    {
+        _store.Features["KeepMe"] = Json("{}");
+        var service = CreateService(new ContributingFeatureCatalogContributor("AvailableFeature"));
+        var catalog = await service.GetCatalogAsync();
+
+        var result = await service.ApplyAsync(new FeatureApplyRequest(
+            catalog.Revision,
+            [new("KeepMe", true, Json("{}"))]));
+
+        Assert.True(_store.Features.ContainsKey("KeepMe"));
+        Assert.Contains(result.Catalog.Features, x => x.Id == "AvailableFeature" && !x.Enabled);
+    }
+
+    [Fact]
+    public async Task ApplyMatchesEnabledFeatureIdsCaseInsensitively()
+    {
+        _store.Features["KeepMe"] = Json("{}");
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+
+        var result = await service.ApplyAsync(new FeatureApplyRequest(
+            catalog.Revision,
+            [new("keepme", true, Json("{}"))]));
+
+        Assert.Contains(result.Catalog.Features, x => x.Enabled);
+    }
+
     private FeatureManagementService CreateService(params IFeatureCatalogContributor[] contributors) =>
         new(_store, contributors, _refresher, _reloader);
 
