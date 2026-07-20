@@ -10,6 +10,8 @@ public sealed class GroundworkCoverageLedgerTests
     private const string ExpectedGroundworkVersion = "0.0.1-preview.77";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
+    private const string CheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/ledger-attachments/runtime-checkpoint-fence.json";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -65,6 +67,38 @@ public sealed class GroundworkCoverageLedgerTests
         Assert.Empty(findings);
         Assert.Equal(32, actualEntryIds.Length);
         Assert.Equal(ExpectedEntryIds.Order(StringComparer.Ordinal), actualEntryIds);
+    }
+
+    [Fact]
+    public void Checked_in_checkpoint_fence_attachment_is_imported_exactly_once_by_declared_tuple()
+    {
+        var ledgerRecords = Entries(ReadLedger())
+            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
+                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
+            .ToArray();
+        var attachmentPath = Path.Combine(
+            RepoRoot,
+            CheckpointFenceAttachmentRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        var attachmentRecords = JsonNode.Parse(File.ReadAllText(attachmentPath))?.AsArray()
+                                    ?.OfType<JsonObject>()
+                                    .ToArray()
+                                ?? throw new InvalidOperationException(
+                                    $"Checkpoint/fence ledger attachment '{attachmentPath}' is empty.");
+        var attachmentKeys = attachmentRecords.Select(EvidenceTuple).ToArray();
+
+        Assert.Equal(36, attachmentRecords.Length);
+        Assert.Equal(attachmentKeys.Length, attachmentKeys.Distinct(StringComparer.Ordinal).Count());
+        foreach (var attachmentRecord in attachmentRecords)
+        {
+            var matches = ledgerRecords
+                .Where(record => EvidenceTuple(record) == EvidenceTuple(attachmentRecord))
+                .ToArray();
+
+            Assert.Single(matches);
+            Assert.True(
+                JsonNode.DeepEquals(attachmentRecord, matches[0]),
+                $"Checkpoint/fence evidence tuple '{EvidenceTuple(attachmentRecord)}' differs from its attachment record.");
+        }
     }
 
     [Fact]
@@ -742,6 +776,12 @@ public sealed class GroundworkCoverageLedgerTests
     private static string EntryIdOf(JsonObject entry) =>
         entry["id"]?.GetValue<string>()
         ?? throw new InvalidOperationException("Coverage ledger entry has no id.");
+
+    private static string EvidenceTuple(JsonObject record) => string.Join(
+        '|',
+        record["coverageEntryId"]?.GetValue<string>() ?? "<missing-entry>",
+        record["scenarioId"]?.GetValue<string>() ?? "<missing-scenario>",
+        record["provider"]?.GetValue<string>() ?? "<missing-provider>");
 
     private static void AddCompleteEvidence(JsonObject entry)
     {
