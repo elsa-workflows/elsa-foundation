@@ -1,0 +1,76 @@
+using System.Text.Json;
+using Elsa.Activities.Bpmn.Models;
+using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+
+namespace Elsa.Activities.Bpmn.Internal;
+
+internal sealed class BpmnStructureHandler : IActivityStructureHandler
+{
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    public string Kind => BpmnProcessActivity.StructureKind;
+
+    public string SchemaVersion => BpmnProcessActivity.StructureSchemaVersion;
+
+    public bool SupportsScopedVariables => true;
+
+    public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
+    {
+        var structure = ReadAuthoredStructure(activity);
+        return [new ActivityChildProjection(BpmnProcessActivity.ActivitiesSlotName, structure.Activities)];
+    }
+
+    public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
+    {
+        var current = ReadAuthoredStructure(activity);
+        var slot = childProjections.FirstOrDefault(slot => StringComparer.Ordinal.Equals(slot.Name, BpmnProcessActivity.ActivitiesSlotName));
+        var activities = slot?.Activities.ToArray() ?? [];
+        var updated = new BpmnAuthoredStructure(
+            activities,
+            current.Elements,
+            current.SequenceFlows,
+            current.Pools,
+            current.Lanes,
+            current.Variables,
+            current.Diagram);
+
+        return activity with
+        {
+            Structure = new ActivityNodeStructure(
+                BpmnProcessActivity.StructureKind,
+                BpmnProcessActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(updated, SerializerOptions))
+        };
+    }
+
+    public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
+    {
+        var authoredStructure = ReadAuthoredStructure(activity);
+        // Pools, lanes and the opaque diagram document are authored-side/designer concerns; the
+        // executable structure carries only the semantic process graph.
+        var executableStructure = new BpmnStructure(
+            authoredStructure.Elements,
+            authoredStructure.SequenceFlows,
+            authoredStructure.Variables);
+
+        return new ActivityNodeStructure(
+            BpmnProcessActivity.StructureKind,
+            BpmnProcessActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
+    }
+
+    public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
+        ReadAuthoredStructure(activity).Variables;
+
+    private static BpmnAuthoredStructure ReadAuthoredStructure(ActivityNode activity)
+    {
+        if (activity.Structure is null)
+            return new BpmnAuthoredStructure();
+
+        return activity.Structure.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)
+               ?? new BpmnAuthoredStructure();
+    }
+}
