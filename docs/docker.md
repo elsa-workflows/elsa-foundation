@@ -11,6 +11,10 @@ Postgres-backed persistence.
 The repo default `src/Apps/Elsa.Server/shells.json` (SQLite) is intentionally left untouched; the
 compose stack mounts its own curated `shells.json` instead.
 
+> Just want to run the prebuilt images from Docker Hub with plain `docker run` (no checkout, no
+> build)? See the [Docker Hub quickstart](docker-hub-quickstart.md), which also covers supplying a
+> custom `shells.json` and how Studio feature toggles are persisted.
+
 ---
 
 ## Quickstart (full reference stack)
