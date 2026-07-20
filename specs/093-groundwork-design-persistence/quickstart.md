@@ -12,6 +12,34 @@ This guide is the executable evidence checklist for issue #641. Commands assume 
 - One binary-compatible Groundwork version across `Groundwork.Core`, `Groundwork.Documents`, all four provider packages, and `Groundwork.Tool`.
 - Provider connection values supplied through environment variables; never commit or pass secrets in process-visible command arguments.
 
+## Baseline record (T001 complete; T004 deferred to T025)
+
+The work unit is based on `origin/main` commit `d1548991f`, captured on 2026-07-20.
+The repository currently pins the Groundwork library family, including SQL Server and
+MongoDB, and `Groundwork.Tool` to `0.0.1-preview.72`. The public preview feed reports
+`Groundwork.Tool` `0.0.1-preview.73` as its newest release; `0.0.1-preview.75` is not
+available. This records the actual baseline for T001. T009—not T001—selects and pins
+the later released binary-compatible library/tool family that provides the required
+physical-storage and query APIs.
+
+The captured provider images are SQLite (embedded), SQL Server
+`mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04`, PostgreSQL
+`postgres:17.6-alpine3.22`, and MongoDB `mongo:7.0.24`. One existing PostgreSQL
+unified-host test still uses `postgres:16-alpine`; T053 selects and records its fixture
+image as part of the provider contract work.
+
+The pre-extraction EF behavioral suite inventories are 354 workflow-design tests and
+467 activity-design tests. Their focused restore and discovery succeeded at this base;
+full-solution Release discovery found 6,588 tests without executing them. The shared
+fixture scaffold currently has 8 deterministic-fixture tests. See [baseline
+evidence](evidence/baseline.md) for the commands and precise evidence scope.
+
+No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads
+that define them are T021–T024. T025 runs the EF SQLite oracle, records the canonical
+behavior hashes, and then records the existing Groundwork red baseline. The test
+inventory hashes in this baseline are not substitutes for result hashes, so T004 remains
+open; it is deliberately not a Phase-2 gate.
+
 ## 1. Restore and build
 
 ```bash

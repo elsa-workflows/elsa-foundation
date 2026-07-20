@@ -41,9 +41,31 @@ The Groundwork implementation covers the complete public behavior of:
 
 - `IActivityDefinitionStore`
 - `IActivityDefinitionVersionStore`
-- activity availability settings persistence
+- `IActivityAvailabilitySettingsStore`
 - `IAddActivityDefinitionCommand`
 - `IAddActivityDefinitionVersionCommand` where present in the current public surface
+
+### Reconciled current public surface (T002 baseline)
+
+The list above was reconciled against the registrations on `origin/main` at
+`d1548991f`. The smaller original list did not include the reusable-activity and
+management-projection contracts added after the first Groundwork design switch.
+They are part of this work unit and cannot be removed with the EF lane or omitted
+from the shared suite.
+
+| Domain | Public contract group | Current first-party adapter | Baseline disposition |
+|---|---|---|---|
+| Workflow | `IWorkflowDefinitionStore`, `IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionDraftStore`, `IWorkflowDefinitionVersionLayoutStore`, `IWorkflowDefinitionListProjectionStore` | Corresponding `GroundworkWorkflowDefinition*Store` | Include in US1/US2 shared scenarios. |
+| Workflow | `IAddWorkflowDefinitionCommand`, `IAddCommand<WorkflowDefinitionVersion>`, `ISaveWorkflowDefinitionCommand`, `IDeleteWorkflowDefinitionPermanentlyCommand` | Corresponding `Groundwork*Command` | Include atomicity, retry, OCC, and restart scenarios. |
+| Workflow | `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IUpdateDraftCommand`, `IPromoteDraftToVersionCommand`, `IDiscardDraftCommand`, `ISubmitWorkflowDefinitionCommand` | Corresponding `Groundwork*Command` | Include lifecycle, layout, validation-gate, and event scenarios. |
+| Workflow | `IWorkflowDefinitionLookup`, `IWorkflowDefinitionPermanentDeletionGuard`, `IDraftStateDiffEngine` | `WorkflowDefinitionLookup` plus provider-neutral collaborators | Retain their observable behavior in lookup and lifecycle scenarios. |
+| Activity | `IActivityDefinitionStore`, `IActivityDefinitionVersionStore`, `IActivityAvailabilitySettingsStore` | `GroundworkActivityDefinitionStore`, `GroundworkActivityDefinitionVersionStore`, `GroundworkActivityAvailabilitySettingsStore` | Include baseline CRUD, exact/latest-version, scope, and restart scenarios. |
+| Activity | `IAddActivityDefinitionCommand`, `IAddCommand<ActivityDefinitionVersion>` | `GroundworkAddActivityDefinitionCommand`, `GroundworkAddActivityDefinitionVersionCommand` | Include uniqueness, immutable-version, and atomic multi-document scenarios. |
+| Activity | `IActivityDefinitionManagementProjectionStore` | `GroundworkActivityDefinitionManagementProjectionStore` | Include bounded page, continuation, visibility, and retention scenarios. |
+| Activity | `IActivityDefinitionAuthoringStore`, `IActivityDefinitionDraftStore`, `IActivityDefinitionVersionPublicationStore`, `IRecommendedActivityDefinitionPickerStore`, `IActivityDefinitionLayoutStore`, `IActivityDraftValidationStore`, `IActivityForkStore` | `GroundworkReusableActivityStores` | Include in reusable-activity conformance once its public scenarios are extracted. |
+| Activity | `IActivityDirectDependencyStore`, `IActivityDependencyProjectionStore`, `IActivityDependencyProjectionRebuilder` | `GroundworkReusableActivityStores`, `GroundworkActivityDependencyProjection` | Include bounded dependency reads and rebuild/restart scenarios. |
+| Activity | `IActivityUpgradePlanStore`, `IActivityUpgradeApplyReceiptStore` | `GroundworkActivityUpgradePlanStore` | Include idempotency, receipt, and restart scenarios. |
+| Activity | `ICreateActivityDefinitionCommand`, `ISaveActivityForkCandidateCommand`, `IPruneActivityForkCandidatesCommand`, `IApplyActivityForkCandidateCommand`, `IUpdateActivityDefinitionPresentationCommand`, `ICreateActivityDraftCommand`, `IUpdateActivityDraftPresentationCommand`, `ICreateActivityDraftConflictCopyCommand`, `IReplaceActivityDraftCommand`, `IApplyActivityContractProposalCommand`, `IDiscardActivityDraftCommand`, `IStoreActivityDraftValidationCommand`, `IChangeActivityVersionLifecycleCommand`, `ISetActivityDefinitionRecommendationCommand` | `GroundworkReusableActivityStores` | Include the relevant public authoring, conflict, validation, recommendation, and lifecycle scenarios; no contract is implicitly excluded. |
 
 If implementation inventory finds another public design persistence contract, it is added to this list and the shared suite before deletion. Absence from this planning document is not permission to drop it.
 

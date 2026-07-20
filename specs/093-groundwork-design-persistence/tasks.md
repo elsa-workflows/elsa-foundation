@@ -21,18 +21,18 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 
 ## Phase 1: Setup and Baseline
 
-**Purpose**: Establish the exact current surface, temporary oracle, upstream version, and test scaffolding before changing behavior.
+**Purpose**: Establish the exact current surface, oracle prerequisites, upstream version, and test scaffolding before changing behavior.
 
-- [ ] T001 Record branch base, Groundwork package/tool version, provider images, and current focused/full test counts in `specs/093-groundwork-design-persistence/quickstart.md`
-- [ ] T002 Reconcile every current workflow/activity design store and command with the coverage list in `specs/093-groundwork-design-persistence/contracts/design-persistence-contract.md`
-- [ ] T003 Classify every EF-referencing design test by preserved domain objective versus removable EF mechanism and populate the exact per-test architect approval ledger in `specs/093-groundwork-design-persistence/research.md`; T072/T073 may not delete a test without its approved ledger row
-- [ ] T004 Capture the temporary EF SQLite oracle result hashes and behavior baseline in `specs/093-groundwork-design-persistence/quickstart.md`
-- [ ] T005 Create `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj` and add it to `Elsa.Server.slnx`
-- [ ] T006 [P] Add the released `Groundwork.SqlServer`, `Groundwork.MongoDb`, and matching provider test/tool package versions to `Directory.Packages.props`
-- [ ] T007 [P] Add a pinned `Groundwork.Tool` entry matching the library version in `.config/dotnet-tools.json`
-- [ ] T008 Add deterministic design catalog fixtures, clocks, identifiers, scopes, and payload serializers in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignPersistenceFixtureData.cs`
+- [X] T001 Record branch base, Groundwork package/tool version, provider images, and current focused/full test counts in `specs/093-groundwork-design-persistence/quickstart.md`
+- [X] T002 Reconcile every current workflow/activity design store and command with the coverage list in `specs/093-groundwork-design-persistence/contracts/design-persistence-contract.md`
+- [X] T003 Classify every EF-referencing design test by preserved domain objective versus removable EF mechanism and populate the exact per-test architect approval ledger in `specs/093-groundwork-design-persistence/test-removal-ledger.md` (linked from `research.md`); T072/T073 may not delete a test without its approved ledger row
+- [ ] T004 Capture the temporary EF SQLite behavioral-oracle result hashes in `specs/093-groundwork-design-persistence/quickstart.md` after T021–T024 define the canonical scenarios; T025 performs and records this run
+- [X] T005 Create `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj` and add it to `Elsa.Server.slnx`
+- [X] T006 [P] Add the released `Groundwork.SqlServer`, `Groundwork.MongoDb`, and matching provider test/tool package versions to `Directory.Packages.props`
+- [X] T007 [P] Add a pinned `Groundwork.Tool` entry matching the library version in `.config/dotnet-tools.json`
+- [X] T008 Add deterministic design catalog fixtures, clocks, identifiers, scopes, and payload serializers in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignPersistenceFixtureData.cs`
 
-**Checkpoint**: Current behavior and test objectives are recorded; the shared test project restores without changing production composition.
+**Checkpoint**: Current behavior and test objectives are recorded; the shared test project restores without changing production composition. The workload-level EF behavioral oracle is deliberately deferred to T025 and is not a Phase-2 entry gate.
 
 ---
 
@@ -42,7 +42,7 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 
 **⚠️ CRITICAL**: No production adapter migration starts until this phase is green.
 
-- [ ] T009 Upgrade all Groundwork libraries and the tool as one binary-compatible set in `Directory.Packages.props` and resolve compile breaks without adding compatibility fallbacks
+- [ ] T009 Upgrade all Groundwork libraries and the tool as one released binary-compatible set that supplies the required physical-storage/query APIs in `Directory.Packages.props`, and resolve compile breaks without adding compatibility fallbacks
 - [ ] T010 [P] Replace legacy workflow design storage declarations with versioned `PhysicalTableDefinition` and bounded query identities in `src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignStorageManifest.cs`
 - [ ] T011 [P] Replace legacy activity design storage declarations with versioned `PhysicalTableDefinition` and bounded query identities in `src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignStorageManifest.cs`
 - [ ] T012 Update the stable composite identity/version and unioned physical definitions in `src/Elsa/Persistence/Groundwork/Unified/GroundworkUnifiedManifest.cs`
@@ -71,7 +71,7 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 - [ ] T022 [P] [US1] Extract activity definition/version/reconciliation black-box scenarios from existing tests into `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/ActivityDesignContractSuite.cs`
 - [ ] T023 [P] [US1] Add multi-document rollback, partial staging, cancellation, lost acknowledgement, replay fingerprint, and duplicate-event scenarios in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignAtomicityContractSuite.cs`
 - [ ] T024 [P] [US1] Add point-read/write scope isolation, stale OCC, duplicate identity, wrong-scope non-disclosure, and restart scenarios in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignIsolationAndRestartContractSuite.cs`
-- [ ] T025 [US1] Run T021–T024 against the existing adapters and record the intentional red baseline in `specs/093-groundwork-design-persistence/quickstart.md`
+- [ ] T025 [US1] Run T021–T024 against the temporary EF SQLite oracle and record canonical result hashes/behavior baseline in `specs/093-groundwork-design-persistence/quickstart.md` (completes T004), then run the same scenarios against existing Groundwork adapters and record the intentional red baseline
 
 ### Implementation for User Story 1
 
@@ -203,11 +203,11 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 ### Phase Dependencies
 
 - **Phase 1 (Setup)**: starts immediately.
-- **Phase 2 (Foundational)**: depends on T001–T008 and blocks every production adapter change.
+- **Phase 2 (Foundational)**: depends on T001–T003 and T005–T008; T004 is completed by T025 after its canonical black-box scenarios exist and is not a Phase-2 gate. Phase 2 blocks every production adapter change until it is green.
 - **US1 / Phase 3**: depends on T009–T020; establishes durable lifecycle behavior.
 - **US2 / Phase 4**: depends on the translator/session foundation and may execute alongside late US1 command hardening once shared files T015–T017 are stable.
 - **US3 / Phase 5**: provider fixtures T051–T054 may begin after Phase 2; final provider matrix T063 depends on US1 and US2.
-- **US4 / Phase 6**: benchmark scaffolding T067–T068 may begin after US2; EF deletion T071–T076 depends on US1–US3 and passing T069.
+- **US4 / Phase 6**: benchmark scaffolding T067–T068 may begin after US2; EF deletion T071–T076 depends on completed T004/T025 behavioral-oracle evidence, US1–US3, and passing T069. T067–T069 remain the separate fixed-scale performance/form-selection gate.
 - **Phase 7**: depends on all requested user stories and every deletion gate.
 
 ### User Story Dependencies
@@ -219,7 +219,7 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 
 ### Critical Path
 
-`T001–T009 -> T010–T020 -> ((T021–T035 -> T036) || (T037–T049 -> T050)) -> T051–T065 -> T066 -> T067–T078 -> T079 -> T080–T082 -> T083–T088`
+`(T001–T003 + T005–T008) -> T009–T020 -> ((T021–T035 -> T036) || (T037–T049 -> T050)) -> T051–T065 -> T066 -> T067–T078 -> T079 -> T080–T082 -> T083–T088`, with T025 completing T004 before any T071–T076 deletion work.
 
 ## Parallel Opportunities
 

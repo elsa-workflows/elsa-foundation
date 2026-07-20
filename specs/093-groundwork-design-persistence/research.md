@@ -96,11 +96,11 @@ Each measured case runs as three independent processes after one untimed warm-up
 
 ## Test-removal approval ledger
 
-This ledger is populated by T003. No entry is approved by default. T072 and T073 may delete an existing test only when its exact test identity appears here with its objective classification, replacement evidence or invalid-objective rationale, architect, decision, and decision date.
-
-| Existing test | Objective classification | Replacement evidence / rationale | Architect | Decision | Date |
-|---|---|---|---|---|---|
-| _Populate during T003_ | _Pending_ | _Pending_ | _Pending_ | _Pending_ | _Pending_ |
+The exact baseline inventory is maintained in
+[test-removal-ledger.md](test-removal-ledger.md). No entry is approved by default.
+T072 and T073 may delete an existing test only when its exact test identity has an
+explicit architect decision and replacement evidence in that ledger. A `Pending`
+decision is deliberately not deletion permission.
 
 ## Framework §2.23 coverage ledger
 
