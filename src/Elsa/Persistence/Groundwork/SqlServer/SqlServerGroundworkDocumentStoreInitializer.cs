@@ -28,6 +28,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly GroundworkStoreSessionSource _sessionSource;
     private readonly ILogger<SqlServerGroundworkDocumentStoreInitializer> _logger;
+    private readonly GroundworkProviderCapabilityAdmission? _capabilityAdmission;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private bool _initialized;
 
@@ -36,7 +37,8 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
         bool autoApplyOnStartup,
         IServiceScopeFactory scopeFactory,
         GroundworkStoreSessionSource sessionSource,
-        ILogger<SqlServerGroundworkDocumentStoreInitializer> logger)
+        ILogger<SqlServerGroundworkDocumentStoreInitializer> logger,
+        GroundworkProviderCapabilityAdmission? capabilityAdmission = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         _connectionString = connectionString;
@@ -44,6 +46,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _sessionSource = sessionSource ?? throw new ArgumentNullException(nameof(sessionSource));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _capabilityAdmission = capabilityAdmission;
     }
 
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
@@ -64,7 +67,8 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
             if (_initialized)
                 return;
 
-            var schemaSource = await CreateSchemaSourceAsync(cancellationToken);
+            var composition = await CreateSchemaSourceAsync(cancellationToken);
+            var schemaSource = composition.Source;
             var admission = await schemaSource.InspectRuntimeAdmissionAsync(
                 new SqlServerPhysicalSchemaExecutor(_connectionString),
                 new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = _autoApplyOnStartup },
@@ -81,7 +85,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
             if (!_sessionSource.IsInitialized)
             {
                 var manifest = schemaSource.CreateManifest();
-                _sessionSource.TrySetAdmitted((access, ct) =>
+                if (_sessionSource.TrySetAdmitted((access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
                     var store = new SqlServerPhysicalDocumentStore(
@@ -99,7 +103,10 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
                                     route,
                                     admission.PhysicalTarget.Provider))));
                     return ValueTask.FromResult(new GroundworkStoreSessionResources(store, boundedStore));
-                }, TransactionBoundary.CrossUnitAtomic);
+                }, TransactionBoundary.CrossUnitAtomic))
+                {
+                    _capabilityAdmission?.TrySet(composition.Capabilities);
+                }
             }
 
             _initialized = true;
@@ -123,7 +130,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
         }
     }
 
-    private async ValueTask<GroundworkPhysicalSchemaManifestSource> CreateSchemaSourceAsync(
+    private async ValueTask<GroundworkProviderSchemaSource> CreateSchemaSourceAsync(
         CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -140,9 +147,14 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
                 }),
             scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
             cancellationToken);
-        return await compositionFactory.CreateSourceAsync(
+        var source = await compositionFactory.CreateSourceAsync(
             capabilities,
             SqlServerGroundworkCapabilities.PhysicalNames,
             cancellationToken);
+        return new GroundworkProviderSchemaSource(source, capabilities);
     }
+
+    private sealed record GroundworkProviderSchemaSource(
+        GroundworkPhysicalSchemaManifestSource Source,
+        GroundworkProviderCapabilitySnapshot Capabilities);
 }

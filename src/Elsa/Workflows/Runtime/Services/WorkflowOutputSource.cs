@@ -16,7 +16,7 @@ public sealed class WorkflowOutputSource(
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var stored = await durableValueStateStore.ListAsync(workflowExecutionId, cancellationToken);
+        var stored = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowExecutionId, cancellationToken);
         var effective = stored.ToDictionary(value => value.DurableValueId, StringComparer.Ordinal);
         foreach (var change in pendingDurableValueChanges ?? [])
         {

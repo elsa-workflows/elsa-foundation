@@ -31,7 +31,8 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
     bool autoApplyOnStartup,
     IServiceScopeFactory scopeFactory,
     GroundworkStoreSessionSource sessionSource,
-    ILogger<SqliteGroundworkDocumentStoreInitializer> logger) : IHostedService, IShellInitializer
+    ILogger<SqliteGroundworkDocumentStoreInitializer> logger,
+    GroundworkProviderCapabilityAdmission? capabilityAdmission = null) : IHostedService, IShellInitializer
 {
     private readonly SemaphoreSlim initializationLock = new(1, 1);
     private bool initialized;
@@ -70,7 +71,11 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                     SqliteGroundworkCapabilities.PhysicalNames,
                     cancellationToken);
 
-            await using var inspectionConnection = new SqliteConnection(connectionString);
+            // Route through Groundwork's connection factory so the WAL/synchronous/busy-timeout pragmas apply.
+            // A bare SqliteConnection here would create (and forever admit) the database in rollback-journal
+            // mode: journal_mode is a persistent per-database property, and this initializer's connections are
+            // the first to touch the file.
+            await using var inspectionConnection = SqliteConnectionFactory.Create(connectionString);
             var admission = await source.InspectRuntimeAdmissionAsync(
                 new SqlitePhysicalSchemaExecutor(inspectionConnection),
                 new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = autoApplyOnStartup },
@@ -87,13 +92,15 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             if (!sessionSource.IsInitialized)
             {
                 var manifest = source.CreateManifest();
-                sessionSource.TrySetAdmitted(async (access, ct) =>
+                if (sessionSource.TrySetAdmitted(async (access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
                     SqliteConnection? connection = null;
                     try
                     {
-                        connection = new SqliteConnection(connectionString);
+                        // Every store session must open through the pragma factory: journal_mode=WAL persists
+                        // per-database, but synchronous=NORMAL and busy_timeout are per-connection.
+                        connection = SqliteConnectionFactory.Create(connectionString);
                         await connection.OpenAsync(ct);
                         var store = new SqlitePhysicalDocumentStore(
                             connection,
@@ -122,7 +129,10 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                             SqliteGroundworkPersistenceOperation.OpenSession,
                             await DisposeAfterFailureAsync(connection, exception));
                     }
-                }, TransactionBoundary.CrossUnitAtomic);
+                }, TransactionBoundary.CrossUnitAtomic))
+                {
+                    capabilityAdmission?.TrySet(capabilities);
+                }
             }
 
             initialized = true;

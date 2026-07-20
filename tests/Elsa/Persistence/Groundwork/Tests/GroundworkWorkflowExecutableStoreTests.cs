@@ -67,7 +67,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Equal("hash-artifact-2", retainedDependency.ArtifactHash);
         Assert.Equal("root", Assert.Single(retainedDependency.DispatchNodeIds));
 
-        var all = await store.ListAsync();
+        var all = await store.ListAllAsync();
         Assert.Equal(2, all.Count);
         Assert.Equal(new[] { "artifact-1", "artifact-2" }, all.Select(x => x.Identity.ArtifactId).OrderBy(x => x));
     }
@@ -87,7 +87,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
 
         var found = await store.FindAsync("artifact-1");
         Assert.Equal("1", found!.Identity.ArtifactVersion);
-        Assert.Single(await store.ListAsync());
+        Assert.Single(await store.ListAllAsync());
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         Assert.Null(await store.FindAsync("missing"));
-        Assert.Empty(await store.ListAsync());
+        Assert.Empty(await store.ListAllAsync());
     }
 
     [Theory]
@@ -136,7 +136,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         await store.SaveAsync(Executable("artifact-1"));
         Assert.True(await store.DeleteAsync("artifact-1"));
         Assert.Null(await store.FindAsync("artifact-1"));
-        Assert.Empty(await store.ListAsync());
+        Assert.Empty(await store.ListAllAsync());
         Assert.False(await store.DeleteAsync("artifact-1"));
     }
 
@@ -333,13 +333,13 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         await store.SaveAsync(Reference("ref-2", "artifact-1", WorkflowExecutableReferenceScope.TestRun, expiresAt: now.AddMinutes(30)));
         await store.SaveAsync(Reference("ref-3", "artifact-2", WorkflowExecutableReferenceScope.TestRun, expiresAt: now.AddMinutes(-1)));
 
-        var byArtifact = await store.ListByArtifactAsync("artifact-1");
+        var byArtifact = await store.ListAllByArtifactAsync("artifact-1");
         Assert.Equal(new[] { "ref-1", "ref-2" }, byArtifact.Select(r => r.SourceReferenceId).OrderBy(x => x));
 
-        var live = await store.ListAsync(liveOnly: true, now: now);
+        var live = await store.ListAllAsync(liveOnly: true, now: now);
         Assert.Equal(new[] { "ref-1", "ref-2" }, live.Select(r => r.SourceReferenceId).OrderBy(x => x));
 
-        var published = await store.ListAsync(scope: WorkflowExecutableReferenceScope.Published, now: now);
+        var published = await store.ListAllAsync(scope: WorkflowExecutableReferenceScope.Published, now: now);
         Assert.Equal("ref-1", Assert.Single(published).SourceReferenceId);
 
         // Layout sidecar survives the round-trip.
@@ -369,11 +369,13 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Equal(now, retired!.DeletedAt);
         Assert.Equal("manual", retired.DeletedReason);
 
-        var swept = await store.DeleteExpiredOrRetiredAsync(now);
+        var swept = await store.DeleteExpiredOrRetiredAsync(new WorkflowExecutableSourceReferenceCleanupBatch(), now);
         Assert.Equal(new[] { "ref-expired", "ref-to-retire" }, swept.OrderBy(x => x));
         Assert.Null(await store.FindAsync("ref-expired"));
 
-        var unreferenced = await store.ListUnreferencedArtifactIdsAsync(["artifact-1", "artifact-2", "artifact-3"], now);
+        var unreferenced = await store.ListUnreferencedArtifactIdsAsync(
+            new WorkflowExecutableArtifactCandidateBatch(["artifact-1", "artifact-2", "artifact-3"]),
+            now);
         // artifact-1 still has a live reference; 2 and 3 lost theirs to the sweep.
         Assert.Equal(new[] { "artifact-2", "artifact-3" }, unreferenced.OrderBy(x => x));
     }
@@ -389,11 +391,11 @@ public sealed class GroundworkWorkflowExecutableStoreTests
                 GroundworkTestSerialization.Serializer,
                 queries);
 
-        await store.ListAsync(scope: WorkflowExecutableReferenceScope.Published);
+        await store.ListPageAsync(new WorkflowExecutableSourceReferencePageQuery(WorkflowExecutableReferenceScope.Published));
 
         var query = Assert.Single(queries.Observed);
         Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, query.DocumentKind);
-        Assert.Equal(ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByScopeQuery, query.QueryIdentity);
+        Assert.Equal("page-by-scope", query.QueryIdentity);
         var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
         Assert.Equal(ElsaRuntimeStorageManifest.ScopeField, comparison.Path);
         Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
@@ -412,26 +414,39 @@ public sealed class GroundworkWorkflowExecutableStoreTests
                 queries);
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
 
-        await store.DeleteExpiredOrRetiredAsync(now);
+        await store.DeleteExpiredOrRetiredAsync(new WorkflowExecutableSourceReferenceCleanupBatch(limit: 3), now);
 
         Assert.Collection(
             queries.Observed,
             expired =>
             {
-                Assert.Equal(ElsaRuntimeStorageManifest.ListExpiredWorkflowExecutableSourceReferencesQuery, expired.QueryIdentity);
+                Assert.Equal("batch-expired", expired.QueryIdentity);
                 var comparison = Assert.Single(Assert.Single(expired.Clauses).Comparisons);
                 Assert.Equal(ElsaRuntimeStorageManifest.ExpiresAtField, comparison.Path);
                 Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
                 Assert.Equal(now, DateTimeOffset.Parse(Assert.Single(comparison.Values)!));
-                Assert.Equal(ElsaRuntimeStorageManifest.ExpiresAtField, Assert.Single(expired.Order).Path);
+                AssertOrderByExpiryAndReferenceId(expired);
+                Assert.Equal(3, expired.Take);
             },
             retired =>
             {
-                Assert.Equal(ElsaRuntimeStorageManifest.ListRetiredWorkflowExecutableSourceReferencesQuery, retired.QueryIdentity);
-                var comparison = Assert.Single(Assert.Single(retired.Clauses).Comparisons);
-                Assert.Equal(ElsaRuntimeStorageManifest.IsRetiredField, comparison.Path);
-                Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
-                Assert.Equal(bool.TrueString, Assert.Single(comparison.Values));
+                Assert.Equal("batch-retired", retired.QueryIdentity);
+                Assert.Collection(
+                    retired.Clauses.SelectMany(clause => clause.Comparisons),
+                    isRetired =>
+                    {
+                        Assert.Equal(ElsaRuntimeStorageManifest.IsRetiredField, isRetired.Path);
+                        Assert.Equal(QueryComparisonOperator.Equal, isRetired.Operator);
+                        Assert.Equal(bool.TrueString, Assert.Single(isRetired.Values));
+                    },
+                    expiresAt =>
+                    {
+                        Assert.Equal(ElsaRuntimeStorageManifest.ExpiresAtField, expiresAt.Path);
+                        Assert.Equal(QueryComparisonOperator.GreaterThan, expiresAt.Operator);
+                        Assert.Equal(now, DateTimeOffset.Parse(Assert.Single(expiresAt.Values)!));
+                    });
+                AssertOrderByExpiryAndReferenceId(retired);
+                Assert.Equal(3, retired.Take);
             });
     }
 
@@ -447,20 +462,60 @@ public sealed class GroundworkWorkflowExecutableStoreTests
                 queries);
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
 
-        await store.ListUnreferencedArtifactIdsAsync(["artifact-1", "artifact-1", "artifact-2"], now);
+        await store.ListUnreferencedArtifactIdsAsync(
+            new WorkflowExecutableArtifactCandidateBatch(["artifact-1", "artifact-1", "artifact-2"]),
+            now);
 
         Assert.Equal(2, queries.Observed.Count);
         Assert.Equal(
             new[] { "artifact-1", "artifact-2" },
-            queries.Observed.Select(query => Assert.Single(Assert.Single(query.Clauses).Comparisons).Values.Single()!).ToArray());
+            queries.Observed.Select(query =>
+                    Assert.Single(query.Clauses.SelectMany(clause => clause.Comparisons)
+                        .Where(comparison => comparison.Path == ElsaRuntimeStorageManifest.ArtifactIdField))
+                        .Values.Single()!)
+                .ToArray());
         Assert.All(queries.Observed, query =>
         {
             Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, query.DocumentKind);
-            Assert.Equal(ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByArtifactQuery, query.QueryIdentity);
-            var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+            Assert.Equal("find-live-by-artifact", query.QueryIdentity);
+            var comparison = Assert.Single(query.Clauses.SelectMany(clause => clause.Comparisons)
+                .Where(comparison => comparison.Path == ElsaRuntimeStorageManifest.ArtifactIdField));
             Assert.Equal(ElsaRuntimeStorageManifest.ArtifactIdField, comparison.Path);
             Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+            AssertOrderByExpiryAndReferenceId(query);
         });
+    }
+
+    [Fact]
+    public async Task SourceReferenceStore_LivePages_UseExpiryThenIdentityOrder()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IWorkflowExecutableSourceReferenceStore store =
+            new GroundworkWorkflowExecutableSourceReferenceStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                queries);
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+
+        await store.ListPageAsync(new WorkflowExecutableSourceReferencePageQuery(liveOnly: true, now: now));
+        await store.ListPageAsync(new WorkflowExecutableSourceReferencePageQuery(
+            WorkflowExecutableReferenceScope.Published,
+            liveOnly: true,
+            now: now));
+
+        Assert.Collection(
+            queries.Observed,
+            all =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.PageLiveWorkflowExecutableSourceReferencesQuery, all.QueryIdentity);
+                AssertOrderByExpiryAndReferenceId(all);
+            },
+            scope =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.PageLiveWorkflowExecutableSourceReferencesByScopeQuery, scope.QueryIdentity);
+                AssertOrderByExpiryAndReferenceId(scope);
+            });
     }
 
     [Fact]
@@ -502,7 +557,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
                 Assert.Equal("definition-1", found.Identity.DefinitionId);
                 Assert.Equal("root", found.RootActivity.ExecutableNodeId);
                 Assert.Equal("child", Assert.Single(Assert.Single(found.RootActivity.ChildSlots).Activities).ExecutableNodeId);
-                Assert.Equal("artifact-1", Assert.Single(await store.ListAsync()).Identity.ArtifactId);
+                Assert.Equal("artifact-1", Assert.Single(await store.ListAllAsync()).Identity.ArtifactId);
             }
         }
         finally
@@ -587,6 +642,12 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             Scope: scope,
             ExpiresAt: expiresAt,
             Layout: [new WorkflowExecutableLayoutRecord("node-a", 1, 2, 3, 4, Json("""{ "k": "v" }"""))]);
+
+    private static void AssertOrderByExpiryAndReferenceId(DocumentQuery query) =>
+        Assert.Collection(
+            query.Order,
+            expiresAt => Assert.Equal(ElsaRuntimeStorageManifest.ExpiresAtField, expiresAt.Path),
+            id => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField, id.Path));
 
     private static JsonElement Json(string json)
     {

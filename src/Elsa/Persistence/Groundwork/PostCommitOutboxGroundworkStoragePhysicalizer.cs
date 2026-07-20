@@ -6,6 +6,10 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Persistence.Groundwork;
 
+/// <summary>
+/// Gives post-commit delivery and claiming one provider-side candidate set each. The derived timestamps are
+/// maintained with the document, so eligibility, ordering, and limiting do not require a client-side union.
+/// </summary>
 internal static class PostCommitOutboxGroundworkStoragePhysicalizer
 {
     public static StorageManifest AddBoundedDeliveryRoutes(StorageManifest manifest) => manifest with
@@ -28,69 +32,53 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
 
         var routes = new[]
         {
-            DeliveryRoute(
+            CandidateRoute(
                 ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxQuery,
                 "deliverable",
-                ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField,
-                ElsaRuntimeStorageManifest.ByOutboxAvailableAtIndex,
+                ElsaRuntimeStorageManifest.PostCommitOutboxDeliverableAtField,
+                ElsaRuntimeStorageManifest.ByOutboxDeliverableAtIndex,
                 []),
-            DeliveryRoute(
+            CandidateRoute(
                 ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxByWorkflowQuery,
                 "deliverable-by-workflow",
-                ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField,
-                ElsaRuntimeStorageManifest.ByOutboxAvailableAtIndex,
+                ElsaRuntimeStorageManifest.PostCommitOutboxDeliverableAtField,
+                ElsaRuntimeStorageManifest.ByOutboxDeliverableAtIndex,
                 [Filter.Workflow]),
-            DeliveryRoute(
+            CandidateRoute(
                 ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxByIntentKindQuery,
                 "deliverable-by-intent-kind",
-                ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField,
-                ElsaRuntimeStorageManifest.ByOutboxAvailableAtIndex,
+                ElsaRuntimeStorageManifest.PostCommitOutboxDeliverableAtField,
+                ElsaRuntimeStorageManifest.ByOutboxDeliverableAtIndex,
                 [Filter.IntentKind]),
-            DeliveryRoute(
+            CandidateRoute(
                 ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxByWorkflowAndIntentKindQuery,
                 "deliverable-by-workflow-and-intent-kind",
-                ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField,
-                ElsaRuntimeStorageManifest.ByOutboxAvailableAtIndex,
+                ElsaRuntimeStorageManifest.PostCommitOutboxDeliverableAtField,
+                ElsaRuntimeStorageManifest.ByOutboxDeliverableAtIndex,
                 [Filter.Workflow, Filter.IntentKind]),
-            ImmediateRoute(
-                ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxQuery,
-                "immediate",
+            CandidateRoute(
+                ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxQuery,
+                "claimable",
+                ElsaRuntimeStorageManifest.PostCommitOutboxClaimableAtField,
+                ElsaRuntimeStorageManifest.ByOutboxClaimableAtIndex,
                 []),
-            ImmediateRoute(
-                ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxByWorkflowQuery,
-                "immediate-by-workflow",
+            CandidateRoute(
+                ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxByWorkflowQuery,
+                "claimable-by-workflow",
+                ElsaRuntimeStorageManifest.PostCommitOutboxClaimableAtField,
+                ElsaRuntimeStorageManifest.ByOutboxClaimableAtIndex,
                 [Filter.Workflow]),
-            ImmediateRoute(
-                ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxByIntentKindQuery,
-                "immediate-by-intent-kind",
+            CandidateRoute(
+                ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxByIntentKindQuery,
+                "claimable-by-intent-kind",
+                ElsaRuntimeStorageManifest.PostCommitOutboxClaimableAtField,
+                ElsaRuntimeStorageManifest.ByOutboxClaimableAtIndex,
                 [Filter.IntentKind]),
-            ImmediateRoute(
-                ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxByWorkflowAndIntentKindQuery,
-                "immediate-by-workflow-and-intent-kind",
-                [Filter.Workflow, Filter.IntentKind]),
-            DeliveryRoute(
-                ElsaRuntimeStorageManifest.ListExpiredPostCommitOutboxClaimsQuery,
-                "expired-claims",
-                ElsaRuntimeStorageManifest.PostCommitOutboxVisibleAfterField,
-                ElsaRuntimeStorageManifest.ByOutboxVisibleAfterIndex,
-                []),
-            DeliveryRoute(
-                ElsaRuntimeStorageManifest.ListExpiredPostCommitOutboxClaimsByWorkflowQuery,
-                "expired-claims-by-workflow",
-                ElsaRuntimeStorageManifest.PostCommitOutboxVisibleAfterField,
-                ElsaRuntimeStorageManifest.ByOutboxVisibleAfterIndex,
-                [Filter.Workflow]),
-            DeliveryRoute(
-                ElsaRuntimeStorageManifest.ListExpiredPostCommitOutboxClaimsByIntentKindQuery,
-                "expired-claims-by-intent-kind",
-                ElsaRuntimeStorageManifest.PostCommitOutboxVisibleAfterField,
-                ElsaRuntimeStorageManifest.ByOutboxVisibleAfterIndex,
-                [Filter.IntentKind]),
-            DeliveryRoute(
-                ElsaRuntimeStorageManifest.ListExpiredPostCommitOutboxClaimsByWorkflowAndIntentKindQuery,
-                "expired-claims-by-workflow-and-intent-kind",
-                ElsaRuntimeStorageManifest.PostCommitOutboxVisibleAfterField,
-                ElsaRuntimeStorageManifest.ByOutboxVisibleAfterIndex,
+            CandidateRoute(
+                ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxByWorkflowAndIntentKindQuery,
+                "claimable-by-workflow-and-intent-kind",
+                ElsaRuntimeStorageManifest.PostCommitOutboxClaimableAtField,
+                ElsaRuntimeStorageManifest.ByOutboxClaimableAtIndex,
                 [Filter.Workflow, Filter.IntentKind])
         };
         var projectedColumns = definition.ProjectedColumns
@@ -104,6 +92,14 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
                 ElsaRuntimeStorageManifest.ByOutboxIntentKindIndex => column with
                 {
                     Length = RuntimePostCommitIntent.MaximumKindLength
+                },
+                ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex => column with
+                {
+                    Length = ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength
+                },
+                ElsaRuntimeStorageManifest.ByOutboxItemIdIndex => column with
+                {
+                    Length = ElsaRuntimeStorageManifest.PostCommitOutboxItemIdProjectionLength
                 },
                 _ => column
             })
@@ -129,37 +125,33 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
         };
     }
 
-    private static OutboxDeliveryRoute DeliveryRoute(
+    private static OutboxCandidateRoute CandidateRoute(
         string queryIdentity,
         string indexIdentity,
-        string temporalField,
-        string temporalProjectedColumn,
-        IReadOnlyList<Filter> filters,
-        MissingValueBehavior missingValueBehavior = MissingValueBehavior.Excluded,
-        PortableQueryOperation temporalOperation = PortableQueryOperation.LessThanOrEqual)
+        string candidateAtField,
+        string candidateAtProjectedColumn,
+        IReadOnlyList<Filter> filters)
     {
         var filterFields = filters.Select(Field).ToArray();
         IndexField[] fields =
         [
-            new IndexField(
-                ElsaRuntimeStorageManifest.PostCommitOutboxStatusField,
-                IndexValueKind.Number),
             .. filterFields.Select(filter => new IndexField(filter.Path)),
-            new IndexField(temporalField, IndexValueKind.DateTime),
-            new IndexField(ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField, IndexValueKind.DateTime)
+            new IndexField(candidateAtField, IndexValueKind.DateTime),
+            new IndexField(ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField, IndexValueKind.DateTime),
+            new IndexField(ElsaRuntimeStorageManifest.PostCommitOutboxItemIdField)
         ];
         var logicalIndex = new LogicalIndexDeclaration(
-            $"by-{indexIdentity}-status-time-recorded",
+            $"by-{indexIdentity}-time-recorded-id",
             fields,
             IndexValueKind.Keyword,
             isUnique: false,
-            missingValueBehavior);
+            MissingValueBehavior.Excluded);
         string[] projectedColumns =
         [
-            ElsaRuntimeStorageManifest.ByOutboxStatusIndex,
             .. filterFields.Select(filter => filter.ProjectedColumn),
-            temporalProjectedColumn,
-            ElsaRuntimeStorageManifest.ByOutboxRecordedAtIndex
+            candidateAtProjectedColumn,
+            ElsaRuntimeStorageManifest.ByOutboxRecordedAtIndex,
+            ElsaRuntimeStorageManifest.ByOutboxItemIdIndex
         ];
         var physicalIndex = new PhysicalIndexDefinition(
             logicalIndex.Identity,
@@ -168,47 +160,30 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
                 .. projectedColumns.Select((column, index) =>
                     new PhysicalIndexColumnDefinition(column, index + 1))
             ],
-            missingValueBehavior: missingValueBehavior);
-        var predicateFields = new List<BoundedQueryPredicateField>
-        {
-            Equal(ElsaRuntimeStorageManifest.PostCommitOutboxStatusField)
-        };
+            missingValueBehavior: MissingValueBehavior.Excluded);
+        var predicateFields = new List<BoundedQueryPredicateField>();
         predicateFields.AddRange(filterFields.Select(filter => Equal(filter.Path)));
         predicateFields.Add(new BoundedQueryPredicateField(
-            temporalField,
-            new HashSet<PortableQueryOperation> { temporalOperation }));
-
+            candidateAtField,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual }));
         var supportedOperations = new HashSet<PortableQueryOperation>
         {
-            PortableQueryOperation.Equal
+            PortableQueryOperation.Equal,
+            PortableQueryOperation.LessThanOrEqual
         };
-        supportedOperations.Add(temporalOperation);
-
+        var sortFields = fields
+            .Select(field => new BoundedQuerySortField(field.Path, PhysicalSortDirection.Ascending))
+            .ToArray();
         var query = new BoundedQueryDeclaration(
             queryIdentity,
             logicalIndex.Identity,
             supportedOperations,
             QuerySortSupport.Ascending,
             QueryPagingSupport.None,
-            sortFields: fields
-                .Select(field => new BoundedQuerySortField(field.Path, PhysicalSortDirection.Ascending))
-                .ToArray(),
+            sortFields: sortFields,
             predicateFields: predicateFields);
-        return new OutboxDeliveryRoute(logicalIndex, physicalIndex, query);
+        return new OutboxCandidateRoute(logicalIndex, physicalIndex, query);
     }
-
-    private static OutboxDeliveryRoute ImmediateRoute(
-        string queryIdentity,
-        string indexIdentity,
-        IReadOnlyList<Filter> filters) =>
-        DeliveryRoute(
-            queryIdentity,
-            indexIdentity,
-            ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField,
-            ElsaRuntimeStorageManifest.ByOutboxAvailableAtIndex,
-            filters,
-            MissingValueBehavior.IncludedAsNull,
-            PortableQueryOperation.Equal);
 
     private static FilterField Field(Filter filter) => filter switch
     {
@@ -233,7 +208,7 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
 
     private sealed record FilterField(string Path, string ProjectedColumn);
 
-    private sealed record OutboxDeliveryRoute(
+    private sealed record OutboxCandidateRoute(
         LogicalIndexDeclaration LogicalIndex,
         PhysicalIndexDefinition PhysicalIndex,
         BoundedQueryDeclaration Query);

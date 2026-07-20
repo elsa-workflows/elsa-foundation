@@ -18,8 +18,8 @@ namespace Elsa.Persistence.Groundwork.Serialization;
 /// These options are deliberately independent of <c>IPayloadSerializer</c>: this is the durability
 /// format of suspended workflow state, frozen by the golden-fixture suite and only changed through
 /// explicit version policy. Workflow executables admit only their current fixture; executable activity
-/// templates retain an explicit compatible upgrade step. Future released shapes may add Groundwork upcasters
-/// and retained fixtures under the same policy. See the
+/// templates and post-commit outbox documents retain explicit compatible upgrade steps. Future released
+/// shapes may add Groundwork upcasters and retained fixtures under the same policy. See the
 /// sanctioned-exception entry in <c>docs/serialization.md</c>.
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentSerializer : IGroundworkRuntimeDocumentSerializer
@@ -28,7 +28,7 @@ public sealed class GroundworkRuntimeDocumentSerializer : IGroundworkRuntimeDocu
     {
         TypeInfoResolver = new DefaultJsonTypeInfoResolver
         {
-            Modifiers = { DropDerivedExecutableProjections }
+            Modifiers = { ConfigureDurableDocumentShape }
         }
     };
 
@@ -42,7 +42,8 @@ public sealed class GroundworkRuntimeDocumentSerializer : IGroundworkRuntimeDocu
                 ElsaRuntimeDocumentVersions.MinimumReadableFor(pair.Key),
                 pair.Value)),
             [
-                new ExecutableActivityTemplateDocumentV1ToV2Upcaster()
+                new ExecutableActivityTemplateDocumentV1ToV2Upcaster(),
+                new PostCommitOutboxDocumentV3ToV4Upcaster()
             ],
             new DocumentSchemaVersionFormat(
                 (documentKind, schemaVersion) => ElsaRuntimeDocumentVersions.Parse(documentKind, schemaVersion),
@@ -72,8 +73,30 @@ public sealed class GroundworkRuntimeDocumentSerializer : IGroundworkRuntimeDocu
     // WorkflowExecutable and ExecutableActivityTemplate recompute their node indexes from the root in
     // their constructors. Persisting those projections would duplicate the graph; the constructors
     // rebuild them on load.
-    private static void DropDerivedExecutableProjections(JsonTypeInfo typeInfo)
+    private static void ConfigureDurableDocumentShape(JsonTypeInfo typeInfo)
     {
+        if (typeInfo.Type == typeof(BookmarkState))
+        {
+            AddStimulusLookupKeys<BookmarkState>(
+                typeInfo,
+                ElsaRuntimeStorageManifest.BookmarkStimulusLookupKeyField,
+                ElsaRuntimeStorageManifest.BookmarkStimulusTypeLookupKeyField,
+                bookmark => bookmark.StimulusType,
+                bookmark => bookmark.StimulusHash);
+            return;
+        }
+
+        if (typeInfo.Type == typeof(WorkflowTriggerBinding))
+        {
+            AddStimulusLookupKeys<WorkflowTriggerBinding>(
+                typeInfo,
+                ElsaRuntimeStorageManifest.WorkflowTriggerBindingStimulusLookupKeyField,
+                ElsaRuntimeStorageManifest.WorkflowTriggerBindingStimulusTypeLookupKeyField,
+                binding => binding.StimulusType,
+                binding => binding.StimulusHash);
+            return;
+        }
+
         if (typeInfo.Type == typeof(ExecutableActivityTemplate))
         {
             RemoveProperties(typeInfo, nameof(ExecutableActivityTemplate.NodesById));
@@ -82,6 +105,33 @@ public sealed class GroundworkRuntimeDocumentSerializer : IGroundworkRuntimeDocu
 
         if (typeInfo.Type == typeof(WorkflowExecutable))
             RemoveProperties(typeInfo, nameof(WorkflowExecutable.Nodes), nameof(WorkflowExecutable.NodesById));
+    }
+
+    private static void AddStimulusLookupKeys<T>(
+        JsonTypeInfo typeInfo,
+        string stimulusLookupField,
+        string stimulusTypeLookupField,
+        Func<T, string> getStimulusType,
+        Func<T, string> getStimulusHash)
+    {
+        var stimulus = typeInfo.CreateJsonPropertyInfo(
+            typeof(string),
+            stimulusLookupField);
+        stimulus.Get = value =>
+        {
+            var document = (T)value;
+            return StimulusLookupKey.FromPair(
+                getStimulusType(document),
+                getStimulusHash(document));
+        };
+        typeInfo.Properties.Add(stimulus);
+
+        var stimulusType = typeInfo.CreateJsonPropertyInfo(
+            typeof(string),
+            stimulusTypeLookupField);
+        stimulusType.Get = value =>
+            StimulusLookupKey.FromType(getStimulusType((T)value));
+        typeInfo.Properties.Add(stimulusType);
     }
 
     private static void RemoveProperties(JsonTypeInfo typeInfo, params string[] propertyNames)

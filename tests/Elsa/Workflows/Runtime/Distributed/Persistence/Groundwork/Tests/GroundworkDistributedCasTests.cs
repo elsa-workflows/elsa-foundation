@@ -104,6 +104,7 @@ public sealed class GroundworkDistributedCasTests
         var drained = await _transportB.LeaseAsync(ExecutionId, NodeB, Now, LeaseDuration, maxItems: 10);
         Assert.Equal(new[] { "env-b", "env-a" }, drained.Select(item => item.Envelope.EnvelopeId).ToArray());
         Assert.Equal(new long[] { 1, 2 }, drained.Select(item => item.Sequence).ToArray());
+        Assert.Equal(0, _interceptedStore.RollbackAttempts);
     }
 
     [Fact]
@@ -120,8 +121,8 @@ public sealed class GroundworkDistributedCasTests
 
         Assert.Single(leasedByB!);
         Assert.Empty(leasedByA);
-        Assert.False(await _transportA.AckAsync(ExecutionId, leasedByB![0].TransportItemId, NodeA, Now.AddSeconds(1)));
-        Assert.True(await _transportB.AckAsync(ExecutionId, leasedByB[0].TransportItemId, NodeB, Now.AddSeconds(1)));
+        Assert.False(await _transportA.AckAsync(ExecutionId, leasedByB![0].TransportItemId, NodeA, leasedByB[0].LeaseToken!.Value, Now.AddSeconds(1)));
+        Assert.True(await _transportB.AckAsync(ExecutionId, leasedByB[0].TransportItemId, NodeB, leasedByB[0].LeaseToken!.Value, Now.AddSeconds(1)));
     }
 
     private static ExecutionPlacementClaim Claim(string ownerId, DateTimeOffset? requestedAt = null)
@@ -138,6 +139,7 @@ public sealed class GroundworkDistributedCasTests
     {
         public Func<SaveDocumentRequest, Task>? OnBeforeSave { get; set; }
         public Func<string, string, Task>? OnAfterLoad { get; set; }
+        public int RollbackAttempts { get; private set; }
         public DocumentStoreAccess Access => inner.Access;
 
         public async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
@@ -182,6 +184,9 @@ public sealed class GroundworkDistributedCasTests
 
         public async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             new InterceptingDocumentUnitOfWork(await inner.BeginAsync(scope, cancellationToken), this);
+
+        public void RecordRollbackAttempt() =>
+            RollbackAttempts++;
     }
 
     private sealed class InterceptingDocumentUnitOfWork(
@@ -208,8 +213,11 @@ public sealed class GroundworkDistributedCasTests
         public Task CommitAsync(CancellationToken cancellationToken = default) =>
             inner.CommitAsync(cancellationToken);
 
-        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
-            inner.RollbackAsync(cancellationToken);
+        public Task RollbackAsync(CancellationToken cancellationToken = default)
+        {
+            interceptor.RecordRollbackAttempt();
+            return inner.RollbackAsync(cancellationToken);
+        }
 
         public ValueTask DisposeAsync() =>
             inner.DisposeAsync();

@@ -20,19 +20,19 @@ public sealed class ActivityScopeCleanupStore(
         ArgumentNullException.ThrowIfNull(activityExecutionIds);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var bookmarks = (await bookmarkStateStore.ListAsync(workflowExecutionId, cancellationToken))
+        var bookmarks = (await bookmarkStateStore.ListAllBookmarkStatesAsync(workflowExecutionId, cancellationToken))
             .Where(bookmark => activityExecutionIds.Contains(bookmark.ActivityExecutionId))
             .OrderBy(bookmark => bookmark.BookmarkId, StringComparer.Ordinal)
             .ToArray();
         var stimuli = bookmarks.Select(bookmark => (bookmark.StimulusType, bookmark.StimulusHash)).ToHashSet();
-        var timers = (await durableTimerStore.ListAsync(workflowExecutionId, cancellationToken))
+        var timers = (await RuntimeOperationalStorePagingExtensions.ListAllAsync(durableTimerStore, workflowExecutionId, cancellationToken))
             .Where(timer =>
                 (timer.ActivityExecutionId is { } activityExecutionId && activityExecutionIds.Contains(activityExecutionId)) ||
                 (timer.ExecutionScopeId is { } timerScopeId && activityExecutionIds.Contains(timerScopeId)) ||
                 stimuli.Contains((timer.StimulusType, timer.StimulusHash)))
             .OrderBy(timer => timer.TimerId, StringComparer.Ordinal)
             .ToArray();
-        var workItems = (await schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId), cancellationToken))
+        var workItems = (await schedulerWorkQueue.ListAllAsync(workflowExecutionId, cancellationToken))
             .Where(item => item.ExecutionScopeId is { } scopeId && activityExecutionIds.Contains(scopeId))
             .OrderBy(item => item.RecordedAt)
             .ThenBy(item => item.WorkItemId, StringComparer.Ordinal)

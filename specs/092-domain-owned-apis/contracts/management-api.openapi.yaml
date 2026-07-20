@@ -1407,6 +1407,58 @@ components:
             state:
               type: object
               additionalProperties: true
+            # Host-configuration-derived checkpoint cadence + implied inspection granularity (ADR 0032 R3).
+            checkpointCadence: { type: string, enum: [Immediate, Coalesced] }
+            maxSegmentCheckpoints: { type: [integer, 'null'], minimum: 1 }
+            inspectionGranularity: { type: string, enum: [activity-level, boundary-level] }
+    WorkflowFolder:
+      type: object
+      required: [id, name, normalizedName, createdAt, lastModifiedAt]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 64 }
+        parentId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
+        name: { type: string, maxLength: 128 }
+        normalizedName: { type: string, maxLength: 128 }
+        createdAt: { type: string, format: date-time }
+        lastModifiedAt: { type: string, format: date-time }
+    WorkflowFolderBreadcrumbItem:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: string, maxLength: 128 }
+    WorkflowFolderPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowFolder' }
+        nextContinuationToken: { type: [string, 'null'] }
+    WorkflowFolderDetails:
+      type: object
+      required: [folder, ancestors]
+      properties:
+        folder: { $ref: '#/components/schemas/WorkflowFolder' }
+        ancestors:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowFolder' }
+    CreateWorkflowFolderRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        parentId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
+    RenameWorkflowFolderRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+    MoveWorkflowFolderRequest:
+      type: object
+      required: [parentId]
+      properties:
+        parentId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
     RuntimeDiagnosticsSettings:
       type: object
       additionalProperties: true

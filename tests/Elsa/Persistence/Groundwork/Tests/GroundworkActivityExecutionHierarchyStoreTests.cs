@@ -30,9 +30,23 @@ public class GroundworkActivityExecutionHierarchyStoreTests
     }
 
     [Fact]
+    public async Task Store_Pages_Descendants_When_The_Completed_Root_Has_The_Latest_Sequence()
+    {
+        var store = Store();
+        await store.SaveAsync(Record("child-a", "outer", "outer", 2));
+        await store.SaveAsync(Record("child-b", "outer", "child-a", 3));
+        await store.SaveAsync(Record("outer", "outer", null, 4, boundary: true));
+
+        var page = await store.ReadPageAsync(Query(limit: 10));
+
+        Assert.Equal(["child-a", "child-b"], page!.Items.Select(x => x.ActivityExecutionId));
+        Assert.Null(page.NextCursor);
+    }
+
+    [Fact]
     public async Task SaveAsync_RejectsProviderVersionChangeBetweenLoadAndWrite()
     {
-        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var seedStore = Store(documentStore);
         await seedStore.SaveAsync(Record("outer", "outer", null, 1, boundary: true));
         await seedStore.SaveAsync(Record("child-a", "outer", "outer", 2));
@@ -73,9 +87,41 @@ public class GroundworkActivityExecutionHierarchyStoreTests
         Assert.Equal(ActivityExecutionHierarchyAggregateStatus.Completed, boundary.Aggregate.Status);
     }
 
+    [Fact]
+    public async Task Attempt_navigation_traverses_the_bounded_workflow_route()
+    {
+        var store = Store();
+        var first = WithAttempt(Record("attempt-1", "attempt-1", null, 1), 1, "attempt-1", null);
+        var second = WithAttempt(Record("attempt-2", "attempt-2", null, 2), 2, "attempt-1", "attempt-1");
+        var third = WithAttempt(Record("attempt-3", "attempt-3", null, 3), 3, "attempt-1", "attempt-2");
+        await store.SaveAsync(first);
+        await store.SaveAsync(second);
+        await store.SaveAsync(third);
+
+        var navigation = await store.FindAttemptNavigationAsync("wf", "attempt-2");
+
+        Assert.NotNull(navigation);
+        Assert.Equal("attempt-1", navigation!.Lineage.PreviousAttemptActivityExecutionId);
+        Assert.Equal("attempt-3", navigation.NextAttemptActivityExecutionId);
+        Assert.Equal(3, navigation.TotalAttempts);
+    }
+
+    private static ActivityExecutionHierarchyRecord WithAttempt(
+        ActivityExecutionHierarchyRecord record,
+        int number,
+        string firstAttemptActivityExecutionId,
+        string? previousAttemptActivityExecutionId) =>
+        record with
+        {
+            Item = record.Item with
+            {
+                Attempt = new(number, firstAttemptActivityExecutionId, previousAttemptActivityExecutionId)
+            }
+        };
+
     private static GroundworkActivityExecutionHierarchyStore Store(IDocumentStore? documents = null)
     {
-        documents ??= new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        documents ??= new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         return new(documents, GroundworkTestSerialization.Serializer,
             new HmacActivityExecutionHierarchyCursorCodec(Options.Create(new ActivityExecutionHierarchyCursorOptions
             {

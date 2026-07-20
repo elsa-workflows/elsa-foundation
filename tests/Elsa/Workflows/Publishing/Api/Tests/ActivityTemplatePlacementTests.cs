@@ -438,15 +438,22 @@ public sealed class ActivityTemplatePlacementTests
         private readonly IReadOnlyDictionary<string, ExecutableActivityTemplate> _values = values.ToDictionary(x => x.TemplateId);
         public ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default) => ValueTask.FromResult(_values.GetValueOrDefault(templateId));
         public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) => ValueTask.FromResult(_values.Values.SingleOrDefault(x => x.TemplateHash == templateHash));
+        public ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(request, _values.Values, template => template.TemplateId, "activity-template"));
     }
 
     private sealed class SourceReader(IEnumerable<WorkflowExecutableSourceReference> values) : IWorkflowExecutableSourceReferenceReader
     {
         private readonly IReadOnlyDictionary<string, WorkflowExecutableSourceReference> _values = values.ToDictionary(x => x.SourceReferenceId);
         public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => ValueTask.FromResult(_values.GetValueOrDefault(sourceReferenceId));
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>(_values.Values.Where(x => x.ArtifactId == artifactId).ToArray());
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>(_values.Values.ToArray());
-        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(query, _values.Values.Where(reference => reference.ArtifactId == query.ArtifactId), reference => reference.SourceReferenceId, $"source-reference:artifact:{query.ArtifactId}"));
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(query, _values.Values
+                .Where(reference => query.Scope is null || reference.Scope == query.Scope)
+                .Where(reference => !query.LiveOnly || reference.IsLive(query.Now!.Value)), reference => reference.SourceReferenceId, TestRuntimeStorePages.SourceReferenceQueryBinding(query)));
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.UnreferencedArtifactIds(candidates, _values.Values, now));
     }
 
     private sealed class BoundaryHierarchyStore(ActivityExecutionBoundary boundary) : IActivityExecutionHierarchyStore

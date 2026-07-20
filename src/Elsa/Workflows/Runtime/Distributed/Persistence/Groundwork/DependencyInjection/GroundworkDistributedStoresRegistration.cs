@@ -1,8 +1,11 @@
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Unified.Composition;
+using Elsa.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
+using Groundwork.Core.Capabilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -20,6 +23,7 @@ public static class GroundworkDistributedStoresRegistration
 {
     public static IServiceCollection AddGroundworkDistributedRuntimeStores(this IServiceCollection services)
     {
+        services.TryAddSingleton<GroundworkProviderCapabilityAdmission>();
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, DistributedGroundworkStorageManifestSource>());
 
@@ -31,6 +35,7 @@ public static class GroundworkDistributedStoresRegistration
         services.AddScoped<IExecutionCommandTransport, GroundworkExecutionCommandTransport>();
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkDistributionDurabilityEvidence>());
+        services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionLeaseFencingCapability, GroundworkWorkflowExecutionLeaseFencingCapability>());
 
         return services;
     }
@@ -40,4 +45,31 @@ internal sealed class GroundworkDistributionDurabilityEvidence : IWorkflowDispat
 {
     public string Component => WorkflowDispatchDurabilityComponents.DistributionPersistence;
     public WorkflowDispatchDurabilityLevel Level => WorkflowDispatchDurabilityLevel.Durable;
+}
+
+/// <summary>
+/// Maps the admitted Groundwork checkpoint-commit route to the provider-neutral actor capability.
+/// It stays unavailable until the selected physical provider has published successful admission evidence.
+/// </summary>
+public sealed class GroundworkWorkflowExecutionLeaseFencingCapability(
+    GroundworkProviderCapabilityAdmission admission) : IWorkflowExecutionLeaseFencingCapability
+{
+    private static readonly GroundworkActiveStoragePath CheckpointCommitPath = CreateCheckpointCommitPath();
+    private static readonly GroundworkStorageTopologyRequirement CheckpointCommitTopology = new(
+        RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity);
+
+    public bool IsAvailable => admission.IsCapabilityAdmitted(
+        CheckpointCommitPath,
+        WellKnownCapabilities.AtomicCommit,
+        CheckpointCommitTopology);
+
+    private static GroundworkActiveStoragePath CreateCheckpointCommitPath()
+    {
+        var route = RuntimeGroundworkStorageManifestSource.CreateCheckpointCommitRouteRequirement();
+        return new GroundworkActiveStoragePath(
+            RuntimeGroundworkStorageManifestSource.FeatureName,
+            route.StorageUnit,
+            route.RouteIdentity,
+            route.RequiredCapabilities);
+    }
 }

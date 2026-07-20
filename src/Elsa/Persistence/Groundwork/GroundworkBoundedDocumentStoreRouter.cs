@@ -9,6 +9,15 @@ namespace Elsa.Persistence.Groundwork;
 /// admitted physical route. Query identities are intentionally resolved inside the selected route,
 /// so different storage units may safely use the same stable identity.
 /// </summary>
+/// <remarks>
+/// Each terminal convenience method binds the query's <see cref="BoundedQueryResultOperation"/> to the
+/// operation it performs before dispatching. The provider-native runtime (<c>PhysicalQueryDocumentStore</c>)
+/// requires the incoming query to declare the exact terminal operation it is being executed for; a query
+/// carries <see cref="BoundedQueryResultOperation.Documents"/> by default, so calling
+/// <c>FirstOrDefaultAsync</c>/<c>AnyAsync</c>/<c>CountAsync</c> without this selection would be rejected with
+/// "does not declare result operation". Genuine capability checks (whether the bounded query declares the
+/// requested operation at all) still run inside the runtime after selection.
+/// </remarks>
 public sealed class GroundworkBoundedDocumentStoreRouter : IBoundedDocumentStore, IPhysicalDocumentQueryExplainer
 {
     private readonly IReadOnlyDictionary<string, IBoundedDocumentStore> stores;
@@ -38,16 +47,16 @@ public sealed class GroundworkBoundedDocumentStoreRouter : IBoundedDocumentStore
     }
 
     public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        Resolve(query).QueryAsync(query, cancellationToken);
+        Resolve(query).QueryAsync(query.Select(BoundedQueryResultOperation.Documents), cancellationToken);
 
     public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        Resolve(query).CountAsync(query, cancellationToken);
+        Resolve(query).CountAsync(query.Select(BoundedQueryResultOperation.Count), cancellationToken);
 
     public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        Resolve(query).FirstOrDefaultAsync(query, cancellationToken);
+        Resolve(query).FirstOrDefaultAsync(query.Select(BoundedQueryResultOperation.First), cancellationToken);
 
     public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        Resolve(query).AnyAsync(query, cancellationToken);
+        Resolve(query).AnyAsync(query.Select(BoundedQueryResultOperation.Any), cancellationToken);
 
     public PhysicalQueryPlan ResolvePlan(
         DocumentQuery query,

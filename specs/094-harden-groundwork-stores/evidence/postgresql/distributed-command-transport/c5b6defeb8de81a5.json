@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:lease-visible-by-execution-bounded",
+  "sourceScenarioId": "distributed-bounded-route-equivalence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+  "executionPath": "provider-driver/postgresql/distributed-command-transport/c5b6defeb8de81a5",
+  "clients": 1,
+  "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
+  "outcome": "pass",
+  "queryShape": "lease-visible-by-execution-bounded",
+  "nativeQueryIdentity": "lease-visible-commands-by-execution",
+  "documentKind": "executionCommandTransport",
+  "nativeEvidence": "evidence/postgresql/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
+  "evidence": "evidence/postgresql/distributed-command-transport/c5b6defeb8de81a5.json"
+}

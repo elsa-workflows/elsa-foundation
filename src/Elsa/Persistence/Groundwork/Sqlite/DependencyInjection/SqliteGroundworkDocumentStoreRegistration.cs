@@ -42,7 +42,8 @@ public static class SqliteGroundworkDocumentStoreRegistration
             sp.GetRequiredService<GroundworkStoreSessionSource>(),
             // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
             sp.GetService<ILogger<SqliteGroundworkDocumentStoreInitializer>>()
-            ?? NullLogger<SqliteGroundworkDocumentStoreInitializer>.Instance));
+            ?? NullLogger<SqliteGroundworkDocumentStoreInitializer>.Instance,
+            sp.GetRequiredService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>()));
         services.AddHostedService(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(

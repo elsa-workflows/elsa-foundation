@@ -151,7 +151,7 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 ### Implementation for User Story 3
 
-- [ ] T048 [US3] Express fence, claim token, visibility deadline, expected revision, stale acknowledgement, and replay outcomes in `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimeExecutionOwnershipService.cs`, `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`, `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimePostCommitOutboxStore.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowSchedulerWorkQueue.cs`
+- [x] T048 [US3] Express fence, claim token, visibility deadline, expected revision, stale acknowledgement, and replay outcomes in `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimeExecutionOwnershipService.cs`, `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`, `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimePostCommitOutboxStore.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowSchedulerWorkQueue.cs`
 - [x] T049 [US3] Implement provider-atomic ownership allocation/heartbeat/release through liveness state in `src/Elsa/Workflows/Runtime/Services/RuntimeExecutionOwnershipService.cs` and `src/Elsa/Persistence/Groundwork/Stores/GroundworkExecutionLivenessStateStore.cs`
 - [ ] T050 [US3] Make fence validation, checkpoint state, outbox state, and the idempotency marker one unit of work, then advance the complete provider matrix for row group B5-FENCE-CHECKPOINT in `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeCheckpointWriter.cs` and `specs/094-harden-groundwork-stores/coverage-ledger.json`
 - [x] T051 [US3] Implement bounded atomic outbox claim/retry/complete transitions in `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimePostCommitOutboxStore.cs`
@@ -175,19 +175,19 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 ### Tests for User Story 5
 
-- [ ] T059 [P] [US5] Write failing IAM authority/uniqueness/revision/reopen contracts and direct branch tests for every new IAM store in `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkConformanceTests.cs`, `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/GroundworkApplicationStoreTests.cs`, `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/GroundworkCredentialStoreTests.cs`, `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/GroundworkClaimMappingStoreTests.cs`, and `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/GroundworkProviderConfigurationStoreTests.cs`
-- [ ] T060 [P] [US5] Write failing secret create-only, revision, bounded-list, tenant-collision, and reopen tests in `tests/Elsa/Secrets/Tests/GroundworkSecretRepositoryTests.cs` and `tests/Elsa/Secrets/Tests/SecretRepositoryContractTests.cs`
+- [x] T059 [P] [US5] Write failing IAM authority/uniqueness/revision/reopen contracts and direct branch tests for every new IAM store in `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkConformanceTests.cs`, `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/GroundworkApplicationStoreTests.cs`, `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/GroundworkCredentialStoreTests.cs`, `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/GroundworkClaimMappingStoreTests.cs`, and `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/GroundworkProviderConfigurationStoreTests.cs`
+- [x] T060 [P] [US5] Write failing secret create-only, revision, bounded-list, tenant-collision, and reopen tests in `tests/Elsa/Secrets/Tests/GroundworkSecretRepositoryTests.cs` and `tests/Elsa/Secrets/Tests/SecretRepositoryContractTests.cs`
 
 ### Implementation for User Story 5
 
-- [ ] T061 [US5] Add provider-neutral revision/conflict and bounded-page outcomes to IAM contracts in `src/Elsa/Foundation/Identity/Abstractions/Iam/IamContracts.cs`
-- [ ] T062 [US5] Adapt user, role, and external identity operations to #644 without parallel documents in `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkUserStore.cs`, `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkRoleStore.cs`, and `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkExternalIdentityStore.cs`
+- [x] T061 [US5] Add provider-neutral revision/conflict and bounded-page outcomes to IAM contracts in `src/Elsa/Foundation/Identity/Abstractions/Iam/IamContracts.cs`
+- [x] T062 [US5] Adapt user, role, and external identity operations to #644 without parallel documents in `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkUserStore.cs`, `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkRoleStore.cs`, and `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkExternalIdentityStore.cs`
 - [X] T063 [P] [US5] Implement application and credential stores in `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkApplicationStore.cs` and `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkCredentialStore.cs`
-- [ ] T064 [P] [US5] Implement claim-mapping and provider-configuration stores with separate tenant/global access in `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkClaimMappingStore.cs` and `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkProviderConfigurationStore.cs`
-- [ ] T065 [US5] Make tenant membership create/update/delete revision-aware in `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkTenantMembershipStore.cs`
-- [ ] T066 [US5] Add all IAM document kinds, physical uniqueness, and bounded lookup routes in `src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityStorageManifest.cs`
-- [ ] T067 [US5] Add secret revision/page semantics and preserve provider-neutral core boundaries in `src/Elsa/Secrets/Core/Contracts/ISecretRepository.cs` and `src/Elsa/Secrets/Core/Models/SecretModels.cs`
-- [ ] T068 [US5] Implement create-only, expected-version update/delete, and bounded deterministic list behavior in `src/Elsa/Secrets/Persistence/Groundwork/Stores/GroundworkSecretRepository.cs` and `src/Elsa/Secrets/Persistence/Groundwork/SecretsStorageManifest.cs`
+- [x] T064 [P] [US5] Implement claim-mapping and provider-configuration stores with separate tenant/global access in `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkClaimMappingStore.cs` and `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkProviderConfigurationStore.cs`
+- [x] T065 [US5] Make tenant membership create/update/delete revision-aware in `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkTenantMembershipStore.cs`
+- [x] T066 [US5] Add all IAM document kinds, physical uniqueness, and bounded lookup routes in `src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityStorageManifest.cs`
+- [x] T067 [US5] Add secret revision/page semantics and preserve provider-neutral core boundaries in `src/Elsa/Secrets/Core/Contracts/ISecretRepository.cs` and `src/Elsa/Secrets/Core/Models/SecretModels.cs`
+- [x] T068 [US5] Implement create-only, expected-version update/delete, and bounded deterministic list behavior in `src/Elsa/Secrets/Persistence/Groundwork/Stores/GroundworkSecretRepository.cs` and `src/Elsa/Secrets/Persistence/Groundwork/SecretsStorageManifest.cs`
 - [ ] T069 [US5] Run the complete provider matrix for row group B6-IAM-SECRETS, consuming #644 evidence for its authority rows, in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/IamSecretsProviderContractTests.cs` and `specs/094-harden-groundwork-stores/coverage-ledger.json`
 
 **Checkpoint**: IAM and secrets have one authoritative winner under races, stable stale-revision outcomes, bounded queries, and persistent scope/uniqueness evidence.
@@ -202,15 +202,15 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 ### Tests for User Story 6
 
-- [ ] T070 [P] [US6] Write failing placement CAS/takeover/stale-release tests in `tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/ExecutionPlacementStoreContractTests.cs`
-- [ ] T071 [P] [US6] Write failing stream-sequence, bounded visibility lease, expiry, stale-ack, and restart tests in `tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/ExecutionCommandTransportContractTests.cs`
+- [x] T070 [P] [US6] Write failing placement CAS/takeover/stale-release tests in `tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/ExecutionPlacementStoreContractTests.cs`
+- [x] T071 [P] [US6] Write failing stream-sequence, bounded visibility lease, expiry, stale-ack, and restart tests in `tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/ExecutionCommandTransportContractTests.cs`
 
 ### Implementation for User Story 6
 
-- [ ] T072 [US6] Add expected-version placement and tokenized command outcomes to `src/Elsa/Workflows/Runtime/Distributed/Contracts/IExecutionPlacementStore.cs`, `src/Elsa/Workflows/Runtime/Distributed/Contracts/IExecutionCommandTransport.cs`, and `src/Elsa/Workflows/Runtime/Distributed/Models/ExecutionCommandTransportItem.cs`
-- [ ] T073 [US6] Implement provider-atomic placement claim/renew/takeover/release in `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Stores/GroundworkExecutionPlacementStore.cs`
-- [ ] T074 [US6] Implement create-only command IDs, a per-execution CAS stream head, bounded visibility claims, and tokenized acknowledgement in `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Stores/GroundworkExecutionCommandTransport.cs`
-- [ ] T075 [US6] Add stream-head/lease fields, routes, and executable capability prerequisites in `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/DistributedGroundworkDocuments.cs` and `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/DistributedGroundworkStorageManifest.cs`
+- [x] T072 [US6] Add expected-version placement and tokenized command outcomes to `src/Elsa/Workflows/Runtime/Distributed/Contracts/IExecutionPlacementStore.cs`, `src/Elsa/Workflows/Runtime/Distributed/Contracts/IExecutionCommandTransport.cs`, and `src/Elsa/Workflows/Runtime/Distributed/Models/ExecutionCommandTransportItem.cs`
+- [x] T073 [US6] Implement provider-atomic placement claim/renew/takeover/release in `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Stores/GroundworkExecutionPlacementStore.cs`
+- [x] T074 [US6] Implement create-only command IDs, a per-execution CAS stream head, bounded visibility claims, and tokenized acknowledgement in `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Stores/GroundworkExecutionCommandTransport.cs`
+- [x] T075 [US6] Add stream-head/lease fields, routes, and executable capability prerequisites in `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/DistributedGroundworkDocuments.cs` and `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/DistributedGroundworkStorageManifest.cs`
 - [ ] T076 [US6] Prove placement cannot override stale execution fencing and advance the complete provider matrix for row group B9-DISTRIBUTED in `tests/Elsa/Workflows/Runtime/Distributed/Tests/TwoNodeAcceptanceTests.cs` and `specs/094-harden-groundwork-stores/coverage-ledger.json`
 
 **Checkpoint**: Exactly one current placement/visibility owner exists, stream order is durable without scan-max allocation, and checkpoint fencing remains final commit authority.
@@ -225,18 +225,18 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 ### Tests for User Story 7
 
-- [ ] T077 [P] [US7] Write failing runtime result-equivalence and bounded-materialization tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeBoundedQueryContractTests.cs`
+- [x] T077 [P] [US7] Write failing runtime result-equivalence and bounded-materialization tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeBoundedQueryContractTests.cs`
 - [x] T078 [P] [US7] Write failing IAM/secrets/distributed bounded-route tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/FoundationBoundedQueryContractTests.cs`
 
 ### Implementation for User Story 7
 
-- [ ] T079 [US7] Declare stable route identities, finite maxima, deterministic ordering, continuation, and required physical fields in `src/Elsa/Persistence/Groundwork/Querying/ElsaGroundworkQueryRoutes.cs` and `src/Elsa/Persistence/Groundwork/ElsaRuntimeStorageManifest.cs`
-- [ ] T080 [US7] Replace bookmark, trigger-binding, source-reference, recovery, timer, schedule, outbox, and queue client evaluation in `src/Elsa/Persistence/Groundwork/Stores/GroundworkBookmarkStateStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowTriggerBindingStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutableSourceReferenceStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutionStateStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkExecutionLivenessStateStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkDurableTimerStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkRecurringTriggerScheduleStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimePostCommitOutboxStore.cs`, and `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowSchedulerWorkQueue.cs`
+- [x] T079 [US7] Declare stable route identities, finite maxima, deterministic ordering, continuation, and required physical fields in `src/Elsa/Persistence/Groundwork/Querying/ElsaGroundworkQueryRoutes.cs` and `src/Elsa/Persistence/Groundwork/ElsaRuntimeStorageManifest.cs`
+- [x] T080 [US7] Replace bookmark, trigger-binding, source-reference, recovery, timer, schedule, outbox, and queue client evaluation in `src/Elsa/Persistence/Groundwork/Stores/GroundworkBookmarkStateStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowTriggerBindingStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutableSourceReferenceStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutionStateStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkExecutionLivenessStateStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkDurableTimerStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkRecurringTriggerScheduleStore.cs`, `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimePostCommitOutboxStore.cs`, and `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowSchedulerWorkQueue.cs`
 - [x] T081 [US7] Replace provider-specific execution-history paging with the common compiled route and retire the fallback seam in `src/Elsa/Persistence/Groundwork/ExecutionHistory/RelationalGroundworkWorkflowExecutionStatePageQuery.cs` and `src/Elsa/Persistence/Groundwork/ExecutionHistory/IGroundworkWorkflowExecutionStatePageQuery.cs`
 - [x] T082 [P] [US7] Bind IAM and secrets lookups/lists to compiled routes in `src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityStorageManifest.cs` and `src/Elsa/Secrets/Persistence/Groundwork/SecretsStorageManifest.cs`
 - [x] T083 [P] [US7] Bind placement and command retrieval to compiled routes in `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/DistributedGroundworkStorageManifest.cs`
-- [ ] T084 [US7] Capture SQLite, SQL Server, PostgreSQL, and MongoDB native bounded-route evidence in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/ProviderNativePlanTests.cs`
-- [ ] T085 [US7] Reject missing/unsupported routes without fallback and advance the complete provider route evidence for row group B7-BOUNDED-QUERIES in `src/Elsa/Persistence/Groundwork/Unified/Composition/GroundworkStorageCompositionValidator.cs` and `specs/094-harden-groundwork-stores/coverage-ledger.json`
+- [x] T084 [US7] Capture SQLite, SQL Server, PostgreSQL, and MongoDB native bounded-route evidence in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/ProviderNativePlanTests.cs`
+- [x] T085 [US7] Reject missing/unsupported routes without fallback and advance the complete provider route evidence for row group B7-BOUNDED-QUERIES in `src/Elsa/Persistence/Groundwork/Unified/Composition/GroundworkStorageCompositionValidator.cs` and `specs/094-harden-groundwork-stores/coverage-ledger.json`
 
 **Checkpoint**: Every scale-bearing operation has a provider-bound finite route and no production-enabled load-all fallback.
 
@@ -250,13 +250,13 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 ### Tests and Integration for User Story 8
 
-- [ ] T086 [US8] Define the complete provider-independent scenario catalog and result-digest rules in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/GroundworkStoreScenarioCatalog.cs`
-- [ ] T087 [P] [US8] Run runtime ordinary-document/checkpoint/operational scenarios across all drivers in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeProviderContractTests.cs`
-- [ ] T088 [P] [US8] Run IAM and secrets scenarios across all drivers in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/IamSecretsProviderContractTests.cs`
-- [ ] T089 [P] [US8] Run distributed placement/transport scenarios across all drivers in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/DistributedProviderContractTests.cs`
-- [ ] T090 [US8] Run cancellation, declared failure-window, disposal/reopen, process-restart, and topology rejection scenarios in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/ProviderRecoveryContractTests.cs`
-- [ ] T091 [US8] Extract shared observable scenarios for the temporary EF oracle without adding EF surface in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/TemporaryEfOracleContractTests.cs`
-- [ ] T092 [US8] Run evidence-only integration scenarios proving capability claims come only from selected passing active paths in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/ProviderCapabilityContractTests.cs`
+- [x] T086 [US8] Define the complete provider-independent scenario catalog and result-digest rules in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/GroundworkStoreScenarioCatalog.cs`
+- [x] T087 [P] [US8] Run runtime ordinary-document/checkpoint/operational scenarios across all drivers in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/RuntimeProviderContractTests.cs`
+- [x] T088 [P] [US8] Run IAM and secrets scenarios across all drivers in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/IamSecretsProviderContractTests.cs`
+- [x] T089 [P] [US8] Run distributed placement/transport scenarios across all drivers in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/DistributedProviderContractTests.cs`
+- [x] T090 [US8] Run cancellation, declared failure-window, disposal/reopen, process-restart, and topology rejection scenarios in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/ProviderRecoveryContractTests.cs`
+- [x] T091 [US8] Extract shared observable scenarios for the temporary EF oracle without adding EF surface in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/TemporaryEfOracleContractTests.cs`
+- [x] T092 [US8] Run evidence-only integration scenarios proving capability claims come only from selected passing active paths in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/ProviderCapabilityContractTests.cs`
 - [ ] T093 [US8] Record provider/topology/package/fingerprint/result evidence for row groups B5-FENCE-CHECKPOINT, B6-IAM-SECRETS, B7-BOUNDED-QUERIES, B8-OPERATIONAL-RUNTIME, and B9-DISTRIBUTED, consume linked #660 evidence, and advance only complete rows in `specs/094-harden-groundwork-stores/coverage-ledger.json`
 
 **Checkpoint**: Provider-specific mechanics differ, but public results, conflict classifications, restart outcomes, and readiness diagnostics do not.
@@ -271,15 +271,15 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 ### Tests for User Story 9
 
-- [ ] T094 [P] [US9] Write failing workload-schema, ledger-mapping, correctness-digest, and verdict-readiness tests in `tests/Elsa/Architecture/GroundworkPerformanceHandoffTests.cs`
+- [x] T094 [P] [US9] Write failing workload-schema, ledger-mapping, correctness-digest, and verdict-readiness tests in `tests/Elsa/Architecture/GroundworkPerformanceHandoffTests.cs`
 
 ### Implementation for User Story 9
 
-- [ ] T095 [US9] Define the versioned workload/handoff schema in `specs/094-harden-groundwork-stores/contracts/performance-workload.schema.json`
-- [ ] T096 [P] [US9] Define checkpoint/bookmark/trigger/recovery/queue/outbox/timer/schedule workloads in `specs/094-harden-groundwork-stores/workloads/runtime.json`
-- [ ] T097 [P] [US9] Define IAM normalized lookup/update and secret create/read/list workloads in `specs/094-harden-groundwork-stores/workloads/iam-secrets.json`
-- [ ] T098 [P] [US9] Define placement takeover and command send/lease/ack workloads in `specs/094-harden-groundwork-stores/workloads/distributed-runtime.json`
-- [ ] T099 [US9] Produce deterministic correctness digests and provider prerequisites through public contracts in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/PerformanceWorkloadCorrectnessTests.cs`
+- [x] T095 [US9] Define the versioned workload/handoff schema in `specs/094-harden-groundwork-stores/contracts/performance-workload.schema.json`
+- [x] T096 [P] [US9] Define checkpoint/bookmark/trigger/recovery/queue/outbox/timer/schedule workloads in `specs/094-harden-groundwork-stores/workloads/runtime.json`
+- [x] T097 [P] [US9] Define IAM normalized lookup/update and secret create/read/list workloads in `specs/094-harden-groundwork-stores/workloads/iam-secrets.json`
+- [x] T098 [P] [US9] Define placement takeover and command send/lease/ack workloads in `specs/094-harden-groundwork-stores/workloads/distributed-runtime.json`
+- [x] T099 [US9] Produce deterministic correctness digests and provider prerequisites through public contracts in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/PerformanceWorkloadCorrectnessTests.cs`
 - [ ] T100 [US9] Consume #646 evidence/accepted-shape verdicts for every ALL32 row and block missing/Redesign/Blocked lanes in `specs/094-harden-groundwork-stores/coverage-ledger.json` and `specs/094-harden-groundwork-stores/contracts/performance-handoff.md`
 
 **Checkpoint**: Every hot/ordinary lane has a reproducible #646 verdict; redesign loops return to the owning implementation phase.
@@ -290,11 +290,11 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 **Purpose**: Close combined-host, documentation, CLI, architecture, and evidence gates without expanding the EF implementation surface.
 
-- [ ] T101 Run the complete production-shaped host on all providers, add the SQL Server/MongoDB host projects to `Elsa.Server.slnx`, and implement their fixtures/direct host tests in `tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/Tests/Elsa.Persistence.Groundwork.SqlServer.UnifiedHost.Tests.csproj`, `tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/Tests/SqlServerContainerFixture.cs`, `tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/Tests/SqlServerUnifiedGroundworkHostTests.cs`, `tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/Tests/Elsa.Persistence.Groundwork.MongoDb.UnifiedHost.Tests.csproj`, `tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/Tests/MongoDbReplicaSetFixture.cs`, and `tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/Tests/MongoDbUnifiedGroundworkHostTests.cs`
-- [ ] T102 [P] Refresh Groundwork extension points and operational prerequisites in `src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`, `src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`, `src/Elsa/Secrets/EXTENSION_POINTS.md`, `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md`, and `specs/094-harden-groundwork-stores/quickstart.md`
-- [ ] T103 [P] Update the decision map and program goals in `docs/decision-maps/zero-ef-groundwork.md`, `docs/program-goals/groundwork-persistence-readiness.md`, and `docs/program-goals/zero-ef-persistence.md`
-- [ ] T104 Refresh generated architecture/feature/dependency/test maps with `tools/maps/generate-maps.sh`, `tools/maps/generate-architecture-reference-map.sh`, and `tools/maps/generate-feature-dependency-map.sh`, then review `docs/reports/maps-v2-findings.md`
-- [ ] T105 Run every command in `specs/094-harden-groundwork-stores/quickstart.md`, audit every exact ALL32 row, close only rows meeting every local or linked-owner gate, and retain incomplete/external rows with explicit blockers in `specs/094-harden-groundwork-stores/coverage-ledger.json`
+- [x] T101 Run the complete production-shaped host on all providers, add the SQL Server/MongoDB host projects to `Elsa.Server.slnx`, and implement their fixtures/direct host tests in `tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/Tests/Elsa.Persistence.Groundwork.SqlServer.UnifiedHost.Tests.csproj`, `tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/Tests/SqlServerContainerFixture.cs`, `tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/Tests/SqlServerUnifiedGroundworkHostTests.cs`, `tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/Tests/Elsa.Persistence.Groundwork.MongoDb.UnifiedHost.Tests.csproj`, `tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/Tests/MongoDbReplicaSetFixture.cs`, and `tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/Tests/MongoDbUnifiedGroundworkHostTests.cs`
+- [x] T102 [P] Refresh Groundwork extension points and operational prerequisites in `src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`, `src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`, `src/Elsa/Secrets/EXTENSION_POINTS.md`, `src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md`, and `specs/094-harden-groundwork-stores/quickstart.md`
+- [x] T103 [P] Update the decision map and program goals in `docs/decision-maps/zero-ef-groundwork.md`, `docs/program-goals/groundwork-persistence-readiness.md`, and `docs/program-goals/zero-ef-persistence.md`
+- [x] T104 Refresh generated architecture/feature/dependency/test maps with `tools/maps/generate-maps.sh`, `tools/maps/generate-architecture-reference-map.sh`, and `tools/maps/generate-feature-dependency-map.sh`, then review `docs/reports/maps-v2-findings.md`
+- [x] T105 Run every command in `specs/094-harden-groundwork-stores/quickstart.md`, audit every exact ALL32 row, close only rows meeting every local or linked-owner gate, and retain incomplete/external rows with explicit blockers in `specs/094-harden-groundwork-stores/coverage-ledger.json`
 
 ---
 

@@ -62,13 +62,7 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default)
-    {
-        var result = await QueryAllAsync(cancellationToken);
-        return result.Documents
-            .Select(Serializer.Deserialize<WorkflowExecutionStateDocument>)
-            .Select(document => document.State)
-            .ToArray();
-    }
+        => await this.ListAllAsync(cancellationToken);
 
     public async ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
         WorkflowExecutionStatePageQuery query,
@@ -119,27 +113,48 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
 
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
     {
-        var result = await QueryAllAsync(cancellationToken);
-
-        return result.Documents
-            .Select(ReadPinnedExecutableArtifactId)
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
+        var artifactIds = new List<string>();
+        for (var skip = 0;; skip += RuntimeStorePageRequest.MaximumLimit)
+        {
+            var result = await Queries.QueryAsync(
+                new DocumentQuery(
+                        ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+                        ElsaRuntimeStorageManifest.PagePinnedExecutableArtifactIdsQuery,
+                        [
+                            DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                                ElsaRuntimeStorageManifest.CollectionField,
+                                ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection))
+                        ],
+                        [
+                            new DocumentQueryOrder(
+                                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField),
+                            new DocumentQueryOrder(
+                                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)
+                        ],
+                        skip: skip,
+                        take: RuntimeStorePageRequest.MaximumLimit)
+                    .LatestPerKey(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField),
+                cancellationToken);
+            artifactIds.AddRange(result.Documents
+                .Select(ReadHistoryArtifactId));
+            if (result.Documents.Count < RuntimeStorePageRequest.MaximumLimit)
+                return artifactIds;
+        }
     }
 
-    private Task<DocumentQueryResult> QueryAllAsync(CancellationToken cancellationToken) =>
-        Queries.QueryAsync(
-            new DocumentQuery(
-                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-                ElsaRuntimeStorageManifest.ListWorkflowExecutionsQuery,
-                [
-                    DocumentQueryClause.Of(
-                        DocumentQueryComparison.Equal(
-                            ElsaRuntimeStorageManifest.CollectionField,
-                            ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection))
-                ]),
-            cancellationToken);
+    private static string ReadHistoryArtifactId(DocumentEnvelope envelope)
+    {
+        using var content = JsonDocument.Parse(envelope.ContentJson);
+        if (!content.RootElement.TryGetProperty("historyArtifactId", out var artifactId) ||
+            artifactId.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(artifactId.GetString()))
+        {
+            throw new InvalidOperationException(
+                $"Workflow execution '{envelope.Id}' has no projected pinned executable artifact identity.");
+        }
+
+        return artifactId.GetString()!;
+    }
 
     private static IReadOnlyList<DocumentQueryClause> BuildHistoryClauses(
         WorkflowExecutionStatePageQuery query)
@@ -198,24 +213,6 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
 
         var result = await DeleteDocumentAsync(workflowExecutionId, cancellationToken);
         return result.Status == DocumentStoreWriteStatus.Deleted;
-    }
-
-    private string ReadPinnedExecutableArtifactId(DocumentEnvelope envelope)
-    {
-        // Current documents all have the pinned identity at this stable JSON path. Reading only that
-        // element avoids materializing the much larger workflow execution state during every GC sweep.
-        // A non-current envelope falls through to the serializer so version policy rejects it consistently.
-        if (Serializer.IsCurrentVersion(envelope))
-        {
-            using var content = JsonDocument.Parse(envelope.ContentJson);
-            if (content.RootElement.TryGetProperty("state", out var state) &&
-                state.TryGetProperty("pinnedExecutable", out var pinnedExecutable) &&
-                pinnedExecutable.TryGetProperty("artifactId", out var artifactId) &&
-                artifactId.ValueKind is not JsonValueKind.Null)
-                return Serializer.DeserializeElement<string>(artifactId);
-        }
-
-        return Serializer.Deserialize<WorkflowExecutionStateDocument>(envelope).State.PinnedExecutable.ArtifactId;
     }
 
 }

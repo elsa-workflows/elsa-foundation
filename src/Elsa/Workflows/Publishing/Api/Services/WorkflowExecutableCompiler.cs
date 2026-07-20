@@ -362,7 +362,7 @@ public sealed class WorkflowExecutableCompiler(
         if (dependencies.Count == 0 || _executableStore is null)
             return;
 
-        var storedExecutables = await _executableStore.ListAsync(cancellationToken);
+        var storedExecutables = await _executableStore.ListAllAsync(cancellationToken);
         var roots = dependencies
             .Select(dependency => new WorkflowExecutableIdentity(
                 dependency.ArtifactId,

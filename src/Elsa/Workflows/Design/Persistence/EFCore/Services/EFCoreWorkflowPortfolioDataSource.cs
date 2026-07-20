@@ -36,11 +36,11 @@ public sealed class EFCoreWorkflowPortfolioDataSource(
             .Select(x => x.WorkflowDefinitionId)
             .Distinct()
             .CountAsync(cancellationToken);
-        var publishedIds = (await sourceReferences.ListAsync(
+        var publishedIds = (await sourceReferences.ListAllAsync(
                 WorkflowExecutableReferenceScope.Published,
                 liveOnly: true,
                 now: asOf,
-                cancellationToken))
+                cancellationToken: cancellationToken))
             .Select(x => x.DefinitionId)
             .ToHashSet(StringComparer.Ordinal);
         var publishedCount = 0;

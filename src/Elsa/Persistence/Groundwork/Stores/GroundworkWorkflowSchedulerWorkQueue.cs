@@ -50,15 +50,18 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(
         return item;
     }
 
-    public async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(
+    public async ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(
         RuntimeSchedulerWorkQuery query,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var result = await QueryOrderedAsync(query.WorkflowExecutionId, query.Limit, cancellationToken);
-        return result.Documents.Select(document => Deserialize(document).Item).ToArray();
+        var result = await QueryOrderedAsync(query, cancellationToken);
+        return new RuntimeStorePage<RuntimeSchedulerWorkItem>(
+            query,
+            result.Documents.Select(document => Deserialize(document).Item).ToArray(),
+            result.NextContinuation);
     }
 
     public async ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(
@@ -127,27 +130,29 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(
         int limit,
         CancellationToken cancellationToken = default)
     {
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Pending workflow execution listing limit must be greater than zero.");
+        RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
         cancellationToken.ThrowIfCancellationRequested();
 
         var result = await BoundedStore.QueryAsync(
             new DocumentQuery(
-                DocumentKind,
-                ElsaRuntimeStorageManifest.ListPendingSchedulerWorkflowExecutionsQuery,
-                [
-                    DocumentQueryClause.Of(
-                        DocumentQueryComparison.StartsWith(
-                            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
-                            ""))
-                ],
-                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField)],
-                take: limit),
+                    DocumentKind,
+                    ElsaRuntimeStorageManifest.ListPendingSchedulerWorkflowExecutionsQuery,
+                    [
+                        DocumentQueryClause.Of(
+                            DocumentQueryComparison.Equal(
+                                ElsaRuntimeStorageManifest.CollectionField,
+                                DocumentKind))
+                    ],
+                    [
+                        new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                        new DocumentQueryOrder(ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField)
+                    ],
+                    take: limit)
+                .LatestPerKey(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
             cancellationToken);
 
         return result.Documents
             .Select(document => Deserialize(document).Item.WorkflowExecutionId)
-            .Distinct(StringComparer.Ordinal)
             .ToArray();
     }
 
@@ -330,28 +335,30 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(
         string workflowExecutionId,
         CancellationToken cancellationToken)
     {
-        var result = await QueryOrderedAsync(workflowExecutionId, limit: 1, cancellationToken);
+        var result = await QueryOrderedAsync(
+            new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1),
+            cancellationToken);
         return result.Documents.FirstOrDefault();
     }
 
     private async ValueTask<DocumentQueryResult> QueryOrderedAsync(
-        string workflowExecutionId,
-        int? limit,
+        RuntimeSchedulerWorkQuery query,
         CancellationToken cancellationToken)
     {
-        var query = new DocumentQuery(
+        var documentQuery = new DocumentQuery(
             DocumentKind,
             ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
             [
                 DocumentQueryClause.Of(
-                    DocumentQueryComparison.StartsWith(
-                        ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField,
-                        OrderPrefix(workflowExecutionId)))
+                    DocumentQueryComparison.Equal(
+                        ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                        query.WorkflowExecutionId))
             ],
             [new DocumentQueryOrder(ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField)],
-            take: limit);
+            take: query.Limit,
+            continuation: query.ContinuationToken);
 
-        return await BoundedStore.QueryAsync(query, cancellationToken);
+        return await BoundedStore.QueryAsync(documentQuery, cancellationToken);
     }
 
     private WorkQueueEnvelope Deserialize(DocumentEnvelope document) =>
@@ -417,8 +424,8 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(
             (workItemId is null ? "" : $" and work item '{workItemId}'") +
             $" did not settle after {MaxTransitionAttempts} compare-and-swap attempts.");
 
-    // The lifted order key is a provider-portable single-field index. Fixed hashes keep it under every
-    // provider's keyword-index bound; physical/logical identity verification fails closed on a collision.
+    // Fixed hashes keep the lifted order key under every provider's keyword-index bound;
+    // physical/logical identity verification fails closed on a collision.
     private sealed record WorkQueueEnvelope(
         string Collection,
         string WorkflowExecutionId,

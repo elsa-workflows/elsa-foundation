@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "restartScenario:dispose-and-reopen-same-database",
+  "sourceScenarioId": "runtime-scheduler-state-roundtrip",
+  "coverageEntryId": "runtime-scheduler-state",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "af403c3397f1e15c74e7188c72589106a75a66ea5d153089bc7002fd32ac9b04",
+  "executionPath": "provider-driver/sqlserver/runtime-scheduler-state/9ff7253c911b2760",
+  "clients": 2,
+  "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
+  "outcome": "pass",
+  "restartScenario": "dispose-and-reopen-same-database",
+  "evidence": "evidence/sqlserver/runtime-scheduler-state/9ff7253c911b2760.json"
+}

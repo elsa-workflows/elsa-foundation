@@ -414,6 +414,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
             string workflowExecutionId,
             string transportItemId,
             string ownerId,
+            long leaseToken,
             DateTimeOffset now,
             CancellationToken cancellationToken = default) => new(false);
 
@@ -468,6 +469,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
             string workflowExecutionId,
             string transportItemId,
             string ownerId,
+            long leaseToken,
             DateTimeOffset acknowledgedAt,
             CancellationToken cancellationToken = default)
         {

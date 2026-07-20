@@ -26,11 +26,15 @@ public interface IWorkflowTriggerBindingStore
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support publication-scoped preparation."));
 
-    /// <summary>Returns every prepared or active binding owned by one publication.</summary>
-    ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByPublicationAsync(
-        string publicationId,
+    /// <summary>
+    /// Returns one finite, deterministically ordered page of prepared or active bindings owned by one
+    /// publication. Callers whose business semantics require the complete publication projection must
+    /// deliberately traverse the opaque continuation.
+    /// </summary>
+    ValueTask<WorkflowTriggerBindingPage> ListByPublicationAsync(
+        WorkflowTriggerBindingPublicationPageQuery query,
         CancellationToken cancellationToken = default) =>
-        ValueTask.FromException<IReadOnlyCollection<WorkflowTriggerBinding>>(
+        ValueTask.FromException<WorkflowTriggerBindingPage>(
             new NotSupportedException("This trigger-binding store does not support publication-scoped queries."));
 
     /// <summary>
@@ -62,8 +66,14 @@ public interface IWorkflowTriggerBindingStore
         WorkflowTriggerBindingPageQuery query,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Returns every binding owned by the given artifact.</summary>
-    ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Returns one finite, deterministically ordered page of bindings owned by the given artifact.
+    /// Callers rebuilding or replacing an entire artifact projection must deliberately traverse the
+    /// opaque continuation.
+    /// </summary>
+    ValueTask<WorkflowTriggerBindingPage> ListByArtifactAsync(
+        WorkflowTriggerBindingArtifactPageQuery query,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns one finite page of active bindings of the given stimulus type across all artifacts. Callers

@@ -305,7 +305,8 @@ public sealed record ActivityExecutionHierarchyCursorState(
     long CommittedThroughSequence,
     long LastExecutionSequence,
     string LastActivityExecutionId,
-    int SchemaVersion = 1);
+    int SchemaVersion = 1,
+    string? ProviderContinuation = null);
 
 public sealed record ActivityExecutionCursorFailureMetadata(
     string CursorClass,

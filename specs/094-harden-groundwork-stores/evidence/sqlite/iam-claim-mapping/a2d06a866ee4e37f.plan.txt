@@ -1,0 +1,14 @@
+provider=sqlite
+document-kind=identityClaimMapping
+route=list-claim-mappings-by-provider
+physical-name=identity_claim_mappings
+physical-cardinality=100000
+plan-classification=index-search
+index=identity_claim_mapping_identity_claim_mapping_by_provider_b2dea62524ec
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=512
+materialized-candidate-count=512
+command-count=2
+command-0=Count|count|sqlite-query-plan|index-search|identity_claim_mapping_identity_claim_mapping_by_provider_b2dea62524ec|document_kind,providerLookupKey,storage_scope|1||eacf54cbb5ba270ff26ea6614d1707097ed6f7aef1934c82e482c3ff4160a877
+command-1=Page|page|sqlite-query-plan|index-search|identity_claim_mapping_identity_claim_mapping_by_provider_b2dea62524ec|document_kind,providerLookupKey,storage_scope|512|storage_scope:Ascending:true,id_comparison_key:Ascending:true|7ed4ebeea3ee901fca15da697189daef146b8c20c87f7986f78042598705ce13

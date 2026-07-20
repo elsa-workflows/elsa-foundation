@@ -90,6 +90,40 @@ public sealed class GroundworkDurableTimerStoreTests
     }
 
     [Fact]
+    public async Task ListPage_UsesDeclaredWorkflowTimerRoute()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        var store = new GroundworkDurableTimerStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            queries);
+
+        await store.ListPageAsync(new DurableTimerPageQuery("wfexec-1", limit: 17, continuationToken: "next"));
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(ElsaRuntimeStorageManifest.PageDurableTimersByWorkflowExecutionQuery, query.QueryIdentity);
+        Assert.Equal(17, query.Take);
+        Assert.Equal("next", query.Continuation);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerIdField, Assert.Single(query.Order).Path);
+    }
+
+    [Fact]
+    public async Task DueAndClaimReadsRejectLimitsAboveTheRuntimeMaximum()
+    {
+        await using var fixture = CreateStore("memory");
+        IDurableTimerStore store = NewStore(fixture);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            store.ListDueAsync(Now, RuntimeStorePageRequest.MaximumLimit + 1).AsTask());
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeDurableTimerClaimRequest(
+            "owner-a",
+            Now,
+            TimeSpan.FromMinutes(1),
+            RuntimeStorePageRequest.MaximumLimit + 1));
+    }
+
+    [Fact]
     public async Task ClaimDue_UsesBoundedClaimOrderRoute()
     {
         await using var fixture = CreateStore("memory");
@@ -164,7 +198,7 @@ public sealed class GroundworkDurableTimerStoreTests
     }
 
     [Fact]
-    public async Task ListAsync_UsesDeclaredWorkflowExecutionRoute()
+    public async Task ListAsync_TraversesDeclaredWorkflowExecutionPageRoute()
     {
         await using var fixture = CreateStore("memory");
         var queries = new RecordingBoundedDocumentStore();
@@ -177,7 +211,7 @@ public sealed class GroundworkDurableTimerStoreTests
 
         var query = Assert.Single(queries.Observed);
         Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDocumentKind, query.DocumentKind);
-        Assert.Equal(ElsaRuntimeStorageManifest.ListDurableTimersByWorkflowExecutionQuery, query.QueryIdentity);
+        Assert.Equal(ElsaRuntimeStorageManifest.PageDurableTimersByWorkflowExecutionQuery, query.QueryIdentity);
         var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
         Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, comparison.Path);
         Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);

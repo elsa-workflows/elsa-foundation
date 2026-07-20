@@ -1,7 +1,3 @@
-using System.Buffers.Binary;
-using System.Security.Cryptography;
-using System.Text;
-
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>Versioned deterministic identities for one parent activity dispatch.</summary>
@@ -75,35 +71,17 @@ public sealed class WorkflowDispatchIdentity
     }
 
     public string ParentResumeOutboxItemId(string commitId)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
-        return $"{commitId}:{ParentResumeIntentId}";
-    }
+        => RuntimePostCommitOutboxIdentity.CreateLogicalValue(commitId, ParentResumeIntentId);
 
     public string ChildCancelOutboxItemId(string commitId)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
-        return $"{commitId}:{ChildCancelIntentId}";
-    }
+        => RuntimePostCommitOutboxIdentity.CreateLogicalValue(commitId, ChildCancelIntentId);
 
     private static string ComputeDigest(string parentWorkflowExecutionId, string parentActivityExecutionId)
-    {
-        using var stream = new MemoryStream();
-        WriteValue(stream, "elsa.workflow-dispatch");
-        WriteValue(stream, Version);
-        WriteValue(stream, parentWorkflowExecutionId);
-        WriteValue(stream, parentActivityExecutionId);
-        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
-    }
-
-    private static void WriteValue(Stream stream, string value)
-    {
-        var bytes = Encoding.UTF8.GetBytes(value);
-        Span<byte> length = stackalloc byte[sizeof(int)];
-        BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
-        stream.Write(length);
-        stream.Write(bytes);
-    }
+        => RuntimeIdentityDigest.Compute(
+            "elsa.workflow-dispatch",
+            Version,
+            parentWorkflowExecutionId,
+            parentActivityExecutionId);
 
     private static bool IsSafeIdentityCharacter(char value) =>
         char.IsAsciiLetterOrDigit(value) || value is ':' or '-' or '_' or '.';

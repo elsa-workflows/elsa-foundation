@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.MongoDb;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Groundwork.Core.Capabilities;
@@ -8,12 +9,17 @@ using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.SchemaEvolution;
 using Groundwork.PostgreSql;
 using Groundwork.PostgreSql.PhysicalStorage;
+using Groundwork.MongoDb;
+using Groundwork.MongoDb.Materialization;
 using Groundwork.Sqlite;
 using Groundwork.Sqlite.PhysicalStorage;
+using Groundwork.SqlServer;
+using Groundwork.SqlServer.PhysicalStorage;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using MongoDB.Driver;
 
 namespace Elsa.Persistence.Groundwork.Testing;
 
@@ -137,6 +143,54 @@ public static class GroundworkStoreInitialization
             throw new InvalidOperationException($"PostgreSQL test schema application was not accepted: {result.Outcome}.");
     }
 
+    /// <summary>Explicitly applies the selected SQL Server target before exercising runtime admission.</summary>
+    public static async Task ApplySqlServerGroundworkSchemaAsync(
+        this IServiceProvider provider,
+        string connectionString,
+        CancellationToken cancellationToken = default)
+    {
+        var source = await CreateSourceAsync(
+            provider,
+            SqlServerGroundworkCapabilities.Runtime(),
+            "sqlserver",
+            SqlServerGroundworkCapabilities.PhysicalNames,
+            cancellationToken);
+        var result = await PhysicalSchemaApplication.ApplyAsync(
+            source.PhysicalTarget,
+            new SqlServerPhysicalSchemaExecutor(connectionString),
+            cancellationToken: cancellationToken);
+        if (result.Outcome is PhysicalSchemaApplicationOutcome.Rejected or PhysicalSchemaApplicationOutcome.AuthorizationRequired)
+            throw new InvalidOperationException($"SQL Server test schema application was not accepted: {result.Outcome}.");
+    }
+
+    /// <summary>Explicitly applies the selected transaction-capable MongoDB target before runtime admission.</summary>
+    public static async Task ApplyMongoDbGroundworkSchemaAsync(
+        this IServiceProvider provider,
+        string connectionString,
+        string databaseName,
+        CancellationToken cancellationToken = default)
+    {
+        var topology = await new MongoDbGroundworkRuntimeAdmission().InspectReplicaSetAsync(
+            connectionString,
+            databaseName,
+            cancellationToken);
+        var source = await CreateSourceAsync(
+            provider,
+            MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment(),
+            "transaction-capable-replica-set",
+            MongoDbPhysicalNameNormalizer.Instance,
+            cancellationToken,
+            MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance,
+            topology);
+        using var client = new MongoClient(connectionString);
+        var result = await PhysicalSchemaApplication.ApplyAsync(
+            source.PhysicalTarget,
+            new MongoDbPhysicalSchemaExecutor(client.GetDatabase(databaseName)),
+            cancellationToken: cancellationToken);
+        if (result.Outcome is PhysicalSchemaApplicationOutcome.Rejected or PhysicalSchemaApplicationOutcome.AuthorizationRequired)
+            throw new InvalidOperationException($"MongoDB test schema application was not accepted: {result.Outcome}.");
+    }
+
     /// <summary>Runs all registered shell initializers so the Groundwork document store is materialized and usable.</summary>
     public static async Task InitializeGroundworkStoreAsync(this IServiceProvider provider, CancellationToken cancellationToken = default)
     {
@@ -149,10 +203,12 @@ public static class GroundworkStoreInitialization
         global::Groundwork.Core.Capabilities.ProviderCapabilityReport capabilityReport,
         string topologyIdentity,
         IProviderPhysicalNameNormalizer providerNameNormalizer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IGroundworkPhysicalSchemaTargetCompiler? targetCompiler = null,
+        GroundworkProviderTopologySnapshot? topology = null)
     {
         await using var scope = provider.CreateAsyncScope();
-        var topology = new GroundworkProviderTopologySnapshot(
+        topology ??= new GroundworkProviderTopologySnapshot(
             capabilityReport.Provider.Name,
             topologyIdentity,
             new HashSet<string>(StringComparer.Ordinal)
@@ -168,6 +224,7 @@ public static class GroundworkStoreInitialization
                     scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
                     cancellationToken),
                 providerNameNormalizer,
-                cancellationToken);
+                cancellationToken,
+                targetCompiler);
     }
 }

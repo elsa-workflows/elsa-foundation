@@ -16,7 +16,7 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// real store bridge writes today against the fixture for that kind's current version and fails when a
 /// shape changes without a version bump. The read-path test loads every supported generation; every kind
 /// except explicitly retained rolling windows supports only its clean current baseline. Executable activity
-/// templates retain v1-to-v2.
+/// templates retain v1-to-v2, while post-commit outbox documents retain v3-to-v4.
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentFixtureTests
 {
@@ -31,6 +31,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
                 var expected = pair.Key switch
                 {
                     ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => 1,
+                    ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => 3,
                     _ => pair.Value
                 };
                 Assert.Equal(expected, minimumReadable);
@@ -77,9 +78,9 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     }
 
     [Fact]
-    public void Post_commit_outbox_shape_is_explicitly_versioned_at_v3() =>
+    public void Post_commit_outbox_shape_is_explicitly_versioned_at_v4() =>
         Assert.Equal(
-            3,
+            4,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind));
 

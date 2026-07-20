@@ -23,6 +23,8 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
 
         Assert.Equal("1", schemaVersion);
         Assert.Contains("\"bookmarkId\"", contentJson);
+        Assert.Contains("\"stimulusLookupKey\"", contentJson);
+        Assert.Contains("\"stimulusTypeLookupKey\"", contentJson);
     }
 
     [Fact]

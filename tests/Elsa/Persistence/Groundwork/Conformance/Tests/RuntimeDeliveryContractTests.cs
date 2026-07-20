@@ -119,6 +119,13 @@ public sealed class RuntimeDeliveryContractTests
         var first = Outbox(firstClient);
         var second = Outbox(secondClient);
         await first.SavePendingAsync(PendingOutbox());
+        Assert.Empty(await first.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "owner-filter-probe",
+            Now,
+            VisibilityTimeout,
+            limit: 1,
+            workflowExecutionId: "other-workflow",
+            intentKind: "delivery-contract")));
 
         var initialClaims = await Task.WhenAll(
             first.ClaimAsync(OutboxClaimRequest("owner-a", Now)).AsTask(),

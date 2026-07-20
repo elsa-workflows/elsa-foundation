@@ -36,6 +36,9 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
                 query.Identity.EndsWith("-current", StringComparison.Ordinal));
             Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, current.ExecutionClass);
             Assert.Equal(QueryPagingSupport.None, current.PagingSupport);
+            Assert.Single(current.PredicateFields);
+            Assert.Contains(current.ResidualPredicateFields, field =>
+                field.Path == ActivitiesDesignStorageManifest.ManagementValidToField);
 
             var page = physicalStorage.BoundedQueries.Single(query =>
                 query.Identity.EndsWith("-identity-asc", StringComparison.Ordinal));
@@ -48,7 +51,10 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
                     ActivitiesDesignStorageManifest.ManagementSortField,
                     PhysicalSortDirection.Ascending),
                 Assert.Single(page.SortFields));
-            AssertSuperset(page.PredicateFields.Select(field => field.Path),
+            Assert.Equal(
+                ActivitiesDesignStorageManifest.ManagementSortField,
+                Assert.Single(page.PredicateFields).Path);
+            AssertSuperset(page.ResidualPredicateFields.Select(field => field.Path),
             [
                 ActivitiesDesignStorageManifest.ManagementVisibilityField,
                 ActivitiesDesignStorageManifest.ManagementValidFromField,
@@ -62,6 +68,22 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
             Assert.True(retention.SupportsTotalCount);
             Assert.Contains(retention.PredicateFields, field =>
                 field.Path == ActivitiesDesignStorageManifest.ManagementValidToField);
+
+            Assert.All(policy.Definition.ProjectedColumns
+                .Where(column => column.Path is
+                    ActivitiesDesignStorageManifest.ManagementValidFromField or
+                    ActivitiesDesignStorageManifest.ManagementValidToField),
+                column => Assert.Equal(
+                    ActivitiesDesignStorageManifest.ManagementSequenceKeyLength,
+                    column.Length));
+            Assert.Collection(
+                policy.Definition.Indexes.Single(index => index.LogicalName == "management-by-id").Columns,
+                scope => Assert.Equal("storage_scope", scope.ColumnLogicalName),
+                id => Assert.NotEqual("valid_to", id.ColumnLogicalName));
+            Assert.Collection(
+                policy.Definition.Indexes.Single(index => index.LogicalName == "management-by-sort").Columns,
+                scope => Assert.Equal("storage_scope", scope.ColumnLogicalName),
+                sort => Assert.Equal("sort_key", sort.ColumnLogicalName));
         });
     }
 

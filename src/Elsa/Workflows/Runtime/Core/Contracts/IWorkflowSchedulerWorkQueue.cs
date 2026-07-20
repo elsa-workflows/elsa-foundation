@@ -13,15 +13,30 @@ public interface IWorkflowSchedulerWorkQueue
     /// </summary>
     bool SupportsClaimTransitions => false;
 
+    /// <summary>
+    /// Records a scheduler work item for its workflow execution and returns the queued item.
+    /// </summary>
+    /// <remarks>
+    /// Providers MUST make this operation idempotent by work-item identity (ADR 0031). Re-enqueueing an item
+    /// whose <see cref="RuntimeSchedulerWorkItem.WorkItemId"/> already exists for the same
+    /// <see cref="RuntimeSchedulerWorkItem.WorkflowExecutionId"/> MUST return (and keep) the already-queued item
+    /// and MUST NOT append a duplicate — enqueue is create-only by the <c>(WorkflowExecutionId, WorkItemId)</c>
+    /// identity. This queue-level de-duplication is the primary redelivery-safety guarantee the in-process fast
+    /// path and outbox redelivery sweeps rely on; per-handler idempotency is defense-in-depth, not a substitute
+    /// for it. Both shipped providers conform, and the guarantee is covered by provider conformance tests.
+    /// </remarks>
     ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default);
+    /// <summary>Returns one finite, deterministic page of work for the requested workflow execution.</summary>
+    ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default);
     ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
     ValueTask<bool> DeleteAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This scheduler work queue does not support targeted deletion.");
 
     /// <summary>
-    /// Lists the distinct workflow execution IDs that currently have pending scheduler work, ordered
-    /// deterministically (ordinal). Used by system-wide resumption sweeps to discover executions whose
+    /// Lists up to <paramref name="limit"/> distinct workflow execution IDs that currently have pending scheduler
+    /// work, ordered deterministically (ordinal). Implementations may make several finite provider requests to
+    /// compensate for repeated work items belonging to the same execution; they must not underfill merely because
+    /// one provider page contains duplicates. Used by system-wide resumption sweeps to discover executions whose
     /// queued work survived a process restart and would otherwise never be drained.
     /// </summary>
     ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default);

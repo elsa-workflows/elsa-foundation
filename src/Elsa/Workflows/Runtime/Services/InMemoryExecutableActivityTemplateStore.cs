@@ -59,11 +59,27 @@ public sealed class InMemoryExecutableActivityTemplateStore : IExecutableActivit
             return ValueTask.FromResult(_byHash.GetValueOrDefault(templateHash));
     }
 
-    public ValueTask<IReadOnlyCollection<ExecutableActivityTemplate>> ListAsync(CancellationToken cancellationToken = default)
+    public ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(
+        RuntimeStorePageRequest request,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(request);
         lock (_gate)
-            return ValueTask.FromResult<IReadOnlyCollection<ExecutableActivityTemplate>>(_byId.Values.ToArray());
+        {
+            const string queryBinding = "executable-activity-template:list";
+            var lastId = InMemoryRuntimeStoreContinuation.Decode(request.ContinuationToken, queryBinding, nameof(request.ContinuationToken));
+            var ordered = _byId.Values
+                .OrderBy(template => template.TemplateId, StringComparer.Ordinal)
+                .Where(template => lastId is null || StringComparer.Ordinal.Compare(template.TemplateId, lastId) > 0)
+                .Take(request.Limit + 1)
+                .ToArray();
+            var items = ordered.Take(request.Limit).ToArray();
+            var nextContinuation = ordered.Length > request.Limit
+                ? InMemoryRuntimeStoreContinuation.Encode(queryBinding, items[^1].TemplateId)
+                : null;
+            return ValueTask.FromResult(new RuntimeStorePage<ExecutableActivityTemplate>(request, items, nextContinuation));
+        }
     }
 
     public ValueTask<bool> DeleteAsync(string templateId, CancellationToken cancellationToken = default)

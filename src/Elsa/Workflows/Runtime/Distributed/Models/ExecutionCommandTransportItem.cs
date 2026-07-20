@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 
@@ -67,11 +68,19 @@ public sealed class ExecutionCommandTransportItem
     public int DeliveryAttemptCount { get; }
     public string? LeasedByOwnerId { get; }
     public DateTimeOffset? LeaseExpiresAt { get; }
+    /// <summary>
+    /// Monotonically increasing delivery-claim token. Acknowledgements must present this exact value, which
+    /// distinguishes a stale lease by the same owner from the current lease after an expiry/re-lease cycle. It is
+    /// derived from the already-persisted delivery attempt count so adding acknowledgement fencing does not reshape
+    /// the frozen v1 transport-item wire payload.
+    /// </summary>
+    [JsonIgnore]
+    public long? LeaseToken => LeasedByOwnerId is null ? null : DeliveryAttemptCount;
 
     /// <summary>An item is visible (available to lease) when it is unleased or its lease has expired.</summary>
     public bool IsVisible(DateTimeOffset now) => LeasedByOwnerId is null || LeaseExpiresAt is null || LeaseExpiresAt.Value <= now;
 
-    /// <summary>Returns a copy leased by <paramref name="ownerId"/> until <paramref name="leaseExpiresAt"/>, bumping the attempt count.</summary>
+    /// <summary>Returns a copy leased by <paramref name="ownerId"/> until <paramref name="leaseExpiresAt"/>, bumping the attempt count and derived lease token.</summary>
     public ExecutionCommandTransportItem Lease(string ownerId, DateTimeOffset leaseExpiresAt) => new(
         TransportItemId,
         WorkflowExecutionId,

@@ -165,7 +165,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         // that loads the workflow-execution state, and only when an intent actually mutates it.
         try
         {
-            var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+            var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workItem.WorkflowExecutionId, cancellationToken);
             persistedDurableValues = durableValues;
             projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
             workflowInputValues = projections.WorkflowInputs;
@@ -216,6 +216,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 workItem,
                 invokePayload,
                 state,
+                activityContract.SideEffectProfile,
                 cancellationToken);
             state = activationClaim.State;
             valueFlowAttempt = activationClaim.Attempt;

@@ -27,10 +27,10 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         await queue.EnqueueAsync(NewWorkItem(9, workflowExecutionId: "wfexec-2"));
 
         var listed = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
-        Assert.Equal(new[] { "work-1", "work-2", "work-3" }, listed.Select(item => item.WorkItemId));
+        Assert.Equal(new[] { "work-1", "work-2", "work-3" }, listed.Items.Select(item => item.WorkItemId));
 
         var limited = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1", limit: 2));
-        Assert.Equal(new[] { "work-1", "work-2" }, limited.Select(item => item.WorkItemId));
+        Assert.Equal(new[] { "work-1", "work-2" }, limited.Items.Select(item => item.WorkItemId));
 
         Assert.Equal("work-1", (await queue.DequeueAsync("wfexec-1"))!.WorkItemId);
         Assert.Equal("work-2", (await queue.DequeueAsync("wfexec-1"))!.WorkItemId);
@@ -39,6 +39,33 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
 
         // The other workflow execution's queue is untouched.
         Assert.Equal("work-9", (await queue.DequeueAsync("wfexec-2"))!.WorkItemId);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task List_returns_one_capped_cursor_page_in_deterministic_queue_order(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer);
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+        await queue.EnqueueAsync(NewWorkItem(3));
+
+        var first = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1", limit: 2));
+        var second = await queue.ListAsync(new RuntimeSchedulerWorkQuery(
+            "wfexec-1",
+            limit: 2,
+            continuationToken: first.NextContinuationToken));
+
+        Assert.Equal(["work-1", "work-2"], first.Items.Select(item => item.WorkItemId));
+        Assert.Equal(["work-3"], second.Items.Select(item => item.WorkItemId));
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Null(second.NextContinuationToken);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1", limit: 501)).AsTask());
     }
 
     [Theory]
@@ -57,8 +84,31 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
 
         Assert.Equal("command-1", enqueued.CommandId);
         Assert.Equal("command-1", deduplicated.CommandId);
-        var stored = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var stored = Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
         Assert.Equal("command-1", stored.CommandId);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Enqueue_ReEnqueuingANonHeadItem_KeepsQueueContentsAndOrderUnchanged(string provider)
+    {
+        // ADR 0031: redelivery de-duplication is a mandated queue-provider contract — re-enqueueing an item
+        // already present for a workflow execution must add no duplicate and must not reorder the FIFO.
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+        await queue.EnqueueAsync(NewWorkItem(3));
+
+        // Redeliver the middle item with a different command payload; the original must win and stay in place.
+        var redelivered = await queue.EnqueueAsync(NewWorkItem(2, commandId: "command-redelivered"));
+
+        var items = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        Assert.Equal(new[] { "work-1", "work-2", "work-3" }, items.Items.Select(item => item.WorkItemId));
+        Assert.Equal("command-2", redelivered.CommandId);
+        Assert.Equal("command-2", items.Items.ElementAt(1).CommandId);
     }
 
     [Theory]
@@ -76,7 +126,7 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
 
         Assert.Equal("command-first", (await queue.EnqueueAsync(first)).CommandId);
         Assert.Equal("command-first", (await queue.EnqueueAsync(duplicate)).CommandId);
-        Assert.Equal(workItemId, Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).WorkItemId);
+        Assert.Equal(workItemId, Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items).WorkItemId);
         Assert.Equal(workItemId, (await queue.DequeueAsync("wfexec-1"))!.WorkItemId);
         Assert.Null(await queue.DequeueAsync("wfexec-1"));
     }
@@ -93,7 +143,7 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         await queue.EnqueueAsync(NewWorkItem(1, workItemId: workItemId));
 
         Assert.True(await queue.DeleteAsync("wfexec-1", workItemId));
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
         Assert.False(await queue.DeleteAsync("wfexec-1", workItemId));
     }
 
@@ -171,8 +221,8 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         IWorkflowSchedulerWorkQueue restarted = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
         var recovered = await restarted.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
-        Assert.Equal(new[] { "work-1", "work-2" }, recovered.Select(item => item.WorkItemId));
-        var head = recovered.First();
+        Assert.Equal(new[] { "work-1", "work-2" }, recovered.Items.Select(item => item.WorkItemId));
+        var head = recovered.Items.First();
         Assert.Equal("command-1", head.CommandId);
         Assert.Equal(WorkflowExecutionCommandKind.RunSchedulerWork, head.CommandKind);
         Assert.Equal("envelope-1", head.EnvelopeId);
@@ -206,6 +256,27 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => queue.ListPendingWorkflowExecutionIdsAsync(0).AsTask());
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ListPendingWorkflowExecutionIds_deduplicates_in_the_provider_before_applying_the_limit(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer);
+        await queue.EnqueueAsync(NewWorkItem(1, workflowExecutionId: "wfexec-a"));
+        await queue.EnqueueAsync(NewWorkItem(2, workflowExecutionId: "wfexec-a"));
+        await queue.EnqueueAsync(NewWorkItem(3, workflowExecutionId: "wfexec-a"));
+        await queue.EnqueueAsync(NewWorkItem(4, workflowExecutionId: "wfexec-b"));
+
+        var pending = await queue.ListPendingWorkflowExecutionIdsAsync(2);
+
+        Assert.Equal(["wfexec-a", "wfexec-b"], pending);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            queue.ListPendingWorkflowExecutionIdsAsync(501).AsTask());
+    }
+
     [Fact]
     public async Task ListPendingWorkflowExecutionIds_UsesOneBoundedOrderedProviderQuery()
     {
@@ -222,11 +293,17 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         Assert.Equal(ElsaRuntimeStorageManifest.ListPendingSchedulerWorkflowExecutionsQuery, query.QueryIdentity);
         Assert.Equal(7, query.Take);
         var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
-        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, comparison.Path);
-        Assert.Equal(QueryComparisonOperator.StartsWith, comparison.Operator);
-        Assert.Equal(string.Empty, Assert.Single(comparison.Values));
-        var order = Assert.Single(query.Order);
-        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, order.Path);
+        Assert.Equal(ElsaRuntimeStorageManifest.CollectionField, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+            Assert.Single(comparison.Values));
+        Assert.Collection(
+            query.Order,
+            workflow => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, workflow.Path),
+            order => Assert.Equal(ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField, order.Path));
+        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, query.LatestPerKeyPath);
+        Assert.Null(query.Continuation);
     }
 
     [Theory]
@@ -241,8 +318,8 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         await queue.EnqueueAsync(NewWorkItem(1, workflowExecutionId: "a:b", workItemId: "c"));
         await queue.EnqueueAsync(NewWorkItem(2, workflowExecutionId: "a", workItemId: "b:c"));
 
-        Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("a:b")));
-        Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("a")));
+        Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery("a:b"))).Items);
+        Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery("a"))).Items);
     }
 
     [Theory]
@@ -263,7 +340,7 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         var winner = Assert.Single(claims.Where(claim => claim is not null))!;
         Assert.Equal("work-1", winner.Item.WorkItemId);
         Assert.Null(await first.ClaimAsync(new("wfexec-1", "owner-c", Now.AddSeconds(1), TimeSpan.FromMinutes(1))));
-        Assert.Equal(new[] { "work-1", "work-2" }, (await first.ListAsync(new("wfexec-1"))).Select(item => item.WorkItemId));
+        Assert.Equal(new[] { "work-1", "work-2" }, (await first.ListAsync(new("wfexec-1"))).Items.Select(item => item.WorkItemId));
     }
 
     [Theory]
@@ -282,9 +359,9 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
 
         Assert.True(second!.FencingToken > first!.FencingToken);
         Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await queue.CompleteClaimAsync(first)).Status);
-        Assert.Single(await queue.ListAsync(new("wfexec-1")));
+        Assert.Single((await queue.ListAsync(new("wfexec-1"))).Items);
         Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded, (await queue.CompleteClaimAsync(second)).Status);
-        Assert.Empty(await queue.ListAsync(new("wfexec-1")));
+        Assert.Empty((await queue.ListAsync(new("wfexec-1"))).Items);
     }
 
     [Theory]

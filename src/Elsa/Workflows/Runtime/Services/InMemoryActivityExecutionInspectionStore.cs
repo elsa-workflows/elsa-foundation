@@ -34,17 +34,39 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
         }
     }
 
-    public ValueTask<IReadOnlyCollection<ActivityExecutionInspectionSummaryProjection>> ListSummariesAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public ValueTask<ActivityExecutionInspectionSummaryPage> ListSummariesPageAsync(
+        ActivityExecutionInspectionSummaryPageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
-            return new ValueTask<IReadOnlyCollection<ActivityExecutionInspectionSummaryProjection>>(
-                ListByWorkflowExecutionId(workflowExecutionId)
-                    .Select(ActivityExecutionInspectionSummaryProjection.FromProjection)
-                    .ToArray());
+            var all = ListByWorkflowExecutionId(query.WorkflowExecutionId)
+                .Select(ActivityExecutionInspectionSummaryProjection.FromProjection)
+                .ToArray();
+            var queryBinding = $"activity-inspection-summary:workflow:{query.WorkflowExecutionId}";
+            var lastKey = InMemoryRuntimeStoreContinuation.Decode(
+                query.ContinuationToken,
+                queryBinding,
+                nameof(query));
+            var remaining = all
+                .Where(summary =>
+                    lastKey is null ||
+                    StringComparer.Ordinal.Compare(SortKey(summary), lastKey) > 0)
+                .Take(query.Limit + 1)
+                .ToArray();
+            var items = remaining.Take(query.Limit).ToArray();
+            var nextContinuationToken = remaining.Length > items.Length
+                ? InMemoryRuntimeStoreContinuation.Encode(queryBinding, SortKey(items[^1]))
+                : null;
+            return ValueTask.FromResult(
+                new ActivityExecutionInspectionSummaryPage(
+                    query,
+                    items,
+                    all.Length,
+                    nextContinuationToken));
         }
     }
 
@@ -57,4 +79,7 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
             .ThenBy(projection => projection.ActivityExecutionId, StringComparer.Ordinal);
 
     private readonly record struct ActivityExecutionInspectionProjectionKey(string WorkflowExecutionId, string ActivityExecutionId);
+
+    private static string SortKey(ActivityExecutionInspectionSummaryProjection summary) =>
+        $"{summary.ExecutionSequence:D20}:{summary.ScheduledAt.UtcTicks:D19}:{summary.ActivityExecutionId}";
 }

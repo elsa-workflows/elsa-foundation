@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Testing;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -102,7 +103,107 @@ public sealed class GroundworkNativeRoutePlanContractTests
             materializedCandidateCount: 1,
             []));
 
-        Assert.Contains("Count then Page", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exact ordered command contract", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Result_accepts_count_only_evidence_without_a_materialization_limit()
+    {
+        var request = new GroundworkNativeRoutePlanRequest(
+            "executionCommandTransport",
+            "count-pending-commands-by-execution",
+            "execution_command_transport",
+            "workflowExecutionIdKey",
+            ["workflowExecutionIdKey"],
+            "scope-secret",
+            "route-secret",
+            limit: null,
+            acceptanceCardinality: 100_000,
+            expectedCommandKinds: [PhysicalDocumentQueryCommandKind.Count],
+            evidenceKind: "provider-native-route-plan");
+
+        var result = GroundworkNativeRoutePlanResult.Create(
+            request,
+            "sqlite",
+            request.AcceptanceCardinality,
+            "index-search",
+            "ix_execution_command_transport_scope_execution",
+            finiteLimit: null,
+            materializedCandidateCount: 0,
+            [CreateCommand(
+                0,
+                PhysicalDocumentQueryCommandKind.Count,
+                PhysicalDocumentQueryCommandIdentities.Count,
+                "SEARCH ix_execution_command_transport_scope_execution",
+                "workflowExecutionIdKey",
+                "ix_execution_command_transport_scope_execution")]);
+
+        Assert.Null(result.FiniteLimit);
+        Assert.Equal("provider-native-route-plan", result.Evidence.Kind);
+        Assert.Contains("finite-limit=none", result.Evidence.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Dataset_preserves_typed_explicit_projection_values()
+    {
+        var request = new GroundworkNativeRoutePlanRequest(
+            "secret",
+            "list-filtered",
+            "secrets",
+            "normalizedName",
+            ["normalizedName", "status", "hasNonExpiringActiveVersion"],
+            "scope-secret",
+            "route-secret",
+            limit: 10,
+            acceptanceCardinality: 100_000,
+            projectedValues:
+            [
+                GroundworkNativeRouteProjectedValue.String("normalizedName", "route-secret"),
+                GroundworkNativeRouteProjectedValue.String("status", "active"),
+                GroundworkNativeRouteProjectedValue.Boolean("hasNonExpiringActiveVersion", true)
+            ],
+            requiredPredicateFields: ["status"]);
+
+        var dataset = GroundworkNativeRouteDataset.Create([request]);
+
+        Assert.Equal(
+            GroundworkNativeRouteProjectedValueKind.Boolean,
+            dataset.ProjectedValues["hasNonExpiringActiveVersion"].Kind);
+        Assert.Equal("true", dataset.ProjectedValues["hasNonExpiringActiveVersion"].Value);
+    }
+
+    [Fact]
+    public void Compiled_index_selection_rejects_an_unrelated_admitted_index()
+    {
+        var request = new GroundworkNativeRoutePlanRequest(
+            "secret",
+            "list-filtered",
+            "secrets",
+            "status",
+            ["status"],
+            "scope-secret",
+            "active",
+            limit: 10,
+            acceptanceCardinality: 100_000,
+            expectedIndexName: "ix_secret_filtered");
+        var commands = new[]
+        {
+            CreateCommand(
+                0,
+                PhysicalDocumentQueryCommandKind.Count,
+                PhysicalDocumentQueryCommandIdentities.Count,
+                "SEARCH ix_secret_name",
+                "status",
+                "ix_secret_name")
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            GroundworkNativeRoutePlanResult.SelectCompiledIndex(
+                request,
+                ["ix_secret_filtered", "ix_secret_name"],
+                commands));
+
+        Assert.Contains("did not use compiled index 'ix_secret_filtered'", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -162,7 +263,9 @@ public sealed class GroundworkNativeRoutePlanContractTests
         int ordinal,
         PhysicalDocumentQueryCommandKind kind,
         string identity,
-        string rawNativePlan) =>
+        string rawNativePlan,
+        string predicateField = "normalizedUserNameKey",
+        string indexName = "ix_identity_users_scope_name") =>
         GroundworkNativeRouteCommandEvidence.Create(
             ordinal,
             new PhysicalDocumentQueryCommandExplanation(
@@ -170,7 +273,23 @@ public sealed class GroundworkNativeRoutePlanContractTests
                 identity,
                 "sqlite-query-plan",
                 rawNativePlan,
-                ["normalizedUserNameKey", "storage_scope"]),
+                [predicateField, "storage_scope"],
+                providerAppliedMaximumRows: 1,
+                providerAppliedOrder: kind is
+                    PhysicalDocumentQueryCommandKind.Page or
+                    PhysicalDocumentQueryCommandKind.First
+                    ?
+                    [
+                        new PhysicalDocumentQueryCommandOrder(
+                            predicateField,
+                            PhysicalSortDirection.Ascending,
+                            isIdentityTieBreak: false),
+                        new PhysicalDocumentQueryCommandOrder(
+                            "id",
+                            PhysicalSortDirection.Ascending,
+                            isIdentityTieBreak: true)
+                    ]
+                    : null),
             "index-search",
-            ["ix_identity_users_scope_name"]);
+            [indexName]);
 }

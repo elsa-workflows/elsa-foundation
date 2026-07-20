@@ -20,7 +20,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
         await queue.EnqueueAsync(NewWorkItem(2));
         await queue.EnqueueAsync(NewWorkItem(3));
 
-        var items = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var items = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.Collection(
             items,
@@ -38,12 +38,31 @@ public sealed class RuntimeSchedulerWorkQueueTests
 
         var firstResult = await queue.EnqueueAsync(first);
         var duplicateResult = await queue.EnqueueAsync(duplicate);
-        var items = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var items = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.Same(firstResult, duplicateResult);
         Assert.Same(first, duplicateResult);
         Assert.Single(items);
         Assert.Equal("command-1", items.Single().CommandId);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_ReEnqueuingANonHeadItem_KeepsQueueContentsAndOrderUnchanged()
+    {
+        // ADR 0031: redelivery de-duplication is a mandated queue-provider contract — re-enqueueing an
+        // item already present for a workflow execution must add no duplicate and must not reorder the FIFO.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+        await queue.EnqueueAsync(NewWorkItem(3));
+
+        // Redeliver the middle item with a different command payload; the original must win and stay in place.
+        var redelivered = await queue.EnqueueAsync(NewWorkItem(2, commandId: "command-redelivered"));
+
+        var items = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        Assert.Equal(new[] { "work-1", "work-2", "work-3" }, items.Items.Select(item => item.WorkItemId));
+        Assert.Equal("command-2", redelivered.CommandId);
+        Assert.Equal("command-2", items.Items.ElementAt(1).CommandId);
     }
 
     [Fact]
@@ -71,8 +90,8 @@ public sealed class RuntimeSchedulerWorkQueueTests
         await queue.EnqueueAsync(NewWorkItem(1, workflowExecutionId: "wfexec-2"));
 
         var secondWorkflowItem = await queue.DequeueAsync("wfexec-2");
-        var firstWorkflowItems = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
-        var secondWorkflowItems = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-2"));
+        var firstWorkflowItems = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var secondWorkflowItems = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-2"));
 
         Assert.Equal("wfexec-2", secondWorkflowItem!.WorkflowExecutionId);
         Assert.Equal("work-1", secondWorkflowItem.WorkItemId);
@@ -93,7 +112,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
 
         await processor.ProcessAsync(envelope);
 
-        var workItem = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var workItem = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(envelope.EnvelopeId, workItem.WorkItemId);
         Assert.Equal(envelope.Command.CommandId, workItem.CommandId);
         Assert.Equal(envelope.Command.Kind, workItem.CommandKind);
@@ -153,7 +172,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
 
         await processor.ProcessAsync(envelope);
 
-        var workItem = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var workItem = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal("outer", workItem.ExecutionScopeId);
     }
 
@@ -172,7 +191,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
         var first = await agent.EnqueueAsync(envelope);
         var duplicate = await agent.EnqueueAsync(NewEnvelope(2, idempotencyKey: envelope.IdempotencyKey));
 
-        var workItem = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var workItem = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, first.Status);
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, duplicate.Status);
         Assert.Equal(envelope.EnvelopeId, workItem.EnvelopeId);

@@ -33,6 +33,21 @@ public sealed class WorkflowDispatchIdentityTests
     }
 
     [Fact]
+    public void Outbox_identifiers_preserve_the_legacy_logical_format_beyond_the_projection_limit()
+    {
+        var identity = new WorkflowDispatchIdentity("parent-1", "activity-1");
+        var longCommitId = new string('c', RuntimePostCommitOutboxIdentity.MaximumLength);
+        var longIntentId = new string('i', RuntimePostCommitOutboxIdentity.MaximumLength);
+        var parentResumeId = identity.ParentResumeOutboxItemId(longCommitId);
+        var genericId = RuntimePostCommitOutboxItems.OutboxItemId(longCommitId, longIntentId);
+
+        Assert.Equal($"{longCommitId}:{identity.ParentResumeIntentId}", parentResumeId);
+        Assert.Equal($"{longCommitId}:{longIntentId}", genericId);
+        Assert.True(parentResumeId.Length > RuntimePostCommitOutboxIdentity.MaximumLength);
+        Assert.True(genericId.Length > RuntimePostCommitOutboxIdentity.MaximumLength);
+    }
+
+    [Fact]
     public void WaitAndResumeIdentities_AreDeterministicAndNamespaceDistinct()
     {
         var first = new WorkflowDispatchIdentity("parent-1", "activity-1");

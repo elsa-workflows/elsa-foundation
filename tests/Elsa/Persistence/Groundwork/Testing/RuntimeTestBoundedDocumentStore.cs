@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Testing;
@@ -77,10 +78,23 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
             .Where(document => comparisons.All(comparison => Matches(document, comparison)))
             .ToArray();
         Array.Sort(matches, (left, right) => Compare(left, right, query.Order));
-        IEnumerable<DocumentEnvelope> page = matches.Skip(query.Skip ?? 0);
+        if (query.LatestPerKeyPath is { } latestPerKeyPath)
+        {
+            matches = matches
+                .GroupBy(document => ReadComparable(document, latestPerKeyPath), StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToArray();
+        }
+        var offset = DecodeContinuation(query);
+        IEnumerable<DocumentEnvelope> page = matches.Skip(offset + (query.Skip ?? 0));
         if (query.Take is { } take)
             page = page.Take(take);
-        return new DocumentQueryResult(page.ToArray(), matches.Length);
+        var pageDocuments = page.ToArray();
+        var nextOffset = offset + (query.Skip ?? 0) + pageDocuments.Length;
+        var nextContinuation = query.Take is not null && nextOffset < matches.Length
+            ? EncodeContinuation(query, nextOffset)
+            : null;
+        return new DocumentQueryResult(pageDocuments, matches.Length, nextContinuation);
     }
 
     private static bool Matches(DocumentEnvelope document, DocumentQueryComparison comparison)
@@ -110,24 +124,35 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
         DocumentEnvelope right,
         IReadOnlyList<DocumentQueryOrder> order)
     {
-        var compared = order
-            .Select(item => StringComparer.Ordinal.Compare(
+        foreach (var item in order)
+        {
+            var compared = StringComparer.Ordinal.Compare(
                 ReadComparable(left, item.Path),
-                ReadComparable(right, item.Path)))
-            .FirstOrDefault(result => result != 0);
-        return compared != 0
-            ? compared
-            : StringComparer.Ordinal.Compare(left.Id, right.Id);
+                ReadComparable(right, item.Path));
+            if (compared != 0)
+            {
+                return item.Direction == PhysicalSortDirection.Descending
+                    ? -compared
+                    : compared;
+            }
+        }
+
+        return StringComparer.Ordinal.Compare(left.Id, right.Id);
     }
 
     private static string? ReadComparable(DocumentEnvelope document, string path)
     {
+        if (StringComparer.Ordinal.Equals(path, PhysicalDocumentFieldPaths.Id))
+            return document.Id;
+
         using var content = JsonDocument.Parse(document.ContentJson);
         var value = GetPropertyPath(content.RootElement, path);
         if (value is null || value.Value.ValueKind == JsonValueKind.Null)
             return null;
         if (DateTimeFields.Contains(path))
             return value.Value.GetDateTimeOffset().UtcTicks.ToString("D19", CultureInfo.InvariantCulture);
+        if (Int64Fields.Contains(path))
+            return value.Value.GetInt64().ToString("D20", CultureInfo.InvariantCulture);
         return value.Value.ValueKind switch
         {
             JsonValueKind.Number => value.Value.GetRawText(),
@@ -143,6 +168,11 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
         DateTimeFields.Contains(path)
             ? DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
                 .UtcTicks.ToString("D19", CultureInfo.InvariantCulture)
+            : Int64Fields.Contains(path)
+                ? long.Parse(value, CultureInfo.InvariantCulture)
+                    .ToString("D20", CultureInfo.InvariantCulture)
+            : BooleanFields.Contains(path)
+                ? bool.Parse(value).ToString()
             : value;
 
     private static JsonElement? GetPropertyPath(JsonElement root, string path) =>
@@ -164,6 +194,7 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
         await FirstOrDefaultAsync(query, cancellationToken) is not null;
 
     private static bool IsOrderedRangeQuery(DocumentQuery query) =>
+        query.Order.Count > 0 ||
         query.DocumentKind switch
         {
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind =>
@@ -177,8 +208,51 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
                     or ElsaRuntimeStorageManifest.ListPendingSchedulerWorkflowExecutionsQuery,
             ElsaRuntimeStorageManifest.DurableTimerDocumentKind =>
                 query.QueryIdentity == ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery,
+            ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind =>
+                query.QueryIdentity is
+                    ElsaRuntimeStorageManifest.PageActivityExecutionStatesByWorkflowExecutionQuery or
+                    ElsaRuntimeStorageManifest.PageActivityExecutionStatesByParentQuery,
+            ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind =>
+                query.QueryIdentity ==
+                ElsaRuntimeStorageManifest.PageActivityExecutionInspectionSummariesQuery,
+            ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind =>
+                query.QueryIdentity is
+                    ElsaRuntimeStorageManifest.FindLatestActivityExecutionHierarchyByWorkflowQuery or
+                    ElsaRuntimeStorageManifest.PageActivityExecutionHierarchyByScopeQuery,
+            ElsaRuntimeStorageManifest.BookmarkStateDocumentKind or
+            ElsaRuntimeStorageManifest.DurableValueStateDocumentKind =>
+                query.QueryIdentity == ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery &&
+                query.Order.Count > 0,
+            ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind =>
+                query.QueryIdentity is ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery or
+                    ElsaRuntimeStorageManifest.ListTriggerBindingsByArtifactQuery or
+                    ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusTypeQuery,
             _ => false
         };
+
+    private static string EncodeContinuation(DocumentQuery query, int offset) =>
+        $"runtime-test:{query.DocumentKind}:{query.QueryIdentity}:{offset}";
+
+    private static int DecodeContinuation(DocumentQuery query)
+    {
+        if (query.Continuation is null)
+            return 0;
+
+        var prefix = $"runtime-test:{query.DocumentKind}:{query.QueryIdentity}:";
+        if (!query.Continuation.StartsWith(prefix, StringComparison.Ordinal) ||
+            !int.TryParse(
+                query.Continuation[prefix.Length..],
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out var offset) ||
+            offset < 0)
+        {
+            throw new InvalidDocumentQueryContinuationException(
+                "The Runtime test continuation is invalid or belongs to another query.");
+        }
+
+        return offset;
+    }
 
     private static readonly HashSet<string> PostCommitOutboxOrderedRangeQueries =
     [
@@ -186,6 +260,10 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
         ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxByWorkflowQuery,
         ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxByIntentKindQuery,
         ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxByWorkflowAndIntentKindQuery,
+        ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxQuery,
+        ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxByWorkflowQuery,
+        ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxByIntentKindQuery,
+        ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxByWorkflowAndIntentKindQuery,
         ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxQuery,
         ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxByWorkflowQuery,
         ElsaRuntimeStorageManifest.ListImmediatePostCommitOutboxByIntentKindQuery,
@@ -224,12 +302,31 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
     private static readonly HashSet<string> DateTimeFields =
     [
         ElsaRuntimeStorageManifest.WorkflowDispatchCreatedAtField,
+        ElsaRuntimeStorageManifest.ActivityExecutionInspectionSummaryScheduledAtField,
+        ElsaRuntimeStorageManifest.ExpiresAtField,
+        ElsaRuntimeStorageManifest.PostCommitOutboxDeliverableAtField,
+        ElsaRuntimeStorageManifest.PostCommitOutboxClaimableAtField,
         ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField,
         ElsaRuntimeStorageManifest.PostCommitOutboxVisibleAfterField,
         ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField,
         ElsaRuntimeStorageManifest.RecoveryInterruptedAtField,
         ElsaRuntimeStorageManifest.RecoveryLeaseAcquiredAtField,
         ElsaRuntimeStorageManifest.RecoveryLeaseExpiresAtField,
-        ElsaRuntimeStorageManifest.RecoveryHeartbeatRecordedAtField
+        ElsaRuntimeStorageManifest.RecoveryHeartbeatRecordedAtField,
+        ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField
+    ];
+
+    private static readonly HashSet<string> Int64Fields =
+    [
+        ElsaRuntimeStorageManifest.ActivityExecutionHierarchyExecutionSequenceField,
+        ElsaRuntimeStorageManifest.ActivityExecutionInspectionSummaryExecutionSequenceField
+    ];
+
+    private static readonly HashSet<string> BooleanFields =
+    [
+        ElsaRuntimeStorageManifest.ActivityExecutionHierarchyIsScopeRootField,
+        ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField,
+        ElsaRuntimeStorageManifest.IsRetiredField,
+        ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField
     ];
 }

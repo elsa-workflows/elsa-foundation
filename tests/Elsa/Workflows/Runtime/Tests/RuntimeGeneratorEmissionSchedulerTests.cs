@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -22,7 +23,7 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
             enqueuedAt: _now.AddSeconds(1),
             metadata: new Dictionary<string, string> { ["Source"] = "generator-test" }));
 
-        var workItem = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var workItem = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(workItem.WorkItemId, result.SchedulerWorkItem.WorkItemId);
         Assert.Equal(workItem.IdempotencyKey, result.SchedulerWorkItem.IdempotencyKey);
         Assert.Equal("wfexec-1:generated-event:event-5", workItem.WorkItemId);
@@ -59,7 +60,7 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
         Assert.Equal(first.SchedulerWorkItem.WorkItemId, duplicate.SchedulerWorkItem.WorkItemId);
         Assert.Equal(first.SchedulerWorkItem.IdempotencyKey, duplicate.SchedulerWorkItem.IdempotencyKey);
         Assert.Equal("GeneratorEmitted", duplicate.GeneratedEventWorkItem.Reason);
-        Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal("GeneratorEmitted", first.SchedulerWorkItem.Payload!.Value.GetProperty("Reason").GetString());
     }
 
@@ -72,8 +73,8 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
         await scheduler.ScheduleAsync(new RuntimeGeneratorEmissionScheduleRequest(NewGeneratedEvent(1), "GeneratorEmitted"));
         await scheduler.ScheduleAsync(new RuntimeGeneratorEmissionScheduleRequest(NewGeneratedEvent(1, "wfexec-2"), "GeneratorEmitted"));
 
-        Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        var secondWorkflowWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-2")));
+        Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var secondWorkflowWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-2")));
         Assert.Equal("wfexec-2:generated-event:event-1", secondWorkflowWork.WorkItemId);
     }
 

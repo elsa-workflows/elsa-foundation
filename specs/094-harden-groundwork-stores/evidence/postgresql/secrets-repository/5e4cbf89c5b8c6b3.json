@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:list-by-scope-bounded",
+  "sourceScenarioId": "secret-bounded-list-equivalence",
+  "coverageEntryId": "secrets-repository",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "b3d85766a6138ce9a22d9943fcfdcce13db60fde3fe955b1e8106e1c9f911c22",
+  "executionPath": "provider-driver/postgresql/secrets-repository/5e4cbf89c5b8c6b3",
+  "clients": 1,
+  "resultHash": "431d17322fb0725388591d89aeb57d9f700c56b064e1c9e5b35dfd637c20ec40",
+  "outcome": "pass",
+  "queryShape": "list-by-scope-bounded",
+  "nativeQueryIdentity": "list-filtered",
+  "documentKind": "secret",
+  "nativeEvidence": "evidence/postgresql/secrets-repository/5e4cbf89c5b8c6b3.plan.txt",
+  "evidence": "evidence/postgresql/secrets-repository/5e4cbf89c5b8c6b3.json"
+}

@@ -41,7 +41,7 @@ public sealed class RouteTableTriggerIndexObserverTests
 
     private async Task NotifyAsync(string artifactId)
     {
-        var bindings = await _store.ListByArtifactAsync(artifactId);
+        var bindings = await _store.ListAllByArtifactAsync(artifactId);
         await _observer.OnTriggersIndexedAsync(new WorkflowTriggerIndexSnapshot(artifactId, bindings));
     }
 
@@ -174,7 +174,7 @@ public sealed class RouteTableTriggerIndexObserverTests
         await _store.SaveAsync(Bindings.Other("a1", "n1", stimulusType: "Event")); // The post-republish durable index.
 
         var freshObserver = Observer();
-        var bindings = await _store.ListByArtifactAsync("a1");
+        var bindings = await _store.ListAllByArtifactAsync("a1");
         await freshObserver.OnTriggersIndexedAsync(new WorkflowTriggerIndexSnapshot("a1", bindings));
 
         Assert.Equal(refreshesBeforeRepublish + 1, _routeTable.RefreshCount);

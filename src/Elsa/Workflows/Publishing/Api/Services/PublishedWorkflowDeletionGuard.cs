@@ -29,11 +29,11 @@ public sealed class PublishedWorkflowDeletionGuard(
                 $"Workflow definition '{definitionId}' still has an active publication in slot(s) " +
                 $"{string.Join(", ", activeSlotNames.Select(name => $"'{name}'"))}; unpublish it before deleting it permanently.");
 
-        var liveReferences = await sourceReferenceReader.ListAsync(
+        var liveReferences = await sourceReferenceReader.ListAllAsync(
             WorkflowExecutableReferenceScope.Published,
             liveOnly: true,
-            timeProvider.GetUtcNow(),
-            cancellationToken);
+            now: timeProvider.GetUtcNow(),
+            cancellationToken: cancellationToken);
         if (liveReferences.Any(reference => StringComparer.Ordinal.Equals(reference.DefinitionId, definitionId)))
             throw new InvalidOperationException(
                 $"Workflow definition '{definitionId}' still has a live published executable source reference; " +

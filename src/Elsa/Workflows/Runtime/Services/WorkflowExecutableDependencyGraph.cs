@@ -14,7 +14,7 @@ public sealed class WorkflowExecutableDependencyGraph(IWorkflowExecutableStore e
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(root);
-        var executables = await executableStore.ListAsync(cancellationToken);
+        var executables = await executableStore.ListAllAsync(cancellationToken);
         return ResolveClosure([root], executables);
     }
 

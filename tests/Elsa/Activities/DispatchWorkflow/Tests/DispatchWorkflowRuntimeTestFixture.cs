@@ -155,7 +155,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 testScope: testScope));
 
         var activityState = AssertSingle(await _provider.GetRequiredService<IActivityExecutionStateStore>()
-            .ListAsync(parentWorkflowExecutionId));
+            .ListAllAsync(parentWorkflowExecutionId));
         var identity = new WorkflowDispatchIdentity(parentWorkflowExecutionId, activityState.Execution.ActivityExecutionId);
         var dispatch = await _provider.GetRequiredService<IWorkflowDispatchStore>().FindAsync(identity.DispatchId);
         if (dispatch is null)
@@ -164,7 +164,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             var incidentSummary = string.Join(" | ", incidents.Select(incident => $"{incident.FailureType}: {incident.Message}"));
             var parentState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(parentWorkflowExecutionId);
             var queuedWork = await _provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-                .ListAsync(new RuntimeSchedulerWorkQuery(parentWorkflowExecutionId));
+                .ListAllAsync(new RuntimeSchedulerWorkQuery(parentWorkflowExecutionId));
             var poisonRecords = await _provider.GetRequiredService<IWorkflowSchedulerPoisonStore>()
                 .ListAsync(parentWorkflowExecutionId);
             var commits = Checkpoints.Commits
@@ -244,7 +244,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
     }
 
     internal async ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListActivitiesAsync(string workflowExecutionId) =>
-        await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync(workflowExecutionId);
+        await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(workflowExecutionId);
 
     internal async ValueTask<RuntimeResumptionSweepResult> SweepAsync()
     {

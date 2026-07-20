@@ -21,6 +21,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private readonly IRuntimePostCommitOutboxClaimCompletionStore? _claimCompletionStore;
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;
     private readonly IPostCommitFailureProjector? _deliveryFailureProjector;
+    private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
+    private readonly IRuntimeCoalescingSessionAccessor? _coalescingSessionAccessor;
     private readonly ILogger<RuntimePostCommitOutboxProcessor> _logger;
     private readonly string _claimOwnerId = $"runtime-outbox-{Guid.NewGuid():N}";
     private static readonly TimeSpan ClaimVisibilityTimeout = TimeSpan.FromMinutes(1);
@@ -65,7 +67,9 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         TimeProvider timeProvider,
         IRuntimeFaultCapturePolicy faultCapturePolicy,
         IWorkflowDispatchStore? workflowDispatchStore,
-        ILogger<RuntimePostCommitOutboxProcessor>? logger)
+        ILogger<RuntimePostCommitOutboxProcessor>? logger,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor = null)
     {
         ArgumentNullException.ThrowIfNull(outboxStore);
         ArgumentNullException.ThrowIfNull(intentDispatcher);
@@ -79,6 +83,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         _claimStore = outboxStore as IRuntimePostCommitOutboxClaimStore;
         _claimCompletionStore = outboxStore as IRuntimePostCommitOutboxClaimCompletionStore;
         _workflowDispatchStore = workflowDispatchStore;
+        _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
+        _coalescingSessionAccessor = coalescingSessionAccessor;
         _logger = logger ?? NullLogger<RuntimePostCommitOutboxProcessor>.Instance;
     }
 
@@ -89,8 +95,10 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         IRuntimeFaultCapturePolicy faultCapturePolicy,
         IWorkflowDispatchStore? workflowDispatchStore,
         IEnumerable<IPostCommitFailureProjector> deliveryFailureProjectors,
-        ILogger<RuntimePostCommitOutboxProcessor>? logger)
-        : this(outboxStore, intentDispatcher, timeProvider, faultCapturePolicy, workflowDispatchStore, logger)
+        ILogger<RuntimePostCommitOutboxProcessor>? logger,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor = null)
+        : this(outboxStore, intentDispatcher, timeProvider, faultCapturePolicy, workflowDispatchStore, logger, liveDrainDeliveryAccessor, coalescingSessionAccessor)
     {
         ArgumentNullException.ThrowIfNull(deliveryFailureProjectors);
         var projectors = deliveryFailureProjectors.ToArray();
@@ -112,7 +120,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
         var processedItems = new List<RuntimePostCommitOutboxProcessedItem>();
 
-        if (_claimStore is not null)
+        if (_claimStore is not null && !DeliversInMemory(request))
         {
             var claims = await _claimStore.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
                 ownerId: _claimOwnerId,
@@ -126,8 +134,11 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
         else
         {
-            // Compatibility path for third-party v1 stores. Durable compositions advertise the additive claim
-            // capability and therefore always take the fenced path above.
+            // In-memory live-drain delivery (WU-2) and the compatibility path for third-party v1 stores share the same
+            // claim-free mechanics: read the deliverable items, enqueue the continuation through the queue's idempotent
+            // EnqueueAsync, and mark the durable outbox item Delivered directly (Pending -> Delivered) via the existing
+            // recording contract. DeliversInMemory forces this branch even when the store advertises the claim capability
+            // so a live drain skips the durable claim round-trip while the durable outbox item stays a crash backstop.
             var items = await _outboxStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
                 now: _timeProvider.GetUtcNow(),
                 limit: request.Limit,
@@ -140,6 +151,16 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
         return new RuntimePostCommitOutboxProcessResult(processedItems);
     }
+
+    // The live-drain fast path (WU-2) engages only when: a live drain owns this exact execution's delivery, the request
+    // targets EnqueueSchedulerWork intents (every other kind stays on the durable claim path, condition (e)), and no
+    // coalescing session is active (the coalescing overlay is authoritative, condition (c) — the drain orchestrator
+    // never pushes a live-drain scope on the coalescing path, and this guard defends against direct callers).
+    private bool DeliversInMemory(RuntimePostCommitOutboxProcessRequest request) =>
+        _liveDrainDeliveryAccessor?.Current is { } scope &&
+        scope.AppliesTo(request.WorkflowExecutionId) &&
+        StringComparer.Ordinal.Equals(request.IntentKind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork) &&
+        _coalescingSessionAccessor?.Current is not { IsActive: true };
 
     private async ValueTask<RuntimePostCommitOutboxProcessedItem> ProcessItemAsync(
         RuntimePostCommitOutboxItem item,

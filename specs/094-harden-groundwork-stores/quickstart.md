@@ -5,17 +5,23 @@ This guide is the implementation/review path for feature 094. A narrow green uni
 ## Prerequisites
 
 - .NET 10 SDK selected by the repository.
-- Access to the package feed containing the pinned Groundwork `0.0.1-preview.64` release.
+- Access to the package feed containing the pinned Groundwork `0.0.1-preview.72` release.
 - Docker-compatible container runtime for SQL Server, PostgreSQL, and MongoDB.
 - Enough local resources to run MongoDB as a replica set for transaction scenarios.
-- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.64`, matching all
+- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.72`, matching all
   Groundwork packages.
 
-Groundwork PR #88 is the generic version-aware codec boundary in this release. Elsa-specific payload policies,
+Groundwork PR #88 is the generic version-aware codec boundary in this release; PR #101 admits sort-only index
+fields as bounded residual predicates; and PR #108 adds bounded linked hydration. Elsa-specific payload policies,
 legacy-stamp parsing, JSON options, and concrete upcasters must remain marker-gated in Elsa provider packages; core modules must not
 reference Groundwork.
 
 Do not use a standalone MongoDB instance for scenarios that claim multi-document atomicity.
+
+The repository's current Groundwork family is `0.0.1-preview.72`; do not combine it with a different
+`Groundwork.Tool` or provider package version. PR #88 provides the generic version-aware codec consumed by this
+family. Elsa owns only its per-kind policies, legacy-stamp parsing, JSON options, and concrete upcasters behind
+the Elsa provider marker.
 
 ## 1. Inspect the frozen denominator
 
@@ -93,9 +99,30 @@ of work retain one session until commit/rollback/disposal; all other adapter ope
 session. Singleton actors and recurring pumps must open a fresh DI scope per command or tick before resolving
 logic-bearing persistence consumers.
 
-## 4. Run the shared provider matrix
+### Document scope and admitted capability gate
 
-After the conformance project is introduced:
+Runtime, Secrets, and Distributed Runtime storage units are scoped. Identity is scoped except for the deliberately
+global `identityGlobalProviderConfiguration` unit; global storage still requires the matching global access and
+does not convey privileged write authority. Exact current kinds, physical forms, and manifest owners are catalogued
+in the four Groundwork extension-point documents; do not reconstruct a scope from document JSON.
+
+`GroundworkProviderCapabilityAdmission` publishes a capability snapshot only after the selected physical schema
+has been admitted. The Groundwork distributed leaf advertises `LeaseFencing` only when that snapshot proves
+`AtomicCommit` for `checkpointCommit` / `runtime-checkpoint-commit` and the observed
+`multi-document-transactions` topology. The process-local distributed fallback reports no lease fencing.
+Run the focused admission evidence in addition to the general conformance suite:
+
+```bash
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  --configuration Release --no-build \
+  --filter 'FullyQualifiedName~ProviderCapabilityContractTests'
+
+dotnet test tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj \
+  --configuration Release --no-build \
+  --filter 'FullyQualifiedName~DistributedWorkflowExecutionActorProviderTests'
+```
+
+## 4. Run the shared provider matrix
 
 ```bash
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
@@ -113,6 +140,44 @@ The single suite must execute file-backed SQLite, SQL Server, PostgreSQL, and tr
 
 Provider-specific expected domain results are a test defect.
 
+### Publish reviewed provider evidence
+
+The ordinary conformance run does not mutate checked-in evidence. To publish the exact executable slices
+currently owned by #645, set an explicit output root and run each publisher separately:
+
+```bash
+export ELSA_GROUNDWORK_EVIDENCE_OUTPUT="$PWD/specs/094-harden-groundwork-stores"
+
+ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE=1 \
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  --configuration Release --no-build \
+  --filter 'FullyQualifiedName=Elsa.Persistence.Groundwork.Conformance.Tests.RuntimeProviderEvidencePublicationTests.Publish_the_catalog_validated_runtime_provider_evidence_slice'
+
+ELSA_PUBLISH_GROUNDWORK_IAM_SECRETS_EVIDENCE=1 \
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  --configuration Release --no-build \
+  --filter 'FullyQualifiedName=Elsa.Persistence.Groundwork.Conformance.Tests.IamSecretsProviderEvidencePublicationTests.Publish_the_real_B6_provider_configuration_and_secret_matrices'
+
+ELSA_PUBLISH_GROUNDWORK_DISTRIBUTED_PLACEMENT_EVIDENCE=1 \
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  --configuration Release --no-build \
+  --filter 'FullyQualifiedName=Elsa.Persistence.Groundwork.Conformance.Tests.DistributedProviderEvidencePublicationTests.Publish_the_real_distributed_ordinary_round_trip_matrices'
+```
+
+Each successful publisher writes provider artifacts under `evidence/` and one deterministic, merge-ready
+record set under `ledger-attachments/`. Review and mechanically import those records by
+`(coverageEntryId, scenarioId, provider)`; do not hand-author or infer missing obligations. Publication does
+not advance a row status. A row remains incomplete until every declared query, concurrency, failure, and
+restart obligation is present for all four providers and the linked #644/#660 authority evidence is current.
+
+For the performance handoff, `requiredNativeRoutes` in the versioned workload documents are exact current
+`BoundedQueryDeclaration.Identity` values, not coverage-ledger `queryShapes` or descriptive “bounded” aliases.
+For example the current workload set uses `list-claimable`, `list-due`,
+`list-owned-live-placements`, and `lease-visible-commands-by-execution`; checkpoint commit has no bounded-query
+route because its evidence is admitted atomic-path/topology evidence. The complete, canonical mapping is in
+[`workloads/`](workloads/) and its interpretation is in
+[`contracts/performance-handoff.md`](contracts/performance-handoff.md).
+
 ## 5. Validate the production-shaped combined host
 
 Run the unified-host tests for each provider leaf:
@@ -124,19 +189,21 @@ dotnet test tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence
 dotnet test tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj \
   --configuration Release --no-build
 
-dotnet test tests/Elsa/Persistence/Groundwork/SqlServer/Tests/Elsa.Persistence.Groundwork.SqlServer.Tests.csproj \
+dotnet test tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/Tests/Elsa.Persistence.Groundwork.SqlServer.UnifiedHost.Tests.csproj \
   --configuration Release --no-build
 
-dotnet test tests/Elsa/Persistence/Groundwork/MongoDb/Tests/Elsa.Persistence.Groundwork.MongoDb.Tests.csproj \
+dotnet test tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/Tests/Elsa.Persistence.Groundwork.MongoDb.UnifiedHost.Tests.csproj \
   --configuration Release --no-build
 ```
 
 The bare unified provider matrix selects the six provider-level families: workflow runtime, secrets,
 distributed runtime, workflows design, activities design, and workflows publishing. Identity is never
 selected implicitly. The same matrix separately selects the Identity deployment-schema variant and explicit
-Groundwork Identity feature, proving that all seven selected families share the exact admitted target. SQLite
-and PostgreSQL execute the restart-oriented unified-host scenarios; SQL Server proves exact registration and
-MongoDB proves the exact admission target. The MongoDB lane requires a writable transaction-capable replica set.
+Groundwork Identity feature, proving that all seven selected families share the exact admitted target. The
+SQLite, PostgreSQL, SQL Server, and MongoDB provider leaves are all production-shaped host paths and must remain
+in the solution/test gate; SQL Server and PostgreSQL require their real container hosts, and MongoDB requires a
+writable transaction-capable replica set. Do not substitute a provider's package-registration assertion for its
+provider/topology host evidence.
 
 Also run invalid compositions: missing source, duplicate unit, unsupported route/capability, wrong MongoDB topology, and scope-policy conflict. Each must fail before serving work with a stable owner-aware diagnostic.
 
@@ -220,8 +287,8 @@ Exit `2` is an expected result for a plan/status deployment gate, not a tool fai
 apply requires exit `0`. Destructive or semantic operations require the exact retained plan
 fingerprint and exact operation approvals.
 
-Runtime admission calls the provider's read-only `IPhysicalSchemaHistoryInspector`, computes the
-same Groundwork diff in memory, and never acquires an application lock or invokes schema apply. It
+This Elsa composition's runtime admission calls the provider's read-only `IPhysicalSchemaHistoryInspector`,
+computes the same Groundwork diff in memory, and never acquires an application lock or invokes schema apply. It
 blocks startup with `ELSA-GW-SCHEMA-PENDING` when an applicable plan remains and with
 `ELSA-GW-SCHEMA-DRIFT` when durable history or live physical state is incompatible. Operators then
 run and review the CLI workflow above; runtime never silently repairs or applies schema.
@@ -238,7 +305,7 @@ For each workload in [`contracts/performance-handoff.md`](contracts/performance-
 
 Do not time setup, schema application, or a workload whose correctness/provider gate is failing.
 For `iam-normalized-lookup-update`, run the real physical Groundwork correctness path with mandatory SQLite and
-the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.64` and the current Identity
+the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.72` and the current Identity
 storage manifest. Retain its provider identity, input/result digests, observable operations, and native route
 evidence captured at 100,000 physical records. The accepted `preview.60` / Identity manifest v1.0.4 matrix and
 all earlier artifacts are immutable historical provenance, not current pass evidence; the ledger remains

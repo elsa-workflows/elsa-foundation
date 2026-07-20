@@ -231,6 +231,18 @@ public sealed class RuntimeCoalescingSession
         return false;
     }
 
+    /// <summary>Returns a stable snapshot of activity upserts currently visible through this session.</summary>
+    public IReadOnlyCollection<ActivityExecutionState> GetActivityUpserts() => _activityUpserts.Values.ToArray();
+
+    /// <summary>Returns a stable snapshot of activity identities deleted by this session.</summary>
+    public IReadOnlyCollection<string> GetActivityTombstones() => _activityTombstones.ToArray();
+
+    /// <summary>Returns a stable snapshot of durable-value upserts currently visible through this session.</summary>
+    public IReadOnlyCollection<DurableValueState> GetDurableValueUpserts() => _durableValueUpserts.Values.ToArray();
+
+    /// <summary>Returns a stable snapshot of durable-value identities deleted by this session.</summary>
+    public IReadOnlyCollection<string> GetDurableValueTombstones() => _durableValueTombstones.ToArray();
+
     /// <summary>Merges an inner activity-execution list with the overlay upserts and tombstones for this workflow execution.</summary>
     public IReadOnlyCollection<ActivityExecutionState> MergeActivityList(IReadOnlyCollection<ActivityExecutionState> innerList)
     {
@@ -457,7 +469,7 @@ public sealed class RuntimeCoalescingSession
 
         _queueSeeded = true;
 
-        var innerItems = await _innerQueue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId), cancellationToken);
+        var innerItems = await _innerQueue.ListAllAsync(WorkflowExecutionId, cancellationToken);
         foreach (var item in innerItems)
         {
             await _overlayQueue.EnqueueAsync(item, cancellationToken);
@@ -471,7 +483,7 @@ public sealed class RuntimeCoalescingSession
         return await _overlayQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListOverlayAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken)
+    public async ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListOverlayAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken)
     {
         await EnsureQueueSeededAsync(cancellationToken);
         return await _overlayQueue.ListAsync(query, cancellationToken);
@@ -597,7 +609,7 @@ public sealed class RuntimeCoalescingSession
 
         var seeded = new HashSet<string>(_seededWorkItemIds, StringComparer.Ordinal);
         IReadOnlyCollection<RuntimeSchedulerWorkItem> remaining =
-            await _overlayQueue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId), cancellationToken);
+            await _overlayQueue.ListAllAsync(WorkflowExecutionId, cancellationToken);
 
         if (consumeInFlightClaims && _overlayClaims.Count > 0)
         {

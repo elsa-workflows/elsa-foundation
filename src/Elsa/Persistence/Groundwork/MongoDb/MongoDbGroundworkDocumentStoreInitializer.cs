@@ -31,6 +31,7 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IMongoDbGroundworkRuntimeAdmission _admission;
     private readonly ILogger<MongoDbGroundworkDocumentStoreInitializer> _logger;
+    private readonly GroundworkProviderCapabilityAdmission? _capabilityAdmission;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private bool _initialized;
 
@@ -40,7 +41,8 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
         bool autoApplyOnStartup,
         GroundworkStoreSessionSource sessionSource,
         IServiceScopeFactory scopeFactory,
-        ILogger<MongoDbGroundworkDocumentStoreInitializer> logger)
+        ILogger<MongoDbGroundworkDocumentStoreInitializer> logger,
+        GroundworkProviderCapabilityAdmission? capabilityAdmission = null)
         : this(
             connectionString,
             databaseName,
@@ -48,7 +50,8 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
             sessionSource,
             scopeFactory,
             new MongoDbGroundworkRuntimeAdmission(),
-            logger)
+            logger,
+            capabilityAdmission)
     {
     }
 
@@ -59,7 +62,8 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
         GroundworkStoreSessionSource sessionSource,
         IServiceScopeFactory scopeFactory,
         IMongoDbGroundworkRuntimeAdmission admission,
-        ILogger<MongoDbGroundworkDocumentStoreInitializer> logger)
+        ILogger<MongoDbGroundworkDocumentStoreInitializer> logger,
+        GroundworkProviderCapabilityAdmission? capabilityAdmission = null)
     {
         _connectionString = connectionString;
         _databaseName = databaseName;
@@ -68,6 +72,7 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
         _scopeFactory = scopeFactory;
         _admission = admission;
         _logger = logger;
+        _capabilityAdmission = capabilityAdmission;
     }
 
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
@@ -117,6 +122,7 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
                     _autoApplyOnStartup,
                     _logger,
                     cancellationToken);
+                _capabilityAdmission?.TrySet(providerCapabilities);
             }
 
             _initialized = true;

@@ -70,7 +70,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         ValidatePublicationBindings(publicationId, bindings);
 
         var projectionStateEnvelope = await LoadProjectionStateEnvelopeAsync(publicationId, cancellationToken);
-        var existing = await ListByPublicationAsync(publicationId, cancellationToken);
+        var existing = await this.ListAllByPublicationAsync(publicationId, cancellationToken);
         var prepared = bindings.Select(binding => binding with { IsActive = false }).ToArray();
         if (projectionStateEnvelope is not null)
         {
@@ -91,14 +91,15 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
             projectionStateExpectedVersion: 0);
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByPublicationAsync(
-        string publicationId,
+    public async ValueTask<WorkflowTriggerBindingPage> ListByPublicationAsync(
+        WorkflowTriggerBindingPublicationPageQuery query,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        return await QueryBindingsAsync(
+        ArgumentNullException.ThrowIfNull(query);
+        return await QueryBindingsPageAsync(
+            query,
             ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery,
-            [Equal(ElsaRuntimeStorageManifest.PublicationIdField, publicationId)],
+            [Equal(ElsaRuntimeStorageManifest.PublicationIdField, query.PublicationId)],
             cancellationToken);
     }
 
@@ -137,10 +138,10 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
             replacedState,
             hasDistinctReplacement);
 
-        var candidate = await ListByPublicationAsync(publicationId, cancellationToken);
+        var candidate = await this.ListAllByPublicationAsync(publicationId, cancellationToken);
         var replaced = !hasDistinctReplacement
             ? []
-            : await ListByPublicationAsync(replacedPublicationId!, cancellationToken);
+            : await this.ListAllByPublicationAsync(replacedPublicationId!, cancellationToken);
         var updates = candidate.Select(binding => binding with { IsActive = true })
             .Concat(replaced.Select(binding => binding with { IsActive = false }))
             .ToArray();
@@ -158,7 +159,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
     public async ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        var existing = await ListByPublicationAsync(publicationId, cancellationToken);
+        var existing = await this.ListAllByPublicationAsync(publicationId, cancellationToken);
         await CommitAtomicallyAsync(
             existing.Select(binding => binding.TriggerBindingId),
             [],
@@ -171,7 +172,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
 
-        var existing = await ListByArtifactAsync(artifactId, cancellationToken);
+        var existing = await this.ListAllByArtifactAsync(artifactId, cancellationToken);
         var deleted = 0;
 
         foreach (var binding in existing)
@@ -196,12 +197,14 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
                 DocumentKind,
                 ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery,
                 [
-                    Equal(ElsaRuntimeStorageManifest.StimulusHashField, query.StimulusHash),
-                    Equal(ElsaRuntimeStorageManifest.StimulusTypeField, query.StimulusType),
+                    Equal(
+                        ElsaRuntimeStorageManifest.WorkflowTriggerBindingStimulusLookupKeyField,
+                        StimulusLookupKey.FromPair(query.StimulusType, query.StimulusHash)),
                     Equal(
                         ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField,
                         bool.TrueString.ToLowerInvariant())
                 ],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.TriggerBindingIdField)],
                 take: query.Limit,
                 continuation: query.ContinuationToken),
             cancellationToken);
@@ -213,13 +216,16 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
             result.NextContinuation);
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
+    public async ValueTask<WorkflowTriggerBindingPage> ListByArtifactAsync(
+        WorkflowTriggerBindingArtifactPageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+        ArgumentNullException.ThrowIfNull(query);
 
-        return await QueryBindingsAsync(
+        return await QueryBindingsPageAsync(
+            query,
             ElsaRuntimeStorageManifest.ListTriggerBindingsByArtifactQuery,
-            [Equal(ElsaRuntimeStorageManifest.ArtifactIdField, artifactId)],
+            [Equal(ElsaRuntimeStorageManifest.ArtifactIdField, query.ArtifactId)],
             cancellationToken);
     }
 
@@ -233,7 +239,9 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
                 DocumentKind,
                 ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusTypeQuery,
                 [
-                    Equal(ElsaRuntimeStorageManifest.StimulusTypeField, query.StimulusType),
+                    Equal(
+                        ElsaRuntimeStorageManifest.WorkflowTriggerBindingStimulusTypeLookupKeyField,
+                        StimulusLookupKey.FromType(query.StimulusType)),
                     Equal(
                         ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField,
                         bool.TrueString.ToLowerInvariant())
@@ -249,7 +257,8 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
             result.NextContinuation);
     }
 
-    private async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> QueryBindingsAsync(
+    private async ValueTask<WorkflowTriggerBindingPage> QueryBindingsPageAsync(
+        WorkflowTriggerBindingPageRequest query,
         string queryIdentity,
         IReadOnlyList<DocumentQueryClause> clauses,
         CancellationToken cancellationToken)
@@ -258,9 +267,16 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
             new DocumentQuery(
                 DocumentKind,
                 queryIdentity,
-                clauses),
+                clauses,
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.TriggerBindingIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
             cancellationToken);
-        return result.Documents.Select(Serializer.Deserialize<WorkflowTriggerBinding>).ToArray();
+        return new WorkflowTriggerBindingPage(
+            query,
+            result.Documents.Select(Serializer.Deserialize<WorkflowTriggerBinding>).ToArray(),
+            result.TotalCount,
+            result.NextContinuation);
     }
 
     private static DocumentQueryClause Equal(string fieldPath, string value) =>

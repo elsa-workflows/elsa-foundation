@@ -34,12 +34,30 @@ public sealed class InMemoryDurableValueStateStore : InMemoryKeyedStateStore<InM
         return new(Find(new DurableValueStateKey(workflowExecutionId, durableValueId)));
     }
 
-    public ValueTask<IReadOnlyCollection<DurableValueState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public ValueTask<RuntimeStorePage<DurableValueState>> ListPageAsync(
+        DurableValueStatePageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return new(Snapshot(key => key.WorkflowExecutionId == workflowExecutionId));
+        var states = Snapshot(key => key.WorkflowExecutionId == query.WorkflowExecutionId)
+            .OrderBy(state => state.DurableValueId, StringComparer.Ordinal)
+            .ToArray();
+        var queryBinding = $"durable-value-state:workflow:{query.WorkflowExecutionId}";
+        var lastDurableValueId = InMemoryRuntimeStoreContinuation.Decode(
+            query.ContinuationToken,
+            queryBinding,
+            nameof(query));
+        var remaining = lastDurableValueId is null
+            ? states
+            : states.Where(state => StringComparer.Ordinal.Compare(state.DurableValueId, lastDurableValueId) > 0).ToArray();
+        var items = remaining.Take(query.Limit).ToArray();
+        var nextContinuationToken = remaining.Length > items.Length
+            ? InMemoryRuntimeStoreContinuation.Encode(queryBinding, items[^1].DurableValueId)
+            : null;
+
+        return new(new RuntimeStorePage<DurableValueState>(query, items, nextContinuationToken));
     }
 
     public readonly record struct DurableValueStateKey(string WorkflowExecutionId, string DurableValueId);

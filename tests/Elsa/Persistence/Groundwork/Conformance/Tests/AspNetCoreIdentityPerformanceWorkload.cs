@@ -169,7 +169,7 @@ public sealed class AspNetCoreIdentityPerformanceWorkload
                 result.Evidence.Sha256,
                 result.PlanClassification,
                 result.IndexName,
-                result.FiniteLimit);
+                result.FiniteLimit!.Value);
         }).ToArray();
     }
 }

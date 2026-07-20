@@ -1,0 +1,14 @@
+provider=sqlite
+document-kind=executionCommandTransport
+route=list-visible-command-executions
+physical-name=execution_command_transport
+physical-cardinality=100000
+plan-classification=index-search
+index=execution_command_transport_pending_command_by_execution_sequence_223c44a17e5d
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=16
+materialized-candidate-count=16
+command-count=2
+command-0=Count|count|sqlite-query-plan|index-search|execution_command_transport_pending_command_by_execution_sequence_223c44a17e5d|collection,document_kind,storage_scope,visibleAt,workflowExecutionIdKey|1||4b1ce741c93f0dca9e24338d86e5bd22cc72c30ddc1f5bb3c961682d7d55fa9e
+command-1=Page|page|sqlite-query-plan|index-search|execution_command_transport_pending_command_by_execution_sequence_223c44a17e5d|collection,document_kind,id_comparison_key,sequence,storage_scope,visibleAt,workflowExecutionIdKey|16|workflowExecutionIdKey:Ascending:false,sequence:Descending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|f9a57618eda1871ec995bb8734a8b7d31c33f83222fb7f82f56eae21898733fd

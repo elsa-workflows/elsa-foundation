@@ -66,7 +66,7 @@ public sealed class FlowchartStateGrowthTests
 
         // Loop semantics preserved: the loop body really ran once per iteration plus the initial pass,
         // and the post-loop node ran exactly once.
-        var activityStates = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var activityStates = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         Assert.Equal(Iterations + 1, activityStates.Count(activityState => activityState.Execution.ExecutableNodeId == "node-a"));
         Assert.Single(activityStates.Where(activityState => activityState.Execution.ExecutableNodeId == "node-c"));
 

@@ -1,0 +1,14 @@
+provider=mongodb
+document-kind=executionPlacement
+route=list-owned-live-placements
+physical-name=execution_placements
+physical-cardinality=100000
+plan-classification=index-scan
+index=placement-by-owner-expiry
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=16
+materialized-candidate-count=16
+command-count=2
+command-0=Count|count|mongodb-json|index-scan|placement-by-owner-expiry|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope,workflowExecutionIdKey|1||4e870961b343734c54fa06f69c72ebabd7d9da6bb229499afbe29c9007c146f3
+command-1=Page|page|mongodb-json|index-scan|placement-by-owner-expiry|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope,workflowExecutionIdKey|16|ownerIdLookupKey:Ascending:false,expiresAt:Ascending:false,workflowExecutionIdKey:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|df11c6a513e2e7172270a0ab03ec22ffec9f9e6d5e67ba86eecccc2dd6eb9f3c

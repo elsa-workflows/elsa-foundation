@@ -6,6 +6,72 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Tests;
 public sealed class IdentityGroundworkRevisionContractTests
 {
     [Fact]
+    public async Task Application_revision_save_rejects_stale_revision_without_mutating_state()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.ApplicationStore(docStore);
+        var revisionAware = Assert.IsAssignableFrom<IRevisionAwareApplicationStore>(store);
+        var application = IdentityGroundworkFixtures.Application();
+        var created = await revisionAware.SaveWithRevisionAsync(application, expectedRevision: null);
+        var duplicate = await revisionAware.SaveWithRevisionAsync(
+            application with { DisplayName = "Duplicate client" },
+            expectedRevision: null);
+
+        var first = await revisionAware.FindWithRevisionAsync(application.TenantId, application.Id);
+        var second = await revisionAware.FindWithRevisionAsync(application.TenantId, application.Id);
+
+        Assert.Equal(IamRevisionSaveStatus.Saved, created.Status);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, duplicate.Status);
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        var saved = await revisionAware.SaveWithRevisionAsync(
+            first.Record with { DisplayName = "Updated client" },
+            first.Revision);
+        var stale = await revisionAware.SaveWithRevisionAsync(
+            second.Record with { DisplayName = "Stale client" },
+            second.Revision);
+
+        var reloaded = await store.FindAsync(application.TenantId, application.Id);
+        Assert.Equal(IamRevisionSaveStatus.Saved, saved.Status);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, stale.Status);
+        Assert.Equal("Updated client", reloaded!.DisplayName);
+        Assert.NotEqual(first.Revision, saved.Revision);
+    }
+
+    [Fact]
+    public async Task Credential_revision_save_rejects_stale_revision_without_mutating_state()
+    {
+        var docStore = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.CredentialStore(docStore);
+        var revisionAware = Assert.IsAssignableFrom<IRevisionAwareCredentialStore>(store);
+        var credential = IdentityGroundworkFixtures.Credential();
+        var created = await revisionAware.SaveWithRevisionAsync(credential, expectedRevision: null);
+        var duplicate = await revisionAware.SaveWithRevisionAsync(
+            credential with { Status = CredentialStatus.Revoked },
+            expectedRevision: null);
+
+        var first = await revisionAware.FindWithRevisionAsync(credential.TenantId, credential.Id);
+        var second = await revisionAware.FindWithRevisionAsync(credential.TenantId, credential.Id);
+
+        Assert.Equal(IamRevisionSaveStatus.Saved, created.Status);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, duplicate.Status);
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        var saved = await revisionAware.SaveWithRevisionAsync(
+            first.Record with { Status = CredentialStatus.Revoked },
+            first.Revision);
+        var stale = await revisionAware.SaveWithRevisionAsync(
+            second.Record with { Status = CredentialStatus.Active },
+            second.Revision);
+
+        var reloaded = await store.FindAsync(credential.TenantId, credential.Id);
+        Assert.Equal(IamRevisionSaveStatus.Saved, saved.Status);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, stale.Status);
+        Assert.Equal(CredentialStatus.Revoked, reloaded!.Status);
+        Assert.NotEqual(first.Revision, saved.Revision);
+    }
+
+    [Fact]
     public async Task User_revision_save_rejects_stale_revision_without_mutating_state()
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();

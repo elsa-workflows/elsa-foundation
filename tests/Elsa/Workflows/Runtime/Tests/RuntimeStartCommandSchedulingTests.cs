@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -25,7 +26,7 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         await handler.HandleAsync(NewStartWorkItem(executable.Identity));
 
-        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
         Assert.Equal("wfexec-1", checkpointWork.WorkflowExecutionId);
         Assert.Equal("start-work:checkpoint:WorkflowStarted", checkpointWork.WorkItemId);
@@ -62,7 +63,7 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         await handler.HandleAsync(NewStartWorkItem(executable.Identity));
 
-        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
         var intent = Assert.Single(checkpointPayload.PostCommitIntents);
         var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
@@ -84,7 +85,7 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         await handler.HandleAsync(NewStartWorkItem(executable.Identity, recordedAt: delayedRecordedAt));
 
-        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(_now, checkpointWork.EnqueuedAt);
         Assert.Equal(delayedRecordedAt, checkpointWork.RecordedAt);
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
@@ -108,7 +109,7 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         Assert.Contains("pinned executable artifact", exception.Message);
         Assert.Contains("definition-1/version-1", exception.Message);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -123,7 +124,7 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         await handler.HandleAsync(NewStartWorkItem(pinned));
 
-        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
     }
 
@@ -162,7 +163,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Equal(_now, workflowChange.State.UpdatedAt);
         Assert.Null(workflowChange.State.CompletedAt);
         Assert.Equal(executable.Identity, workflowChange.State.PinnedExecutable);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
         Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, pending.Intent.Kind);
         var scheduled = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
@@ -248,7 +249,8 @@ public sealed class RuntimeStartCommandSchedulingTests
                 incidentStore,
                 durableValueStore,
                 new DefaultRuntimePayloadCapturePolicy(),
-                authorization)
+                authorization,
+                new RuntimeCheckpointCadenceInspector([]))
             .Handle(new GetWorkflowInstance("wfexec-1"), CancellationToken.None);
         var summary = Assert.Single(list.Items);
         Assert.Equal("version-2", summary.DefinitionVersionId);
@@ -290,7 +292,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, write.Commit.Checkpoint.Name);
         Assert.Equal(2, write.Commit.StateChanges.DurableValues.Count);
 
-        var durableValues = await durableValueStore.ListAsync("wfexec-1");
+        var durableValues = await durableValueStore.ListAllDurableValueStatesAsync("wfexec-1");
         var variables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
         var inputs = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
         Assert.Equal("Hello", ((JsonElement)Assert.Single(variables).Value!).GetString());
@@ -314,7 +316,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         await store.SaveAsync(executable);
         var startHandler = NewHandler(store, startQueue);
         await startHandler.HandleAsync(NewStartWorkItem(executable.Identity));
-        var checkpointWork = Assert.Single(await startQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await startQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var checkpointHandler = NewCheckpointHandler(
             new InMemoryActivityExecutionStateStore(),
             new ThrowingCheckpointWriter(),
@@ -323,7 +325,7 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => checkpointHandler.HandleAsync(checkpointWork).AsTask());
 
-        Assert.Empty(await dispatchQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await dispatchQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -336,7 +338,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewStartWorkItem(includePayload: false)).AsTask());
 
         Assert.Contains("requires a start command payload", exception.Message);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -350,7 +352,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewStartWorkItem(payload: document.RootElement.Clone())).AsTask());
 
         Assert.Contains("not a valid start command payload", exception.Message);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     // ── #412 Start exception-masking: the deserialize catch-filter is a ParamName whitelist ──────────
@@ -374,7 +376,7 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         Assert.Contains("not a valid start command payload", exception.Message);
         Assert.IsType<ArgumentException>(exception.InnerException);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]

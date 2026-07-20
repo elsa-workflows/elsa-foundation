@@ -68,6 +68,7 @@ namespace Elsa.Activities.Parallel.Activities;
     ChildProperty = "activity",
     LabelProperty = "name",
     SlotNameTemplate = "Parallel.Branch[{name}]")]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Parallel(IActivityExecutionStateStore activityExecutionStateStore) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler
 {
     public const string BranchSlotPrefix = "Parallel.Branch[";
@@ -201,7 +202,7 @@ public sealed class Parallel(IActivityExecutionStateStore activityExecutionState
         // fires once per branch-completion/fault event, so a whole-workflow list here made the join O(branches × workflow
         // states) — effectively quadratic on wide/large workflows (#514/#413 item 3). The parent-scoped read returns exactly
         // the ParentActivityExecutionId == compositeExecutionId subset; the branch/grouping filters stay here.
-        var states = await activityExecutionStateStore.ListByParentAsync(runtimeContext.WorkflowExecutionId, compositeExecutionId, runtimeContext.CancellationToken);
+        var states = await activityExecutionStateStore.ListAllByParentAsync(runtimeContext.WorkflowExecutionId, compositeExecutionId, runtimeContext.CancellationToken);
 
         var branchGroups = states
             .Where(state => navigator.IsBranch(state.Execution.ExecutableNodeId))

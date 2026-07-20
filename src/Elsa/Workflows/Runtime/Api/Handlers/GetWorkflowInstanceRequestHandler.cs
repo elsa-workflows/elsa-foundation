@@ -1,8 +1,10 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
@@ -13,7 +15,8 @@ public sealed class GetWorkflowInstanceRequestHandler(
     IIncidentStateStore incidentStateStore,
     IDurableValueStateStore durableValueStateStore,
     IRuntimePayloadCapturePolicy payloadCapturePolicy,
-    IActivityExecutionInspectionAuthorizationContext authorization)
+    IActivityExecutionInspectionAuthorizationContext authorization,
+    RuntimeCheckpointCadenceInspector checkpointCadenceInspector)
     : IRequestHandler<GetWorkflowInstance, GetWorkflowInstanceResponse>
 {
     public async Task<GetWorkflowInstanceResponse> Handle(GetWorkflowInstance request, CancellationToken cancellationToken)
@@ -26,10 +29,13 @@ public sealed class GetWorkflowInstanceRequestHandler(
 
         var canInspectSensitiveValues = authorization.CanInspectSensitiveValues(state);
 
-        var activities = (await activityExecutionInspectionStore.ListSummariesAsync(request.WorkflowExecutionId, cancellationToken))
-            .OrderBy(activity => activity.ExecutionSequence)
-            .ThenBy(activity => activity.ScheduledAt)
-            .ThenBy(activity => activity.ActivityExecutionId, StringComparer.Ordinal)
+        var activityPage = await activityExecutionInspectionStore.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery(
+                request.WorkflowExecutionId,
+                request.ActivityPageSize,
+                request.ActivityContinuationToken),
+            cancellationToken);
+        var activities = activityPage.Items
             .Select(ActivityExecutionInspectionSummaryView.From)
             .ToArray();
         var incidents = (await incidentStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken))
@@ -42,7 +48,7 @@ public sealed class GetWorkflowInstanceRequestHandler(
         // values, with every payload routed through the configured capture policy (declined payloads surface
         // as named redacted markers, never silently absent).
         var outputProjections = RuntimeWorkflowOutputStateProjection
-            .Project(await durableValueStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken), payloadCapturePolicy)
+            .Project(await durableValueStateStore.ListAllDurableValueStatesAsync(request.WorkflowExecutionId, cancellationToken), payloadCapturePolicy)
             .ToArray();
         var outputs = outputProjections.ToDictionary(
             output => output.Name,
@@ -51,10 +57,18 @@ public sealed class GetWorkflowInstanceRequestHandler(
                 : WorkflowOutputView.Redacted(output.CapturedAt),
             StringComparer.Ordinal);
 
+        // Checkpoint cadence + inspection granularity (ADR 0032 R3) are host-configuration-derived, so they are resolved
+        // at view-assembly time rather than persisted per instance.
+        var cadence = checkpointCadenceInspector.Resolve();
+
         return new GetWorkflowInstanceResponse(new WorkflowInstanceDetailsView(
-            WorkflowInstanceSummaryView.From(state, activities.Length, incidents.Length, canInspectSensitiveValues),
+            WorkflowInstanceSummaryView.From(state, activityPage.TotalCount, incidents.Length, canInspectSensitiveValues),
             activities,
             incidents,
-            outputs));
+            outputs,
+            cadence.CheckpointCadence,
+            cadence.MaxSegmentCheckpoints,
+            cadence.InspectionGranularity,
+            activityPage.NextContinuationToken));
     }
 }

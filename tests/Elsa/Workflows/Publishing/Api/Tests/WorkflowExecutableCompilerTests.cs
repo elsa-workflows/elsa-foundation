@@ -202,6 +202,28 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("writeline-1a75fea9", Assert.Single(executable.RootActivity.ChildSlots).Activities.Single().ExecutableNodeId);
     }
 
+    // ADR 0032 R1 / spec 107: the [ActivitySideEffectProfile] attribute is folded into the pinned contract by
+    // the publish-time compiler. Flowchart is declared ReplaySafe; WriteLine (unmarked) defaults to External.
+    [Fact]
+    public async Task Compiler_folds_the_declared_side_effect_profile_into_the_pinned_contract()
+    {
+        var root = FlowchartNode("flowchart-0affb8fb", [Node("writeline-1a75fea9", Text("hello"))]);
+        var publication = SourceOwnedPublication(
+            _flowchartActivity,
+            ActivityDefinitionVersionResolutionKind.AuthorableActivity);
+        var compiler = CompilerWithPublication(root, publication, _writeLineActivity, _flowchartActivity);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe,
+            executable.RootActivity.ActivityContract!.SideEffectProfile);
+        var writeLine = Assert.Single(executable.RootActivity.ChildSlots).Activities.Single();
+        Assert.Equal(
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+            writeLine.ActivityContract!.SideEffectProfile);
+    }
+
     [Fact]
     public async Task Legacy_source_owned_sequence_publication_compiles_authored_children_as_ordinary_structure()
     {
@@ -1327,7 +1349,7 @@ public sealed class WorkflowExecutableCompilerTests
         var captured = await durableStore.FindAsync(workflowExecutionId, "durable-variable:CallerResult");
         if (captured is not null)
             return captured;
-        var stored = await durableStore.ListAsync(workflowExecutionId);
+        var stored = await durableStore.ListAllDurableValueStatesAsync(workflowExecutionId);
         var incidents = await incidentStore.ListAsync(workflowExecutionId);
         throw new Xunit.Sdk.XunitException(
             $"Normal Runtime boundary completion did not write the compiled caller output target. " +
@@ -1854,6 +1876,9 @@ public sealed class WorkflowExecutableCompilerTests
 
         public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+
+        public ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(request, Array.Empty<ExecutableActivityTemplate>(), template => template.TemplateId, "activity-template"));
     }
 
     private sealed class EmptySourceReferenceReader : IWorkflowExecutableSourceReferenceReader
@@ -1861,14 +1886,14 @@ public sealed class WorkflowExecutableCompilerTests
         public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<WorkflowExecutableSourceReference?>(null);
 
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(query, Array.Empty<WorkflowExecutableSourceReference>(), reference => reference.SourceReferenceId, $"source-reference:artifact:{query.ArtifactId}"));
 
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([]);
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(query, Array.Empty<WorkflowExecutableSourceReference>(), reference => reference.SourceReferenceId, TestRuntimeStorePages.SourceReferenceQueryBinding(query)));
 
-        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.UnreferencedArtifactIds(candidates, Array.Empty<WorkflowExecutableSourceReference>(), now));
     }
 
     private sealed class SinglePublicationStore(ActivityDefinitionVersionPublication publication) : IActivityDefinitionVersionPublicationStore
@@ -1881,14 +1906,19 @@ public sealed class WorkflowExecutableCompilerTests
     {
         public ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default) => ValueTask.FromResult(templateId == template.TemplateId ? template : null);
         public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) => ValueTask.FromResult(templateHash == template.TemplateHash ? template : null);
+        public ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(request, new[] { template }, candidate => candidate.TemplateId, "activity-template"));
     }
 
     private sealed class ReusableSourceReader(WorkflowExecutableSourceReference reference) : IWorkflowExecutableSourceReferenceReader
     {
         public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => ValueTask.FromResult(sourceReferenceId == reference.SourceReferenceId ? reference : null);
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>(artifactId == reference.ArtifactId ? [reference] : []);
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(WorkflowExecutableReferenceScope? scope = null, bool liveOnly = false, DateTimeOffset? now = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>([reference]);
-        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(IEnumerable<string> artifactIds, DateTimeOffset now, CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(query, query.ArtifactId == reference.ArtifactId ? new[] { reference } : Array.Empty<WorkflowExecutableSourceReference>(), candidate => candidate.SourceReferenceId, $"source-reference:artifact:{query.ArtifactId}"));
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(query, (query.Scope is null || reference.Scope == query.Scope) && (!query.LiveOnly || reference.IsLive(query.Now!.Value)) ? new[] { reference } : Array.Empty<WorkflowExecutableSourceReference>(), candidate => candidate.SourceReferenceId, TestRuntimeStorePages.SourceReferenceQueryBinding(query)));
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.UnreferencedArtifactIds(candidates, new[] { reference }, now));
     }
 
     private static ExecutableNodeMetadataEnricher MetadataEnricher(params IExecutableCompilationSource[] sources) =>

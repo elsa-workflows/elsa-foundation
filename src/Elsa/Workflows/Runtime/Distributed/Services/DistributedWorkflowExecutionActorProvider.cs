@@ -41,11 +41,13 @@ public sealed class DistributedWorkflowExecutionActorProvider : IWorkflowExecuti
     private readonly IExecutionPlacementService? _placementService;
     private readonly IExecutionCommandTransport? _transport;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowExecutionLeaseFencingCapability? _leaseFencingCapability;
 
     public DistributedWorkflowExecutionActorProvider(
         InProcessWorkflowExecutionActorProvider localProvider,
         IPersistenceOperationScopeFactory operationScopeFactory,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutionLeaseFencingCapability? leaseFencingCapability = null)
     {
         ArgumentNullException.ThrowIfNull(localProvider);
         ArgumentNullException.ThrowIfNull(operationScopeFactory);
@@ -54,13 +56,15 @@ public sealed class DistributedWorkflowExecutionActorProvider : IWorkflowExecuti
         _localProvider = localProvider;
         _operationScopeFactory = operationScopeFactory;
         _timeProvider = timeProvider;
+        _leaseFencingCapability = leaseFencingCapability;
     }
 
     public DistributedWorkflowExecutionActorProvider(
         InProcessWorkflowExecutionActorProvider localProvider,
         IExecutionPlacementService placementService,
         IExecutionCommandTransport transport,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutionLeaseFencingCapability? leaseFencingCapability = null)
     {
         ArgumentNullException.ThrowIfNull(localProvider);
         ArgumentNullException.ThrowIfNull(placementService);
@@ -71,13 +75,23 @@ public sealed class DistributedWorkflowExecutionActorProvider : IWorkflowExecuti
         _placementService = placementService;
         _transport = transport;
         _timeProvider = timeProvider;
+        _leaseFencingCapability = leaseFencingCapability;
     }
 
-    public WorkflowExecutionActorCapabilities Capabilities =>
-        WorkflowExecutionActorCapabilities.InProcessMailbox |
-        WorkflowExecutionActorCapabilities.DistributedPlacement |
-        WorkflowExecutionActorCapabilities.LeaseFencing |
-        WorkflowExecutionActorCapabilities.Passivation;
+    public WorkflowExecutionActorCapabilities Capabilities
+    {
+        get
+        {
+            var capabilities =
+                WorkflowExecutionActorCapabilities.InProcessMailbox |
+                WorkflowExecutionActorCapabilities.DistributedPlacement |
+                WorkflowExecutionActorCapabilities.Passivation;
+
+            return _leaseFencingCapability?.IsAvailable is true
+                ? capabilities | WorkflowExecutionActorCapabilities.LeaseFencing
+                : capabilities;
+        }
+    }
 
     public async ValueTask<IWorkflowExecutionActor> GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default)
     {

@@ -42,7 +42,8 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
             sp.GetRequiredService<GroundworkStoreSessionSource>(),
             // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
             sp.GetService<ILogger<PostgreSqlGroundworkDocumentStoreInitializer>>()
-            ?? NullLogger<PostgreSqlGroundworkDocumentStoreInitializer>.Instance));
+            ?? NullLogger<PostgreSqlGroundworkDocumentStoreInitializer>.Instance,
+            sp.GetRequiredService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>()));
         services.AddHostedService(sp => sp.GetRequiredService<PostgreSqlGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<PostgreSqlGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(

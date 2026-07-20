@@ -5,6 +5,33 @@ using Elsa.Workflows.Runtime.Core.Constants;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
+/// Creates provider-portable projection values for stable post-commit outbox identities.
+/// </summary>
+public static class RuntimePostCommitOutboxIdentity
+{
+    public const int MaximumLength = 450;
+    public const int MaximumProjectionLength = 256;
+    private const string ProjectionDigestPrefix = "outbox:projection:sha256:v1:";
+
+    /// <summary>Preserves the durable logical identity format used by existing replay markers and providers.</summary>
+    public static string CreateLogicalValue(string commitId, string intentId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
+        return $"{commitId}:{intentId}";
+    }
+
+    /// <summary>Returns a bounded physical projection without changing the durable logical identity.</summary>
+    public static string CreateProjectionValue(string outboxItemId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        return outboxItemId.Length <= MaximumProjectionLength
+            ? outboxItemId
+            : $"{ProjectionDigestPrefix}{RuntimeIdentityDigest.Compute("elsa.outbox.projection", "v1", outboxItemId)}";
+    }
+}
+
+/// <summary>
 /// Durable delivery state for a post-commit intent. Intent payloads are delivered only after checkpoint commit.
 /// </summary>
 public sealed class RuntimePostCommitOutboxItem

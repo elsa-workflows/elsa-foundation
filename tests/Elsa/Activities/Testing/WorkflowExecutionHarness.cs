@@ -130,11 +130,11 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
 
-        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync(WorkflowExecutionId);
+        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(WorkflowExecutionId);
         var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowExecutionId);
 
         var pending = await _provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-            .ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId));
+            .ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId));
         if (pending.Count != 0)
         {
             var terminated = workflowState?.Status is WorkflowExecutionStatus.Completed
@@ -200,7 +200,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Resume command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
 
-        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync(WorkflowExecutionId);
+        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(WorkflowExecutionId);
         var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowExecutionId);
         return new WorkflowExecutionRun(states, workflowState);
     }

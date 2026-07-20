@@ -12,6 +12,8 @@
   },
   "resumeTargetId": "resume-1",
   "stimulusHash": "hash-1",
+  "stimulusLookupKey": "aaeb0e8759bb85bbe05a55e6cc1284eb9ebd77c5b4b2832cde2bc4dae3b98617",
   "stimulusType": "Http",
+  "stimulusTypeLookupKey": "d17ab73b4b061e75f9036e617f9befb10378e27b12a58776349f8140d3acb0b6",
   "workflowExecutionId": "wf-1"
 }

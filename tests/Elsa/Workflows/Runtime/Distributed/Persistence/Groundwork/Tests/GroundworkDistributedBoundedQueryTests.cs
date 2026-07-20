@@ -1,6 +1,8 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
+using Groundwork.Core.Capabilities;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Text;
 using Groundwork.Documents.Store;
@@ -11,6 +13,21 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests;
 public sealed class GroundworkDistributedBoundedQueryTests
 {
     [Fact]
+    public async Task ManifestSource_DeclaresAtomicStreamAppendAndTransactionTopologyPrerequisites()
+    {
+        var declaration = await new DistributedGroundworkStorageManifestSource()
+            .CreateDeclarationAsync(CancellationToken.None);
+
+        var route = Assert.Single(declaration.RequiredRoutes);
+        Assert.Equal(DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind, route.StorageUnit.Value);
+        Assert.Equal("command-stream-append", route.RouteIdentity);
+        Assert.Equal([WellKnownCapabilities.AtomicCommit], route.RequiredCapabilities);
+        Assert.Equal(
+            RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity,
+            Assert.Single(declaration.TopologyRequirements).Identity);
+    }
+
+    [Fact]
     public void ManifestUsesPortableOrdinalKeysWithinTheDeclaredIdentityBoundary()
     {
         var manifest = DistributedGroundworkStorageManifest.Create();
@@ -19,6 +36,8 @@ public sealed class GroundworkDistributedBoundedQueryTests
             unit => unit.Identity.Value == DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind);
         var transport = manifest.StorageUnits.Single(
             unit => unit.Identity.Value == DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind);
+        var streamHead = manifest.StorageUnits.Single(
+            unit => unit.Identity.Value == DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind);
 
         AssertProjectionLength(
             placement,
@@ -40,6 +59,18 @@ public sealed class GroundworkDistributedBoundedQueryTests
             transport,
             DistributedGroundworkStorageManifest.CollectionField,
             128);
+        AssertProjectionLength(
+            transport,
+            DistributedGroundworkStorageManifest.LeaseOwnerIdField,
+            64);
+        var streamHeadPhysicalStorage = Assert.IsType<StorageUnitPhysicalStorage>(streamHead.PhysicalStorage);
+        var streamHeadTable = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(streamHeadPhysicalStorage.Policy).Definition;
+        Assert.Contains(
+            streamHeadTable.ProjectedColumns,
+            column => column.Path == DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField);
+        Assert.Contains(
+            streamHeadTable.ProjectedColumns,
+            column => column.Path == DistributedGroundworkStorageManifest.LastSequenceField);
 
         var physicalStorage = Assert.IsType<StorageUnitPhysicalStorage>(transport.PhysicalStorage);
         var countRoute = Assert.Single(

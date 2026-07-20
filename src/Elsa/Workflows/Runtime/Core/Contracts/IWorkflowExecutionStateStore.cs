@@ -18,7 +18,9 @@ public interface IWorkflowExecutionStateStore
     ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns all workflow execution states currently held by the store.
+    /// Returns all workflow execution states currently held by the store. Implementations must obtain this
+    /// compatibility projection through finite history pages; new callers should use <see cref="QueryPageAsync"/>
+    /// or the explicitly named <see cref="WorkflowExecutionStateStorePagingExtensions.ListAllAsync"/> traversal.
     /// </summary>
     ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default);
 

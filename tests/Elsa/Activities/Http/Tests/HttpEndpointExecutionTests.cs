@@ -628,7 +628,7 @@ public sealed class HttpEndpointExecutionTests
     }
 
     private static async Task<IReadOnlyCollection<BookmarkState>> BookmarksAsync(WorkflowExecutionHarness harness) =>
-        await harness.Services.GetRequiredService<IBookmarkStateStore>().ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        await harness.Services.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId);
 
     private static bool CompletedEndpoint(WorkflowExecutionRun run) =>
         run.ActivityStates.Any(s => s.Execution.ExecutableNodeId == NodeId && s.Status == ActivityExecutionStatus.Completed);

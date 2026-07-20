@@ -43,7 +43,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
         Assert.Equal("node-start", state.Execution.ExecutableNodeId);
         Assert.Equal(RuntimeStartActivityCommandPayload.ScheduledActivityReason, state.Metadata["runtime.startReason"]);
         Assert.Equal("start-work", state.Metadata["runtime.startSchedulerWorkItemId"]);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
         Assert.Equal(ActivityExecutionStatus.Running, projection.Status);
         Assert.Equal(_now, projection.StartedAt);
 
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
         var invokeWork = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, invokeWork.CommandKind);
@@ -95,7 +95,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Running, state.Status);
         Assert.Equal(_now.AddMinutes(-1), state.StartedAt);
-        var invokeWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var invokeWork = Assert.Single(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, invokeWork.CommandKind);
     }
 
@@ -119,7 +119,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
         Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
         Assert.Equal(_now.AddMinutes(-1), state.StartedAt);
         Assert.Equal(_now, state.CompletedAt);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]

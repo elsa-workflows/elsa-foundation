@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -450,6 +451,124 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitOutboxProcessRequest(limit: 0));
         Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxProcessRequest(limit: 10, workflowExecutionId: " "));
         Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxProcessRequest(limit: 10, intentKind: " "));
+    }
+
+    [Fact]
+    public async Task Processor_LiveDrainMarker_DeliversEnqueueSchedulerWorkInMemory_WithoutClaimRoundTrip()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var dispatcher = new RecordingDispatcher();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var processor = NewLiveDrainProcessor(store, dispatcher, _now, liveDrain);
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+        using (liveDrain.Push(new RuntimeLiveDrainDeliveryScope("wfexec-1")))
+        {
+            var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 10, workflowExecutionId: "wfexec-1", intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+            Assert.Equal(1, result.DeliveredCount);
+        }
+
+        Assert.Equal(["intent-1"], dispatcher.Intents.Select(intent => intent.IntentId));
+        var delivered = await store.FindAsync("outbox-1");
+        Assert.NotNull(delivered);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
+        Assert.Equal(1, delivered.DeliveryAttemptCount);
+        // The fenced claim path bumps the fencing token to 1 (Pending -> Delivering -> Delivered). In-memory delivery
+        // skips the claim, so a token still at 0 proves the durable claim round-trip was not taken.
+        Assert.Equal(0, delivered.DeliveryFencingToken);
+    }
+
+    [Fact]
+    public async Task Processor_CoalescingSessionActive_DoesNotEngageInMemoryFastPath()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var dispatcher = new RecordingDispatcher();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var coalescing = new FixedCoalescingSessionAccessor(new RuntimeCoalescingSession(
+            "wfexec-1", new InMemoryWorkflowSchedulerWorkQueue(), new CoalescingRuntimeCheckpointPersistenceOptions()));
+        var processor = NewLiveDrainProcessor(store, dispatcher, _now, liveDrain, coalescing);
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+        using (liveDrain.Push(new RuntimeLiveDrainDeliveryScope("wfexec-1")))
+        {
+            var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 10, workflowExecutionId: "wfexec-1", intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+            Assert.Equal(1, result.DeliveredCount);
+        }
+
+        // Coalescing overlay is authoritative: the durable claim path runs, so the fencing token advanced.
+        var delivered = await store.FindAsync("outbox-1");
+        Assert.NotNull(delivered);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
+        Assert.Equal(1, delivered.DeliveryFencingToken);
+    }
+
+    [Fact]
+    public async Task Processor_LiveDrainMarker_LeavesNonEnqueueSchedulerWorkIntentsOnClaimPath()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var dispatcher = new RecordingDispatcher();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var processor = NewLiveDrainProcessor(store, dispatcher, _now, liveDrain);
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", kind: "OtherIntent"));
+
+        using (liveDrain.Push(new RuntimeLiveDrainDeliveryScope("wfexec-1")))
+        {
+            await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 10, workflowExecutionId: "wfexec-1", intentKind: "OtherIntent"));
+        }
+
+        var delivered = await store.FindAsync("outbox-1");
+        Assert.NotNull(delivered);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
+        Assert.Equal(1, delivered.DeliveryFencingToken);
+    }
+
+    [Fact]
+    public async Task Processor_LiveDrainMarkerForDifferentExecution_UsesClaimPath()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var dispatcher = new RecordingDispatcher();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var processor = NewLiveDrainProcessor(store, dispatcher, _now, liveDrain);
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+        using (liveDrain.Push(new RuntimeLiveDrainDeliveryScope("wfexec-OTHER")))
+        {
+            await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 10, workflowExecutionId: "wfexec-1", intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+        }
+
+        var delivered = await store.FindAsync("outbox-1");
+        Assert.NotNull(delivered);
+        Assert.Equal(1, delivered.DeliveryFencingToken);
+    }
+
+    private static RuntimePostCommitOutboxProcessor NewLiveDrainProcessor(
+        IRuntimePostCommitOutboxStore store,
+        RecordingDispatcher dispatcher,
+        DateTimeOffset now,
+        IRuntimeLiveDrainDeliveryAccessor liveDrainDeliveryAccessor,
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor = null) =>
+        new(
+            store,
+            dispatcher,
+            new FixedTimeProvider(now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            logger: null,
+            liveDrainDeliveryAccessor,
+            coalescingSessionAccessor);
+
+    private sealed class FixedCoalescingSessionAccessor(RuntimeCoalescingSession session) : IRuntimeCoalescingSessionAccessor
+    {
+        public RuntimeCoalescingSession? Current => session;
+
+        public IDisposable Push(RuntimeCoalescingSession? pushedSession) =>
+            throw new NotSupportedException("The processor test provides a fixed ambient coalescing session.");
     }
 
     private static RuntimePostCommitOutboxProcessor NewProcessor(

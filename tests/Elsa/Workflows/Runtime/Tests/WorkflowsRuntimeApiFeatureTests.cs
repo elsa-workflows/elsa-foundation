@@ -361,7 +361,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                 RuntimeStartActivityCommandPayload.ScheduledActivityReason))));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.True(result.StoppedOnPause);
         Assert.Equal(0, result.DrainedCount);

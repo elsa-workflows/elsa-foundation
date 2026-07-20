@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-credential",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+  "executionPath": "provider-driver/mongodb/iam-credential/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "63b3a91983178d2f7966c3a328152fbd81f1ca582b45610d23c1449d01e637fe",
+  "outcome": "pass",
+  "evidence": "evidence/mongodb/iam-credential/0e7ae6dd54aaea28.json"
+}

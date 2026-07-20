@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "distributed-command-send-sequence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "357b2f34ad9d59fa97b97697952c4d9d6f73278759e388ef999a2ff70b4b1f55",
+  "executionPath": "provider-driver/sqlite/distributed-command-transport/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
+  "outcome": "pass",
+  "evidence": "evidence/sqlite/distributed-command-transport/0e7ae6dd54aaea28.json"
+}

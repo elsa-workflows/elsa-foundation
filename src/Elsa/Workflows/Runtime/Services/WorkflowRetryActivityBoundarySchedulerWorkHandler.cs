@@ -69,7 +69,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
         if (existingRetry is not null)
             ValidateExistingRetry(existingRetry, prior, attempt, command.PinnedExecutable);
 
-        var allValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+        var allValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workItem.WorkflowExecutionId, cancellationToken);
         var originalInputs = allValues
             .Where(value => StringComparer.Ordinal.Equals(value.SourceActivityExecutionId, prior.Execution.ActivityExecutionId))
             .Where(value => value.Metadata.TryGetValue(RuntimeMetadataKeys.BoundaryValueRole, out var role) && StringComparer.Ordinal.Equals(role, "input"))

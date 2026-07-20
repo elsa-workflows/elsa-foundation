@@ -120,7 +120,7 @@ internal sealed class GroundworkDocumentStoreFixture(
                 return await QueryScopePageAsync(query, requireExpiry: false, cancellationToken);
             if (query.QueryIdentity == ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery)
                 return await QuerySingleValuePageAsync(query, ElsaRuntimeStorageManifest.TestScopeIdField, cancellationToken);
-            if (IsOrderedRangeRoute(query.QueryIdentity))
+            if (query.Order.Count > 0 || IsOrderedRangeRoute(query.QueryIdentity))
                 return await new RuntimeTestBoundedDocumentStore(store).QueryAsync(query, cancellationToken);
             if (query.DocumentKind == ElsaRuntimeStorageManifest.BookmarkStateDocumentKind &&
                 query.QueryIdentity == ElsaRuntimeStorageManifest.ListBookmarksByStimulusAndTypeQuery)
@@ -222,10 +222,18 @@ internal sealed class GroundworkDocumentStoreFixture(
                 .ThenBy(candidate => candidate.Document.Id, StringComparer.Ordinal)
                 .Select(candidate => candidate.Document)
                 .ToArray();
-            IEnumerable<DocumentEnvelope> window = matches.Skip(query.Skip ?? 0);
+            var offset = DecodeContinuation(query);
+            IEnumerable<DocumentEnvelope> window = matches.Skip(offset + (query.Skip ?? 0));
             if (query.Take is { } take)
                 window = window.Take(take);
-            return new DocumentQueryResult(window.ToArray(), matches.Length);
+            var documents = window.ToArray();
+            var nextOffset = offset + (query.Skip ?? 0) + documents.Length;
+            return new DocumentQueryResult(
+                documents,
+                matches.Length,
+                query.Take is not null && nextOffset < matches.Length
+                    ? EncodeContinuation(query, nextOffset)
+                    : null);
         }
 
         private async Task<DocumentQueryResult> QueryPendingSchedulerExecutionsAsync(
@@ -246,16 +254,49 @@ internal sealed class GroundworkDocumentStoreFixture(
             var matches = all.Documents
                 .Select(document => (
                     Document: document,
-                    WorkflowExecutionId: ReadRequiredString(document, ElsaRuntimeStorageManifest.WorkflowExecutionIdField)))
+                    WorkflowExecutionId: ReadRequiredString(document, ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                    OrderKey: ReadRequiredString(document, ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField)))
                 .Where(candidate => candidate.WorkflowExecutionId.StartsWith(prefix, StringComparison.Ordinal))
                 .OrderBy(candidate => candidate.WorkflowExecutionId, StringComparer.Ordinal)
-                .ThenBy(candidate => candidate.Document.Id, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.OrderKey, StringComparer.Ordinal)
                 .Select(candidate => candidate.Document)
                 .ToArray();
-            IEnumerable<DocumentEnvelope> window = matches.Skip(query.Skip ?? 0);
+            var offset = DecodeContinuation(query);
+            IEnumerable<DocumentEnvelope> window = matches.Skip(offset + (query.Skip ?? 0));
             if (query.Take is { } take)
                 window = window.Take(take);
-            return new DocumentQueryResult(window.ToArray(), matches.Length);
+            var documents = window.ToArray();
+            var nextOffset = offset + (query.Skip ?? 0) + documents.Length;
+            return new DocumentQueryResult(
+                documents,
+                matches.Length,
+                query.Take is not null && nextOffset < matches.Length
+                    ? EncodeContinuation(query, nextOffset)
+                    : null);
+        }
+
+        private static string EncodeContinuation(DocumentQuery query, int offset) =>
+            $"groundwork-test:{query.DocumentKind}:{query.QueryIdentity}:{offset.ToString(CultureInfo.InvariantCulture)}";
+
+        private static int DecodeContinuation(DocumentQuery query)
+        {
+            if (query.Continuation is null)
+                return 0;
+
+            var prefix = $"groundwork-test:{query.DocumentKind}:{query.QueryIdentity}:";
+            if (!query.Continuation.StartsWith(prefix, StringComparison.Ordinal) ||
+                !int.TryParse(
+                    query.Continuation[prefix.Length..],
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out var offset) ||
+                offset < 0)
+            {
+                throw new InvalidDocumentQueryContinuationException(
+                    "The Groundwork test continuation is invalid or belongs to another query.");
+            }
+
+            return offset;
         }
 
         private static string ReadRequiredString(DocumentEnvelope envelope, string path)

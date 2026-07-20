@@ -2,6 +2,7 @@
   "activityExecutionId": "ae-1",
   "executionScopeId": "ae-1",
   "executionSequence": 1,
+  "isScopeRoot": true,
   "record": {
     "activityExecutionId": "ae-1",
     "executionScopeId": "ae-1",

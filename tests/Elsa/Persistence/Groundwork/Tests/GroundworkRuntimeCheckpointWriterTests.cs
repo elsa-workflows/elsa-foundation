@@ -399,7 +399,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
                 Assert.Null(await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1"));
                 Assert.Null(await new GroundworkDurableTimerStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "timer-1"));
                 Assert.Empty(await new GroundworkWorkflowSchedulerWorkQueue(store, GroundworkTestSerialization.Serializer)
-                    .ListAsync(new RuntimeSchedulerWorkQuery("wf-1")));
+                    .ListAllAsync(new RuntimeSchedulerWorkQuery("wf-1")));
                 Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-scope-cancel"));
             }
         }

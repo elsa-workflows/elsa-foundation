@@ -16,8 +16,8 @@ internal static class DueWorkStoragePhysicalizer
     {
         StorageUnits = manifest.StorageUnits.Select(unit => unit.Identity.Value switch
         {
-            ElsaRuntimeStorageManifest.DurableTimerDocumentKind => AddTimerRoute(unit),
-            ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind => AddScheduleRoute(unit),
+            ElsaRuntimeStorageManifest.DurableTimerDocumentKind => AddTimerPageRoute(AddTimerRoute(unit)),
+            ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind => AddSchedulePageRoutes(AddScheduleRoute(unit)),
             _ => unit
         }).ToArray()
     };
@@ -36,6 +36,7 @@ internal static class DueWorkStoragePhysicalizer
                 ElsaRuntimeStorageManifest.DurableTimerByDueTime,
                 ElsaRuntimeStorageManifest.ByTimerIdIndex
             ],
+            [ElsaRuntimeStorageManifest.DurableTimerByDueTime],
             ElsaRuntimeStorageManifest.ListDueDurableTimersQuery,
             new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
             [
@@ -70,6 +71,10 @@ internal static class DueWorkStoragePhysicalizer
                 ElsaRuntimeStorageManifest.RecurringTriggerScheduleByNextOccurrence,
                 ElsaRuntimeStorageManifest.ByRecurringScheduleIdIndex
             ],
+            [
+                ElsaRuntimeStorageManifest.ByRecurringScheduleActiveIndex,
+                ElsaRuntimeStorageManifest.RecurringTriggerScheduleByNextOccurrence
+            ],
             ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery,
             new HashSet<PortableQueryOperation>
             {
@@ -96,15 +101,95 @@ internal static class DueWorkStoragePhysicalizer
                     PhysicalSortDirection.Ascending)
             ]);
 
+    private static StorageUnit AddTimerPageRoute(StorageUnit unit) =>
+        AddRoute(
+            unit,
+            ElsaRuntimeStorageManifest.DurableTimerByWorkflowAndTimerId,
+            [
+                new IndexField(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                new IndexField(ElsaRuntimeStorageManifest.DurableTimerIdField)
+            ],
+            [
+                ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
+                ElsaRuntimeStorageManifest.ByTimerIdIndex
+            ],
+            [],
+            ElsaRuntimeStorageManifest.PageDurableTimersByWorkflowExecutionQuery,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+            [
+                new BoundedQueryPredicateField(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+            ],
+            [
+                new BoundedQuerySortField(
+                    ElsaRuntimeStorageManifest.DurableTimerIdField,
+                    PhysicalSortDirection.Ascending)
+            ],
+            paging: QueryPagingSupport.Cursor);
+
+    private static StorageUnit AddSchedulePageRoutes(StorageUnit unit) =>
+        AddRoute(
+            AddRoute(
+                unit,
+                ElsaRuntimeStorageManifest.RecurringTriggerScheduleByPublicationAndScheduleId,
+                [
+                    new IndexField(ElsaRuntimeStorageManifest.RecurringTriggerSchedulePublicationIdField),
+                    new IndexField(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)
+                ],
+                [
+                    ElsaRuntimeStorageManifest.ByPublicationIndex,
+                    ElsaRuntimeStorageManifest.ByRecurringScheduleIdIndex
+                ],
+                [],
+                ElsaRuntimeStorageManifest.PageRecurringTriggerSchedulesByPublicationQuery,
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+                [
+                    new BoundedQueryPredicateField(
+                        ElsaRuntimeStorageManifest.RecurringTriggerSchedulePublicationIdField,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+                ],
+                [
+                    new BoundedQuerySortField(
+                        ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField,
+                        PhysicalSortDirection.Ascending)
+                ],
+                paging: QueryPagingSupport.Cursor),
+            ElsaRuntimeStorageManifest.RecurringTriggerScheduleByArtifactAndScheduleId,
+            [
+                new IndexField(ElsaRuntimeStorageManifest.ArtifactIdField),
+                new IndexField(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)
+            ],
+            [
+                ElsaRuntimeStorageManifest.ByArtifactIndex,
+                ElsaRuntimeStorageManifest.ByRecurringScheduleIdIndex
+            ],
+            [],
+            ElsaRuntimeStorageManifest.PageRecurringTriggerSchedulesByArtifactQuery,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+            [
+                new BoundedQueryPredicateField(
+                    ElsaRuntimeStorageManifest.ArtifactIdField,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+            ],
+            [
+                new BoundedQuerySortField(
+                    ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField,
+                    PhysicalSortDirection.Ascending)
+            ],
+            paging: QueryPagingSupport.Cursor);
+
     private static StorageUnit AddRoute(
         StorageUnit unit,
         string indexIdentity,
         IndexField[] fields,
         string[] projectedColumns,
+        string[] supersededPhysicalIndexes,
         string queryIdentity,
         IReadOnlySet<PortableQueryOperation> operations,
         BoundedQueryPredicateField[] predicates,
-        BoundedQuerySortField[] order)
+        BoundedQuerySortField[] order,
+        QueryPagingSupport paging = QueryPagingSupport.None)
     {
         if (unit.PhysicalStorage is not { } storage ||
             storage.Policy is not PhysicalStoragePolicy.ExplicitPolicy { Definition: var definition } ||
@@ -120,17 +205,37 @@ internal static class DueWorkStoragePhysicalizer
             IndexValueKind.Keyword,
             isUnique: false,
             MissingValueBehavior.Excluded);
-        var physicalIndex = new PhysicalIndexDefinition(
-            logicalIndex.Identity,
-            [
-                new PhysicalIndexColumnDefinition(new DocumentEnvelopeDefinition().StorageScopeColumn, 0),
-                .. projectedColumns.Select((column, index) =>
-                    new PhysicalIndexColumnDefinition(column, index + 1))
-            ]);
+        var envelope = new DocumentEnvelopeDefinition();
+        var physicalIndexColumns = new List<PhysicalIndexColumnDefinition>
+        {
+            new(envelope.StorageScopeColumn, 0)
+        };
+        physicalIndexColumns.AddRange(projectedColumns.Select((column, index) =>
+            new PhysicalIndexColumnDefinition(column, index + 1)));
+        if (paging == QueryPagingSupport.Cursor)
+        {
+            physicalIndexColumns.Add(new PhysicalIndexColumnDefinition(
+                envelope.IdLookupKeyColumn,
+                physicalIndexColumns.Count));
+        }
+
+        var physicalIndex = new PhysicalIndexDefinition(logicalIndex.Identity, physicalIndexColumns);
         var table = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
-            definition.ProjectedColumns,
-            definition.Indexes.Concat([physicalIndex]).ToArray(),
+            definition.ProjectedColumns
+                .Select(column =>
+                    projectedColumns.Contains(column.LogicalName, StringComparer.Ordinal) &&
+                    column.Type == PortablePhysicalType.String
+                        ? column with
+                        {
+                            Length = ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength
+                        }
+                        : column)
+                .ToArray(),
+            definition.Indexes
+                .Where(index => !supersededPhysicalIndexes.Contains(index.LogicalName, StringComparer.Ordinal))
+                .Append(physicalIndex)
+                .ToArray(),
             definition.SchemaVersion,
             definition.Evolution,
             definition.LinkedProjectionLogicalName,
@@ -140,7 +245,7 @@ internal static class DueWorkStoragePhysicalizer
             logicalIndex.Identity,
             operations,
             QuerySortSupport.Ascending,
-            QueryPagingSupport.None,
+            paging,
             BoundedQueryExecutionClass.ScaleBearing,
             sortFields: order,
             predicateFields: predicates);

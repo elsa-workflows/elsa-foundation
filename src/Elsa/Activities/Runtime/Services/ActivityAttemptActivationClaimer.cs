@@ -14,6 +14,7 @@ internal static class ActivityAttemptActivationClaimer
         RuntimeSchedulerWorkItem workItem,
         RuntimeInvokeActivityCommandPayload payload,
         ActivityExecutionState state,
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile,
         CancellationToken cancellationToken) =>
         ClaimAsync(
             checkpointCommitter,
@@ -24,6 +25,7 @@ internal static class ActivityAttemptActivationClaimer
             payload.ActivityExecutionId,
             payload.Reason,
             state,
+            sideEffectProfile,
             freshAttemptReason: ActivityAttemptReason.Retry,
             claimedReplacementReason: ActivityAttemptReason.Retry,
             triggerDeliveryId: null,
@@ -37,6 +39,7 @@ internal static class ActivityAttemptActivationClaimer
         RuntimeSchedulerWorkItem workItem,
         RuntimeCompleteActivityCommandPayload payload,
         ActivityExecutionState state,
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile,
         CancellationToken cancellationToken) =>
         ClaimAsync(
             checkpointCommitter,
@@ -47,6 +50,7 @@ internal static class ActivityAttemptActivationClaimer
             payload.ActivityExecutionId,
             payload.Reason,
             state,
+            sideEffectProfile,
             freshAttemptReason: ActivityAttemptReason.Resume,
             claimedReplacementReason: ActivityAttemptReason.Retry,
             triggerDeliveryId: null,
@@ -282,6 +286,7 @@ internal static class ActivityAttemptActivationClaimer
         string activityExecutionId,
         string checkpointReason,
         ActivityExecutionState state,
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile,
         ActivityAttemptReason freshAttemptReason,
         ActivityAttemptReason claimedReplacementReason,
         string? triggerDeliveryId,
@@ -342,7 +347,14 @@ internal static class ActivityAttemptActivationClaimer
             [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
             [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
             [RuntimeMetadataKeys.CheckpointReason] = checkpointReason,
+            // ADR 0032 R2: the claim boundary stays Mandatory (IsMandatoryCheckpoint forbids only Skip, never
+            // Deferred), so the committer's guardrail is preserved for both profiles while ReplaySafe still
+            // permits the coalescing policy to Defer this flush. The resolved profile rides as transport so the
+            // policy can make that decision; the contract remains the source of truth.
             [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.CheckpointSideEffectProfile] = sideEffectProfile == Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe
+                ? RuntimeMetadataKeys.CheckpointSideEffectProfileReplaySafe
+                : RuntimeMetadataKeys.CheckpointSideEffectProfileExternal,
             [RuntimeMetadataKeys.ActivityExecutionId] = activityExecutionId,
             [RuntimeMetadataKeys.ActivityAttemptActivationClaim] = openAttempt.AttemptId,
             [RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId] = workItem.WorkItemId,

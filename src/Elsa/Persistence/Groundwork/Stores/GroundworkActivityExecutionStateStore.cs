@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
@@ -56,37 +57,55 @@ public sealed class GroundworkActivityExecutionStateStore(
         return (await LoadByLogicalIdentityAsync(workflowExecutionId, activityExecutionId, cancellationToken))?.State;
     }
 
-    public async ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        return await QueryDocumentsAsync<ActivityExecutionStateDocument, ActivityExecutionState>(
-            ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
-            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
-            workflowExecutionId,
-            document => document.State,
+        return new(BoundedStore.CountAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageActivityExecutionStatesByWorkflowExecutionQuery,
+                [Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, workflowExecutionId)],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.ActivityExecutionIdField)],
+                take: 1),
+            cancellationToken));
+    }
+
+    public async ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(
+        ActivityExecutionStatePageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return await QueryPageAsync(
+            ElsaRuntimeStorageManifest.PageActivityExecutionStatesByWorkflowExecutionQuery,
+            query,
+            [
+                Equal(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                    query.WorkflowExecutionId)
+            ],
             cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(
+        ActivityExecutionStateParentPageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(parentActivityExecutionId);
+        ArgumentNullException.ThrowIfNull(query);
 
-        // Query the single-field parent index (equality on the persisted state.parentActivityExecutionId), then apply a
-        // defensive in-memory workflow-execution filter so the full (wf, parent) semantics hold identically across providers
-        // without relying on parent activity-execution ids being globally unique. The parent-scoped set is branch-bounded,
-        // so the post-filter is over a tiny list.
-        var byParent = await QueryDocumentsAsync<ActivityExecutionStateDocument, ActivityExecutionState>(
-            ElsaRuntimeStorageManifest.ListByParentActivityExecutionQuery,
-            ElsaRuntimeStorageManifest.ParentActivityExecutionIdField,
-            parentActivityExecutionId,
-            document => document.State,
+        return await QueryPageAsync(
+            ElsaRuntimeStorageManifest.PageActivityExecutionStatesByParentQuery,
+            query,
+            [
+                Equal(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                    query.WorkflowExecutionId),
+                Equal(
+                    ElsaRuntimeStorageManifest.ParentActivityExecutionIdField,
+                    query.ParentActivityExecutionId)
+            ],
             cancellationToken);
-
-        return byParent
-            .Where(state => StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId))
-            .ToArray();
     }
 
     private async ValueTask<LoadedActivityExecutionState?> LoadByLogicalIdentityAsync(
@@ -117,4 +136,30 @@ public sealed class GroundworkActivityExecutionStateStore(
         ActivityExecutionState State);
 
     private sealed record LoadedActivityExecutionState(ActivityExecutionState State, long Version);
+
+    private async ValueTask<RuntimeStorePage<ActivityExecutionState>> QueryPageAsync(
+        string queryIdentity,
+        RuntimeStorePageRequest query,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        CancellationToken cancellationToken)
+    {
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                queryIdentity,
+                clauses,
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.ActivityExecutionIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
+            cancellationToken);
+        return new RuntimeStorePage<ActivityExecutionState>(
+            query,
+            result.Documents
+                .Select(envelope => Serializer.Deserialize<ActivityExecutionStateDocument>(envelope).State)
+                .ToArray(),
+            result.NextContinuation);
+    }
+
+    private static DocumentQueryClause Equal(string fieldPath, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
 }

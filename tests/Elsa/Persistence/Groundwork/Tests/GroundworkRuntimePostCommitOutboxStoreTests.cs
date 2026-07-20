@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
@@ -25,6 +26,14 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SavePendingAsync(Pending("item-1", "wf-1"));
+        var persisted = await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+            "item-1");
+        Assert.Contains("deliverableAt", persisted!.ContentJson, StringComparison.Ordinal);
+        Assert.Contains("claimableAt", persisted.ContentJson, StringComparison.Ordinal);
+        using var content = JsonDocument.Parse(persisted.ContentJson);
+        Assert.Equal(Now, content.RootElement.GetProperty("deliverableAt").GetDateTimeOffset());
+        Assert.Equal(Now, content.RootElement.GetProperty("claimableAt").GetDateTimeOffset());
 
         var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10));
         Assert.Equal(new[] { "item-1" }, deliverable.Select(x => x.OutboxItemId));
@@ -47,7 +56,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
-    public async Task Nested_scheduler_identity_beyond_portable_document_limit_round_trips(string provider)
+    public async Task Nested_scheduler_identity_preserves_its_logical_value_while_bounding_the_projection(string provider)
     {
         await using var fixture = CreateStore(provider);
         var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
@@ -63,7 +72,8 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
             idempotencyKey: null,
             payload: null);
         var logicalOutboxItemId = RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent);
-        Assert.True(logicalOutboxItemId.Length > 450, $"Expected the regression identity to exceed 450 code units, but observed {logicalOutboxItemId.Length}.");
+        Assert.True(logicalOutboxItemId.Length > RuntimePostCommitOutboxIdentity.MaximumLength);
+        Assert.Equal(logicalOutboxItemId, RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent));
         var pending = new RuntimePostCommitOutboxItem(
             logicalOutboxItemId,
             intent,
@@ -89,14 +99,26 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         await store.SavePendingAsync(Pending(outboxItemId, "wf-lookup"));
 
         var found = await ((IPostCommitOutboxLookupStore)store).FindAsync(outboxItemId);
+        var envelope = await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+            GroundworkPhysicalDocumentIdTestData.PhysicalAliasFor(outboxItemId));
+        using var content = JsonDocument.Parse(envelope!.ContentJson);
 
         Assert.NotNull(found);
         Assert.Equal(outboxItemId, found.OutboxItemId);
         Assert.Equal("wf-lookup", found.Intent.WorkflowExecutionId);
+        Assert.Equal(
+            outboxItemId,
+            content.RootElement.GetProperty("logicalOutboxItemId").GetString());
+        Assert.True(
+            content.RootElement.GetProperty("item").GetProperty("outboxItemId").GetString()!.Length <=
+            RuntimePostCommitOutboxIdentity.MaximumProjectionLength);
         Assert.Null(await ((IPostCommitOutboxLookupStore)store).FindAsync("missing"));
     }
 
     [Theory]
+    [InlineData(256)]
+    [InlineData(257)]
     [InlineData(450)]
     [InlineData(451)]
     public async Task Portable_identity_boundary_round_trips(int identityLength)
@@ -230,9 +252,10 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now.AddHours(2), 1));
 
         Assert.Equal("z-earliest", Assert.Single(deliverable).OutboxItemId);
-        Assert.Equal(4, recording.Queries.Count);
+        Assert.Single(recording.Queries);
         Assert.All(recording.Queries, query => Assert.Equal(1, query.Take));
-        Assert.InRange(recording.ReturnedDocumentCounts.Sum(), 1, 4);
+        Assert.Equal(ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxQuery, Assert.Single(recording.Queries).QueryIdentity);
+        Assert.Single(recording.ReturnedDocumentCounts);
     }
 
     [Fact]
@@ -260,9 +283,10 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
                 1)));
 
         Assert.Equal("due-now", claim.OutboxItemId);
-        Assert.Equal(5, recording.Queries.Count);
+        Assert.Single(recording.Queries);
         Assert.All(recording.Queries, query => Assert.Equal(1, query.Take));
-        Assert.InRange(recording.ReturnedDocumentCounts.Sum(), 1, 5);
+        Assert.Equal(ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxQuery, Assert.Single(recording.Queries).QueryIdentity);
+        Assert.Single(recording.ReturnedDocumentCounts);
     }
 
     [Theory]
@@ -306,20 +330,13 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
 
         Assert.Empty(await store.GetDeliverableAsync(
             new RuntimePostCommitOutboxQuery(Now, int.MaxValue)));
-        Assert.Equal(4, recording.Queries.Count);
-        Assert.All(recording.Queries, query => Assert.Equal(int.MaxValue, query.Take));
-        Assert.All(
-            recording.Queries.Where(query =>
-                query.QueryIdentity.StartsWith("list-immediate", StringComparison.Ordinal)),
-            query =>
-            {
-                var availability = query.Clauses
-                    .SelectMany(clause => clause.Comparisons)
-                    .Single(comparison =>
-                        comparison.Path == ElsaRuntimeStorageManifest.PostCommitOutboxAvailableAtField);
-                Assert.Equal(QueryComparisonOperator.Equal, availability.Operator);
-                Assert.Null(Assert.Single(availability.Values));
-            });
+        Assert.Single(recording.Queries);
+        Assert.All(recording.Queries, query => Assert.Equal(RuntimeStorePageRequest.MaximumLimit, query.Take));
+        Assert.Equal(ElsaRuntimeStorageManifest.ListDeliverablePostCommitOutboxQuery, Assert.Single(recording.Queries).QueryIdentity);
+        var deliverableAt = Assert.Single(recording.Queries.Single().Clauses
+            .SelectMany(clause => clause.Comparisons)
+            .Where(comparison => comparison.Path == ElsaRuntimeStorageManifest.PostCommitOutboxDeliverableAtField));
+        Assert.Equal(QueryComparisonOperator.LessThanOrEqual, deliverableAt.Operator);
 
         recording.Queries.Clear();
         Assert.Empty(await store.ClaimAsync(
@@ -328,8 +345,42 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
                 Now,
                 TimeSpan.FromMinutes(1),
                 int.MaxValue)));
-        Assert.Equal(5, recording.Queries.Count);
-        Assert.All(recording.Queries, query => Assert.Equal(int.MaxValue, query.Take));
+        Assert.Single(recording.Queries);
+        Assert.All(recording.Queries, query => Assert.Equal(RuntimeStorePageRequest.MaximumLimit, query.Take));
+        Assert.Equal(ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxQuery, Assert.Single(recording.Queries).QueryIdentity);
+    }
+
+    [Fact]
+    public async Task Filtered_candidate_query_orders_by_the_complete_declared_prefix()
+    {
+        await using var fixture = CreateStore("memory");
+        var recording = new EmptyRecordingBoundedDocumentStore();
+        var store = new GroundworkRuntimePostCommitOutboxStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            recording);
+
+        Assert.Empty(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "filtered-owner",
+            Now,
+            TimeSpan.FromMinutes(1),
+            1,
+            workflowExecutionId: "wf-filtered",
+            intentKind: "intent-filtered")));
+
+        var query = Assert.Single(recording.Queries);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.ListClaimablePostCommitOutboxByWorkflowAndIntentKindQuery,
+            query.QueryIdentity);
+        Assert.Equal(
+            [
+                ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                ElsaRuntimeStorageManifest.PostCommitOutboxIntentKindField,
+                ElsaRuntimeStorageManifest.PostCommitOutboxClaimableAtField,
+                ElsaRuntimeStorageManifest.PostCommitOutboxRecordedAtField,
+                ElsaRuntimeStorageManifest.PostCommitOutboxItemIdField
+            ],
+            query.Order.Select(order => order.Path));
     }
 
     [Theory]

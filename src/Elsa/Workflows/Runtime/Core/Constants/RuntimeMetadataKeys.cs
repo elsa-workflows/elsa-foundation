@@ -7,6 +7,16 @@ public static class RuntimeMetadataKeys
     public const string CompletionOutcomeNames = "runtime.completionOutcomeNames";
     public const string CheckpointRequirement = "runtime.checkpointRequirement";
     public const string CheckpointRequirementMandatory = "Mandatory";
+    /// <summary>
+    /// Transport for the resolved <c>SideEffectProfile</c> of the CLR activity a pre-activation attempt-claim
+    /// checkpoint belongs to (ADR 0032 R2). The contract is the source of truth; the claimer stamps the resolved
+    /// value here so the coalescing persistence policy can decide whether the claim boundary may be deferred
+    /// (<c>ReplaySafe</c>) or must flush immediately (<c>External</c> / absent). Its value is the profile name
+    /// (<see cref="CheckpointSideEffectProfileReplaySafe"/> / <see cref="CheckpointSideEffectProfileExternal"/>).
+    /// </summary>
+    public const string CheckpointSideEffectProfile = "runtime.checkpointSideEffectProfile";
+    public const string CheckpointSideEffectProfileExternal = "External";
+    public const string CheckpointSideEffectProfileReplaySafe = "ReplaySafe";
     public const string ActivityExecutionId = "runtime.activityExecutionId";
     /// <summary>
     /// Attempt identity durably claimed by an InvokeActivity delivery before CLR activation. If the same open

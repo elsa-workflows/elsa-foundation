@@ -563,6 +563,15 @@ internal sealed class GroundworkCoverageLedgerValidator
         if (queryShape is null)
             return;
 
+        var nativeQueryIdentity = StringValue(record, "nativeQueryIdentity");
+        var documentKind = StringValue(record, "documentKind");
+        if (nativeQueryIdentity is null || documentKind is null)
+        {
+            findings.Add(
+                $"{id}: {provider} query '{queryShape}' must identify its native query identity and document kind.");
+            return;
+        }
+
         var expectedNativeEvidence = GroundworkEvidenceArtifactContract.NativeEvidencePath(provider, id, scenarioId);
         var nativeEvidence = StringValue(record, "nativeEvidence");
         if (nativeEvidence != expectedNativeEvidence)
@@ -580,6 +589,62 @@ internal sealed class GroundworkCoverageLedgerValidator
             StringValue(record, "nativeEvidenceSha256"),
             expectedPayload: null,
             findings);
+        ValidateNativeArtifactBinding(
+            id,
+            provider,
+            scenarioId,
+            queryShape,
+            documentKind,
+            nativeQueryIdentity,
+            nativeEvidence,
+            findings);
+    }
+
+    private void ValidateNativeArtifactBinding(
+        string id,
+        string provider,
+        string scenarioId,
+        string queryShape,
+        string documentKind,
+        string nativeQueryIdentity,
+        string relativePath,
+        ICollection<string> findings)
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            _evidenceRoot,
+            relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        var rootPrefix = _evidenceRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? _evidenceRoot
+            : _evidenceRoot + Path.DirectorySeparatorChar;
+        if (!path.StartsWith(rootPrefix, StringComparison.Ordinal) || !File.Exists(path))
+            return;
+
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var line in File.ReadLines(path))
+        {
+            var separator = line.IndexOf('=');
+            if (separator <= 0 || !values.TryAdd(line[..separator], line[(separator + 1)..]))
+                continue;
+        }
+
+        if (!values.TryGetValue("provider", out var nativeProvider) ||
+            !string.Equals(nativeProvider, provider, StringComparison.Ordinal))
+        {
+            findings.Add(
+                $"{id}: {provider} query '{queryShape}' native artifact does not bind the provider.");
+        }
+        if (!values.TryGetValue("document-kind", out var nativeDocumentKind) ||
+            !string.Equals(nativeDocumentKind, documentKind, StringComparison.Ordinal))
+        {
+            findings.Add(
+                $"{id}: {provider} query '{queryShape}' native artifact does not bind document kind '{documentKind}'.");
+        }
+        if (!values.TryGetValue("route", out var nativeRoute) ||
+            !string.Equals(nativeRoute, nativeQueryIdentity, StringComparison.Ordinal))
+        {
+            findings.Add(
+                $"{id}: {provider} query '{queryShape}' native artifact does not bind route '{nativeQueryIdentity}'.");
+        }
     }
 
     private void VerifyArtifact(
@@ -1078,6 +1143,7 @@ internal sealed record GroundworkProviderEvidence(
 
 internal sealed record GroundworkProviderEvidenceRecord(
     string ScenarioId,
+    string SourceScenarioId,
     string CoverageEntryId,
     string Provider,
     string ProviderIdentity,
@@ -1087,6 +1153,8 @@ internal sealed record GroundworkProviderEvidenceRecord(
     string ExecutionPath,
     int Clients,
     string? QueryShape,
+    string? NativeQueryIdentity,
+    string? DocumentKind,
     string? ConcurrencySemantic,
     string? FailureWindow,
     string? RestartScenario,

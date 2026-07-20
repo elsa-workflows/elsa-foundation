@@ -186,10 +186,26 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
             return ValueTask.FromResult(_executables.GetValueOrDefault(artifactId));
     }
 
-    public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default)
+    public ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(
+        RuntimeStorePageRequest request,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
         lock (_gate)
-            return ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutable>>(_executables.Values.ToArray());
+        {
+            const string queryBinding = "workflow-executable:list";
+            var lastId = InMemoryRuntimeStoreContinuation.Decode(request.ContinuationToken, queryBinding, nameof(request.ContinuationToken));
+            var ordered = _executables.Values
+                .OrderBy(executable => executable.Identity.ArtifactId, StringComparer.Ordinal)
+                .Where(executable => lastId is null || StringComparer.Ordinal.Compare(executable.Identity.ArtifactId, lastId) > 0)
+                .Take(request.Limit + 1)
+                .ToArray();
+            var items = ordered.Take(request.Limit).ToArray();
+            var nextContinuation = ordered.Length > request.Limit
+                ? InMemoryRuntimeStoreContinuation.Encode(queryBinding, items[^1].Identity.ArtifactId)
+                : null;
+            return ValueTask.FromResult(new RuntimeStorePage<WorkflowExecutable>(request, items, nextContinuation));
+        }
     }
 
     private void RecoverExpiredState(string artifactId, DateTimeOffset now)

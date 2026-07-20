@@ -301,7 +301,8 @@ public sealed class ParallelActivityTests : IDisposable
 
     private sealed class FakeActivityExecutionStateStore : IActivityExecutionStateStore
     {
-        private readonly List<ActivityExecutionState> _states = [];
+        private readonly InMemoryActivityExecutionStateStore _inner = new();
+        private int _nextStateOrdinal;
 
         public void SeedCompletedBranch(string executableNodeId) => SeedBranch(executableNodeId, ActivityExecutionStatus.Completed);
 
@@ -320,8 +321,8 @@ public sealed class ParallelActivityTests : IDisposable
 
         private void SeedActivity(string executableNodeId, ActivityExecutionStatus status, string parentActivityExecutionId)
         {
-            _states.Add(new ActivityExecutionState(
-                Execution: new ActivityExecution($"actexec-{executableNodeId}-{_states.Count}", "wfexec-1", executableNodeId, $"authored-{executableNodeId}", "test/probe", "1.0.0"),
+            var state = new ActivityExecutionState(
+                Execution: new ActivityExecution($"actexec-{executableNodeId}-{_nextStateOrdinal++}", "wfexec-1", executableNodeId, $"authored-{executableNodeId}", "test/probe", "1.0.0"),
                 Status: status,
                 SubStatus: null,
                 ScheduledAt: DateTimeOffset.UnixEpoch,
@@ -336,27 +337,25 @@ public sealed class ParallelActivityTests : IDisposable
                 IncidentIds: [],
                 FaultCount: 0,
                 AggregateFaultCount: 0,
-                Metadata: new Dictionary<string, string>()));
+                Metadata: new Dictionary<string, string>());
+            _inner.SaveAsync(state).GetAwaiter().GetResult();
         }
 
-        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
-        {
-            _states.Add(state);
-            return new(state);
-        }
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+            _inner.SaveAsync(state, cancellationToken);
 
         public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
-            new(_states.FirstOrDefault(s => s.Execution.ActivityExecutionId == activityExecutionId));
+            _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            new(_states.Where(s => s.Execution.WorkflowExecutionId == workflowExecutionId).ToArray());
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(
+            ActivityExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            _inner.ListPageAsync(query, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default) =>
-            new(_states
-                .Where(s =>
-                    s.Execution.WorkflowExecutionId == workflowExecutionId &&
-                    StringComparer.Ordinal.Equals(s.ParentActivityExecutionId, parentActivityExecutionId))
-                .ToArray());
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(
+            ActivityExecutionStateParentPageQuery query,
+            CancellationToken cancellationToken = default) =>
+            _inner.ListByParentPageAsync(query, cancellationToken);
     }
 
 }

@@ -319,14 +319,24 @@ service isolation, retry, and resumption behavior.
 
 #### Invocation lifecycle and durability
 
-- **FR-019**: Durable execution MUST commit a logical invocation identity and complete materialized
-  input snapshot before constructing or invoking user activity code.
+- **FR-019**: Durable execution MUST *write* a logical invocation identity and complete materialized
+  input snapshot into the checkpoint working set before constructing or invoking user activity code. The
+  durable **flush** of that pre-activation write is profile-conditional (ADR 0032 R2, spec 107): for an
+  `External` (default / unmarked) side-effect profile the flush MUST complete before user code runs
+  (unchanged); for a `ReplaySafe` profile under a coalescing cadence the write MAY be deferred and folded
+  forward into the next flushed commit, because re-executing a replay-safe activity produces byte-identical
+  state and no observable effect. The identity/snapshot is always written; only its flush timing relaxes.
 - **FR-020**: Retries and resumptions MUST retain one logical invocation identity and pinned input
-  snapshot while using a distinct attempt identity and fresh activity activation.
+  snapshot while using a distinct attempt identity and fresh activity activation. When the pre-activation
+  flush was deferred for a `ReplaySafe` profile (FR-019), the retained identity is recovered by replay from
+  the last flushed boundary rather than from an immediately-flushed claim.
 - **FR-021**: Successful activity completion MUST commit one complete typed result and authored control
   outcome before downstream work is scheduled.
 - **FR-022**: Recovery after a committed completion MUST reuse the completion record and MUST NOT
-  reexecute the activity solely because downstream scheduling was interrupted.
+  reexecute the activity solely because downstream scheduling was interrupted. For a `ReplaySafe` activity
+  whose pre-activation claim flush was deferred (FR-019), recovery before completion MAY reexecute the
+  activity by replay from the last flushed boundary; this is safe precisely because the profile guarantees
+  no observable effect. (Authority: ADR 0032 R2, spec 107.)
 - **FR-023**: Persistable fault information MUST be normalized into a safe runtime record; arbitrary
   CLR exception objects MUST NOT become ordinary persisted workflow values.
 - **FR-024**: Nonpersistable input, state, or result values MUST be rejected for durable execution and

@@ -232,7 +232,7 @@ public sealed class RuntimeTransitionContractTests
                     "publication-prepare-trigger",
                     [Binding("publication-prepare-trigger", "artifact-second", "node-second")]).AsTask()));
             Assert.Single(triggerPrepareOutcomes.Where(outcome => outcome));
-            Assert.Single(await firstTriggerStore.ListByPublicationAsync("publication-prepare-trigger"));
+            Assert.Single(await firstTriggerStore.ListAllByPublicationAsync("publication-prepare-trigger"));
 
             var firstScheduleStore = new GroundworkRecurringTriggerScheduleStore(
                 firstClient.DocumentStore,
@@ -393,7 +393,7 @@ public sealed class RuntimeTransitionContractTests
         var active = new List<string>();
         foreach (var publicationId in new[] { "publication-a", "publication-b" })
         {
-            if (Assert.Single(await store.ListByPublicationAsync(publicationId)).IsActive)
+            if (Assert.Single(await store.ListAllByPublicationAsync(publicationId)).IsActive)
                 active.Add(publicationId);
         }
 

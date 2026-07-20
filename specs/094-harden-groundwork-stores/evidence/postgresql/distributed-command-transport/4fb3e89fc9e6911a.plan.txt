@@ -1,0 +1,13 @@
+provider=postgresql
+document-kind=executionCommandTransport
+route=count-pending-commands-by-execution
+physical-name=execution_command_transport
+physical-cardinality=100000
+plan-classification=indexed
+index=execution_command_transport_u001fcommand_by_execut_b205695700bc
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=none
+materialized-candidate-count=0
+command-count=1
+command-0=Count|count|postgresql-json|index-scan|execution_command_transport_u001fcommand_by_execut_b205695700bc|document_kind,storage_scope,workflowExecutionIdKey|1||c41b4739531c7ff13cfa5fec8e21aa9627032b4686e2428f0e72bca9af742fb1

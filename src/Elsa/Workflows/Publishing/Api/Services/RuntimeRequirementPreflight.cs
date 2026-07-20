@@ -32,7 +32,7 @@ public sealed class RuntimeRequirementPreflight(
     {
         var selection = ValidateSelection(scope, artifactIds);
         var asOf = timeProvider.GetUtcNow();
-        var references = await sourceReferences.ListAsync(liveOnly: true, now: asOf, cancellationToken: cancellationToken);
+        var references = await sourceReferences.ListAllAsync(liveOnly: true, now: asOf, cancellationToken: cancellationToken);
         var retained = references
             .GroupBy(x => x.ArtifactId, StringComparer.Ordinal)
             .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.Ordinal);

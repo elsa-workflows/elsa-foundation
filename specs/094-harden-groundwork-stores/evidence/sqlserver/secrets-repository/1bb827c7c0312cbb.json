@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:expected-version-save",
+  "sourceScenarioId": "secret-revision-aware-mutation",
+  "coverageEntryId": "secrets-repository",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "e66998c0e2274a7add468384abbe318409f282a63c0ce85244baca74213b2794",
+  "executionPath": "provider-driver/sqlserver/secrets-repository/1bb827c7c0312cbb",
+  "clients": 3,
+  "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
+  "outcome": "pass",
+  "concurrencySemantic": "expected-version-save",
+  "evidence": "evidence/sqlserver/secrets-repository/1bb827c7c0312cbb.json"
+}

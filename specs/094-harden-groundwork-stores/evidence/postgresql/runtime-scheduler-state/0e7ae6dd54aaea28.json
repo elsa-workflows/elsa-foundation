@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "runtime-scheduler-state-roundtrip",
+  "coverageEntryId": "runtime-scheduler-state",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.72",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "78351eef5610e8f11b2d431bdfe30784d78e40202e30041262860bfaf6e7c476",
+  "executionPath": "provider-driver/postgresql/runtime-scheduler-state/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
+  "outcome": "pass",
+  "evidence": "evidence/postgresql/runtime-scheduler-state/0e7ae6dd54aaea28.json"
+}

@@ -65,19 +65,21 @@ public sealed class RuntimeSchedulerWorkItem
     public ActivityExecutionAttemptLineage? Attempt { get; }
 }
 
-public sealed class RuntimeSchedulerWorkQuery
+/// <summary>
+/// One finite, forward-only page of scheduler work for a workflow execution.
+/// </summary>
+public sealed record RuntimeSchedulerWorkQuery : RuntimeStorePageRequest
 {
-    public RuntimeSchedulerWorkQuery(string workflowExecutionId, int? limit = null)
+    public RuntimeSchedulerWorkQuery(
+        string workflowExecutionId,
+        int limit = DefaultLimit,
+        string? continuationToken = null)
+        : base(limit, continuationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Scheduler work query limit must be greater than zero when provided.");
-
         WorkflowExecutionId = workflowExecutionId;
-        Limit = limit;
     }
 
     public string WorkflowExecutionId { get; }
-    public int? Limit { get; }
 }

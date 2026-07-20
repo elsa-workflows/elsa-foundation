@@ -23,6 +23,16 @@ public interface IIncidentStateStore
     ValueTask<IncidentState?> FindAsync(string workflowExecutionId, string incidentId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the number of incidents for one workflow execution. Durable providers should implement this as
+    /// a provider-side count over the workflow index.
+    /// </summary>
+    async ValueTask<int> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        return (await ListAsync(workflowExecutionId, cancellationToken)).Count;
+    }
+
+    /// <summary>
     /// Returns all incident states for the given workflow execution ID.
     /// </summary>
     ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default);

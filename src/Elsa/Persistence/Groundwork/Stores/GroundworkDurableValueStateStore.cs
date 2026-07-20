@@ -68,16 +68,28 @@ public sealed class GroundworkDurableValueStateStore(
         return (await LoadByLogicalIdentityAsync(workflowExecutionId, durableValueId, cancellationToken))?.State;
     }
 
-    public async ValueTask<IReadOnlyCollection<DurableValueState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeStorePage<DurableValueState>> ListPageAsync(
+        DurableValueStatePageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(query);
 
-        return await QueryDocumentsAsync<DurableValueState, DurableValueState>(
-            ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
-            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
-            workflowExecutionId,
-            state => state,
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                    query.WorkflowExecutionId))],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableValueIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
             cancellationToken);
+
+        return new RuntimeStorePage<DurableValueState>(
+            query,
+            result.Documents.Select(Serializer.Deserialize<DurableValueState>).ToArray(),
+            result.NextContinuation);
     }
 
     private async ValueTask<LoadedDurableValueState?> LoadByLogicalIdentityAsync(

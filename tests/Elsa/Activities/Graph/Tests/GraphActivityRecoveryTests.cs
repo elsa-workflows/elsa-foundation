@@ -72,7 +72,7 @@ public sealed class GraphActivityRecoveryTests
         Assert.Equal(ActivityExecutionStatus.Cancelled, (await states.FindAsync(WorkflowId, "child"))!.Status);
         Assert.Null(await bookmarks.FindAsync(WorkflowId, "bookmark-child"));
         Assert.Null(await timers.FindAsync(WorkflowId, "timer-child"));
-        Assert.DoesNotContain(await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowId)), item => item.WorkItemId == pending.WorkItemId);
+        Assert.DoesNotContain(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowId)), item => item.WorkItemId == pending.WorkItemId);
 
         var identity = Identity();
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(Executable(identity));
@@ -132,7 +132,7 @@ public sealed class GraphActivityRecoveryTests
             .Single(item => item is WorkflowCancelActivityScopeSchedulerWorkHandler);
         await handler.HandleAsync(CancelWorkItem());
 
-        Assert.Equal(depth, (await states.ListAsync(WorkflowId)).Count(state => state.Status == ActivityExecutionStatus.Cancelled));
+        Assert.Equal(depth, (await states.ListAllAsync(WorkflowId)).Count(state => state.Status == ActivityExecutionStatus.Cancelled));
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class GraphActivityRecoveryTests
             .Single(item => item is WorkflowCancelActivityScopeSchedulerWorkHandler);
         await handler.HandleAsync(CancelWorkItem());
 
-        var cancelled = await states.ListAsync(WorkflowId);
+        var cancelled = await states.ListAllAsync(WorkflowId);
         Assert.Equal(2, cancelled.Count);
         Assert.All(cancelled, state => Assert.Equal(ActivityExecutionStatus.Cancelled, state.Status));
         var commit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
@@ -180,7 +180,7 @@ public sealed class GraphActivityRecoveryTests
         await handler.HandleAsync(RetryWorkItem(identity));
         await handler.HandleAsync(RetryWorkItem(identity));
 
-        var cloned = Assert.Single((await values.ListAsync(WorkflowId)), value =>
+        var cloned = Assert.Single((await values.ListAllDurableValueStatesAsync(WorkflowId)), value =>
             StringComparer.Ordinal.Equals(value.SourceActivityExecutionId, "outer-retry"));
         Assert.Equal(ActivityExecutionScopeKeys.Input("outer-retry", "order"), cloned.DurableValueId);
         Assert.True(JsonElement.DeepEquals(input.InlineValue!.Value, cloned.InlineValue!.Value));

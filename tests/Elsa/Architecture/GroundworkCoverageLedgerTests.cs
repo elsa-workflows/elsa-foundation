@@ -7,7 +7,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
-    private const string ExpectedGroundworkVersion = "0.0.1-preview.64";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.72";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
 
@@ -419,6 +419,44 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
+    public void Evidence_complete_requires_the_executable_source_scenario()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        entry["status"] = "evidence-complete";
+        AddCompleteEvidence(entry);
+        var record = entry["providerEvidence"]!["sqlite"]!.AsArray()[0]!.AsObject();
+        record.Remove("sourceScenarioId");
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains("$.entries[0].providerEvidence.sqlite[0]: required property 'sourceScenarioId' is missing.", findings);
+    }
+
+    [Fact]
+    public void Evidence_complete_binds_query_provenance_to_the_native_plan_artifact()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        entry["status"] = "evidence-complete";
+        AddCompleteEvidence(entry);
+        var record = entry["providerEvidence"]!["sqlite"]!.AsArray()
+            .OfType<JsonObject>()
+            .First(candidate => candidate.ContainsKey("queryShape"));
+        var queryShape = record["queryShape"]!.GetValue<string>();
+        record["nativeQueryIdentity"] = "different-route";
+        var evidencePath = ArtifactPath(record["evidence"]!.GetValue<string>());
+        File.WriteAllText(evidencePath, GroundworkEvidenceArtifactContract.ArtifactPayload(record).ToJsonString());
+        record["evidenceSha256"] = GroundworkEvidenceArtifactContract.FileSha256(evidencePath);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"{EntryId}: sqlite query '{queryShape}' native artifact does not bind route 'different-route'.",
+            findings);
+    }
+
+    [Fact]
     public void Evidence_complete_requires_equivalent_result_hashes_for_each_scenario()
     {
         var ledger = ReadLedger();
@@ -717,7 +755,11 @@ public sealed class GroundworkCoverageLedgerTests
             var record = EvidenceRecord(entryId, provider, scenarioId);
             record[evidenceProperty] = obligation;
             if (evidenceProperty == "queryShape")
+            {
+                record["nativeQueryIdentity"] = $"fixture-{obligation}";
+                record["documentKind"] = "fixture-document";
                 record["nativeEvidence"] = GroundworkEvidenceArtifactContract.NativeEvidencePath(provider, entryId, scenarioId);
+            }
             records.Add(record);
         }
     }
@@ -728,6 +770,7 @@ public sealed class GroundworkCoverageLedgerTests
         return new JsonObject
         {
             ["scenarioId"] = scenarioId,
+            ["sourceScenarioId"] = "fixture-source",
             ["coverageEntryId"] = entryId,
             ["provider"] = provider,
             ["providerIdentity"] = $"groundwork-{provider}",
@@ -757,7 +800,11 @@ public sealed class GroundworkCoverageLedgerTests
             {
                 var nativePath = ArtifactPath(nativeEvidence);
                 Directory.CreateDirectory(Path.GetDirectoryName(nativePath)!);
-                File.WriteAllText(nativePath, "provider-native bounded execution plan");
+                File.WriteAllText(
+                    nativePath,
+                    $"provider={record["provider"]!.GetValue<string>()}\n" +
+                    $"document-kind={record["documentKind"]!.GetValue<string>()}\n" +
+                    $"route={record["nativeQueryIdentity"]!.GetValue<string>()}\n");
                 record["nativeEvidenceSha256"] = GroundworkEvidenceArtifactContract.FileSha256(nativePath);
             }
 

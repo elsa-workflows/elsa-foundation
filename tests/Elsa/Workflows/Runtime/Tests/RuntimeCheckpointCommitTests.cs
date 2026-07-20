@@ -681,7 +681,7 @@ public sealed class RuntimeCheckpointCommitTests
 
         Assert.Contains("Upsert", exception.Message);
         Assert.Empty(writer.ListCommits());
-        Assert.Empty(await activityStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await activityStateStore.ListAllAsync("wfexec-1"));
     }
 
     [Fact]
@@ -764,7 +764,7 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Contains("Upsert", exception.Message);
         Assert.Contains("Delete", exception.Message);
         Assert.Empty(writer.ListCommits());
-        Assert.Empty(await bookmarkStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await bookmarkStateStore.ListAllBookmarkStatesAsync("wfexec-1"));
     }
 
     [Fact]
@@ -785,8 +785,8 @@ public sealed class RuntimeCheckpointCommitTests
 
         Assert.Contains("WorkflowExecutionId", exception.Message);
         Assert.Empty(writer.ListCommits());
-        Assert.Empty(await bookmarkStateStore.ListAsync("wfexec-1"));
-        Assert.Empty(await bookmarkStateStore.ListAsync("wfexec-2"));
+        Assert.Empty(await bookmarkStateStore.ListAllBookmarkStatesAsync("wfexec-1"));
+        Assert.Empty(await bookmarkStateStore.ListAllBookmarkStatesAsync("wfexec-2"));
     }
 
     [Fact]
@@ -862,7 +862,7 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Contains("Upsert", exception.Message);
         Assert.Contains("Delete", exception.Message);
         Assert.Empty(writer.ListCommits());
-        Assert.Empty(await durableValueStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await durableValueStateStore.ListAllDurableValueStatesAsync("wfexec-1"));
     }
 
     [Fact]
@@ -883,8 +883,8 @@ public sealed class RuntimeCheckpointCommitTests
 
         Assert.Contains("WorkflowExecutionId", exception.Message);
         Assert.Empty(writer.ListCommits());
-        Assert.Empty(await durableValueStateStore.ListAsync("wfexec-1"));
-        Assert.Empty(await durableValueStateStore.ListAsync("wfexec-2"));
+        Assert.Empty(await durableValueStateStore.ListAllDurableValueStatesAsync("wfexec-1"));
+        Assert.Empty(await durableValueStateStore.ListAllDurableValueStatesAsync("wfexec-2"));
     }
 
     [Fact]
@@ -1706,10 +1706,10 @@ public sealed class RuntimeCheckpointCommitTests
             CancellationToken cancellationToken = default) =>
             _inner.FindAsync(workflowExecutionId, bookmarkId, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<BookmarkState>> ListAsync(
-            string workflowExecutionId,
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(
+            BookmarkStatePageQuery query,
             CancellationToken cancellationToken = default) =>
-            _inner.ListAsync(workflowExecutionId, cancellationToken);
+            _inner.ListPageAsync(query, cancellationToken);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
@@ -1748,11 +1748,15 @@ public sealed class RuntimeCheckpointCommitTests
         public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<ActivityExecutionState?>(null);
 
-        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<ActivityExecutionState>>([]);
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(
+            ActivityExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeStorePage<ActivityExecutionState>(query, []));
 
-        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<ActivityExecutionState>>([]);
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(
+            ActivityExecutionStateParentPageQuery query,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeStorePage<ActivityExecutionState>(query, []));
     }
 
     private sealed class ThrowingSchedulerStateStore : ISchedulerStateStore
@@ -1778,8 +1782,10 @@ public sealed class RuntimeCheckpointCommitTests
         public ValueTask<BookmarkState?> FindAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<BookmarkState?>(null);
 
-        public ValueTask<IReadOnlyCollection<BookmarkState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<BookmarkState>>([]);
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(
+            BookmarkStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeStorePage<BookmarkState>(query, []));
     }
 
     private sealed class ThrowingDurableValueStateStore : IDurableValueStateStore
@@ -1793,8 +1799,10 @@ public sealed class RuntimeCheckpointCommitTests
         public ValueTask<DurableValueState?> FindAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<DurableValueState?>(null);
 
-        public ValueTask<IReadOnlyCollection<DurableValueState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<DurableValueState>>([]);
+        public ValueTask<RuntimeStorePage<DurableValueState>> ListPageAsync(
+            DurableValueStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeStorePage<DurableValueState>(query, []));
     }
 
     private sealed class ThrowingIncidentStateStore : IIncidentStateStore

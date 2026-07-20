@@ -41,6 +41,7 @@ public sealed class PublishWorkflowRequestHandlerTests
 {
     private const string UnknownStructureKind = "test.opaque.structure";
     private const string UnknownStructureSchemaVersion = "1.0.0";
+    private static readonly DateTimeOffset ReferenceEvaluationTime = DateTimeOffset.Parse("2026-07-19T12:00:00Z");
 
     private readonly InMemoryWorkflowExecutableStore _store = new();
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
@@ -88,8 +89,8 @@ public sealed class PublishWorkflowRequestHandlerTests
             Handler(workflowVersion)
                 .Handle(new PublishWorkflow(workflowVersion.Id, PreflightToken: issued.PreflightToken), CancellationToken.None));
 
-        Assert.Empty(await _store.ListAsync());
-        Assert.Empty(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published));
+        Assert.Empty(await _store.ListAllAsync());
+        Assert.Empty(await _referenceStore.ListAllAsync(WorkflowExecutableReferenceScope.Published));
     }
 
     [Fact]
@@ -164,7 +165,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(first.ArtifactHash, second.ArtifactHash);
         Assert.NotEqual(first.PublicationId, second.PublicationId);
         Assert.NotEqual(first.SourceReferenceId, second.SourceReferenceId);
-        var references = await _referenceStore.ListByArtifactAsync(first.ArtifactId);
+        var references = await _referenceStore.ListAllByArtifactAsync(first.ArtifactId);
         Assert.Equal(["tenant-a", "tenant-b"], references.Select(x => x.TenantId).OrderBy(x => x, StringComparer.Ordinal));
     }
 
@@ -181,7 +182,10 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(first.PublicationId, second.PublicationId);
         Assert.Equal(first.SourceReferenceId, second.SourceReferenceId);
         Assert.Equal(PublicationStatusView.Active, second.Status);
-        Assert.Single(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
+        Assert.Single(await _referenceStore.ListAllAsync(
+            WorkflowExecutableReferenceScope.Published,
+            liveOnly: true,
+            now: ReferenceEvaluationTime));
     }
 
     [Fact]
@@ -201,9 +205,10 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(first.ArtifactId, second.ArtifactId);
         Assert.NotEqual(first.PublicationId, second.PublicationId);
         Assert.NotEqual(first.SourceReferenceId, second.SourceReferenceId);
-        var liveReference = Assert.Single(await _referenceStore.ListAsync(
+        var liveReference = Assert.Single(await _referenceStore.ListAllAsync(
             WorkflowExecutableReferenceScope.Published,
-            liveOnly: true));
+            liveOnly: true,
+            now: ReferenceEvaluationTime));
         Assert.Equal(second.SourceReferenceId, liveReference.SourceReferenceId);
         Assert.Equal("tenant-b", liveReference.TenantId);
     }
@@ -221,9 +226,9 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         Assert.Equal(first.ArtifactId, second.ArtifactId);
         Assert.Equal(first.ArtifactHash, second.ArtifactHash);
-        Assert.Single(await _store.ListAsync());
+        Assert.Single(await _store.ListAllAsync());
 
-        var references = await _referenceStore.ListByArtifactAsync(first.ArtifactId);
+        var references = await _referenceStore.ListAllByArtifactAsync(first.ArtifactId);
         Assert.Equal(2, references.Count);
         Assert.Equal(["definition-A", "definition-B"], references.Select(r => r.DefinitionId).OrderBy(x => x, StringComparer.Ordinal));
         Assert.Equal(["version-A", "version-B"], references.Select(r => r.DefinitionVersionId).OrderBy(x => x, StringComparer.Ordinal));
@@ -251,7 +256,10 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.NotNull(storedFirst);
         Assert.NotNull(storedSecond);
 
-        var liveReferences = await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true);
+        var liveReferences = await _referenceStore.ListAllAsync(
+            WorkflowExecutableReferenceScope.Published,
+            liveOnly: true,
+            now: ReferenceEvaluationTime);
         var retiredReference = await _referenceStore.FindAsync(first.SourceReferenceId!);
 
         Assert.Collection(liveReferences, reference => Assert.Equal(second.SourceReferenceId, reference.SourceReferenceId));
@@ -268,7 +276,10 @@ public sealed class PublishWorkflowRequestHandlerTests
         var defaultPublication = await Handler(defaultVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var namedPublication = await Handler(namedVersion).Handle(NamedPublish("version-2", "blue"), CancellationToken.None);
 
-        var liveReferences = await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true);
+        var liveReferences = await _referenceStore.ListAllAsync(
+            WorkflowExecutableReferenceScope.Published,
+            liveOnly: true,
+            now: ReferenceEvaluationTime);
 
         Assert.Equal(2, liveReferences.Count);
         Assert.Contains(liveReferences, reference => reference.SourceReferenceId == defaultPublication.SourceReferenceId);
@@ -290,8 +301,11 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         Assert.NotNull(deletionGuard);
         Assert.Equal(first.ArtifactId, exception.ArtifactId);
-        Assert.Single(await _referenceStore.ListByArtifactAsync(first.ArtifactId));
-        Assert.Empty(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
+        Assert.Single(await _referenceStore.ListAllByArtifactAsync(first.ArtifactId));
+        Assert.Empty(await _referenceStore.ListAllAsync(
+            WorkflowExecutableReferenceScope.Published,
+            liveOnly: true,
+            now: ReferenceEvaluationTime));
     }
 
     [Fact]
@@ -304,7 +318,10 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         var reference = await _referenceStore.FindAsync(published.SourceReferenceId!);
         Assert.NotNull(reference?.DeletedAt);
-        Assert.Empty(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
+        Assert.Empty(await _referenceStore.ListAllAsync(
+            WorkflowExecutableReferenceScope.Published,
+            liveOnly: true,
+            now: ReferenceEvaluationTime));
         Assert.NotNull(await _store.FindAsync(published.ArtifactId));
     }
 
@@ -317,7 +334,10 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         await InvokeSlotLifecycleHandlerAsync("Restore", "definition-1", "default");
 
-        var liveReference = Assert.Single(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
+        var liveReference = Assert.Single(await _referenceStore.ListAllAsync(
+            WorkflowExecutableReferenceScope.Published,
+            liveOnly: true,
+            now: ReferenceEvaluationTime));
         Assert.Equal(published.ArtifactId, liveReference.ArtifactId);
         Assert.NotNull(await _store.FindAsync(published.ArtifactId));
     }
@@ -337,7 +357,7 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         var view = await Handler(version, layout, _writeLineActivity).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        var reference = Assert.Single(await _referenceStore.ListByArtifactAsync(view.ArtifactId));
+        var reference = Assert.Single(await _referenceStore.ListAllByArtifactAsync(view.ArtifactId));
         var record = Assert.Single(reference.Layout);
         Assert.Equal("write-one", record.NodeId);
         Assert.Equal(12.5, record.X);
@@ -363,7 +383,7 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         var view = await Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        var reference = Assert.Single(await _referenceStore.ListByArtifactAsync(view.ArtifactId));
+        var reference = Assert.Single(await _referenceStore.ListAllByArtifactAsync(view.ArtifactId));
         var authored = Assert.Single(reference.AuthoredInputs);
         Assert.Equal("write-one", authored.ExecutableNodeId);
         Assert.Equal("Text", authored.InputKey);

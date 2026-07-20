@@ -44,6 +44,7 @@ public static class ActivitiesDesignStorageManifest
     public const string ManagementVisibilityField = "entity.visibilityKey";
     public const string ManagementSortField = "entity.sortKey";
     public const string ManagementSearchField = "entity.searchText";
+    public const int ManagementSequenceKeyLength = 20;
     public const int ManagementSearchMaximumLength = 4000;
     public const string ManagementAuthorityField = "entity.contentAuthority.kind";
     public const string ManagementProviderField = "entity.providerKey";
@@ -330,8 +331,8 @@ public static class ActivitiesDesignStorageManifest
             Column("definition_id", DefinitionIdField, false),
             Column("draft_id", DraftIdField),
             Column("definition_version_id", DefinitionVersionIdField),
-            Column("valid_from", ManagementValidFromField, false),
-            Column("valid_to", ManagementValidToField, false),
+            Column("valid_from", ManagementValidFromField, false, ManagementSequenceKeyLength),
+            Column("valid_to", ManagementValidToField, false, ManagementSequenceKeyLength),
             Column("visibility", ManagementVisibilityField, false),
             Column("sort_key", ManagementSortField, false),
             Column("search_text", ManagementSearchField, false, ManagementSearchMaximumLength),
@@ -366,16 +367,20 @@ public static class ActivitiesDesignStorageManifest
         };
         BoundedQueryPredicateField[] pageIndexPredicates =
         [
-            Predicate(ManagementSortField, PortableQueryOperation.Equal),
-            .. pagePredicates
+            Predicate(ManagementSortField, PortableQueryOperation.Equal)
         ];
+        var pageResidualPredicates = pagePredicates
+            .Select(predicate => new BoundedQueryResidualPredicateField(
+                predicate.Path,
+                IndexValueKind.Keyword,
+                predicate.Operations))
+            .ToArray();
         var logicalIndexes = new[]
         {
             new LogicalIndexDeclaration(
                 "management-by-id",
                 [
-                    new IndexField(logicalIdField, IndexValueKind.Keyword),
-                    new IndexField(ManagementValidToField, IndexValueKind.Keyword)
+                    new IndexField(logicalIdField, IndexValueKind.Keyword)
                 ],
                 IndexValueKind.Keyword,
                 false,
@@ -383,7 +388,7 @@ public static class ActivitiesDesignStorageManifest
             new LogicalIndexDeclaration(
                 "management-by-sort",
                 [
-                    .. pageIndexPredicates.Select(predicate => new IndexField(predicate.Path, IndexValueKind.Keyword))
+                    new IndexField(ManagementSortField, IndexValueKind.Keyword)
                 ],
                 IndexValueKind.Keyword,
                 false,
@@ -406,8 +411,11 @@ public static class ActivitiesDesignStorageManifest
                 BoundedQueryExecutionClass.ScaleBearing,
                 predicateFields:
                 [
-                    Predicate(logicalIdField, PortableQueryOperation.Equal),
-                    Predicate(ManagementValidToField, PortableQueryOperation.Equal)
+                    Predicate(logicalIdField, PortableQueryOperation.Equal)
+                ],
+                residualPredicateFields:
+                [
+                    ResidualPredicate(ManagementValidToField, PortableQueryOperation.Equal)
                 ]),
             new BoundedQueryDeclaration(
                 pageQuery,
@@ -419,7 +427,8 @@ public static class ActivitiesDesignStorageManifest
                 supportsDisjunction: true,
                 supportsTotalCount: true,
                 sortFields: [new BoundedQuerySortField(ManagementSortField, PhysicalSortDirection.Ascending)],
-                predicateFields: pageIndexPredicates),
+                predicateFields: pageIndexPredicates,
+                residualPredicateFields: pageResidualPredicates),
             new BoundedQueryDeclaration(
                 ManagementExpiredQuery,
                 "management-by-valid-to",
@@ -440,15 +449,13 @@ public static class ActivitiesDesignStorageManifest
                     "management-by-id",
                     [
                         new PhysicalIndexColumnDefinition("storage_scope", 0),
-                        new PhysicalIndexColumnDefinition(ColumnName(logicalIdField), 1),
-                        new PhysicalIndexColumnDefinition("valid_to", 2)
+                        new PhysicalIndexColumnDefinition(ColumnName(logicalIdField), 1)
                     ]),
                 new PhysicalIndexDefinition(
                     "management-by-sort",
                     [
                         new PhysicalIndexColumnDefinition("storage_scope", 0),
-                        .. pageIndexPredicates.Select((predicate, index) =>
-                            new PhysicalIndexColumnDefinition(ColumnName(predicate.Path), index + 1))
+                        new PhysicalIndexColumnDefinition("sort_key", 1)
                     ]),
                 new PhysicalIndexDefinition(
                     "management-by-valid-to",
@@ -475,6 +482,11 @@ public static class ActivitiesDesignStorageManifest
 
     private static BoundedQueryPredicateField Predicate(string path, params PortableQueryOperation[] operations) =>
         new(path, operations.ToHashSet());
+
+    private static BoundedQueryResidualPredicateField ResidualPredicate(
+        string path,
+        params PortableQueryOperation[] operations) =>
+        new(path, IndexValueKind.Keyword, operations.ToHashSet());
 
     private static string ColumnName(string path) => path switch
     {

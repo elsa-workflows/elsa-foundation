@@ -357,8 +357,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             return claim is null ? null : new SchedulerWorkDelivery(claim.Item, claim);
         }
 
-        var items = await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
-        var item = items.FirstOrDefault();
+        var page = await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
+        var item = page.Items.FirstOrDefault();
         return item is null ? null : new SchedulerWorkDelivery(item, null);
     }
 

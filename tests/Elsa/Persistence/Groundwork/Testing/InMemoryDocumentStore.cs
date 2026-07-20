@@ -205,6 +205,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             foreach (var residual in declaration.ResidualPredicateFields)
                 fieldKinds[residual.Path] = residual.ValueKind;
         }
+        var projectedFieldKinds = ProjectedFieldKinds(unit);
         var predicatePaths = declaration is null || declaration.PredicateFields.Count == 0
             ? indexFields.Select(field => field.Path)
             : declaration.PredicateFields.Select(field => field.Path);
@@ -214,6 +215,22 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             .ToHashSet(StringComparer.Ordinal);
         if (query.Clauses.SelectMany(clause => clause.Comparisons).Any(comparison => !paths.Contains(comparison.Path)))
             throw new InvalidOperationException("The bounded query contains an undeclared stable field path.");
+        foreach (var path in query.Clauses
+                     .SelectMany(clause => clause.Comparisons)
+                     .Select(comparison => comparison.Path)
+                     .Concat(query.Order.Select(order => order.Path))
+                     .Append(query.LatestPerKeyPath)
+                     .Where(path => path is not null)
+                     .Distinct(StringComparer.Ordinal))
+        {
+            if (!fieldKinds.ContainsKey(path!))
+            {
+                if (!projectedFieldKinds.TryGetValue(path!, out var kind))
+                    throw new InvalidOperationException($"The bounded query field '{path}' has no declared manifest type.");
+
+                fieldKinds[path!] = kind;
+            }
+        }
 
         IEnumerable<DocumentEnvelope> matches = _docs.Values
             .Where(document => document.DocumentKind == query.DocumentKind);
@@ -249,10 +266,35 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         }
 
         var all = selected.ToArray();
-        var window = all.Skip(query.Skip ?? 0);
+        var continuationOffset = DecodeContinuation(query);
+        var pageOffset = continuationOffset + (query.Skip ?? 0);
+        var window = all.Skip(pageOffset);
         if (query.Take is { } take)
             window = window.Take(take);
-        return Task.FromResult(new DocumentQueryResult(window.ToArray(), all.Length));
+        var page = window.ToArray();
+        var nextOffset = pageOffset + page.Length;
+        var nextContinuation = query.Take is not null && nextOffset < all.Length
+            ? EncodeContinuation(query, nextOffset)
+            : null;
+        return Task.FromResult(new DocumentQueryResult(page, all.Length, nextContinuation));
+    }
+
+    private static IReadOnlyDictionary<string, IndexValueKind> ProjectedFieldKinds(StorageUnit unit)
+    {
+        if (unit.PhysicalStorage?.Policy is not PhysicalStoragePolicy.ExplicitPolicy policy)
+            return new Dictionary<string, IndexValueKind>(StringComparer.Ordinal);
+
+        return policy.Definition.ProjectedColumns.ToDictionary(
+            column => column.Path,
+            column => column.Type switch
+            {
+                PortablePhysicalType.Boolean => IndexValueKind.Boolean,
+                PortablePhysicalType.DateTime => IndexValueKind.DateTime,
+                PortablePhysicalType.Decimal or PortablePhysicalType.Int32 or PortablePhysicalType.Int64 => IndexValueKind.Number,
+                PortablePhysicalType.String => IndexValueKind.String,
+                _ => throw new ArgumentOutOfRangeException(nameof(column.Type), column.Type, null)
+            },
+            StringComparer.Ordinal);
     }
 
     private static IOrderedEnumerable<DocumentEnvelope> Order(
@@ -324,8 +366,58 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             IndexValueKind.DateTime => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
                 .UtcTicks.ToString("D19", CultureInfo.InvariantCulture),
             IndexValueKind.Boolean => bool.Parse(value).ToString().ToLowerInvariant(),
+            IndexValueKind.Number => NumberComparable(value),
             _ => value
         };
+    }
+
+    private static string NumberComparable(string value)
+    {
+        var number = decimal.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture);
+        var magnitude = decimal.Abs(number).ToString(
+            "00000000000000000000000000000.0000000000000000000000000000",
+            CultureInfo.InvariantCulture);
+        if (number >= 0)
+            return $"1{magnitude}";
+
+        return string.Create(
+            magnitude.Length + 1,
+            magnitude,
+            static (span, source) =>
+            {
+                span[0] = '0';
+                for (var index = 0; index < source.Length; index++)
+                {
+                    var character = source[index];
+                    span[index + 1] = character == '.'
+                        ? character
+                        : (char)('9' - (character - '0'));
+                }
+            });
+    }
+
+    private static string EncodeContinuation(DocumentQuery query, int offset) =>
+        $"in-memory:{query.DocumentKind}:{query.QueryIdentity}:{offset}";
+
+    private static int DecodeContinuation(DocumentQuery query)
+    {
+        if (query.Continuation is null)
+            return 0;
+
+        var prefix = $"in-memory:{query.DocumentKind}:{query.QueryIdentity}:";
+        if (!query.Continuation.StartsWith(prefix, StringComparison.Ordinal) ||
+            !int.TryParse(
+                query.Continuation[prefix.Length..],
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out var offset) ||
+            offset < 0)
+        {
+            throw new InvalidDocumentQueryContinuationException(
+                $"The continuation token is invalid for bounded query '{query.QueryIdentity}'.");
+        }
+
+        return offset;
     }
 
     public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>

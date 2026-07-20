@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "workloads": [
+    {
+      "id": "placement-takeover",
+      "version": "1.0.0",
+      "scenarioId": "distributed-placement-takeover",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Claim, renew, expire, take over, and reject stale release of execution placement through IExecutionPlacementStore.",
+      "coverageRows": ["distributed-execution-placement"],
+      "input": {
+        "seed": "spec094-placement-takeover-v1",
+        "fingerprintSha256": "9599391db271c63a41cced1409754b0bcb4e2bd8c316b70efa4d1583c310c92b",
+        "executionCount": 512,
+        "activePlacements": 256,
+        "leaseDurationSeconds": 30,
+        "takeoverCandidates": 64,
+        "concurrentClaimants": 2,
+        "fixedNowUtc": "2026-07-20T10:00:00Z",
+        "timedSetup": "excluded"
+      },
+      "operationSequence": ["seed-placement-leases", "claim-current-placement", "renew-current-placement", "advance-past-expiry", "take-over-expired-placement", "attempt-stale-release", "reopen-and-read-current-placement"],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": ["list-owned-live-placements"],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "25885819c5cb186adab6196a46d8e369e7b26992e0733e9525a3ca1eb2bf07c1",
+        "invariants": ["exactly one current lease exists for each execution", "placement tokens increase monotonically across claim renewal and takeover", "a stale release cannot clear the newer owner", "the reopened store exposes the takeover winner"],
+        "timingGate": "Run the public placement correctness baseline with independent clients before #646 times the operation."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-distributed-placement-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable placement contract only; #646 owns real same-provider EF execution and comparison."
+      },
+      "physicalFormsFor646": ["dedicated-placement-lease-documents", "shared-documents-with-linked-index-tables", "placement-owner-expiry-index"],
+      "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "independent-client metadata", "native route evidence"]
+    },
+    {
+      "id": "command-send-lease-ack",
+      "version": "1.0.0",
+      "scenarioId": "distributed-command-send-lease-ack",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Send commands, lease a bounded ordered batch, re-lease after visibility expiry, acknowledge the current lease, and reject a stale acknowledgement through IExecutionCommandTransport.",
+      "coverageRows": ["distributed-command-transport"],
+      "input": {
+        "seed": "spec094-command-send-lease-ack-v1",
+        "fingerprintSha256": "cb50baabaf83d0826dbb19d259be9d8fca9b4c8eaa9aea6ba7354a54c1835493",
+        "workflowCount": 128,
+        "commandsPerWorkflow": 64,
+        "batchSize": 16,
+        "visibilityTimeoutSeconds": 30,
+        "concurrentSenders": 2,
+        "concurrentLeasers": 2,
+        "fixedNowUtc": "2026-07-20T10:00:00Z",
+        "timedSetup": "excluded"
+      },
+      "operationSequence": ["seed-command-streams", "send-concurrent-commands", "lease-visible-bounded-batch", "advance-past-visibility-expiry", "re-lease-current-batch", "attempt-stale-acknowledgement", "acknowledge-current-batch", "reopen-and-count-pending"],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": ["lease-visible-commands-by-execution", "list-visible-command-executions", "count-pending-commands-by-execution"],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "9f8fa582159e0a796ecbe2d7bfb655cbebee428f9490fa83d4228e8e64f924eb",
+        "invariants": ["command identity and per-execution sequence are unique", "each lease is ordered and bounded", "visibility expiry permits redelivery only to a current lease", "a stale acknowledgement is rejected and no command is lost after reopen"],
+        "timingGate": "Run the public command transport correctness baseline with independent clients before #646 times the operation."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-distributed-command-transport-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable command transport contract only; this handoff supplies no live EF result or benchmark verdict."
+      },
+      "physicalFormsFor646": ["dedicated-command-transport-documents", "stream-head-documents", "shared-documents-with-linked-index-tables", "visibility-order-index"],
+      "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "independent-client metadata", "native route evidence"]
+    }
+  ]
+}
