@@ -9,6 +9,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
 using Groundwork.Documents.Store;
@@ -1087,13 +1088,14 @@ public sealed class GroundworkReusableActivityStores(
             ActivitiesDesignStorageManifest.ByDependencyVersionIndex => ("list-by-dependency-version", ActivitiesDesignStorageManifest.DependencyVersionIdField),
             _ => throw new ArgumentOutOfRangeException(nameof(index), index, "The activity-design query index is not declared.")
         };
-        var result = await boundedStore.QueryAsync(
-            new DocumentQuery(
-                kind,
-                queryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+        var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+            boundedStore,
+            kind,
+            queryIdentity,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))],
+            ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
             cancellationToken);
-        return result.Documents.Select(x => Deserialize<TEntity>(x, kind)).ToArray();
+        return documents.Select(x => Deserialize<TEntity>(x, kind)).ToArray();
     }
 
     private static Stored<TEntity> Deserialize<TEntity>(DocumentEnvelope envelope, string kind)

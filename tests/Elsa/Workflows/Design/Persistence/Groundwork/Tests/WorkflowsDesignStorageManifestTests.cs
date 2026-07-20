@@ -1,6 +1,9 @@
+using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
+using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
+using Groundwork.Core.SchemaEvolution;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -147,6 +150,43 @@ public sealed class WorkflowsDesignStorageManifestTests
     }
 
     [Fact]
+    public void Identity_comparison_algorithm_version_participates_in_the_target_fingerprint()
+    {
+        var baselineManifest = WorkflowsDesignStorageManifest.Create();
+        var changedManifest = baselineManifest with
+        {
+            StorageUnits = baselineManifest.StorageUnits.Select(unit =>
+                unit.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind
+                    ? unit with
+                    {
+                        IdentityPolicy = IdentityPolicy.StringId(
+                            stringCasePolicy: StringIdentityCasePolicy.UnicodeOrdinalIgnoreCase)
+                    }
+                    : unit).ToArray()
+        };
+        var provider = new ProviderIdentity("groundwork-test", "1.0.0");
+
+        var baseline = PhysicalSchemaTargetCompiler.Compile(
+            baselineManifest,
+            provider,
+            ProviderPhysicalNameNormalizer.Identity);
+        var changed = PhysicalSchemaTargetCompiler.Compile(
+            changedManifest,
+            provider,
+            ProviderPhysicalNameNormalizer.Identity);
+        var baselineIdentity = baseline.Routes.Single(route =>
+            route.StorageUnit.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind)
+            .Envelope.Identity;
+        var changedIdentity = changed.Routes.Single(route =>
+            route.StorageUnit.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind)
+            .Envelope.Identity;
+
+        Assert.NotEqual(baselineIdentity.ComparisonAlgorithmId, changedIdentity.ComparisonAlgorithmId);
+        Assert.Equal(baselineIdentity.LookupAlgorithmId, changedIdentity.LookupAlgorithmId);
+        Assert.NotEqual(baseline.Fingerprint, changed.Fingerprint);
+    }
+
+    [Fact]
     public void Transitional_collection_route_is_bounded_physical_compatibility_not_a_legacy_fallback()
     {
         foreach (var unit in WorkflowsDesignStorageManifest.Create().StorageUnits)
@@ -163,10 +203,20 @@ public sealed class WorkflowsDesignStorageManifestTests
             Assert.Contains(query.PredicateFields, field =>
                 field.Path == WorkflowsDesignStorageManifest.CollectionField &&
                 field.Operations.SetEquals([PortableQueryOperation.Equal]));
-            Assert.Contains(storage.LogicalIndexes, index =>
+            var index = Assert.Single(storage.LogicalIndexes, index =>
                 index.Identity == WorkflowsDesignStorageManifest.ByCollectionIndex);
-            Assert.Contains(table.Indexes, index =>
+            Assert.Equal(
+                [WorkflowsDesignStorageManifest.CollectionField, WorkflowsDesignStorageManifest.DocumentIdField],
+                index.Fields.Select(field => field.Path));
+            Assert.Equal(
+                [new BoundedQuerySortField(WorkflowsDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)],
+                query.SortFields);
+            var physicalIndex = Assert.Single(table.Indexes, index =>
                 index.LogicalName == WorkflowsDesignStorageManifest.ByCollectionIndex);
+            Assert.False(physicalIndex.IsUnique);
+            Assert.Equal(
+                ["storage_scope", "collection", "id_comparison_key"],
+                physicalIndex.Columns.Select(column => column.ColumnLogicalName));
             Assert.Empty(unit.Indexes);
             Assert.Empty(unit.Queries);
         }

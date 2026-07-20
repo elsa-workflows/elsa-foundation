@@ -3,6 +3,7 @@ using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
+using Groundwork.Documents.Store;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork;
 
@@ -21,6 +22,9 @@ public static class ActivitiesDesignStorageManifest
     public const string ByOwnerVersionIndex = "by-owner-version";
     public const string ByDependencyVersionIndex = "by-dependency-version";
     public const string CollectionField = "collection";
+    public const string DocumentIdField = PhysicalDocumentFieldPaths.Id;
+    public static IReadOnlyList<DocumentQueryOrder> DeterministicDocumentOrder { get; } =
+        [new(DocumentIdField, PhysicalSortDirection.Ascending)];
     public const string DefinitionIdField = "entity.definitionId";
     public const string HeadVersionIdField = "entity.headVersionId";
     public const string DraftIdField = "entity.draftId";
@@ -283,8 +287,9 @@ public static class ActivitiesDesignStorageManifest
         name,
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-        QuerySortSupport.None,
-        QueryPagingSupport.Offset);
+        QuerySortSupport.Ascending,
+        QueryPagingSupport.Offset,
+        [new BoundedQuerySortField(DocumentIdField, PhysicalSortDirection.Ascending)]);
 
     private static StorageUnit ManagementUnit(
         string documentKind,
@@ -464,10 +469,25 @@ public static class ActivitiesDesignStorageManifest
         ActivityIndex[] indexes,
         ActivityQuery[] queries)
     {
+        var documentIdOrderedIndexes = queries
+            .Where(query => query.SortFields?.Any(field =>
+                field.Path == DocumentIdField && field.Direction == PhysicalSortDirection.Ascending) == true)
+            .Select(query => query.IndexIdentity)
+            .ToHashSet(StringComparer.Ordinal);
+        if (indexes.Any(index => index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)))
+        {
+            throw new InvalidOperationException(
+                "A unique activity-design index cannot be used by an id-sorted exhaustive route; declare a separate non-unique ordered route.");
+        }
         var logicalIndexes = indexes
             .Select(index => new LogicalIndexDeclaration(
                 index.Identity,
-                index.Fields.Select(field => new IndexField(field, IndexValueKind.Keyword)).ToArray(),
+                [
+                    .. index.Fields.Select(field => new IndexField(field, IndexValueKind.Keyword)),
+                    .. (!index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)
+                        ? new[] { new IndexField(DocumentIdField, IndexValueKind.Keyword) }
+                        : Array.Empty<IndexField>())
+                ],
                 IndexValueKind.Keyword,
                 index.IsUnique,
                 MissingValueBehavior.Excluded))
@@ -485,7 +505,10 @@ public static class ActivitiesDesignStorageManifest
                 index.Identity,
                 [
                     new PhysicalIndexColumnDefinition("storage_scope", 0),
-                    .. index.Fields.Select((field, order) => new PhysicalIndexColumnDefinition(ColumnName(field), order + 1))
+                    .. index.Fields.Select((field, order) => new PhysicalIndexColumnDefinition(ColumnName(field), order + 1)),
+                    .. (!index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)
+                        ? new[] { new PhysicalIndexColumnDefinition("id_comparison_key", index.Fields.Length + 1, PhysicalSortDirection.Ascending) }
+                        : Array.Empty<PhysicalIndexColumnDefinition>())
                 ],
                 isUnique: index.IsUnique,
                 missingValueBehavior: MissingValueBehavior.Excluded))
@@ -498,9 +521,7 @@ public static class ActivitiesDesignStorageManifest
                 query.SortSupport,
                 query.PagingSupport,
                 BoundedQueryExecutionClass.ScaleBearing,
-                sortFields: query.SortSupport == QuerySortSupport.None
-                    ? null
-                    : [new BoundedQuerySortField(indexes.Single(index => index.Identity == query.IndexIdentity).Fields[0], PhysicalSortDirection.Ascending)],
+                sortFields: query.SortFields,
                 predicateFields:
                 [
                     new BoundedQueryPredicateField(
@@ -577,5 +598,6 @@ public static class ActivitiesDesignStorageManifest
         string IndexIdentity,
         IReadOnlySet<PortableQueryOperation> Operations,
         QuerySortSupport SortSupport,
-        QueryPagingSupport PagingSupport);
+        QueryPagingSupport PagingSupport,
+        IReadOnlyList<BoundedQuerySortField>? SortFields = null);
 }

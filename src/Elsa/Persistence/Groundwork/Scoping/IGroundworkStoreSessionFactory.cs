@@ -76,23 +76,53 @@ public sealed class GroundworkStoreSession : IAsyncDisposable
     private PrivilegedCompletion? _privilegedCompletion;
     private Task? _disposeTask;
 
-    internal GroundworkStoreSession(
+    /// <summary>
+    /// Creates an access-bound session over already-authorized resources. Ordinary sessions omit both audit
+    /// arguments; privileged sessions must provide the emitter and acquisition audit as a complete pair.
+    /// Prefer <see cref="IGroundworkStoreSessionFactory"/> when opening provider resources from an Elsa access
+    /// context.
+    /// </summary>
+    public GroundworkStoreSession(
         DocumentStoreAccess access,
         GroundworkStoreSessionResources resources,
-        IGroundworkPrivilegedAccessEmitter? privilegedAccessEmitter,
-        GroundworkPrivilegedAccessAudit? privilegedAccessAudit)
+        IGroundworkPrivilegedAccessEmitter? privilegedAccessEmitter = null,
+        GroundworkPrivilegedAccessAudit? privilegedAccessAudit = null)
     {
         Access = access ?? throw new ArgumentNullException(nameof(access));
-        _resources = resources ?? throw new ArgumentNullException(nameof(resources));
-        if (access.IsPrivileged != (privilegedAccessEmitter is not null && privilegedAccessAudit is not null))
+        ArgumentNullException.ThrowIfNull(resources);
+        ValidateResourceAccess(access, resources);
+
+        var hasEmitter = privilegedAccessEmitter is not null;
+        var hasAudit = privilegedAccessAudit is not null;
+        if (access.IsPrivileged ? !hasEmitter || !hasAudit : hasEmitter || hasAudit)
         {
             throw new ArgumentException(
                 "Privileged sessions require an audit emitter and acquisition identity; ordinary sessions require neither.",
                 nameof(privilegedAccessEmitter));
         }
+        if (privilegedAccessAudit is not null && !GroundworkPrivilegedAccessBinding.Matches(access, privilegedAccessAudit))
+        {
+            throw new ArgumentException(
+                "The privileged acquisition audit must describe the session access kind, scope, and purpose.",
+                nameof(privilegedAccessAudit));
+        }
 
+        _resources = resources;
         _privilegedAccessEmitter = privilegedAccessEmitter;
         _privilegedAccessAudit = privilegedAccessAudit;
+    }
+
+    internal static void ValidateResourceAccess(
+        DocumentStoreAccess access,
+        GroundworkStoreSessionResources resources)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        ArgumentNullException.ThrowIfNull(resources);
+        if (resources.DocumentStore.Access != access)
+        {
+            throw new InvalidOperationException(
+                "The Groundwork session resources are bound to a different access context.");
+        }
     }
 
     public DocumentStoreAccess Access { get; }

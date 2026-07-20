@@ -70,7 +70,7 @@ public sealed class GroundworkScopedDocumentStore(
         try
         {
             var unitOfWork = await session.DocumentStore.BeginAsync(scope, cancellationToken);
-            return new SessionDocumentUnitOfWork(unitOfWork, session);
+            return new SessionUnitOfWork(unitOfWork, session);
         }
         catch
         {
@@ -115,47 +115,4 @@ public sealed class GroundworkScopedDocumentStore(
         return await operation(session.BoundedDocumentStore);
     }
 
-    private sealed class SessionDocumentUnitOfWork(
-        IDocumentUnitOfWork unitOfWork,
-        GroundworkStoreSession session) : IDocumentUnitOfWork
-    {
-        private int _disposed;
-
-        public Task<DocumentStoreWriteResult> SaveAsync(
-            SaveDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            unitOfWork.SaveAsync(request, cancellationToken);
-
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            unitOfWork.DeleteAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(
-            string documentKind,
-            string id,
-            CancellationToken cancellationToken = default) =>
-            unitOfWork.LoadAsync(documentKind, id, cancellationToken);
-
-        public Task CommitAsync(CancellationToken cancellationToken = default) =>
-            unitOfWork.CommitAsync(cancellationToken);
-
-        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
-            unitOfWork.RollbackAsync(cancellationToken);
-
-        public async ValueTask DisposeAsync()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) != 0)
-                return;
-
-            try
-            {
-                await unitOfWork.DisposeAsync();
-            }
-            finally
-            {
-                await session.DisposeAsync();
-            }
-        }
-    }
 }

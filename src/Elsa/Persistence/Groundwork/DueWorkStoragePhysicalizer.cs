@@ -12,11 +12,13 @@ namespace Elsa.Persistence.Groundwork;
 /// </summary>
 internal static class DueWorkStoragePhysicalizer
 {
+    private const string DurableTimerClaimOrderKeyColumn = "durable_timer_claim_order_key";
+
     public static StorageManifest AddRoutes(StorageManifest manifest) => manifest with
     {
         StorageUnits = manifest.StorageUnits.Select(unit => unit.Identity.Value switch
         {
-            ElsaRuntimeStorageManifest.DurableTimerDocumentKind => AddTimerPageRoute(AddTimerRoute(unit)),
+            ElsaRuntimeStorageManifest.DurableTimerDocumentKind => AddTimerClaimRoute(AddTimerPageRoute(AddTimerRoute(unit))),
             ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind => AddSchedulePageRoutes(AddScheduleRoute(unit)),
             _ => unit
         }).ToArray()
@@ -52,6 +54,81 @@ internal static class DueWorkStoragePhysicalizer
                     ElsaRuntimeStorageManifest.DurableTimerIdField,
                     PhysicalSortDirection.Ascending)
             ]);
+
+    private static StorageUnit AddTimerClaimRoute(StorageUnit unit)
+    {
+        if (unit.PhysicalStorage is not { } storage ||
+            storage.Policy is not PhysicalStoragePolicy.ExplicitPolicy { Definition: var definition } ||
+            definition.Form != PhysicalStorageForm.SharedDocuments)
+        {
+            throw new InvalidOperationException(
+                $"Runtime due-work storage unit '{unit.Identity.Value}' requires explicit shared-document physicalization.");
+        }
+
+        var projected = definition.ProjectedColumns
+            .Where(column => column.Path != ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField)
+            .Append(new ProjectedColumnDefinition(
+                DurableTimerClaimOrderKeyColumn,
+                ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField,
+                PortablePhysicalType.String,
+                Length: ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyProjectionLength))
+            .ToArray();
+        var envelope = new DocumentEnvelopeDefinition();
+        var physical = PhysicalTableDefinition.SharedDocuments(
+            definition.SharedStorage!,
+            projected,
+            definition.Indexes
+                .Where(index => index.LogicalName != ElsaRuntimeStorageManifest.DurableTimerByClaimOrder)
+                .Append(new PhysicalIndexDefinition(
+                    ElsaRuntimeStorageManifest.DurableTimerByClaimOrder,
+                    [
+                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                        new PhysicalIndexColumnDefinition(
+                            DurableTimerClaimOrderKeyColumn,
+                            1,
+                            PhysicalSortDirection.Ascending)
+                    ]))
+                .ToArray(),
+            definition.SchemaVersion,
+            definition.Evolution,
+            definition.LinkedProjectionLogicalName,
+            definition.LinkedKey);
+        var route = new BoundedQueryDeclaration(
+            ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery,
+            ElsaRuntimeStorageManifest.DurableTimerByClaimOrder,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+            QuerySortSupport.Ascending,
+            QueryPagingSupport.None,
+            BoundedQueryExecutionClass.ScaleBearing,
+            sortFields:
+            [
+                new BoundedQuerySortField(
+                    ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField,
+                    PhysicalSortDirection.Ascending)
+            ],
+            predicateFields:
+            [
+                new BoundedQueryPredicateField(
+                    ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual })
+            ]);
+
+        return unit with
+        {
+            PhysicalStorage = new StorageUnitPhysicalStorage(
+                storage.ProvisioningMode,
+                PhysicalStoragePolicy.Explicit(physical),
+                storage.LogicalIndexes,
+                storage.BoundedQueries
+                    .Where(existing => !StringComparer.Ordinal.Equals(
+                        existing.Identity,
+                        ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery))
+                    .Append(route)
+                    .ToArray(),
+                storage.NameOverrides,
+                storage.BoundedMutations)
+        };
+    }
 
     private static StorageUnit AddScheduleRoute(StorageUnit unit) =>
         AddRoute(

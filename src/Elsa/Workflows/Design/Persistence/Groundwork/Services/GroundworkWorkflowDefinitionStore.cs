@@ -34,7 +34,8 @@ public sealed class GroundworkWorkflowDefinitionStore : IWorkflowDefinitionStore
             WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
             GroundworkDesignJson.Options,
             boundedStore,
-            sessions);
+            sessions,
+            collectionOrder: WorkflowsDesignStorageManifest.DeterministicDocumentOrder);
     }
 
     public async Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default)

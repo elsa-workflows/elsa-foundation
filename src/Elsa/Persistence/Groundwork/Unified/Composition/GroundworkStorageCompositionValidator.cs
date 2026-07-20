@@ -76,7 +76,13 @@ public sealed class GroundworkStorageCompositionValidator
             request.ProviderNameNormalizer,
             ownersByUnit);
         diagnostics.AddRange(nameResolution.Diagnostics);
-        if (!nameResolution.IsValid)
+        diagnostics.AddRange(nameResolution.Collisions.Select(collision => Error(
+            "ELSA-GW-COMPOSITION-NAME-COLLISION",
+            $"Provider identifier '{collision.Identifier}' in collision scope '{collision.CollisionScope}' " +
+            $"is produced by multiple physical objects: {Join(collision.PhysicalObjects.Select(item =>
+                $"{item.FeatureIdentity}/{item.StorageUnit.Value}/{item.ObjectKind}/{item.FeatureDefaultLogicalName}"))}.",
+            $"composition.physicalNames.{collision.CollisionScope}.{collision.Identifier}")));
+        if (diagnostics.Any(diagnostic => diagnostic.IsError))
             return Invalid(diagnostics);
 
         var routeCompilation = ExecutableStorageRouteCompiler.Compile(nameResolution.Definitions);

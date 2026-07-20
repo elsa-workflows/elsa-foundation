@@ -108,7 +108,40 @@ T020 creates and maintains this ledger at class granularity. Every feature class
 
 | Class | Kind | Owning implementation task | Registration test | Direct branch test | Status |
 |---|---|---|---|---|---|
-| _Populate during T020 and later implementation tasks_ | _Pending_ | _Pending_ | _Pending_ | _Pending_ | _Pending_ |
+| `WorkflowsDesignStorageManifest` | Manifest compiler | T010 | `Reference_deployment_schema_unions_exact_workflow_and_activity_physical_definitions` | `WorkflowsDesignStorageManifestTests`, including algorithm-version fingerprint | Covered |
+| `WorkflowsDesignGroundworkStorageManifestSource` | Manifest source | T010 | `Family_registration_adds_its_source_scoped_and_idempotently` | `Family_source_declares_exact_manifest_and_public_store_contracts`; cancellation theory | Covered |
+| `ActivitiesDesignStorageManifest` | Manifest compiler | T011 | `Reference_deployment_schema_unions_exact_workflow_and_activity_physical_definitions` | `ActivitiesDesignStorageManifestTests` | Covered; no design comparison-key algorithm is declared |
+| `ActivitiesDesignGroundworkStorageManifestSource` | Manifest source | T011 | `Family_registration_adds_its_source_scoped_and_idempotently` | `Family_source_declares_exact_manifest_and_public_store_contracts`; cancellation theory | Covered |
+| `GroundworkStorageCompositionContext` | Composition state | T012 | Not a feature | `GroundworkStorageCompositionTests` duplicate, freeze, ordering, immutability branches | Covered |
+| `GroundworkStorageCompositionHandler` | Composition handler | T012 | Factory inline/fallback paths | `Handler_*` source-order, failure, and cancellation tests | Covered |
+| `GroundworkStorageCompositionFactory` | Composition factory | T012 | `Registered_factory_builds_the_selected_composition_from_scoped_sources` | inline publisher plus `Factory_rejects_a_missing_executable_handler_before_provider_work` | Covered |
+| `GroundworkStorageCompositionValidator` | Admission validator | T012 | Factory composition tests | owner, route, capability, topology, collision, compiler-failure, target-mismatch, and fingerprint tests | Covered |
+| `GroundworkPhysicalNameResolver` | Naming resolver | T012 | Validator composition path | transform order, inexact owners, deterministic collision, and exact-shared-object exemption tests | Covered |
+| `GroundworkRoutePhysicalSchemaTargetCompiler` | Target compiler | T012 | Validator default compiler path | null guards and exact manifest/provider/route preservation test | Covered |
+| `GroundworkUnifiedManifest` | Compatibility facade | T012 | Not a feature | `Compatibility_facade_returns_snapshot_manifest_without_a_second_fingerprint` | Covered |
+| `GroundworkDeploymentSchemaManifestSource` | Deployment schema source | T061 | Reference deployment schema registration | T061: empty/duplicate/invalid/non-constructible sources, naming mismatch, cancellation | Assigned to T061 |
+| `GroundworkStorageCompositionRegistration` | DI registration | T061 | idempotence and deployment-authority tests | T061: resolve the complete registered composition surface | Assigned to T061 |
+| `GroundworkPhysicalSchemaManifestSource` | Readiness/schema bridge | T061 | Schema CLI and host tests | T061: ready/pending/drift, executor failure, cancellation, inspect-only/no-auto-apply | Assigned to T061 |
+| `GroundworkPersistenceAccessMapper` | Scope mapper | T016 | Not a feature | `GroundworkStoreSessionFactoryTests.Mapper_*` | Covered |
+| `GroundworkStoreSession` | Session lifecycle | T016 | Factory/provider registration tests | `GroundworkScopedDocumentStoreTests.Public_session_constructor_*` covers ordinary and privileged construction, resource/access and audit/access binding, dependency-pair validation, cleanup failure, audit, and repeated disposal | Covered; the public constructor is the ratified §2.23.3 seam, while the factory remains preferred for access-context acquisition |
+| `GroundworkScopedDocumentStore` | Scoped store adapter | T016 | Runtime/provider registration tests | `GroundworkScopedDocumentStoreTests` covers every document/bounded operation, ordinary scope injection, failure, cancellation, Begin failure, and UoW retention | Covered |
+| `SessionUnitOfWork` | UoW/session lifetime adapter | T016 | Via `GroundworkScopedDocumentStore.BeginAsync` | `GroundworkScopedDocumentStoreTests.Public_session_unit_of_work_*` covers every forwarded operation, null dependencies, ordered and idempotent disposal, and both single- and double-failure cleanup paths | Covered; the public adapter is the ratified §2.23.3 seam |
+| `GroundworkStoreSessionSource` | Resource publisher | T016 | Runtime/provider registration tests | `GroundworkStoreSessionSourceTests` publication/disposal race branches | Covered |
+| `GroundworkStoreSessionFactory` | Session factory | T017 | Runtime/provider registration tests | ordinary/privileged mapping, authority rejection, cleanup, audit, cancellation, and terminal outcomes | Covered |
+| `GroundworkQueryTranslator<TEntity>` | Query translator | T015 | Not a feature | operators, clause structure, JSON names/scalars, ordering, terminals, invalid selectors, non-scalars, and serialization failures | Covered |
+| `GroundworkQueryException` and `GroundworkQueryTranslationException` | Public failure boundaries | T015/T018 | Not features | Translator negative-path tests cover the shared hierarchy and document-kind/query-identity/entity context | Covered |
+| `GroundworkQueryReadinessException`, `GroundworkCorruptPayloadException`, and `GroundworkProviderFailureException` | Public failure boundaries | T018 | Not features | `GroundworkReadStoreTests` covers readiness, null/invalid/unsupported payloads, point and bounded provider failures, cancellation pass-through, and no double wrapping | Covered |
+| `BoundedDocumentQueryPager` | Bounded query pagination | T020 | Current design-store adapter tests | `GroundworkReadStoreTests` covers continuation repetition, offset page bounds, stable totals, premature exhaustion, storage-identity repetition, same-ID cross-scope progress, cancellation, and multi-page exhaustion | Covered |
+| `InMemoryDocumentStore` | Test query substrate | T019 | Not production/feature | `InMemoryDocumentStoreBoundedQueryTests` | Covered; outside production denominator |
+| `GroundworkReadStore<TEntity>` | Transitional candidate reader | T048 | Current design-store registration tests | Current legacy behavior tests; replacement must prove no load-all path | Assigned to T048 |
+| `GroundworkDesignAtomicWrite` and workflow/activity command implementations | Command/UoW implementations | T035 | T035 store/command registration | T035: success, provider failure, rollback, retry/lost acknowledgement, cancellation, replay fingerprint, scope, exactly-once events | Assigned to T035 |
+| `GroundworkSchemaReadinessTask` and schema-tool adapters | Readiness implementations | T061 | T061 feature/host composition | T061: ready/pending/drift, no apply/fallback, failure, cancellation | Assigned to T061 |
+| SQLite/PostgreSQL/SQL Server/MongoDB provider registrations, initializers, target compilers, and shell features | Provider materialization | T062 | T062 one §2.23.1 resolution test per concrete feature/provider | T062 direct provider branches and exact target evidence | Assigned to T062 |
+
+The session and unit-of-work direct suites live in the base `Elsa.Persistence.Groundwork.Tests` project because
+their public APIs belong to the base Groundwork assembly rather than the Querying assembly. Querying remains a
+separate regression gate. This preserves the T020 requirement for direct public-surface coverage without adding
+a reverse or test-only dependency solely to place the tests under the originally named directory.
 
 ## Resolved Dependencies
 
@@ -116,3 +149,22 @@ T020 creates and maintains this ledger at class granularity. Every feature class
 - MongoDB bounded mutations and portable Unicode/long searchable values remain active upstream work. The design lane must consume a version that provides the exact operations and comparison semantics it declares; it must not emulate missing behavior locally.
 - Document identity case policy is an Identity/OpenIddict dependency and is not required to change existing ordinal design document IDs in this slice.
 - The targeted constitution amendment remains pending until complete zero-EF compliance; this plan does not require an interim exception.
+
+## Phase 2 implementation reconciliation
+
+The unified-composition architecture advanced after the original T012/T013 file targets were drafted. The
+stable `elsa-documents` identity, `elsa.documents` owner, and `1.0.0` version now live in
+`GroundworkStorageCompositionDescriptor`; `GroundworkStorageCompositionValidator` performs the selected
+manifest union. `GroundworkDeploymentSchemaManifestSource` is the provider-neutral deployment source and
+host naming-policy bridge. `GroundworkUnifiedManifest` deliberately remains only a compatibility facade, so
+the design manifests are not hard-coded into it. Direct composition tests cover the workflow/activity union
+and a host-supplied naming policy across both design families.
+
+The original T016/T017 design-specific session class targets would duplicate the established access-bound
+session contract. `GroundworkStoreSession` already presents one immutable `DocumentStoreAccess`,
+`IDocumentStore`, and `IBoundedDocumentStore` bundle; `GroundworkScopedDocumentStore` retains that same
+session for a unit of work and releases it afterward. `GroundworkStoreSessionFactory` maps the current Elsa
+access context for every acquisition and rejects tenant-agnostic work before provider acquisition unless the
+context is explicitly privileged across scopes. Its privileged execution helper also records acquisition
+and terminal outcome. The generic foundation is therefore reused by design adapters rather than wrapped in
+a second design-only lifetime abstraction.

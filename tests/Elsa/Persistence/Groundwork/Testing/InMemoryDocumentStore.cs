@@ -183,54 +183,19 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         throw new NotSupportedException("PortableDocumentQuery is not exercised by this test double.");
 
     public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
-    {
-        Interlocked.Increment(ref _documentQueryCount);
-        var unit = manifest.StorageUnits.Single(candidate => candidate.Identity.Value == query.DocumentKind);
-        var declaration = unit.PhysicalStorage?.BoundedQueries.SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity);
-        var legacyDeclaration = unit.Queries.SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity);
-        var indexIdentity = declaration?.IndexIdentity ?? legacyDeclaration?.IndexIdentity
-            ?? throw new InvalidOperationException(
-                $"Document kind '{query.DocumentKind}' does not declare bounded query '{query.QueryIdentity}'.");
-        var logicalIndex = declaration is null
-            ? null
-            : unit.PhysicalStorage!.LogicalIndexes.Single(index => index.Identity == indexIdentity);
-        var indexFields = logicalIndex?.Fields
-            ?? unit.Indexes.Single(index => index.Identity == indexIdentity).Fields;
-        var fieldKinds = indexFields.ToDictionary(
-            field => field.Path,
-            field => logicalIndex?.GetValueKind(field) ?? field.ValueKind,
-            StringComparer.Ordinal);
-        if (declaration is not null)
-        {
-            foreach (var residual in declaration.ResidualPredicateFields)
-                fieldKinds[residual.Path] = residual.ValueKind;
-        }
-        var projectedFieldKinds = ProjectedFieldKinds(unit);
-        var predicatePaths = declaration is null || declaration.PredicateFields.Count == 0
-            ? indexFields.Select(field => field.Path)
-            : declaration.PredicateFields.Select(field => field.Path);
-        var paths = predicatePaths
-            .Concat(declaration?.ResidualPredicateFields.Select(field => field.Path) ?? [])
-            .Concat(declaration?.SortFields.Select(field => field.Path) ?? [])
-            .ToHashSet(StringComparer.Ordinal);
-        if (query.Clauses.SelectMany(clause => clause.Comparisons).Any(comparison => !paths.Contains(comparison.Path)))
-            throw new InvalidOperationException("The bounded query contains an undeclared stable field path.");
-        foreach (var path in query.Clauses
-                     .SelectMany(clause => clause.Comparisons)
-                     .Select(comparison => comparison.Path)
-                     .Concat(query.Order.Select(order => order.Path))
-                     .Append(query.LatestPerKeyPath)
-                     .Where(path => path is not null)
-                     .Distinct(StringComparer.Ordinal))
-        {
-            if (!fieldKinds.ContainsKey(path!))
-            {
-                if (!projectedFieldKinds.TryGetValue(path!, out var kind))
-                    throw new InvalidOperationException($"The bounded query field '{path}' has no declared manifest type.");
+        => ExecuteQueryAsync(query, BoundedQueryResultOperation.Documents, cancellationToken);
 
-                fieldKinds[path!] = kind;
-            }
-        }
+    private Task<DocumentQueryResult> ExecuteQueryAsync(
+        DocumentQuery query,
+        BoundedQueryResultOperation expectedOperation,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+        var binding = ValidateQuery(query, expectedOperation);
+        var fieldKinds = binding.FieldKinds;
+        _ = DecodeContinuation(query);
+        Interlocked.Increment(ref _documentQueryCount);
 
         IEnumerable<DocumentEnvelope> matches = _docs.Values
             .Where(document => document.DocumentKind == query.DocumentKind);
@@ -278,6 +243,316 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             : null;
         return Task.FromResult(new DocumentQueryResult(page, all.Length, nextContinuation));
     }
+
+    private QueryBinding ValidateQuery(
+        DocumentQuery query,
+        BoundedQueryResultOperation expectedOperation)
+    {
+        var unit = manifest.StorageUnits.SingleOrDefault(
+            candidate => candidate.Identity.Value == query.DocumentKind)
+            ?? throw new InvalidOperationException(
+                $"Document kind '{query.DocumentKind}' is not declared by the in-memory manifest.");
+        var declarations = unit.PhysicalStorage?.BoundedQueries
+            .Where(candidate => candidate.Identity == query.QueryIdentity)
+            .ToArray() ?? [];
+        var legacyDeclarations = unit.Queries
+            .Where(candidate => candidate.Identity == query.QueryIdentity)
+            .ToArray();
+        if ((unit.PhysicalStorage is not null && declarations.Length != 1) ||
+            (unit.PhysicalStorage is null && legacyDeclarations.Length != 1))
+        {
+            throw new InvalidOperationException(
+                $"Document kind '{query.DocumentKind}' must declare bounded query '{query.QueryIdentity}' exactly once.");
+        }
+
+        if (query.ResultOperation != expectedOperation)
+        {
+            throw new InvalidOperationException(
+                $"Document query '{query.QueryIdentity}' requested result operation '{query.ResultOperation}' " +
+                $"through the '{expectedOperation}' execution method.");
+        }
+
+        // Once a unit is physicalized, its bounded routes are authoritative. Retained legacy
+        // declarations cannot hide a missing physical route.
+        if (unit.PhysicalStorage is not null)
+            return ValidatePhysicalQuery(unit, declarations[0], query, expectedOperation);
+
+#pragma warning disable GW0003
+        return ValidateLegacyQuery(unit, legacyDeclarations[0], query);
+#pragma warning restore GW0003
+    }
+
+    private static QueryBinding ValidatePhysicalQuery(
+        StorageUnit unit,
+        BoundedQueryDeclaration declaration,
+        DocumentQuery query,
+        BoundedQueryResultOperation expectedOperation)
+    {
+        if (!declaration.ResultOperations.Contains(expectedOperation))
+        {
+            throw new InvalidOperationException(
+                $"Document query '{query.QueryIdentity}' does not declare result operation '{expectedOperation}'.");
+        }
+
+        if (expectedOperation == BoundedQueryResultOperation.Documents && query.Take is not > 0)
+        {
+            throw new InvalidOperationException(
+                $"Document query '{query.QueryIdentity}' must declare a positive page limit.");
+        }
+
+        var logicalIndex = unit.PhysicalStorage!.LogicalIndexes.Single(
+            index => index.Identity == declaration.IndexIdentity);
+        var predicates = declaration.PredicateFields.Count == 0
+            ? new Dictionary<string, IReadOnlySet<PortableQueryOperation>>(StringComparer.Ordinal)
+            {
+                [logicalIndex.Fields[0].Path] = declaration.Operations
+            }
+            : declaration.PredicateFields.ToDictionary(
+                field => field.Path,
+                field => field.Operations,
+                StringComparer.Ordinal);
+        foreach (var residual in declaration.ResidualPredicateFields)
+            predicates.Add(residual.Path, residual.Operations);
+
+        ValidateClauses(query, declaration.SupportsDisjunction, predicates);
+        ValidateRequiredResidualPredicates(query, declaration);
+        ValidateOrder(query, declaration.SortFields);
+        ValidatePaging(query, declaration.PagingSupport);
+        ValidateLatestPerKey(query, declaration.LatestPerKeyPath);
+        ValidateRequiredEqualityPrefixes(query, declaration, logicalIndex);
+
+        var fieldKinds = logicalIndex.Fields.ToDictionary(
+            field => field.Path,
+            field => (IndexValueKind?)logicalIndex.GetValueKind(field),
+            StringComparer.Ordinal);
+        foreach (var residual in declaration.ResidualPredicateFields)
+            fieldKinds[residual.Path] = residual.ValueKind;
+        AddReferencedProjectedFieldKinds(unit, query, fieldKinds);
+        return new QueryBinding(fieldKinds);
+    }
+
+#pragma warning disable GW0003
+    private static QueryBinding ValidateLegacyQuery(
+        StorageUnit unit,
+        PortableQueryDeclaration declaration,
+        DocumentQuery query)
+#pragma warning restore GW0003
+    {
+#pragma warning disable GW0002
+        var index = unit.Indexes.Single(candidate => candidate.Identity == declaration.IndexIdentity);
+#pragma warning restore GW0002
+        var predicates = index.Fields.ToDictionary(
+            field => field.Path,
+            _ => declaration.Operations,
+            StringComparer.Ordinal);
+        ValidateClauses(query, declaration.SupportsDisjunction, predicates);
+        ValidateLegacyOrder(query, declaration, index.Fields);
+        ValidatePaging(query, declaration.PagingSupport);
+        if (query.LatestPerKeyPath is not null)
+        {
+            throw new InvalidOperationException(
+                $"Latest-per-key selection is not bound to query '{query.QueryIdentity}'.");
+        }
+
+        var fieldKinds = index.Fields.ToDictionary(
+            field => field.Path,
+            field => field.ValueKind,
+            StringComparer.Ordinal);
+        AddReferencedProjectedFieldKinds(unit, query, fieldKinds);
+        return new QueryBinding(fieldKinds);
+    }
+
+    private static void ValidateClauses(
+        DocumentQuery query,
+        bool supportsDisjunction,
+        IReadOnlyDictionary<string, IReadOnlySet<PortableQueryOperation>> predicates)
+    {
+        foreach (var clause in query.Clauses)
+        {
+            if (clause.Comparisons.Count > 1 && !supportsDisjunction)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{query.QueryIdentity}' does not declare disjunction.");
+            }
+
+            foreach (var comparison in clause.Comparisons)
+            {
+                var operation = ToPortableOperation(comparison.Operator);
+                if (!predicates.TryGetValue(comparison.Path, out var operations) ||
+                    !operations.Contains(operation))
+                {
+                    throw new InvalidOperationException(
+                        $"Operation '{operation}' on path '{comparison.Path}' is not bound to query '{query.QueryIdentity}'.");
+                }
+            }
+        }
+    }
+
+    private static void ValidateRequiredResidualPredicates(
+        DocumentQuery query,
+        BoundedQueryDeclaration declaration)
+    {
+        var supplied = query.Clauses
+            .SelectMany(clause => clause.Comparisons)
+            .Select(comparison => comparison.Path)
+            .ToHashSet(StringComparer.Ordinal);
+        var missing = declaration.ResidualPredicateFields
+            .Where(field => field.IsRequired && !supplied.Contains(field.Path))
+            .Select(field => field.Path)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (missing.Length != 0)
+        {
+            throw new InvalidOperationException(
+                $"Document query '{query.QueryIdentity}' requires residual predicates: {string.Join(", ", missing)}.");
+        }
+    }
+
+    private static void ValidateOrder(
+        DocumentQuery query,
+        IReadOnlyList<BoundedQuerySortField> declared)
+    {
+        if (query.Order.Count > declared.Count ||
+            query.Order.Where((order, index) =>
+                order.Path != declared[index].Path ||
+                order.Direction != declared[index].Direction).Any())
+        {
+            throw new InvalidOperationException(
+                $"Compound ordering exceeds query declaration '{query.QueryIdentity}'.");
+        }
+    }
+
+#pragma warning disable GW0003, GW0002
+    private static void ValidateLegacyOrder(
+        DocumentQuery query,
+        PortableQueryDeclaration declaration,
+        IReadOnlyList<IndexField> indexFields)
+#pragma warning restore GW0003, GW0002
+    {
+        if (query.Order.Count == 0)
+            return;
+        var direction = query.Order[0].Direction;
+        var supported = query.Order.Count == 1 &&
+                        query.Order[0].Path == indexFields[0].Path &&
+                        declaration.SortSupport switch
+                        {
+                            QuerySortSupport.Ascending => direction == PhysicalSortDirection.Ascending,
+                            QuerySortSupport.Descending => direction == PhysicalSortDirection.Descending,
+                            QuerySortSupport.Both => true,
+                            _ => false
+                        };
+        if (!supported)
+        {
+            throw new InvalidOperationException(
+                $"Ordering is not bound to legacy query '{query.QueryIdentity}'.");
+        }
+    }
+
+    private static void ValidatePaging(DocumentQuery query, QueryPagingSupport pagingSupport)
+    {
+        if (query.Skip is not null && pagingSupport != QueryPagingSupport.Offset)
+        {
+            throw new InvalidOperationException(
+                $"Offset paging is not bound to query '{query.QueryIdentity}'.");
+        }
+        if (query.Continuation is not null && pagingSupport != QueryPagingSupport.Cursor)
+        {
+            throw new InvalidOperationException(
+                $"Keyset paging is not bound to query '{query.QueryIdentity}'.");
+        }
+        if (query.Continuation is not null &&
+            query.ResultOperation != BoundedQueryResultOperation.Documents)
+        {
+            throw new InvalidOperationException(
+                "Keyset continuations apply only to document-page results.");
+        }
+    }
+
+    private static void ValidateLatestPerKey(
+        DocumentQuery query,
+        string? declaredPath)
+    {
+        if (query.LatestPerKeyPath is not null &&
+            query.LatestPerKeyPath != declaredPath)
+        {
+            throw new InvalidOperationException(
+                $"Latest-per-key selection is not bound to query '{query.QueryIdentity}'.");
+        }
+    }
+
+    private static void ValidateRequiredEqualityPrefixes(
+        DocumentQuery query,
+        BoundedQueryDeclaration declaration,
+        LogicalIndexDeclaration logicalIndex)
+    {
+        if (declaration.SortFields.Count == 0)
+            return;
+        var firstSortIndex = logicalIndex.Fields
+            .Select((field, index) => (field.Path, Index: index))
+            .Single(item => item.Path == declaration.SortFields[0].Path)
+            .Index;
+        foreach (var path in logicalIndex.Fields.Take(firstSortIndex).Select(field => field.Path))
+        {
+            var occurrences = query.Clauses
+                .SelectMany(clause => clause.Comparisons.Select(
+                    comparison => (Clause: clause, Comparison: comparison)))
+                .Where(item => item.Comparison.Path == path)
+                .ToArray();
+            if (occurrences.Length != 1 ||
+                occurrences[0].Clause.Comparisons.Count != 1 ||
+                occurrences[0].Comparison.Operator != QueryComparisonOperator.Equal)
+            {
+                throw new InvalidOperationException(
+                    $"Ordered suffix query '{query.QueryIdentity}' requires exactly one standalone " +
+                    $"equality comparison for prefix path '{path}'.");
+            }
+        }
+    }
+
+    private static void AddReferencedProjectedFieldKinds(
+        StorageUnit unit,
+        DocumentQuery query,
+        IDictionary<string, IndexValueKind?> fieldKinds)
+    {
+        var projected = ProjectedFieldKinds(unit);
+        foreach (var path in query.Clauses
+                     .SelectMany(clause => clause.Comparisons)
+                     .Select(comparison => comparison.Path)
+                     .Concat(query.Order.Select(order => order.Path))
+                     .Append(query.LatestPerKeyPath)
+                     .Where(path => path is not null)
+                     .Distinct(StringComparer.Ordinal))
+        {
+            if (fieldKinds.ContainsKey(path!))
+                continue;
+            if (!projected.TryGetValue(path!, out var kind))
+            {
+                throw new InvalidOperationException(
+                    $"The bounded query field '{path}' has no declared manifest type.");
+            }
+
+            fieldKinds[path!] = kind;
+        }
+    }
+
+    private static PortableQueryOperation ToPortableOperation(
+        QueryComparisonOperator operation) => operation switch
+    {
+        QueryComparisonOperator.Equal => PortableQueryOperation.Equal,
+        QueryComparisonOperator.In => PortableQueryOperation.In,
+        QueryComparisonOperator.Contains => PortableQueryOperation.Contains,
+        QueryComparisonOperator.NotContains => PortableQueryOperation.NotContains,
+        QueryComparisonOperator.NotEqual => PortableQueryOperation.NotEqual,
+        QueryComparisonOperator.StartsWith => PortableQueryOperation.StartsWith,
+        QueryComparisonOperator.GreaterThan => PortableQueryOperation.GreaterThan,
+        QueryComparisonOperator.GreaterThanOrEqual => PortableQueryOperation.GreaterThanOrEqual,
+        QueryComparisonOperator.LessThan => PortableQueryOperation.LessThan,
+        QueryComparisonOperator.LessThanOrEqual => PortableQueryOperation.LessThanOrEqual,
+        _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
+    };
+
+    private sealed record QueryBinding(
+        Dictionary<string, IndexValueKind?> FieldKinds);
 
     private static IReadOnlyDictionary<string, IndexValueKind> ProjectedFieldKinds(StorageUnit unit)
     {
@@ -337,6 +612,8 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         var expected = comparison.Values.SingleOrDefault();
         if (comparison.Operator == QueryComparisonOperator.NotEqual && expected is null)
             return actual is not null;
+        if (comparison.Operator == QueryComparisonOperator.NotContains)
+            return actual is null || !actual.Contains(expected!, StringComparison.OrdinalIgnoreCase);
         if (comparison.Operator != QueryComparisonOperator.Equal && (actual is null || expected is null))
             return false;
         var order = StringComparer.Ordinal.Compare(
@@ -347,7 +624,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             QueryComparisonOperator.Equal => order == 0,
             QueryComparisonOperator.NotEqual => order != 0,
             QueryComparisonOperator.Contains => actual!.Contains(expected!, StringComparison.OrdinalIgnoreCase),
-            QueryComparisonOperator.StartsWith => actual!.StartsWith(expected!, StringComparison.Ordinal),
+            QueryComparisonOperator.StartsWith => actual!.StartsWith(expected!, StringComparison.OrdinalIgnoreCase),
             QueryComparisonOperator.GreaterThan => order > 0,
             QueryComparisonOperator.GreaterThanOrEqual => order >= 0,
             QueryComparisonOperator.LessThan => order < 0,
@@ -421,22 +698,37 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     }
 
     public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        (await QueryAsync(query, cancellationToken)).TotalCount;
+        (await ExecuteQueryAsync(query, BoundedQueryResultOperation.Count, cancellationToken)).TotalCount;
 
     public async Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        (await QueryAsync(new DocumentQuery(
-            query.DocumentKind,
-            query.QueryIdentity,
-            query.Clauses,
-            query.Order,
-            query.Skip,
-            1,
-            query.Continuation,
-            query.LatestPerKeyPath,
-            query.ResultOperation), cancellationToken)).Documents.FirstOrDefault();
+        (await ExecuteQueryAsync(
+            new DocumentQuery(
+                query.DocumentKind,
+                query.QueryIdentity,
+                query.Clauses,
+                query.Order,
+                query.Skip,
+                1,
+                query.Continuation,
+                query.LatestPerKeyPath,
+                query.ResultOperation),
+            BoundedQueryResultOperation.First,
+            cancellationToken)).Documents.FirstOrDefault();
 
     public async Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        await FirstOrDefaultAsync(query, cancellationToken) is not null;
+        (await ExecuteQueryAsync(
+            new DocumentQuery(
+                query.DocumentKind,
+                query.QueryIdentity,
+                query.Clauses,
+                query.Order,
+                query.Skip,
+                1,
+                query.Continuation,
+                query.LatestPerKeyPath,
+                query.ResultOperation),
+            BoundedQueryResultOperation.Any,
+            cancellationToken)).Documents.Count != 0;
 
     // --- Document unit of work: an in-memory cross-document atomic batch mirroring the relational
     // provider's CrossUnitAtomic boundary (stage Save/Delete, read-your-writes, all-or-nothing commit). ---

@@ -237,9 +237,34 @@ public sealed class GroundworkStoreSessionFactoryTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             factory.CreateAsync(PersistenceAccessPolicy.Ordinary).AsTask());
 
-        Assert.Equal("The Groundwork session source returned resources bound to a different access context.", exception.Message);
+        Assert.Equal("The Groundwork session resources are bound to a different access context.", exception.Message);
         Assert.Equal(1, mismatchedLease.DisposeCount);
         Assert.Contains(exception.Data.Values.Cast<object>(), value => ReferenceEquals(value, cleanupFailure));
+    }
+
+    [Fact]
+    public async Task Privileged_mismatched_source_access_is_rejected_before_audit_acquisition()
+    {
+        var accessor = new MutableAccessContextAccessor(
+            PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("host-repair")));
+        var lease = new TrackingLease();
+        var source = new RecordingSessionSource
+        {
+            CreateResources = _ => Resources(
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-b")),
+                lease)
+        };
+        var sink = new GroundworkPrivilegedAccessSink();
+        var factory = new GroundworkStoreSessionFactory(
+            accessor,
+            source,
+            new GroundworkPrivilegedAccessRecorder(sink));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            factory.CreateAsync(PersistenceAccessPolicy.Privileged).AsTask());
+
+        Assert.Equal(1, lease.DisposeCount);
+        Assert.Empty(sink.Snapshot());
     }
 
     [Fact]

@@ -111,10 +111,16 @@ public sealed class ActivitiesDesignStorageManifestTests
         foreach (var (indexIdentity, queryIdentity, path) in expectedRoutes)
         {
             var index = Assert.Single(storage.LogicalIndexes, index => index.Identity == indexIdentity);
-            Assert.Equal(path, Assert.Single(index.Fields).Path);
-            Assert.Contains(storage.BoundedQueries, query =>
+            Assert.Equal([path, ActivitiesDesignStorageManifest.DocumentIdField], index.Fields.Select(field => field.Path));
+            var query = Assert.Single(storage.BoundedQueries, query =>
                 query.Identity == queryIdentity && query.IndexIdentity == indexIdentity);
-            Assert.Contains(table.Indexes, index => index.LogicalName == indexIdentity);
+            Assert.Equal(
+                [new BoundedQuerySortField(ActivitiesDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)],
+                query.SortFields);
+            var physicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == indexIdentity);
+            Assert.False(index.IsUnique);
+            Assert.False(physicalIndex.IsUnique);
+            Assert.Equal("id_comparison_key", physicalIndex.Columns.Last().ColumnLogicalName);
         }
     }
 }

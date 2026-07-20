@@ -11,6 +11,20 @@ namespace Elsa.Secrets.Tests;
 public sealed class LegacySecretTenantBackfillTests
 {
     [Fact]
+    public async Task Backfill_uses_the_non_paged_legacy_route_contract()
+    {
+        var queries = new RecordingBoundedDocumentStore();
+        var backfill = new LegacySecretTenantBackfill(Store(), queries);
+
+        Assert.Equal(0, await backfill.BackfillAsync("tenant-1"));
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(SecretsStorageManifest.LegacyBackfillQuery, query.QueryIdentity);
+        Assert.Null(query.Skip);
+        Assert.Equal(250, query.Take);
+    }
+
+    [Fact]
     public async Task Legacy_rows_are_invisible_until_an_explicit_tenant_is_supplied()
     {
         var store = Store();
@@ -100,4 +114,24 @@ public sealed class LegacySecretTenantBackfillTests
             }
         ]
     };
+
+    private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
+    {
+        public List<DocumentQuery> Observed { get; } = [];
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            Observed.Add(query);
+            return Task.FromResult(DocumentQueryResult.Empty);
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
 }

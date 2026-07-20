@@ -37,7 +37,8 @@ public abstract class TwoNodeAcceptanceTests
     // itself is monotonic and never forgotten, which is the whole point of the kill test.
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan FenceDuration = TimeSpan.FromSeconds(30);
-    private readonly DateTimeOffset _now = new(2026, 7, 20, 9, 0, 0, TimeSpan.Zero);
+    protected static DateTimeOffset TestNow { get; } = new(2026, 7, 20, 9, 0, 0, TimeSpan.Zero);
+    private readonly DateTimeOffset _now = TestNow;
 
     [Fact]
     public async Task Routing_CommandForRemoteExecution_ForwardsAndDrainsOnOwningNodeInOrder()
@@ -247,7 +248,7 @@ public abstract class TwoNodeAcceptanceTests
         var placementStore = clusterState.PlacementStore;
         var transport = clusterState.Transport;
         var livenessStore = clusterState.LivenessStore;
-        var clock = new MutableTimeProvider(_now);
+        var clock = clusterState.Clock;
 
         var ownershipA = new RuntimeExecutionOwnershipService(livenessStore, clock, new RuntimeExecutionOwnershipOptions { OwnerId = NodeA, LeaseDuration = FenceDuration });
         var ownershipB = new RuntimeExecutionOwnershipService(livenessStore, clock, new RuntimeExecutionOwnershipOptions { OwnerId = NodeB, LeaseDuration = FenceDuration });
@@ -660,6 +661,7 @@ public abstract class TwoNodeAcceptanceTests
         IExecutionPlacementStore PlacementStore,
         IExecutionCommandTransport Transport,
         IExecutionLivenessStateStore LivenessStore,
+        MutableTimeProvider Clock,
         Func<DispatchPersistence> OpenDispatchPersistence);
 
     protected sealed class DispatchPersistence(
@@ -707,6 +709,7 @@ public sealed class InMemoryTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
 {
     protected override ClusterState CreateClusterState()
     {
+        var clock = new MutableTimeProvider(TestNow);
         var checkpointState = new InMemoryRuntimeCheckpointStoreState();
         var workflowExecutionStore = new InMemoryWorkflowExecutionStateStore();
         var livenessStore = new InMemoryExecutionLivenessStateStore();
@@ -722,6 +725,7 @@ public sealed class InMemoryTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
                 operationalStateStore: livenessStore,
                 rootWriteLeaseManager: PassThroughRootWriteLeaseManager.Instance,
                 state: checkpointState,
+                timeProvider: clock,
                 workflowDispatchStore: dispatchStore);
             return new DispatchPersistence(
                 checkpointStore,
@@ -737,6 +741,7 @@ public sealed class InMemoryTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
             new InMemoryExecutionPlacementStore(),
             new InMemoryExecutionCommandTransport(),
             livenessStore,
+            clock,
             OpenPersistence);
     }
 }

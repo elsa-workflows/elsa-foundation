@@ -991,7 +991,9 @@ public sealed class GroundworkActivityUpgradePlanStore(
             new DocumentQuery(
                 kind,
                 queryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))],
+                ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
+                take: 2),
             cancellationToken);
         return matches.Documents.Count == 1
             ? matches.Documents[0]

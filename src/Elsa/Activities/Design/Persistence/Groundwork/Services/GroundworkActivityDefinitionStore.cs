@@ -33,7 +33,8 @@ public sealed class GroundworkActivityDefinitionStore : IActivityDefinitionStore
             ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
             GroundworkActivitiesDesignJson.Options,
             boundedStore,
-            sessions);
+            sessions,
+            collectionOrder: ActivitiesDesignStorageManifest.DeterministicDocumentOrder);
     }
 
     public async Task<ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default)
