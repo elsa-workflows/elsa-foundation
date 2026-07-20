@@ -34,6 +34,29 @@ full-solution Release discovery found 6,588 tests without executing them. The sh
 fixture scaffold currently has 8 deterministic-fixture tests. See [baseline
 evidence](evidence/baseline.md) for the commands and precise evidence scope.
 
+### T021/T022 shared contract-suite scaffold
+
+The shared project now contains abstract, executable-by-inheritance workflow and activity suites.
+They exercise readiness, scoped lifecycle reads and writes, restart/result-hash parity, draft and
+version layout round-trips, clone provenance, validation rejection, descriptor serialization,
+SemVer identity, missing outcomes, permanent-delete outcomes, and reconciliation idempotency. The
+scenarios reference only Elsa core contracts plus `IDesignPersistenceContractFixture`. The reusable
+test assembly is guarded against provider SDK assembly references. T025 and T051–T054 must therefore
+place concrete EF-oracle and provider fixtures in separate provider-specific test projects that
+reference this shared project; provider SDK references must not enter the shared assembly. Fixture
+staging is explicitly non-persisting; the activity suite proves both the candidate definition and
+version are absent before it resolves and invokes the real `IActivityVersionReconciler`. A
+provider-neutral behavioral harness executes that inherited scenario and proves that the resolved
+reconciler is invoked on both idempotency passes. Captured domain events assert clone, validation,
+discard, and reconciliation identities and outcomes, including empty validation errors. Canonical
+restart snapshots contain the authored workflow state and activity descriptor, and assert each
+against the deterministic input before comparing restart hashes.
+
+Concrete EF-oracle and provider fixtures remain T025 and T051–T054 work. Therefore no
+provider-parity or oracle result hashes are claimed at this checkpoint. The focused Release project
+restore/build/test completed with `13/13` tests; executable provider scenarios remain pending a
+concrete fixture inheritance target.
+
 No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads
 that define them are T021–T024. T025 runs the EF SQLite oracle, records the canonical
 behavior hashes, and then records the existing Groundwork red baseline. The test
@@ -114,15 +137,25 @@ work unit. The documentation-only follow-up changes only this quickstart. The co
 above are not rerun on that documentation commit; their evidence remains attached to
 the tested source/test candidate SHA stated above.
 
-## 3. Run the four-provider black-box suite
+## 3. Run the shared contracts and four-provider black-box suites
 
-The implementation phase creates one shared design conformance project whose fixtures select each real provider:
+The shared project contains provider-neutral contracts and their behavioral harness:
 
 ```bash
 dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj -c Release --no-build
 ```
 
-Required fixtures:
+The implementation phase adds each concrete fixture in a separate leaf test project. Those projects
+reference the shared contract project and may reference only their own provider SDK:
+
+```bash
+dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite.Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj -c Release --no-build
+dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/SqlServer.Tests/Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests.csproj -c Release --no-build
+dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql.Tests/Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests.csproj -c Release --no-build
+dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb.Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj -c Release --no-build
+```
+
+Required provider-specific fixtures:
 
 - SQLite, including close/reopen restart;
 - SQL Server container;
@@ -132,7 +165,8 @@ Required fixtures:
 
 Expected: identical result hashes and domain outcomes for all public design stores/commands; isolation, OCC, atomic rollback, ambiguous acknowledgement, cancellation, restart, and schema drift scenarios pass.
 
-The same test project must boot the actual `src/Apps/Elsa.Server/` reference host for this composition matrix, rather than proving only isolated fixtures:
+The provider-specific projects must also boot the actual `src/Apps/Elsa.Server/` reference host for
+this composition matrix, rather than proving only isolated fixtures:
 
 | Shape | SQLite | SQL Server | PostgreSQL | MongoDB |
 |---|---:|---:|---:|---:|
