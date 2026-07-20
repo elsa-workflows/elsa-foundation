@@ -98,7 +98,8 @@ public sealed class RuntimeOutputCaptureCompiler(
                     AuthoredValueConversionMapper.Mode(output.Conversion),
                     AuthoredValueConversionMapper.Profile(output.Conversion),
                     AuthoredValueConversionMapper.Limits(output.Conversion),
-                    AuthoredValueConversionMapper.Options(output.Conversion));
+                    AuthoredValueConversionMapper.Options(output.Conversion),
+                    new ValueConversionBindingContext(nodeId, definition.ReferenceKey, ValueConversionBindingKind.Output));
             var type = new RuntimeValueTypeDescriptor(
                 variable.Type.Alias,
                 definition.StorageDriverKey,

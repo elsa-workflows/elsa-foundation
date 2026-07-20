@@ -56,20 +56,34 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
             return binding;
 
         var reference = binding.ActivityResult!;
+        var bindingContext = new ValueConversionBindingContext(
+            consumer.ExecutableNodeId,
+            binding.InputName,
+            ValueConversionBindingKind.ActivityResult);
         if (!nodesById.TryGetValue(reference.ProducerExecutableNodeId, out var producer))
         {
-            throw new ArgumentException(
+            throw ValueConversionPublicationException.SourceContractUnavailable(
                 $"VF-COER-001: Activity result input '{binding.InputName}' on consumer node '{consumer.ExecutableNodeId}' " +
-                $"references producer node '{reference.ProducerExecutableNodeId}', which is not present in the compiled executable.");
+                $"references producer node '{reference.ProducerExecutableNodeId}', which is not present in the compiled executable.",
+                ValueConversionRejectionReason.ProducerNodeMissing,
+                binding.TargetType,
+                binding.ConversionRequest?.Mode ?? ValueConversionMode.Auto,
+                binding.ConversionRequest?.Profile,
+                bindingContext);
         }
 
         var result = producer.ActivityContract?.Result
-            ?? throw new ArgumentException(
+            ?? throw ValueConversionPublicationException.SourceContractUnavailable(
                 $"VF-COER-001: Activity result input '{binding.InputName}' on consumer node '{consumer.ExecutableNodeId}' " +
-                $"references producer node '{producer.ExecutableNodeId}', which has no pinned activity result contract.");
+                $"references producer node '{producer.ExecutableNodeId}', which has no pinned activity result contract.",
+                ValueConversionRejectionReason.ProducerResultContractMissing,
+                binding.TargetType,
+                binding.ConversionRequest?.Mode ?? ValueConversionMode.Auto,
+                binding.ConversionRequest?.Profile,
+                bindingContext);
         var (sourceType, sourceRepresentation) = StringComparer.Ordinal.Equals(reference.ProjectionKey, "$result")
             ? (result.Type, result.EffectiveSourceRepresentation)
-            : ResolveProjectionContract(binding, consumer, reference, producer, result);
+            : ResolveProjectionContract(binding, consumer, reference, producer, result, bindingContext);
         var plan = conversionPlanResolver.Resolve(
             sourceType,
             sourceRepresentation,
@@ -77,7 +91,8 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
             binding.ConversionRequest?.Mode ?? ValueConversionMode.Auto,
             binding.ConversionRequest?.Profile,
             binding.ConversionRequest?.Limits,
-            binding.ConversionRequest?.Options);
+            binding.ConversionRequest?.Options,
+            bindingContext);
 
         return new RuntimeInputBinding(
             binding.InputName,
@@ -98,12 +113,18 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
         ExecutableNode consumer,
         RuntimeActivityResultReference reference,
         ExecutableNode producer,
-        ActivityResultContract result)
+        ActivityResultContract result,
+        ValueConversionBindingContext bindingContext)
     {
         if (!result.Projections.TryGetValue(reference.ProjectionKey, out var projection))
-            throw new ArgumentException(
+            throw ValueConversionPublicationException.SourceContractUnavailable(
                 $"VF-COER-001: Activity result input '{binding.InputName}' on consumer node '{consumer.ExecutableNodeId}' " +
-                $"references unknown result projection '{reference.ProjectionKey}' on producer node '{producer.ExecutableNodeId}'.");
+                $"references unknown result projection '{reference.ProjectionKey}' on producer node '{producer.ExecutableNodeId}'.",
+                ValueConversionRejectionReason.UnknownResultProjection,
+                binding.TargetType,
+                binding.ConversionRequest?.Mode ?? ValueConversionMode.Auto,
+                binding.ConversionRequest?.Profile,
+                bindingContext);
 
         return (projection.Type, projection.EffectiveSourceRepresentation);
     }
