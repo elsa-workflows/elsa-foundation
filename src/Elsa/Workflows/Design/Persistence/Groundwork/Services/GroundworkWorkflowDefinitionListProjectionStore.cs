@@ -33,7 +33,8 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore : IWorkflowD
             WorkflowsDesignStorageManifest.CollectionField,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
             serialization,
-            boundedStore);
+            boundedStore,
+            collectionOrder: WorkflowsDesignStorageManifest.DeterministicDocumentOrder);
     }
 
     public GroundworkWorkflowDefinitionListProjectionStore(

@@ -30,7 +30,8 @@ public sealed class GroundworkWorkflowDefinitionVersionLayoutStore : IWorkflowDe
             WorkflowsDesignStorageManifest.CollectionField,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection,
             Options,
-            boundedStore);
+            boundedStore,
+            collectionOrder: WorkflowsDesignStorageManifest.DeterministicDocumentOrder);
     }
 
     public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default)

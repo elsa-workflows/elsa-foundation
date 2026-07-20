@@ -9,6 +9,7 @@ using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
@@ -240,7 +241,8 @@ public sealed class GroundworkActivityPublicationCommand(
                 ElsaRuntimeStorageManifest.FindExecutableActivityTemplateByHashQuery,
                 [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                     ElsaRuntimeStorageManifest.TemplateHashField,
-                    template.TemplateHash))]),
+                    template.TemplateHash))],
+                take: 1),
             cancellationToken);
         if (sameHash.Documents.Count > 0)
             throw Conflict($"Template hash '{template.TemplateHash}' is already bound to another template identity.");
@@ -267,16 +269,17 @@ public sealed class GroundworkActivityPublicationCommand(
     private async Task EnsureNewVersionAsync(ActivityDefinitionVersion candidate, CancellationToken cancellationToken)
     {
         await EnsureAbsentAsync(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, candidate.Id, cancellationToken);
-        var envelopes = await boundedStore.QueryAsync(
-            new DocumentQuery(
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
-                ActivitiesDesignStorageManifest.ListAllQuery,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                    ActivitiesDesignStorageManifest.CollectionField,
-                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection))]),
+        var envelopes = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+            boundedStore,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+            ActivitiesDesignStorageManifest.ListAllQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.CollectionField,
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection))],
+            ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
             cancellationToken);
         var richOptions = GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer);
-        foreach (var envelope in envelopes.Documents)
+        foreach (var envelope in envelopes)
         {
             var document = JsonSerializer.Deserialize<GroundworkDocument<ActivityDefinitionVersion>>(envelope.ContentJson, richOptions)
                            ?? throw Conflict($"Activity version document '{envelope.Id}' is unreadable.");
@@ -403,7 +406,9 @@ public sealed class GroundworkActivityPublicationCommand(
                 "list-by-definition",
                 [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                     ActivitiesDesignStorageManifest.DefinitionIdField,
-                    definitionId))]),
+                    definitionId))],
+                ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
+                take: 2),
             cancellationToken);
         return matches.Documents.Count switch
         {

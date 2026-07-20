@@ -1,11 +1,16 @@
 using Elsa.Events.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Groundwork;
+using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Secrets.Persistence.Groundwork;
 using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Design.Persistence.Groundwork;
+using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
@@ -102,6 +107,62 @@ public sealed class GroundworkStorageCompositionFactoryTests
     }
 
     [Fact]
+    public void Reference_deployment_schema_unions_exact_workflow_and_activity_physical_definitions()
+    {
+        var manifest = new GroundworkAllFeaturesDeploymentSchema().CreateManifest();
+        var expectedUnits = WorkflowsDesignStorageManifest.Create().StorageUnits
+            .Concat(ActivitiesDesignStorageManifest.Create().StorageUnits)
+            .ToArray();
+
+        Assert.Equal("elsa-documents", manifest.Identity.Value);
+        Assert.Equal("elsa.documents", manifest.Owner.Value);
+        Assert.Equal("1.0.0", manifest.Version.Value);
+        foreach (var expected in expectedUnits)
+        {
+            var actual = Assert.Single(manifest.StorageUnits, unit => unit.Identity == expected.Identity);
+            var expectedStorage = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
+                Assert.IsType<StorageUnitPhysicalStorage>(expected.PhysicalStorage).Policy);
+            var actualStorage = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
+                Assert.IsType<StorageUnitPhysicalStorage>(actual.PhysicalStorage).Policy);
+
+            Assert.Equal(expectedStorage.Definition, actualStorage.Definition);
+            Assert.Equal(
+                expected.PhysicalStorage.LogicalIndexes.Select(index => index.Identity),
+                actual.PhysicalStorage.LogicalIndexes.Select(index => index.Identity));
+            Assert.Equal(
+                expected.PhysicalStorage.BoundedQueries.Select(query => query.Identity),
+                actual.PhysicalStorage.BoundedQueries.Select(query => query.Identity));
+        }
+    }
+
+    [Fact]
+    public void Deployment_schema_exposes_one_host_naming_policy_for_both_design_families()
+    {
+        var source = new PrefixedDesignDeploymentSchema();
+        var manifest = source.CreateManifest();
+        var namePolicy = source.CreateNamePolicy();
+
+        Assert.Equal(
+            "host_workflowDefinition",
+            namePolicy.ResolveName(new PhysicalNameContext(
+                new StorageUnitIdentity(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind),
+                PhysicalObjectKind.PrimaryStorage,
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind)));
+        Assert.Equal(
+            "host_activityDefinition",
+            namePolicy.ResolveName(new PhysicalNameContext(
+                new StorageUnitIdentity(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind),
+                PhysicalObjectKind.PrimaryStorage,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind)));
+        Assert.Contains(
+            manifest.StorageUnits,
+            unit => unit.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+        Assert.Contains(
+            manifest.StorageUnits,
+            unit => unit.Identity.Value == ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+    }
+
+    [Fact]
     public void Identity_reference_deployment_schema_registers_as_the_exact_runtime_authority()
     {
         var services = new ServiceCollection();
@@ -159,6 +220,39 @@ public sealed class GroundworkStorageCompositionFactoryTests
         Assert.Contains("naming policy", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Factory_rejects_a_missing_executable_handler_before_provider_work()
+    {
+        var manifest = WorkflowsDesignStorageManifest.Create();
+        var unit = manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+        var source = new FixedManifestSource(new GroundworkStorageManifestDeclaration(
+            "missing-handler-feature",
+            manifest,
+            [],
+            [
+                new GroundworkStorageRouteRequirement(
+                    unit.Identity,
+                    "missing-executable-handler",
+                    new HashSet<CapabilityId>())
+            ],
+            [],
+            []));
+        var factory = new GroundworkStorageCompositionFactory(
+            new GroundworkStorageCompositionHandler([source]),
+            new GroundworkStorageCompositionValidator(),
+            GroundworkStorageNamingPolicyOptions.Identity);
+
+        var exception = await Assert.ThrowsAsync<GroundworkStorageCompositionException>(() =>
+            factory.CreateSourceAsync(
+                    ProviderCapabilities(),
+                    ProviderPhysicalNameNormalizer.Identity)
+                .AsTask());
+
+        Assert.Contains("ELSA-GW-COMPOSITION-ROUTE-MISSING", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("missing-executable-handler", exception.Message, StringComparison.Ordinal);
+    }
+
     private sealed class RecordingInlineEventPublisher(
         GroundworkStorageCompositionHandler handler,
         ICollection<IEvent> publishedEvents) : IInlineEventPublisher
@@ -167,6 +261,19 @@ public sealed class GroundworkStorageCompositionFactoryTests
         {
             publishedEvents.Add(@event);
             await handler.Handle((OnGroundworkStorageComposing)@event, cancellationToken);
+        }
+    }
+
+    private sealed class FixedManifestSource(GroundworkStorageManifestDeclaration declaration)
+        : IGroundworkStorageManifestSource
+    {
+        public string FeatureIdentity => declaration.FeatureIdentity;
+
+        public ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(declaration);
         }
     }
 
@@ -180,6 +287,18 @@ public sealed class GroundworkStorageCompositionFactoryTests
     {
         protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
             [typeof(SecretsGroundworkStorageManifestSource)];
+    }
+
+    public sealed class PrefixedDesignDeploymentSchema : GroundworkDeploymentSchemaManifestSource
+    {
+        protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
+        [
+            typeof(WorkflowsDesignGroundworkStorageManifestSource),
+            typeof(ActivitiesDesignGroundworkStorageManifestSource)
+        ];
+
+        protected override GroundworkStorageNamingPolicyOptions CreateStorageNamingPolicy() =>
+            new("design-host-prefix-v1", context => $"host_{context.FeatureDefaultLogicalName}");
     }
 
     private static GroundworkProviderCapabilitySnapshot ProviderCapabilities()

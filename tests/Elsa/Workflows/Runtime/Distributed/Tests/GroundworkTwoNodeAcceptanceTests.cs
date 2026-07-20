@@ -25,6 +25,7 @@ public sealed class GroundworkTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
 {
     protected override ClusterState CreateClusterState()
     {
+        var clock = new MutableTimeProvider(TestNow);
         var runtimeManifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var distributedManifest = DistributedGroundworkStorageManifest.Create();
         var combinedManifest = runtimeManifest with
@@ -40,6 +41,7 @@ public sealed class GroundworkTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
         services.AddSingleton<IBoundedDocumentStore>(documentStore);
         services.AddSingleton<IPersistenceAccessContextAccessor>(dispatchAccess);
         services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(PassThroughRootWriteLeaseManager.Instance);
+        services.AddSingleton<TimeProvider>(clock);
         services.AddGroundworkRuntimeStores();
         var provider = services.BuildServiceProvider();
 
@@ -61,6 +63,7 @@ public sealed class GroundworkTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
             new GroundworkExecutionPlacementStore(documentStore),
             new GroundworkExecutionCommandTransport(documentStore, new DefaultAccessContextAccessor()),
             provider.GetRequiredService<IExecutionLivenessStateStore>(),
+            clock,
             OpenPersistence);
     }
 

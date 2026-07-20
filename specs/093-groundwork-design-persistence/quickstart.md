@@ -59,6 +59,61 @@ dotnet test tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence
 
 Expected: registration, serialization, command, atomic rollback, and unified-host scenarios all pass.
 
+### Phase 2 bounded-query substrate evidence (T019)
+
+On 2026-07-20, the canonical in-memory Groundwork test substrate was updated to
+validate the selected physical bounded-query declaration before counting provider I/O,
+while retaining a legacy-declaration fallback for manifests that have not yet been
+physicalized. A physical declaration takes precedence when the transitional manifest
+also retains the corresponding legacy declaration, matching provider route binding.
+The substrate now rejects undeclared operators, paths, disjunction, ordering, paging,
+latest-per-key selection, required residual omissions, unsupported terminal
+operations, and physical `Documents` queries without a positive page limit before I/O;
+it also observes cancellation before I/O. The legacy-declaration fallback remains limited
+to manifests that have not yet been physicalized. The ratified contract requires stable
+ordering when the public query shape requests it (for example, latest-version and
+catalog routes); it does not add an implicit order requirement to every otherwise
+unordered document page.
+
+```bash
+dotnet test tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj \
+  -c Release --no-restore
+dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj \
+  -c Release --no-restore
+```
+
+#### Stable-candidate verification
+
+The latest tested source/test candidate is
+`d8ba8550aaab5bb88fb2af87aa10c40f1547b72e`. Verification completed at
+`2026-07-20T13:11:38+02:00` (CEST, `Europe/Amsterdam`) with these exact results:
+
+- `dotnet test tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj -c Release --no-restore`
+  — passed `84/84` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
+  — passed `627/627` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
+  — passed `52/52` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
+  — passed `48/48` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj -c Release --no-restore`
+  — passed `88/88` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj -c Release --no-restore`
+  — passed `74/74` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj -c Release --no-restore`
+  — passed `354/354` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj -c Release --no-restore`
+  — passed `490/490` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore`
+  — passed `251/251` (`0` failed, `0` skipped).
+- `dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603`
+  — succeeded with `0` errors and `41` existing warnings.
+
+The architecture ratchet used the complete repository assets restored earlier in the
+work unit. The documentation-only follow-up changes only this quickstart. The commands
+above are not rerun on that documentation commit; their evidence remains attached to
+the tested source/test candidate SHA stated above.
+
 ## 3. Run the four-provider black-box suite
 
 The implementation phase creates one shared design conformance project whose fixtures select each real provider:
@@ -160,6 +215,9 @@ dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --
 ```
 
 Expected: all preserved domain-objective tests pass; core-provider boundaries and the design-EF removal ratchet pass.
+
+The exact stable-candidate results for all three commands are recorded in
+[Stable-candidate verification](#stable-candidate-verification).
 
 ## 8. Audit design EF removal
 

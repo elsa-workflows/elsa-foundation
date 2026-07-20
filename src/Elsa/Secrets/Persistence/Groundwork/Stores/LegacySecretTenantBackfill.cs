@@ -39,7 +39,6 @@ public sealed class LegacySecretTenantBackfill(
                             null))
                     ],
                     [],
-                    skip: 0,
                     take: 250),
                 cancellationToken);
             if (page.Documents.Count == 0)

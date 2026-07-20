@@ -68,12 +68,149 @@ public abstract class GroundworkDocumentStore(
         Func<TDocument, TResult> project,
         CancellationToken cancellationToken)
     {
-        var result = await BoundedStore.QueryAsync(
-            new DocumentQuery(
-                DocumentKind,
-                queryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+        var documents = await BoundedDocumentQueryPager.QueryAllAsync(
+            BoundedStore,
+            DocumentKind,
+            queryIdentity,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))],
             cancellationToken);
-        return result.Documents.Select(envelope => project(Serializer.Deserialize<TDocument>(envelope))).ToArray();
+        return documents
+            .Select(envelope => project(Serializer.Deserialize<TDocument>(envelope)))
+            .ToArray();
+    }
+}
+
+/// <summary>Executes admitted document routes page-by-page without truncating the logical result set.</summary>
+public static class BoundedDocumentQueryPager
+{
+    public static async ValueTask<IReadOnlyList<DocumentEnvelope>> QueryAllAsync(
+        IBoundedDocumentStore store,
+        string documentKind,
+        string queryIdentity,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        CancellationToken cancellationToken)
+    {
+        var documents = new List<DocumentEnvelope>();
+        var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
+        string? continuation = null;
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await store.QueryAsync(
+                new DocumentQuery(
+                    documentKind,
+                    queryIdentity,
+                    clauses,
+                    take: ElsaGroundworkQueryRoutes.MaximumResultCount,
+                    continuation: continuation),
+                cancellationToken);
+            if (result.Documents.Count > ElsaGroundworkQueryRoutes.MaximumResultCount)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider page exceeded the requested bound.");
+            }
+
+            documents.AddRange(result.Documents);
+
+            if (result.NextContinuation is null)
+                break;
+            if (!seenContinuations.Add(result.NextContinuation))
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' repeated a previously seen continuation.");
+            }
+
+            continuation = result.NextContinuation;
+        } while (true);
+
+        return documents;
+    }
+
+    /// <summary>
+    /// Exhausts an offset-paged route. Callers must supply an order admitted by the route so that every
+    /// offset addresses a stable, deterministic result sequence.
+    /// </summary>
+    public static async ValueTask<IReadOnlyList<DocumentEnvelope>> QueryAllOffsetAsync(
+        IBoundedDocumentStore store,
+        string documentKind,
+        string queryIdentity,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        IReadOnlyList<DocumentQueryOrder> order,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentKind);
+        ArgumentException.ThrowIfNullOrWhiteSpace(queryIdentity);
+        ArgumentNullException.ThrowIfNull(clauses);
+        ArgumentNullException.ThrowIfNull(order);
+        if (order.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Document query '{queryIdentity}' cannot be exhausted with offset paging without a deterministic declared order.");
+        }
+
+        var documents = new List<DocumentEnvelope>();
+        var seenDocuments = new HashSet<(string? Scope, string Id)>();
+        long? totalCount = null;
+        var skip = 0;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await store.QueryAsync(
+                new DocumentQuery(
+                    documentKind,
+                    queryIdentity,
+                    clauses,
+                    order,
+                    skip,
+                    ElsaGroundworkQueryRoutes.MaximumResultCount),
+                cancellationToken);
+            if (result.Documents.Count > ElsaGroundworkQueryRoutes.MaximumResultCount)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider page exceeded the requested bound.");
+            }
+            if (result.TotalCount < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider returned a negative total count.");
+            }
+            if (totalCount is not null && totalCount != result.TotalCount)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider total count changed while offset paging.");
+            }
+
+            totalCount ??= result.TotalCount;
+            if (documents.Count + (long)result.Documents.Count > totalCount)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider pages exceeded the reported total count.");
+            }
+
+            if (result.Documents.Count == 0)
+            {
+                if (documents.Count != totalCount)
+                    throw new InvalidOperationException(
+                        $"Document query '{queryIdentity}' provider stopped before the reported total count was exhausted.");
+                break;
+            }
+
+            foreach (var document in result.Documents)
+            {
+                if (!seenDocuments.Add((document.Scope?.Value, document.Id)))
+                {
+                    throw new InvalidOperationException(
+                        $"Document query '{queryIdentity}' repeated a previously seen storage identity while offset paging.");
+                }
+            }
+
+            documents.AddRange(result.Documents);
+            skip = checked(skip + result.Documents.Count);
+            if (documents.Count == totalCount)
+                break;
+        }
+
+        return documents;
     }
 }

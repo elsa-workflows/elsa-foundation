@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Groundwork.Documents.Store;
@@ -38,18 +39,18 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
         CancellationToken cancellationToken = default)
     {
         var definitionIds = workflowDefinitionIds.ToHashSet(StringComparer.Ordinal);
-        var result = await (boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
-                "Workflow-definition draft queries require an admitted bounded document-store runtime."))
-            .QueryAsync(
-            new DocumentQuery(
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-                WorkflowsDesignStorageManifest.ListAllQuery,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                    WorkflowsDesignStorageManifest.CollectionField,
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection))]),
+        var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+            boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+                "Workflow-definition draft queries require an admitted bounded document-store runtime."),
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            WorkflowsDesignStorageManifest.ListAllQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                WorkflowsDesignStorageManifest.CollectionField,
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection))],
+            WorkflowsDesignStorageManifest.DeterministicDocumentOrder,
             cancellationToken);
 
-        return result.Documents
+        return documents
             .Select(Deserialize)
             .Where(document => definitionIds.Contains(document.Entity.WorkflowDefinitionId))
             .ToList();

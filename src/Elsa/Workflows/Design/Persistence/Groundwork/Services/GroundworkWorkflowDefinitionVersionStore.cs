@@ -39,7 +39,8 @@ public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefiniti
             WorkflowsDesignStorageManifest.CollectionField,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
-            boundedStore);
+            boundedStore,
+            collectionOrder: WorkflowsDesignStorageManifest.DeterministicDocumentOrder);
         _definitions = definitions;
     }
 

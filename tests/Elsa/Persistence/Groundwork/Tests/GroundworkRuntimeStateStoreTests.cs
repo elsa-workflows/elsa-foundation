@@ -445,6 +445,53 @@ public sealed class GroundworkRuntimeStateStoreTests
     }
 
     [Fact]
+    public async Task ControlPlaneState_ListAll_reads_every_bounded_continuation_page()
+    {
+        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        IWorkflowHoldStateStore store = new GroundworkWorkflowHoldStateStore(
+            documents,
+            GroundworkTestSerialization.Serializer);
+        const int expectedCount = ElsaGroundworkQueryRoutes.MaximumResultCount + 1;
+        foreach (var index in Enumerable.Range(0, expectedCount))
+            await store.SaveAsync(new WorkflowHoldState($"cp-{index:D4}", workflowExecutionId: null));
+
+        var results = await store.ListAllAsync();
+
+        Assert.Equal(expectedCount, results.Count);
+        Assert.Equal(2, documents.DocumentQueryCount);
+    }
+
+    [Fact]
+    public async Task ControlPlaneState_ListAll_rejects_a_continuation_cycle()
+    {
+        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        IWorkflowHoldStateStore store = new GroundworkWorkflowHoldStateStore(
+            documents,
+            GroundworkTestSerialization.Serializer,
+            new CyclingBoundedDocumentStore());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => store.ListAllAsync().AsTask());
+
+        Assert.Contains("repeated", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ControlPlaneState_ListAll_rejects_a_provider_page_over_the_bound()
+    {
+        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        IWorkflowHoldStateStore store = new GroundworkWorkflowHoldStateStore(
+            documents,
+            GroundworkTestSerialization.Serializer,
+            new OversizedPageBoundedDocumentStore());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => store.ListAllAsync().AsTask());
+
+        Assert.Contains("exceeded", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ControlPlaneState_Save_RejectsProviderVersionChangeBetweenLoadAndWrite()
     {
         await using var fixture = CreateStore("memory");
@@ -727,6 +774,56 @@ public sealed class GroundworkRuntimeStateStoreTests
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
+
+    private abstract class BoundedDocumentStoreStub : IBoundedDocumentStore
+    {
+        public abstract Task<DocumentQueryResult> QueryAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default);
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class CyclingBoundedDocumentStore : BoundedDocumentStoreStub
+    {
+        private int _queryCount;
+
+        public override Task<DocumentQueryResult> QueryAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            if (++_queryCount > 4)
+                throw new InvalidOperationException("The test continuation cycle was not detected.");
+            var next = query.Continuation switch
+            {
+                null => "a",
+                "a" => "b",
+                _ => "a"
+            };
+            return Task.FromResult(new DocumentQueryResult([], 0, next));
+        }
+    }
+
+    private sealed class OversizedPageBoundedDocumentStore : BoundedDocumentStoreStub
+    {
+        public override Task<DocumentQueryResult> QueryAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new DocumentQueryResult(
+                Enumerable.Repeat<DocumentEnvelope>(
+                    null!,
+                    ElsaGroundworkQueryRoutes.MaximumResultCount + 1).ToArray(),
+                ElsaGroundworkQueryRoutes.MaximumResultCount + 1));
+    }
 
     private sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumentStore
     {

@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
 using Elsa.Serialization.Core;
@@ -55,6 +56,7 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
                      ActivitiesDesignStorageManifest.ListAllQuery,
                      ActivitiesDesignStorageManifest.CollectionField,
                      ActivitiesDesignStorageManifest.ActivityDependencyEdgeCollection,
+                     ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
                      cancellationToken))
         {
             var edge = DeserializeActivity<ActivityDependencyEdge>(envelope);
@@ -81,6 +83,7 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
                      ActivitiesDesignStorageManifest.ListAllQuery,
                      ActivitiesDesignStorageManifest.CollectionField,
                      ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection,
+                     ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
                      cancellationToken))
         {
             var draft = DeserializeActivity<ActivityDefinitionDraft>(envelope);
@@ -108,6 +111,7 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
                      WorkflowsDesignStorageManifest.ListAllQuery,
                      WorkflowsDesignStorageManifest.CollectionField,
                      WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
+                     WorkflowsDesignStorageManifest.DeterministicDocumentOrder,
                      cancellationToken))
         {
             var document = JsonSerializer.Deserialize<WorkflowDraftDocument>(envelope.ContentJson, _workflowJson)
@@ -129,6 +133,7 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
                      WorkflowsDesignStorageManifest.ListAllQuery,
                      WorkflowsDesignStorageManifest.CollectionField,
                      WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
+                     WorkflowsDesignStorageManifest.DeterministicDocumentOrder,
                      cancellationToken))
         {
             var document = JsonSerializer.Deserialize<GroundworkDocument<WorkflowDefinitionVersion>>(envelope.ContentJson, _workflowJson)
@@ -198,15 +203,16 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
         string queryIdentity,
         string fieldPath,
         string collection,
+        IReadOnlyList<DocumentQueryOrder> order,
         CancellationToken cancellationToken)
     {
-        var result = await boundedStore.QueryAsync(
-            new DocumentQuery(
-                kind,
-                queryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, collection))]),
+        return await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+            boundedStore,
+            kind,
+            queryIdentity,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, collection))],
+            order,
             cancellationToken);
-        return result.Documents;
     }
 
     private async Task<ActivityDefinitionVersionPublication> RequiredPublicationAsync(string versionId, CancellationToken cancellationToken) =>
