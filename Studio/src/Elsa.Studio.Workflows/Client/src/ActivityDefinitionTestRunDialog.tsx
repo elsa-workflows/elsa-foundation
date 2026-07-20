@@ -80,6 +80,9 @@ export function ActivityDefinitionTestRunDialog({
   const dialogRef = useRef<HTMLElement>(null);
   const pollTimerRef = useRef<number | null>(null);
   const prepareExactRevisionRef = useRef(prepareExactRevision);
+  const preparationTaskRef = useRef<Promise<PreparedActivityTestRunRevision | null> | null>(null);
+  const preparationPhaseRef = useRef<PreparationPhase>("saving");
+  const preparationListenerRef = useRef<((phase: "saving" | "validating") => void) | null>(null);
   const [preparation, setPreparation] = useState<PreparationPhase>("saving");
   const [prepared, setPrepared] = useState<PreparedActivityTestRunRevision | null>(null);
   const [dispatchPhase, setDispatchPhase] = useState<DispatchPhase>("idle");
@@ -104,9 +107,16 @@ export function ActivityDefinitionTestRunDialog({
 
   useEffect(() => {
     let active = true;
-    void prepareExactRevisionRef.current(phase => {
+    const listener = (phase: "saving" | "validating") => {
       if (active) setPreparation(phase);
-    }).then(result => {
+    };
+    preparationListenerRef.current = listener;
+    setPreparation(preparationPhaseRef.current);
+    preparationTaskRef.current ??= prepareExactRevisionRef.current(phase => {
+      preparationPhaseRef.current = phase;
+      preparationListenerRef.current?.(phase);
+    });
+    void preparationTaskRef.current.then(result => {
       if (!active) return;
       if (!result) {
         setPreparation("failed");
@@ -119,6 +129,7 @@ export function ActivityDefinitionTestRunDialog({
     });
     return () => {
       active = false;
+      if (preparationListenerRef.current === listener) preparationListenerRef.current = null;
     };
   }, []);
 

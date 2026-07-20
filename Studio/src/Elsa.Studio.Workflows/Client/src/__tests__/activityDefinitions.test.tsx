@@ -712,8 +712,8 @@ function page<T>(items: T[], options: { continuation?: string; hasMore?: boolean
 
 function definition(overrides: Partial<ActivityDefinitionManagementView["definition"]> = {}, actions: ActivityDefinitionManagementView["actions"] = []): ActivityDefinitionManagementView {
   return {
-    definition: { definitionId: "definition-1", activityTypeKey: "Contoso.InvoiceEvaluator", tenantId: null, category: "Finance", displayName: "Invoice evaluator", description: "Evaluates invoice policy.", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design", sourceId: null }, forkedFrom: null, headVersionId: "version-1", recommendedVersionId: "version-1", ...overrides },
-    lifecycle: { draftCount: 1, versionCount: 1, head: { versionId: "version-1", version: "1.0.0", lifecycle: "Active", providerKey: "visual-graph", providerSchemaVersion: "1" }, recommendation: { versionId: "version-1", version: "1.0.0", lifecycle: "Active", providerKey: "visual-graph", providerSchemaVersion: "1" } },
+    definition: { definitionId: "definition-1", activityTypeKey: "Contoso.InvoiceEvaluator", tenantId: null, category: "Finance", displayName: "Invoice evaluator", description: "Evaluates invoice policy.", contentAuthority: { kind: "design", authorityKey: "elsa.activity-design", sourceId: null }, forkedFrom: null, headVersionId: "version-1", recommendedVersionId: "version-1", ...overrides },
+    lifecycle: { draftCount: 1, versionCount: 1, head: { versionId: "version-1", version: "1.0.0", lifecycle: "active", providerKey: "visual-graph", providerSchemaVersion: "1" }, recommendation: { versionId: "version-1", version: "1.0.0", lifecycle: "active", providerKey: "visual-graph", providerSchemaVersion: "1" } },
     actions,
     updatedAt: "2026-07-17T10:00:00Z"
   };
@@ -724,7 +724,7 @@ function draft(overrides: Partial<ActivityDefinitionDraftManagementView["draft"]
 }
 
 function version(overrides: Partial<ActivityDefinitionVersionManagementView> = {}): ActivityDefinitionVersionManagementView {
-  return { version: { versionId: "version-1", definitionId: "definition-1", version: "1.0.0", lifecycle: "Active", publishedAt: "2026-07-17T09:00:00Z" }, providerKey: "visual-graph", providerSchemaVersion: "1", isRecommended: true, actions: [], ...overrides };
+  return { version: { versionId: "version-1", definitionId: "definition-1", version: "1.0.0", lifecycle: "active", publishedAt: "2026-07-17T09:00:00Z" }, providerKey: "visual-graph", providerSchemaVersion: "1", isRecommended: true, actions: [], ...overrides };
 }
 
 function lifecycleDefinition(headVersionId: string, recommendedVersionId: string | null): ActivityDefinitionManagementView {

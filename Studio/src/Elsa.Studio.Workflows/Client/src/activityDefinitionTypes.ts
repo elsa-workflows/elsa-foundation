@@ -2,6 +2,10 @@ import type { StudioActivityDiagnostic } from "@elsa-workflows/studio-sdk";
 
 export type ActivityContentAuthorityKind = "Design" | "ProviderSource" | string;
 
+export function isActivityDefinitionEnumValue(value: string | null | undefined, expected: string) {
+  return value?.toLowerCase() === expected.toLowerCase();
+}
+
 export interface ActivityContentAuthority {
   kind: ActivityContentAuthorityKind;
   authorityKey: string;
