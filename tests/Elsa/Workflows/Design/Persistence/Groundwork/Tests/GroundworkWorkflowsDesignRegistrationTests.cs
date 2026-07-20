@@ -144,6 +144,21 @@ public class GroundworkWorkflowsDesignRegistrationTests
     }
 
     [Fact]
+    public void Groundwork_registration_allows_one_post_composition_draft_originator_replacement()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.Replace(ServiceDescriptor.Scoped<IDraftOriginator, PriorDraftOriginator>());
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var resolved = scope.ServiceProvider.GetRequiredService<IDraftOriginator>();
+
+        Assert.IsType<PriorDraftOriginator>(resolved);
+        Assert.Single(scope.ServiceProvider.GetServices<IDraftOriginator>());
+    }
+
+    [Fact]
     public void Repeated_registration_keeps_scoped_commands_and_stores_registered_once()
     {
         var services = new ServiceCollection();

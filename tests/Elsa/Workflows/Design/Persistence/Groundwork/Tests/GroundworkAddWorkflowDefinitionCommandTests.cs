@@ -5,6 +5,8 @@ using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Xunit;
 
@@ -139,10 +141,95 @@ public class GroundworkAddWorkflowDefinitionCommandTests
         Assert.Single(store.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind));
     }
 
+    [Fact]
+    public async Task Add_version_rejects_a_race_computed_duplicate_version_without_persisting()
+    {
+        // Deterministic replay of issue #404: by the time this publish computed "2.0.0" from its
+        // stale latest-version read, a concurrent publish with a distinct operation key had already
+        // persisted "2.0.0" — the in-lock existence guard must reject rather than silently persist
+        // a duplicate computed version.
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var atomicWrite = new GroundworkDesignAtomicWrite(store);
+        var definitions = new GroundworkWorkflowDefinitionStore(store);
+        var versions = new GroundworkWorkflowDefinitionVersionStore(store, definitions, Payloads);
+        var seed = new GroundworkAddWorkflowDefinitionCommand(
+            store,
+            atomicWrite,
+            Payloads,
+            new FakeSystemClock(),
+            GroundworkTestAccess.DefaultAccessContextAccessor);
+        await seed.Execute(
+            new DesignOperationKey("seed"),
+            new WorkflowDefinition { Id = "def-1", Name = "Definition" },
+            new WorkflowDefinitionDraft
+            {
+                Id = "draft-1",
+                WorkflowDefinitionId = "def-1",
+                State = WorkflowDefinitionState.Empty
+            },
+            [],
+            CancellationToken.None);
+        var versionFactory = new WorkflowDefinitionVersionFactory(new SequentialIdentityGenerator());
+        GroundworkAddWorkflowDefinitionVersionCommand CreateCommand(IWorkflowDefinitionVersionStore versionStore) =>
+            new(
+                atomicWrite,
+                Payloads,
+                versionFactory,
+                definitions,
+                versionStore,
+                new ImmediateLockProvider(),
+                new FakeSystemClock(),
+                GroundworkTestAccess.DefaultAccessContextAccessor);
+
+        var first = await CreateCommand(versions)
+            .Execute(new DesignOperationKey("publish-1"), "def-1", WorkflowDefinitionState.Empty);
+        var second = await CreateCommand(versions)
+            .Execute(new DesignOperationKey("publish-2"), "def-1", WorkflowDefinitionState.Empty);
+        var staleLatest = await versions.GetAsync(first.VersionId);
+        var racingCommand = CreateCommand(new StaleLatestVersionStore(versions, staleLatest));
+        var savesBeforeRace = store.SaveCount;
+
+        var conflict = await Assert.ThrowsAsync<WorkflowDefinitionVersionConflictException>(() =>
+            racingCommand.Execute(new DesignOperationKey("publish-race"), "def-1", WorkflowDefinitionState.Empty));
+
+        Assert.Equal("def-1", conflict.DefinitionId);
+        Assert.Equal(second.Version, conflict.Version);
+        Assert.Equal(savesBeforeRace, store.SaveCount);
+        Assert.Equal(2, store.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind).Count);
+    }
+
     /*
      * The API command allocates version identities behind its operation ledger. Source-owned versions
      * use IMaterializeWorkflowDefinitionVersionCommand instead; see the reconciler tests for that path.
      */
+
+    /// <summary>
+    /// Presents the race window deterministically: the latest-version read is stale while the
+    /// existence check sees the concurrently committed sibling, exactly as a lock-per-node or
+    /// cross-node race would.
+    /// </summary>
+    private sealed class StaleLatestVersionStore(
+        IWorkflowDefinitionVersionStore inner,
+        WorkflowDefinitionVersion staleLatest) : IWorkflowDefinitionVersionStore
+    {
+        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) =>
+            inner.GetAsync(versionId, cancellationToken);
+
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) =>
+            inner.FindByIdAsync(versionId, cancellationToken);
+
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
+            inner.GetWithDefinitionAsync(versionId, cancellationToken);
+
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<WorkflowDefinitionVersion?>(staleLatest);
+
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
+            inner.ListByDefinitionAsync(definitionId, cancellationToken);
+
+        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) =>
+            inner.ExistsAsync(definitionId, semVerSortKey, cancellationToken);
+    }
 
     private sealed class SequentialIdentityGenerator : IIdentityGenerator
     {
