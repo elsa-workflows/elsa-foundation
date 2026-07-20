@@ -11,7 +11,7 @@ public static class WorkflowsDesignStorageManifest
 {
     public const string SchemaVersion = "1.0.0";
 
-    // Kept until T011 moves the existing readers from the legacy collection route to the bounded routes below.
+    // Kept until the later workflow design store/translator migration moves existing readers to the bounded routes below.
     // These values are not declared as indexes or portable queries in this manifest.
     public const string CollectionField = "collection";
     public const string ListAllQuery = "list-all";
@@ -113,14 +113,14 @@ public static class WorkflowsDesignStorageManifest
         {
             LogicalIndex("version-by-id", [DocumentIdField], unique: true),
             LogicalIndex("versions-by-definition", [VersionDefinitionIdField, VersionSemVerSortKeyField, VersionIdField]),
-            LogicalIndex("version-by-definition-and-sort-key", [VersionDefinitionIdField, VersionSemVerSortKeyField, VersionIdField], unique: true),
+            LogicalIndex("version-by-definition-and-sort-key", [VersionDefinitionIdField, VersionSemVerSortKeyField], unique: true),
             LogicalIndex("latest-version-by-definition", [VersionDefinitionIdField, VersionSemVerSortKeyField, VersionIdField])
         };
         var physicalIndexes = new[]
         {
             PointLookupIndex("version-by-id"),
             PhysicalIndex("versions-by-definition", "definition_id", "sem_ver_sort_key", "version_id"),
-            PhysicalIndex("version-by-definition-and-sort-key", true, "definition_id", "sem_ver_sort_key", "version_id"),
+            PhysicalIndex("version-by-definition-and-sort-key", true, "definition_id", "sem_ver_sort_key"),
             OrderedPhysicalIndex(
                 "latest-version-by-definition",
                 ("definition_id", PhysicalSortDirection.Ascending),

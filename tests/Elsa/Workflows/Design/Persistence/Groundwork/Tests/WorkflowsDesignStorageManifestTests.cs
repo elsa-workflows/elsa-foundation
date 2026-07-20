@@ -116,4 +116,28 @@ public sealed class WorkflowsDesignStorageManifestTests
             ],
             drafts.SortFields);
     }
+
+    [Fact]
+    public void Exact_version_route_enforces_uniqueness_on_definition_and_semver_sort_key_only()
+    {
+        var versionUnit = WorkflowsDesignStorageManifest.Create().StorageUnits.Single(unit =>
+            unit.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind);
+        var storage = Assert.IsType<StorageUnitPhysicalStorage>(versionUnit.PhysicalStorage);
+        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+        var index = Assert.Single(storage.LogicalIndexes, candidate =>
+            candidate.Identity == "version-by-definition-and-sort-key");
+        var physicalIndex = Assert.Single(table.Indexes, candidate => candidate.LogicalName == index.Identity);
+
+        Assert.True(index.IsUnique);
+        Assert.Equal(
+            [
+                WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+                WorkflowsDesignStorageManifest.VersionSemVerSortKeyField
+            ],
+            index.Fields.Select(field => field.Path));
+        Assert.True(physicalIndex.IsUnique);
+        Assert.Equal(
+            ["storage_scope", "definition_id", "sem_ver_sort_key"],
+            physicalIndex.Columns.Select(column => column.ColumnLogicalName));
+    }
 }
