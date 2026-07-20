@@ -134,13 +134,16 @@ pins the same linked token at the public command, event handler, EF interceptor,
 
 ### T030 shared atomic-write coordinator evidence (2026-07-20)
 
-Implementation candidate `6b5ea99b5fb98f9446759e81c9878877e07be505` centralizes stable
+Implementation candidate `10469b79902b9cb2235f41dcddd1c148c5c7d898` centralizes stable
 operation identity, canonical request fingerprints, replay/conflict inspection, rollback,
 cancellation, marker-race handling, and independently bounded acknowledgement reconciliation in
 `GroundworkDesignAtomicWrite`. Workflow and activity design registrations share one scoped helper
 and one append-only, scope-bound `designOperation` manifest source. The marker uses a dedicated
 physical document table, joins the mutated document kinds in one `CrossUnitAtomic` commit scope,
 and requires both the `AtomicCommit` capability and the `multi-document-transactions` topology.
+Prior successful deliveries return `Replayed` so callers suppress duplicate post-commit outcomes;
+a successful commit recovered after a lost acknowledgement returns `Reconciled` so the current
+attempt can complete its post-commit outcome phase exactly once, just as it does for `Committed`.
 The internal marker unit is explicitly tracked by the architecture inventory without changing the
 frozen spec 094 ALL32 public-contract denominator.
 
@@ -156,7 +159,7 @@ The exact implementation candidate passed:
 - full architecture ratchets: `261/261`;
 - SQLite Target-profile schema and 25-scenario behavior baseline: passed, preserving `17` green
   and `8` narrowly classified intentional-red rows;
-- full `Elsa.Server.slnx` Release build: `0` errors and `49` accepted existing warnings;
+- full `Elsa.Server.slnx` Release build: `0` errors and `147` accepted existing warnings;
 - the exact CI-generated container-free filter: all `77` test projects passed.
 
 An independent read-only review was clean after verifying terminal rollback observation against
