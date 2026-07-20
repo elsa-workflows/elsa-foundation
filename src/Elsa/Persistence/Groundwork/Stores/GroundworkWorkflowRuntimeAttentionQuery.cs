@@ -64,12 +64,9 @@ public sealed class GroundworkWorkflowRuntimeAttentionQuery(
         string? cursor = null;
         do
         {
-            var page = await executions.QueryPageAsync(
-                new WorkflowExecutionStatePageQuery(
-                    ElsaGroundworkQueryRoutes.MaximumResultCount,
-                    TenantId: request.TenantId,
-                    Status: WorkflowExecutionStatus.Faulted,
-                    Cursor: cursor),
+            var page = await executions.QueryFaultedForAttentionAsync(
+                request.TenantId,
+                cursor,
                 cancellationToken);
             foreach (var execution in page.Items)
             {

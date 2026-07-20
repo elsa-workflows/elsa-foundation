@@ -440,6 +440,12 @@ public sealed class ElsaRuntimeStorageManifestTests
         var route = Assert.Single(
             unit.PhysicalStorage.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery);
+        var faultAttentionLogical = Assert.Single(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex);
+        var faultAttentionRoute = Assert.Single(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery);
         var pinnedLogical = Assert.Single(
             unit.PhysicalStorage.LogicalIndexes,
             index => index.Identity == ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex);
@@ -481,6 +487,20 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(
             route.ResidualPredicateFields,
             field => field.Path == PhysicalDocumentFieldPaths.Id);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex,
+            faultAttentionRoute.IndexIdentity);
+        Assert.Contains(
+            faultAttentionRoute.PredicateFields,
+            field => field.Path == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField);
+        Assert.DoesNotContain(
+            faultAttentionRoute.ResidualPredicateFields,
+            field => field.Path == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField);
+        Assert.Collection(
+            faultAttentionLogical.Fields,
+            status => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField, status.Path),
+            timestamp => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField, timestamp.Path),
+            executionId => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField, executionId.Path));
         Assert.Contains(
             physical.ProjectedColumns,
             column =>
@@ -500,6 +520,11 @@ public sealed class ElsaRuntimeStorageManifestTests
             index =>
                 index.LogicalName == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryOrderIndex &&
                 index.Columns.Count == 4);
+        Assert.Contains(
+            physical.Indexes,
+            index =>
+                index.LogicalName == ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex &&
+                index.Columns.Count == 5);
         Assert.Equal(QueryPagingSupport.Offset, pinnedRoute.PagingSupport);
         Assert.Equal(
             ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
@@ -1080,13 +1105,13 @@ public sealed class ElsaRuntimeStorageManifestTests
     {
         var routes = ElsaGroundworkQueryRoutes.All;
 
-        Assert.Equal(28, routes.Count);
+        Assert.Equal(30, routes.Count);
         Assert.Equal(routes.Count, routes.Select(route => route.Key).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(
             7,
             routes.Count(route => route.Kind == ElsaGroundworkQueryRouteKind.PrimaryIdentityRead));
         Assert.Equal(
-            21,
+            23,
             routes.Count(route => route.Kind == ElsaGroundworkQueryRouteKind.BoundedRoute));
         Assert.All(routes, route => Assert.InRange(route.MaximumResultCount, 1, ElsaGroundworkQueryRoutes.MaximumResultCount));
         Assert.All(

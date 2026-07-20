@@ -128,7 +128,7 @@ public sealed class GroundworkWorkflowRuntimeAttentionQueryTests
             record => Assert.Equal("fault-0001", record.WorkflowExecutionId));
 
         var executionPages = bounded.Queries
-            .Where(documentQuery => documentQuery.QueryIdentity == ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery)
+            .Where(documentQuery => documentQuery.QueryIdentity == ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery)
             .ToArray();
         Assert.True(executionPages.Length >= 2);
         Assert.All(executionPages, documentQuery =>

@@ -92,6 +92,7 @@ public static class ElsaGroundworkQueryRoutes
 
         Primary("runtime-workflow-execution-state", "find-by-execution", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "primary.workflow-execution-state.execution.v1"),
         Route("runtime-workflow-execution-state", "query-page-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Documents(), WorkflowExecutionHistoryRoute()),
+        Route("runtime-workflow-execution-state", "page-faulted-for-attention-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Documents(), FaultedWorkflowExecutionAttentionRoute()),
         Route("runtime-workflow-execution-state", "list-pinned-artifact-ids-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Projection(),
             BoundedOrdered(
                 ElsaRuntimeStorageManifest.PagePinnedExecutableArtifactIdsQuery,
@@ -949,6 +950,22 @@ public static class ElsaGroundworkQueryRoutes
             Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField),
             GreaterThanOrEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField),
             LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField));
+
+    private static ElsaGroundworkPhysicalQueryRoute FaultedWorkflowExecutionAttentionRoute() =>
+        BoundedOrderedDirections(
+            ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex,
+            ElsaGroundworkQueryContinuation.Cursor,
+            [
+                new ElsaGroundworkQueryOrder(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                    PhysicalSortDirection.Descending),
+                new ElsaGroundworkQueryOrder(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
+                    PhysicalSortDirection.Ascending)
+            ],
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField));
 
     private static ElsaGroundworkQueryRoute Primary(
         string coverageRow,

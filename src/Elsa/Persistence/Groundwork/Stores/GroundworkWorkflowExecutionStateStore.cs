@@ -64,6 +64,57 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
     public async ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default)
         => await this.ListAllAsync(cancellationToken);
 
+    internal async ValueTask<WorkflowExecutionStatePage> QueryFaultedForAttentionAsync(
+        string tenantId,
+        string? cursor = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        if (cursor is not null && string.IsNullOrWhiteSpace(cursor))
+            throw new ArgumentException("The workflow runtime attention cursor cannot be blank.", nameof(cursor));
+        _accessContextAccessor.Current.EnsureTenantScope(tenantId);
+
+        DocumentQueryResult result;
+        try
+        {
+            result = await Queries.QueryAsync(
+                new DocumentQuery(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+                    ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery,
+                    [
+                        DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField,
+                            tenantId)),
+                        DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField,
+                            ((int)WorkflowExecutionStatus.Faulted).ToString(CultureInfo.InvariantCulture)))
+                    ],
+                    [
+                        new DocumentQueryOrder(
+                            ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                            PhysicalSortDirection.Descending),
+                        new DocumentQueryOrder(
+                            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
+                            PhysicalSortDirection.Ascending)
+                    ],
+                    take: ElsaGroundworkQueryRoutes.MaximumResultCount,
+                    continuation: cursor),
+                cancellationToken);
+        }
+        catch (InvalidDocumentQueryContinuationException exception)
+        {
+            throw new ArgumentException(
+                "The workflow runtime attention cursor is invalid or does not belong to this query.",
+                nameof(cursor),
+                exception);
+        }
+        var states = result.Documents
+            .Select(Serializer.Deserialize<WorkflowExecutionStateDocument>)
+            .Select(document => document.State)
+            .ToArray();
+        return new(states, result.NextContinuation, result.NextContinuation is not null, result.TotalCount);
+    }
+
     public async ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
         WorkflowExecutionStatePageQuery query,
         CancellationToken cancellationToken = default)

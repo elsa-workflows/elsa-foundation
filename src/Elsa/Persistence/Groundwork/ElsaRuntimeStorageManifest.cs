@@ -293,6 +293,8 @@ public static class ElsaRuntimeStorageManifest
     public const string ListWorkflowExecutionsQuery = ListAllQuery;
     public const string PageWorkflowExecutionsQuery = "page-history";
     public const string WorkflowExecutionHistoryOrderIndex = "by-history-order";
+    public const string PageFaultedWorkflowExecutionsForAttentionQuery = "page-faulted-for-attention";
+    public const string WorkflowExecutionFaultedAttentionOrderIndex = "by-attention-fault-history";
     public const string WorkflowExecutionHistorySortTicksField = "historySortTicks";
     public const string WorkflowExecutionHistoryWorkflowExecutionIdField = "historyWorkflowExecutionId";
     public const string WorkflowExecutionHistoryTenantIdField = "historyTenantId";
