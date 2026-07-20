@@ -354,8 +354,8 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         // while stuck in Running.
         Assert.Equal(immediate.Snapshot, coalescing.Snapshot);
         Assert.NotEmpty(coalescing.Snapshot);
-        Assert.Equal(WorkflowExecutionStatus.Completed, immediate.WorkflowStatus);
-        Assert.Equal(WorkflowExecutionStatus.Completed, coalescing.WorkflowStatus);
+        Assert.Equal(WorkflowExecutionStatus.Completed, immediate.State?.Status);
+        Assert.Equal(WorkflowExecutionStatus.Completed, coalescing.State?.Status);
 
         // Burst folding: coalescing performs strictly fewer durable commits, converging toward Elsa 3's one-per-burst.
         Assert.True(coalescing.CommitCount < immediate.CommitCount,
@@ -375,13 +375,92 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         output.WriteLine($"Uncapped coalescing commits: {uncapped.CommitCount}");
         output.WriteLine($"Cap=1 coalescing commits: {capped.CommitCount}");
 
-        Assert.Equal(WorkflowExecutionStatus.Completed, capped.WorkflowStatus);
+        Assert.Equal(WorkflowExecutionStatus.Completed, capped.State?.Status);
         Assert.Equal(uncapped.Snapshot, capped.Snapshot);
         Assert.NotEmpty(capped.Snapshot);
         // The tiny cap genuinely forced intermediate folds (more commits than the single quiescence fold), while the
         // fresh-segment restart still kept it a fold-per-window shape.
         Assert.True(capped.CommitCount > uncapped.CommitCount,
             $"Expected cap=1 ({capped.CommitCount}) to force intermediate folds beyond the uncapped run ({uncapped.CommitCount}).");
+    }
+
+    [Fact]
+    public async Task AuthoredImmediateCadence_UnderCoalescedHost_RunsImmediate_AndStampsTheRun()
+    {
+        // ADR 0032 R5 precedence: a workflow that authored Immediate must run Immediate even though the host default is
+        // Coalesced — the drain skips the coalescing session for this execution, so its durable commit count matches an
+        // Immediate host, not the folded single-commit burst.
+        var immediateHost = await DriveAsync(coalescing: false);
+        var authoredImmediate = await DriveAsync(
+            coalescing: true,
+            authoredCadence: new WorkflowExecutableCheckpointCadence(WorkflowExecutableCheckpointCadence.ImmediateMode));
+
+        Assert.Equal(immediateHost.Snapshot, authoredImmediate.Snapshot);
+        Assert.Equal(WorkflowExecutionStatus.Completed, authoredImmediate.State?.Status);
+        Assert.Equal(immediateHost.CommitCount, authoredImmediate.CommitCount);
+        Assert.True(authoredImmediate.CommitCount > 1,
+            $"Expected the authored-Immediate run to perform per-checkpoint commits, but saw {authoredImmediate.CommitCount}.");
+
+        // The per-run stamp records the effective cadence the run executed under (upgrades #850's host-only projection).
+        Assert.Equal(
+            WorkflowExecutableCheckpointCadence.ImmediateMode,
+            authoredImmediate.State!.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
+        Assert.False(authoredImmediate.State.SystemMetadata.ContainsKey(RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints));
+    }
+
+    [Fact]
+    public async Task AuthoredNoCadence_UnderCoalescedHost_UsesHostDefault_AndStampsCoalescedWithHostCap()
+    {
+        var run = await DriveAsync(coalescing: true);
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.State?.Status);
+        Assert.Equal(1, run.CommitCount);
+        Assert.Equal(
+            WorkflowExecutableCheckpointCadence.CoalescedMode,
+            run.State!.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
+        Assert.Equal("50", run.State.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints]);
+    }
+
+    [Fact]
+    public async Task AuthoredCoalescedCadence_StampsTheAuthoredCap_AndStillCoalesces()
+    {
+        var run = await DriveAsync(
+            coalescing: true,
+            authoredCadence: new WorkflowExecutableCheckpointCadence(WorkflowExecutableCheckpointCadence.CoalescedMode, 8));
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.State?.Status);
+        Assert.Equal(1, run.CommitCount);
+        Assert.Equal(
+            WorkflowExecutableCheckpointCadence.CoalescedMode,
+            run.State!.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
+        Assert.Equal("8", run.State.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints]);
+    }
+
+    [Fact]
+    public async Task AuthoredCoalescedCadence_MandatoryBookmarkBoundary_StillFlushesImmediately()
+    {
+        // Precedence guardrail (ADR 0032 R5): the mandatory-boundary set is never relaxable by any authored cadence.
+        // Even with the most relaxed authored cadence, a BookmarkCreated suspend boundary must land durably within the
+        // segment, exactly as on a host-default coalesced run.
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddCoalescingRuntimeCheckpointPersistence();
+
+        using var provider = services.BuildServiceProvider();
+
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewExecutableWithResumeTarget(
+            new WorkflowExecutableCheckpointCadence(WorkflowExecutableCheckpointCadence.CoalescedMode, 500)));
+        await provider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(NewRunningActivityState());
+
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
+        var agent = await agentProvider.GetAgentAsync(NewSchedulerWorkActivationRequest("wfexec-1"));
+        await agent.EnqueueAsync(NewCreateBookmarkEnvelope());
+
+        var bookmark = await provider.GetRequiredService<IBookmarkStateStore>().FindAsync("wfexec-1", "bookmark-1");
+        Assert.NotNull(bookmark);
+
+        var commit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
+        Assert.Equal(RuntimeCheckpointNames.BookmarkCreated, commit.Commit.Checkpoint.Name);
     }
 
     [Fact]
@@ -631,7 +710,10 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.False(session.IsActive);
     }
 
-    private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount, WorkflowExecutionStatus? WorkflowStatus)> DriveAsync(bool coalescing, int? maxSegmentCheckpoints = null)
+    private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount, WorkflowExecutionState? State)> DriveAsync(
+        bool coalescing,
+        WorkflowExecutableCheckpointCadence? authoredCadence = null,
+        int? maxSegmentCheckpoints = null)
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
@@ -645,19 +727,19 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         }
 
         using var provider = services.BuildServiceProvider();
-        await SeedAsync(provider);
+        await SeedAsync(provider, authoredCadence);
         await EnqueueStartAsync(provider);
 
         var snapshot = await SnapshotAsync(provider);
         var commitCount = provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits().Count;
-        var workflowStatus = (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1"))?.Status;
-        return (snapshot, commitCount, workflowStatus);
+        var state = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
+        return (snapshot, commitCount, state);
     }
 
-    private static async Task SeedAsync(ServiceProvider provider)
+    private static async Task SeedAsync(ServiceProvider provider, WorkflowExecutableCheckpointCadence? authoredCadence = null)
     {
         var store = provider.GetRequiredService<IWorkflowExecutableStore>();
-        await store.SaveAsync(NewExecutable());
+        await store.SaveAsync(NewExecutable(authoredCadence));
     }
 
     private static async ValueTask EnqueueStartAsync(ServiceProvider provider)
@@ -702,7 +784,13 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: Now,
             Payload: JsonSerializer.SerializeToElement(payload),
-            Metadata: new Dictionary<string, string> { ["source"] = "test" });
+            Metadata: new Dictionary<string, string>
+            {
+                ["source"] = "test",
+                // Mirrors WorkflowStartDispatcher.CreateDispatchMetadata: the artifact-id breadcrumb the per-execution
+                // cadence resolver reads on the first drain, before any WorkflowExecutionState row exists (ADR 0032 R5).
+                ["runtime.artifactId"] = pinnedExecutable.ArtifactId
+            });
 
         return new(
             envelopeId: "envelope-start",
@@ -937,7 +1025,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
                 "1.0.0")
         };
 
-    private static WorkflowExecutable NewExecutableWithResumeTarget()
+    private static WorkflowExecutable NewExecutableWithResumeTarget(WorkflowExecutableCheckpointCadence? checkpointCadence = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var node = new ExecutableNode(
@@ -961,14 +1049,19 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
                     Metadata: new Dictionary<string, string>())
             },
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: null,
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            checkpointCadence: checkpointCadence);
     }
 
     // The driven workflow must genuinely run to completion: a CLR-activity node without a pinned activity contract
     // faults dispatch with VF-ACT-001 and gets parked in the poison store, which (since poison surfacing landed)
     // faults the workflow instead of hanging it silently. A Finish intrinsic root needs no CLR contract and
     // completes the run, so the burst-folding comparison measures a real start-to-completed burst.
-    private static WorkflowExecutable NewExecutable()
+    private static WorkflowExecutable NewExecutable(WorkflowExecutableCheckpointCadence? checkpointCadence = null)
     {
         var outcomeType = new ValueTypeDescriptor("String");
         var node = new ExecutableNode(
@@ -995,7 +1088,12 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: null,
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            checkpointCadence: checkpointCadence);
     }
 
     private sealed class ThrowingOutboxProcessor : IRuntimePostCommitOutboxProcessor

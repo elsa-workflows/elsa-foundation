@@ -628,8 +628,8 @@ and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-
 
 ### `IRuntimeCoalescingDrainScopeFactory` *(engine — `Elsa.Workflows.Runtime`)*
 - **Kind:** Replacement (one factory opens the per-drain coalescing scope and performs the quiescence flush).
-- **Signature:** `IRuntimeCoalescingDrainScope Begin(string workflowExecutionId)`; scope exposes `RuntimeCoalescingSession Session` and `ValueTask FlushAtQuiescenceAsync(CancellationToken)`.
-- **Usage:** `WorkflowDrainOrchestrator` opens a scope around a drain when the factory is registered (greediest resolvable ctor), buffers intra-drain checkpoints in the session, and flushes one folded atomic commit at quiescence through `RuntimeCheckpointCommitter.CommitAsync` (so W5 ownership fencing still gates it). Only registered by the opt-in extension.
+- **Signature:** `IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null)`; scope exposes `RuntimeCoalescingSession Session` and `ValueTask FlushAtQuiescenceAsync(CancellationToken)`. The optional cap overrides the host-configured `MaxSegmentCheckpoints` for that run (ADR 0032 R5 per-workflow authored cadence).
+- **Usage:** `WorkflowDrainOrchestrator` opens a scope around a drain when the factory is registered (greediest resolvable ctor), buffers intra-drain checkpoints in the session, and flushes one folded atomic commit at quiescence through `RuntimeCheckpointCommitter.CommitAsync` (so W5 ownership fencing still gates it). Per execution, the orchestrator first consults `IRuntimeCheckpointCadenceResolver` (per-run stamp > authored-on-executable cadence > host default) and skips the scope entirely for an authored-Immediate run. Only registered by the opt-in extension.
 - **Default implementation:** `RuntimeCoalescingDrainScopeFactory` *(opt-in only)*.
 
 ### `IRuntimeLiveDrainDeliveryAccessor` *(engine — `Elsa.Workflows.Runtime`)*

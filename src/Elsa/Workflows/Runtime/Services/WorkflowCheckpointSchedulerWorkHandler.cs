@@ -17,6 +17,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IWorkflowExecutableStore? _workflowExecutableStore;
+    private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
@@ -31,7 +32,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider,
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
-        IWorkflowExecutableStore? workflowExecutableStore = null)
+        IWorkflowExecutableStore? workflowExecutableStore = null,
+        IRuntimeCheckpointCadenceResolver? cadenceResolver = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
@@ -42,6 +44,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         _inspectionAccumulator = inspectionAccumulator;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _workflowExecutableStore = workflowExecutableStore;
+        _cadenceResolver = cadenceResolver;
         _timeProvider = timeProvider;
     }
 
@@ -141,6 +144,11 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? await _workflowExecutableStore.FindAsync(payload.PinnedExecutable.ArtifactId, cancellationToken)
             : null;
 
+        // ADR 0032 R5: at start, resolve the effective cadence (authored-on-executable over host default) and stamp it
+        // onto the durable instance so the read model reports the cadence this run actually executed under, not the
+        // host's current setting. On other checkpoints the stamp is carried forward via PreserveSystemMetadata.
+        var resolvedCadence = executable is not null ? _cadenceResolver?.Resolve(executable) : null;
+
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
             Checkpoint: new RuntimeCheckpoint(
@@ -151,7 +159,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 ActivityExecutionIds: payload.ActivityExecutionIds,
                 Metadata: checkpointMetadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable),
+                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, resolvedCadence),
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
@@ -203,10 +211,11 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt,
         WorkflowExecutionState? priorWorkflowState,
-        WorkflowExecutable? executable)
+        WorkflowExecutable? executable,
+        ResolvedCheckpointCadence? resolvedCadence)
     {
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted))
-            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState, executable);
+            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, resolvedCadence);
 
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowCompleted))
             return BuildWorkflowCompletedStateChange(workItem, payload, occurredAt, priorWorkflowState);
@@ -219,7 +228,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt,
         WorkflowExecutionState? priorWorkflowState,
-        WorkflowExecutable? executable)
+        WorkflowExecutable? executable,
+        ResolvedCheckpointCadence? resolvedCadence)
     {
         var startedAt = ReadWorkflowStartedAt(workItem) ?? occurredAt;
         var state = new WorkflowExecutionState(
@@ -234,11 +244,11 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             CorrelationId: priorWorkflowState?.CorrelationId ?? payload.CorrelationId,
             ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId ?? payload.ParentWorkflowExecutionId,
             TenantId: priorWorkflowState?.TenantId ?? payload.TenantId,
-            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(new Dictionary<string, string>
+            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(StampCheckpointCadence(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
-            }, priorWorkflowState, workItem)))
+            }, resolvedCadence), priorWorkflowState, workItem)))
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
@@ -267,6 +277,37 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             metadata[RuntimeMetadataKeys.SourceReferenceId] = existingReferenceId;
         else if (workItem?.CommandMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var sourceReferenceId) == true)
             metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
+
+        // Carry the per-run cadence stamp (ADR 0032 R5) forward across every state rebuild that does not itself resolve
+        // it (e.g. the workflow-completed transition), unless this rebuild is stamping a freshly-resolved cadence.
+        if (!metadata.ContainsKey(RuntimeMetadataKeys.CheckpointCadence) &&
+            priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.CheckpointCadence, out var cadenceMode) == true)
+        {
+            metadata[RuntimeMetadataKeys.CheckpointCadence] = cadenceMode;
+            if (priorWorkflowState.SystemMetadata.TryGetValue(RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints, out var maxSegment))
+                metadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints] = maxSegment;
+        }
+
+        return metadata;
+    }
+
+    // Writes the resolved per-run cadence (ADR 0032 R5) onto the workflow-started system metadata. Absent when no
+    // resolver is registered, leaving the read model to fall back to the host projection for that run.
+    private static Dictionary<string, string> StampCheckpointCadence(
+        Dictionary<string, string> metadata,
+        ResolvedCheckpointCadence? resolvedCadence)
+    {
+        if (resolvedCadence is null)
+            return metadata;
+
+        if (resolvedCadence.Coalesced)
+        {
+            metadata[RuntimeMetadataKeys.CheckpointCadence] = WorkflowExecutableCheckpointCadence.CoalescedMode;
+            if (resolvedCadence.MaxSegmentCheckpoints is { } max)
+                metadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints] = max.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+            metadata[RuntimeMetadataKeys.CheckpointCadence] = WorkflowExecutableCheckpointCadence.ImmediateMode;
 
         return metadata;
     }

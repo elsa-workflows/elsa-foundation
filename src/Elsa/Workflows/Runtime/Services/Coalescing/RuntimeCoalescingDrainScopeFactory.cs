@@ -17,11 +17,17 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
     CoalescingRuntimeCheckpointPersistenceOptions options,
     TimeProvider timeProvider) : IRuntimeCoalescingDrainScopeFactory
 {
-    public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId)
+    public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value);
+        // A per-workflow authored segment cap (ADR 0032 R5) overrides the host default for this run only; the host
+        // options singleton is left untouched. When unspecified (or equal) the shared host options are reused as-is.
+        var sessionOptions = maxSegmentCheckpoints is { } cap && cap != options.MaxSegmentCheckpoints
+            ? new CoalescingRuntimeCheckpointPersistenceOptions { MaxSegmentCheckpoints = cap }
+            : options;
+
+        var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, sessionOptions, innerOutboxStore.Value);
         var handle = sessionAccessor.Push(session);
         return new Scope(session, handle, checkpointCommitter, timeProvider);
     }

@@ -74,7 +74,10 @@ public static class ClrActivityContractTestBuilder
                 .Select(attribute => attribute.Key)
                 .DefaultIfEmpty(ActivityOutcomes.Done)
                 .ToArray(),
-            new ActivityActivationRequirement(descriptorType, alias));
+            new ActivityActivationRequirement(descriptorType, alias),
+            // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile (ADR 0032 R1 / spec 107): unmarked ⇒ External.
+            sideEffectProfile: activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
+                ?? SideEffectProfile.External);
     }
 
     public static IReadOnlyDictionary<string, RuntimeInputBinding> CompleteInputBindings(

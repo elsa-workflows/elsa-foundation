@@ -362,6 +362,51 @@ public sealed class WorkflowInstancesRequestHandlerTests
     }
 
     [Fact]
+    public async Task GetWorkflowInstance_PrefersThePerRunStamp_OverAReconfiguredCoalescedHost()
+    {
+        // ADR 0032 R5 per-run stamp: the run executed under Immediate cadence; the host was later reconfigured to
+        // Coalesced. The instance must report the cadence it actually ran under, not the host's current setting.
+        await _workflowStore.SaveAsync(Workflow(
+            "wf-1",
+            WorkflowExecutionStatus.Completed,
+            "definition-1",
+            systemMetadata: new Dictionary<string, string>
+            {
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CheckpointCadence] = "Immediate"
+            }));
+        var handler = NewGetInstanceHandler(CoalescedCadenceInspector(32));
+
+        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+
+        Assert.NotNull(result.Instance);
+        Assert.Equal("Immediate", result.Instance.CheckpointCadence);
+        Assert.Null(result.Instance.MaxSegmentCheckpoints);
+        Assert.Equal("activity-level", result.Instance.InspectionGranularity);
+    }
+
+    [Fact]
+    public async Task GetWorkflowInstance_ReportsAStampedCoalescedRun_EvenOnAnImmediateHost()
+    {
+        await _workflowStore.SaveAsync(Workflow(
+            "wf-1",
+            WorkflowExecutionStatus.Completed,
+            "definition-1",
+            systemMetadata: new Dictionary<string, string>
+            {
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CheckpointCadence] = "Coalesced",
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints] = "8"
+            }));
+        var handler = NewGetInstanceHandler(ImmediateCadenceInspector());
+
+        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+
+        Assert.NotNull(result.Instance);
+        Assert.Equal("Coalesced", result.Instance.CheckpointCadence);
+        Assert.Equal(8, result.Instance.MaxSegmentCheckpoints);
+        Assert.Equal("boundary-level", result.Instance.InspectionGranularity);
+    }
+
+    [Fact]
     public async Task ListAndDetailReturnTheSameRunKindAndKeepLegacyStatesUnknown()
     {
         await _workflowStore.SaveAsync(Workflow("wf-published", WorkflowExecutionStatus.Running, "definition-1", runKind: WorkflowRunKind.PublishedRun));
@@ -393,7 +438,8 @@ public sealed class WorkflowInstancesRequestHandlerTests
         string? correlationId = null,
         DateTimeOffset? updatedAt = null,
         WorkflowRunKind runKind = WorkflowRunKind.Unknown,
-        string? sourceDefinitionId = null) =>
+        string? sourceDefinitionId = null,
+        IReadOnlyDictionary<string, string>? systemMetadata = null) =>
         new(
             WorkflowExecutionId: id,
             PinnedExecutable: new WorkflowExecutableIdentity(
@@ -411,7 +457,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
             CorrelationId: correlationId,
             ParentWorkflowExecutionId: null,
             TenantId: null,
-            SystemMetadata: new Dictionary<string, string>())
+            SystemMetadata: systemMetadata ?? new Dictionary<string, string>())
         {
             RunKind = runKind,
             PinnedSource = sourceDefinitionId is null

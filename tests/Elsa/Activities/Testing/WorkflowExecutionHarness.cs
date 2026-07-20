@@ -520,7 +520,10 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             inputs,
             new ActivityResultContract(NewValueType(resultType), true, ActivityValuePolicy.Default, projections),
             outcomes,
-            new ActivityActivationRequirement(descriptor.Kind, alias));
+            new ActivityActivationRequirement(descriptor.Kind, alias),
+            // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile (ADR 0032 R1 / spec 107): unmarked ⇒ External.
+            sideEffectProfile: activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
+                ?? SideEffectProfile.External);
     }
 
     private static (string Kind, JsonElement Payload) NewClrDescriptor(Type activityType)

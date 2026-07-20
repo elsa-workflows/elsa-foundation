@@ -52,8 +52,26 @@ public sealed class ActivitySourceWorkflowEngineTracer : IWorkflowEngineTracer, 
         activity.SetTag(WorkflowEngineTelemetry.WorkflowExecutionIdTag, request.WorkflowExecutionId);
         if (request.MaxWorkItems is { } maxWorkItems)
             activity.SetTag(WorkflowEngineTelemetry.DrainMaxWorkItemsTag, maxWorkItems);
+        if (!HasEnclosingDrain(activity))
+            activity.SetTag(WorkflowEngineTelemetry.DrainOutermostTag, true);
 
         return activity;
+    }
+
+    // A nested drain (a child workflow drained inside the parent's dispatch via ChildStartExecutor) has an in-process
+    // ancestor drain span from the engine source; an outermost drain does not — even when a host span (the ASP.NET Core
+    // request activity on the synchronous execute path) is its direct parent. Remote parents terminate the chain, which
+    // is correct: a drain continuing an incoming W3C context is still this process's outermost drain.
+    private static bool HasEnclosingDrain(Activity activity)
+    {
+        for (var ancestor = activity.Parent; ancestor is not null; ancestor = ancestor.Parent)
+        {
+            if (ancestor.Source.Name == WorkflowEngineTelemetry.ActivitySourceName &&
+                ancestor.OperationName == WorkflowEngineTelemetry.DrainSpanName)
+                return true;
+        }
+
+        return false;
     }
 
     /// <inheritdoc />
