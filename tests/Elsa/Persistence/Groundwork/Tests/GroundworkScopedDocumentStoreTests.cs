@@ -75,6 +75,66 @@ public sealed class GroundworkScopedDocumentStoreTests
     }
 
     [Fact]
+    public async Task Every_document_and_bounded_operation_uses_an_ordinary_scoped_session()
+    {
+        var source = new TrackingSessionSource();
+        var store = CreateStore(source);
+        var bounded = (IBoundedDocumentStore)store;
+
+        await store.SaveAsync(new SaveDocumentRequest("kind", "id", "1.0.0", "{}"));
+        await store.LoadAsync("kind", "id");
+        await store.DeleteAsync(new DeleteDocumentRequest("kind", "id"));
+#pragma warning disable GW0004
+        await store.QueryAsync(new DocumentStoreQuery("kind", "by-value", "value"));
+        await store.QueryAsync(new PortableDocumentQuery("kind"));
+        await store.FirstOrDefaultAsync(new PortableDocumentQuery("kind"));
+        await store.AnyAsync(new PortableDocumentQuery("kind"));
+#pragma warning restore GW0004
+        var query = new DocumentQuery("kind", "bounded", []);
+        await bounded.QueryAsync(query);
+        await bounded.CountAsync(query);
+        await bounded.FirstOrDefaultAsync(query);
+        await bounded.AnyAsync(query);
+
+        Assert.Equal(
+        [
+            "save",
+            "load",
+            "delete",
+            "legacy-query",
+            "portable-query",
+            "portable-first",
+            "portable-any",
+            "bounded-query",
+            "bounded-count",
+            "bounded-first",
+            "bounded-any"
+        ], source.Calls);
+        Assert.Equal(source.Calls.Count, source.Leases.Count);
+        Assert.All(source.Leases, lease => Assert.Equal(1, lease.DisposeCount));
+        var expectedAccess = DocumentStoreAccess.Scoped(new StorageScope("tenant-a"));
+        Assert.All(source.Stores, openedStore => Assert.Equal(expectedAccess, openedStore.Access));
+        Assert.Equal(expectedAccess, store.Access);
+    }
+
+    [Fact]
+    public async Task Begin_failure_releases_the_acquired_session_and_preserves_the_exception()
+    {
+        var expected = new InvalidOperationException("begin failed");
+        var source = new TrackingSessionSource
+        {
+            ConfigureStore = store => store.BeginFailure = expected
+        };
+        var store = CreateStore(source);
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.BeginAsync(DocumentCommitScope.Of("kind")));
+
+        Assert.Same(expected, actual);
+        Assert.Equal(1, Assert.Single(source.Leases).DisposeCount);
+    }
+
+    [Fact]
     public async Task Unit_of_work_retains_the_session_until_disposal_then_disposes_both_once()
     {
         var source = new TrackingSessionSource();
@@ -108,14 +168,17 @@ public sealed class GroundworkScopedDocumentStoreTests
     {
         public Action<TrackingDocumentStore>? ConfigureStore { get; init; }
         public TrackingDocumentStore Store { get; private set; } = null!;
+        public List<TrackingDocumentStore> Stores { get; } = [];
         public List<TrackingLease> Leases { get; } = [];
+        public List<string> Calls { get; } = [];
 
         public ValueTask<GroundworkStoreSessionResources> OpenAsync(
             DocumentStoreAccess access,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Store = new TrackingDocumentStore(access);
+            Store = new TrackingDocumentStore(access, Calls);
+            Stores.Add(Store);
             ConfigureStore?.Invoke(Store);
             var lease = new TrackingLease();
             Leases.Add(lease);
@@ -134,13 +197,16 @@ public sealed class GroundworkScopedDocumentStoreTests
         }
     }
 
-    private sealed class TrackingDocumentStore(DocumentStoreAccess access) : IDocumentStore, IBoundedDocumentStore
+    private sealed class TrackingDocumentStore(
+        DocumentStoreAccess access,
+        ICollection<string> calls) : IDocumentStore, IBoundedDocumentStore
     {
         public DocumentStoreAccess Access { get; } = access;
         public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
         public int SaveCount { get; private set; }
         public int BoundedQueryCount { get; private set; }
         public Exception? LoadFailure { get; set; }
+        public Exception? BeginFailure { get; set; }
         public CancellationTokenSource? CancelDuringLoad { get; set; }
         public TrackingUnitOfWork UnitOfWork { get; } = new();
 
@@ -149,6 +215,7 @@ public sealed class GroundworkScopedDocumentStoreTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            calls.Add("save");
             SaveCount++;
             var now = DateTimeOffset.UtcNow;
             return Task.FromResult(DocumentStoreWriteResult.Saved(new DocumentEnvelope(
@@ -166,6 +233,7 @@ public sealed class GroundworkScopedDocumentStoreTests
             string id,
             CancellationToken cancellationToken = default)
         {
+            calls.Add("load");
             if (LoadFailure is not null)
                 return Task.FromException<DocumentEnvelope?>(LoadFailure);
             if (CancelDuringLoad is not null)
@@ -179,54 +247,84 @@ public sealed class GroundworkScopedDocumentStoreTests
 
         public Task<DocumentStoreWriteResult> DeleteAsync(
             DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(DocumentStoreWriteResult.NotFound);
+            CancellationToken cancellationToken = default)
+        {
+            calls.Add("delete");
+            return Task.FromResult(DocumentStoreWriteResult.NotFound);
+        }
 
 #pragma warning disable GW0004
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
             DocumentStoreQuery query,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<DocumentEnvelope>>([]);
+            CancellationToken cancellationToken = default)
+        {
+            calls.Add("legacy-query");
+            return Task.FromResult<IReadOnlyList<DocumentEnvelope>>([]);
+        }
 
         public Task<DocumentQueryResult> QueryAsync(
             PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new DocumentQueryResult([], 0));
+            CancellationToken cancellationToken = default)
+        {
+            calls.Add("portable-query");
+            return Task.FromResult(new DocumentQueryResult([], 0));
+        }
 
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(
             PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult<DocumentEnvelope?>(null);
+            CancellationToken cancellationToken = default)
+        {
+            calls.Add("portable-first");
+            return Task.FromResult<DocumentEnvelope?>(null);
+        }
 
         public Task<bool> AnyAsync(
             PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(false);
+            CancellationToken cancellationToken = default)
+        {
+            calls.Add("portable-any");
+            return Task.FromResult(false);
+        }
 #pragma warning restore GW0004
 
         public Task<IDocumentUnitOfWork> BeginAsync(
             DocumentCommitScope scope,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult<IDocumentUnitOfWork>(UnitOfWork);
+            CancellationToken cancellationToken = default)
+        {
+            if (BeginFailure is not null)
+                return Task.FromException<IDocumentUnitOfWork>(BeginFailure);
+            calls.Add("begin");
+            return Task.FromResult<IDocumentUnitOfWork>(UnitOfWork);
+        }
 
         public Task<DocumentQueryResult> QueryAsync(
             DocumentQuery query,
             CancellationToken cancellationToken = default)
         {
+            calls.Add("bounded-query");
             BoundedQueryCount++;
             return Task.FromResult(new DocumentQueryResult([], 0));
         }
 
-        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            Task.FromResult(0L);
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            calls.Add("bounded-count");
+            return Task.FromResult(0L);
+        }
 
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(
             DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult<DocumentEnvelope?>(null);
+            CancellationToken cancellationToken = default)
+        {
+            calls.Add("bounded-first");
+            return Task.FromResult<DocumentEnvelope?>(null);
+        }
 
-        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            Task.FromResult(false);
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            calls.Add("bounded-any");
+            return Task.FromResult(false);
+        }
     }
 
     private sealed class TrackingUnitOfWork : IDocumentUnitOfWork

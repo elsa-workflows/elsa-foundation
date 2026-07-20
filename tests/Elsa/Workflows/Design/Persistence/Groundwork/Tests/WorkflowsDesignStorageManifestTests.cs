@@ -1,6 +1,9 @@
+using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
+using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
+using Groundwork.Core.SchemaEvolution;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -144,6 +147,43 @@ public sealed class WorkflowsDesignStorageManifestTests
         Assert.Equal(
             ["storage_scope", "definition_id", "sem_ver_sort_key"],
             physicalIndex.Columns.Select(column => column.ColumnLogicalName));
+    }
+
+    [Fact]
+    public void Identity_comparison_algorithm_version_participates_in_the_target_fingerprint()
+    {
+        var baselineManifest = WorkflowsDesignStorageManifest.Create();
+        var changedManifest = baselineManifest with
+        {
+            StorageUnits = baselineManifest.StorageUnits.Select(unit =>
+                unit.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind
+                    ? unit with
+                    {
+                        IdentityPolicy = IdentityPolicy.StringId(
+                            stringCasePolicy: StringIdentityCasePolicy.UnicodeOrdinalIgnoreCase)
+                    }
+                    : unit).ToArray()
+        };
+        var provider = new ProviderIdentity("groundwork-test", "1.0.0");
+
+        var baseline = PhysicalSchemaTargetCompiler.Compile(
+            baselineManifest,
+            provider,
+            ProviderPhysicalNameNormalizer.Identity);
+        var changed = PhysicalSchemaTargetCompiler.Compile(
+            changedManifest,
+            provider,
+            ProviderPhysicalNameNormalizer.Identity);
+        var baselineIdentity = baseline.Routes.Single(route =>
+            route.StorageUnit.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind)
+            .Envelope.Identity;
+        var changedIdentity = changed.Routes.Single(route =>
+            route.StorageUnit.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind)
+            .Envelope.Identity;
+
+        Assert.NotEqual(baselineIdentity.ComparisonAlgorithmId, changedIdentity.ComparisonAlgorithmId);
+        Assert.Equal(baselineIdentity.LookupAlgorithmId, changedIdentity.LookupAlgorithmId);
+        Assert.NotEqual(baseline.Fingerprint, changed.Fingerprint);
     }
 
     [Fact]

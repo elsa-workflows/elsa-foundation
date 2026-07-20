@@ -108,7 +108,34 @@ T020 creates and maintains this ledger at class granularity. Every feature class
 
 | Class | Kind | Owning implementation task | Registration test | Direct branch test | Status |
 |---|---|---|---|---|---|
-| _Populate during T020 and later implementation tasks_ | _Pending_ | _Pending_ | _Pending_ | _Pending_ | _Pending_ |
+| `WorkflowsDesignStorageManifest` | Manifest compiler | T010 | `Reference_deployment_schema_unions_exact_workflow_and_activity_physical_definitions` | `WorkflowsDesignStorageManifestTests`, including algorithm-version fingerprint | Covered |
+| `WorkflowsDesignGroundworkStorageManifestSource` | Manifest source | T010 | `Family_registration_adds_its_source_scoped_and_idempotently` | `Family_source_declares_exact_manifest_and_public_store_contracts`; cancellation theory | Covered |
+| `ActivitiesDesignStorageManifest` | Manifest compiler | T011 | `Reference_deployment_schema_unions_exact_workflow_and_activity_physical_definitions` | `ActivitiesDesignStorageManifestTests` | Covered; no design comparison-key algorithm is declared |
+| `ActivitiesDesignGroundworkStorageManifestSource` | Manifest source | T011 | `Family_registration_adds_its_source_scoped_and_idempotently` | `Family_source_declares_exact_manifest_and_public_store_contracts`; cancellation theory | Covered |
+| `GroundworkStorageCompositionContext` | Composition state | T012 | Not a feature | `GroundworkStorageCompositionTests` duplicate, freeze, ordering, immutability branches | Covered |
+| `GroundworkStorageCompositionHandler` | Composition handler | T012 | Factory inline/fallback paths | `Handler_*` source-order, failure, and cancellation tests | Covered |
+| `GroundworkStorageCompositionFactory` | Composition factory | T012 | `Registered_factory_builds_the_selected_composition_from_scoped_sources` | inline publisher plus `Factory_rejects_a_missing_executable_handler_before_provider_work` | Covered |
+| `GroundworkStorageCompositionValidator` | Admission validator | T012 | Factory composition tests | owner, route, capability, topology, collision, compiler-failure, target-mismatch, and fingerprint tests | Covered |
+| `GroundworkPhysicalNameResolver` | Naming resolver | T012 | Validator composition path | transform order, inexact owners, deterministic collision, and exact-shared-object exemption tests | Covered |
+| `GroundworkRoutePhysicalSchemaTargetCompiler` | Target compiler | T012 | Validator default compiler path | null guards and exact manifest/provider/route preservation test | Covered |
+| `GroundworkUnifiedManifest` | Compatibility facade | T012 | Not a feature | `Compatibility_facade_returns_snapshot_manifest_without_a_second_fingerprint` | Covered |
+| `GroundworkDeploymentSchemaManifestSource` | Deployment schema source | T061 | Reference deployment schema registration | T061: empty/duplicate/invalid/non-constructible sources, naming mismatch, cancellation | Assigned to T061 |
+| `GroundworkStorageCompositionRegistration` | DI registration | T061 | idempotence and deployment-authority tests | T061: resolve the complete registered composition surface | Assigned to T061 |
+| `GroundworkPhysicalSchemaManifestSource` | Readiness/schema bridge | T061 | Schema CLI and host tests | T061: ready/pending/drift, executor failure, cancellation, inspect-only/no-auto-apply | Assigned to T061 |
+| `GroundworkPersistenceAccessMapper` | Scope mapper | T016 | Not a feature | `GroundworkStoreSessionFactoryTests.Mapper_*` | Covered |
+| `GroundworkStoreSession` | Session lifecycle | T016 | Factory/provider registration tests | disposal/audit branches are covered indirectly; direct construction awaits the recorded §2.23.3 public-surface decision | Open: T020 ratification |
+| `GroundworkScopedDocumentStore` | Scoped store adapter | T016 | Runtime/provider registration tests | `GroundworkScopedDocumentStoreTests` covers every document/bounded operation, ordinary scope injection, failure, cancellation, Begin failure, and UoW retention | Covered except nested UoW direct-construction decision |
+| `SessionDocumentUnitOfWork` | UoW/session lifetime adapter | T016 | Via `GroundworkScopedDocumentStore.BeginAsync` | disposal behavior is covered indirectly; direct construction awaits the recorded §2.23.3 public-surface decision | Open: T020 ratification |
+| `GroundworkStoreSessionSource` | Resource publisher | T016 | Runtime/provider registration tests | `GroundworkStoreSessionSourceTests` publication/disposal race branches | Covered |
+| `GroundworkStoreSessionFactory` | Session factory | T017 | Runtime/provider registration tests | ordinary/privileged mapping, authority rejection, cleanup, audit, cancellation, and terminal outcomes | Covered |
+| `GroundworkQueryTranslator<TEntity>` | Query translator | T015 | Not a feature | operators, clause structure, JSON names/scalars, ordering, terminals, invalid selectors, non-scalars, and serialization failures | Covered |
+| `GroundworkQueryTranslationException` | Public failure boundary | T015/T018 | Not a feature | Translator negative-path tests | Covered; hierarchy decision remains T018 |
+| readiness, corrupt-payload, and provider-failure exception classes | Public failure boundaries | T018 | Not features | T018 direct constructor/context and throw-site branches | Assigned to T018 after naming ratification |
+| `InMemoryDocumentStore` | Test query substrate | T019 | Not production/feature | `InMemoryDocumentStoreBoundedQueryTests` | Covered; outside production denominator |
+| `GroundworkReadStore<TEntity>` | Transitional candidate reader | T048 | Current design-store registration tests | Current legacy behavior tests; replacement must prove no load-all path | Assigned to T048 |
+| `GroundworkDesignAtomicWrite` and workflow/activity command implementations | Command/UoW implementations | T035 | T035 store/command registration | T035: success, provider failure, rollback, retry/lost acknowledgement, cancellation, replay fingerprint, scope, exactly-once events | Assigned to T035 |
+| `GroundworkSchemaReadinessTask` and schema-tool adapters | Readiness implementations | T061 | T061 feature/host composition | T061: ready/pending/drift, no apply/fallback, failure, cancellation | Assigned to T061 |
+| SQLite/PostgreSQL/SQL Server/MongoDB provider registrations, initializers, target compilers, and shell features | Provider materialization | T062 | T062 one §2.23.1 resolution test per concrete feature/provider | T062 direct provider branches and exact target evidence | Assigned to T062 |
 
 ## Resolved Dependencies
 

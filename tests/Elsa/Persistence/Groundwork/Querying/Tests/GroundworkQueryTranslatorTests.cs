@@ -183,6 +183,44 @@ public sealed class GroundworkQueryTranslatorTests
         Assert.Contains(nameof(DesignDocument.TransientLabel), exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [MemberData(nameof(NonScalarValues))]
+    public void Rejects_non_scalar_json_values_before_a_provider_can_execute(object value)
+    {
+        var source = Query<DesignDocument>.Where(x => x.Category, QueryOp.Equal, value);
+
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            _translator.Translate(DocumentKind, QueryIdentity, source));
+
+        Assert.Contains("scalar", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(nameof(DesignDocument.Category), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Wraps_json_serialization_failures_in_the_translation_boundary()
+    {
+        var options = new JsonSerializerOptions(Json);
+        options.Converters.Add(new FailingValueConverter());
+        var translator = new GroundworkQueryTranslator<DesignDocument>(options);
+        var source = Query<DesignDocument>.Where(
+            x => x.Category,
+            QueryOp.Equal,
+            new FailingValue());
+
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            translator.Translate(DocumentKind, QueryIdentity, source));
+
+        Assert.Contains("serialized", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(nameof(DesignDocument.Category), exception.Message, StringComparison.Ordinal);
+        Assert.IsType<JsonException>(exception.InnerException);
+    }
+
+    public static TheoryData<object> NonScalarValues => new()
+    {
+        new { Value = "object" },
+        new[] { "array" }
+    };
+
     private sealed class DesignDocument : Entity
     {
         [JsonPropertyName("title_text")]
@@ -198,5 +236,22 @@ public sealed class GroundworkQueryTranslatorTests
 
         [JsonIgnore]
         public string TransientLabel { get; init; } = "";
+    }
+
+    private sealed class FailingValue;
+
+    private sealed class FailingValueConverter : JsonConverter<FailingValue>
+    {
+        public override FailingValue? Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options) =>
+            throw new NotSupportedException();
+
+        public override void Write(
+            Utf8JsonWriter writer,
+            FailingValue value,
+            JsonSerializerOptions options) =>
+            throw new JsonException("deliberate-test-failure");
     }
 }

@@ -30,6 +30,7 @@ using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Physicalization;
 using Groundwork.Core.Queries;
+using Groundwork.Core.SchemaEvolution;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -128,6 +129,132 @@ public class GroundworkStorageCompositionTests
         var providerCall = calls.IndexOf("provider:PrimaryStorage:tenant_orders");
         Assert.True(hostCall >= 0, string.Join(", ", calls));
         Assert.True(providerCall > hostCall, string.Join(", ", calls));
+    }
+
+    [Fact]
+    public void Physical_name_resolver_rejects_inexact_owner_maps_and_blank_owners()
+    {
+        var resolver = new GroundworkPhysicalNameResolver();
+        var manifest = CreateManifest("feature", "unit");
+        var naming = GroundworkStorageNamingPolicyOptions.Identity;
+        var provider = ProviderPhysicalNameNormalizer.Identity;
+
+        Assert.Throws<ArgumentException>(() => resolver.Resolve(
+            manifest,
+            naming,
+            provider,
+            new Dictionary<StorageUnitIdentity, string>()));
+        Assert.Throws<ArgumentException>(() => resolver.Resolve(
+            manifest,
+            naming,
+            provider,
+            new Dictionary<StorageUnitIdentity, string>
+            {
+                [new("unit")] = "feature",
+                [new("unknown")] = "feature"
+            }));
+        var blankOwner = Assert.Throws<ArgumentException>(() => resolver.Resolve(
+            manifest,
+            naming,
+            provider,
+            new Dictionary<StorageUnitIdentity, string>
+            {
+                [new("unit")] = " "
+            }));
+        Assert.Contains("blank", blankOwner.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Physical_name_collisions_are_deterministic_and_block_composition()
+    {
+        var first = Assert.Single(CreateManifest("feature", "first", "shared_name").StorageUnits);
+        var second = Assert.Single(CreateManifest("feature", "second", "shared_name").StorageUnits);
+        var manifest = CreateManifest("feature", "unused") with
+        {
+            StorageUnits = [second, first]
+        };
+        var owners = new Dictionary<StorageUnitIdentity, string>
+        {
+            [first.Identity] = "first-feature",
+            [second.Identity] = "second-feature"
+        };
+
+        var resolution = new GroundworkPhysicalNameResolver().Resolve(
+            manifest,
+            GroundworkStorageNamingPolicyOptions.Identity,
+            ProviderPhysicalNameNormalizer.Identity,
+            owners);
+
+        var collision = Assert.Single(resolution.Collisions.Where(item =>
+            item.PhysicalObjects.Any(physicalObject =>
+                physicalObject.ObjectKind == PhysicalObjectKind.PrimaryStorage)));
+        Assert.Equal("shared_name", collision.Identifier);
+        Assert.Equal(
+            ["first-feature", "second-feature"],
+            collision.PhysicalObjects
+                .Where(item => item.ObjectKind == PhysicalObjectKind.PrimaryStorage)
+                .Select(item => item.FeatureIdentity));
+
+        var result = Validate(
+        [
+            CreateDeclaration("second-feature", CreateManifest("second-feature", "second", "shared_name")),
+            CreateDeclaration("first-feature", CreateManifest("first-feature", "first", "shared_name"))
+        ]);
+
+        Assert.False(result.IsValid);
+        var diagnostic = Assert.Single(result.Diagnostics.Where(item =>
+            item.Code == "ELSA-GW-COMPOSITION-NAME-COLLISION" &&
+            item.Message.Contains("PrimaryStorage", StringComparison.Ordinal)));
+        Assert.Contains("first-feature", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("second-feature", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Exact_shared_document_objects_are_exempt_from_collision_reporting()
+    {
+        var first = Assert.Single(CreateManifest("feature", "first").StorageUnits) with
+        {
+            PhysicalStorage = null
+        };
+        var second = Assert.Single(CreateManifest("feature", "second").StorageUnits) with
+        {
+            PhysicalStorage = null
+        };
+        var legacy = CreateManifest("feature", "unused") with
+        {
+            StorageUnits = [second, first]
+        };
+        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(legacy);
+
+        var resolution = new GroundworkPhysicalNameResolver().Resolve(
+            manifest,
+            GroundworkStorageNamingPolicyOptions.Identity,
+            ProviderPhysicalNameNormalizer.Identity,
+            manifest.StorageUnits.ToDictionary(unit => unit.Identity, _ => "feature"));
+
+        Assert.Empty(resolution.Collisions);
+    }
+
+    [Fact]
+    public void Route_target_compiler_rejects_null_inputs_and_preserves_the_exact_target()
+    {
+        var compiler = GroundworkRoutePhysicalSchemaTargetCompiler.Instance;
+        var manifest = CreateManifest("feature", "unit");
+        var provider = new ProviderIdentity("groundwork-sqlite", "1.0.0");
+        var policy = PhysicalNamePolicy.Identity;
+        IReadOnlyList<ExecutableStorageRoute> routes = [];
+
+        Assert.Throws<ArgumentNullException>(() => compiler.Compile(null!, provider, policy, routes));
+        Assert.Throws<ArgumentNullException>(() => compiler.Compile(manifest, null!, policy, routes));
+        Assert.Throws<ArgumentNullException>(() => compiler.Compile(manifest, provider, null!, routes));
+        Assert.Throws<ArgumentNullException>(() => compiler.Compile(manifest, provider, policy, null!));
+
+        var target = compiler.Compile(manifest, provider, policy, routes);
+
+        Assert.Equal(manifest.Identity, target.ManifestIdentity);
+        Assert.Equal(manifest.Version, target.ManifestVersion);
+        Assert.Equal(provider, target.Provider);
+        Assert.Empty(target.Routes);
     }
 
     [Fact]
@@ -399,6 +526,41 @@ public class GroundworkStorageCompositionTests
     }
 
     [Fact]
+    public void Validator_converts_target_compiler_failure_to_stable_diagnostics()
+    {
+        var expected = new InvalidOperationException("provider-compiler-failed");
+
+        var result = Validate(
+            [CreateDeclaration("feature", "unit")],
+            targetCompiler: new DelegateTargetCompiler((_, _, _, _) => throw expected));
+
+        Assert.False(result.IsValid);
+        var diagnostic = Assert.Single(result.Diagnostics.Where(item =>
+            item.Code == "ELSA-GW-COMPOSITION-TARGET-COMPILE"));
+        Assert.Equal("composition.target", diagnostic.Target);
+        Assert.Contains("groundwork-sqlite", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Validator_rejects_a_provider_target_that_does_not_match_validated_input()
+    {
+        var result = Validate(
+            [CreateDeclaration("feature", "unit")],
+            targetCompiler: new DelegateTargetCompiler((manifest, provider, _, routes) =>
+                new PhysicalSchemaTarget(
+                    new StorageManifestIdentity($"{manifest.Identity.Value}-wrong"),
+                    manifest.Version,
+                    provider,
+                    routes)));
+
+        Assert.False(result.IsValid);
+        var diagnostic = Assert.Single(result.Diagnostics.Where(item =>
+            item.Code == "ELSA-GW-COMPOSITION-TARGET-MISMATCH"));
+        Assert.Equal("composition.target", diagnostic.Target);
+        Assert.Contains("groundwork-sqlite", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Target_fingerprint_is_stable_across_declaration_order()
     {
         var first = CreateDeclaration("first", "first-unit");
@@ -477,6 +639,20 @@ public class GroundworkStorageCompositionTests
                 RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity,
                 Assert.Single(declaration.TopologyRequirements).Identity);
         }
+    }
+
+    [Theory]
+    [InlineData("workflows-design")]
+    [InlineData("activities-design")]
+    public async Task Design_family_sources_observe_cancellation_before_compiling_their_manifest(
+        string family)
+    {
+        var source = CreateFamilySource(family);
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            source.CreateDeclarationAsync(cancellation.Token).AsTask());
     }
 
     [Fact]
@@ -586,7 +762,8 @@ public class GroundworkStorageCompositionTests
         IReadOnlyCollection<GroundworkStorageManifestDeclaration> declarations,
         IReadOnlyCollection<Type>? requiredStores = null,
         GroundworkStorageNamingPolicyOptions? naming = null,
-        GroundworkProviderCapabilitySnapshot? providerCapabilities = null)
+        GroundworkProviderCapabilitySnapshot? providerCapabilities = null,
+        IGroundworkPhysicalSchemaTargetCompiler? targetCompiler = null)
     {
         var request = new GroundworkStorageCompositionValidationRequest(
             new StorageManifestIdentity("elsa-host-storage"),
@@ -596,7 +773,8 @@ public class GroundworkStorageCompositionTests
             requiredStores ?? [],
             naming ?? GroundworkStorageNamingPolicyOptions.Identity,
             providerCapabilities ?? ProviderSnapshot(),
-            ProviderPhysicalNameNormalizer.Identity);
+            ProviderPhysicalNameNormalizer.Identity,
+            targetCompiler);
         return new GroundworkStorageCompositionValidator().Validate(request);
     }
 
@@ -891,5 +1069,22 @@ public class GroundworkStorageCompositionTests
         public ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
             CancellationToken cancellationToken = default) =>
             ValueTask.FromException<GroundworkStorageManifestDeclaration>(exception);
+    }
+
+    private sealed class DelegateTargetCompiler(
+        Func<
+            StorageManifest,
+            ProviderIdentity,
+            IPhysicalNamePolicy,
+            IReadOnlyList<ExecutableStorageRoute>,
+            PhysicalSchemaTarget> compile)
+        : IGroundworkPhysicalSchemaTargetCompiler
+    {
+        public PhysicalSchemaTarget Compile(
+            StorageManifest manifest,
+            ProviderIdentity provider,
+            IPhysicalNamePolicy namePolicy,
+            IReadOnlyList<ExecutableStorageRoute> validatedRoutes) =>
+            compile(manifest, provider, namePolicy, validatedRoutes);
     }
 }

@@ -2,6 +2,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
@@ -219,6 +220,39 @@ public sealed class GroundworkStorageCompositionFactoryTests
         Assert.Contains("naming policy", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Factory_rejects_a_missing_executable_handler_before_provider_work()
+    {
+        var manifest = WorkflowsDesignStorageManifest.Create();
+        var unit = manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+        var source = new FixedManifestSource(new GroundworkStorageManifestDeclaration(
+            "missing-handler-feature",
+            manifest,
+            [],
+            [
+                new GroundworkStorageRouteRequirement(
+                    unit.Identity,
+                    "missing-executable-handler",
+                    new HashSet<CapabilityId>())
+            ],
+            [],
+            []));
+        var factory = new GroundworkStorageCompositionFactory(
+            new GroundworkStorageCompositionHandler([source]),
+            new GroundworkStorageCompositionValidator(),
+            GroundworkStorageNamingPolicyOptions.Identity);
+
+        var exception = await Assert.ThrowsAsync<GroundworkStorageCompositionException>(() =>
+            factory.CreateSourceAsync(
+                    ProviderCapabilities(),
+                    ProviderPhysicalNameNormalizer.Identity)
+                .AsTask());
+
+        Assert.Contains("ELSA-GW-COMPOSITION-ROUTE-MISSING", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("missing-executable-handler", exception.Message, StringComparison.Ordinal);
+    }
+
     private sealed class RecordingInlineEventPublisher(
         GroundworkStorageCompositionHandler handler,
         ICollection<IEvent> publishedEvents) : IInlineEventPublisher
@@ -227,6 +261,19 @@ public sealed class GroundworkStorageCompositionFactoryTests
         {
             publishedEvents.Add(@event);
             await handler.Handle((OnGroundworkStorageComposing)@event, cancellationToken);
+        }
+    }
+
+    private sealed class FixedManifestSource(GroundworkStorageManifestDeclaration declaration)
+        : IGroundworkStorageManifestSource
+    {
+        public string FeatureIdentity => declaration.FeatureIdentity;
+
+        public ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(declaration);
         }
     }
 
