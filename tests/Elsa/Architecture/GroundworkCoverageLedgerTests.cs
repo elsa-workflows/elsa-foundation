@@ -81,9 +81,16 @@ public sealed class GroundworkCoverageLedgerTests
                                     .ToArray()
                                 ?? throw new InvalidOperationException(
                                     $"Checkpoint/fence ledger attachment '{attachmentPath}' is empty.");
-        var attachmentEntryIds = attachmentRecords
-            .Select(record => record["coverageEntryId"]!.GetValue<string>())
-            .ToHashSet(StringComparer.Ordinal);
+        var expectedRecordsByEntry = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["runtime-checkpoint-commit"] = 28,
+            ["runtime-execution-liveness"] = 4,
+            ["runtime-post-commit-outbox"] = 4
+        };
+        var attachmentRecordsByEntry = attachmentRecords
+            .GroupBy(record => record["coverageEntryId"]!.GetValue<string>(), StringComparer.Ordinal)
+            .ToDictionary(records => records.Key, records => records.Count(), StringComparer.Ordinal);
+        var attachmentEntryIds = expectedRecordsByEntry.Keys.ToHashSet(StringComparer.Ordinal);
         var ledgerRecords = Entries(ledger)
             .Where(entry => attachmentEntryIds.Contains(EntryIdOf(entry)))
             .SelectMany(entry => entry["providerEvidence"]!.AsObject()
@@ -94,6 +101,9 @@ public sealed class GroundworkCoverageLedgerTests
         var ledgerByKey = ledgerRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
 
         Assert.Equal(36, attachmentRecords.Length);
+        Assert.Equal(
+            expectedRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+            attachmentRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal));
         Assert.All(attachmentRecords, record =>
         {
             Assert.Equal(ExpectedGroundworkVersion, record["providerVersion"]?.GetValue<string>());
