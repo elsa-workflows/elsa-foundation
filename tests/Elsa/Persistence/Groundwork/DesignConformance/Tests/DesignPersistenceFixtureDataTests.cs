@@ -146,7 +146,7 @@ public class DesignPersistenceFixtureDataTests
         MutateProperty(definition, propertyName);
         var after = ActivityDesignContractSuite.CanonicalSnapshot(definition, version);
 
-        AssertSnapshotChanged(before, after, propertyName);
+        AssertSnapshotPropertyMapping(definition, before, after, snapshot => snapshot.Definition, propertyName);
     }
 
     [Theory]
@@ -160,7 +160,7 @@ public class DesignPersistenceFixtureDataTests
         MutateProperty(version, propertyName);
         var after = ActivityDesignContractSuite.CanonicalSnapshot(definition, version);
 
-        AssertSnapshotChanged(before, after, propertyName);
+        AssertSnapshotPropertyMapping(version, before, after, snapshot => snapshot.Version, propertyName);
     }
 
     [Theory]
@@ -175,7 +175,7 @@ public class DesignPersistenceFixtureDataTests
         MutateProperty(definition, propertyName);
         var after = WorkflowDesignContractSuite.CanonicalSnapshot(definition, draft, layout);
 
-        AssertSnapshotChanged(before, after, propertyName);
+        AssertSnapshotPropertyMapping(definition, before, after, snapshot => snapshot.Definition, propertyName);
     }
 
     [Theory]
@@ -190,7 +190,7 @@ public class DesignPersistenceFixtureDataTests
         MutateProperty(draft, propertyName);
         var after = WorkflowDesignContractSuite.CanonicalSnapshot(definition, draft, layout);
 
-        AssertSnapshotChanged(before, after, propertyName);
+        AssertSnapshotPropertyMapping(draft, before, after, snapshot => snapshot.Draft, propertyName);
     }
 
     [Theory]
@@ -199,17 +199,13 @@ public class DesignPersistenceFixtureDataTests
     {
         var definition = DesignPersistenceFixtureData.WorkflowDefinition();
         var draft = DesignPersistenceFixtureData.WorkflowDraft();
-        var before = WorkflowDesignContractSuite.CanonicalSnapshot(
-            definition,
-            draft,
-            DesignPersistenceFixtureData.WorkflowDraftLayout());
+        var layout = new DraftLayoutSource { Records = DesignPersistenceFixtureData.WorkflowDraftLayout() };
+        var before = WorkflowDesignContractSuite.CanonicalSnapshot(definition, draft, layout.Records);
 
-        var after = WorkflowDesignContractSuite.CanonicalSnapshot(
-            definition,
-            draft,
-            ChangedLayout(propertyName));
+        MutateProperty(layout, propertyName);
+        var after = WorkflowDesignContractSuite.CanonicalSnapshot(definition, draft, layout.Records);
 
-        AssertSnapshotChanged(before, after, propertyName);
+        AssertSnapshotPropertyMapping(layout, before, after, snapshot => snapshot.Layout, propertyName);
     }
 
     [Theory]
@@ -223,7 +219,7 @@ public class DesignPersistenceFixtureDataTests
         MutateProperty(version, propertyName);
         var after = WorkflowDesignContractSuite.CanonicalSnapshot(version, layout);
 
-        AssertSnapshotChanged(before, after, propertyName);
+        AssertSnapshotPropertyMapping(version, before, after, snapshot => snapshot.Version, propertyName);
     }
 
     [Theory]
@@ -237,7 +233,7 @@ public class DesignPersistenceFixtureDataTests
         MutateProperty(layout, propertyName);
         var after = WorkflowDesignContractSuite.CanonicalSnapshot(version, layout);
 
-        AssertSnapshotChanged(before, after, propertyName);
+        AssertSnapshotPropertyMapping(layout, before, after, snapshot => snapshot.Layout, propertyName);
     }
 
     [Theory]
@@ -251,7 +247,7 @@ public class DesignPersistenceFixtureDataTests
         var changedRecord = ChangedDesignMetadata(record, propertyName);
         var after = WorkflowDesignContractSuite.CanonicalSnapshot(definition, draft, [changedRecord]);
 
-        AssertSnapshotChanged(before, after, propertyName);
+        AssertSnapshotPropertyMapping(changedRecord, before, after, snapshot => Assert.Single(snapshot.Layout.Records), propertyName);
     }
 
     [Fact]
@@ -360,7 +356,7 @@ public class DesignPersistenceFixtureDataTests
             return new[] { new OutputDefinition("drift-output", "DriftOutput", new TypeReference("String"), null, "Drift output", null, false) };
         if (propertyType == typeof(IEnumerable<ActivityDesignFacet>))
             return new[] { new ActivityDesignFacet("drift", "1", JsonSerializer.SerializeToElement(new { value = true })) };
-        if (propertyType == typeof(IEnumerable<DesignMetadataRecord>))
+        if (typeof(IEnumerable<DesignMetadataRecord>).IsAssignableFrom(propertyType))
             return ChangedLayout(propertyName);
 
         throw new InvalidOperationException($"No deterministic mutation is defined for {propertyType} ({propertyName}).");
@@ -389,12 +385,52 @@ public class DesignPersistenceFixtureDataTests
             _ => throw new InvalidOperationException($"No design-metadata mutation is defined for {propertyName}.")
         };
 
-    private static void AssertSnapshotChanged<T>(T before, T after, string propertyName)
+    private static void AssertSnapshotPropertyMapping<TSource, TAggregate, TSnapshot>(
+        TSource source,
+        TAggregate before,
+        TAggregate after,
+        Func<TAggregate, TSnapshot> snapshotSelector,
+        string propertyName)
     {
-        var beforeHash = DesignPersistenceFixtureData.ResultHash(before);
-        var afterHash = DesignPersistenceFixtureData.ResultHash(after);
-        Assert.True(
-            beforeHash != afterHash,
-            $"Canonical snapshot did not observe drift in {propertyName}.");
+        var sourceProperty = GetPublicProperty(typeof(TSource), propertyName);
+        var beforeSnapshot = snapshotSelector(before);
+        var afterSnapshot = snapshotSelector(after);
+        var snapshotProperty = GetPublicProperty(typeof(TSnapshot), propertyName);
+
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(sourceProperty.GetValue(source)),
+            DesignPersistenceFixtureData.ResultHash(snapshotProperty.GetValue(afterSnapshot)));
+        Assert.NotEqual(
+            DesignPersistenceFixtureData.ResultHash(snapshotProperty.GetValue(beforeSnapshot)),
+            DesignPersistenceFixtureData.ResultHash(snapshotProperty.GetValue(afterSnapshot)));
+        AssertNonTargetSnapshotPropertiesAreUnchanged(beforeSnapshot, afterSnapshot, propertyName);
+    }
+
+    private static void AssertNonTargetSnapshotPropertiesAreUnchanged<TSnapshot>(
+        TSnapshot beforeSnapshot,
+        TSnapshot afterSnapshot,
+        string targetPropertyName)
+    {
+        foreach (var property in typeof(TSnapshot).GetProperties(BindingFlags.Instance | BindingFlags.Public))
+        {
+            if (property.Name == targetPropertyName)
+                continue;
+
+            Assert.Equal(
+                DesignPersistenceFixtureData.ResultHash(property.GetValue(beforeSnapshot)),
+                DesignPersistenceFixtureData.ResultHash(property.GetValue(afterSnapshot)));
+        }
+    }
+
+    private static PropertyInfo GetPublicProperty(Type type, string propertyName)
+    {
+        var property = type.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+        Assert.NotNull(property);
+        return property!;
+    }
+
+    private sealed class DraftLayoutSource
+    {
+        public IReadOnlyCollection<DesignMetadataRecord> Records { get; set; } = [];
     }
 }
