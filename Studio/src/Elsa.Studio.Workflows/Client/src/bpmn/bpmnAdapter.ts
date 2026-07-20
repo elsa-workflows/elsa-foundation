@@ -217,6 +217,44 @@ export function createBpmnBoundNode(
   };
 }
 
+// Immutably applies `patch` to one sequence flow of a BPMN owner's payload (flow-condition edits).
+export function updateBpmnFlow(owner: ActivityNode, flowId: string, patch: Partial<BpmnSequenceFlow>): ActivityNode {
+  if (owner.structure?.kind !== bpmnStructureKind) return owner;
+  const sequenceFlows = readBpmnSequenceFlows(owner).map(flow =>
+    flow.flowId === flowId ? { ...flow, ...patch, flowId: flow.flowId, sourceRef: flow.sourceRef, targetRef: flow.targetRef } : flow);
+
+  return {
+    ...owner,
+    structure: {
+      ...owner.structure,
+      payload: { ...owner.structure.payload, sequenceFlows }
+    }
+  };
+}
+
+// Marks `flowId` as the BPMN default flow of `sourceElementId` (clearing siblings), or clears the
+// default entirely when `flowId` is null. A default flow carries no condition, so its
+// conditionOutcome is dropped.
+export function updateBpmnDefaultFlow(owner: ActivityNode, sourceElementId: string, flowId: string | null): ActivityNode {
+  if (owner.structure?.kind !== bpmnStructureKind) return owner;
+  const sequenceFlows = readBpmnSequenceFlows(owner).map(flow => {
+    if (flow.sourceRef !== sourceElementId) return flow;
+    if (flow.flowId === flowId) return { ...flow, isDefault: true, conditionOutcome: null };
+    return flow.isDefault ? { ...flow, isDefault: false } : flow;
+  });
+
+  const elements = readBpmnElements(owner).map(element =>
+    element.elementId === sourceElementId ? { ...element, defaultFlowId: flowId } : element);
+
+  return {
+    ...owner,
+    structure: {
+      ...owner.structure,
+      payload: { ...owner.structure.payload, sequenceFlows, elements }
+    }
+  };
+}
+
 // Immutably applies `patch` to one element of a BPMN owner's payload (inspector edits).
 export function updateBpmnElement(owner: ActivityNode, elementId: string, patch: Partial<BpmnElement>): ActivityNode {
   if (owner.structure?.kind !== bpmnStructureKind) return owner;

@@ -50,8 +50,8 @@ import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { InspectorPanel } from "./InspectorPanel";
 import { BpmnElementInspector } from "../bpmn/BpmnElementInspector";
 import { BpmnShapePalette } from "../bpmn/BpmnShapePalette";
-import { updateBpmnElement } from "../bpmn/bpmnAdapter";
-import type { BpmnElement } from "../bpmn/bpmnTypes";
+import { findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
+import { bpmnElementTypeLabel, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { SlotEmptyState } from "./SlotEmptyState";
 import type { PublicationIntent } from "../api/publishing";
 import { publicationChangesFor, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
@@ -470,8 +470,9 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, editDraft]);
 
-  // Patches one BPMN structure element on the current scope owner (inspector edits for pure elements).
-  const updateSelectedBpmnElement = useCallback((elementId: string, patch: Partial<BpmnElement>) => {
+  // Rewrites the current scope owner's BPMN payload through `apply` (inspector edits for pure
+  // elements and their outbound sequence flows).
+  const updateScopeOwnerBpmnPayload = useCallback((apply: (owner: ActivityNode) => ActivityNode) => {
     const ownerNodeId = scopeOwner?.nodeId;
     if (!ownerNodeId) return;
     editDraft(({ draft: current }) => {
@@ -481,11 +482,30 @@ export function WorkflowEditor({
         ...current,
         state: {
           ...current.state,
-          rootActivity: updateActivity(rootActivity, ownerNodeId, owner => updateBpmnElement(owner, elementId, patch), catalogByVersion)
+          rootActivity: updateActivity(rootActivity, ownerNodeId, apply, catalogByVersion)
         }
       };
     });
   }, [catalogByVersion, editDraft, scopeOwner?.nodeId]);
+
+  const updateSelectedBpmnElement = useCallback((elementId: string, patch: Partial<BpmnElement>) =>
+    updateScopeOwnerBpmnPayload(owner => updateBpmnElement(owner, elementId, patch)), [updateScopeOwnerBpmnPayload]);
+
+  const updateSelectedBpmnFlow = useCallback((flowId: string, patch: Partial<BpmnSequenceFlow>) =>
+    updateScopeOwnerBpmnPayload(owner => updateBpmnFlow(owner, flowId, patch)), [updateScopeOwnerBpmnPayload]);
+
+  const setSelectedBpmnDefaultFlow = useCallback((sourceElementId: string, flowId: string | null) =>
+    updateScopeOwnerBpmnPayload(owner => updateBpmnDefaultFlow(owner, sourceElementId, flowId)), [updateScopeOwnerBpmnPayload]);
+
+  const selectedBpmnElementFlows = useMemo(() =>
+    selectedBpmnElement && scopeOwner
+      ? readBpmnSequenceFlows(scopeOwner).filter(flow => flow.sourceRef === selectedBpmnElement.elementId)
+      : [], [scopeOwner, selectedBpmnElement]);
+
+  const bpmnFlowTargetLabel = useCallback((flow: BpmnSequenceFlow) => {
+    const target = findBpmnElement(scopeOwner, flow.targetRef);
+    return target ? target.name?.trim() || bpmnElementTypeLabel(target) : flow.targetRef;
+  }, [scopeOwner]);
 
   const openVersionChange = useCallback((occurrence: ActivityNode, current: ActivityDefinitionVersionView) => {
     setError("");
@@ -619,7 +639,14 @@ export function WorkflowEditor({
       order: 0,
       icon: <ListTree size={15} />,
       render: () => selectedBpmnElement && !selectedNode ? (
-        <BpmnElementInspector element={selectedBpmnElement} onChangeElement={updateSelectedBpmnElement} />
+        <BpmnElementInspector
+          element={selectedBpmnElement}
+          outboundFlows={selectedBpmnElementFlows}
+          onChangeElement={updateSelectedBpmnElement}
+          onChangeFlow={updateSelectedBpmnFlow}
+          onSetDefaultFlow={setSelectedBpmnDefaultFlow}
+          targetLabelFor={bpmnFlowTargetLabel}
+        />
       ) : (
         <InspectorPanel
           context={context}

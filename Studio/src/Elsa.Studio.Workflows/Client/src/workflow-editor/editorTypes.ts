@@ -4,7 +4,7 @@ import type { StudioActivityDescriptor, StudioWorkflowContextConnection } from "
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowInstanceDetails, WorkflowTestRunView } from "../workflowTypes";
 import type { getChildSlots, ScopeFrame, WorkflowEdgeData } from "../workflowAdapter";
 
-export type CreateWorkflowKind = "sequence" | "flowchart";
+export type CreateWorkflowKind = "sequence" | "flowchart" | "bpmn";
 
 export interface CreateWorkflowDraft {
   name: string;
@@ -14,7 +14,8 @@ export interface CreateWorkflowDraft {
 
 export const createWorkflowRootOptions: { value: CreateWorkflowKind; label: string; hint: string }[] = [
   { value: "flowchart", label: "Flowchart", hint: "Free-form graph of connected activities." },
-  { value: "sequence", label: "Sequence", hint: "Ordered list of activities that run top to bottom." }
+  { value: "sequence", label: "Sequence", hint: "Ordered list of activities that run top to bottom." },
+  { value: "bpmn", label: "BPMN", hint: "BPMN 2.0 process with events, gateways, and tasks." }
 ];
 
 export interface ActivityPaletteGroup {
