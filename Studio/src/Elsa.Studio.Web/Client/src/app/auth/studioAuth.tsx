@@ -85,7 +85,7 @@ export function createStudioEndpointContext(
   return {
     baseUrl,
     headers,
-    http: createAuthenticatedHttpClient(baseUrl, manager, { defaultHeaders: headers }),
+    http: createAuthenticatedHttpClient(baseUrl, manager, { defaultHeaders: headers, requireAuthorization: true }),
     accessTokenFactory
   };
 }
