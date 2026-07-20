@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -11,6 +12,7 @@ using Groundwork.MongoDb.Documents;
 using Groundwork.PostgreSql.Documents;
 using Groundwork.Sqlite.Documents;
 using Groundwork.SqlServer.Documents;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Conformance.Tests;
@@ -48,6 +50,9 @@ public sealed class RuntimeFenceContractTests
 
         await driver.ResetPhysicalAsync();
         await AssertCheckpointFenceAndReplayAtomicityAsync(driver);
+
+        foreach (var (window, decisionIsDurable) in CheckpointFailureWindows())
+            await AssertCheckpointBundleFailureAndReopenAsync(driver, window, decisionIsDurable);
     }
 
     private static async Task AssertPhysicalClientsAsync(GroundworkProviderDriver driver, string providerKey)
@@ -169,6 +174,59 @@ public sealed class RuntimeFenceContractTests
         await AssertBundlePresentAsync(secondClient.DocumentStore, currentCommit);
     }
 
+    /// <summary>
+    /// Exercises the same multi-document checkpoint commit used by the production writer around every named
+    /// provider decision boundary. This is intentionally a real provider test: the fault decorator only controls
+    /// when the provider acknowledgement is interrupted; the underlying transaction, reopen, and replay all run
+    /// against the selected physical provider.
+    /// </summary>
+    private static async Task AssertCheckpointBundleFailureAndReopenAsync(
+        GroundworkProviderDriver driver,
+        string windowId,
+        bool decisionIsDurable)
+    {
+        await driver.ResetPhysicalAsync();
+        var commit = FullBundleCommit($"checkpoint-failure-{windowId}");
+
+        await using (var client = await driver.OpenPhysicalClientAsync())
+        {
+            var failures = new GroundworkFailureController();
+            failures.FailAt(new GroundworkFailureWindow(windowId));
+            var decorated = new GroundworkFailureInjectingDocumentStore(
+                client.DocumentStore,
+                client.BoundedDocumentStore!,
+                client.DocumentStore.Access,
+                failures,
+                GroundworkDocumentStoreFailureWindows.OperationalRuntime);
+
+            var exception = await Assert.ThrowsAsync<GroundworkRuntimeCheckpointWriterException>(async () =>
+                await Writer(decorated).CommitAsync(commit, Decision));
+            Assert.IsType<InjectedGroundworkFailureException>(exception.InnerException);
+        }
+
+        await using (var reopenedClient = await driver.OpenPhysicalClientAsync())
+        {
+            await AssertFullBundleAsync(reopenedClient.DocumentStore, commit, decisionIsDurable);
+
+            // Before a durable decision, this is the first successful commit. After it, this is a replay. Both
+            // routes must converge to one complete bundle after the physical client is reopened.
+            var result = await Writer(reopenedClient.DocumentStore).CommitAsync(commit, Decision);
+            Assert.Equal(new[] { OutboxId(commit) }, result.PendingPostCommitWorkIds);
+            await AssertFullBundleAsync(reopenedClient.DocumentStore, commit, present: true);
+        }
+    }
+
+    private static IReadOnlyList<(string WindowId, bool DecisionIsDurable)> CheckpointFailureWindows()
+    {
+        var windows = GroundworkDocumentStoreFailureWindows.OperationalRuntime;
+        return
+        [
+            (windows.BeforeProviderDecision.Value, false),
+            (windows.DuringProviderDecision!.Value.Value, true),
+            (windows.AfterDurableDecision.Value, true)
+        ];
+    }
+
     private static RuntimeExecutionOwnershipService Ownership(
         IDocumentStore store,
         string ownerId,
@@ -261,6 +319,106 @@ public sealed class RuntimeFenceContractTests
         };
     }
 
+    private static RuntimeCheckpointCommit FullBundleCommit(string commitId)
+    {
+        const string workflowExecutionId = "wf-full-checkpoint-bundle";
+        var activity = new ActivityExecutionState(
+            new ActivityExecution("activity-full", workflowExecutionId, "node-full", "authored-full", "Elsa.Log", "1.0.0"),
+            ActivityExecutionStatus.Running,
+            SubStatus: null,
+            ScheduledAt: Now,
+            StartedAt: Now,
+            CompletedAt: null,
+            SchedulingActivityExecutionId: null,
+            ParentActivityExecutionId: null,
+            BranchId: null,
+            IterationId: null,
+            CallStackDepth: 0,
+            BookmarkIds: [],
+            IncidentIds: [],
+            FaultCount: 0,
+            AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string>());
+        var inspection = ActivityExecutionInspectionProjection.FromState(activity, $"checkpoint:{commitId}", Now);
+        var intent = new RuntimePostCommitIntent(
+            "intent-full",
+            workflowExecutionId,
+            "runtime-fence-contract",
+            Now,
+            activity.Execution.ActivityExecutionId,
+            "intent-full",
+            payload: null);
+        var stateChanges = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(
+                workflowExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                new WorkflowExecutionState(
+                    workflowExecutionId,
+                    new WorkflowExecutableIdentity("artifact-full", "definition-full", "version-full", "1", "hash-full"),
+                    WorkflowExecutionStatus.Running,
+                    SubStatus: null,
+                    CreatedAt: Now,
+                    StartedAt: Now,
+                    UpdatedAt: Now,
+                    CompletedAt: null,
+                    CorrelationId: null,
+                    ParentWorkflowExecutionId: null,
+                    TenantId: null,
+                    SystemMetadata: new Dictionary<string, string>()),
+                new Dictionary<string, string>()),
+            new RuntimeStateChange<SchedulerState>(
+                workflowExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                new SchedulerState(workflowExecutionId, version: 1, pendingWork: []),
+                new Dictionary<string, string>()),
+            [new RuntimeStateChange<ActivityExecutionState>(activity.Execution.ActivityExecutionId, RuntimeStateChangeOperation.Upsert, activity, new Dictionary<string, string>())],
+            [new RuntimeStateChange<BookmarkState>(
+                "bookmark-full",
+                RuntimeStateChangeOperation.Upsert,
+                new BookmarkState("bookmark-full", workflowExecutionId, activity.Execution.ActivityExecutionId, "node-full", "resume-full", "contract", "sha256:full", null, new Dictionary<string, string>(), Now, null),
+                new Dictionary<string, string>())],
+            [new RuntimeStateChange<DurableValueState>(
+                "value-full",
+                RuntimeStateChangeOperation.Upsert,
+                new DurableValueState(
+                    "value-full",
+                    workflowExecutionId,
+                    "value-full",
+                    new RuntimeValueTypeDescriptor("int", null, null),
+                    DurableValueLifecycle.Instance,
+                    DurableValueStorage.Inline,
+                    Json("42"),
+                    externalReference: null,
+                    sourceActivityExecutionId: activity.Execution.ActivityExecutionId,
+                    capturedAt: Now,
+                    metadata: new Dictionary<string, string>()),
+                new Dictionary<string, string>())],
+            [new RuntimeStateChange<IncidentState>(
+                "incident-full",
+                RuntimeStateChangeOperation.Append,
+                new IncidentState("incident-full", workflowExecutionId, activity.Execution.ActivityExecutionId, "node-full", IncidentSeverity.Error, IncidentStatus.Open, IncidentResolutionAction.None, "System.Exception", "full bundle", Now, null),
+                new Dictionary<string, string>())],
+            [new RuntimeStateChange<ExecutionLivenessState>(
+                "operational-full",
+                RuntimeStateChangeOperation.Upsert,
+                new ExecutionLivenessState("operational-full", workflowExecutionId, executionLease: null, heartbeat: null, drain: null, interruptedExecution: null),
+                new Dictionary<string, string>())],
+            workflowDispatches: [],
+            activityExecutionInspections:
+            [new RuntimeStateChange<ActivityExecutionInspectionProjection>(inspection.ActivityExecutionId, RuntimeStateChangeOperation.Upsert, inspection, new Dictionary<string, string>())]);
+        var commit = new RuntimeCheckpointCommit(
+            commitId,
+            new RuntimeCheckpoint($"checkpoint:{commitId}", "runtime-fence-contract", workflowExecutionId, Now, [activity.Execution.ActivityExecutionId], new Dictionary<string, string>()),
+            stateChanges,
+            [intent],
+            new Dictionary<string, string>());
+
+        return commit with
+        {
+            StateChanges = commit.StateChanges.WithPostCommitOutbox(RuntimePostCommitOutboxItems.CreatePendingChanges(commit))
+        };
+    }
+
     private static async Task AssertBundleAbsentAsync(IDocumentStore store, RuntimeCheckpointCommit commit)
     {
         Assert.Null(await new GroundworkBookmarkStateStore(store, GroundworkProviderTestSerialization.Serializer)
@@ -284,6 +442,53 @@ public sealed class RuntimeFenceContractTests
         Assert.NotNull(await store.LoadAsync(
             ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
             commit.CommitId));
+    }
+
+    private static async Task AssertFullBundleAsync(IDocumentStore store, RuntimeCheckpointCommit commit, bool present)
+    {
+        const string workflowExecutionId = "wf-full-checkpoint-bundle";
+        var serializer = GroundworkProviderTestSerialization.Serializer;
+        var workflow = await new GroundworkWorkflowExecutionStateStore(store, serializer, GroundworkTestAccess.DefaultAccessContextAccessor)
+            .FindAsync(workflowExecutionId);
+        var activity = await new GroundworkActivityExecutionStateStore(store, serializer)
+            .FindAsync(workflowExecutionId, "activity-full");
+        var inspection = await new GroundworkActivityExecutionInspectionStore(store, serializer)
+            .FindAsync(workflowExecutionId, "activity-full");
+        var bookmark = await new GroundworkBookmarkStateStore(store, serializer)
+            .FindAsync(workflowExecutionId, "bookmark-full");
+        var value = await new GroundworkDurableValueStateStore(store, serializer)
+            .FindAsync(workflowExecutionId, "value-full");
+        var liveness = await Liveness(store).FindAsync(workflowExecutionId, "operational-full");
+        var marker = await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, commit.CommitId);
+        var outbox = await store.LoadAsync(ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind, OutboxId(commit));
+
+        if (!present)
+        {
+            Assert.Null(workflow);
+            Assert.Null(activity);
+            Assert.Null(inspection);
+            Assert.Null(bookmark);
+            Assert.Null(value);
+            Assert.Null(liveness);
+            Assert.Null(marker);
+            Assert.Null(outbox);
+            return;
+        }
+
+        Assert.Equal(workflowExecutionId, workflow!.WorkflowExecutionId);
+        Assert.Equal("activity-full", activity!.Execution.ActivityExecutionId);
+        Assert.Equal("activity-full", inspection!.ActivityExecutionId);
+        Assert.Equal("bookmark-full", bookmark!.BookmarkId);
+        Assert.Equal("value-full", value!.DurableValueId);
+        Assert.Equal("operational-full", liveness!.OperationalStateId);
+        Assert.NotNull(marker);
+        Assert.NotNull(outbox);
+    }
+
+    private static JsonElement Json(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
     }
 
     private static string OutboxId(RuntimeCheckpointCommit commit) =>

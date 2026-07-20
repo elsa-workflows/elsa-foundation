@@ -64,7 +64,7 @@ internal static class RuntimeProviderEvidenceScenarios
 
     public static IReadOnlyList<string> UnpublishedObligations { get; } =
     [
-        "B5: checkpoint expected-version state changes, all ordinary document lifecycle and query obligations, and all restart/failure windows.",
+        "B5: the real-provider fence contract now proves the complete checkpoint state bundle across the three provider-decision windows and a physical reopen. It still has no published four-provider ledger artifacts, process-restart proof, workflow-execution-state parity, or #646 performance verdict; none of those claims may be inferred from the contract probe.",
         "B7: primary-identity reads (the find-* obligations) have no bounded native-plan probe; they remain unpublished. All mapped bounded routes are publishable through explicit ledger-to-route mappings.",
         "B8: concurrency semantics and process-restart evidence remain unpublished; all three named provider-decision failure windows are covered for every operational row."
     ];
