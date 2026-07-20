@@ -150,7 +150,7 @@ public static class BoundedDocumentQueryPager
         }
 
         var documents = new List<DocumentEnvelope>();
-        var seenDocumentIds = new HashSet<string>(StringComparer.Ordinal);
+        long? totalCount = null;
         var skip = 0;
         while (true)
         {
@@ -169,23 +169,35 @@ public static class BoundedDocumentQueryPager
                 throw new InvalidOperationException(
                     $"Document query '{queryIdentity}' provider page exceeded the requested bound.");
             }
-
-            if (result.Documents.Count == 0)
-                break;
-
-            foreach (var document in result.Documents)
+            if (result.TotalCount < 0)
             {
-                if (!seenDocumentIds.Add(document.Id))
-                {
-                    throw new InvalidOperationException(
-                        $"Document query '{queryIdentity}' repeated document '{document.Id}' while offset paging.");
-                }
-
-                documents.Add(document);
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider returned a negative total count.");
+            }
+            if (totalCount is not null && totalCount != result.TotalCount)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider total count changed while offset paging.");
             }
 
+            totalCount ??= result.TotalCount;
+            if (documents.Count + (long)result.Documents.Count > totalCount)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider pages exceeded the reported total count.");
+            }
+
+            if (result.Documents.Count == 0)
+            {
+                if (documents.Count != totalCount)
+                    throw new InvalidOperationException(
+                        $"Document query '{queryIdentity}' provider stopped before the reported total count was exhausted.");
+                break;
+            }
+
+            documents.AddRange(result.Documents);
             skip = checked(skip + result.Documents.Count);
-            if (result.Documents.Count < ElsaGroundworkQueryRoutes.MaximumResultCount)
+            if (documents.Count == totalCount)
                 break;
         }
 

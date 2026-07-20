@@ -5,6 +5,7 @@ using Elsa.Primitives.Entities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
@@ -34,6 +35,8 @@ public class GroundworkReadStoreTests
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly IReadOnlyList<DocumentQueryOrder> CollectionOrder =
         [new(CollectionField)];
+    private static readonly IReadOnlyList<DocumentQueryOrder> DocumentIdentityOrder =
+        [new(PhysicalDocumentFieldPaths.Id)];
 
     private sealed class Doc : Entity
     {
@@ -413,35 +416,45 @@ public class GroundworkReadStoreTests
     [Fact]
     public async Task Collection_query_exhausts_multiple_offset_pages_without_truncation()
     {
-        var documents = new InMemoryDocumentStore(BuildManifest());
-        for (var number = 0; number <= ElsaGroundworkQueryRoutes.MaximumResultCount; number++)
-        {
-            var id = $"doc-{number:D4}";
-            var content = JsonSerializer.Serialize(
-                new GroundworkDocument<Doc>(CollectionValue, new Doc { Id = id, Name = id }),
-                Json);
-            await documents.SaveAsync(new SaveDocumentRequest(DocumentKind, id, SchemaVersion, content));
-        }
+        var documents = Enumerable.Range(0, ElsaGroundworkQueryRoutes.MaximumResultCount + 1)
+            .Select(number =>
+            {
+                var id = $"doc-{number:D4}";
+                var content = JsonSerializer.Serialize(
+                    new GroundworkDocument<Doc>(CollectionValue, new Doc { Id = id, Name = id }),
+                    Json);
+                return new DocumentEnvelope(
+                    DocumentKind,
+                    id,
+                    SchemaVersion,
+                    1,
+                    content,
+                    DateTimeOffset.UnixEpoch,
+                    DateTimeOffset.UnixEpoch);
+            })
+            .ToArray();
+        var pages = new PagedBoundedDocumentStore(documents);
 
         var store = new GroundworkReadStore<Doc>(
-            documents,
+            new InMemoryDocumentStore(BuildManifest()),
             DocumentKind,
             ListAllQuery,
             CollectionField,
             CollectionValue,
             Json,
-            collectionOrder: CollectionOrder);
+            pages,
+            collectionOrder: DocumentIdentityOrder);
 
         var result = await store.QueryAsync(Query<Doc>.All());
 
         Assert.Equal(ElsaGroundworkQueryRoutes.MaximumResultCount + 1, result.Count);
-        Assert.Equal(2, documents.DocumentQueryCount);
+        Assert.Equal(2, pages.QueryCount);
     }
 
     [Fact]
-    public async Task Offset_pager_rejects_a_repeated_full_page()
+    public async Task Offset_pager_rejects_a_page_sequence_that_stops_before_the_reported_total()
     {
-        var store = new RepeatingBoundedDocumentStore();
+        var store = new StallingBoundedDocumentStore();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             BoundedDocumentQueryPager.QueryAllOffsetAsync(
@@ -449,17 +462,17 @@ public class GroundworkReadStoreTests
                 DocumentKind,
                 ListAllQuery,
                 [],
-                CollectionOrder,
+                DocumentIdentityOrder,
                 CancellationToken.None).AsTask());
 
-        Assert.Contains("repeated document", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("total count", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(2, store.QueryCount);
     }
 
     [Fact]
     public async Task Offset_pager_honors_cancellation_before_provider_io()
     {
-        var store = new RepeatingBoundedDocumentStore();
+        var store = new StallingBoundedDocumentStore();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
@@ -469,7 +482,7 @@ public class GroundworkReadStoreTests
                 DocumentKind,
                 ListAllQuery,
                 [],
-                CollectionOrder,
+                DocumentIdentityOrder,
                 cancellation.Token).AsTask());
 
         Assert.Equal(0, store.QueryCount);
@@ -568,7 +581,7 @@ public class GroundworkReadStoreTests
         public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) => Task.FromException<bool>(exception);
     }
 
-    private sealed class RepeatingBoundedDocumentStore : IBoundedDocumentStore
+    private sealed class StallingBoundedDocumentStore : IBoundedDocumentStore
     {
         private static readonly IReadOnlyList<DocumentEnvelope> Page = Enumerable.Range(0, ElsaGroundworkQueryRoutes.MaximumResultCount)
             .Select(number => new DocumentEnvelope(
@@ -586,7 +599,9 @@ public class GroundworkReadStoreTests
         public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
         {
             QueryCount++;
-            return Task.FromResult(new DocumentQueryResult(Page, Page.Count));
+            return Task.FromResult(QueryCount == 1
+                ? new DocumentQueryResult(Page, Page.Count + 1L)
+                : new DocumentQueryResult([], Page.Count + 1L));
         }
 
         public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
@@ -597,5 +612,30 @@ public class GroundworkReadStoreTests
 
         public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
+    }
+
+    private sealed class PagedBoundedDocumentStore(IReadOnlyList<DocumentEnvelope> documents) : IBoundedDocumentStore
+    {
+        public int QueryCount { get; private set; }
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            QueryCount++;
+            var page = documents
+                .Skip(query.Skip ?? 0)
+                .Take(query.Take ?? documents.Count)
+                .ToArray();
+            return Task.FromResult(new DocumentQueryResult(page, documents.Count));
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            Task.FromResult((long)documents.Count);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            Task.FromResult(documents.FirstOrDefault());
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            Task.FromResult(documents.Count != 0);
     }
 }
