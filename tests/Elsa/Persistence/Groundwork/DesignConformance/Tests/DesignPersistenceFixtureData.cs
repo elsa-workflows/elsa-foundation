@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -23,7 +24,7 @@ public static class DesignPersistenceFixtureData
     public const string ActivityDefinitionId = "activity-http-request";
     public const string ActivityVersionId = "activity-http-request-v1";
 
-    public static JsonSerializerOptions JsonOptions { get; } = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializationOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = false
     };
@@ -93,8 +94,44 @@ public static class DesignPersistenceFixtureData
     /// <summary>Computes an invariant result hash for parity assertions and evidence records.</summary>
     public static string ResultHash<T>(T value)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions);
-        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        var document = JsonSerializer.SerializeToElement(value, SerializationOptions);
+        var buffer = new ArrayBufferWriter<byte>();
+
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            WriteCanonicalJson(document, writer);
+        }
+
+        return Convert.ToHexString(SHA256.HashData(buffer.WrittenSpan)).ToLowerInvariant();
+    }
+
+    private static void WriteCanonicalJson(JsonElement element, Utf8JsonWriter writer)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+
+                foreach (var property in element.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
+                {
+                    writer.WritePropertyName(property.Name);
+                    WriteCanonicalJson(property.Value, writer);
+                }
+
+                writer.WriteEndObject();
+                break;
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+
+                foreach (var item in element.EnumerateArray())
+                    WriteCanonicalJson(item, writer);
+
+                writer.WriteEndArray();
+                break;
+            default:
+                element.WriteTo(writer);
+                break;
+        }
     }
 
     public sealed class FixedSystemClock(DateTimeOffset utcNow) : ISystemClock
@@ -113,13 +150,13 @@ public static class DesignPersistenceFixtureData
 
     public sealed class DeterministicPayloadSerializer : IPayloadSerializer
     {
-        public string Serialize(object payload) => JsonSerializer.Serialize(payload, JsonOptions);
-        public JsonElement SerializeToElement(object payload) => JsonSerializer.SerializeToElement(payload, JsonOptions);
-        public object Deserialize(string serializedData) => JsonSerializer.Deserialize<object>(serializedData, JsonOptions)!;
-        public object Deserialize(string serializedData, Type type) => JsonSerializer.Deserialize(serializedData, type, JsonOptions)!;
-        public object Deserialize(JsonElement serializedData) => serializedData.Deserialize<object>(JsonOptions)!;
-        public T Deserialize<T>(string serializedData) => JsonSerializer.Deserialize<T>(serializedData, JsonOptions)!;
-        public T Deserialize<T>(JsonElement serializedData) => serializedData.Deserialize<T>(JsonOptions)!;
-        public JsonSerializerOptions GetOptions() => JsonOptions;
+        public string Serialize(object payload) => JsonSerializer.Serialize(payload, SerializationOptions);
+        public JsonElement SerializeToElement(object payload) => JsonSerializer.SerializeToElement(payload, SerializationOptions);
+        public object Deserialize(string serializedData) => JsonSerializer.Deserialize<object>(serializedData, SerializationOptions)!;
+        public object Deserialize(string serializedData, Type type) => JsonSerializer.Deserialize(serializedData, type, SerializationOptions)!;
+        public object Deserialize(JsonElement serializedData) => serializedData.Deserialize<object>(SerializationOptions)!;
+        public T Deserialize<T>(string serializedData) => JsonSerializer.Deserialize<T>(serializedData, SerializationOptions)!;
+        public T Deserialize<T>(JsonElement serializedData) => serializedData.Deserialize<T>(SerializationOptions)!;
+        public JsonSerializerOptions GetOptions() => new(SerializationOptions);
     }
 }

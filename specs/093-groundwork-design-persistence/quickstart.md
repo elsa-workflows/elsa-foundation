@@ -23,7 +23,7 @@ release can be pinned as one package/tool family.
 
 The pre-extraction EF behavioral suite inventories are 354 workflow-design tests and
 467 activity-design tests. Their focused restore and discovery succeeded at this base.
-The shared fixture scaffold currently has 4 deterministic-fixture tests. See
+The shared fixture scaffold currently has 8 deterministic-fixture tests. See
 [baseline evidence](evidence/baseline.md) for the commands and precise evidence scope.
 
 No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads

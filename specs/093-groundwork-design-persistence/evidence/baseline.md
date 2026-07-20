@@ -41,7 +41,7 @@ The new shared fixture scaffold was verified with:
 dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj -c Release
 ```
 
-Result: 4 passed, 0 failed, 0 skipped.
+Result: 8 passed, 0 failed, 0 skipped.
 
 The existing focused Groundwork adapter suites were also executed at the same base:
 
@@ -51,8 +51,9 @@ The existing focused Groundwork adapter suites were also executed at the same ba
 | `Elsa.Activities.Design.Persistence.Groundwork.Tests` | 47 | 0 | Existing legacy-storage and descriptor obsolescence warnings only. |
 
 After restoring the clean worktree, `dotnet build Elsa.Server.slnx -c Release
---no-restore -v:q` completed successfully with 0 errors. Its one warning is the
-pre-existing `NU1510` recommendation in `Elsa.Architecture.Tests`.
+--no-restore -v:q` completed successfully with 0 errors. The build reports existing
+Groundwork-storage and legacy-descriptor obsolescence warnings, plus `NU1510` in
+`Elsa.Architecture.Tests`; the new DesignConformance project introduced none.
 
 ## Deliberate evidence boundary
 

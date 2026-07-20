@@ -15,6 +15,56 @@ public class DesignPersistenceFixtureDataTests
     }
 
     [Fact]
+    public void Equivalent_dictionary_payloads_with_different_insertion_orders_have_the_same_result_hash()
+    {
+        var first = new Dictionary<string, object?>
+        {
+            ["z"] = 1,
+            ["nested"] = new Dictionary<string, object?> { ["b"] = true, ["a"] = new[] { "first", "second" } },
+            ["a"] = "value"
+        };
+        var second = new Dictionary<string, object?>
+        {
+            ["a"] = "value",
+            ["nested"] = new Dictionary<string, object?> { ["a"] = new[] { "first", "second" }, ["b"] = true },
+            ["z"] = 1
+        };
+
+        Assert.Equal(DesignPersistenceFixtureData.ResultHash(first), DesignPersistenceFixtureData.ResultHash(second));
+    }
+
+    [Fact]
+    public void Equivalent_object_payloads_with_different_property_orders_have_the_same_result_hash()
+    {
+        var first = new { Zeta = 1, Alpha = "value" };
+        var second = new { Alpha = "value", Zeta = 1 };
+
+        Assert.Equal(DesignPersistenceFixtureData.ResultHash(first), DesignPersistenceFixtureData.ResultHash(second));
+    }
+
+    [Fact]
+    public void Semantically_different_payloads_have_different_result_hashes()
+    {
+        var first = new Dictionary<string, object?> { ["state"] = "published", ["version"] = 1 };
+        var second = new Dictionary<string, object?> { ["state"] = "published", ["version"] = 2 };
+
+        Assert.NotEqual(DesignPersistenceFixtureData.ResultHash(first), DesignPersistenceFixtureData.ResultHash(second));
+    }
+
+    [Fact]
+    public void Payload_serializer_options_are_returned_as_independent_copies()
+    {
+        var serializer = new DesignPersistenceFixtureData.DeterministicPayloadSerializer();
+        var mutated = serializer.GetOptions();
+        mutated.WriteIndented = true;
+
+        Assert.False(serializer.GetOptions().WriteIndented);
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(new Dictionary<string, int> { ["b"] = 2, ["a"] = 1 }),
+            DesignPersistenceFixtureData.ResultHash(new Dictionary<string, int> { ["a"] = 1, ["b"] = 2 }));
+    }
+
+    [Fact]
     public void Fixture_scopes_remain_distinct()
     {
         var first = DesignPersistenceFixtureData.WorkflowDefinition(DesignPersistenceFixtureData.ScopeA);
