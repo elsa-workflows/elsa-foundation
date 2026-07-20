@@ -58,7 +58,8 @@ default `List()` result is empty.
 ### Profile picker endpoint
 
 `GET publishing/value-conversion/profiles` projects the active shell registry for
-authoring pickers. It is gated by the `expressions.read` permission and advertised
+authoring pickers. It is gated by the `workflow-publishing.read` permission of its
+owning publishing domain and advertised
 in the API capability document under the `elsa.api.expressions` capability as
 relation `conversion-profiles`; clients that predate the relation fall back
 gracefully. The default host returns the built-in `elsa.json@1` and `elsa.xml@1`

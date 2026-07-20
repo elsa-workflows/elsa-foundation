@@ -23,12 +23,12 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class ValueConversionProfilesEndpointTests
 {
     [Fact]
-    public void Endpoint_has_pinned_route_and_expressions_read_permission()
+    public void Endpoint_has_pinned_route_and_publishing_read_permission()
     {
         var definition = ConfiguredDefinition("Elsa.Workflows.Publishing.Api.Endpoints.ListValueConversionProfiles");
 
         Assert.Contains("publishing/value-conversion/profiles", definition.Routes);
-        Assert.Contains(PermissionNames.ExpressionsRead, definition.AllowedPermissions!);
+        Assert.Contains(PermissionNames.WorkflowPublishingRead, definition.AllowedPermissions!);
         Assert.Contains(PermissionNames.All, definition.AllowedPermissions!);
         Assert.Null(definition.AnonymousVerbs);
     }

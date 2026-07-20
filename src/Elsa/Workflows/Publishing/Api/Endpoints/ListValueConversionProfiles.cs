@@ -17,6 +17,6 @@ internal sealed class ListValueConversionProfiles(IRequestSender requestSender, 
     public override void Configure()
     {
         Get(RouteConstants.ValueConversionProfiles);
-        ConfigurePermissions(PermissionNames.ExpressionsRead);
+        ConfigurePermissions(PermissionNames.WorkflowPublishingRead);
     }
 }
