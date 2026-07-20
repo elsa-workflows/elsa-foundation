@@ -136,6 +136,11 @@ PostgreSQL document store:
   `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` / `DiagnosticsStructuredLogsPersistenceEFCoreSqlite`
   back and give `/app` a writable volume for the SQLite files.
 
+- Engine self-instrumentation is enabled: `WorkflowsRuntimeTracing` emits engine spans and
+  `DiagnosticsOpenTelemetryEngineBridge` forwards them into the OpenTelemetry ingestion store, so
+  Studio's timing view is populated. Without the persistence lane above, the traces live in the
+  in-memory store and reset on restart.
+
 - The `SampleNuplaneActivities` and `WeatherForecastSample` sample features are dropped because they
   require Nuplane feed packages that are not present in the image.
 
