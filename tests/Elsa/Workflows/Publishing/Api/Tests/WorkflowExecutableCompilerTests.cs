@@ -1261,9 +1261,10 @@ public sealed class WorkflowExecutableCompilerTests
         var executable = await compiler.CompileAsync(NewRequest(now));
 
         var resumeTarget = Assert.Contains(
-            "resume-target:probe",
+            "delay-1:resume-target:probe",
             (IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>)executable.ResumeTargets);
         Assert.Equal("delay-1", resumeTarget.ExecutableNodeId);
+        Assert.Equal("resume-target:probe", resumeTarget.LocalResumeTargetId);
         Assert.Equal(nameof(ResumeProbeActivity.OnResumeAsync), resumeTarget.HandlerKey);
     }
 
@@ -1279,7 +1280,7 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task DuplicateResumeTargetIdAcrossNodesFailsCompilation()
+    public async Task MultipleInstancesOfAResumeTargetActivityCompileToNodeScopedTargets()
     {
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
         var compiler = ResumeCompiler(
@@ -1287,7 +1288,17 @@ public sealed class WorkflowExecutableCompilerTests
             _resumeProbeActivity,
             _sequenceActivity);
 
-        await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(NewRequest(now)).AsTask());
+        var executable = await compiler.CompileAsync(NewRequest(now));
+
+        Assert.Equal(2, executable.ResumeTargets.Count);
+        foreach (var nodeId in new[] { "delay-1", "delay-2" })
+        {
+            var target = Assert.Contains(
+                $"{nodeId}:resume-target:probe",
+                (IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>)executable.ResumeTargets);
+            Assert.Equal(nodeId, target.ExecutableNodeId);
+            Assert.Equal("resume-target:probe", target.LocalResumeTargetId);
+        }
     }
 
     private static ValueTask<ActivityInputSnapshot> MaterializeInputsAsync(

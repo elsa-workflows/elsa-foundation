@@ -536,16 +536,23 @@ public sealed class ExecutableNodeCompiler(
 
                 ValidateResumeTargetSignature(activityType, method);
 
-                var resumeTargetId = attribute.ResumeTargetId;
+                // Node-scoped resume-target ids (lifting the W8 one-instance-per-workflow limit): the map key
+                // embeds the executable node id, so multiple instances of the same resume-target activity
+                // (e.g. two Delay nodes, or two synthesized BPMN timer catch events) coexist. Activities keep
+                // registering by their local attribute id — the resume resolver falls back to matching
+                // (ExecutableNodeId, LocalResumeTargetId), the same rescoped shape the template placer emits.
+                var localResumeTargetId = attribute.ResumeTargetId;
+                var resumeTargetId = $"{node.ExecutableNodeId}:{localResumeTargetId}";
                 if (resumeTargets.TryGetValue(resumeTargetId, out var existing))
                     throw new ArgumentException(
-                        $"Resume target '{resumeTargetId}' is declared by executable nodes '{existing.ExecutableNodeId}' and '{node.ExecutableNodeId}'. A resume target id must be unique within a workflow executable; multiple instances of the same resume-target activity in one workflow are not yet supported.");
+                        $"Resume target '{localResumeTargetId}' is declared more than once by executable node '{existing.ExecutableNodeId}'. A resume target id must be unique within one activity type.");
 
                 resumeTargets[resumeTargetId] = new WorkflowExecutableResumeTarget(
                     ResumeTargetId: resumeTargetId,
                     ExecutableNodeId: node.ExecutableNodeId,
                     HandlerKey: method.Name,
-                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal));
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal),
+                    LocalResumeTargetId: localResumeTargetId);
             }
         }
 

@@ -4,6 +4,34 @@ Status: Phase 1 shipped 2026-07-20. This document is the handover brief for the 
 implements Phase 2. The full original program design lives in the session plan (mirrored below where
 it matters); the Phase-1 scope record is `specs/108-bpmn-container-activity/spec.md`.
 
+## Phase 2 progress (updated 2026-07-21)
+
+Spec numbers drifted from this document's suggestions: 109–111 and 113–114 were claimed by the
+engine-perf program. Shipped so far:
+
+| Unit | Spec | PR | State |
+|---|---|---|---|
+| Core seam A — child-subtree cancellation | `specs/112-runtime-child-subtree-cancellation` | #903 | merged |
+| Core seam B — handled child fault (absorption) | `specs/115-runtime-handled-child-fault` | #904 | merged |
+| Catch-events prerequisite — node-scoped resume targets (lifts the W8 one-instance limit) | — (documented W8 follow-up) | #911 | this PR |
+
+Seam facts for the remaining units: `RequestChildSubtreeCancellation` / `RequestChildFaultAbsorption`
+are staged on `IRuntimeActivityExecutionContext` during child-completion/child-fault evaluations and
+applied atomically in the continuation's own commit (`ActivitySubtreeCancellationPlanner` is the
+shared core; see the runtime EXTENSION_POINTS entries and the two specs for the validation rules).
+
+Catch-events slice notes (explored 2026-07-21): `BpmnElement.EventDefinitions` and
+`BpmnEventDefinitionTypes.Timer/Message/Signal` already exist and round-trip; an intermediate catch
+event is a new behavior family riding the existing `ScheduleChild` → `AwaitingChild` →
+`OnChildCompleted` token path with a synthesized suspending child in `BpmnAuthoredStructure.
+Activities` bound via `ChildNodeId` (`BpmnGraph.Validate` demands exactly-one binding, and
+`BpmnElementFamilies.ResolveStartEvent` currently throws on event-defined start events); the
+interchange importer currently **drops** `intermediateCatchEvent`/`boundaryEvent` and degrades
+event-defined start events; `Event` (Primitives) is start-only — its mid-flow wait form (add a
+`[ResumeTarget]` resume path) is the natural message/signal catch child; correlation-scoped resume
+already exists (passive `correlationId` through `IGlobalBookmarkStimulusLookup`); BPMN timer START
+events ride `RecurringScheduleDescriptor` + `RecurringTriggerPumpTask` (Timer/Cron template).
+
 ## Where the program stands
 
 Phase 1 landed as eight merged PRs in one day:
