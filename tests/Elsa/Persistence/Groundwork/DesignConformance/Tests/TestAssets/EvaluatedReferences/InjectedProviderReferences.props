@@ -1,0 +1,7 @@
+<Project>
+  <ItemGroup>
+    <PackageReference Include="Groundwork.Documents" />
+    <ProjectReference Include="$(DesignConformanceRepositoryRoot)/src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
+    <Reference Include="Groundwork.Documents" />
+  </ItemGroup>
+</Project>
