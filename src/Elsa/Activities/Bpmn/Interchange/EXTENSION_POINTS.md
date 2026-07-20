@@ -25,6 +25,12 @@
 - The authored `diagram` payload shape (`shapes: {id: {x,y,width,height}}`,
   `edges: {id: {waypoints: [{x,y}]}}`) mirrors BPMNDI and is treated as opaque by the runtime.
 
+## Owned HTTP endpoints
+
+- `POST interchange/bpmn/analyze` / `import` / `export` (`Endpoints/BpmnInterchangeEndpoints.cs`),
+  permission-gated by `bpmn-interchange.read` / `bpmn-interchange.manage`, discovered by the
+  FastEndpoints assembly scan via `FastEndpointsFeatureBase`.
+
 ## Consumed contracts
 
 - `Elsa.Activities.Bpmn` models (`BpmnAuthoredStructure`, `BpmnElement`, `BpmnSequenceFlow`, …) and

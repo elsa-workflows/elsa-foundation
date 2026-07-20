@@ -20,4 +20,6 @@ public static class PermissionNames
     public const string ApiCapabilitiesRead = "api-capabilities.read";
     public const string Elsa3ImportRead = "elsa3-import.read";
     public const string Elsa3ImportManage = "elsa3-import.manage";
+    public const string BpmnInterchangeRead = "bpmn-interchange.read";
+    public const string BpmnInterchangeManage = "bpmn-interchange.manage";
 }
