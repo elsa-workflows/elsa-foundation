@@ -1,7 +1,10 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
+using System.Globalization;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -112,6 +115,44 @@ public sealed class GroundworkIncidentStateStore(
         return states.Where(state => state.IsBlocking).ToArray();
     }
 
+    /// <summary>Reads one declared, keyset-bounded page of active incidents.</summary>
+    internal async ValueTask<IncidentAttentionPage> QueryAttentionPageAsync(
+        IncidentStatus status,
+        string? continuation = null,
+        int take = ElsaGroundworkQueryRoutes.MaximumResultCount,
+        CancellationToken cancellationToken = default)
+    {
+        if (status is not (IncidentStatus.Open or IncidentStatus.Blocking))
+            throw new ArgumentOutOfRangeException(nameof(status), "Attention supports only open and blocking incidents.");
+        if (take is <= 0 or > ElsaGroundworkQueryRoutes.MaximumResultCount)
+            throw new ArgumentOutOfRangeException(nameof(take));
+
+        var clauses = new List<DocumentQueryClause>
+        {
+            DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                ElsaRuntimeStorageManifest.StatusField,
+                ((int)status).ToString(CultureInfo.InvariantCulture)))
+        };
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageAttentionIncidentsByStatusQuery,
+                clauses,
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.CreatedAtField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.IncidentIdField)
+                ],
+                take: take,
+                continuation: continuation),
+            cancellationToken);
+        var items = result.Documents
+            .Select(Serializer.Deserialize<IncidentState>)
+            .Where(incident => incident.Status == status)
+            .ToArray();
+        return new IncidentAttentionPage(items, result.NextContinuation);
+    }
+
     private async ValueTask<LoadedIncident?> LoadByLogicalIdentityAsync(
         string workflowExecutionId,
         string incidentId,
@@ -141,3 +182,5 @@ public sealed class GroundworkIncidentStateStore(
 
     private sealed record LoadedIncident(IncidentState State, long Version);
 }
+
+internal sealed record IncidentAttentionPage(IReadOnlyList<IncidentState> Items, string? NextContinuation);

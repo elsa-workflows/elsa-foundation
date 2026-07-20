@@ -92,6 +92,7 @@ public static class ElsaGroundworkQueryRoutes
 
         Primary("runtime-workflow-execution-state", "find-by-execution", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "primary.workflow-execution-state.execution.v1"),
         Route("runtime-workflow-execution-state", "query-page-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Documents(), WorkflowExecutionHistoryRoute()),
+        Route("runtime-workflow-execution-state", "page-faulted-for-attention-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Documents(), FaultedWorkflowExecutionAttentionRoute()),
         Route("runtime-workflow-execution-state", "list-pinned-artifact-ids-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Projection(),
             BoundedOrdered(
                 ElsaRuntimeStorageManifest.PagePinnedExecutableArtifactIdsQuery,
@@ -104,6 +105,17 @@ public static class ElsaGroundworkQueryRoutes
                 ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
                 Equal(ElsaRuntimeStorageManifest.CollectionField))),
         Route("runtime-workflow-execution-state", "list-all-replaced-by-bounded-page", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Documents(), WorkflowExecutionHistoryRoute()),
+
+        Route("runtime-incident-state", "page-attention-by-status-bounded", ElsaRuntimeStorageManifest.IncidentStateDocumentKind, Documents(), BoundedOrdered(
+            ElsaRuntimeStorageManifest.PageAttentionIncidentsByStatusQuery,
+            ElsaRuntimeStorageManifest.IncidentAttentionStatusOrderIndex,
+            ElsaGroundworkQueryContinuation.Cursor,
+            [
+                ElsaRuntimeStorageManifest.CreatedAtField,
+                ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                ElsaRuntimeStorageManifest.IncidentIdField
+            ],
+            Equal(ElsaRuntimeStorageManifest.StatusField))),
 
         Route("runtime-trigger-binding", "list-by-publication-bounded", ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind, Documents(), BoundedOrdered(ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery, ElsaRuntimeStorageManifest.WorkflowTriggerBindingByPublicationAndId, ElsaGroundworkQueryContinuation.Cursor, [ElsaRuntimeStorageManifest.TriggerBindingIdField], Equal(ElsaRuntimeStorageManifest.PublicationIdField))),
         Route("runtime-trigger-binding", "list-by-stimulus-bounded", ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind, Documents(), BoundedOrdered(ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery, ElsaRuntimeStorageManifest.WorkflowTriggerBindingByStimulusAndType, ElsaGroundworkQueryContinuation.Cursor, [ElsaRuntimeStorageManifest.TriggerBindingIdField], Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingStimulusLookupKeyField), Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField))),
@@ -172,6 +184,31 @@ public static class ElsaGroundworkQueryRoutes
                             ElsaRuntimeStorageManifest.DurableValueStateByWorkflowAndValueId,
                             ElsaRuntimeStorageManifest.DurableValueIdField,
                             "durable_value_id"),
+                    ElsaRuntimeStorageManifest.IncidentStateDocumentKind =>
+                        PhysicalizeEnvelopeOrderedRoutes(
+                            unit,
+                            Field(
+                                ElsaRuntimeStorageManifest.IncidentIdField,
+                                ElsaRuntimeStorageManifest.IncidentAttentionIncidentIdIndex,
+                                length: ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
+                            preserveExistingRouteFieldProjections: true,
+                            new EnvelopeOrderedRoute(
+                                ElsaRuntimeStorageManifest.IncidentAttentionStatusOrderIndex,
+                                [
+                                    Field(
+                                        ElsaRuntimeStorageManifest.StatusField,
+                                        ElsaRuntimeStorageManifest.IncidentAttentionStatusIndex,
+                                        IndexValueKind.Number),
+                                    Field(
+                                        ElsaRuntimeStorageManifest.CreatedAtField,
+                                        ElsaRuntimeStorageManifest.IncidentAttentionCreatedAtIndex,
+                                        IndexValueKind.DateTime),
+                                    Field(
+                                        ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+                                        ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
+                                        length: ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength)
+                                ],
+                                UsesCursorPaging: true)),
                     _ => Physicalize(unit)
                 }).ToArray()
         };
@@ -744,6 +781,13 @@ public static class ElsaGroundworkQueryRoutes
     private static StorageUnit PhysicalizeEnvelopeOrderedRoutes(
         StorageUnit unit,
         EnvelopeOrderedField identity,
+        params EnvelopeOrderedRoute[] routes) =>
+        PhysicalizeEnvelopeOrderedRoutes(unit, identity, preserveExistingRouteFieldProjections: false, routes);
+
+    private static StorageUnit PhysicalizeEnvelopeOrderedRoutes(
+        StorageUnit unit,
+        EnvelopeOrderedField identity,
+        bool preserveExistingRouteFieldProjections,
         params EnvelopeOrderedRoute[] routes)
     {
         var storage = unit.PhysicalStorage ?? throw new InvalidOperationException(
@@ -773,12 +817,17 @@ public static class ElsaGroundworkQueryRoutes
             .SelectMany(route => route.Fields)
             .GroupBy(field => field.Path, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var existingProjectedPaths = definition.ProjectedColumns
+            .Select(column => column.Path)
+            .ToHashSet(StringComparer.Ordinal);
         var projected = definition.ProjectedColumns
             .Where(column => column.Path != identity.Path)
-            .Select(column =>
-                routeFieldsByPath.TryGetValue(column.Path, out var field) && field.Length is { } length
-                    ? column with { Length = length }
-                    : column)
+            .Where(column =>
+                preserveExistingRouteFieldProjections || !routeFieldsByPath.ContainsKey(column.Path))
+            .Concat(routeFieldsByPath.Values
+                .Where(field =>
+                    !preserveExistingRouteFieldProjections || !existingProjectedPaths.Contains(field.Path))
+                .Select(Projected))
             .Append(new ProjectedColumnDefinition(
                 identity.ProjectedColumn,
                 identity.Path,
@@ -845,6 +894,20 @@ public static class ElsaGroundworkQueryRoutes
         int? length = null) =>
         new(path, projectedColumn, kind, length);
 
+    private static ProjectedColumnDefinition Projected(EnvelopeOrderedField field) => new(
+        field.ProjectedColumn,
+        field.Path,
+        field.Kind switch
+        {
+            IndexValueKind.Boolean => PortablePhysicalType.Boolean,
+            IndexValueKind.DateTime => PortablePhysicalType.DateTime,
+            IndexValueKind.Number => PortablePhysicalType.Int64,
+            _ => PortablePhysicalType.String
+        },
+        Length: field.Kind == IndexValueKind.Keyword
+            ? field.Length ?? LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength
+            : null);
+
     private static BoundedQueryDeclaration ToBoundedQuery(ElsaGroundworkPhysicalQueryRoute route)
     {
         var predicates = route.Predicates
@@ -902,6 +965,22 @@ public static class ElsaGroundworkQueryRoutes
             Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField),
             GreaterThanOrEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField),
             LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField));
+
+    private static ElsaGroundworkPhysicalQueryRoute FaultedWorkflowExecutionAttentionRoute() =>
+        BoundedOrderedDirections(
+            ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex,
+            ElsaGroundworkQueryContinuation.Cursor,
+            [
+                new ElsaGroundworkQueryOrder(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                    PhysicalSortDirection.Descending),
+                new ElsaGroundworkQueryOrder(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
+                    PhysicalSortDirection.Ascending)
+            ],
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField));
 
     private static ElsaGroundworkQueryRoute Primary(
         string coverageRow,

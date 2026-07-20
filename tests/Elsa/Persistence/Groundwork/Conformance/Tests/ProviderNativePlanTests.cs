@@ -50,7 +50,7 @@ public sealed class ProviderNativePlanTests
             declared.SequenceEqual(covered, StringComparer.Ordinal),
             $"Missing native route scenarios: {string.Join(", ", declared.Except(covered, StringComparer.Ordinal))}. " +
             $"Unexpected native route scenarios: {string.Join(", ", covered.Except(declared, StringComparer.Ordinal))}.");
-        Assert.Equal(63, declared.Length);
+        Assert.Equal(65, declared.Length);
         Assert.DoesNotContain(
             RouteKey(SecretsStorageManifest.SecretDocumentKind, SecretsStorageManifest.SearchFilteredQuery),
             declared);
@@ -109,6 +109,12 @@ public sealed class ProviderNativePlanTests
                     var plan = explainer.ResolvePlan(
                         scenario.Query,
                         scenario.Query.ResultOperation);
+                    if (scenario.Query.QueryIdentity == ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery)
+                    {
+                        Assert.Equal(
+                            ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex,
+                            plan.IndexName?.Identifier);
+                    }
                     var request = NativePlanRequest(
                         scenario,
                         plan,
@@ -179,7 +185,7 @@ public sealed class ProviderNativePlanTests
                 }
             }
 
-            Assert.Equal(53, results.Count);
+            Assert.Equal(55, results.Count);
             Assert.Equal(
                 results.Count,
                 results.Select(result => RouteKey(
@@ -995,6 +1001,35 @@ public sealed class ProviderNativePlanTests
                         PhysicalSortDirection.Descending),
                     new DocumentQueryOrder(
                         ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)
+                ]),
+            Documents(
+                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+                ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery,
+                [
+                    Equal(
+                        ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField,
+                        TenantId),
+                    Equal(
+                        ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField,
+                        ((int)WorkflowExecutionStatus.Faulted).ToString(CultureInfo.InvariantCulture))
+                ],
+                [
+                    new DocumentQueryOrder(
+                        ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                        PhysicalSortDirection.Descending),
+                    new DocumentQueryOrder(
+                        ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)
+                ]),
+            Documents(
+                ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+                ElsaRuntimeStorageManifest.PageAttentionIncidentsByStatusQuery,
+                [Equal(
+                    ElsaRuntimeStorageManifest.StatusField,
+                    ((int)IncidentStatus.Open).ToString(CultureInfo.InvariantCulture))],
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.CreatedAtField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.IncidentIdField)
                 ])
         ];
     }

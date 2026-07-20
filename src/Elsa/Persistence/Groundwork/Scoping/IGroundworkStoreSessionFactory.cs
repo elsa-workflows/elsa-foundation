@@ -13,6 +13,13 @@ public interface IGroundworkStoreSessionFactory
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Creates an explicit ordinary global session. Callers must enforce their own domain-level
+    /// partitioning; privileged contexts are rejected so this path cannot bypass privileged auditing.
+    /// </summary>
+    ValueTask<GroundworkStoreSession> CreateOrdinaryGlobalAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Executes one privileged operation and records its terminal outcome after provider-lease cleanup.
     /// </summary>
     ValueTask<TResult> ExecutePrivilegedAsync<TResult>(

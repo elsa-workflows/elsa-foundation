@@ -284,11 +284,29 @@ public sealed class ArchitectureGuardTests
     {
         var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
 
         Assert.Contains("Elsa.Activities.Http", references);
         Assert.Contains("Elsa.Workflows.Runtime.Http", references);
         Assert.Contains(".WithHostAssemblies()", program, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_catalogs_and_enables_dashboard_dependencies_in_the_default_shell(string fileName)
+    {
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
+        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+
+        Assert.Contains("Elsa.Workflows.Design.Validations", references);
+        Assert.Contains("Elsa.Workflows.Runtime.Resumption", references);
+        Assert.Contains("typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains("typeof(WorkflowsRuntimeResumptionFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains("WorkflowDesignValidations", features);
+        Assert.Contains("WorkflowsRuntimeResumption", features);
     }
 
     [Fact]
@@ -296,7 +314,7 @@ public sealed class ArchitectureGuardTests
     {
         var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
 
         Assert.Contains("Elsa.Activities.Graph.Design", references);
         Assert.Contains("Elsa.Activities.Graph.Runtime", references);

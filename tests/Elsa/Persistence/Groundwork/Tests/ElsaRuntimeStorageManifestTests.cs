@@ -1,9 +1,17 @@
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
+using Groundwork.Core.SchemaEvolution;
+using Groundwork.Sqlite;
+using Groundwork.Sqlite.PhysicalStorage;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -14,6 +22,44 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// </summary>
 public sealed class ElsaRuntimeStorageManifestTests
 {
+    [Fact]
+    public async Task Attention_routes_upgrade_existing_sqlite_schema_additively()
+    {
+        var databasePath = Path.Join(Path.GetTempPath(), $"elsa-groundwork-attention-upgrade-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={databasePath}";
+
+        try
+        {
+            var legacyManifest = CreatePreAttentionRuntimeManifest();
+            var currentManifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
+            foreach (var (documentKind, path, expectedLength) in CompatibilityProjectionLengths)
+                AssertRouteProjectionLength(currentManifest, documentKind, path, expectedLength);
+            var legacySource = await CreateSqliteSchemaSourceAsync(legacyManifest);
+            await using (var connection = new SqliteConnection(connectionString))
+            {
+                var applied = await PhysicalSchemaApplication.ApplyAsync(
+                    legacySource.PhysicalTarget,
+                    new SqlitePhysicalSchemaExecutor(connection));
+                Assert.NotEqual(PhysicalSchemaApplicationOutcome.Rejected, applied.Outcome);
+                Assert.NotEqual(PhysicalSchemaApplicationOutcome.AuthorizationRequired, applied.Outcome);
+            }
+
+            var currentSource = await CreateSqliteSchemaSourceAsync(currentManifest);
+            await using var inspectionConnection = new SqliteConnection(connectionString);
+            var admission = await currentSource.InspectRuntimeAdmissionAsync(
+                new SqlitePhysicalSchemaExecutor(inspectionConnection),
+                new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = true });
+
+            Assert.True(admission.IsReady, string.Join(Environment.NewLine, admission.Diagnostics.Select(x => x.Message)));
+            Assert.True(admission.AppliedOperationCount > 0);
+            Assert.DoesNotContain(admission.Diagnostics, diagnostic => diagnostic.Code == "ELSA-GW-SCHEMA-DRIFT");
+        }
+        finally
+        {
+            File.Delete(databasePath);
+        }
+    }
+
     [Fact]
     public void ActivityExecutionState_Declares_ByParent_Index_And_Query()
     {
@@ -440,6 +486,12 @@ public sealed class ElsaRuntimeStorageManifestTests
         var route = Assert.Single(
             unit.PhysicalStorage.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery);
+        var faultAttentionLogical = Assert.Single(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex);
+        var faultAttentionRoute = Assert.Single(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery);
         var pinnedLogical = Assert.Single(
             unit.PhysicalStorage.LogicalIndexes,
             index => index.Identity == ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex);
@@ -481,6 +533,20 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(
             route.ResidualPredicateFields,
             field => field.Path == PhysicalDocumentFieldPaths.Id);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex,
+            faultAttentionRoute.IndexIdentity);
+        Assert.Contains(
+            faultAttentionRoute.PredicateFields,
+            field => field.Path == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField);
+        Assert.DoesNotContain(
+            faultAttentionRoute.ResidualPredicateFields,
+            field => field.Path == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField);
+        Assert.Collection(
+            faultAttentionLogical.Fields,
+            status => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField, status.Path),
+            timestamp => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField, timestamp.Path),
+            executionId => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField, executionId.Path));
         Assert.Contains(
             physical.ProjectedColumns,
             column =>
@@ -500,6 +566,11 @@ public sealed class ElsaRuntimeStorageManifestTests
             index =>
                 index.LogicalName == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryOrderIndex &&
                 index.Columns.Count == 4);
+        Assert.Contains(
+            physical.Indexes,
+            index =>
+                index.LogicalName == ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex &&
+                index.Columns.Count == 5);
         Assert.Equal(QueryPagingSupport.Offset, pinnedRoute.PagingSupport);
         Assert.Equal(
             ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
@@ -1125,13 +1196,13 @@ public sealed class ElsaRuntimeStorageManifestTests
     {
         var routes = ElsaGroundworkQueryRoutes.All;
 
-        Assert.Equal(28, routes.Count);
+        Assert.Equal(30, routes.Count);
         Assert.Equal(routes.Count, routes.Select(route => route.Key).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(
             7,
             routes.Count(route => route.Kind == ElsaGroundworkQueryRouteKind.PrimaryIdentityRead));
         Assert.Equal(
-            21,
+            23,
             routes.Count(route => route.Kind == ElsaGroundworkQueryRouteKind.BoundedRoute));
         Assert.All(routes, route => Assert.InRange(route.MaximumResultCount, 1, ElsaGroundworkQueryRoutes.MaximumResultCount));
         Assert.All(
@@ -1257,5 +1328,89 @@ public sealed class ElsaRuntimeStorageManifestTests
 
         Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashProjectionLength, stimulusHash.Length);
         Assert.Equal(stimulusTypeLength, stimulusType.Length);
+    }
+
+    private static StorageManifest CreatePreAttentionRuntimeManifest()
+    {
+        var current = ElsaRuntimeStorageManifest.CreatePhysicalized();
+        var legacyIncident = LegacyGroundworkStorageManifestPhysicalizer
+            .Physicalize(ElsaRuntimeStorageManifest.Create())
+            .StorageUnits
+            .Single(unit => unit.Identity.Value == ElsaRuntimeStorageManifest.IncidentStateDocumentKind);
+
+        return current with
+        {
+            StorageUnits = current.StorageUnits
+                .Select(unit => unit.Identity.Value == ElsaRuntimeStorageManifest.IncidentStateDocumentKind
+                    ? legacyIncident
+                    : unit)
+                .ToArray()
+        };
+    }
+
+    private static void AssertRouteProjectionLength(
+        StorageManifest manifest,
+        string documentKind,
+        string path,
+        int expectedLength)
+    {
+        var unit = manifest.StorageUnits.Single(candidate => candidate.Identity.Value == documentKind);
+        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage!.Policy).Definition;
+        Assert.Equal(expectedLength, Assert.Single(table.ProjectedColumns, column => column.Path == path).Length);
+    }
+
+    private static IReadOnlyList<(string DocumentKind, string Path, int ExpectedLength)> CompatibilityProjectionLengths { get; } =
+    [
+        (
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+            ElsaRuntimeStorageManifest.CollectionField,
+            ElsaRuntimeStorageManifest.RuntimeCollectionProjectionLength),
+        (
+            ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+            ElsaRuntimeStorageManifest.CollectionField,
+            ElsaRuntimeStorageManifest.RuntimeCollectionProjectionLength),
+        (
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+            ElsaRuntimeStorageManifest.ArtifactIdField,
+            ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
+        (
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+            ElsaRuntimeStorageManifest.ScopeField,
+            ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength),
+        (
+            ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+            LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength)
+    ];
+
+    private static ValueTask<GroundworkPhysicalSchemaManifestSource> CreateSqliteSchemaSourceAsync(StorageManifest manifest)
+    {
+        var topology = new GroundworkProviderTopologySnapshot(
+            SqliteGroundworkCapabilities.Provider.Name,
+            "sqlite-file",
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+            });
+        return GroundworkStoreInitialization.CreatePhysicalSchemaSourceAsync(
+            SqliteGroundworkCapabilities.Runtime(),
+            topology,
+            SqliteGroundworkCapabilities.PhysicalNames,
+            [new StaticRuntimeManifestSource(manifest)]);
+    }
+
+    private sealed class StaticRuntimeManifestSource(StorageManifest manifest) : IGroundworkStorageManifestSource
+    {
+        public string FeatureIdentity => RuntimeGroundworkStorageManifestSource.FeatureName;
+
+        public ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
+                FeatureIdentity,
+                manifest,
+                [],
+                [],
+                [],
+                []));
     }
 }
