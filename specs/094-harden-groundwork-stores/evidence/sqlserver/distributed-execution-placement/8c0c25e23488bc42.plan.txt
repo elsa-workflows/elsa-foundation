@@ -10,5 +10,5 @@ route-predicate=true
 finite-limit=16
 materialized-candidate-count=16
 command-count=2
-command-0=Count|count|sqlserver-statistics-xml|index-seek|placement-by-owner-expiry|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope|1||f812ca1a30c1ed3a48f5a53aca1e3a957f80777c6f99147cb0cc050965f211d3
-command-1=Page|page|sqlserver-statistics-xml|index-seek|placement-by-owner-expiry|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope|16|ownerIdLookupKey:Ascending:false,expiresAt:Ascending:false,workflowExecutionIdKey:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|2b745fe3acd09ba6edcf447a44be7b6deb2a173d66924bd59586a6b924a381a0
+command-0=Count|count|sqlserver-statistics-xml|index-seek|placement-by-owner-expiry|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope|1||4be7447ff7e02f2e53644c9ad276f7a742241661bd553a85ec43c897bdb4397d
+command-1=Page|page|sqlserver-statistics-xml|index-seek|placement-by-owner-expiry|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope|16|ownerIdLookupKey:Ascending:false,expiresAt:Ascending:false,workflowExecutionIdKey:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|1245a1753c9c1316667cfaed0df86baa98a305d02220e0b8a659f8809799f9c2

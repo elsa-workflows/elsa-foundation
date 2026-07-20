@@ -22,7 +22,11 @@ namespace Elsa.Activities.Design.Api.Endpoints.Versions
 namespace Elsa.Activities.Design.Api.Endpoints.Drafts
 {
     internal sealed class Diff(IRequestSender sender, ILogger<Diff> logger)
-        : ActivityAuthoringRequestEndpoint<PreviewActivityDraftDiff, ActivityVersionDiffView>(sender, logger)
+        : ActivityAuthoringRouteRequestEndpoint<PreviewActivityDraftDiff, ActivityVersionDiffView>(
+            sender,
+            logger,
+            "draftId",
+            static (request, draftId) => request with { DraftId = draftId })
     {
         public override void Configure()
         {

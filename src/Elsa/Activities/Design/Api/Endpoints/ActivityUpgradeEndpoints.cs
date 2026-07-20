@@ -33,7 +33,11 @@ internal sealed class Get(IRequestSender sender, ILogger<Get> logger)
 }
 
 internal sealed class Apply(ICommandSender sender, ILogger<Apply> logger)
-    : ActivityAuthoringCommandEndpoint<ApplyActivityUpgradePlan, ActivityUpgradeApplyResultView>(sender, logger)
+    : ActivityAuthoringRouteCommandEndpoint<ApplyActivityUpgradePlan, ActivityUpgradeApplyResultView>(
+        sender,
+        logger,
+        "planId",
+        static (request, planId) => request with { PlanId = planId })
 {
     public override void Configure()
     {
@@ -53,7 +57,11 @@ internal sealed class GetReceipt(IRequestSender sender, ILogger<GetReceipt> logg
 }
 
 internal sealed class Refresh(ICommandSender sender, ILogger<Refresh> logger)
-    : ActivityAuthoringCommandEndpoint<RefreshActivityUpgradePlan, ActivityUpgradePlanView>(sender, logger)
+    : ActivityAuthoringRouteCommandEndpoint<RefreshActivityUpgradePlan, ActivityUpgradePlanView>(
+        sender,
+        logger,
+        "planId",
+        static (request, planId) => request with { PlanId = planId })
 {
     protected override int SuccessStatusCode => 201;
     protected override string GetLocation(ActivityUpgradePlanView response) =>

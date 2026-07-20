@@ -206,7 +206,8 @@ public sealed class WorkflowExecutableCompiler(
 
             var inputContract = BuildInputContract(state.Inputs);
             var dependencies = BuildDependencies(dependencyClaims);
-            var artifactHash = hasher.ComputeHash(compiledRoot, inputContract, dependencies);
+            var checkpointCadence = CompileCheckpointCadence(state.StrategyOptions);
+            var artifactHash = hasher.ComputeHash(compiledRoot, inputContract, dependencies, checkpointCadence);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             await ValidateDependencyGraphAsync(artifactId, artifactHash, dependencies, cancellationToken);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
@@ -246,7 +247,8 @@ public sealed class WorkflowExecutableCompiler(
                 runtimeRequirements: runtimeRequirements,
                 storageDriverRequirements: storageDriverRequirements,
                 inputContract: inputContract,
-                dependencies: dependencies);
+                dependencies: dependencies,
+                checkpointCadence: checkpointCadence);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
             return executable;
         }
@@ -434,6 +436,33 @@ public sealed class WorkflowExecutableCompiler(
             path.RemoveAt(path.Count - 1);
             return false;
         }
+    }
+
+    // ADR 0032 R5: compile the authored per-workflow checkpoint cadence into the executable. The mode is a stable
+    // string alias validated here (fail-fast at publish, mirroring the contract gate discipline); an unauthored cadence
+    // compiles to null so the host default applies and the artifact hash is unchanged from before this field existed.
+    private static WorkflowExecutableCheckpointCadence? CompileCheckpointCadence(WorkflowStrategyOptions? strategyOptions)
+    {
+        var authored = strategyOptions?.CheckpointCadence;
+        if (authored is null || string.IsNullOrWhiteSpace(authored.Mode))
+            return null;
+
+        if (StringComparer.Ordinal.Equals(authored.Mode, WorkflowExecutableCheckpointCadence.ImmediateMode))
+            return new WorkflowExecutableCheckpointCadence(WorkflowExecutableCheckpointCadence.ImmediateMode);
+
+        if (StringComparer.Ordinal.Equals(authored.Mode, WorkflowExecutableCheckpointCadence.CoalescedMode))
+        {
+            if (authored.MaxSegmentCheckpoints is { } maxSegmentCheckpoints && maxSegmentCheckpoints <= 0)
+                throw new ArgumentException(
+                    $"Authored checkpoint cadence 'MaxSegmentCheckpoints' must be greater than zero, but was {maxSegmentCheckpoints}.");
+
+            return new WorkflowExecutableCheckpointCadence(
+                WorkflowExecutableCheckpointCadence.CoalescedMode,
+                authored.MaxSegmentCheckpoints);
+        }
+
+        throw new ArgumentException(
+            $"Authored checkpoint cadence mode '{authored.Mode}' is not a recognised alias. Use '{WorkflowExecutableCheckpointCadence.ImmediateMode}' or '{WorkflowExecutableCheckpointCadence.CoalescedMode}'.");
     }
 
     private static WorkflowExecutableInputContract BuildInputContract(IEnumerable<InputDefinition> inputs)

@@ -176,6 +176,7 @@ public sealed class PublishingHttpContractTests
                 "activity.draft.not-found",
                 "The requested activity draft was not found.",
                 [])));
+        notFound.HttpContext.Request.RouteValues["draftId"] = "missing";
 
         await InvokeHandleAsync(notFound, new StartActivityDraftTestRun("missing", 1, "run-1"));
 
@@ -185,12 +186,94 @@ public sealed class PublishingHttpContractTests
         var unexpected = CreateEndpoint(
             "Elsa.Workflows.Publishing.Api.Endpoints.ActivityDraftTestRunEndpoint",
             new ExceptionSender(new InvalidOperationException("secret provider payload")));
+        unexpected.HttpContext.Request.RouteValues["draftId"] = "draft-1";
         await InvokeHandleAsync(unexpected, new StartActivityDraftTestRun("draft-1", 1, "run-1"));
 
         Assert.Equal(StatusCodes.Status500InternalServerError, unexpected.HttpContext.Response.StatusCode);
         var body = await ResponseBodyAsync(unexpected);
         Assert.Contains("\"errorCode\":\"activity.operation.failed\"", body, StringComparison.Ordinal);
         Assert.DoesNotContain("secret provider payload", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Activity_test_run_endpoints_bind_every_route_identity_explicitly()
+    {
+        var startSender = new CapturingExceptionSender();
+        var start = CreateEndpoint(
+            "Elsa.Workflows.Publishing.Api.Endpoints.ActivityDraftTestRunEndpoint",
+            startSender);
+        start.HttpContext.Request.RouteValues["draftId"] = "draft-routed";
+        await InvokeHandleAsync(start, new StartActivityDraftTestRun(null!, 7, "operation-1"));
+        Assert.Equal("draft-routed", Assert.IsType<StartActivityDraftTestRun>(startSender.Request).DraftId);
+
+        var getSender = new CapturingExceptionSender();
+        var get = CreateEndpoint(
+            "Elsa.Workflows.Publishing.Api.Endpoints.GetActivityDraftTestRunEndpoint",
+            getSender);
+        get.HttpContext.Request.RouteValues["testRunId"] = "test-run-routed";
+        await InvokeHandleWithoutRequestAsync(get);
+        Assert.Equal("test-run-routed", Assert.IsType<GetActivityDraftTestRun>(getSender.Request).TestRunId);
+
+        var receiptSender = new CapturingExceptionSender();
+        var receipt = CreateEndpoint(
+            "Elsa.Workflows.Publishing.Api.Endpoints.GetActivityDraftTestRunByIdempotencyKeyEndpoint",
+            receiptSender);
+        receipt.HttpContext.Request.RouteValues["draftId"] = "draft-routed";
+        receipt.HttpContext.Request.RouteValues["idempotencyKey"] = "operation-routed";
+        await InvokeHandleWithoutRequestAsync(receipt);
+        var receiptRequest = Assert.IsType<GetActivityDraftTestRunByIdempotencyKey>(receiptSender.Request);
+        Assert.Equal("draft-routed", receiptRequest.DraftId);
+        Assert.Equal("operation-routed", receiptRequest.IdempotencyKey);
+
+        var cancelSender = new CapturingExceptionSender();
+        var cancel = CreateEndpoint(
+            "Elsa.Workflows.Publishing.Api.Endpoints.CancelActivityDraftTestRunEndpoint",
+            cancelSender);
+        cancel.HttpContext.Request.RouteValues["testRunId"] = "test-run-routed";
+        await InvokeHandleWithoutRequestAsync(cancel);
+        Assert.Equal("test-run-routed", Assert.IsType<CancelActivityDraftTestRun>(cancelSender.Request).TestRunId);
+    }
+
+    [Fact]
+    public async Task Activity_publication_endpoints_bind_every_route_identity_explicitly()
+    {
+        var preflightSender = new CapturingExceptionSender();
+        var preflight = CreateEndpoint(
+            "Elsa.Workflows.Publishing.Api.Endpoints.PreflightActivityDraftPublicationEndpoint",
+            preflightSender);
+        preflight.HttpContext.Request.RouteValues["draftId"] = "draft-routed";
+        await InvokeHandleAsync(preflight, new PreflightActivityDraftPublication(null!, 7, null));
+        Assert.Equal(
+            "draft-routed",
+            Assert.IsType<PreflightActivityDraftPublication>(preflightSender.Request).DraftId);
+
+        var publishSender = new CapturingExceptionSender();
+        var publish = CreateEndpoint(
+            "Elsa.Workflows.Publishing.Api.Endpoints.PublishActivityDraftEndpoint",
+            publishSender);
+        publish.HttpContext.Request.RouteValues["draftId"] = "draft-routed";
+        await InvokeHandleAsync(
+            publish,
+            new PublishActivityDraft(
+                "draft-body",
+                7,
+                null,
+                "1.0.0",
+                "review-sha256",
+                "operation-1"));
+        Assert.Equal(
+            "draft-routed",
+            Assert.IsType<PublishActivityDraft>(publishSender.Request).DraftId);
+
+        var receiptSender = new CapturingExceptionSender();
+        var receipt = CreateEndpoint(
+            "Elsa.Workflows.Publishing.Api.Endpoints.GetActivityPublicationReceiptEndpoint",
+            receiptSender);
+        receipt.HttpContext.Request.RouteValues["idempotencyKey"] = "operation-routed";
+        await InvokeHandleWithoutRequestAsync(receipt);
+        Assert.Equal(
+            "operation-routed",
+            Assert.IsType<GetActivityPublicationReceipt>(receiptSender.Request).IdempotencyKey);
     }
 
     [Fact]
@@ -278,9 +361,26 @@ public sealed class PublishingHttpContractTests
         return (BaseEndpoint)create.Invoke(null, [configure, new object[] { sender, logger }])!;
     }
 
-    private static Task InvokeHandleAsync<TRequest>(BaseEndpoint endpoint, TRequest request) =>
-        (Task)endpoint.GetType().GetMethod("HandleAsync", [typeof(TRequest), typeof(CancellationToken)])!
+    private static Task InvokeHandleAsync<TRequest>(BaseEndpoint endpoint, TRequest request)
+    {
+        if (!endpoint.HttpContext.Request.RouteValues.ContainsKey("draftId"))
+        {
+            endpoint.HttpContext.Request.RouteValues["draftId"] = request switch
+            {
+                PreflightActivityDraftPublication preflight => preflight.DraftId,
+                PublishActivityDraft publish => publish.DraftId,
+                StartActivityDraftTestRun testRun => testRun.DraftId,
+                _ => null
+            };
+        }
+
+        return (Task)endpoint.GetType().GetMethod("HandleAsync", [typeof(TRequest), typeof(CancellationToken)])!
             .Invoke(endpoint, [request, CancellationToken.None])!;
+    }
+
+    private static Task InvokeHandleWithoutRequestAsync(BaseEndpoint endpoint) =>
+        (Task)endpoint.GetType().GetMethod("HandleAsync", [typeof(CancellationToken)])!
+            .Invoke(endpoint, [CancellationToken.None])!;
 
     private static async Task<string> ResponseBodyAsync(BaseEndpoint endpoint)
     {
@@ -413,6 +513,17 @@ public sealed class PublishingHttpContractTests
     {
         public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
             Task.FromException<T>(exception);
+    }
+
+    private sealed class CapturingExceptionSender : IRequestSender
+    {
+        public object? Request { get; private set; }
+
+        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
+        {
+            Request = request;
+            return Task.FromException<T>(new InvalidOperationException("Captured endpoint request."));
+        }
     }
 
     private sealed class ThrowingSender : IRequestSender

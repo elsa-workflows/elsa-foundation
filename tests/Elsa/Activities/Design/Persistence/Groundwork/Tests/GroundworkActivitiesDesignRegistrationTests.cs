@@ -35,7 +35,7 @@ public class GroundworkActivitiesDesignRegistrationTests
             x.Identity.Value == ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind);
 
         Assert.Equal(LifecyclePolicy.AppendOnly, receipt.Lifecycle);
-        Assert.Contains(candidate.Queries, x =>
+        Assert.Contains(candidate.PhysicalStorage!.BoundedQueries, x =>
             x.Identity == ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery);
     }
 

@@ -4,6 +4,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
+using FastEndpoints;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
@@ -25,7 +26,8 @@ internal sealed class PreflightActivityDraftPublicationEndpoint(
     {
         try
         {
-            await Send.OkAsync(await requestSender.Send(request, cancellationToken), cancellationToken);
+            var routedRequest = request with { DraftId = Route<string>("draftId")! };
+            await Send.OkAsync(await requestSender.Send(routedRequest, cancellationToken), cancellationToken);
         }
         catch (ActivityPublicationRejectedException exception)
         {
@@ -55,7 +57,7 @@ internal sealed class PreflightActivityDraftPublicationEndpoint(
 internal sealed class GetActivityPublicationReceiptEndpoint(
     IRequestSender requestSender,
     ILogger<GetActivityPublicationReceiptEndpoint> logger)
-    : ElsaEndpoint<GetActivityPublicationReceipt, ActivityPublicationReceiptView>
+    : ElsaEndpointWithoutRequest<ActivityPublicationReceiptView>
 {
     public override void Configure()
     {
@@ -63,12 +65,11 @@ internal sealed class GetActivityPublicationReceiptEndpoint(
         ConfigurePermissions(PermissionNames.WorkflowPublishingRead);
     }
 
-    public override async Task HandleAsync(
-        GetActivityPublicationReceipt request,
-        CancellationToken cancellationToken)
+    public override async Task HandleAsync(CancellationToken cancellationToken)
     {
         try
         {
+            var request = new GetActivityPublicationReceipt(Route<string>("idempotencyKey")!);
             await Send.OkAsync(await requestSender.Send(request, cancellationToken), cancellationToken);
         }
         catch (ActivityPublicationRejectedException exception)
