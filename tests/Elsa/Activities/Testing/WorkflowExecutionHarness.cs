@@ -45,12 +45,25 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     private static readonly DateTimeOffset Now = new(2026, 6, 12, 12, 0, 0, TimeSpan.Zero);
 
     private readonly ServiceProvider _provider;
+    private readonly string _workflowExecutionId;
+    private readonly WorkflowExecutableIdentity _identity;
     private bool _activityTypesRegistered;
 
-    private WorkflowExecutionHarness(ServiceProvider provider) => _provider = provider;
+    private WorkflowExecutionHarness(ServiceProvider provider, string workflowExecutionId, WorkflowExecutableIdentity identity)
+    {
+        _provider = provider;
+        _workflowExecutionId = workflowExecutionId;
+        _identity = identity;
+    }
 
     /// <summary>The configured service provider (escape hatch for advanced assertions).</summary>
     public IServiceProvider Services => _provider;
+
+    /// <summary>The workflow-execution id this harness drives (defaults to <see cref="WorkflowExecutionId"/>).</summary>
+    public string ExecutionId => _workflowExecutionId;
+
+    /// <summary>The executable identity this harness saves and starts (defaults to <see cref="Identity"/>).</summary>
+    public WorkflowExecutableIdentity ExecutableIdentity => _identity;
 
     /// <summary>
     /// Runs the harness's CLR activity-type registration pass without starting a workflow. Restart tests use
@@ -130,11 +143,11 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
 
-        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(WorkflowExecutionId);
-        var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowExecutionId);
+        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(_workflowExecutionId);
+        var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(_workflowExecutionId);
 
         var pending = await _provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
-            .ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId));
+            .ListAllAsync(new RuntimeSchedulerWorkQuery(_workflowExecutionId));
         if (pending.Count != 0)
         {
             var terminated = workflowState?.Status is WorkflowExecutionStatus.Completed
@@ -180,7 +193,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
         var command = new WorkflowExecutionCommand(
             CommandId: "command-resume",
-            WorkflowExecutionId: WorkflowExecutionId,
+            WorkflowExecutionId: _workflowExecutionId,
             Kind: WorkflowExecutionCommandKind.ResumeBookmark,
             EnqueuedAt: Now,
             Payload: JsonSerializer.SerializeToElement(payload),
@@ -188,9 +201,9 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
         var envelope = new WorkflowExecutionCommandEnvelope(
             envelopeId: "envelope-resume",
-            workflowExecutionId: WorkflowExecutionId,
+            workflowExecutionId: _workflowExecutionId,
             command: command,
-            idempotencyKey: $"{WorkflowExecutionId}:resume:{bookmarkId}",
+            idempotencyKey: $"{_workflowExecutionId}:resume:{bookmarkId}",
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: Now,
             sequence: 2,
@@ -200,8 +213,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Resume command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
 
-        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(WorkflowExecutionId);
-        var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowExecutionId);
+        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(_workflowExecutionId);
+        var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(_workflowExecutionId);
         return new WorkflowExecutionRun(states, workflowState);
     }
 
@@ -225,10 +238,18 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                 .ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
     }
 
-    /// <summary>Convenience: wrap a root node in a <see cref="WorkflowExecutable"/> with the harness identity.</summary>
+    /// <summary>Convenience: wrap a root node in a <see cref="WorkflowExecutable"/> with the default harness identity.</summary>
     public static WorkflowExecutable NewExecutable(ExecutableNode rootActivity) =>
+        NewExecutable(rootActivity, Identity);
+
+    /// <summary>
+    /// Wraps a root node in a <see cref="WorkflowExecutable"/> with a caller-supplied identity. Concurrency harnesses
+    /// that run many executions against one shared store use this to give each execution a distinct artifact identity
+    /// (the executable store keys on <see cref="WorkflowExecutableIdentity.ArtifactId"/>).
+    /// </summary>
+    public static WorkflowExecutable NewExecutable(ExecutableNode rootActivity, WorkflowExecutableIdentity identity) =>
         new(
-            identity: Identity,
+            identity: identity,
             rootActivity: rootActivity,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
@@ -538,15 +559,15 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         return new ValueTypeDescriptor(reference.Alias, reference.CollectionKind);
     }
 
-    private static WorkflowExecutionActorActivationRequest NewActivationRequest() =>
+    private WorkflowExecutionActorActivationRequest NewActivationRequest() =>
         new(
-            workflowExecutionId: WorkflowExecutionId,
+            workflowExecutionId: _workflowExecutionId,
             reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: Now,
             requestedBy: "activity-execution-test",
             requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
-    private static WorkflowExecutionCommandEnvelope NewStartEnvelope(
+    private WorkflowExecutionCommandEnvelope NewStartEnvelope(
         WorkflowExecutableIdentity pinnedExecutable,
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
         JsonElement? stimulusInput = null,
@@ -555,7 +576,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs, stimulusInput: stimulusInput, triggerNodeId: triggerNodeId);
         var command = new WorkflowExecutionCommand(
             CommandId: "command-start",
-            WorkflowExecutionId: WorkflowExecutionId,
+            WorkflowExecutionId: _workflowExecutionId,
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: Now,
             Payload: JsonSerializer.SerializeToElement(payload),
@@ -563,9 +584,9 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
         return new WorkflowExecutionCommandEnvelope(
             envelopeId: "envelope-start",
-            workflowExecutionId: WorkflowExecutionId,
+            workflowExecutionId: _workflowExecutionId,
             command: command,
-            idempotencyKey: $"{WorkflowExecutionId}:start:{pinnedExecutable.ArtifactId}",
+            idempotencyKey: $"{_workflowExecutionId}:start:{pinnedExecutable.ArtifactId}",
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: Now,
             sequence: 1,
@@ -620,11 +641,23 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             Build((IEnumerable<string>)activityExecutionIds);
 
         /// <inheritdoc cref="Build(string[])"/>
-        public WorkflowExecutionHarness Build(IEnumerable<string> activityExecutionIds)
+        public WorkflowExecutionHarness Build(IEnumerable<string> activityExecutionIds) =>
+            Build(Identity, WorkflowExecutionId, activityExecutionIds);
+
+        /// <summary>
+        /// Builds a harness that drives a caller-supplied workflow-execution id and executable identity. Concurrency
+        /// harnesses stand up many of these against ONE shared document store — each with a distinct id/identity — to
+        /// measure N concurrent executions contending on the single durable writer.
+        /// </summary>
+        public WorkflowExecutionHarness Build(
+            WorkflowExecutableIdentity identity,
+            string workflowExecutionId,
+            IEnumerable<string> activityExecutionIds)
         {
             var services = new ServiceCollection();
 
-            services.AddSingleton<IRuntimeExecutionIdGenerator>(new DeterministicRuntimeExecutionIdGenerator(activityExecutionIds));
+            services.AddSingleton<IRuntimeExecutionIdGenerator>(
+                new DeterministicRuntimeExecutionIdGenerator(workflowExecutionId, activityExecutionIds));
 
             foreach (var configurator in _featureConfigurators)
                 configurator(services);
@@ -634,7 +667,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             // Activity CLR types are registered into the well-known type registry lazily, on first RunAsync (see
             // EnsureActivityTypesRegistered), not here — the caller loads the activity assemblies via its graph
             // builders after Build() returns, so scanning them at Build() time would be order-dependent.
-            return new WorkflowExecutionHarness(provider);
+            return new WorkflowExecutionHarness(provider, workflowExecutionId, identity);
         }
     }
 }
