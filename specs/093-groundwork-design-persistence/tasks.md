@@ -43,8 +43,8 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 **⚠️ CRITICAL**: No production adapter migration starts until this phase is green.
 
 - [ ] T009 Upgrade all Groundwork libraries and the tool as one released binary-compatible set that supplies the required physical-storage/query APIs in `Directory.Packages.props`, and resolve compile breaks without adding compatibility fallbacks
-- [ ] T010 [P] Replace legacy workflow design storage declarations with versioned `PhysicalTableDefinition` and bounded query identities in `src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignStorageManifest.cs`
-- [ ] T011 [P] Replace legacy activity design storage declarations with versioned `PhysicalTableDefinition` and bounded query identities in `src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignStorageManifest.cs`
+- [x] T010 [P] Replace legacy workflow design storage declarations with versioned `PhysicalTableDefinition` and bounded query identities in `src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignStorageManifest.cs`
+- [x] T011 [P] Replace legacy activity design storage declarations with versioned `PhysicalTableDefinition` and bounded query identities in `src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignStorageManifest.cs`
 - [ ] T012 Update the stable composite identity/version and unioned physical definitions in `src/Elsa/Persistence/Groundwork/Unified/GroundworkUnifiedManifest.cs`
 - [ ] T013 Add the provider-neutral `IPhysicalSchemaManifestSource` and host naming-policy bridge in `src/Elsa/Persistence/Groundwork/Unified/ElsaGroundworkSchema.cs`
 - [ ] T014 Write red translation tests for every Elsa `QueryOp`, AND-of-OR group, sort, page, count, any, first, null/missing case, and unsupported shape in `tests/Elsa/Persistence/Groundwork/Querying/Tests/GroundworkQueryTranslatorTests.cs`
