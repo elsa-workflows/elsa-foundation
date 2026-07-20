@@ -12,10 +12,11 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// <c>OnDraftValidated</c>.
 /// </summary>
 /// <remarks>
-/// This is the single origination path for Drafts. <c>ICloneDraftFromVersionCommand</c> delegates
-/// here, passing the version's copied State + layout and the source version id; the only thing
-/// that varies between a fresh create and a clone is <c>OnDraftCreated.SourceVersionId</c>
-/// (<c>null</c> for fresh, set for a clone).
+/// Fresh creation and <c>ICloneDraftFromVersionCommand</c> must use the same provider-owned
+/// origination lifecycle path: generate the Draft id, acquire its lock, validate, persist
+/// atomically, then publish the lifecycle events. Providers need not implement that invariant by
+/// making one public command call the other. The origin is carried by
+/// <c>OnDraftCreated.SourceVersionId</c> (<c>null</c> for fresh, set for a clone).
 /// </remarks>
 public interface ICreateDraftCommand
 {

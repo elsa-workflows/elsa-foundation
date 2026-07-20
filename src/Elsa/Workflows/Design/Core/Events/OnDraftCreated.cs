@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// <see cref="SourceVersionId"/> distinguishes the two origins: <c>null</c> for a fresh Draft (the
 /// very first Draft of a definition, with no version to copy from); set to the source
 /// <c>WorkflowDefinitionVersion</c> id when the Draft was cloned from an existing version
-/// (<c>ICloneDraftFromVersionCommand</c> delegates to <c>ICreateDraftCommand</c>). A separate
+/// (both commands use the provider's shared Draft-origination lifecycle path). A separate
 /// <c>OnDraftClonedFromVersion</c> event is therefore unnecessary — the provenance lives here.
 /// </remarks>
 public sealed class OnDraftCreated(string draftId, string workflowDefinitionId, string? sourceVersionId = null) : IEvent

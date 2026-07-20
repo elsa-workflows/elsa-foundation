@@ -4,6 +4,7 @@ using Elsa.Locking.Core;
 using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
@@ -42,8 +43,27 @@ public class GroundworkWorkflowDefinitionCommandTests
 
     private DesignOperationKey NextKey() => new($"test-operation-{++_operationSequence}");
 
+    private GroundworkDraftCreationCoordinator DraftCreationCoordinator(
+        IDocumentStore? store = null,
+        IPayloadSerializer? payloadSerializer = null,
+        IDeferredEventPublisher? deferredEventPublisher = null)
+    {
+        var documents = store ?? _store;
+        var payloads = payloadSerializer ?? Payloads;
+        return new(
+            _identities,
+            _locks,
+            documents,
+            new GroundworkDesignAtomicWrite(documents),
+            payloads,
+            _events,
+            deferredEventPublisher ?? _events,
+            _clock,
+            _accessContext);
+    }
+
     private GroundworkCreateDraftCommand CreateCommand() =>
-        new(_identities, _locks, _store, AtomicWrite(), Payloads, _events, _events, _clock, _accessContext);
+        new(DraftCreationCoordinator(), Payloads);
 
     private GroundworkUpdateDraftCommand UpdateCommand() =>
         new(_locks, _store, AtomicWrite(), Payloads, _events, _events, _clock, _accessContext);
@@ -105,16 +125,10 @@ public class GroundworkWorkflowDefinitionCommandTests
     public async Task CreateDraft_maps_payload_serialization_failure_before_opening_an_atomic_write()
     {
         var serializationFailure = new InvalidOperationException("Payload serialization failed.");
+        var failingPayloads = new FakePayloadSerializer(serializationFailure);
         var command = new GroundworkCreateDraftCommand(
-            _identities,
-            _locks,
-            _store,
-            AtomicWrite(),
-            new FakePayloadSerializer(serializationFailure),
-            _events,
-            _events,
-            _clock,
-            _accessContext);
+            DraftCreationCoordinator(payloadSerializer: failingPayloads),
+            failingPayloads);
 
         var thrown = await Assert.ThrowsAsync<DesignPersistenceException>(() => command.Execute(
             NextKey(),
@@ -142,7 +156,11 @@ public class GroundworkWorkflowDefinitionCommandTests
         var layout = new[] { new DesignMetadataRecord("root", 10, 20, 300, 200) };
         var sourceDraftId = await CreateCommand().Execute(NextKey(), "definition-1", state, layout, cancellationToken: CancellationToken.None);
         var sourceVersionId = await PromoteCommand().Execute(NextKey(), sourceDraftId, CancellationToken.None);
-        var clone = new GroundworkCloneDraftFromVersionCommand(VersionStore(), VersionLayoutStore(), CreateCommand(), _accessContext);
+        var clone = new GroundworkCloneDraftFromVersionCommand(
+            VersionStore(),
+            VersionLayoutStore(),
+            DraftCreationCoordinator(),
+            _accessContext);
         var key = NextKey();
 
         var cloneId = await clone.Execute(key, sourceVersionId, CancellationToken.None);
@@ -163,6 +181,136 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.Empty(cloned.State.Inputs);
         Assert.Empty(cloned.State.Outputs);
         Assert.Equal(layout, await DraftStore().FindLayoutByDraftIdAsync(cloneId));
+    }
+
+    [Fact]
+    public async Task CloneDraftFromVersion_replay_returns_the_committed_draft_after_the_source_is_removed_without_restaging_or_republishing()
+    {
+        var sourceDraftId = await CreateCommand().Execute(
+            NextKey(),
+            "definition-1",
+            MinimalState(),
+            [new DesignMetadataRecord("root", 10, 20, 300, 200)],
+            cancellationToken: CancellationToken.None);
+        var sourceVersionId = await PromoteCommand().Execute(NextKey(), sourceDraftId, CancellationToken.None);
+        var sourceLayout = await VersionLayoutStore().FindByVersionIdAsync(sourceVersionId);
+        Assert.NotNull(sourceLayout);
+        var clone = new GroundworkCloneDraftFromVersionCommand(
+            VersionStore(),
+            VersionLayoutStore(),
+            DraftCreationCoordinator(),
+            _accessContext);
+        var operationKey = NextKey();
+        var deferredEventsBeforeClone = _events.DeferredEvents.Count;
+        var cloneId = await clone.Execute(operationKey, sourceVersionId, CancellationToken.None);
+        var identityCount = _identities.GenerateCount;
+        var draftLockKey = WorkflowDesignPersistenceLockKeys.DraftKey(cloneId);
+        var draftLockCount = _locks.AcquireCounts[draftLockKey];
+        var deferredEventCount = _events.DeferredEvents.Count;
+        Assert.Equal(deferredEventsBeforeClone + 2, deferredEventCount);
+
+        await _store.DeleteAsync(GroundworkDocumentWriter.ToDeleteRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
+            sourceLayout!.Id));
+        await _store.DeleteAsync(GroundworkDocumentWriter.ToDeleteRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            sourceVersionId));
+        var beginCount = _store.BeginCount;
+        var saveCount = _store.SaveCount;
+        var deleteCount = _store.DeleteCount;
+
+        var replayId = await clone.Execute(operationKey, sourceVersionId, CancellationToken.None);
+
+        Assert.Equal(cloneId, replayId);
+        Assert.Equal(beginCount, _store.BeginCount);
+        Assert.Equal(saveCount, _store.SaveCount);
+        Assert.Equal(deleteCount, _store.DeleteCount);
+        Assert.Equal(identityCount, _identities.GenerateCount);
+        Assert.Equal(draftLockCount, _locks.AcquireCounts[draftLockKey]);
+        Assert.Equal(deferredEventCount, _events.DeferredEvents.Count);
+        Assert.DoesNotContain(
+            _store.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind),
+            document => document.Id == sourceVersionId);
+        Assert.NotNull(await DraftStore().FindByIdAsync(cloneId));
+    }
+
+    [Fact]
+    public async Task CloneDraftFromVersion_same_key_with_different_source_conflicts_before_reading_the_alternative_source()
+    {
+        var sourceDraftId = await CreateCommand().Execute(
+            NextKey(),
+            "definition-1",
+            MinimalState(),
+            cancellationToken: CancellationToken.None);
+        var sourceVersionId = await PromoteCommand().Execute(NextKey(), sourceDraftId, CancellationToken.None);
+        var clone = new GroundworkCloneDraftFromVersionCommand(
+            VersionStore(),
+            VersionLayoutStore(),
+            DraftCreationCoordinator(),
+            _accessContext);
+        var operationKey = NextKey();
+        await clone.Execute(operationKey, sourceVersionId, CancellationToken.None);
+        var beginCount = _store.BeginCount;
+        var saveCount = _store.SaveCount;
+        var identityCount = _identities.GenerateCount;
+        var lockCount = _locks.AcquireCounts.Values.Sum();
+        var deferredEventCount = _events.DeferredEvents.Count;
+
+        await Assert.ThrowsAsync<GroundworkDesignOperationConflictException>(() =>
+            clone.Execute(operationKey, "missing-alternative-version", CancellationToken.None));
+
+        Assert.Equal(beginCount, _store.BeginCount);
+        Assert.Equal(saveCount, _store.SaveCount);
+        Assert.Equal(identityCount, _identities.GenerateCount);
+        Assert.Equal(lockCount, _locks.AcquireCounts.Values.Sum());
+        Assert.Equal(deferredEventCount, _events.DeferredEvents.Count);
+    }
+
+    [Fact]
+    public async Task CloneDraftFromVersion_reconciles_lost_acknowledgement_then_replays_without_the_source_or_duplicate_events()
+    {
+        var sourceDraftId = await CreateCommand().Execute(
+            NextKey(),
+            "definition-1",
+            MinimalState(),
+            [new DesignMetadataRecord("root", 10, 20)],
+            cancellationToken: CancellationToken.None);
+        var sourceVersionId = await PromoteCommand().Execute(NextKey(), sourceDraftId, CancellationToken.None);
+        var sourceLayout = await VersionLayoutStore().FindByVersionIdAsync(sourceVersionId);
+        Assert.NotNull(sourceLayout);
+        using var callerCancellation = new CancellationTokenSource();
+        var store = new AcknowledgementLostAfterCommitDocumentStore(_store, callerCancellation);
+        var deferredEvents = new CancellationAwareDeferredEventPublisher();
+        var clone = new GroundworkCloneDraftFromVersionCommand(
+            VersionStore(),
+            VersionLayoutStore(),
+            DraftCreationCoordinator(store, deferredEventPublisher: deferredEvents),
+            _accessContext);
+        var operationKey = NextKey();
+
+        var cloneId = await clone.Execute(operationKey, sourceVersionId, callerCancellation.Token);
+        await _store.DeleteAsync(GroundworkDocumentWriter.ToDeleteRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
+            sourceLayout!.Id));
+        await _store.DeleteAsync(GroundworkDocumentWriter.ToDeleteRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            sourceVersionId));
+        var identityCount = _identities.GenerateCount;
+        var draftLockKey = WorkflowDesignPersistenceLockKeys.DraftKey(cloneId);
+        var draftLockCount = _locks.AcquireCounts[draftLockKey];
+        var replayId = await clone.Execute(operationKey, sourceVersionId, CancellationToken.None);
+
+        Assert.True(callerCancellation.IsCancellationRequested);
+        Assert.True(store.ReconciliationUsedFreshToken);
+        Assert.Equal(cloneId, replayId);
+        Assert.Equal(identityCount, _identities.GenerateCount);
+        Assert.Equal(draftLockCount, _locks.AcquireCounts[draftLockKey]);
+        Assert.Collection(
+            deferredEvents.Events,
+            @event => Assert.IsType<OnDraftCreated>(@event),
+            @event => Assert.IsType<OnDraftValidated>(@event));
+        Assert.All(deferredEvents.CancellationTokens, token => Assert.False(token.IsCancellationRequested));
+        Assert.NotNull(await DraftStore().FindByIdAsync(cloneId));
     }
 
     [Fact]
@@ -277,15 +425,8 @@ public class GroundworkWorkflowDefinitionCommandTests
         var store = new AcknowledgementLostAfterCommitDocumentStore(_store, callerCancellation);
         var deferredEvents = new CancellationAwareDeferredEventPublisher();
         var command = new GroundworkCreateDraftCommand(
-            _identities,
-            _locks,
-            store,
-            new GroundworkDesignAtomicWrite(store),
-            Payloads,
-            _events,
-            deferredEvents,
-            _clock,
-            _accessContext);
+            DraftCreationCoordinator(store, deferredEventPublisher: deferredEvents),
+            Payloads);
         var key = NextKey();
 
         var draftId = await command.Execute(key, "definition-1", EmptyState(), cancellationToken: callerCancellation.Token);
@@ -695,6 +836,9 @@ public class GroundworkWorkflowDefinitionCommandTests
     private sealed class SequentialIdentityGenerator : IIdentityGenerator
     {
         private int _next;
+
+        public int GenerateCount => Volatile.Read(ref _next);
+
         public string Generate() => $"id-{Interlocked.Increment(ref _next)}";
     }
 

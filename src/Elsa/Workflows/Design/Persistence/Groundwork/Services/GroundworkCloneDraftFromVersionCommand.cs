@@ -9,37 +9,52 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkCloneDraftFromVersionCommand(
     IWorkflowDefinitionVersionStore versionStore,
     IWorkflowDefinitionVersionLayoutStore layoutStore,
-    ICreateDraftCommand createDraftCommand,
+    GroundworkDraftCreationCoordinator coordinator,
     IPersistenceAccessContextAccessor accessContextAccessor)
     : ICloneDraftFromVersionCommand
 {
+    private const string OperationKind = "workflow.draft.clone-from-version.v1";
+
     public async Task<string> Execute(
         DesignOperationKey operationKey,
         string sourceVersionId,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operationKey);
-        var sourceVersion = await versionStore.FindByIdAsync(sourceVersionId, cancellationToken)
-            ?? throw new InvalidOperationException($"Workflow definition version '{sourceVersionId}' not found");
-        accessContextAccessor.Current.EnsureTenantScope(sourceVersion.TenantId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceVersionId);
 
-        var sourceLayout = await layoutStore.FindByVersionIdAsync(sourceVersionId, cancellationToken);
-        if (sourceLayout is not null)
-            accessContextAccessor.Current.EnsureTenantScope(sourceLayout.TenantId);
-        var sourceState = sourceVersion.State;
-        var copiedState = new WorkflowDefinitionState(
-            Variables: [.. sourceState.Variables],
-            RootActivity: sourceState.RootActivity,
-            Inputs: [.. sourceState.Inputs],
-            Outputs: [.. sourceState.Outputs],
-            StrategyOptions: sourceState.StrategyOptions);
-
-        return await createDraftCommand.Execute(
+        return await coordinator.ExecuteAsync(
             operationKey,
-            sourceVersion.DefinitionId,
-            copiedState,
-            [.. (sourceLayout?.Records ?? [])],
-            sourceVersionId,
+            OperationKind,
+            // Versions are immutable, so their identity is the complete canonical clone request.
+            // Expanding that identity after a marker miss keeps exact replay independent of whether
+            // the source remains physically available.
+            new CloneDraftRequestMaterial(sourceVersionId),
+            async token =>
+            {
+                var sourceVersion = await versionStore.FindByIdAsync(sourceVersionId, token)
+                    ?? throw new InvalidOperationException(
+                        $"Workflow definition version '{sourceVersionId}' not found");
+                accessContextAccessor.Current.EnsureTenantScope(sourceVersion.TenantId);
+                var sourceLayout = await layoutStore.FindByVersionIdAsync(sourceVersionId, token);
+                if (sourceLayout is not null)
+                    accessContextAccessor.Current.EnsureTenantScope(sourceLayout.TenantId);
+                var sourceState = sourceVersion.State;
+                var copiedState = new WorkflowDefinitionState(
+                    Variables: [.. sourceState.Variables],
+                    RootActivity: sourceState.RootActivity,
+                    Inputs: [.. sourceState.Inputs],
+                    Outputs: [.. sourceState.Outputs],
+                    StrategyOptions: sourceState.StrategyOptions);
+                return new GroundworkDraftCreationInput(
+                    sourceVersion.DefinitionId,
+                    copiedState,
+                    [.. (sourceLayout?.Records ?? [])],
+                    sourceVersionId,
+                    sourceVersion.TenantId);
+            },
             cancellationToken);
     }
+
+    private sealed record CloneDraftRequestMaterial(string SourceVersionId);
 }

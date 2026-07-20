@@ -9,13 +9,13 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// <remarks>
 /// <para>
 /// <b>Semantics.</b> Reads the source Version's State and the records from its
-/// <c>WorkflowDefinitionVersionLayout</c> sibling, deep-copies them, then delegates to
-/// <see cref="ICreateDraftCommand"/> — the single Draft-origination path — passing the copied
-/// State, copied layout, and the source Version id. The create command generates the new DraftId,
-/// acquires the per-Draft distributed lock (<c>workflow-draft:{NewDraftId}</c>), runs the
-/// validation gate, flushes atomically, and publishes the lifecycle events. NodeIds carry 1:1
-/// from the Version into the new Draft per FR-009a copy semantics. Cloning never crosses
-/// Definitions — the target is always the source Version's own Definition.
+/// <c>WorkflowDefinitionVersionLayout</c> sibling, copies them, then enters the provider's shared
+/// Draft-origination lifecycle path with the source Version id. That path generates the new
+/// DraftId, acquires the per-Draft distributed lock (<c>workflow-draft:{NewDraftId}</c>), runs the
+/// validation gate, flushes atomically, and publishes the lifecycle events. Providers need not
+/// implement this by delegating to <see cref="ICreateDraftCommand"/>. NodeIds carry 1:1 from the
+/// Version into the new Draft per FR-009a copy semantics. Cloning never crosses Definitions — the
+/// target is always the source Version's own Definition.
 /// </para>
 /// <para>
 /// <b>Provenance.</b> The source Version id is persisted as the immutable, optional

@@ -69,6 +69,7 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkCloneDraftFromVersionCommand>(sp.GetRequiredService<ICloneDraftFromVersionCommand>());
         Assert.IsType<WorkflowDefinitionLookup>(sp.GetRequiredService<IWorkflowDefinitionLookup>());
         Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<GroundworkDesignAtomicWrite>());
+        Assert.IsType<GroundworkDraftCreationCoordinator>(sp.GetRequiredService<GroundworkDraftCreationCoordinator>());
         Assert.Single(
             sp.GetServices<IGroundworkStorageManifestSource>(),
             source => source is GroundworkDesignAtomicWriteStorageManifestSource);
@@ -132,6 +133,7 @@ public class GroundworkWorkflowsDesignRegistrationTests
         }
 
         AssertScopedOnce(services, typeof(GroundworkDesignAtomicWrite));
+        AssertScopedOnce(services, typeof(GroundworkDraftCreationCoordinator));
         Assert.Single(services.Where(x =>
             x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
             x.ImplementationType == typeof(WorkflowsDesignGroundworkStorageManifestSource)));

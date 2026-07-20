@@ -37,6 +37,7 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, GroundworkDesignAtomicWriteStorageManifestSource>());
         services.TryAddScoped<GroundworkDesignAtomicWrite>();
+        services.TryAddScoped<GroundworkDraftCreationCoordinator>();
 
         services.RemoveAll<IWorkflowDefinitionStore>();
         services.AddScoped<IWorkflowDefinitionStore, GroundworkWorkflowDefinitionStore>();
