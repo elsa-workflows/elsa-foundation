@@ -62,13 +62,6 @@ internal static class RuntimeProviderEvidenceScenarios
         "runtime-publication-projection-state"
     ];
 
-    public static IReadOnlyList<string> UnpublishedObligations { get; } =
-    [
-        "B5: the reviewed four-provider slice publishes strictly increasing fences for runtime-execution-liveness; stale-fence rejection, create-only idempotency, all three provider-decision windows, dispose/reopen, and process restart for runtime-checkpoint-commit; and checkpoint-bundle-write atomicity for runtime-post-commit-outbox. It does not establish complete B5 row-group closure, workflow-execution-state parity, or a #646 performance verdict.",
-        "B7: primary-identity reads (the find-* obligations) have no bounded native-plan probe; they remain unpublished. All mapped bounded routes are publishable through explicit ledger-to-route mappings.",
-        "B8: checkpoint-bundle-write concurrency is published for runtime-post-commit-outbox; its remaining declared concurrency semantics and all restart scenarios remain unpublished. All three named provider-decision failure windows are covered for every operational row."
-    ];
-
     /// <summary>
     /// Executes the complete physical checkpoint/fence contract once. Result factories below may project that
     /// one execution into only the catalog scenarios it directly proves; they never manufacture a row outcome.
