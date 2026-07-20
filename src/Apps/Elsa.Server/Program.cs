@@ -56,7 +56,6 @@ using Elsa.Studio.Preferences.Api;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Api;
-using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
@@ -194,7 +193,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
             typeof(PostgreSqlGroundworkUnifiedPersistenceShellFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
-            typeof(WorkflowDesignValidationsFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 
             // Construction seam (Runtime side): the dispatch factory and stable CLR/graph consumers.

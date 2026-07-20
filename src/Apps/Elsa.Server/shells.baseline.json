@@ -18,7 +18,6 @@
           "Secrets": {},
           "SecretsApi": {},
           "WorkflowsDesignApi": {},
-          "WorkflowDesignValidations": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphDesign": {},
           "ActivitiesGraphRuntime": {},
