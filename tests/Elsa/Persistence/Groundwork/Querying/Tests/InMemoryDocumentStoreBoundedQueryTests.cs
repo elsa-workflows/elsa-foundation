@@ -43,6 +43,21 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
     }
 
     [Fact]
+    public async Task StartsWith_matches_mixed_case_like_the_relational_dialects()
+    {
+        var store = new InMemoryDocumentStore(CreateManifest());
+        await SaveAsync(store, "a", "AlphaRoute", 10, "selected");
+        await SaveAsync(store, "b", "beta", 20, "selected");
+        var query = ValidQuery(
+            DocumentQueryComparison.StartsWith(NamePath, "aLPHa"),
+            DocumentQueryComparison.Equal(GroupPath, "selected"));
+
+        var page = await store.QueryAsync(query);
+
+        Assert.Equal("a", Assert.Single(page.Documents).Id);
+    }
+
+    [Fact]
     public async Task Rejects_every_undeclared_runtime_shape_before_query_io()
     {
         var store = new InMemoryDocumentStore(CreateManifest());
@@ -199,6 +214,7 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
             {
                 PortableQueryOperation.Equal,
                 PortableQueryOperation.NotContains,
+                PortableQueryOperation.StartsWith,
                 PortableQueryOperation.GreaterThan
             },
             QuerySortSupport.Descending,
@@ -217,7 +233,8 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
                     new HashSet<PortableQueryOperation>
                     {
                         PortableQueryOperation.Equal,
-                        PortableQueryOperation.NotContains
+                        PortableQueryOperation.NotContains,
+                        PortableQueryOperation.StartsWith
                     }),
                 new BoundedQueryPredicateField(
                     ScorePath,

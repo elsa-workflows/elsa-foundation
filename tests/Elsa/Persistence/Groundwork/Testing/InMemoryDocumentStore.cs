@@ -624,7 +624,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             QueryComparisonOperator.Equal => order == 0,
             QueryComparisonOperator.NotEqual => order != 0,
             QueryComparisonOperator.Contains => actual!.Contains(expected!, StringComparison.OrdinalIgnoreCase),
-            QueryComparisonOperator.StartsWith => actual!.StartsWith(expected!, StringComparison.Ordinal),
+            QueryComparisonOperator.StartsWith => actual!.StartsWith(expected!, StringComparison.OrdinalIgnoreCase),
             QueryComparisonOperator.GreaterThan => order > 0,
             QueryComparisonOperator.GreaterThanOrEqual => order >= 0,
             QueryComparisonOperator.LessThan => order < 0,
