@@ -80,7 +80,8 @@ public abstract class GroundworkDocumentStore(
     }
 }
 
-internal static class BoundedDocumentQueryPager
+/// <summary>Executes admitted document routes page-by-page without truncating the logical result set.</summary>
+public static class BoundedDocumentQueryPager
 {
     public static async ValueTask<IReadOnlyList<DocumentEnvelope>> QueryAllAsync(
         IBoundedDocumentStore store,
@@ -121,6 +122,72 @@ internal static class BoundedDocumentQueryPager
 
             continuation = result.NextContinuation;
         } while (true);
+
+        return documents;
+    }
+
+    /// <summary>
+    /// Exhausts an offset-paged route. Callers must supply an order admitted by the route so that every
+    /// offset addresses a stable, deterministic result sequence.
+    /// </summary>
+    public static async ValueTask<IReadOnlyList<DocumentEnvelope>> QueryAllOffsetAsync(
+        IBoundedDocumentStore store,
+        string documentKind,
+        string queryIdentity,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        IReadOnlyList<DocumentQueryOrder> order,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentKind);
+        ArgumentException.ThrowIfNullOrWhiteSpace(queryIdentity);
+        ArgumentNullException.ThrowIfNull(clauses);
+        ArgumentNullException.ThrowIfNull(order);
+        if (order.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Document query '{queryIdentity}' cannot be exhausted with offset paging without a deterministic declared order.");
+        }
+
+        var documents = new List<DocumentEnvelope>();
+        var seenDocumentIds = new HashSet<string>(StringComparer.Ordinal);
+        var skip = 0;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await store.QueryAsync(
+                new DocumentQuery(
+                    documentKind,
+                    queryIdentity,
+                    clauses,
+                    order,
+                    skip,
+                    ElsaGroundworkQueryRoutes.MaximumResultCount),
+                cancellationToken);
+            if (result.Documents.Count > ElsaGroundworkQueryRoutes.MaximumResultCount)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider page exceeded the requested bound.");
+            }
+
+            if (result.Documents.Count == 0)
+                break;
+
+            foreach (var document in result.Documents)
+            {
+                if (!seenDocumentIds.Add(document.Id))
+                {
+                    throw new InvalidOperationException(
+                        $"Document query '{queryIdentity}' repeated document '{document.Id}' while offset paging.");
+                }
+
+                documents.Add(document);
+            }
+
+            skip = checked(skip + result.Documents.Count);
+            if (result.Documents.Count < ElsaGroundworkQueryRoutes.MaximumResultCount)
+                break;
+        }
 
         return documents;
     }

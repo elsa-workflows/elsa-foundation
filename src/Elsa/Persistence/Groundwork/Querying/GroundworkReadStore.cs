@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using System.Text.Json;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Primitives.Entities;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Scoping;
@@ -35,6 +36,7 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
     private readonly string _collectionQueryIdentity;
     private readonly string _collectionFieldPath;
     private readonly string _collectionValue;
+    private readonly IReadOnlyList<DocumentQueryOrder>? _collectionOrder;
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly IGroundworkStoreSessionFactory? _sessions;
 
@@ -52,7 +54,8 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
         string collectionValue,
         JsonSerializerOptions jsonOptions,
         IBoundedDocumentStore? boundedStore = null,
-        IGroundworkStoreSessionFactory? sessions = null)
+        IGroundworkStoreSessionFactory? sessions = null,
+        IReadOnlyList<DocumentQueryOrder>? collectionOrder = null)
     {
         _store = store;
         _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
@@ -60,6 +63,7 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
         _collectionQueryIdentity = collectionQueryIdentity;
         _collectionFieldPath = collectionFieldPath;
         _collectionValue = collectionValue;
+        _collectionOrder = collectionOrder;
         _jsonOptions = jsonOptions;
         _sessions = sessions;
     }
@@ -157,15 +161,17 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
         IBoundedDocumentStore boundedStore,
         CancellationToken cancellationToken)
     {
+        var collectionOrder = CollectionOrder();
         IReadOnlyList<DocumentEnvelope> envelopes;
         try
         {
-            envelopes = (await boundedStore.QueryAsync(
-                new DocumentQuery(
-                    _documentKind,
-                    _collectionQueryIdentity,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(_collectionFieldPath, _collectionValue))]),
-                cancellationToken)).Documents;
+            envelopes = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+                boundedStore,
+                _documentKind,
+                _collectionQueryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(_collectionFieldPath, _collectionValue))],
+                collectionOrder,
+                cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -195,6 +201,15 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
         _collectionQueryIdentity,
         null,
         typeof(TEntity));
+
+    private IReadOnlyList<DocumentQueryOrder> CollectionOrder() => _collectionOrder is { Count: > 0 }
+        ? _collectionOrder
+        : throw new GroundworkQueryReadinessException(
+            $"Queries for '{_documentKind}' require a deterministic declared order for exhaustive offset paging.",
+            _documentKind,
+            _collectionQueryIdentity,
+            null,
+            typeof(TEntity));
 
     private TEntity Deserialize(DocumentEnvelope envelope)
     {

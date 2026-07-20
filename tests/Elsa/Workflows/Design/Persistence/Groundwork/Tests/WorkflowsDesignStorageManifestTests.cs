@@ -203,10 +203,20 @@ public sealed class WorkflowsDesignStorageManifestTests
             Assert.Contains(query.PredicateFields, field =>
                 field.Path == WorkflowsDesignStorageManifest.CollectionField &&
                 field.Operations.SetEquals([PortableQueryOperation.Equal]));
-            Assert.Contains(storage.LogicalIndexes, index =>
+            var index = Assert.Single(storage.LogicalIndexes, index =>
                 index.Identity == WorkflowsDesignStorageManifest.ByCollectionIndex);
-            Assert.Contains(table.Indexes, index =>
+            Assert.Equal(
+                [WorkflowsDesignStorageManifest.CollectionField, WorkflowsDesignStorageManifest.DocumentIdField],
+                index.Fields.Select(field => field.Path));
+            Assert.Equal(
+                [new BoundedQuerySortField(WorkflowsDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)],
+                query.SortFields);
+            var physicalIndex = Assert.Single(table.Indexes, index =>
                 index.LogicalName == WorkflowsDesignStorageManifest.ByCollectionIndex);
+            Assert.False(physicalIndex.IsUnique);
+            Assert.Equal(
+                ["storage_scope", "collection", "id_comparison_key"],
+                physicalIndex.Columns.Select(column => column.ColumnLogicalName));
             Assert.Empty(unit.Indexes);
             Assert.Empty(unit.Queries);
         }

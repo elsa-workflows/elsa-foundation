@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Persistence.Core.Queries;
+using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Primitives.Entities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
@@ -31,6 +32,8 @@ public class GroundworkReadStoreTests
     private const string SchemaVersion = "1.0.0";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly IReadOnlyList<DocumentQueryOrder> CollectionOrder =
+        [new(CollectionField)];
 
     private sealed class Doc : Entity
     {
@@ -50,7 +53,14 @@ public class GroundworkReadStoreTests
             await store.SaveAsync(new SaveDocumentRequest(DocumentKind, doc.Id, SchemaVersion, content));
         }
 
-        return new GroundworkReadStore<Doc>(store, DocumentKind, ListAllQuery, CollectionField, CollectionValue, Json);
+        return new GroundworkReadStore<Doc>(
+            store,
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json,
+            collectionOrder: CollectionOrder);
     }
 
     private static Doc[] Sample() =>
@@ -201,7 +211,8 @@ public class GroundworkReadStoreTests
             CollectionField,
             CollectionValue,
             Json,
-            new ThrowingBoundedDocumentStore(providerFailure));
+            new ThrowingBoundedDocumentStore(providerFailure),
+            collectionOrder: CollectionOrder);
 
         var exception = await Assert.ThrowsAsync<GroundworkProviderFailureException>(() =>
             store.QueryAsync(Query<Doc>.All()));
@@ -241,7 +252,8 @@ public class GroundworkReadStoreTests
             CollectionField,
             CollectionValue,
             Json,
-            new ThrowingBoundedDocumentStore(cancellation));
+            new ThrowingBoundedDocumentStore(cancellation),
+            collectionOrder: CollectionOrder);
 
         var exception = await Assert.ThrowsAsync<OperationCanceledException>(() =>
             store.QueryAsync(Query<Doc>.All()));
@@ -288,7 +300,8 @@ public class GroundworkReadStoreTests
             CollectionField,
             CollectionValue,
             Json,
-            new ThrowingBoundedDocumentStore(existing));
+            new ThrowingBoundedDocumentStore(existing),
+            collectionOrder: CollectionOrder);
 
         var exception = await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
             store.QueryAsync(Query<Doc>.All()));
@@ -378,6 +391,90 @@ public class GroundworkReadStoreTests
         Assert.Empty(result);
     }
 
+    [Fact]
+    public async Task Collection_query_requires_deterministic_order_before_provider_io()
+    {
+        var documents = new InMemoryDocumentStore(BuildManifest());
+        var store = new GroundworkReadStore<Doc>(
+            documents,
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json);
+
+        var exception = await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.QueryAsync(Query<Doc>.All()));
+
+        Assert.Contains("deterministic", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, documents.DocumentQueryCount);
+    }
+
+    [Fact]
+    public async Task Collection_query_exhausts_multiple_offset_pages_without_truncation()
+    {
+        var documents = new InMemoryDocumentStore(BuildManifest());
+        for (var number = 0; number <= ElsaGroundworkQueryRoutes.MaximumResultCount; number++)
+        {
+            var id = $"doc-{number:D4}";
+            var content = JsonSerializer.Serialize(
+                new GroundworkDocument<Doc>(CollectionValue, new Doc { Id = id, Name = id }),
+                Json);
+            await documents.SaveAsync(new SaveDocumentRequest(DocumentKind, id, SchemaVersion, content));
+        }
+
+        var store = new GroundworkReadStore<Doc>(
+            documents,
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json,
+            collectionOrder: CollectionOrder);
+
+        var result = await store.QueryAsync(Query<Doc>.All());
+
+        Assert.Equal(ElsaGroundworkQueryRoutes.MaximumResultCount + 1, result.Count);
+        Assert.Equal(2, documents.DocumentQueryCount);
+    }
+
+    [Fact]
+    public async Task Offset_pager_rejects_a_repeated_full_page()
+    {
+        var store = new RepeatingBoundedDocumentStore();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            BoundedDocumentQueryPager.QueryAllOffsetAsync(
+                store,
+                DocumentKind,
+                ListAllQuery,
+                [],
+                CollectionOrder,
+                CancellationToken.None).AsTask());
+
+        Assert.Contains("repeated document", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, store.QueryCount);
+    }
+
+    [Fact]
+    public async Task Offset_pager_honors_cancellation_before_provider_io()
+    {
+        var store = new RepeatingBoundedDocumentStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            BoundedDocumentQueryPager.QueryAllOffsetAsync(
+                store,
+                DocumentKind,
+                ListAllQuery,
+                [],
+                CollectionOrder,
+                cancellation.Token).AsTask());
+
+        Assert.Equal(0, store.QueryCount);
+    }
+
     private static StorageManifest BuildManifest() => new(
         new StorageManifestIdentity("elsa-groundwork-querying-tests"),
         new StorageManifestOwner("elsa.persistence.groundwork.querying.tests"),
@@ -407,7 +504,7 @@ public class GroundworkReadStoreTests
                         "list-all",
                         CollectionIndex,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-                        QuerySortSupport.None,
+                        QuerySortSupport.Ascending,
                         QueryPagingSupport.Offset)
                 ],
                 PhysicalizationPolicy.Portable)
@@ -469,5 +566,36 @@ public class GroundworkReadStoreTests
         public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) => Task.FromException<long>(exception);
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) => Task.FromException<DocumentEnvelope?>(exception);
         public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) => Task.FromException<bool>(exception);
+    }
+
+    private sealed class RepeatingBoundedDocumentStore : IBoundedDocumentStore
+    {
+        private static readonly IReadOnlyList<DocumentEnvelope> Page = Enumerable.Range(0, ElsaGroundworkQueryRoutes.MaximumResultCount)
+            .Select(number => new DocumentEnvelope(
+                DocumentKind,
+                $"duplicate-{number:D4}",
+                SchemaVersion,
+                1,
+                "{}",
+                DateTimeOffset.UnixEpoch,
+                DateTimeOffset.UnixEpoch))
+            .ToArray();
+
+        public int QueryCount { get; private set; }
+
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        {
+            QueryCount++;
+            return Task.FromResult(new DocumentQueryResult(Page, Page.Count));
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            Task.FromResult((long)Page.Count);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            Task.FromResult<DocumentEnvelope?>(Page[0]);
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
     }
 }

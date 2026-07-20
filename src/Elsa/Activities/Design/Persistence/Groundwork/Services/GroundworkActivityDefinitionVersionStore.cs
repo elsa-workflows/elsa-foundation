@@ -34,7 +34,8 @@ public sealed class GroundworkActivityDefinitionVersionStore : IActivityDefiniti
             ActivitiesDesignStorageManifest.CollectionField,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
             GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer),
-            boundedStore);
+            boundedStore,
+            collectionOrder: ActivitiesDesignStorageManifest.DeterministicDocumentOrder);
         _definitions = definitions;
     }
 
