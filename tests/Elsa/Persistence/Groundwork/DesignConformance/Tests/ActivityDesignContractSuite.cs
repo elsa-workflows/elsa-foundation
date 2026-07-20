@@ -94,8 +94,12 @@ public abstract class ActivityDesignContractSuite
 
         using (var beforeScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
         {
-            Assert.Null(await beforeScope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>()
+            var services = beforeScope.ServiceProvider;
+            Assert.Null(await services.GetRequiredService<IActivityDefinitionStore>()
                 .FindAsync(new ActivityDefinitionFilter { Id = candidate.DefinitionId }));
+            Assert.DoesNotContain(
+                await services.GetRequiredService<IActivityDefinitionVersionStore>().ListAsync(),
+                version => version.Id == candidate.Id);
         }
 
         fixture.ClearObservedEvents();

@@ -139,7 +139,12 @@ public abstract class WorkflowDesignContractSuite
         Assert.Equal(cloneId, created.DraftId);
         Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, created.WorkflowDefinitionId);
         Assert.Equal(promotedVersionId, created.SourceVersionId);
-        Assert.Equal(2, events.OfType<OnDraftValidated>().Count());
+
+        var validations = events.OfType<OnDraftValidated>().ToArray();
+        var updatedValidation = Assert.Single(validations.Where(x => x.Draft.Id == DesignPersistenceFixtureData.WorkflowDraftId));
+        var clonedValidation = Assert.Single(validations.Where(x => x.Draft.Id == cloneId));
+        Assert.Empty(updatedValidation.Errors);
+        Assert.Empty(clonedValidation.Errors);
     }
 
     [Fact]

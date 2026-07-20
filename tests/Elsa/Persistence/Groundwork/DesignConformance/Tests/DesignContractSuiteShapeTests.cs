@@ -1,5 +1,4 @@
-using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
+using System.Reflection;
 using Elsa.Events.Core.Contracts;
 using Xunit;
 
@@ -7,36 +6,29 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Tests;
 
 public class DesignContractSuiteShapeTests
 {
-    private static readonly string[] ReusableSourceFiles =
-    [
-        "WorkflowDesignContractSuite.cs",
-        "ActivityDesignContractSuite.cs",
-        "DesignPersistenceContractFixture.cs",
-        "DesignPersistenceFixtureData.cs"
-    ];
-
-    private static readonly Regex[] ForbiddenProviderReferences =
-    [
-        new(@"\b(?:global::)?Microsoft\.EntityFrameworkCore\b", RegexOptions.CultureInvariant),
-        new(@"\b(?:global::)?Groundwork\.(?!DesignConformance\b)", RegexOptions.CultureInvariant),
-        new(@"\b(?:global::)?MongoDB\.Driver\b", RegexOptions.CultureInvariant),
-        new(@"\b(?:global::)?Npgsql\b", RegexOptions.CultureInvariant),
-        new(@"\b(?:global::)?Microsoft\.Data\.Sql(?:Client|ite)\b", RegexOptions.CultureInvariant)
-    ];
-
     [Fact]
-    public void Shared_suites_are_abstract_and_only_the_reusable_source_boundary_is_provider_guarded()
+    public void Shared_assembly_and_fixture_contracts_are_provider_neutral()
     {
         Assert.True(typeof(WorkflowDesignContractSuite).IsAbstract);
         Assert.True(typeof(ActivityDesignContractSuite).IsAbstract);
 
-        foreach (var file in ReusableSourceFiles)
-        {
-            var source = File.ReadAllText(Path.Combine(SourceDirectory(), file));
+        var referencedAssemblies = Assembly.GetExecutingAssembly().GetReferencedAssemblies();
+        Assert.DoesNotContain(referencedAssemblies, assembly => ForbiddenProviderAssembly(assembly.Name));
 
-            foreach (var forbiddenReference in ForbiddenProviderReferences)
-                Assert.DoesNotMatch(forbiddenReference, source);
-        }
+        var fixtureTypes = new[]
+        {
+            typeof(IDesignPersistenceContractFixture),
+            typeof(IDesignPersistenceContractFixtureFactory)
+        };
+        var signatureTypes = fixtureTypes
+            .SelectMany(type => type.GetMethods())
+            .SelectMany(method => method.GetParameters().Select(parameter => parameter.ParameterType).Append(method.ReturnType))
+            .Concat(fixtureTypes.SelectMany(type => type.GetProperties()).Select(property => property.PropertyType))
+            .SelectMany(ExpandType)
+            .Distinct()
+            .ToArray();
+
+        Assert.DoesNotContain(signatureTypes, type => ForbiddenProviderAssembly(type.Assembly.GetName().Name));
     }
 
     [Fact]
@@ -50,23 +42,6 @@ public class DesignContractSuiteShapeTests
         var observation = fixtureType.GetMethod(nameof(IDesignPersistenceContractFixture.ReadObservedEventsAsync));
         Assert.NotNull(observation);
         Assert.Equal(typeof(Task<IReadOnlyList<IEvent>>), observation!.ReturnType);
-
-        var activitySuiteSource = File.ReadAllText(Path.Combine(SourceDirectory(), "ActivityDesignContractSuite.cs"));
-        Assert.Contains("GetRequiredService<IActivityVersionReconciler>()", activitySuiteSource, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Fixture_contract_signatures_are_provider_neutral()
-    {
-        var fixtureType = typeof(IDesignPersistenceContractFixture);
-        var signatureTypes = fixtureType.GetMethods()
-            .SelectMany(method => method.GetParameters().Select(parameter => parameter.ParameterType).Append(method.ReturnType))
-            .Concat(fixtureType.GetProperties().Select(property => property.PropertyType))
-            .SelectMany(ExpandType)
-            .Distinct()
-            .ToArray();
-
-        Assert.DoesNotContain(signatureTypes, type => ForbiddenProviderAssembly(type.Assembly.GetName().Name));
     }
 
     private static IEnumerable<Type> ExpandType(Type type)
@@ -88,12 +63,13 @@ public class DesignContractSuiteShapeTests
 
     private static bool ForbiddenProviderAssembly(string? assemblyName) =>
         assemblyName?.Contains("EntityFrameworkCore", StringComparison.OrdinalIgnoreCase) == true ||
+        assemblyName?.Contains(".EFCore", StringComparison.OrdinalIgnoreCase) == true ||
         assemblyName?.StartsWith("Groundwork.", StringComparison.OrdinalIgnoreCase) == true ||
         assemblyName?.StartsWith("MongoDB.", StringComparison.OrdinalIgnoreCase) == true ||
         assemblyName?.StartsWith("Npgsql", StringComparison.OrdinalIgnoreCase) == true ||
+        assemblyName?.Contains("MongoDb", StringComparison.OrdinalIgnoreCase) == true ||
+        assemblyName?.Contains("PostgreSql", StringComparison.OrdinalIgnoreCase) == true ||
+        assemblyName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) == true ||
         assemblyName?.Contains("SqlClient", StringComparison.OrdinalIgnoreCase) == true ||
         assemblyName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
-
-    private static string SourceDirectory([CallerFilePath] string sourcePath = "") =>
-        Path.GetDirectoryName(sourcePath) ?? throw new InvalidOperationException("Could not resolve the contract-suite source directory.");
 }
