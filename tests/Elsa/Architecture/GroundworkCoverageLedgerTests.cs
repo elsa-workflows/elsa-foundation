@@ -72,10 +72,7 @@ public sealed class GroundworkCoverageLedgerTests
     [Fact]
     public void Checked_in_checkpoint_fence_attachment_is_imported_exactly_once_by_declared_tuple()
     {
-        var ledgerRecords = Entries(ReadLedger())
-            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
-                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
-            .ToArray();
+        var ledger = ReadLedger();
         var attachmentPath = Path.Combine(
             RepoRoot,
             CheckpointFenceAttachmentRelativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -84,20 +81,35 @@ public sealed class GroundworkCoverageLedgerTests
                                     .ToArray()
                                 ?? throw new InvalidOperationException(
                                     $"Checkpoint/fence ledger attachment '{attachmentPath}' is empty.");
-        var attachmentKeys = attachmentRecords.Select(EvidenceTuple).ToArray();
+        var attachmentEntryIds = attachmentRecords
+            .Select(record => record["coverageEntryId"]!.GetValue<string>())
+            .ToHashSet(StringComparer.Ordinal);
+        var ledgerRecords = Entries(ledger)
+            .Where(entry => attachmentEntryIds.Contains(EntryIdOf(entry)))
+            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
+                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
+            .Where(record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion)
+            .ToArray();
+        var attachmentByKey = attachmentRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
+        var ledgerByKey = ledgerRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
 
         Assert.Equal(36, attachmentRecords.Length);
-        Assert.Equal(attachmentKeys.Length, attachmentKeys.Distinct(StringComparer.Ordinal).Count());
-        foreach (var attachmentRecord in attachmentRecords)
+        Assert.All(attachmentRecords, record =>
         {
-            var matches = ledgerRecords
-                .Where(record => EvidenceTuple(record) == EvidenceTuple(attachmentRecord))
-                .ToArray();
-
-            Assert.Single(matches);
+            Assert.Equal(ExpectedGroundworkVersion, record["providerVersion"]?.GetValue<string>());
+            Assert.Equal("pass", record["outcome"]?.GetValue<string>());
+        });
+        Assert.All(attachmentByKey, records => Assert.Single(records));
+        Assert.All(ledgerByKey, records => Assert.Single(records));
+        Assert.Equal(
+            attachmentByKey.Select(records => records.Key).Order(StringComparer.Ordinal),
+            ledgerByKey.Select(records => records.Key).Order(StringComparer.Ordinal));
+        foreach (var attachment in attachmentByKey)
+        {
+            var ledgerRecord = ledgerByKey.Single(records => records.Key == attachment.Key).Single();
             Assert.True(
-                JsonNode.DeepEquals(attachmentRecord, matches[0]),
-                $"Checkpoint/fence evidence tuple '{EvidenceTuple(attachmentRecord)}' differs from its attachment record.");
+                JsonNode.DeepEquals(attachment.Single(), ledgerRecord),
+                $"Checkpoint/fence evidence tuple '{attachment.Key}' differs from its attachment record.");
         }
     }
 
@@ -446,6 +458,23 @@ public sealed class GroundworkCoverageLedgerTests
 
         Assert.Contains(
             $"{EntryId}: sqlite evidence record 'ordinary-round-trip' declares coverage entry 'runtime-checkpoint-commit'.",
+            findings);
+    }
+
+    [Fact]
+    public void Implemented_rows_reject_nonpassing_current_generation_evidence()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        var record = EvidenceRecord(EntryId, "sqlite", "ordinary-round-trip");
+        record["outcome"] = "classified-readiness-failure";
+        WriteEvidenceArtifacts([record]);
+        entry["providerEvidence"]!["sqlite"] = new JsonArray(record);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"{EntryId}: sqlite evidence record 'ordinary-round-trip' is not passing.",
             findings);
     }
 

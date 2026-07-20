@@ -488,7 +488,7 @@ internal sealed class GroundworkCoverageLedgerValidator
                 ValidateCatalogBinding(entry, id, provider, record, scenarioId, findings);
                 ValidateEvidenceArtifacts(id, provider, record, scenarioId, findings);
 
-                if (requireCurrentGeneration && StringValue(record, "outcome") != "pass")
+                if (StringValue(record, "outcome") != "pass")
                     findings.Add($"{id}: {provider} evidence record '{scenarioId}' is not passing.");
 
                 if ((record.ContainsKey("concurrencySemantic") ||
