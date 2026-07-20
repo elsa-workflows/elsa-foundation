@@ -18,4 +18,11 @@
     <ProjectReference Include="..\..\Workflows\Runtime\Elsa.Workflows.Runtime.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Interchange/**/*" />
+    <EmbeddedResource Remove="Interchange/**/*" />
+    <None Remove="Interchange/**/*" />
+  </ItemGroup>
+
 </Project>
