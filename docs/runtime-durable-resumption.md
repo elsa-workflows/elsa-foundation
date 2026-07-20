@@ -207,9 +207,15 @@ checkpoint itself + any remaining unconsumed in-memory queue items (durably re-e
 intents. Nothing buffered is lost at a boundary.
 
 **Segment cap.** `CoalescingRuntimeCheckpointPersistenceOptions.MaxSegmentCheckpoints` (default 50) bounds a
-segment: once the buffered checkpoint count reaches the cap, an intermediate flush is forced. This bounds both
-replay cost (a crash re-runs at most one segment) and memory (the working set holds at most one segment). See
-the benchmark results doc for the replay-cost trade.
+segment: once the buffered checkpoint count reaches the cap, an intermediate fold-and-flush is forced and a
+**fresh segment starts** (like a durable attempt boundary), so a replayable hot loop longer than the cap keeps
+coalescing at one durable commit per cap-sized window instead of degrading to per-checkpoint persistence for the
+remainder of the drain (ADR 0032's segment-cap follow-up). The cap's purpose is unchanged: it bounds both replay
+cost (a crash re-runs at most one cap-sized segment past the last folded flush) and memory (the working set
+buffers at most one segment). Continuation outbox items persisted durably by a cap flush keep delivering from
+the overlay for the next segment; the session writes their overlay outcome back to the durable outbox store at
+the next flush, so no durable `Pending` residue survives the drain to be redelivered by a later sweep. See the
+benchmark results doc for the replay-cost trade.
 
 **The crash-replay window and at-least-once semantics.** A crash mid-segment loses the buffered-but-unflushed
 checkpoints, but they are **replayable from the last flushed commit + durable queue redelivery** — the honest
