@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
     IDocumentStore store,
-    GroundworkDesignAtomicWrite atomicWrite,
+    IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IWorkflowDefinitionStore definitionStore,
     IWorkflowDefinitionDraftStore draftStore,

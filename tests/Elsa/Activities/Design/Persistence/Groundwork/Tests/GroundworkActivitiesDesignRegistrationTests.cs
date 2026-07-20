@@ -90,7 +90,7 @@ public class GroundworkActivitiesDesignRegistrationTests
         Assert.Same(reusable, sp.GetRequiredService<IDiscardActivityDraftCommand>());
         Assert.Same(reusable, sp.GetRequiredService<IStoreActivityDraftValidationCommand>());
         Assert.Same(reusable, sp.GetRequiredService<IChangeActivityVersionLifecycleCommand>());
-        Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<GroundworkDesignAtomicWrite>());
+        Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<IDesignAtomicWriter>());
         Assert.Single(
             sp.GetServices<IGroundworkStorageManifestSource>(),
             source => source is GroundworkDesignAtomicWriteStorageManifestSource);
@@ -107,6 +107,19 @@ public class GroundworkActivitiesDesignRegistrationTests
 
         Assert.IsType<GroundworkActivityDefinitionStore>(resolved);
         Assert.Single(scope.ServiceProvider.GetServices<IActivityDefinitionStore>());
+    }
+
+    [Fact]
+    public void Groundwork_registration_preserves_a_prior_design_atomic_writer()
+    {
+        using var provider = BuildProvider(services =>
+            services.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
+        using var scope = provider.CreateScope();
+
+        var resolved = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
+
+        Assert.IsType<PriorDesignAtomicWriter>(resolved);
+        Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
     }
 
     [Fact]
@@ -155,7 +168,7 @@ public class GroundworkActivitiesDesignRegistrationTests
             AssertScopedOnce(services, serviceType);
         }
 
-        AssertScopedOnce<GroundworkDesignAtomicWrite>(services);
+        AssertScopedOnce<IDesignAtomicWriter>(services);
         AssertScopedOnce<GroundworkReusableActivityStores>(services);
         AssertScopedOnce<GroundworkActivityManagementProjectionWriter>(services);
         AssertScopedOnce<GroundworkActivityManagementProjectionRetention>(services);
@@ -186,6 +199,22 @@ public class GroundworkActivitiesDesignRegistrationTests
         public Task<IReadOnlyList<Core.Entities.ActivityDefinition>> ListAsync(Core.Filters.ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Core.Entities.ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> ExistsByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class PriorDesignAtomicWriter : IDesignAtomicWriter
+    {
+        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+            GroundworkDesignAtomicWriteRequest request,
+            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+            GroundworkDesignAtomicWriteRequest request,
+            Func<CancellationToken, Task>? beforeAttempt,
+            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeClock : ISystemClock

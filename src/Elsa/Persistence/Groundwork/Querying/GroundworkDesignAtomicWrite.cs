@@ -13,7 +13,7 @@ namespace Elsa.Persistence.Groundwork.Querying;
 /// identity independently from the canonical request fingerprint; this coordinator persists the accepted
 /// result in the same Groundwork unit of work as the mutation.
 /// </summary>
-public sealed class GroundworkDesignAtomicWrite
+public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
 {
     private const string MarkerIdentityVersion = "elsa-design-operation:v1";
     private const string RollbackFailureDataKey = "Elsa.Persistence.Groundwork.DesignAtomicWrite.RollbackFailure";

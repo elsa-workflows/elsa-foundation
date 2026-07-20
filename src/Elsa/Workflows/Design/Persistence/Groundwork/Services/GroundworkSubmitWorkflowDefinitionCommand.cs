@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkSubmitWorkflowDefinitionCommand(
     IIdentityGenerator identityGenerator,
     IDocumentStore store,
-    GroundworkDesignAtomicWrite atomicWrite,
+    IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IActivityStructureService activityStructureService,
     ISystemClock clock,

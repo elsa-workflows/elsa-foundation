@@ -19,7 +19,7 @@ public sealed class GroundworkAddActivityDefinitionVersionCommand(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IActivityDefinitionVersionStore versionStore,
     IDistributedLockProvider lockProvider,
-    GroundworkDesignAtomicWrite atomicWrite)
+    IDesignAtomicWriter atomicWrite)
     : IAddActivityDefinitionVersionCommand
 {
     private const string OperationKind = "activity.version.add.v1";

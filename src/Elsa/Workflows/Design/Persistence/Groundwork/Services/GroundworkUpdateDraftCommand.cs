@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkUpdateDraftCommand(
     IDistributedLockProvider lockProvider,
     IDocumentStore store,
-    GroundworkDesignAtomicWrite atomicWrite,
+    IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IInlineEventPublisher inlineEventPublisher,
     IDeferredEventPublisher deferredEventPublisher,

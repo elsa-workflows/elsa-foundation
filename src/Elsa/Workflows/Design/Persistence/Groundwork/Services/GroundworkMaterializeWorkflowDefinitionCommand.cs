@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 /// <summary>Creates one source-owned workflow definition record without an authored draft.</summary>
 public sealed class GroundworkMaterializeWorkflowDefinitionCommand(
-    GroundworkDesignAtomicWrite atomicWrite,
+    IDesignAtomicWriter atomicWrite,
     ISystemClock clock,
     IPersistenceAccessContextAccessor accessContextAccessor)
     : IMaterializeWorkflowDefinitionCommand

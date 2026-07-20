@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 /// <summary>Materializes one immutable source-authored workflow version.</summary>
 public sealed class GroundworkMaterializeWorkflowDefinitionVersionCommand(
-    GroundworkDesignAtomicWrite atomicWrite,
+    IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     ISystemClock clock,
     IPersistenceAccessContextAccessor accessContextAccessor)

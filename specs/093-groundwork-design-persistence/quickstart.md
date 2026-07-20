@@ -218,8 +218,8 @@ The integrated pre-review candidate passed:
 
 - persistence core: `43/43`;
 - Groundwork querying: `126/126`;
-- workflow design Groundwork: `80/80`;
-- activity design Groundwork: `66/66`;
+- workflow design Groundwork: `81/81`;
+- activity design Groundwork: `67/67`;
 - focused SQLite atomicity/lifecycle suite: `8/8` — `7/7` provider-transaction scenarios plus
   `1/1` public `ICreateDraftCommand`/`OnDraftCreated` durability scenario;
 - SQLite 25-scenario Target-profile baseline: `1/1`, with all `25` logical scenarios green;

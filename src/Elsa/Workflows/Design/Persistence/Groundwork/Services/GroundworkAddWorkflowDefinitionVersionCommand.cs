@@ -17,7 +17,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 public sealed class GroundworkAddWorkflowDefinitionVersionCommand(
-    GroundworkDesignAtomicWrite atomicWrite,
+    IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IWorkflowDefinitionVersionFactory versionFactory,
     IWorkflowDefinitionStore definitionStore,

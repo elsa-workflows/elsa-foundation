@@ -34,7 +34,7 @@ public static class GroundworkActivitiesDesignStoreRegistration
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, ActivitiesDesignGroundworkStorageManifestSource>());
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, GroundworkDesignAtomicWriteStorageManifestSource>());
-        services.TryAddScoped<GroundworkDesignAtomicWrite>();
+        services.TryAddScoped<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
 
         services.RemoveAll<IActivityDefinitionStore>();
         services.AddScoped<IActivityDefinitionStore, GroundworkActivityDefinitionStore>();

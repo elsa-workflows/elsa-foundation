@@ -4,7 +4,7 @@ using Elsa.Persistence.Core.Design;
 namespace Elsa.Persistence.Groundwork.Querying;
 
 /// <summary>
-/// Command-facing adapter over <see cref="GroundworkDesignAtomicWrite"/>. It keeps canonical request
+/// Command-facing adapter over <see cref="IDesignAtomicWriter"/>. It keeps canonical request
 /// material separate from caller operation identity, persists a typed authoritative result, and maps
 /// terminal storage decisions to stable Groundwork command exceptions.
 /// </summary>
@@ -13,7 +13,7 @@ public static class GroundworkDesignAtomicCommand
     private const string MaterialSchemaVersion = "1";
 
     public static async Task<GroundworkDesignAtomicCommandResult<TResult>> ExecuteAsync<TRequest, TResult>(
-        GroundworkDesignAtomicWrite atomicWrite,
+        IDesignAtomicWriter atomicWrite,
         DesignOperationKey operationKey,
         string operationKind,
         TRequest requestMaterial,

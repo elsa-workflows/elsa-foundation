@@ -13,6 +13,13 @@ Groundwork provider catalog for activity-design persistence replacement contract
 
 `AddGroundworkActivitiesDesignStores()` removes existing registrations for these contracts before adding the Groundwork implementations, preserving the one-active-implementation replacement-contract rule.
 
+## Feature specialization seam
+
+`IDesignAtomicWriter` defaults to `GroundworkDesignAtomicWrite` and uses `TryAddScoped`, so a host
+or inheriting feature can register a specialization before composing the Groundwork
+activity-design stores. The same contract owns replay-safe multi-document mutations, durable
+operation markers, and uncertain-commit reconciliation for workflow and activity design commands.
+
 ## Cross-references
 
 - EF Core provider catalog: [`../EFCore/EXTENSION_POINTS.md`](../EFCore/EXTENSION_POINTS.md)

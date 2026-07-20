@@ -22,7 +22,7 @@ public sealed class GroundworkAddActivityDefinitionCommand(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IActivityDefinitionStore definitionStore,
     IDistributedLockProvider lockProvider,
-    GroundworkDesignAtomicWrite atomicWrite)
+    IDesignAtomicWriter atomicWrite)
     : IAddActivityDefinitionCommand
 {
     private const string OperationKind = "activity.definition.create.v1";

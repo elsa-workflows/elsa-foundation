@@ -24,7 +24,7 @@ public sealed class DraftOriginator(
     IIdentityGenerator identityGenerator,
     IDistributedLockProvider lockProvider,
     IDocumentStore store,
-    GroundworkDesignAtomicWrite atomicWrite,
+    IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IInlineEventPublisher inlineEventPublisher,
     IDeferredEventPublisher deferredEventPublisher,

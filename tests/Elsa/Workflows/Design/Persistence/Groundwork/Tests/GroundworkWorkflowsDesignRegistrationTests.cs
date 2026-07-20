@@ -69,7 +69,7 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkSubmitWorkflowDefinitionCommand>(sp.GetRequiredService<ISubmitWorkflowDefinitionCommand>());
         Assert.IsType<GroundworkCloneDraftFromVersionCommand>(sp.GetRequiredService<ICloneDraftFromVersionCommand>());
         Assert.IsType<WorkflowDefinitionLookup>(sp.GetRequiredService<IWorkflowDefinitionLookup>());
-        Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<GroundworkDesignAtomicWrite>());
+        Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<IDesignAtomicWriter>());
         Assert.IsType<DraftOriginator>(sp.GetRequiredService<IDraftOriginator>());
         Assert.Single(
             sp.GetServices<IGroundworkStorageManifestSource>(),
@@ -115,6 +115,19 @@ public class GroundworkWorkflowsDesignRegistrationTests
     }
 
     [Fact]
+    public void Groundwork_registration_preserves_a_prior_design_atomic_writer()
+    {
+        using var provider = BuildProvider(services =>
+            services.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
+        using var scope = provider.CreateScope();
+
+        var resolved = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
+
+        Assert.IsType<PriorDesignAtomicWriter>(resolved);
+        Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
+    }
+
+    [Fact]
     public void Repeated_registration_keeps_scoped_commands_and_stores_registered_once()
     {
         var services = new ServiceCollection();
@@ -146,7 +159,7 @@ public class GroundworkWorkflowsDesignRegistrationTests
             AssertScopedOnce(services, serviceType);
         }
 
-        AssertScopedOnce(services, typeof(GroundworkDesignAtomicWrite));
+        AssertScopedOnce(services, typeof(IDesignAtomicWriter));
         AssertScopedOnce(services, typeof(IDraftOriginator));
         Assert.Single(services.Where(x =>
             x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
@@ -180,6 +193,22 @@ public class GroundworkWorkflowsDesignRegistrationTests
             CancellationToken cancellationToken)
             where TRequest : notnull =>
             Task.FromResult("prior-draft");
+    }
+
+    private sealed class PriorDesignAtomicWriter : IDesignAtomicWriter
+    {
+        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+            GroundworkDesignAtomicWriteRequest request,
+            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+            GroundworkDesignAtomicWriteRequest request,
+            Func<CancellationToken, Task>? beforeAttempt,
+            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class StubEventPublisher : IInlineEventPublisher, IDeferredEventPublisher
