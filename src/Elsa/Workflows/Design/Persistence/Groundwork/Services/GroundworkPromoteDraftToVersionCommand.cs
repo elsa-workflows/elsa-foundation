@@ -59,6 +59,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         var version = new WorkflowDefinitionVersion(draft.WorkflowDefinitionId, WorkflowVersionNumbering.NextMajor(lastVersion?.Version))
         {
             Id = versionId,
+            TenantId = draft.TenantId,
             State = draft.State,
             SourceDraftId = draft.Id
         };
@@ -66,6 +67,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         var versionLayout = new WorkflowDefinitionVersionLayout
         {
             Id = identityGenerator.Generate(),
+            TenantId = draft.TenantId,
             WorkflowDefinitionVersionId = versionId,
             Records = document.Layout.ToList()
         };

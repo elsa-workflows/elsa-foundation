@@ -83,7 +83,8 @@ It applies both existing SQLite migration chains to one temporary file database,
 service provider on restart, uses public design commands/stores plus the real activity reconciler, and
 keeps its partial-staging/cancellation faults in a test-only EF `SaveChangesInterceptor`. Its four
 inherited contract suites completed with `15` passed and `10` intentional LegacyEfOracle N/A skips
-(`25` total); the provider leaf also contains the focused evidence test below.
+(`25` total). Its two focused evidence tests pass as well, so the complete EF provider leaf reports
+`17` passed, `10` skipped, and `27` total.
 
 The deterministic canonical result hashes captured after restart are:
 
@@ -91,8 +92,46 @@ The deterministic canonical result hashes captured after restart are:
 - workflow version: `3fcb29139ffcac2c0fc3d5450d4e2682d3b504b86f31326b16b17f4712ceb9d4`
 - activity definition/version: `8bdeb707ea537e6357a8327b2d7404deb23af9e370c65a03f2e2883b182bf3f1`
 
-These are workload behavior hashes, not test-inventory hashes; the evidence test pins them. The Groundwork
-Target-profile intentional-red baseline remains pending its separate provider fixture and is not claimed here.
+These are workload behavior hashes, not test-inventory hashes; the evidence test pins them.
+
+### T025 Groundwork SQLite Target-profile baseline (2026-07-20)
+
+`Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests` is a separate provider-leaf baseline
+project. For every scenario it creates a fresh file-backed SQLite target, drives production
+`Groundwork.Tool` `validate --offline`, `plan`, and `apply --safe` commands against
+`GroundworkAllFeaturesDeploymentSchema`, then builds the public
+`AddGroundworkSqliteUnifiedPersistence` composition with startup auto-apply disabled. Runtime
+startup only admits the applied target. Restart scenarios dispose and rebuild the service provider
+against the same file without reapplying schema, and every design operation resolves from a fresh
+DI scope bound through `IPersistenceAccessContextBinder`.
+
+The immutable Target-profile catalog executed all `25` T021–T024 rows and proved the ratified
+intentional-red matrix:
+
+- `17` green lifecycle, reconciliation, scope, OCC, last-writer-wins, and restart rows;
+- `7` classified red atomicity rows:
+  `design-atomicity-operation-ledger-absent`;
+- `1` classified red same-scope duplicate row:
+  `same-scope-identity-rejection-absent`.
+
+The runner fails if any expected green becomes red, any expected red becomes green, or a red row
+does not match its narrow classification. The run used the Groundwork library/tool family
+`0.0.1-preview.77`, target fingerprint
+`22e3b8afe1564edc52ae126b5d049b21d1db72f38d1ceac6a1c2b9ddc144fa6d`, and plan fingerprint
+`e2c71279ddd7cc8506f45601bd128347a30c89fcd70a32afeec67928f9b86275`.
+It also exposed and fixed one target correctness defect: promotion now copies the validated
+scope-bound draft's `TenantId` to both the immutable workflow version and its layout.
+
+Ordinary CI writes no evidence file. Operators can opt in to the sanitized allowlisted JSON
+artifact without exposing connection strings, database paths, or scope identities:
+
+```bash
+ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR=/path/to/evidence \
+dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite.Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj -c Release
+```
+
+This closes only T025's Target-profile baseline. T051's broader SQLite fixture, schema-drift hooks,
+and later full provider conformance remain pending.
 
 ## 1. Restore and build
 

@@ -122,6 +122,37 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task PromoteDraft_preserves_the_scope_identity_on_the_version_and_layout()
+    {
+        const string scope = GroundworkTestAccess.DefaultScopeValue;
+        var definition = new WorkflowDefinition
+        {
+            Id = "definition-scoped",
+            TenantId = scope,
+            Name = "Scoped definition"
+        };
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft-scoped",
+            TenantId = scope,
+            WorkflowDefinitionId = definition.Id,
+            State = EmptyState()
+        };
+        await new GroundworkAddWorkflowDefinitionCommand(_store, Payloads, _clock, _accessContext).Execute(
+            definition,
+            draft,
+            [new DesignMetadataRecord("root", 5, 6, 7, 8)],
+            CancellationToken.None);
+
+        var versionId = await PromoteCommand().Execute(draft.Id, CancellationToken.None);
+
+        var version = await VersionStore().GetAsync(versionId);
+        var layout = await VersionLayoutStore().FindByVersionIdAsync(versionId);
+        Assert.Equal(scope, version.TenantId);
+        Assert.Equal(scope, layout!.TenantId);
+    }
+
+    [Fact]
     public async Task DiscardDraft_deletes_the_embedded_draft_document()
     {
         var draftId = await CreateCommand().Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
