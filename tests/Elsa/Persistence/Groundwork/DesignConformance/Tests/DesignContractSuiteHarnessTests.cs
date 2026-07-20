@@ -197,10 +197,8 @@ public class DesignContractSuiteHarnessTests
     {
         private const int AggregatePartCount = 2;
         private readonly ServiceProvider _services = new ServiceCollection().BuildServiceProvider();
-        private readonly Dictionary<string, LedgerEntry> _ledger = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, AtomicityScopeState> _scopes = new(StringComparer.Ordinal);
         private AtomicityFaultLease? _armedFault;
-        private int _visibleAggregatePartCount;
-        private int _publishedOutcomeCount;
 
         public string Provider => "atomicity-contract-harness";
 
@@ -242,28 +240,28 @@ public class DesignContractSuiteHarnessTests
             cancellationToken.ThrowIfCancellationRequested();
             ArgumentException.ThrowIfNullOrWhiteSpace(request.StorageScope);
 
-            if (_ledger.TryGetValue(request.OperationKey.Value, out var existing))
+            var scope = ScopeState(request.StorageScope);
+
+            if (scope.Ledger.TryGetValue(request.OperationKey.Value, out var existing))
             {
                 return Task.FromResult(existing.Fingerprint == request.CanonicalRequestFingerprint.Value
                     ? new DesignAtomicityOperationResult(DesignAtomicityOperationStatus.Replayed, existing.ResultFingerprint)
                     : new DesignAtomicityOperationResult(DesignAtomicityOperationStatus.Conflict, null));
             }
 
-            return Task.FromResult(ExecuteInitialAttempt(request));
+            return Task.FromResult(ExecuteInitialAttempt(request, scope));
         }
 
         public Task<DesignAtomicitySnapshot> ReadAtomicitySnapshotAsync(
             string storageScope,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(new DesignAtomicitySnapshot(
-                _visibleAggregatePartCount,
-                AggregatePartCount,
-                _ledger.Count,
-                _publishedOutcomeCount));
+            Task.FromResult(ScopeState(storageScope).Snapshot());
 
         public ValueTask DisposeAsync() => _services.DisposeAsync();
 
-        private DesignAtomicityOperationResult ExecuteInitialAttempt(DesignAtomicityOperationRequest request)
+        private DesignAtomicityOperationResult ExecuteInitialAttempt(
+            DesignAtomicityOperationRequest request,
+            AtomicityScopeState scope)
         {
             if (TryTrigger(DesignAtomicityFaultPhase.AfterStagedWrite, out var stagedFault))
                 return ApplyPreDecisionFault(stagedFault!);
@@ -272,9 +270,9 @@ public class DesignContractSuiteHarnessTests
                 return ApplyPreDecisionFault(decisionFault!);
 
             var resultFingerprint = $"result:{request.StorageScope}:{request.CanonicalRequestFingerprint.Value}";
-            _visibleAggregatePartCount = AggregatePartCount;
-            _ledger.Add(request.OperationKey.Value, new(request.CanonicalRequestFingerprint.Value, resultFingerprint));
-            _publishedOutcomeCount++;
+            scope.VisibleAggregatePartCount = AggregatePartCount;
+            scope.Ledger.Add(request.OperationKey.Value, new(request.CanonicalRequestFingerprint.Value, resultFingerprint));
+            scope.PublishedOutcomeCount++;
 
             if (TryTrigger(DesignAtomicityFaultPhase.AfterDurableDecision, out var acknowledgementFault))
                 return ApplyAfterDurableDecisionFault(acknowledgementFault!, resultFingerprint);
@@ -314,7 +312,32 @@ public class DesignContractSuiteHarnessTests
                 _ => throw new ArgumentOutOfRangeException(nameof(plan))
             };
 
+        private AtomicityScopeState ScopeState(string storageScope)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(storageScope);
+
+            if (_scopes.TryGetValue(storageScope, out var state))
+                return state;
+
+            state = new AtomicityScopeState();
+            _scopes.Add(storageScope, state);
+            return state;
+        }
+
         private sealed record LedgerEntry(string Fingerprint, string ResultFingerprint);
+
+        private sealed class AtomicityScopeState
+        {
+            public Dictionary<string, LedgerEntry> Ledger { get; } = new(StringComparer.Ordinal);
+            public int VisibleAggregatePartCount { get; set; }
+            public int PublishedOutcomeCount { get; set; }
+
+            public DesignAtomicitySnapshot Snapshot() => new(
+                VisibleAggregatePartCount,
+                AggregatePartCount,
+                Ledger.Count,
+                PublishedOutcomeCount);
+        }
 
         private sealed class AtomicityFaultLease(DesignAtomicityFaultPlan plan, Action onDispose) : IDesignAtomicityFaultLease
         {

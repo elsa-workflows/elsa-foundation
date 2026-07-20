@@ -47,8 +47,8 @@ provider-neutral atomicity fault contracts for `AfterStagedWrite`, `BeforeProvid
 carries a caller-stable operation/idempotency key separately from the canonical request fingerprint. The
 shared suite proves partial-staging rollback, non-success rollback, cancellation propagation, durable-result
 reconciliation after acknowledgement loss, exact replay, same-key/different-fingerprint conflict without
-mutation, and duplicate-outcome suppression. The scenarios reference only Elsa core contracts plus
-`IDesignPersistenceContractFixture`. The reusable test assembly is guarded against provider SDK assembly
+mutation, scope-bound operation ledgers, and duplicate-outcome suppression. The scenarios reference only
+Elsa core contracts plus `IDesignPersistenceContractFixture`. The reusable test assembly is guarded against provider SDK assembly
 references. T025 and T051–T054 must therefore place concrete EF-oracle and provider fixtures in separate
 provider-specific test projects that reference this shared project; provider SDK references must not enter the
 shared assembly. T024

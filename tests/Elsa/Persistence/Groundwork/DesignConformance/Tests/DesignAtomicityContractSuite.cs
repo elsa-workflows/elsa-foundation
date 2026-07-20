@@ -93,15 +93,23 @@ public abstract class DesignAtomicityContractSuite
     {
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
-        var request = Request();
+        var scopeARequest = Request(DesignPersistenceFixtureData.ScopeA);
+        var scopeBRequest = Request(DesignPersistenceFixtureData.ScopeB);
 
-        var committed = await fixture.ExecuteAtomicityOperationAsync(request);
-        var replayed = await fixture.ExecuteAtomicityOperationAsync(request);
+        var committedA = await fixture.ExecuteAtomicityOperationAsync(scopeARequest);
+        var committedB = await fixture.ExecuteAtomicityOperationAsync(scopeBRequest);
+        var replayedA = await fixture.ExecuteAtomicityOperationAsync(scopeARequest);
+        var replayedB = await fixture.ExecuteAtomicityOperationAsync(scopeBRequest);
 
-        Assert.Equal(DesignAtomicityOperationStatus.Committed, committed.Status);
-        Assert.Equal(DesignAtomicityOperationStatus.Replayed, replayed.Status);
-        Assert.Equal(committed.AuthoritativeResultFingerprint, replayed.AuthoritativeResultFingerprint);
-        await AssertCommittedExactlyOnceAsync(fixture);
+        Assert.Equal(DesignAtomicityOperationStatus.Committed, committedA.Status);
+        Assert.Equal(DesignAtomicityOperationStatus.Committed, committedB.Status);
+        Assert.Equal(DesignAtomicityOperationStatus.Replayed, replayedA.Status);
+        Assert.Equal(DesignAtomicityOperationStatus.Replayed, replayedB.Status);
+        Assert.Equal(committedA.AuthoritativeResultFingerprint, replayedA.AuthoritativeResultFingerprint);
+        Assert.Equal(committedB.AuthoritativeResultFingerprint, replayedB.AuthoritativeResultFingerprint);
+        Assert.NotEqual(committedA.AuthoritativeResultFingerprint, committedB.AuthoritativeResultFingerprint);
+        await AssertCommittedExactlyOnceAsync(fixture, DesignPersistenceFixtureData.ScopeA);
+        await AssertCommittedExactlyOnceAsync(fixture, DesignPersistenceFixtureData.ScopeB);
     }
 
     [Fact]
@@ -134,8 +142,13 @@ public abstract class DesignAtomicityContractSuite
         Assert.Equal(1, snapshot.PublishedOutcomeCount);
     }
 
-    private static DesignAtomicityOperationRequest Request(DesignCanonicalRequestFingerprint? fingerprint = null) => new(
-        DesignPersistenceFixtureData.ScopeA,
+    private static DesignAtomicityOperationRequest Request(DesignCanonicalRequestFingerprint? fingerprint = null) =>
+        Request(DesignPersistenceFixtureData.ScopeA, fingerprint);
+
+    private static DesignAtomicityOperationRequest Request(
+        string storageScope,
+        DesignCanonicalRequestFingerprint? fingerprint = null) => new(
+        storageScope,
         OperationKey,
         fingerprint ?? CanonicalFingerprint);
 
@@ -148,9 +161,11 @@ public abstract class DesignAtomicityContractSuite
         Assert.Equal(0, snapshot.PublishedOutcomeCount);
     }
 
-    private static async Task AssertCommittedExactlyOnceAsync(IDesignPersistenceContractFixture fixture)
+    private static async Task AssertCommittedExactlyOnceAsync(
+        IDesignPersistenceContractFixture fixture,
+        string storageScope = DesignPersistenceFixtureData.ScopeA)
     {
-        var snapshot = await fixture.ReadAtomicitySnapshotAsync(DesignPersistenceFixtureData.ScopeA);
+        var snapshot = await fixture.ReadAtomicitySnapshotAsync(storageScope);
 
         Assert.True(snapshot.ExpectedAggregatePartCount > 1, "The atomicity fixture must exercise a multi-document operation.");
         Assert.Equal(snapshot.ExpectedAggregatePartCount, snapshot.VisibleAggregatePartCount);
