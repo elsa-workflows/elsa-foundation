@@ -16,6 +16,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
     private readonly RuntimeCheckpointCommitter? _checkpointCommitter;
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowExecutableReader? _executableReader;
 
     public WorkflowScheduleActivitySchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
@@ -23,7 +24,8 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         RuntimeCheckpointCommitter? checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -36,6 +38,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
         _timeProvider = timeProvider;
+        _executableReader = executableReader;
     }
 
     public string Name => HandlerName;
@@ -70,7 +73,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         cancellationToken.ThrowIfCancellationRequested();
 
         var schedulePayload = DeserializeSchedulePayload(workItem);
-        var executable = await _workflowExecutableStore.FindAsync(schedulePayload.PinnedExecutable.ArtifactId, cancellationToken);
+        var executable = await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, schedulePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(schedulePayload.PinnedExecutable.ArtifactId);
 

@@ -21,6 +21,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     private readonly IDurableValueStateStore? _durableValueStateStore;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly IWorkflowExecutableReader? _executableReader;
 
     public WorkflowStartActivitySchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
@@ -31,7 +32,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         TimeProvider timeProvider,
         IServiceScopeFactory serviceScopeFactory,
         IDurableValueStateStore? durableValueStateStore = null,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -50,6 +52,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         _durableValueStateStore = durableValueStateStore;
         _serviceScopeFactory = serviceScopeFactory;
         _workflowExecutionStateStore = workflowExecutionStateStore;
+        _executableReader = executableReader;
     }
 
     public string Name => HandlerName;
@@ -100,7 +103,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         cancellationToken.ThrowIfCancellationRequested();
 
         var startPayload = DeserializeStartPayload(workItem);
-        var executable = await _workflowExecutableStore.FindAsync(startPayload.PinnedExecutable.ArtifactId, cancellationToken);
+        var executable = await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, startPayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(startPayload.PinnedExecutable.ArtifactId);
 

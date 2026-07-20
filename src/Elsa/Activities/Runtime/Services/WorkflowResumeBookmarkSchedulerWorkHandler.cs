@@ -47,7 +47,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         var resumePayload = DeserializeResumePayload(workItem);
         await using var scope = _serviceScopeFactory.CreateAsyncScope();
-        var workflowExecutableStore = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
         var activityExecutionStateStore = scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var bookmarkStateStore = scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>();
         var bookmarkConsumptionCheckpointService = scope.ServiceProvider.GetRequiredService<IBookmarkConsumptionCheckpointService>();
@@ -57,7 +56,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var durableValueStateStore = scope.ServiceProvider.GetRequiredService<IDurableValueStateStore>();
         var payloadCapturePolicy = scope.ServiceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
 
-        var executable = await workflowExecutableStore.FindAsync(resumePayload.PinnedExecutable.ArtifactId, cancellationToken);
+        // spec 111: burst-cached pinned-executable read.
+        var executable = await PinnedExecutableRead.FindAsync(scope.ServiceProvider, resumePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(resumePayload.PinnedExecutable.ArtifactId);
 
