@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap } from "@xyflow/react";
-import { AlertCircle, Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Workflow as WorkflowIcon } from "lucide-react";
+import { AlertCircle, Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
@@ -51,7 +51,8 @@ import { InspectorPanel } from "./InspectorPanel";
 import { BpmnElementInspector } from "../bpmn/BpmnElementInspector";
 import { BpmnShapePalette } from "../bpmn/BpmnShapePalette";
 import { findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
-import { bpmnElementTypeLabel, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
+import { bpmnElementTypeLabel, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
+import { exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
 import { SlotEmptyState } from "./SlotEmptyState";
 import type { PublicationIntent } from "../api/publishing";
 import { publicationChangesFor, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
@@ -507,6 +508,65 @@ export function WorkflowEditor({
     return target ? target.name?.trim() || bpmnElementTypeLabel(target) : flow.targetRef;
   }, [scopeOwner]);
 
+  // BPMN XML interchange (root scope of a BPMN workflow only): export downloads the root with the
+  // canvas layout stamped into BPMNDI; import replaces the root's structure with the converted
+  // document (keeping the root's node/version identity) and positions the canvas from its DI.
+  const isBpmnRoot = draft?.state.rootActivity?.structure?.kind === bpmnStructureKind;
+  const canUseBpmnInterchange = isBpmnRoot && frames.length === 0;
+  const bpmnFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const exportBpmn = useCallback(async () => {
+    const rootActivity = draft?.state.rootActivity;
+    if (!rootActivity) return;
+    try {
+      const xml = await exportBpmnDocument(context, withDiagramFromLayout(rootActivity, draft.layout));
+      const blob = new Blob([xml], { type: "application/xml" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${details?.definition.name || "workflow"}.bpmn`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setError("");
+      setStatus("Exported BPMN 2.0 XML.");
+    } catch {
+      setStatus("");
+      setError("BPMN export failed.");
+    }
+  }, [context, details?.definition.name, draft, setError, setStatus]);
+
+  const importBpmn = useCallback(async (file: File) => {
+    const rootActivity = draft?.state.rootActivity;
+    if (!rootActivity) return;
+    try {
+      const xml = await file.text();
+      const result = await importBpmnDocument(context, xml);
+      const importedLayout = layoutFromBpmnDiagram(result.processNode);
+      editDraftAndSelect(({ draft: current }) => {
+        const currentRoot = current?.state.rootActivity;
+        if (!current || !currentRoot) return null;
+        return {
+          ...current,
+          layout: importedLayout,
+          state: {
+            ...current.state,
+            rootActivity: {
+              ...result.processNode,
+              nodeId: currentRoot.nodeId,
+              activityVersionId: currentRoot.activityVersionId
+            }
+          }
+        };
+      }, null);
+      const issueSummary = summarizeBpmnImportIssues(result.analysis);
+      setError("");
+      setStatus(issueSummary ? `Imported BPMN document (${issueSummary}).` : "Imported BPMN document.");
+    } catch {
+      setStatus("");
+      setError("BPMN import failed — check that the file is a valid BPMN 2.0 document.");
+    }
+  }, [context, draft, editDraftAndSelect, setError, setStatus]);
+
   const openVersionChange = useCallback((occurrence: ActivityNode, current: ActivityDefinitionVersionView) => {
     setError("");
     setAutosavePaused(true);
@@ -765,6 +825,28 @@ export function WorkflowEditor({
           ) : null}
           {proposeUpdateAction ? (
             <button type="button" onClick={() => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })}><Sparkles size={15} /> Propose</button>
+          ) : null}
+          {canUseBpmnInterchange ? (
+            <>
+              <input
+                ref={bpmnFileInputRef}
+                type="file"
+                accept=".bpmn,.xml"
+                style={{ display: "none" }}
+                aria-label="Import BPMN file"
+                onChange={event => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void importBpmn(file);
+                }}
+              />
+              <button type="button" title="Import a BPMN 2.0 document, replacing this process" disabled={busy} onClick={() => bpmnFileInputRef.current?.click()}>
+                <Upload size={15} /> Import BPMN
+              </button>
+              <button type="button" title="Export as BPMN 2.0 XML with diagram interchange" onClick={() => void exportBpmn()}>
+                <Download size={15} /> Export BPMN
+              </button>
+            </>
           ) : null}
           <button type="button" title="Export workflow as JSON" onClick={exportJson}><Download size={15} /> Export</button>
           <button type="button" disabled={busy} onClick={() => void save()}><Save size={15} /> Save</button>

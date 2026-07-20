@@ -261,3 +261,35 @@ describe("bpmn flow editing helpers", async () => {
     expect(clearedFlows.every(flow => flow.isDefault !== true)).toBe(true);
   });
 });
+
+describe("bpmn interchange layout bridges", async () => {
+  const { layoutFromBpmnDiagram, withDiagramFromLayout } = await import("../api/bpmnInterchange");
+
+  const node = {
+    nodeId: "node-bpmn",
+    activityVersionId: "bpmn@1",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: "elsa.bpmn.structure",
+      schemaVersion: "1.0.0",
+      payload: {
+        elements: [{ elementId: "start", elementType: "startEvent" }, { elementId: "end", elementType: "endEvent" }],
+        sequenceFlows: [],
+        activities: [],
+        diagram: { shapes: { start: { x: 120, y: 200, width: 36, height: 36 } }, edges: {} }
+      }
+    }
+  };
+
+  it("layoutFromBpmnDiagram maps DI shapes to layout records keyed by elementId", () => {
+    expect(layoutFromBpmnDiagram(node)).toEqual([{ nodeId: "start", x: 120, y: 200 }]);
+  });
+
+  it("withDiagramFromLayout stamps canvas positions into DI shapes, preserving sizes", () => {
+    const next = withDiagramFromLayout(node, [{ nodeId: "start", x: 300, y: 50 }, { nodeId: "end", x: 500, y: 50 }]);
+    const shapes = (next.structure?.payload.diagram as { shapes: Record<string, Record<string, unknown>> }).shapes;
+    expect(shapes.start).toMatchObject({ x: 300, y: 50, width: 36, height: 36 });
+    expect(shapes.end).toMatchObject({ x: 500, y: 50 });
+  });
+});
