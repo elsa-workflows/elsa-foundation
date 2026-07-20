@@ -14,10 +14,12 @@ public abstract class DesignAtomicityContractSuite
     private static readonly DesignCanonicalRequestFingerprint ChangedFingerprint = new("canonical:create-workflow-and-draft:v2");
 
     protected abstract Task<IDesignPersistenceContractFixture> CreateFixtureAsync(CancellationToken cancellationToken = default);
+    protected abstract DesignPersistenceContractProfile ContractProfile { get; }
 
     [Fact]
     public async Task Partial_staging_failure_leaves_no_visible_partial_aggregate()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityPartialStagingFailure);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
         await using var fault = await fixture.ArmAtomicityFaultAsync(new(
@@ -35,6 +37,7 @@ public abstract class DesignAtomicityContractSuite
     [Fact]
     public async Task Non_success_provider_decision_rolls_back_all_staged_parts()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityNonSuccessProviderDecision);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
         await using var fault = await fixture.ArmAtomicityFaultAsync(new(
@@ -52,6 +55,7 @@ public abstract class DesignAtomicityContractSuite
     [Fact]
     public async Task Cancellation_rolls_back_and_propagates_cancellation()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityCancellation);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
         await using var fault = await fixture.ArmAtomicityFaultAsync(new(
@@ -68,6 +72,7 @@ public abstract class DesignAtomicityContractSuite
     [Fact]
     public async Task Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityLostAcknowledgement);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
         var request = Request();
@@ -94,6 +99,7 @@ public abstract class DesignAtomicityContractSuite
     [Fact]
     public async Task Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityExactReplay);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
         var scopeARequest = Request(DesignPersistenceFixtureData.ScopeA);
@@ -118,6 +124,7 @@ public abstract class DesignAtomicityContractSuite
     [Fact]
     public async Task Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityKeyReuseConflict);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
 
@@ -136,6 +143,7 @@ public abstract class DesignAtomicityContractSuite
     [Fact]
     public async Task Duplicate_delivery_does_not_duplicate_the_domain_outcome()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityDuplicateDelivery);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
         var request = Request();
@@ -165,6 +173,8 @@ public abstract class DesignAtomicityContractSuite
         Assert.Equal(0, snapshot.VisibleAggregatePartCount);
         Assert.Equal(0, snapshot.DurableOutcomeCount);
         Assert.Equal(0, snapshot.PublishedOutcomeCount);
+        Assert.True(string.IsNullOrWhiteSpace(snapshot.CanonicalAggregateStateFingerprint));
+        Assert.True(string.IsNullOrWhiteSpace(snapshot.AuthoritativeDurableResultFingerprint));
     }
 
     private static async Task<DesignAtomicitySnapshot> AssertCommittedExactlyOnceAsync(
@@ -180,5 +190,11 @@ public abstract class DesignAtomicityContractSuite
         Assert.False(string.IsNullOrWhiteSpace(snapshot.CanonicalAggregateStateFingerprint));
         Assert.False(string.IsNullOrWhiteSpace(snapshot.AuthoritativeDurableResultFingerprint));
         return snapshot;
+    }
+
+    private void SkipIfNotApplicable(DesignPersistenceContractScenario scenario)
+    {
+        var applicability = ContractProfile.GetApplicability(scenario);
+        Xunit.Skip.If(!applicability.IsApplicable, applicability.NotApplicableReason!);
     }
 }

@@ -47,6 +47,8 @@ public class DesignContractSuiteHarnessTests
 
     private sealed class HarnessAtomicityContractSuite : DesignAtomicityContractSuite
     {
+        protected override DesignPersistenceContractProfile ContractProfile => DesignPersistenceContractProfiles.Target;
+
         protected override Task<IDesignPersistenceContractFixture> CreateFixtureAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IDesignPersistenceContractFixture>(new AtomicityHarnessFixture());
     }

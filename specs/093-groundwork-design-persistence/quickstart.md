@@ -66,9 +66,15 @@ against the deterministic input before comparing restart hashes.
 
 Concrete EF-oracle and provider fixtures remain T025 and T051–T054 work. Therefore no
 provider-parity or oracle result hashes are claimed at this checkpoint. The focused Release project
-restore/build/test completed with `95/95` tests; executable provider scenarios remain pending a
-concrete fixture inheritance target. The T023 harness validates the contract shape only; T025 requires only
-the rows that overlap legacy EF observable behavior and must not introduce an EF idempotency/fault shim.
+restore/build/test completed with `96/96` tests; executable provider scenarios remain pending a
+concrete fixture inheritance target. The T023 harness validates the contract shape only. T025's executable
+`LegacyEfOracle` profile runs exactly five of these rows: partial-staging failure, cancellation, same-scope
+duplicate identities, workflow-draft last-writer-wins, and restart. Its nine explicit N/A rows are provider
+non-success decision; acknowledgement loss, exact replay, key-reuse conflict, and duplicate delivery; same
+identities across scopes; foreign reads and writes; and reusable-activity-draft OCC. The profile records a
+nonempty reason per N/A row. Test-only EF fault injection is permitted for partial staging and cancellation;
+T025 must not add a production EF operation ledger, scope boundary, or reusable-draft OCC shim. T033/T035's
+exception-taxonomy deferral remains unchanged.
 
 No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads
 that define them are T021–T024. T025 runs the EF SQLite oracle, records the canonical

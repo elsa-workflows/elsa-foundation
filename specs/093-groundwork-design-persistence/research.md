@@ -74,7 +74,24 @@
 
 ## Decision 7: Migrate test objectives before deleting EF tests
 
-**Decision**: Extract black-box behavior fixtures from existing EF-centric tests, run their overlapping legacy behavior against the temporary EF oracle and every Groundwork provider, then remove only the EF setup/mechanism assertions after parity and performance evidence is recorded. The shared contract remains authoritative for the target Groundwork semantics. A scenario that the legacy EF model cannot represent—specifically scope-local reuse of the same identity and reusable-activity draft OCC—is recorded as not applicable to the EF oracle and still runs against Groundwork; no throwaway EF shim is added and the target contract is not weakened. Preserve domain-objective tests such as immutability, event sequencing, SemVer resolution, layout behavior, and failure recovery. Before deleting any existing test, record the exact test, its classified objective, its replacement evidence or reason the objective is invalid, and explicit architect approval in the test-removal ledger in this document; general approval of the migration is not approval to delete an individual test.
+**Decision**: Extract black-box behavior fixtures from existing EF-centric tests, run their overlapping legacy behavior against the temporary EF oracle and every Groundwork provider, then remove only the EF setup/mechanism assertions after parity and performance evidence is recorded. The shared contract remains authoritative for the target Groundwork semantics. `DesignPersistenceContractProfiles.LegacyEfOracle` is the executable source of truth for its exact T023/T024 applicability matrix below; its N/A rows are skipped with their declared reason before fixture work. Test-only EF fault injection is allowed for the two applicable atomic rows, but no production EF operation ledger, storage-scope boundary, or reusable-draft OCC shim may be added. Preserve domain-objective tests such as immutability, event sequencing, SemVer resolution, layout behavior, and failure recovery. Before deleting any existing test, record the exact test, its classified objective, its replacement evidence or reason the objective is invalid, and explicit architect approval in the test-removal ledger in this document; general approval of the migration is not approval to delete an individual test.
+
+| T023/T024 scenario | Target | Legacy EF oracle | Reason when N/A |
+|---|---|---|---|
+| Partial staging failure | applicable | applicable | — |
+| Non-success provider decision | applicable | N/A | Legacy EF exposes provider failures as exceptions, not a non-success result. |
+| Cancellation | applicable | applicable | — |
+| Lost acknowledgement | applicable | N/A | No durable operation ledger can reconcile acknowledgement loss. |
+| Exact replay | applicable | N/A | No caller-stable operation key or durable replay outcome. |
+| Key reuse with different fingerprint | applicable | N/A | No caller-stable operation key/fingerprint comparison. |
+| Duplicate delivery | applicable | N/A | No durable operation ledger for outcome suppression. |
+| Same identities across scopes | applicable | N/A | EF identity keys are global rather than scope-local. |
+| Foreign point-read non-disclosure | applicable | N/A | No storage-scope-bound point-read boundary. |
+| Foreign scope-write rejection | applicable | N/A | No storage-scope-bound write boundary. |
+| Same-scope duplicate identities | applicable | applicable | — |
+| Reusable activity draft OCC | applicable | N/A | No expected-revision replace contract. |
+| Workflow draft last-writer-wins | applicable | applicable | — |
+| Scope-bound restart | applicable | applicable | — |
 
 **Rationale**: Framework §2.21.1 requires test objective continuity. Several current tests assert EF metadata as a proxy for domain immutability; those objectives must become provider-neutral observable stale-write/conflict tests before their EF mechanics disappear.
 

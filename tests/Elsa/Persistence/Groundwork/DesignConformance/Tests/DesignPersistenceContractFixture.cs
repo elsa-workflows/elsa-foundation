@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Events.Core.Contracts;
 using Elsa.Primitives.Contracts;
@@ -99,9 +100,24 @@ public enum DesignAtomicityFaultAction
 }
 
 /// <summary>Immutable one-shot plan for an atomic-write conformance fault.</summary>
-public sealed record DesignAtomicityFaultPlan(
-    DesignAtomicityFaultPhase Phase,
-    DesignAtomicityFaultAction Action);
+public sealed record DesignAtomicityFaultPlan
+{
+    public DesignAtomicityFaultPlan(DesignAtomicityFaultPhase phase, DesignAtomicityFaultAction action)
+    {
+        if (phase == DesignAtomicityFaultPhase.AfterDurableDecision && action == DesignAtomicityFaultAction.ReturnNonSuccess)
+        {
+            throw new ArgumentException(
+                "A non-success provider decision cannot occur after the provider has made a durable decision.",
+                nameof(action));
+        }
+
+        Phase = phase;
+        Action = action;
+    }
+
+    public DesignAtomicityFaultPhase Phase { get; }
+    public DesignAtomicityFaultAction Action { get; }
+}
 
 /// <summary>Owns an armed fault and reports whether the configured point was reached.</summary>
 public interface IDesignAtomicityFaultLease : IAsyncDisposable
@@ -167,3 +183,111 @@ public sealed record DesignAtomicitySnapshot(
     int PublishedOutcomeCount,
     string? CanonicalAggregateStateFingerprint,
     string? AuthoritativeDurableResultFingerprint);
+
+/// <summary>One executable T023/T024 scenario whose applicability differs by conformance profile.</summary>
+public enum DesignPersistenceContractScenario
+{
+    AtomicityPartialStagingFailure,
+    AtomicityNonSuccessProviderDecision,
+    AtomicityCancellation,
+    AtomicityLostAcknowledgement,
+    AtomicityExactReplay,
+    AtomicityKeyReuseConflict,
+    AtomicityDuplicateDelivery,
+    IsolationSamePointIdentities,
+    IsolationForeignPointReads,
+    IsolationForeignScopeWrites,
+    IsolationDuplicateIdentities,
+    IsolationReusableActivityDraftOcc,
+    IsolationWorkflowDraftLastWriterWins,
+    IsolationScopeBoundRestart
+}
+
+/// <summary>Whether a profile can execute a scenario, with an explicit reason when it cannot.</summary>
+public sealed record DesignPersistenceScenarioApplicability
+{
+    private DesignPersistenceScenarioApplicability(bool isApplicable, string? notApplicableReason)
+    {
+        IsApplicable = isApplicable;
+        NotApplicableReason = notApplicableReason;
+    }
+
+    public bool IsApplicable { get; }
+    public string? NotApplicableReason { get; }
+
+    public static DesignPersistenceScenarioApplicability Applicable() => new(true, null);
+
+    public static DesignPersistenceScenarioApplicability NotApplicable(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        return new(false, reason);
+    }
+}
+
+/// <summary>
+/// Immutable applicability declaration for all executable T023/T024 scenarios. It separates the
+/// target conformance contract from the deliberately narrower temporary legacy-EF oracle.
+/// </summary>
+public sealed class DesignPersistenceContractProfile
+{
+    private readonly IReadOnlyDictionary<DesignPersistenceContractScenario, DesignPersistenceScenarioApplicability> _applicability;
+
+    public DesignPersistenceContractProfile(
+        string name,
+        IReadOnlyDictionary<DesignPersistenceContractScenario, DesignPersistenceScenarioApplicability> applicability)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(applicability);
+
+        var expected = Enum.GetValues<DesignPersistenceContractScenario>();
+        var missing = expected.Except(applicability.Keys).ToArray();
+        var unexpected = applicability.Keys.Except(expected).ToArray();
+
+        if (missing.Length > 0 || unexpected.Length > 0)
+            throw new ArgumentException("A design persistence contract profile must declare every T023/T024 scenario exactly once.", nameof(applicability));
+
+        if (applicability.Values.Any(value => value is null || (!value.IsApplicable && string.IsNullOrWhiteSpace(value.NotApplicableReason))))
+            throw new ArgumentException("Every non-applicable scenario must provide a reason.", nameof(applicability));
+
+        Name = name;
+        _applicability = new ReadOnlyDictionary<DesignPersistenceContractScenario, DesignPersistenceScenarioApplicability>(
+            new Dictionary<DesignPersistenceContractScenario, DesignPersistenceScenarioApplicability>(applicability));
+    }
+
+    public string Name { get; }
+    public IReadOnlyDictionary<DesignPersistenceContractScenario, DesignPersistenceScenarioApplicability> Applicability => _applicability;
+
+    public DesignPersistenceScenarioApplicability GetApplicability(DesignPersistenceContractScenario scenario) =>
+        _applicability.TryGetValue(scenario, out var applicability)
+            ? applicability
+            : throw new ArgumentOutOfRangeException(nameof(scenario));
+}
+
+/// <summary>Ratified target and temporary legacy-EF oracle applicability profiles.</summary>
+public static class DesignPersistenceContractProfiles
+{
+    public static DesignPersistenceContractProfile Target { get; } = new(
+        "target",
+        Enum.GetValues<DesignPersistenceContractScenario>()
+            .ToDictionary(scenario => scenario, _ => DesignPersistenceScenarioApplicability.Applicable()));
+
+    public static DesignPersistenceContractProfile LegacyEfOracle { get; } = new(
+        "legacy-ef-oracle",
+        new Dictionary<DesignPersistenceContractScenario, DesignPersistenceScenarioApplicability>
+        {
+            [DesignPersistenceContractScenario.AtomicityPartialStagingFailure] = DesignPersistenceScenarioApplicability.Applicable(),
+            [DesignPersistenceContractScenario.AtomicityNonSuccessProviderDecision] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF commands expose provider failures as exceptions, not a provider-decision non-success result."),
+            [DesignPersistenceContractScenario.AtomicityCancellation] = DesignPersistenceScenarioApplicability.Applicable(),
+            [DesignPersistenceContractScenario.AtomicityLostAcknowledgement] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF commands do not persist an operation ledger that can reconcile acknowledgement loss."),
+            [DesignPersistenceContractScenario.AtomicityExactReplay] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF mutation contracts do not accept a caller-stable operation key or persist replay outcomes."),
+            [DesignPersistenceContractScenario.AtomicityKeyReuseConflict] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF mutation contracts do not accept a caller-stable operation key or compare canonical request fingerprints."),
+            [DesignPersistenceContractScenario.AtomicityDuplicateDelivery] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF mutation contracts have no durable operation ledger to suppress duplicate delivery outcomes."),
+            [DesignPersistenceContractScenario.IsolationSamePointIdentities] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF identity keys are global and cannot represent the target scope-local same-identity semantics."),
+            [DesignPersistenceContractScenario.IsolationForeignPointReads] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF fixtures do not bind point reads to a storage scope and therefore cannot prove target non-disclosure."),
+            [DesignPersistenceContractScenario.IsolationForeignScopeWrites] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF fixtures do not bind writes to a storage scope and therefore cannot prove target cross-scope rejection."),
+            [DesignPersistenceContractScenario.IsolationDuplicateIdentities] = DesignPersistenceScenarioApplicability.Applicable(),
+            [DesignPersistenceContractScenario.IsolationReusableActivityDraftOcc] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF reusable activity drafts do not expose the target expected-revision replace contract."),
+            [DesignPersistenceContractScenario.IsolationWorkflowDraftLastWriterWins] = DesignPersistenceScenarioApplicability.Applicable(),
+            [DesignPersistenceContractScenario.IsolationScopeBoundRestart] = DesignPersistenceScenarioApplicability.Applicable()
+        });
+}

@@ -20,10 +20,12 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Tests;
 public abstract class DesignIsolationAndRestartContractSuite
 {
     protected abstract Task<IDesignPersistenceContractFixture> CreateFixtureAsync(CancellationToken cancellationToken = default);
+    protected abstract DesignPersistenceContractProfile ContractProfile { get; }
 
     [Fact]
     public async Task Same_point_identities_resolve_only_their_own_scope()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationSamePointIdentities);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
 
@@ -49,6 +51,7 @@ public abstract class DesignIsolationAndRestartContractSuite
     [Fact]
     public async Task Foreign_point_reads_are_indistinguishable_from_missing_identities()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationForeignPointReads);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
 
@@ -88,6 +91,7 @@ public abstract class DesignIsolationAndRestartContractSuite
     [Fact]
     public async Task Foreign_scope_point_writes_are_rejected_without_mutating_either_scope()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationForeignScopeWrites);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
         await SeedScopeAsync(fixture, DesignPersistenceFixtureData.ScopeA, "scope A");
@@ -128,6 +132,7 @@ public abstract class DesignIsolationAndRestartContractSuite
     [Fact]
     public async Task Duplicate_workflow_and_activity_identities_are_rejected_within_a_scope()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationDuplicateIdentities);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
         await SeedScopeAsync(fixture, DesignPersistenceFixtureData.ScopeA, "scope A");
@@ -173,6 +178,7 @@ public abstract class DesignIsolationAndRestartContractSuite
     [Fact]
     public async Task Reusable_activity_draft_rejects_a_stale_expected_revision_without_replacing_state_or_layout()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationReusableActivityDraftOcc);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
 
@@ -216,6 +222,7 @@ public abstract class DesignIsolationAndRestartContractSuite
     [Fact]
     public async Task Workflow_draft_updates_preserve_the_intentional_last_writer_wins_policy()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationWorkflowDraftLastWriterWins);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
         await SeedScopeAsync(fixture, DesignPersistenceFixtureData.ScopeA, "scope A");
@@ -244,6 +251,7 @@ public abstract class DesignIsolationAndRestartContractSuite
     [Fact]
     public async Task Scope_bound_point_read_snapshots_survive_restart()
     {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationScopeBoundRestart);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
 
@@ -365,6 +373,12 @@ public abstract class DesignIsolationAndRestartContractSuite
 
     private static string Normalize(string value, string requestedIdentity) =>
         value.Replace(requestedIdentity, "<requested-identity>", StringComparison.Ordinal);
+
+    private void SkipIfNotApplicable(DesignPersistenceContractScenario scenario)
+    {
+        var applicability = ContractProfile.GetApplicability(scenario);
+        Xunit.Skip.If(!applicability.IsApplicable, applicability.NotApplicableReason!);
+    }
 
     private sealed record SeededScope(string PromotedVersionId);
 
