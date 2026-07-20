@@ -196,33 +196,23 @@ public sealed class WorkflowsDesignStorageManifestTests
             var query = Assert.Single(storage.BoundedQueries, candidate =>
                 candidate.Identity == WorkflowsDesignStorageManifest.ListAllQuery);
 
-            Assert.Equal(WorkflowsDesignStorageManifest.DeterministicCollectionIndex, query.IndexIdentity);
+            Assert.Equal(WorkflowsDesignStorageManifest.ByCollectionIndex, query.IndexIdentity);
             Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, query.ExecutionClass);
             Assert.Equal(QueryPagingSupport.Offset, query.PagingSupport);
             Assert.Contains(BoundedQueryResultOperation.Documents, query.ResultOperations);
             Assert.Contains(query.PredicateFields, field =>
                 field.Path == WorkflowsDesignStorageManifest.CollectionField &&
                 field.Operations.SetEquals([PortableQueryOperation.Equal]));
-            var legacyIndex = Assert.Single(storage.LogicalIndexes, index =>
-                index.Identity == WorkflowsDesignStorageManifest.ByCollectionIndex);
-            Assert.Equal(
-                [WorkflowsDesignStorageManifest.CollectionField],
-                legacyIndex.Fields.Select(field => field.Path));
             var index = Assert.Single(storage.LogicalIndexes, index =>
-                index.Identity == WorkflowsDesignStorageManifest.DeterministicCollectionIndex);
+                index.Identity == WorkflowsDesignStorageManifest.ByCollectionIndex);
             Assert.Equal(
                 [WorkflowsDesignStorageManifest.CollectionField, WorkflowsDesignStorageManifest.DocumentIdField],
                 index.Fields.Select(field => field.Path));
             Assert.Equal(
                 [new BoundedQuerySortField(WorkflowsDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)],
                 query.SortFields);
-            var legacyPhysicalIndex = Assert.Single(table.Indexes, index =>
-                index.LogicalName == WorkflowsDesignStorageManifest.ByCollectionIndex);
             var physicalIndex = Assert.Single(table.Indexes, index =>
-                index.LogicalName == WorkflowsDesignStorageManifest.DeterministicCollectionIndex);
-            Assert.Equal(
-                ["storage_scope", "collection"],
-                legacyPhysicalIndex.Columns.Select(column => column.ColumnLogicalName));
+                index.LogicalName == WorkflowsDesignStorageManifest.ByCollectionIndex);
             Assert.False(physicalIndex.IsUnique);
             Assert.Equal(
                 ["storage_scope", "collection", "id_comparison_key"],

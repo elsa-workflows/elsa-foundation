@@ -110,23 +110,17 @@ public sealed class ActivitiesDesignStorageManifestTests
 
         foreach (var (indexIdentity, queryIdentity, path) in expectedRoutes)
         {
-            var legacyIndex = Assert.Single(storage.LogicalIndexes, index => index.Identity == indexIdentity);
-            Assert.Equal([path], legacyIndex.Fields.Select(field => field.Path));
-            var successorIdentity = $"{indexIdentity}{ActivitiesDesignStorageManifest.DeterministicDocumentOrderIndexSuffix}";
-            var successorIndex = Assert.Single(storage.LogicalIndexes, index => index.Identity == successorIdentity);
-            Assert.Equal([path, ActivitiesDesignStorageManifest.DocumentIdField], successorIndex.Fields.Select(field => field.Path));
+            var index = Assert.Single(storage.LogicalIndexes, index => index.Identity == indexIdentity);
+            Assert.Equal([path, ActivitiesDesignStorageManifest.DocumentIdField], index.Fields.Select(field => field.Path));
             var query = Assert.Single(storage.BoundedQueries, query =>
-                query.Identity == queryIdentity && query.IndexIdentity == successorIdentity);
+                query.Identity == queryIdentity && query.IndexIdentity == indexIdentity);
             Assert.Equal(
                 [new BoundedQuerySortField(ActivitiesDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)],
                 query.SortFields);
-            var legacyPhysicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == indexIdentity);
-            var successorPhysicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == successorIdentity);
-            Assert.False(legacyIndex.IsUnique);
-            Assert.False(legacyPhysicalIndex.IsUnique);
-            Assert.False(successorPhysicalIndex.IsUnique);
-            Assert.NotEqual("id_comparison_key", legacyPhysicalIndex.Columns.Last().ColumnLogicalName);
-            Assert.Equal("id_comparison_key", successorPhysicalIndex.Columns.Last().ColumnLogicalName);
+            var physicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == indexIdentity);
+            Assert.False(index.IsUnique);
+            Assert.False(physicalIndex.IsUnique);
+            Assert.Equal("id_comparison_key", physicalIndex.Columns.Last().ColumnLogicalName);
         }
     }
 }
