@@ -809,10 +809,14 @@ public static class ElsaGroundworkQueryRoutes
             .SelectMany(route => route.Fields)
             .GroupBy(field => field.Path, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var existingProjectedPaths = definition.ProjectedColumns
+            .Select(column => column.Path)
+            .ToHashSet(StringComparer.Ordinal);
         var projected = definition.ProjectedColumns
             .Where(column => column.Path != identity.Path)
-            .Where(column => !routeFieldsByPath.ContainsKey(column.Path))
-            .Concat(routeFieldsByPath.Values.Select(Projected))
+            .Concat(routeFieldsByPath.Values
+                .Where(field => !existingProjectedPaths.Contains(field.Path))
+                .Select(Projected))
             .Append(new ProjectedColumnDefinition(
                 identity.ProjectedColumn,
                 identity.Path,

@@ -1,9 +1,17 @@
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
+using Groundwork.Core.SchemaEvolution;
+using Groundwork.Sqlite;
+using Groundwork.Sqlite.PhysicalStorage;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -14,6 +22,41 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// </summary>
 public sealed class ElsaRuntimeStorageManifestTests
 {
+    [Fact]
+    public async Task Attention_routes_upgrade_existing_sqlite_schema_additively()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-attention-upgrade-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={databasePath}";
+
+        try
+        {
+            var legacyManifest = CreatePreAttentionRuntimeManifest();
+            var legacySource = await CreateSqliteSchemaSourceAsync(legacyManifest);
+            await using (var connection = new SqliteConnection(connectionString))
+            {
+                var applied = await PhysicalSchemaApplication.ApplyAsync(
+                    legacySource.PhysicalTarget,
+                    new SqlitePhysicalSchemaExecutor(connection));
+                Assert.NotEqual(PhysicalSchemaApplicationOutcome.Rejected, applied.Outcome);
+                Assert.NotEqual(PhysicalSchemaApplicationOutcome.AuthorizationRequired, applied.Outcome);
+            }
+
+            var currentSource = await CreateSqliteSchemaSourceAsync(ElsaRuntimeStorageManifest.CreatePhysicalized());
+            await using var inspectionConnection = new SqliteConnection(connectionString);
+            var admission = await currentSource.InspectRuntimeAdmissionAsync(
+                new SqlitePhysicalSchemaExecutor(inspectionConnection),
+                new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = true });
+
+            Assert.True(admission.IsReady, string.Join(Environment.NewLine, admission.Diagnostics.Select(x => x.Message)));
+            Assert.True(admission.AppliedOperationCount > 0);
+            Assert.DoesNotContain(admission.Diagnostics, diagnostic => diagnostic.Code == "ELSA-GW-SCHEMA-DRIFT");
+        }
+        finally
+        {
+            File.Delete(databasePath);
+        }
+    }
+
     [Fact]
     public void ActivityExecutionState_Declares_ByParent_Index_And_Query()
     {
@@ -1237,5 +1280,54 @@ public sealed class ElsaRuntimeStorageManifestTests
 
         Assert.Equal(ElsaRuntimeStorageManifest.StimulusHashProjectionLength, stimulusHash.Length);
         Assert.Equal(stimulusTypeLength, stimulusType.Length);
+    }
+
+    private static StorageManifest CreatePreAttentionRuntimeManifest()
+    {
+        var current = ElsaRuntimeStorageManifest.CreatePhysicalized();
+        var legacyIncident = LegacyGroundworkStorageManifestPhysicalizer
+            .Physicalize(ElsaRuntimeStorageManifest.Create())
+            .StorageUnits
+            .Single(unit => unit.Identity.Value == ElsaRuntimeStorageManifest.IncidentStateDocumentKind);
+
+        return current with
+        {
+            StorageUnits = current.StorageUnits
+                .Select(unit => unit.Identity.Value == ElsaRuntimeStorageManifest.IncidentStateDocumentKind
+                    ? legacyIncident
+                    : unit)
+                .ToArray()
+        };
+    }
+
+    private static ValueTask<GroundworkPhysicalSchemaManifestSource> CreateSqliteSchemaSourceAsync(StorageManifest manifest)
+    {
+        var topology = new GroundworkProviderTopologySnapshot(
+            SqliteGroundworkCapabilities.Provider.Name,
+            "sqlite-file",
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+            });
+        return GroundworkStoreInitialization.CreatePhysicalSchemaSourceAsync(
+            SqliteGroundworkCapabilities.Runtime(),
+            topology,
+            SqliteGroundworkCapabilities.PhysicalNames,
+            [new StaticRuntimeManifestSource(manifest)]);
+    }
+
+    private sealed class StaticRuntimeManifestSource(StorageManifest manifest) : IGroundworkStorageManifestSource
+    {
+        public string FeatureIdentity => RuntimeGroundworkStorageManifestSource.FeatureName;
+
+        public ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
+                FeatureIdentity,
+                manifest,
+                [],
+                [],
+                [],
+                []));
     }
 }
