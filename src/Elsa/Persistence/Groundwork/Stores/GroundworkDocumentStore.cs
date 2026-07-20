@@ -68,12 +68,60 @@ public abstract class GroundworkDocumentStore(
         Func<TDocument, TResult> project,
         CancellationToken cancellationToken)
     {
-        var result = await BoundedStore.QueryAsync(
-            new DocumentQuery(
-                DocumentKind,
-                queryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
+        var documents = await BoundedDocumentQueryPager.QueryAllAsync(
+            BoundedStore,
+            DocumentKind,
+            queryIdentity,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))],
             cancellationToken);
-        return result.Documents.Select(envelope => project(Serializer.Deserialize<TDocument>(envelope))).ToArray();
+        return documents
+            .Select(envelope => project(Serializer.Deserialize<TDocument>(envelope)))
+            .ToArray();
+    }
+}
+
+internal static class BoundedDocumentQueryPager
+{
+    public static async ValueTask<IReadOnlyList<DocumentEnvelope>> QueryAllAsync(
+        IBoundedDocumentStore store,
+        string documentKind,
+        string queryIdentity,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        CancellationToken cancellationToken)
+    {
+        var documents = new List<DocumentEnvelope>();
+        var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
+        string? continuation = null;
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await store.QueryAsync(
+                new DocumentQuery(
+                    documentKind,
+                    queryIdentity,
+                    clauses,
+                    take: ElsaGroundworkQueryRoutes.MaximumResultCount,
+                    continuation: continuation),
+                cancellationToken);
+            if (result.Documents.Count > ElsaGroundworkQueryRoutes.MaximumResultCount)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider page exceeded the requested bound.");
+            }
+
+            documents.AddRange(result.Documents);
+
+            if (result.NextContinuation is null)
+                break;
+            if (!seenContinuations.Add(result.NextContinuation))
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' repeated a previously seen continuation.");
+            }
+
+            continuation = result.NextContinuation;
+        } while (true);
+
+        return documents;
     }
 }

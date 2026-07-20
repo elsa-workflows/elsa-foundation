@@ -258,7 +258,8 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         var legacyDeclarations = unit.Queries
             .Where(candidate => candidate.Identity == query.QueryIdentity)
             .ToArray();
-        if (declarations.Length > 1 || declarations.Length == 0 && legacyDeclarations.Length != 1)
+        if ((unit.PhysicalStorage is not null && declarations.Length != 1) ||
+            (unit.PhysicalStorage is null && legacyDeclarations.Length != 1))
         {
             throw new InvalidOperationException(
                 $"Document kind '{query.DocumentKind}' must declare bounded query '{query.QueryIdentity}' exactly once.");
@@ -271,10 +272,9 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
                 $"through the '{expectedOperation}' execution method.");
         }
 
-        // Physicalized manifests intentionally retain their provider-neutral legacy declarations
-        // during the transition. Providers bind the physical route when one exists, so the test
-        // substrate must do the same instead of treating the retained fallback as a duplicate.
-        if (declarations.Length == 1)
+        // Once a unit is physicalized, its bounded routes are authoritative. Retained legacy
+        // declarations cannot hide a missing physical route.
+        if (unit.PhysicalStorage is not null)
             return ValidatePhysicalQuery(unit, declarations[0], query, expectedOperation);
 
 #pragma warning disable GW0003

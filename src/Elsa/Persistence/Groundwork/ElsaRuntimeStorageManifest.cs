@@ -532,7 +532,66 @@ public static class ElsaRuntimeStorageManifest
                                 WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
                                     DueWorkStoragePhysicalizer.AddRoutes(
                                         SchedulerWorkStoragePhysicalizer.AddRoutes(
-                                            LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()))))))))))));
+                                            EnableCompatibilityCollectionPaging(
+                                                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create())))))))))))));
+
+    private static StorageManifest EnableCompatibilityCollectionPaging(StorageManifest manifest) =>
+        manifest with
+        {
+            StorageUnits = manifest.StorageUnits.Select(unit =>
+                unit.Identity.Value switch
+                {
+                    SchedulerStateDocumentKind => EnableCursorPaging(unit, ListAllQuery),
+                    WorkflowHoldStateDocumentKind => EnableCursorPaging(
+                        unit,
+                        ListByWorkflowExecutionQuery,
+                        ListAllQuery),
+                    IncidentStateDocumentKind => EnableCursorPaging(unit, ListByWorkflowExecutionQuery),
+                    SchedulerPoisonDocumentKind => EnableCursorPaging(unit, ListByWorkflowExecutionQuery),
+                    WorkflowDispatchDocumentKind => EnableCursorPaging(
+                        unit,
+                        ListWorkflowDispatchesByParentQuery,
+                        ListWorkflowDispatchesQuery),
+                    _ => unit
+                }).ToArray()
+        };
+
+    private static StorageUnit EnableCursorPaging(StorageUnit unit, params string[] queryIdentities)
+    {
+        var storage = unit.PhysicalStorage ?? throw new InvalidOperationException(
+            $"Compatibility collection routes for '{unit.Identity.Value}' require physical storage.");
+        var identities = queryIdentities.ToHashSet(StringComparer.Ordinal);
+        return unit with
+        {
+            PhysicalStorage = new StorageUnitPhysicalStorage(
+                storage.ProvisioningMode,
+                storage.Policy,
+                storage.LogicalIndexes,
+                storage.BoundedQueries
+                    .Select(query => identities.Contains(query.Identity)
+                        ? WithCursorPaging(query)
+                        : query)
+                    .ToArray(),
+                storage.NameOverrides,
+                storage.BoundedMutations)
+        };
+    }
+
+    private static BoundedQueryDeclaration WithCursorPaging(BoundedQueryDeclaration query) =>
+        new(
+            query.Identity,
+            query.IndexIdentity,
+            query.Operations,
+            query.SortSupport,
+            QueryPagingSupport.Cursor,
+            query.ExecutionClass,
+            query.SupportsDisjunction,
+            query.SupportsTotalCount,
+            query.SortFields,
+            query.PredicateFields,
+            query.ResultOperations,
+            query.LatestPerKeyPath,
+            query.ResidualPredicateFields);
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),

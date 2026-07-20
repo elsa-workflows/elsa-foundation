@@ -38,7 +38,7 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         int? take = null)
     {
         ArgumentNullException.ThrowIfNull(query);
-        ValidateResultShape(query, resultOperation, take);
+        ValidateResultShape(resultOperation, take);
 
         var clauses = query.Clauses.Select(TranslateClause).ToArray();
         var order = query.Order is null
@@ -60,7 +60,6 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
     }
 
     private static void ValidateResultShape(
-        Query<TEntity> query,
         BoundedQueryResultOperation resultOperation,
         int? take)
     {
@@ -77,12 +76,6 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         {
             throw new GroundworkQueryTranslationException(
                 "Document query results require a positive take bound before they can be sent to a provider.");
-        }
-
-        if (query.Order is null)
-        {
-            throw new GroundworkQueryTranslationException(
-                "Document query results require a deterministic order before they can be sent to a provider.");
         }
     }
 

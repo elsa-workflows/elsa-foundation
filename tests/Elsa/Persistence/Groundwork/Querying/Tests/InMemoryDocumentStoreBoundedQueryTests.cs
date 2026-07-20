@@ -126,6 +126,20 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
     }
 
     [Fact]
+    public async Task Physicalized_unit_rejects_a_missing_physical_route_instead_of_using_the_retained_legacy_route()
+    {
+        var store = new InMemoryDocumentStore(CreateManifest(includePhysicalRoute: false));
+
+        await RejectBeforeIoAsync(
+            store,
+            new DocumentQuery(
+                DocumentKind,
+                QueryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(NamePath, "alpha"))],
+                take: 1));
+    }
+
+    [Fact]
     public async Task Cancellation_is_observed_before_query_io()
     {
         var store = new InMemoryDocumentStore(CreateManifest());
@@ -166,7 +180,7 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
         Assert.Equal(DocumentStoreWriteStatus.Saved, result.Status);
     }
 
-    private static StorageManifest CreateManifest()
+    private static StorageManifest CreateManifest(bool includePhysicalRoute = true)
     {
         var logicalIndex = new LogicalIndexDeclaration(
             "bounded-query-index",
@@ -272,7 +286,7 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
                             new ProjectedColumnDefinition("group", GroupPath, PortablePhysicalType.String, Length: 100)
                         ])),
                 [logicalIndex],
-                [declaration])
+                includePhysicalRoute ? [declaration] : [])
         };
 
         return new StorageManifest(

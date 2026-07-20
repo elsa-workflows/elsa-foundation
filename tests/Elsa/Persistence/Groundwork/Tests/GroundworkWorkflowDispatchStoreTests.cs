@@ -151,6 +151,24 @@ public sealed class GroundworkWorkflowDispatchStoreTests
     }
 
     [Fact]
+    public async Task List_by_parent_reads_every_bounded_continuation_page()
+    {
+        var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        var store = new GroundworkWorkflowDispatchStore(
+            documents,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor);
+        const int expectedCount = ElsaGroundworkQueryRoutes.MaximumResultCount + 1;
+        foreach (var index in Enumerable.Range(0, expectedCount))
+            await store.SaveAsync(Pending("parent-all", $"activity-{index:D4}"));
+
+        var results = await store.ListAsync("parent-all");
+
+        Assert.Equal(expectedCount, results.Count);
+        Assert.Equal(2, documents.DocumentQueryCount);
+    }
+
+    [Fact]
     public async Task Query_take_and_continuation_bound_total_provider_work_independent_of_history()
     {
         await using var fixture = GroundworkDocumentStoreFixture.Create("memory");

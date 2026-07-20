@@ -282,7 +282,6 @@ public sealed class GroundworkWorkflowDispatchStore :
         return await QueryAsync(
             ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentQuery,
             [Equal(ElsaRuntimeStorageManifest.ParentWorkflowExecutionIdField, parentWorkflowExecutionId)],
-            take: null,
             cancellationToken);
     }
 
@@ -424,7 +423,6 @@ public sealed class GroundworkWorkflowDispatchStore :
         var records = await QueryAsync(
             ElsaRuntimeStorageManifest.ListWorkflowDispatchesQuery,
             [Equal(ElsaRuntimeStorageManifest.CollectionField, ElsaRuntimeStorageManifest.WorkflowDispatchCollection)],
-            take: null,
             cancellationToken);
 
         return records
@@ -491,17 +489,15 @@ public sealed class GroundworkWorkflowDispatchStore :
     private async ValueTask<IReadOnlyCollection<WorkflowDispatchRecord>> QueryAsync(
         string queryIdentity,
         IReadOnlyList<DocumentQueryClause> clauses,
-        int? take,
         CancellationToken cancellationToken)
     {
-        var result = await BoundedStore.QueryAsync(
-            new DocumentQuery(
-                ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind,
-                queryIdentity,
-                clauses,
-                take: take),
+        var documents = await BoundedDocumentQueryPager.QueryAllAsync(
+            BoundedStore,
+            ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind,
+            queryIdentity,
+            clauses,
             cancellationToken);
-        return result.Documents
+        return documents
             .Select(_serializer.Deserialize<WorkflowDispatchDocument>)
             .Select(document => document.Record)
             .OrderBy(record => record.CreatedAt)

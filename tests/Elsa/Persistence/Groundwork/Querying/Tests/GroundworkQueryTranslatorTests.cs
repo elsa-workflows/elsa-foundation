@@ -160,16 +160,17 @@ public sealed class GroundworkQueryTranslatorTests
     }
 
     [Fact]
-    public void Rejects_document_results_without_a_deterministic_order_before_a_provider_can_execute()
+    public void Accepts_bounded_unordered_document_results()
     {
-        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
-            _translator.Translate(
-                DocumentKind,
-                QueryIdentity,
-                Query<DesignDocument>.All(),
-                take: 1));
+        var result = _translator.Translate(
+            DocumentKind,
+            QueryIdentity,
+            Query<DesignDocument>.All(),
+            take: 25);
 
-        Assert.Contains("deterministic order", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(BoundedQueryResultOperation.Documents, result.ResultOperation);
+        Assert.Equal(25, result.Take);
+        Assert.Empty(result.Order);
     }
 
     [Fact]
