@@ -126,3 +126,12 @@ manifest union. `GroundworkDeploymentSchemaManifestSource` is the provider-neutr
 host naming-policy bridge. `GroundworkUnifiedManifest` deliberately remains only a compatibility facade, so
 the design manifests are not hard-coded into it. Direct composition tests cover the workflow/activity union
 and a host-supplied naming policy across both design families.
+
+The original T016/T017 design-specific session class targets would duplicate the established access-bound
+session contract. `GroundworkStoreSession` already presents one immutable `DocumentStoreAccess`,
+`IDocumentStore`, and `IBoundedDocumentStore` bundle; `GroundworkScopedDocumentStore` retains that same
+session for a unit of work and releases it afterward. `GroundworkStoreSessionFactory` maps the current Elsa
+access context for every acquisition and rejects tenant-agnostic work before provider acquisition unless the
+context is explicitly privileged across scopes. Its privileged execution helper also records acquisition
+and terminal outcome. The generic foundation is therefore reused by design adapters rather than wrapped in
+a second design-only lifetime abstraction.
