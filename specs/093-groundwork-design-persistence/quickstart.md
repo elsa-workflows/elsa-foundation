@@ -29,9 +29,10 @@ unified-host test still uses `postgres:16-alpine`; T053 selects and records its 
 image as part of the provider contract work.
 
 The pre-extraction EF behavioral suite inventories are 354 workflow-design tests and
-467 activity-design tests. Their focused restore and discovery succeeded at this base.
-The shared fixture scaffold currently has 8 deterministic-fixture tests. See
-[baseline evidence](evidence/baseline.md) for the commands and precise evidence scope.
+467 activity-design tests. Their focused restore and discovery succeeded at this base;
+full-solution Release discovery found 6,588 tests without executing them. The shared
+fixture scaffold currently has 8 deterministic-fixture tests. See [baseline
+evidence](evidence/baseline.md) for the commands and precise evidence scope.
 
 No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads
 that define them are T021–T024. T025 runs the EF SQLite oracle, records the canonical

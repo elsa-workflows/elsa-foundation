@@ -48,6 +48,15 @@ dotnet test tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.cspr
 | `Elsa.Workflows.Design.Tests` | 354 | Discovery succeeded. |
 | `Elsa.Activities.Design.Tests` | 467 | Discovery succeeded. |
 
+The full solution's built Release outputs were discovered without executing tests:
+
+```bash
+dotnet test Elsa.Server.slnx -c Release --no-build --no-restore \
+  --disable-build-servers -m:1 --list-tests --logger 'console;verbosity=quiet'
+```
+
+Result: 6,588 discovered tests across the solution.
+
 The new shared fixture scaffold was verified with:
 
 ```bash
