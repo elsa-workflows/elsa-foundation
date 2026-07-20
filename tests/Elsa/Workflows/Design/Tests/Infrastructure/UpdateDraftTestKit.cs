@@ -26,7 +26,7 @@ internal static class UpdateDraftTestKit
     {
         await host.EnsureDefinition(workflowDefinitionId);
         using var scope = host.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute(workflowDefinitionId);
+        return await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, workflowDefinitionId);
     }
 
     public static async Task Update(
@@ -37,7 +37,7 @@ internal static class UpdateDraftTestKit
     {
         using var scope = host.Services.CreateScope();
         var command = scope.ServiceProvider.GetRequiredService<IUpdateDraftCommand>();
-        await command.Execute(new UpdateDraftRequest(draftId, state, layout ?? []));
+        await command.Execute(WorkflowsDesignTestHost.TestOperationKey, new UpdateDraftRequest(draftId, state, layout ?? []));
     }
 
     /// <summary>

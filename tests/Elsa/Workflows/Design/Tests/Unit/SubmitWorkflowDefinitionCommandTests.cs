@@ -31,7 +31,7 @@ public sealed class SubmitWorkflowDefinitionCommandTests
         using var scope = host.Services.CreateScope();
         var command = scope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>();
 
-        var submitted = await command.Execute("Demo", "Submitted over REST", state);
+        var submitted = await command.Execute(WorkflowsDesignTestHost.TestOperationKey, "Demo", "Submitted over REST", state);
 
         await using var ctx = host.CreateContext();
         var definition = await ctx.WorkflowDefinitions.FirstOrDefaultAsync(x => x.Id == submitted.DefinitionId);
@@ -64,7 +64,7 @@ public sealed class SubmitWorkflowDefinitionCommandTests
         var command = scope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>();
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            command.Execute("Demo", null, state));
+            command.Execute(WorkflowsDesignTestHost.TestOperationKey, "Demo", null, state));
 
         Assert.Contains("activity version id", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -79,7 +79,7 @@ public sealed class SubmitWorkflowDefinitionCommandTests
         var command = scope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>();
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            command.Execute("Demo", null, state));
+            command.Execute(WorkflowsDesignTestHost.TestOperationKey, "Demo", null, state));
 
         Assert.Contains("root activity", exception.Message, StringComparison.OrdinalIgnoreCase);
     }

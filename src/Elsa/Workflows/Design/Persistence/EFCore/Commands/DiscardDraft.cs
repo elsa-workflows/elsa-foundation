@@ -1,5 +1,6 @@
 using Elsa.Locking.Core;
 using Elsa.Events.Core.Contracts;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -24,8 +25,12 @@ public sealed class DiscardDraft(
     IDeferredEventPublisher deferredEventPublisher
 ) : IDiscardDraftCommand
 {
-    public async Task Execute(string draftId, CancellationToken cancellationToken = default)
+    public async Task Execute(
+        DesignOperationKey operationKey,
+        string draftId,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operationKey);
         var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
 
         string workflowDefinitionId;

@@ -9,4 +9,4 @@ namespace Elsa.Workflows.Design.Api.Commands;
 /// immutable and are never individually deletable — a version only disappears when its owning definition is
 /// permanently deleted here (which is why <c>Versions/Delete</c> does not exist as an endpoint).
 /// </summary>
-public sealed record DeleteDefinition(string Id) : ICommand;
+public sealed record DeleteDefinition(string OperationKey, string Id) : ICommand;

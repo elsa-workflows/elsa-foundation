@@ -297,7 +297,9 @@ public sealed class GroundworkReusableActivityStores(
     {
         ValidateCreate(request);
         await using var lockHandle = await lockProvider.AcquireLockAsync(
-            DefinitionKeyLock(request.Definition.TenantId, request.Definition.ActivityTypeKey),
+            ActivityDesignPersistenceLockKeys.DefinitionTypeKey(
+                request.Definition.TenantId,
+                request.Definition.ActivityTypeKey),
             null,
             cancellationToken);
 
@@ -433,7 +435,7 @@ public sealed class GroundworkReusableActivityStores(
             null,
             cancellationToken);
         await using var keyLock = await lockProvider.AcquireLockAsync(
-            DefinitionKeyLock(
+            ActivityDesignPersistenceLockKeys.DefinitionTypeKey(
                 candidate.Entity.ReservedDefinition.TenantId,
                 candidate.Entity.ReservedDefinition.ActivityTypeKey),
             null,
@@ -1329,13 +1331,6 @@ public sealed class GroundworkReusableActivityStores(
             .Select(x => $"publication\u001f{x.Entity.DefinitionVersionId}\u001f{x.Envelope.Version}");
         var canonical = string.Join('\n', canonicalEdges.Concat(canonicalPublications));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
-    }
-
-    private static string DefinitionKeyLock(string? tenantId, string activityTypeKey)
-    {
-        var key = $"{tenantId ?? "<global>"}\u001f{activityTypeKey}";
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key))).ToLowerInvariant();
-        return $"elsa:activities:design:definition-key:{hash}";
     }
 
     private static string ForkCandidateLock(string candidateId) =>

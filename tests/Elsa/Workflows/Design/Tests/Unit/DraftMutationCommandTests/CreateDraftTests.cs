@@ -26,7 +26,7 @@ public sealed class CreateDraftTests
 
         string draftId;
         using (var scope = host.Services.CreateScope())
-            draftId = await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute("wf-1");
+            draftId = await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, "wf-1");
 
         using var ctx = host.CreateContext();
         var draft = await ctx.WorkflowDefinitionDrafts.FirstOrDefaultAsync(d => d.Id == draftId);
@@ -44,7 +44,7 @@ public sealed class CreateDraftTests
 
         string draftId;
         using (var scope = host.Services.CreateScope())
-            draftId = await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute("wf-1");
+            draftId = await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, "wf-1");
 
         var created = host.EventPublisher.LastOf<OnDraftCreated>();
         Assert.NotNull(created);

@@ -7,8 +7,10 @@ using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork;
+using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
+using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
@@ -57,6 +59,7 @@ public class UnifiedGroundworkHostTests
             .AddLogging()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>()
+            .AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>()
             .AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         var provider = services
             .AddGroundworkSqliteUnifiedPersistence(database.ConnectionString)
@@ -73,6 +76,7 @@ public class UnifiedGroundworkHostTests
             .AddLogging()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>()
+            .AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>()
             .AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         var provider = services
             .AddGroundworkSqliteUnifiedPersistence(connectionString)
@@ -90,6 +94,7 @@ public class UnifiedGroundworkHostTests
             .AddLogging()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>()
+            .AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>()
             .AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         if (identityFirst)
             services.AddFoundationAspNetCoreIdentityGroundwork();
@@ -251,9 +256,17 @@ public class UnifiedGroundworkHostTests
             using (var scope = firstHost.CreateScope())
             {
                 await scope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>()
-                    .Execute(workflowDefinition, workflowDraft, CancellationToken.None);
+                    .Execute(
+                        new DesignOperationKey("unified-host.reopen.workflow-design-write"),
+                        workflowDefinition,
+                        workflowDraft,
+                        CancellationToken.None);
                 await scope.ServiceProvider.GetRequiredService<IAddActivityDefinitionCommand>()
-                    .Execute(activityDefinition, activityVersion, CancellationToken.None);
+                    .Execute(
+                        new DesignOperationKey("unified-host.reopen.activity-design-write"),
+                        activityDefinition,
+                        activityVersion,
+                        CancellationToken.None);
             }
 
             await firstServices.GetRequiredService<IPublicationRecordStore>().SaveAsync(publication);
@@ -462,7 +475,11 @@ public class UnifiedGroundworkHostTests
         };
 
         // Write through the neutral command; it is backed by the single host-selected Groundwork store.
-        await add.Execute(definition, draft, CancellationToken.None);
+        await add.Execute(
+            new DesignOperationKey("unified-host.workflow-design-write"),
+            definition,
+            draft,
+            CancellationToken.None);
 
         // Read back through the neutral read ports — same database, no provider-specific code.
         var definitionStore = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>();
@@ -490,6 +507,37 @@ public class UnifiedGroundworkHostTests
 
         public PersistenceAccessContext Current { get; } =
             PersistenceAccessContext.Scoped(new PersistenceScope("tenant-1"));
+    }
+
+    private sealed class ImmediateDistributedLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(
+            string name,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) =>
+            new Handle();
+
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(
+            string name,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(
+            string name,
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+
+        private sealed class Handle : IDistributedSynchronizationHandle
+        {
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose()
+            {
+            }
+
+            public ValueTask DisposeAsync() => default;
+        }
     }
 
     private static PublicationSnapshotReview SnapshotReview(string token, DateTimeOffset expiresAt) => new(

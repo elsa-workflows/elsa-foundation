@@ -1,5 +1,6 @@
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Xunit;
 
@@ -19,17 +20,23 @@ public sealed class DeleteDefinitionCommandHandlerTests
         var deleteCommand = new RecordingDeleteCommand();
         var handler = new DeleteDefinitionCommandHandler(deleteCommand);
 
-        await handler.Handle(new DeleteDefinition("def-1"), CancellationToken.None);
+        await handler.Handle(new DeleteDefinition("delete-request-1", "def-1"), CancellationToken.None);
 
         Assert.Equal("def-1", deleteCommand.LastId);
+        Assert.Equal(new DesignOperationKey("delete-request-1"), deleteCommand.OperationKey);
     }
 
     private sealed class RecordingDeleteCommand : IDeleteWorkflowDefinitionPermanentlyCommand
     {
         public string? LastId { get; private set; }
+        public DesignOperationKey? OperationKey { get; private set; }
 
-        public Task Execute(string definitionId, CancellationToken cancellationToken = default)
+        public Task Execute(
+            DesignOperationKey operationKey,
+            string definitionId,
+            CancellationToken cancellationToken = default)
         {
+            OperationKey = operationKey;
             LastId = definitionId;
             return Task.CompletedTask;
         }

@@ -1,5 +1,6 @@
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Queries;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Serialization.Core;
@@ -34,7 +35,9 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore : IWorkflowD
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
             serialization,
             boundedStore,
-            sessions);
+            sessions,
+            DesignPersistenceDomain.Workflow,
+            "workflow definition list projection");
     }
 
     public GroundworkWorkflowDefinitionListProjectionStore(

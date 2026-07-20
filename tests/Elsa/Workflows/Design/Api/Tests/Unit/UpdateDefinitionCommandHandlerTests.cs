@@ -1,4 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
@@ -34,11 +35,12 @@ public sealed class UpdateDefinitionCommandHandlerTests
         var handler = new UpdateDefinitionCommandHandler(draftStore, updateCommand, sender);
 
         var state = new WorkflowDefinitionStateView();
-        var result = await handler.Handle(new UpdateDefinition("def-1", state), CancellationToken.None);
+        var result = await handler.Handle(new UpdateDefinition("update-1", "def-1", state), CancellationToken.None);
 
         Assert.NotNull(updateCommand.LastRequest);
         Assert.Equal("draft-1", updateCommand.LastRequest!.DraftId);
         Assert.Equal("def-1", result.Definition.Id);
+        Assert.Equal(new DesignOperationKey("update-1"), updateCommand.OperationKey);
     }
 
     [Fact]
@@ -51,7 +53,7 @@ public sealed class UpdateDefinitionCommandHandlerTests
         var updateCommand = new RecordingUpdateDraftCommand();
         var handler = new UpdateDefinitionCommandHandler(draftStore, updateCommand, new StubRequestSender(DetailsFor("def-1")));
 
-        await handler.Handle(new UpdateDefinition("def-1", new WorkflowDefinitionStateView(), Layout: null), CancellationToken.None);
+        await handler.Handle(new UpdateDefinition("update-2", "def-1", new WorkflowDefinitionStateView(), Layout: null), CancellationToken.None);
 
         Assert.Same(storedLayout, updateCommand.LastRequest!.Layout);
     }
@@ -66,7 +68,7 @@ public sealed class UpdateDefinitionCommandHandlerTests
         var handler = new UpdateDefinitionCommandHandler(draftStore, updateCommand, new StubRequestSender(DetailsFor("def-1")));
 
         var layout = new WorkflowDefinitionLayoutRecordView[] { new("incoming", 5, 6, null, null, null) };
-        await handler.Handle(new UpdateDefinition("def-1", new WorkflowDefinitionStateView(), layout), CancellationToken.None);
+        await handler.Handle(new UpdateDefinition("update-3", "def-1", new WorkflowDefinitionStateView(), layout), CancellationToken.None);
 
         var forwarded = Assert.Single(updateCommand.LastRequest!.Layout);
         Assert.Equal("incoming", forwarded.NodeId);
@@ -82,7 +84,7 @@ public sealed class UpdateDefinitionCommandHandlerTests
             new StubRequestSender(DetailsFor("def-1")));
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => handler.Handle(new UpdateDefinition("missing", new WorkflowDefinitionStateView()), CancellationToken.None));
+            () => handler.Handle(new UpdateDefinition("update-missing", "missing", new WorkflowDefinitionStateView()), CancellationToken.None));
     }
 
     private static WorkflowDefinitionDetailsView DetailsFor(string id) =>
@@ -118,9 +120,14 @@ public sealed class UpdateDefinitionCommandHandlerTests
     private sealed class RecordingUpdateDraftCommand : IUpdateDraftCommand
     {
         public UpdateDraftRequest? LastRequest { get; private set; }
+        public DesignOperationKey? OperationKey { get; private set; }
 
-        public Task Execute(UpdateDraftRequest request, CancellationToken cancellationToken = default)
+        public Task Execute(
+            DesignOperationKey operationKey,
+            UpdateDraftRequest request,
+            CancellationToken cancellationToken = default)
         {
+            OperationKey = operationKey;
             LastRequest = request;
             return Task.CompletedTask;
         }

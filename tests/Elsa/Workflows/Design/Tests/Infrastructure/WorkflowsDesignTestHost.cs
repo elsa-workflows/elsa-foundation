@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Persistence.EFCore.Extensions;
@@ -36,6 +37,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
     private readonly ServiceProvider _services;
 
     public IServiceProvider Services => _services;
+    public static DesignOperationKey TestOperationKey { get; } = new("workflow-design-test");
     public CapturingEventPublisher EventPublisher { get; }
     public InMemoryDistributedLockProvider LockProvider { get; }
 
@@ -117,6 +119,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // The DbContext factory bridges to the in-memory connection.
         services.AddSingleton<IDbContextFactory<WorkflowsDesignDbContext>>(sp =>
             new TestDbContextFactory(sp.GetRequiredService<IServiceProvider>(), connection));
+        services.ConfigureCommands<WorkflowsDesignDbContext>();
 
         // Named read ports over the closed query spec. CloneDraftFromVersionCommand reads the source
         // Version + layout through these; production registers them under UseQueries.
@@ -160,6 +163,9 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
     {
         services
             .AddScoped<Persistence.Core.Contracts.IAddWorkflowDefinitionCommand, AddWorkflowDefinition>()
+            .AddScoped<Persistence.Core.Contracts.IAddWorkflowDefinitionVersionCommand, AddWorkflowDefinitionVersion>()
+            .AddScoped<Persistence.Core.Contracts.IMaterializeWorkflowDefinitionCommand, MaterializeWorkflowDefinition>()
+            .AddScoped<Persistence.Core.Contracts.IMaterializeWorkflowDefinitionVersionCommand, MaterializeWorkflowDefinitionVersion>()
             .AddScoped<Persistence.Core.Contracts.ISaveWorkflowDefinitionCommand, SaveWorkflowDefinition>()
             .AddScoped<Persistence.Core.Contracts.IDeleteWorkflowDefinitionPermanentlyCommand, DeleteWorkflowDefinitionPermanently>()
             .AddScoped<Persistence.Core.Contracts.ISubmitWorkflowDefinitionCommand, SubmitWorkflowDefinition>()

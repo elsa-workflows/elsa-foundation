@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 
@@ -23,6 +24,7 @@ public interface ICreateDraftCommand
     /// <param name="initialLayout">The Draft's initial layout records; empty when omitted.</param>
     /// <param name="sourceVersionId">The version this Draft was cloned from, or <c>null</c> for a fresh Draft. Surfaced on <c>OnDraftCreated.SourceVersionId</c>.</param>
     Task<string> Execute(
+        DesignOperationKey operationKey,
         string workflowDefinitionId,
         WorkflowDefinitionState? initialState = null,
         IReadOnlyCollection<DesignMetadataRecord>? initialLayout = null,

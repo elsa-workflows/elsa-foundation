@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Persistence.Core.Queries;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
@@ -30,7 +31,9 @@ public sealed class GroundworkActivityDefinitionStore : IActivityDefinitionStore
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
             GroundworkActivitiesDesignJson.Options,
             boundedStore,
-            sessions);
+            sessions,
+            DesignPersistenceDomain.Activity,
+            "activity definition");
     }
 
     public async Task<ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default)

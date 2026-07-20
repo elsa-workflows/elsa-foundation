@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
@@ -128,7 +129,11 @@ public static class UnifiedGroundworkHostContract
             State = new WorkflowDefinitionState([], null, [], [], null),
         };
 
-        await add.Execute(definition, draft, CancellationToken.None);
+        await add.Execute(
+            new DesignOperationKey("unified-host-contract.workflow-design-write"),
+            definition,
+            draft,
+            CancellationToken.None);
 
         var definitionStore = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>();
         var draftStore = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>();

@@ -40,7 +40,7 @@ public sealed class PromotionGateTests
 
         using var scope = host.Services.CreateScope();
         var gate = scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>();
-        var ex = await Assert.ThrowsAsync<DraftHasValidationErrorsException>(() => gate.Execute(draftId));
+        var ex = await Assert.ThrowsAsync<DraftHasValidationErrorsException>(() => gate.Execute(WorkflowsDesignTestHost.TestOperationKey, draftId));
 
         Assert.Equal(draftId, ex.DraftId);
         Assert.Equal(2, ex.ErrorCount);
@@ -56,7 +56,7 @@ public sealed class PromotionGateTests
 
         using var scope = host.Services.CreateScope();
         var gate = scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>();
-        var versionId = await gate.Execute(draftId);
+        var versionId = await gate.Execute(WorkflowsDesignTestHost.TestOperationKey, draftId);
 
         Assert.NotNull(versionId);
         Assert.NotEmpty(versionId);
@@ -91,7 +91,7 @@ public sealed class PromotionGateTests
 
         using var scope = host.Services.CreateScope();
         var gate = scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>();
-        var ex = await Assert.ThrowsAsync<DraftHasValidationErrorsException>(() => gate.Execute(draftId));
+        var ex = await Assert.ThrowsAsync<DraftHasValidationErrorsException>(() => gate.Execute(WorkflowsDesignTestHost.TestOperationKey, draftId));
 
         Assert.Equal(1, ex.ErrorCount);
     }
@@ -100,6 +100,6 @@ public sealed class PromotionGateTests
     {
         await host.EnsureDefinition("wf-1");
         using var scope = host.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute("wf-1");
+        return await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, "wf-1");
     }
 }

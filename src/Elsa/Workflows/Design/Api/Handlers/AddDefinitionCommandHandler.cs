@@ -1,4 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
@@ -30,12 +31,21 @@ public sealed class AddDefinitionCommandHandler(
                 record.AdditionalProperties))
             .ToArray();
 
-        await addCommand.Execute(
+        var result = await addCommand.Execute(
+            new DesignOperationKey(command.OperationKey),
             WorkflowDefinition.From(definition),
             draftEntity,
             layout,
             cancellationToken);
 
-        return new WorkflowDefinitionDetailsView(definition.ToView(), WorkflowDraftView.From(draftEntity, layout), Versions: []);
+        var authoritativeDefinition = WorkflowDefinition.From(definition);
+        authoritativeDefinition.Id = result.DefinitionId;
+        var authoritativeDraft = WorkflowDefinitionDraft.From(draft);
+        authoritativeDraft.Id = result.DraftId;
+        authoritativeDraft.WorkflowDefinitionId = result.DefinitionId;
+        return new WorkflowDefinitionDetailsView(
+            authoritativeDefinition.ToView(),
+            WorkflowDraftView.From(authoritativeDraft, layout),
+            Versions: []);
     }
 }

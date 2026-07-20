@@ -19,7 +19,7 @@ public sealed class GroundworkTargetBaselineTests
     private const string ExpectedPlanFingerprint = "d8717f5ebca1755d8aa24473c37da3a2dc823f70d069ec38fa4de40ff2b012f8";
 
     [Fact]
-    public async Task Target_profile_matches_the_ratified_seventeen_green_eight_red_baseline()
+    public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()
     {
         var telemetry = new GroundworkBaselineTelemetry();
         var workflow = new WorkflowSuite(telemetry);
@@ -38,17 +38,17 @@ public sealed class GroundworkTargetBaselineTests
             Green(nameof(activity.Definition_and_initial_version_round_trip_across_restart), activity.Definition_and_initial_version_round_trip_across_restart),
             Green(nameof(activity.Versions_preserve_semver_identity_and_missing_outcomes), activity.Versions_preserve_semver_identity_and_missing_outcomes),
             Green(nameof(activity.Reconciliation_is_idempotent_after_restart), activity.Reconciliation_is_idempotent_after_restart),
-            Red(nameof(atomicity.Partial_staging_failure_leaves_no_visible_partial_aggregate), atomicity.Partial_staging_failure_leaves_no_visible_partial_aggregate, Atomicity),
-            Red(nameof(atomicity.Non_success_provider_decision_rolls_back_all_staged_parts), atomicity.Non_success_provider_decision_rolls_back_all_staged_parts, Atomicity),
-            Red(nameof(atomicity.Cancellation_rolls_back_and_propagates_cancellation), atomicity.Cancellation_rolls_back_and_propagates_cancellation, Atomicity),
-            Red(nameof(atomicity.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry), atomicity.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry, Atomicity),
-            Red(nameof(atomicity.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result), atomicity.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result, Atomicity),
-            Red(nameof(atomicity.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation), atomicity.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation, Atomicity),
-            Red(nameof(atomicity.Duplicate_delivery_does_not_duplicate_the_domain_outcome), atomicity.Duplicate_delivery_does_not_duplicate_the_domain_outcome, Atomicity),
+            Green(nameof(atomicity.Partial_staging_failure_leaves_no_visible_partial_aggregate), atomicity.Partial_staging_failure_leaves_no_visible_partial_aggregate),
+            Green(nameof(atomicity.Non_success_provider_decision_rolls_back_all_staged_parts), atomicity.Non_success_provider_decision_rolls_back_all_staged_parts),
+            Green(nameof(atomicity.Cancellation_rolls_back_and_propagates_cancellation), atomicity.Cancellation_rolls_back_and_propagates_cancellation),
+            Green(nameof(atomicity.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry), atomicity.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry),
+            Green(nameof(atomicity.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result), atomicity.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result),
+            Green(nameof(atomicity.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation), atomicity.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation),
+            Green(nameof(atomicity.Duplicate_delivery_does_not_duplicate_the_domain_outcome), atomicity.Duplicate_delivery_does_not_duplicate_the_domain_outcome),
             Green(nameof(isolation.Same_point_identities_resolve_only_their_own_scope), isolation.Same_point_identities_resolve_only_their_own_scope),
             Green(nameof(isolation.Foreign_point_reads_are_indistinguishable_from_missing_identities), isolation.Foreign_point_reads_are_indistinguishable_from_missing_identities),
             Green(nameof(isolation.Foreign_scope_point_writes_are_rejected_without_mutating_either_scope), isolation.Foreign_scope_point_writes_are_rejected_without_mutating_either_scope),
-            Red(nameof(isolation.Duplicate_workflow_and_activity_identities_are_rejected_within_a_scope), isolation.Duplicate_workflow_and_activity_identities_are_rejected_within_a_scope, DuplicateIdentity),
+            Green(nameof(isolation.Duplicate_workflow_and_activity_identities_are_rejected_within_a_scope), isolation.Duplicate_workflow_and_activity_identities_are_rejected_within_a_scope),
             Green(nameof(isolation.Reusable_activity_draft_rejects_a_stale_expected_revision_without_replacing_state_or_layout), isolation.Reusable_activity_draft_rejects_a_stale_expected_revision_without_replacing_state_or_layout),
             Green(nameof(isolation.Workflow_draft_updates_preserve_the_intentional_last_writer_wins_policy), isolation.Workflow_draft_updates_preserve_the_intentional_last_writer_wins_policy),
             Green(nameof(isolation.Single_scope_point_read_snapshot_survives_restart), isolation.Single_scope_point_read_snapshot_survives_restart),
@@ -56,8 +56,8 @@ public sealed class GroundworkTargetBaselineTests
         };
 
         Assert.Equal(25, catalog.Length);
-        Assert.Equal(17, catalog.Count(x => x.Expected == ExpectedOutcome.Green));
-        Assert.Equal(8, catalog.Count(x => x.Expected == ExpectedOutcome.Red));
+        Assert.Equal(25, catalog.Count(x => x.Expected == ExpectedOutcome.Green));
+        Assert.Equal(0, catalog.Count(x => x.Expected == ExpectedOutcome.Red));
 
         var observed = new List<ScenarioEvidence>(catalog.Length);
         foreach (var scenario in catalog)
@@ -105,7 +105,7 @@ public sealed class GroundworkTargetBaselineTests
              """);
 
         var evidence = new BaselineEvidence(
-            "2",
+            "3",
             DesignPersistenceContractProfiles.Target.Name,
             "sqlite",
             "groundwork",
@@ -115,8 +115,8 @@ public sealed class GroundworkTargetBaselineTests
             typeof(Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema).FullName!,
             telemetrySnapshot.TargetFingerprint,
             telemetrySnapshot.PlanFingerprint,
-            ExpectedGreenCount: 17,
-            ExpectedRedCount: 8,
+            ExpectedGreenCount: 25,
+            ExpectedRedCount: 0,
             telemetrySnapshot.RestartCount,
             telemetrySnapshot.BoundScopeCount,
             telemetrySnapshot.ReconciliationCandidateCount,
@@ -126,22 +126,8 @@ public sealed class GroundworkTargetBaselineTests
         WriteEvidenceIfRequested(evidence);
     }
 
-    private const string Atomicity = GroundworkTargetAtomicityUnavailableException.Classification;
-    private const string DuplicateIdentity = DesignDuplicateIdentityAcceptedException.Classification;
-
     private static Scenario Green(string name, Func<Task> execute) =>
         new(name, ExpectedOutcome.Green, execute, exception => exception is null ? null : "unexpected-failure");
-
-    private static Scenario Red(string name, Func<Task> execute, string classification) =>
-        new(name, ExpectedOutcome.Red, execute, exception =>
-        {
-            if (classification == Atomicity && exception is GroundworkTargetAtomicityUnavailableException)
-                return Atomicity;
-            if (classification == DuplicateIdentity
-                && exception is DesignDuplicateIdentityAcceptedException)
-                return DuplicateIdentity;
-            return null;
-        });
 
     private static void WriteEvidenceIfRequested(BaselineEvidence evidence)
     {

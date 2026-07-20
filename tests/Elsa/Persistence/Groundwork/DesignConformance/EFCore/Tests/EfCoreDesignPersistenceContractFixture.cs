@@ -123,6 +123,7 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
         using var operationCancellation = _faults.BeginOperation(cancellationToken);
 
         await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+            DesignPersistenceFixtureData.OperationKey($"ef-oracle-atomicity:{request.OperationKey.Value}"),
             definition,
             draft,
             DesignPersistenceFixtureData.WorkflowDraftLayout(),

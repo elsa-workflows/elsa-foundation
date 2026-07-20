@@ -127,7 +127,7 @@ public sealed class CloneDraftFromVersionTests
     {
         using var scope = host.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<ICloneDraftFromVersionCommand>()
-            .Execute(sourceVersionId);
+            .Execute(WorkflowsDesignTestHost.TestOperationKey, sourceVersionId);
     }
 
     private static async Task<(string versionId, string definitionId)> SeedVersion(

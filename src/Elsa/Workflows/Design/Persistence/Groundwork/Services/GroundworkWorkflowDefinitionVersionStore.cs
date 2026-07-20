@@ -1,4 +1,5 @@
 using Elsa.Persistence.Core.Queries;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
@@ -39,7 +40,9 @@ public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefiniti
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             boundedStore,
-            sessions);
+            sessions,
+            DesignPersistenceDomain.Workflow,
+            "workflow definition version");
         _definitions = definitions;
     }
 

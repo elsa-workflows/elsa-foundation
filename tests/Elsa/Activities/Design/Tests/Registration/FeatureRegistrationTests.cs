@@ -312,7 +312,7 @@ public sealed class FeatureRegistrationTests
         services.AddSingleton<IActivityDefinitionStore, Integration.ThrowingActivityDefinitionStore>();
         services.AddSingleton<IActivityDefinitionVersionStore, Integration.ThrowingActivityDefinitionVersionStore>();
         services.AddSingleton<IAddActivityDefinitionCommand, StubAddActivityDefinitionCommand>();
-        services.AddSingleton<IAddCommand<ActivityDefinitionVersion>, StubAddCommand<ActivityDefinitionVersion>>();
+        services.AddSingleton<IAddActivityDefinitionVersionCommand, StubAddActivityDefinitionVersionCommand>();
     }
 
     private sealed class StubEventPublisher : IInlineEventPublisher
@@ -332,11 +332,20 @@ public sealed class FeatureRegistrationTests
 
     private sealed class StubAddActivityDefinitionCommand : IAddActivityDefinitionCommand
     {
-        public Task Execute(ActivityDefinition workflowDefinition, ActivityDefinitionVersion version, CancellationToken cancellation) => Task.CompletedTask;
+        public Task<ActivityDefinitionCreated> Execute(
+            Elsa.Persistence.Core.Design.DesignOperationKey operationKey,
+            ActivityDefinition definition,
+            ActivityDefinitionVersion version,
+            CancellationToken cancellation) =>
+            Task.FromResult(new ActivityDefinitionCreated(definition.Id, version.Id, version.Version, version.Hash));
     }
 
-    private sealed class StubAddCommand<TEntity> : IAddCommand<TEntity> where TEntity : Elsa.Primitives.Entities.Entity
+    private sealed class StubAddActivityDefinitionVersionCommand : IAddActivityDefinitionVersionCommand
     {
-        public Task Add(TEntity entity, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<ActivityDefinitionVersionAdded> Execute(
+            Elsa.Persistence.Core.Design.DesignOperationKey operationKey,
+            ActivityDefinitionVersion version,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ActivityDefinitionVersionAdded(version.DefinitionId, version.Id, version.Version, version.Hash));
     }
 }

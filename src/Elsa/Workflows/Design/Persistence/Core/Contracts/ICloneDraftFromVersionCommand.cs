@@ -1,3 +1,5 @@
+using Elsa.Persistence.Core.Design;
+
 namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 /// <summary>
@@ -30,5 +32,8 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// </remarks>
 public interface ICloneDraftFromVersionCommand
 {
-    Task<string> Execute(string sourceVersionId, CancellationToken cancellationToken = default);
+    Task<string> Execute(
+        DesignOperationKey operationKey,
+        string sourceVersionId,
+        CancellationToken cancellationToken = default);
 }

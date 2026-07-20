@@ -5,6 +5,18 @@ namespace Elsa.Activities.Design.Persistence.Core.Constants;
 
 public static class ActivityDesignPersistenceLockKeys
 {
+    /// <summary>
+    /// Serializes creation of one tenant-scoped activity type key. Runtime lock name only — not a
+    /// persisted identifier.
+    /// </summary>
+    public static string DefinitionTypeKey(string? tenantId, string activityTypeKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeKey);
+        var material = $"{tenantId ?? "<global>"}\u001f{activityTypeKey}";
+        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)));
+        return $"elsa:activities:design:definition-key:{hash}";
+    }
+
     public static string DraftKey(string draftId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(draftId);

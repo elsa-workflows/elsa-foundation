@@ -47,6 +47,7 @@ public sealed class DraftLayoutUpsertTests
         {
             var add = scope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>();
             await add.Execute(
+                WorkflowsDesignTestHost.TestOperationKey,
                 new WorkflowDefinition { Id = "def-1", Name = "def-1" },
                 new WorkflowDefinitionDraft { Id = "draft-1", WorkflowDefinitionId = "def-1", State = EmptyState },
                 records,
@@ -80,7 +81,7 @@ public sealed class DraftLayoutUpsertTests
         using (var scope = host.Services.CreateScope())
         {
             var update = scope.ServiceProvider.GetRequiredService<IUpdateDraftCommand>();
-            await update.Execute(new UpdateDraftRequest("draft-1", EmptyState, submitted));
+            await update.Execute(WorkflowsDesignTestHost.TestOperationKey, new UpdateDraftRequest("draft-1", EmptyState, submitted));
         }
 
         await using var readCtx = host.CreateContext();
@@ -96,6 +97,7 @@ public sealed class DraftLayoutUpsertTests
         using var scope = host.Services.CreateScope();
         var add = scope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>();
         await add.Execute(
+            WorkflowsDesignTestHost.TestOperationKey,
             new WorkflowDefinition { Id = definitionId, Name = definitionId },
             new WorkflowDefinitionDraft { Id = draftId, WorkflowDefinitionId = definitionId, State = EmptyState },
             CancellationToken.None);

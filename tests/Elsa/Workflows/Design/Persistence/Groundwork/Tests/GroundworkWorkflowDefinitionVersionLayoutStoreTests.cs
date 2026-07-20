@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -91,12 +92,13 @@ public class GroundworkWorkflowDefinitionVersionLayoutStoreTests
             raw,
             new FirstResultBoundedDocumentStore(envelope));
 
-        var exception = await Assert.ThrowsAsync<GroundworkCorruptPayloadException>(
+        var exception = await Assert.ThrowsAsync<DesignPersistenceException>(
             () => store.FindByVersionIdAsync("bad-version"));
 
-        Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind, exception.DocumentKind);
-        Assert.Equal("bad-layout", exception.DocumentId);
-        Assert.Equal(typeof(WorkflowDefinitionVersionLayout), exception.EntityType);
+        Assert.Equal(DesignPersistenceDomain.Workflow, exception.Domain);
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, exception.FailureKind);
+        Assert.Equal("read", exception.Operation);
+        Assert.Equal("workflow definition version layout", exception.Context);
         Assert.IsType<JsonException>(exception.InnerException);
     }
 

@@ -166,6 +166,53 @@ An independent read-only review was clean after verifying terminal rollback obse
 Groundwork preview.77's normative `IDocumentUnitOfWork` contract. T031–T032 still own command
 adoption, so this slice does not advance any of the seven intentional-red atomicity rows.
 
+### T031–T035 design-command adoption evidence (2026-07-20)
+
+Every workflow definition/version/draft/promote/submit/delete command and both activity
+definition/version commands now route through the typed atomic facade. Public contracts require
+an explicit caller-stable `DesignOperationKey`; operation identity remains separate from the
+canonical request fingerprint, and generated definition/version/draft identities come back from
+the durable authoritative result. Source reconciliation uses separate materialization commands so
+API allocation policy does not leak into source-owned projection.
+
+Groundwork reads and writes now surface provider-neutral `DesignPersistenceException` outcomes
+with explicit Workflow/Activity and Provider/Serialization classifications. Only positively
+classified provider, corrupt-payload, marker/result corruption, or explicitly scoped
+serialization operations are mapped. Cancellation, readiness, validation, operation-key
+conflict/rejection, uncertain-commit, and other domain outcomes retain their existing contracts.
+Repeated provider composition resolves every public store/command, the shared atomic helper, and
+each manifest source exactly once per scope.
+
+The SQLite Target profile now executes all seven atomicity scenarios through a real scoped
+`GroundworkDesignAtomicWrite` over two admitted workflow document kinds plus the durable marker.
+Its test-only fault seam injects a throw after one staged write, a rejected provider decision,
+cancellation, and a post-durable lost acknowledgement. Exact replay uses the same logical
+operation identity in two storage scopes, proving that isolation comes from the storage boundary
+rather than from scope material embedded in the key. Evidence schema `3` advances the immutable
+catalog from `17/8` to `25` green and `0` intentional-red scenarios while retaining target
+fingerprint `b87b33275b2f9f52a8756eeb039bb8227a93083a6adacb95cd6a16c2445253d3`
+and plan fingerprint `d8717f5ebca1755d8aa24473c37da3a2dc823f70d069ec38fa4de40ff2b012f8`.
+
+The integrated pre-review candidate passed:
+
+- persistence core: `43/43`;
+- Groundwork querying: `126/126`;
+- workflow design Groundwork: `71/71`;
+- activity design Groundwork: `66/66`;
+- SQLite atomicity contract: `7/7`;
+- SQLite 25-scenario Target-profile baseline: `1/1`, with all `25` logical scenarios green;
+- shared design conformance: `96` passed and `1` intentional profile-shape skip;
+- temporary EF oracle: `17` passed and `10` explicitly inapplicable skips;
+- Groundwork unified host: `23/23`;
+- workflow design domain suite: `358/358`;
+- activity design domain suite: `490/490`;
+- workflow design API: `50/50`;
+- activity design API: `5/5`;
+- workflow publishing API: `381/381`;
+- full `Elsa.Server.slnx` Release build: `0` errors.
+
+T036 records the exact committed candidate and independent review after this evidence is committed.
+
 Ordinary CI writes no evidence file. Operators can opt in to the sanitized allowlisted JSON
 artifact without exposing connection strings, database paths, or scope identities:
 

@@ -14,14 +14,18 @@ using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Events;
+using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -32,6 +36,8 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
     private readonly string _directory = Path.Join(Path.GetTempPath(), $"elsa-design-groundwork-{Guid.NewGuid():N}");
     private readonly GroundworkBaselineTelemetry _telemetry;
     private readonly GroundworkTargetEventCapture _events;
+    private readonly GroundworkTargetAtomicityFaultController _atomicityFaults = new();
+    private readonly ConcurrentDictionary<string, byte> _publishedAtomicOutcomes = new(StringComparer.Ordinal);
     private ServiceProvider _services = null!;
 
     private SqliteDesignPersistenceContractFixture(GroundworkBaselineTelemetry telemetry)
@@ -123,17 +129,93 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
     public Task<IDesignAtomicityFaultLease> ArmAtomicityFaultAsync(
         DesignAtomicityFaultPlan plan,
         CancellationToken cancellationToken = default) =>
-        throw GroundworkTargetAtomicityUnavailableException.Create();
+        Task.FromResult<IDesignAtomicityFaultLease>(_atomicityFaults.Arm(plan, cancellationToken));
 
-    public Task<DesignAtomicityOperationResult> ExecuteAtomicityOperationAsync(
+    public async Task<DesignAtomicityOperationResult> ExecuteAtomicityOperationAsync(
         DesignAtomicityOperationRequest request,
-        CancellationToken cancellationToken = default) =>
-        throw GroundworkTargetAtomicityUnavailableException.Create();
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
 
-    public Task<DesignAtomicitySnapshot> ReadAtomicitySnapshotAsync(
+        using var scope = CreateScope(request.StorageScope);
+        var atomicWrite = scope.ServiceProvider.GetRequiredService<GroundworkDesignAtomicWrite>();
+        var identities = AtomicityDocumentIdentities.Create(request.StorageScope, request.OperationKey.Value);
+        using var operationCancellation = _atomicityFaults.BeginOperation(cancellationToken);
+        var atomicRequest = new GroundworkDesignAtomicWriteRequest(
+            new GroundworkDesignOperationIdentity(
+                AtomicityOperationKind,
+                request.OperationKey.Value),
+            request.CanonicalRequestFingerprint.Value,
+            [
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind
+            ]);
+
+        var result = await atomicWrite.ExecuteAsync(
+            atomicRequest,
+            async (context, token) =>
+            {
+                await context.SaveAsync(DefinitionSave(identities, request.StorageScope), token);
+                _atomicityFaults.ThrowIfTriggered(
+                    DesignAtomicityFaultPhase.AfterStagedWrite,
+                    operationCancellation);
+                await context.SaveAsync(VersionSave(identities, request.StorageScope), token);
+
+                return _atomicityFaults.ResolveProviderDecision(operationCancellation, token)
+                    ? GroundworkDesignAtomicWriteStageResult.Rejected()
+                    : GroundworkDesignAtomicWriteStageResult.Accepted(
+                        ResultFingerprint(request.StorageScope, request.CanonicalRequestFingerprint.Value, identities),
+                        ResultJson(request.StorageScope, request.CanonicalRequestFingerprint.Value, identities));
+            },
+            operationCancellation.Token);
+
+        var mapped = MapAtomicityResult(result);
+        if (mapped.Status is DesignAtomicityOperationStatus.Committed)
+            _publishedAtomicOutcomes.TryAdd(OutcomeKey(request.StorageScope, request.OperationKey.Value), 0);
+
+        _atomicityFaults.ThrowIfTriggered(
+            DesignAtomicityFaultPhase.AfterDurableDecision,
+            operationCancellation);
+        return mapped;
+    }
+
+    public async Task<DesignAtomicitySnapshot> ReadAtomicitySnapshotAsync(
         string storageScope,
-        CancellationToken cancellationToken = default) =>
-        throw GroundworkTargetAtomicityUnavailableException.Create();
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(storageScope);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using var scope = CreateScope(storageScope);
+        var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
+        var identities = AtomicityDocumentIdentities.Create(storageScope, AtomicitySnapshotOperationKey);
+        var definition = await store.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            identities.DefinitionId,
+            cancellationToken);
+        var version = await store.LoadAsync(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            identities.VersionId,
+            cancellationToken);
+        var marker = await store.LoadAsync(
+            GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind,
+            MarkerId(AtomicitySnapshotOperationKey),
+            cancellationToken);
+        var visibleParts = new[] { definition, version }.Count(x => x is not null);
+        var markerResultFingerprint = marker is null ? null : MarkerResultFingerprint(marker.ContentJson);
+
+        return new DesignAtomicitySnapshot(
+            VisibleAggregatePartCount: visibleParts,
+            ExpectedAggregatePartCount: 2,
+            DurableOutcomeCount: marker is null ? 0 : 1,
+            PublishedOutcomeCount: marker is not null && _publishedAtomicOutcomes.ContainsKey(
+                OutcomeKey(storageScope, AtomicitySnapshotOperationKey)) ? 1 : 0,
+            CanonicalAggregateStateFingerprint: definition is not null && version is not null
+                ? Digest($"{definition.ContentJson}\n{version.ContentJson}")
+                : null,
+            AuthoritativeDurableResultFingerprint: markerResultFingerprint);
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -184,6 +266,116 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
+    private static SaveDocumentRequest DefinitionSave(AtomicityDocumentIdentities identities, string storageScope)
+    {
+        var definition = new WorkflowDefinition
+        {
+            Id = identities.DefinitionId,
+            TenantId = storageScope,
+            Name = $"Atomicity probe {identities.Fingerprint}",
+            Description = "SQLite design-conformance atomicity probe",
+            CreatedAt = DesignPersistenceFixtureData.Epoch,
+            LastModifiedAt = DesignPersistenceFixtureData.Epoch
+        };
+        return GroundworkDocumentWriter.ToSaveRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            definition,
+            GroundworkDesignJson.Options) with { ExpectedVersion = 0 };
+    }
+
+    private static SaveDocumentRequest VersionSave(AtomicityDocumentIdentities identities, string storageScope)
+    {
+        var version = new WorkflowDefinitionVersion(identities.DefinitionId, "1.0.0")
+        {
+            Id = identities.VersionId,
+            TenantId = storageScope,
+            CreatedAt = DesignPersistenceFixtureData.Epoch,
+            LastModifiedAt = DesignPersistenceFixtureData.Epoch,
+            SourceCreatedAt = DesignPersistenceFixtureData.Epoch
+        };
+        return GroundworkDocumentWriter.ToSaveRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            version,
+            GroundworkDesignJson.Options) with { ExpectedVersion = 0 };
+    }
+
+    private static DesignAtomicityOperationResult MapAtomicityResult(GroundworkDesignAtomicWriteResult result) =>
+        result.Status switch
+        {
+            GroundworkDesignAtomicWriteStatus.Committed => new(
+                DesignAtomicityOperationStatus.Committed,
+                result.AuthoritativeResultFingerprint),
+            GroundworkDesignAtomicWriteStatus.Reconciled => new(
+                DesignAtomicityOperationStatus.Committed,
+                result.AuthoritativeResultFingerprint),
+            GroundworkDesignAtomicWriteStatus.Replayed => new(
+                DesignAtomicityOperationStatus.Replayed,
+                result.AuthoritativeResultFingerprint),
+            GroundworkDesignAtomicWriteStatus.Rejected => new(
+                DesignAtomicityOperationStatus.Rejected,
+                null),
+            GroundworkDesignAtomicWriteStatus.Conflict => new(
+                DesignAtomicityOperationStatus.Conflict,
+                null),
+            _ => throw new ArgumentOutOfRangeException(nameof(result), result.Status, null)
+        };
+
+    private static string OutcomeKey(string storageScope, string operationKey) => $"{storageScope}\n{operationKey}";
+
+    private static string ResultFingerprint(
+        string storageScope,
+        string requestFingerprint,
+        AtomicityDocumentIdentities identities) =>
+        Digest($"{storageScope}\n{requestFingerprint}\n{identities.DefinitionId}\n{identities.VersionId}");
+
+    private static string ResultJson(
+        string storageScope,
+        string requestFingerprint,
+        AtomicityDocumentIdentities identities) =>
+        JsonSerializer.Serialize(new
+        {
+            storageScope,
+            requestFingerprint,
+            identities.DefinitionId,
+            identities.VersionId
+        });
+
+    private static string MarkerId(string operationKey)
+    {
+        var framed = string.Concat(
+            "elsa-design-operation:v1|",
+            Encoding.UTF8.GetByteCount(AtomicityOperationKind), ":", AtomicityOperationKind, "|",
+            Encoding.UTF8.GetByteCount(operationKey), ":", operationKey);
+        return $"design-operation-v1-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(framed)))}";
+    }
+
+    private static string? MarkerResultFingerprint(string contentJson)
+    {
+        using var marker = JsonDocument.Parse(contentJson);
+        return marker.RootElement.TryGetProperty("authoritativeResultFingerprint", out var value)
+            ? value.GetString()
+            : null;
+    }
+
+    private static string Digest(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    private const string AtomicityOperationKind = "design-conformance.atomicity.v1";
+    private const string AtomicitySnapshotOperationKey = "design-atomicity-create-v1";
+
+    private sealed record AtomicityDocumentIdentities(string Fingerprint, string DefinitionId, string VersionId)
+    {
+        public static AtomicityDocumentIdentities Create(string storageScope, string operationKey)
+        {
+            var fingerprint = Digest($"{storageScope}\n{operationKey}")[..24];
+            return new(fingerprint, $"atomicity-definition-{fingerprint}", $"atomicity-version-{fingerprint}");
+        }
+    }
+
     private sealed class SequentialIdentityGenerator : IIdentityGenerator
     {
         private int _next;
@@ -200,16 +392,139 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
     }
 }
 
-internal sealed class GroundworkTargetAtomicityUnavailableException : InvalidOperationException
+internal sealed class GroundworkTargetAtomicityFaultController
 {
-    public const string Classification = "design-atomicity-operation-ledger-absent";
+    private GroundworkTargetAtomicityFaultLease? _armed;
 
-    private GroundworkTargetAtomicityUnavailableException()
-        : base("The target atomicity operation ledger and provider-neutral fault seam are not implemented.")
+    public IDesignAtomicityFaultLease Arm(DesignAtomicityFaultPlan plan, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(plan);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_armed is not null)
+            throw new InvalidOperationException("Only one SQLite atomicity fault may be armed at a time.");
+
+        _armed = new GroundworkTargetAtomicityFaultLease(this, plan);
+        return _armed;
     }
 
-    public static GroundworkTargetAtomicityUnavailableException Create() => new();
+    public GroundworkTargetAtomicityOperationCancellation BeginOperation(CancellationToken callerToken) =>
+        _armed?.BeginOperation(callerToken) ?? GroundworkTargetAtomicityOperationCancellation.PassThrough(callerToken);
+
+    public void ThrowIfTriggered(
+        DesignAtomicityFaultPhase phase,
+        GroundworkTargetAtomicityOperationCancellation operation)
+    {
+        var fault = _armed;
+        if (fault is null || fault.Plan.Phase != phase)
+            return;
+
+        if (!fault.TryTrigger())
+            return;
+
+        switch (fault.Plan.Action)
+        {
+            case DesignAtomicityFaultAction.Throw:
+                throw new InvalidOperationException($"Injected SQLite atomicity fault at '{phase}'.");
+            case DesignAtomicityFaultAction.Cancel:
+                operation.Cancel();
+                operation.Token.ThrowIfCancellationRequested();
+                break;
+            case DesignAtomicityFaultAction.ReturnNonSuccess:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(fault.Plan), fault.Plan.Action, null);
+        }
+    }
+
+    public bool ResolveProviderDecision(
+        GroundworkTargetAtomicityOperationCancellation operation,
+        CancellationToken cancellationToken)
+    {
+        var fault = _armed;
+        if (fault is null || fault.Plan.Phase != DesignAtomicityFaultPhase.BeforeProviderDecision)
+            return false;
+
+        if (!fault.TryTrigger())
+            return false;
+
+        switch (fault.Plan.Action)
+        {
+            case DesignAtomicityFaultAction.ReturnNonSuccess:
+                return true;
+            case DesignAtomicityFaultAction.Cancel:
+                operation.Cancel();
+                cancellationToken.ThrowIfCancellationRequested();
+                return false;
+            case DesignAtomicityFaultAction.Throw:
+                throw new InvalidOperationException("Injected SQLite atomicity provider-decision fault.");
+            default:
+                throw new ArgumentOutOfRangeException(nameof(fault.Plan), fault.Plan.Action, null);
+        }
+    }
+
+    private void Disarm(GroundworkTargetAtomicityFaultLease lease)
+    {
+        if (ReferenceEquals(_armed, lease))
+            _armed = null;
+    }
+
+    private sealed class GroundworkTargetAtomicityFaultLease(
+        GroundworkTargetAtomicityFaultController owner,
+        DesignAtomicityFaultPlan plan) : IDesignAtomicityFaultLease
+    {
+        private readonly CancellationTokenSource _cancellation = new();
+        private bool _disposed;
+
+        public DesignAtomicityFaultPlan Plan { get; } = plan;
+        public bool WasTriggered { get; private set; }
+
+        public bool TryTrigger()
+        {
+            if (WasTriggered)
+                return false;
+
+            WasTriggered = true;
+            return true;
+        }
+
+        public GroundworkTargetAtomicityOperationCancellation BeginOperation(CancellationToken callerToken) =>
+            new(CancellationTokenSource.CreateLinkedTokenSource(callerToken, _cancellation.Token), _cancellation);
+
+        public ValueTask DisposeAsync()
+        {
+            if (!_disposed)
+            {
+                _disposed = true;
+                owner.Disarm(this);
+                _cancellation.Dispose();
+            }
+
+            return ValueTask.CompletedTask;
+        }
+    }
+}
+
+internal sealed class GroundworkTargetAtomicityOperationCancellation : IDisposable
+{
+    private readonly CancellationTokenSource? _source;
+    private readonly CancellationTokenSource? _faultCancellation;
+
+    public GroundworkTargetAtomicityOperationCancellation(
+        CancellationTokenSource source,
+        CancellationTokenSource faultCancellation)
+    {
+        _source = source;
+        _faultCancellation = faultCancellation;
+        Token = source.Token;
+    }
+
+    private GroundworkTargetAtomicityOperationCancellation(CancellationToken token) => Token = token;
+
+    public CancellationToken Token { get; }
+
+    public static GroundworkTargetAtomicityOperationCancellation PassThrough(CancellationToken token) => new(token);
+    public void Cancel() => _faultCancellation?.Cancel();
+    public void Dispose() => _source?.Dispose();
 }
 
 internal sealed class GroundworkTargetEventCapture(GroundworkBaselineTelemetry telemetry)

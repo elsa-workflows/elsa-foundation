@@ -1,4 +1,5 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -12,8 +13,12 @@ public sealed class GroundworkCloneDraftFromVersionCommand(
     IPersistenceAccessContextAccessor accessContextAccessor)
     : ICloneDraftFromVersionCommand
 {
-    public async Task<string> Execute(string sourceVersionId, CancellationToken cancellationToken = default)
+    public async Task<string> Execute(
+        DesignOperationKey operationKey,
+        string sourceVersionId,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operationKey);
         var sourceVersion = await versionStore.FindByIdAsync(sourceVersionId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow definition version '{sourceVersionId}' not found");
         accessContextAccessor.Current.EnsureTenantScope(sourceVersion.TenantId);
@@ -30,6 +35,7 @@ public sealed class GroundworkCloneDraftFromVersionCommand(
             StrategyOptions: sourceState.StrategyOptions);
 
         return await createDraftCommand.Execute(
+            operationKey,
             sourceVersion.DefinitionId,
             copiedState,
             [.. (sourceLayout?.Records ?? [])],

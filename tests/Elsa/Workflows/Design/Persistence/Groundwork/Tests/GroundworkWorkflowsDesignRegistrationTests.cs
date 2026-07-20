@@ -56,7 +56,9 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkWorkflowDefinitionListProjectionStore>(sp.GetRequiredService<IWorkflowDefinitionListProjectionStore>());
         Assert.IsType<GroundworkWorkflowDefinitionVersionLayoutStore>(sp.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>());
         Assert.IsType<GroundworkAddWorkflowDefinitionCommand>(sp.GetRequiredService<IAddWorkflowDefinitionCommand>());
-        Assert.IsType<GroundworkAddWorkflowDefinitionVersionCommand>(sp.GetRequiredService<IAddCommand<WorkflowDefinitionVersion>>());
+        Assert.IsType<GroundworkMaterializeWorkflowDefinitionCommand>(sp.GetRequiredService<IMaterializeWorkflowDefinitionCommand>());
+        Assert.IsType<GroundworkAddWorkflowDefinitionVersionCommand>(sp.GetRequiredService<IAddWorkflowDefinitionVersionCommand>());
+        Assert.IsType<GroundworkMaterializeWorkflowDefinitionVersionCommand>(sp.GetRequiredService<IMaterializeWorkflowDefinitionVersionCommand>());
         Assert.IsType<GroundworkSaveWorkflowDefinitionCommand>(sp.GetRequiredService<ISaveWorkflowDefinitionCommand>());
         Assert.IsType<GroundworkDeleteWorkflowDefinitionPermanentlyCommand>(sp.GetRequiredService<IDeleteWorkflowDefinitionPermanentlyCommand>());
         Assert.IsType<GroundworkCreateDraftCommand>(sp.GetRequiredService<ICreateDraftCommand>());
@@ -95,6 +97,54 @@ public class GroundworkWorkflowsDesignRegistrationTests
 
         Assert.IsType<GroundworkWorkflowDefinitionStore>(resolved);
         Assert.Single(scope.ServiceProvider.GetServices<IWorkflowDefinitionStore>());
+    }
+
+    [Fact]
+    public void Repeated_registration_keeps_scoped_commands_and_stores_registered_once()
+    {
+        var services = new ServiceCollection();
+
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddGroundworkWorkflowsDesignStores();
+
+        foreach (var serviceType in new[]
+                 {
+                     typeof(IWorkflowDefinitionStore),
+                     typeof(IWorkflowDefinitionVersionStore),
+                     typeof(IWorkflowDefinitionDraftStore),
+                     typeof(IWorkflowDefinitionListProjectionStore),
+                     typeof(IWorkflowDefinitionVersionLayoutStore),
+                     typeof(IAddWorkflowDefinitionCommand),
+                     typeof(IMaterializeWorkflowDefinitionCommand),
+                     typeof(IAddWorkflowDefinitionVersionCommand),
+                     typeof(IMaterializeWorkflowDefinitionVersionCommand),
+                     typeof(ISaveWorkflowDefinitionCommand),
+                     typeof(IDeleteWorkflowDefinitionPermanentlyCommand),
+                     typeof(ICreateDraftCommand),
+                     typeof(IUpdateDraftCommand),
+                     typeof(IDiscardDraftCommand),
+                     typeof(IPromoteDraftToVersionCommand),
+                     typeof(ISubmitWorkflowDefinitionCommand),
+                     typeof(ICloneDraftFromVersionCommand),
+                 })
+        {
+            AssertScopedOnce(services, serviceType);
+        }
+
+        AssertScopedOnce(services, typeof(GroundworkDesignAtomicWrite));
+        Assert.Single(services.Where(x =>
+            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
+            x.ImplementationType == typeof(WorkflowsDesignGroundworkStorageManifestSource)));
+        Assert.Single(services.Where(x =>
+            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
+            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource)));
+    }
+
+    private static void AssertScopedOnce(IServiceCollection services, Type serviceType)
+    {
+        var registration = Assert.Single(services.Where(x => x.ServiceType == serviceType));
+
+        Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
     }
 
     private sealed class PriorStore : IWorkflowDefinitionStore

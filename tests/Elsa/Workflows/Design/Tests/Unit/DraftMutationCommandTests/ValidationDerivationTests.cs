@@ -99,6 +99,6 @@ public sealed class ValidationDerivationTests
         await host.EnsureDefinition(workflowDefinitionId);
         using var scope = host.Services.CreateScope();
         var command = scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>();
-        return await command.Execute(workflowDefinitionId);
+        return await command.Execute(WorkflowsDesignTestHost.TestOperationKey, workflowDefinitionId);
     }
 }

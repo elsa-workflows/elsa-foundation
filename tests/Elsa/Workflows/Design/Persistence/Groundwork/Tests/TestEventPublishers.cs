@@ -20,6 +20,8 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 public sealed class HookEventPublisher : IInlineEventPublisher, IDeferredEventPublisher
 {
     public Action<IEvent>? OnPublish { get; set; }
+    public List<IEvent> InlineEvents { get; } = [];
+    public List<IEvent> DeferredEvents { get; } = [];
 
     /// <summary>
     /// Convenience: install an <see cref="OnPublish"/> hook that contributes <paramref name="error"/>
@@ -33,9 +35,16 @@ public sealed class HookEventPublisher : IInlineEventPublisher, IDeferredEventPu
                 validating.Errors.Add(error);
         };
 
-    public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
+    Task IInlineEventPublisher.Publish(IEvent @event, CancellationToken cancellationToken) =>
+        Publish(@event, InlineEvents);
+
+    Task IDeferredEventPublisher.Publish(IEvent @event, CancellationToken cancellationToken) =>
+        Publish(@event, DeferredEvents);
+
+    private Task Publish(IEvent @event, ICollection<IEvent> events)
     {
         OnPublish?.Invoke(@event);
+        events.Add(@event);
         return Task.CompletedTask;
     }
 }

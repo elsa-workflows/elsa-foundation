@@ -1,6 +1,7 @@
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Entities;
 using Groundwork.Documents.Store;
@@ -22,13 +23,17 @@ public sealed class GroundworkNamedQueryAccess<TEntity> where TEntity : Entity
     private readonly IGroundworkStoreSessionFactory? _sessions;
     private readonly string _documentKind;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly DesignPersistenceDomain? _persistenceDomain;
+    private readonly string? _failureContext;
 
     public GroundworkNamedQueryAccess(
         IDocumentStore documentStore,
         string documentKind,
         JsonSerializerOptions jsonOptions,
         IBoundedDocumentStore? boundedDocumentStore = null,
-        IGroundworkStoreSessionFactory? sessions = null)
+        IGroundworkStoreSessionFactory? sessions = null,
+        DesignPersistenceDomain? persistenceDomain = null,
+        string? failureContext = null)
     {
         _documentStore = documentStore ?? throw new ArgumentNullException(nameof(documentStore));
         ArgumentException.ThrowIfNullOrWhiteSpace(documentKind);
@@ -38,6 +43,8 @@ public sealed class GroundworkNamedQueryAccess<TEntity> where TEntity : Entity
         _sessions = sessions;
         _documentKind = documentKind;
         _jsonOptions = jsonOptions;
+        _persistenceDomain = persistenceDomain;
+        _failureContext = failureContext;
     }
 
     /// <summary>
@@ -51,30 +58,42 @@ public sealed class GroundworkNamedQueryAccess<TEntity> where TEntity : Entity
         ArgumentNullException.ThrowIfNull(operation);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (acrossScopes)
+        try
         {
-            var sessions = _sessions ?? throw new GroundworkQueryReadinessException(
-                $"Across-scope named queries for '{_documentKind}' require an authorized Groundwork session factory.",
-                _documentKind,
-                null,
-                null,
-                typeof(TEntity));
-            return await sessions.ExecutePrivilegedAcrossScopesAsync(
-                (session, token) => new ValueTask<TResult>(
-                    operation(CreateExecutor(session), token)),
-                cancellationToken);
-        }
+            if (acrossScopes)
+            {
+                var sessions = _sessions ?? throw new GroundworkQueryReadinessException(
+                    $"Across-scope named queries for '{_documentKind}' require an authorized Groundwork session factory.",
+                    _documentKind,
+                    null,
+                    null,
+                    typeof(TEntity));
+                return await sessions.ExecutePrivilegedAcrossScopesAsync(
+                    (session, token) => new ValueTask<TResult>(
+                        operation(CreateExecutor(session), token)),
+                    cancellationToken);
+            }
 
-        var session = _sessions is null
-            ? new GroundworkStoreSession(
-                _documentStore.Access,
-                new GroundworkStoreSessionResources(
-                    _documentStore,
-                    _boundedDocumentStore ?? new UnavailableBoundedDocumentStore(
-                        _documentKind,
-                        typeof(TEntity))))
-            : await _sessions.CreateAsync(PersistenceAccessPolicy.Ordinary, cancellationToken);
-        return await ExecuteAndDisposeAsync(session, operation, cancellationToken);
+            var session = _sessions is null
+                ? new GroundworkStoreSession(
+                    _documentStore.Access,
+                    new GroundworkStoreSessionResources(
+                        _documentStore,
+                        _boundedDocumentStore ?? new UnavailableBoundedDocumentStore(
+                            _documentKind,
+                            typeof(TEntity))))
+                : await _sessions.CreateAsync(PersistenceAccessPolicy.Ordinary, cancellationToken);
+            return await ExecuteAndDisposeAsync(session, operation, cancellationToken);
+        }
+        catch (Exception exception) when (GroundworkDesignPersistenceBoundary.TryMap(
+                   exception,
+                   _persistenceDomain,
+                   "read",
+                   _failureContext,
+                   out var mapped))
+        {
+            throw mapped!;
+        }
     }
 
     private async Task<TResult> ExecuteAndDisposeAsync<TResult>(

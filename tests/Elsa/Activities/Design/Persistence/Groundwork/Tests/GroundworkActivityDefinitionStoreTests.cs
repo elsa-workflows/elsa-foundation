@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Exceptions;
 using Groundwork.Core.PhysicalStorage;
@@ -51,6 +52,31 @@ public class GroundworkActivityDefinitionStoreTests
             DisplayName = search ?? typeKey,
             Description = search,
         };
+
+    [Fact]
+    public async Task Provider_and_corrupt_payload_reads_surface_domain_scoped_failures()
+    {
+        var providerFailure = new IOException("activity-provider-read");
+        var raw = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        var store = new GroundworkActivityDefinitionStore(
+            new ThrowingDocumentStore(raw, GroundworkDocumentStoreOperation.Load, providerFailure));
+
+        var providerException = await Assert.ThrowsAsync<DesignPersistenceException>(() => store.GetAsync("activity-1"));
+        Assert.Equal(DesignPersistenceDomain.Activity, providerException.Domain);
+        Assert.Equal(DesignPersistenceFailureKind.Provider, providerException.FailureKind);
+        Assert.Same(providerFailure, providerException.InnerException);
+
+        await raw.SaveAsync(new SaveDocumentRequest(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            "corrupt-activity",
+            SchemaVersion,
+            "null"));
+        var corruptStore = new GroundworkActivityDefinitionStore(raw);
+
+        var corruptException = await Assert.ThrowsAsync<DesignPersistenceException>(() => corruptStore.GetAsync("corrupt-activity"));
+        Assert.Equal(DesignPersistenceDomain.Activity, corruptException.Domain);
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, corruptException.FailureKind);
+    }
 
     [Fact]
     public async Task Get_returns_definition_by_id()

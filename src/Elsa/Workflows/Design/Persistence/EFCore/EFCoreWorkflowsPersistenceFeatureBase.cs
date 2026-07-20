@@ -32,6 +32,9 @@ public abstract class EFCoreWorkflowsPersistenceFeatureBase : EFCorePersistenceS
         {
             services
                 .AddScoped<IAddWorkflowDefinitionCommand, AddWorkflowDefinition>()
+                .AddScoped<IAddWorkflowDefinitionVersionCommand, AddWorkflowDefinitionVersion>()
+                .AddScoped<IMaterializeWorkflowDefinitionCommand, MaterializeWorkflowDefinition>()
+                .AddScoped<IMaterializeWorkflowDefinitionVersionCommand, MaterializeWorkflowDefinitionVersion>()
                 .AddScoped<ISaveWorkflowDefinitionCommand, SaveWorkflowDefinition>()
                 .AddScoped<IDeleteWorkflowDefinitionPermanentlyCommand, DeleteWorkflowDefinitionPermanently>()
                 .AddScoped<ISubmitWorkflowDefinitionCommand, SubmitWorkflowDefinition>()

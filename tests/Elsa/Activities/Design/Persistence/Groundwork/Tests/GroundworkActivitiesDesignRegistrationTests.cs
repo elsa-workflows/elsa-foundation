@@ -66,7 +66,7 @@ public class GroundworkActivitiesDesignRegistrationTests
         Assert.IsType<GroundworkActivityDefinitionStore>(sp.GetRequiredService<IActivityDefinitionStore>());
         Assert.IsType<GroundworkActivityDefinitionVersionStore>(sp.GetRequiredService<IActivityDefinitionVersionStore>());
         Assert.IsType<GroundworkAddActivityDefinitionCommand>(sp.GetRequiredService<IAddActivityDefinitionCommand>());
-        Assert.IsType<GroundworkAddActivityDefinitionVersionCommand>(sp.GetRequiredService<IAddCommand<ActivityDefinitionVersion>>());
+        Assert.IsType<GroundworkAddActivityDefinitionVersionCommand>(sp.GetRequiredService<IAddActivityDefinitionVersionCommand>());
         Assert.IsType<ActivityDefinitionLookup>(sp.GetRequiredService<IActivityDefinitionLookup>());
         Assert.IsType<GroundworkActivityAvailabilitySettingsStore>(sp.GetRequiredService<IActivityAvailabilitySettingsStore>());
         var reusable = Assert.IsType<GroundworkReusableActivityStores>(sp.GetRequiredService<IActivityDefinitionAuthoringStore>());
@@ -107,6 +107,76 @@ public class GroundworkActivitiesDesignRegistrationTests
 
         Assert.IsType<GroundworkActivityDefinitionStore>(resolved);
         Assert.Single(scope.ServiceProvider.GetServices<IActivityDefinitionStore>());
+    }
+
+    [Fact]
+    public void Repeated_registration_keeps_shared_scoped_adapters_registered_once()
+    {
+        var services = new ServiceCollection();
+
+        services.AddGroundworkActivitiesDesignStores();
+        services.AddGroundworkActivitiesDesignStores();
+
+        foreach (var serviceType in new[]
+                 {
+                     typeof(IActivityDefinitionStore),
+                     typeof(IActivityDefinitionVersionStore),
+                     typeof(IAddActivityDefinitionCommand),
+                     typeof(IAddActivityDefinitionVersionCommand),
+                     typeof(IActivityDefinitionManagementProjectionStore),
+                     typeof(IActivityDefinitionAuthoringStore),
+                     typeof(IActivityDefinitionDraftStore),
+                     typeof(IActivityDefinitionVersionPublicationStore),
+                     typeof(IRecommendedActivityDefinitionPickerStore),
+                     typeof(IActivityDefinitionLayoutStore),
+                     typeof(IActivityDraftValidationStore),
+                     typeof(IActivityForkStore),
+                     typeof(IActivityDirectDependencyStore),
+                     typeof(IActivityDependencyProjectionStore),
+                     typeof(IActivityDependencyProjectionRebuilder),
+                     typeof(IActivityUpgradePlanStore),
+                     typeof(IActivityUpgradeApplyReceiptStore),
+                     typeof(ICreateActivityDefinitionCommand),
+                     typeof(ISaveActivityForkCandidateCommand),
+                     typeof(IPruneActivityForkCandidatesCommand),
+                     typeof(IApplyActivityForkCandidateCommand),
+                     typeof(IUpdateActivityDefinitionPresentationCommand),
+                     typeof(ICreateActivityDraftCommand),
+                     typeof(IUpdateActivityDraftPresentationCommand),
+                     typeof(ICreateActivityDraftConflictCopyCommand),
+                     typeof(IReplaceActivityDraftCommand),
+                     typeof(IApplyActivityContractProposalCommand),
+                     typeof(IDiscardActivityDraftCommand),
+                     typeof(IStoreActivityDraftValidationCommand),
+                     typeof(IChangeActivityVersionLifecycleCommand),
+                     typeof(ISetActivityDefinitionRecommendationCommand),
+                 })
+        {
+            AssertScopedOnce(services, serviceType);
+        }
+
+        AssertScopedOnce<GroundworkDesignAtomicWrite>(services);
+        AssertScopedOnce<GroundworkReusableActivityStores>(services);
+        AssertScopedOnce<GroundworkActivityManagementProjectionWriter>(services);
+        AssertScopedOnce<GroundworkActivityManagementProjectionRetention>(services);
+        AssertScopedOnce<GroundworkActivityDependencyProjection>(services);
+        AssertScopedOnce<GroundworkActivityUpgradePlanStore>(services);
+        Assert.Single(services.Where(x =>
+            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
+            x.ImplementationType == typeof(ActivitiesDesignGroundworkStorageManifestSource)));
+        Assert.Single(services.Where(x =>
+            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
+            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource)));
+    }
+
+    private static void AssertScopedOnce<TService>(IServiceCollection services)
+        => AssertScopedOnce(services, typeof(TService));
+
+    private static void AssertScopedOnce(IServiceCollection services, Type serviceType)
+    {
+        var registration = Assert.Single(services.Where(x => x.ServiceType == serviceType));
+
+        Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
     }
 
     private sealed class PriorStore : IActivityDefinitionStore
