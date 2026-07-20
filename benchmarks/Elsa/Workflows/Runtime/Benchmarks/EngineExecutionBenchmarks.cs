@@ -93,8 +93,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     /// that interaction is documented by the default-cap diagnostic run, not baked into the A/B numbers.
     /// </summary>
     private const int HotLoopSegmentCap = 256;
-    private const string WriteLineNodeId = "node-writeline";
-    private const string FlowchartNodeId = "node-flowchart";
+    private const string WriteLineNodeId = BenchmarkWorkflows.WriteLineNodeId;
 
     // A comfortably large deterministic activity-execution id pool; the graphs here consume far fewer
     // (2-node: 2; hot loop: HotLoopLength + 1 for the flowchart root).
@@ -547,95 +546,19 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     }
 
     // ---- Workflow graphs ------------------------------------------------------------------------------------
+    // Thin forwarders onto the shared BenchmarkWorkflows builders (see that type); kept as named locals so the
+    // [Fact] bodies and their documentation above read unchanged.
 
-    /// <summary>Builds the 2-node executable: a Flowchart root whose single start node is a WriteLine leaf.</summary>
-    private static WorkflowExecutable BuildFlowchartWithWriteLine()
-    {
-        var writeLine = NewWriteLineNode(WriteLineNodeId, "Hello from the Elsa engine benchmark.");
-        return NewFlowchart([writeLine], connections: [], startNodeId: WriteLineNodeId);
-    }
+    private static WorkflowExecutable BuildFlowchartWithWriteLine() => BenchmarkWorkflows.TwoNode();
 
-    /// <summary>
-    /// Builds the hot-loop executable: a Flowchart whose start node begins a straight-line chain of
-    /// <see cref="HotLoopLength"/> leaf activities (leaf shape chosen by <paramref name="makeLeaf"/>), each
-    /// wired to the next by a default-outcome connection.
-    /// </summary>
-    private static WorkflowExecutable BuildHotLoopFlowchart(Func<int, ExecutableNode> makeLeaf)
-    {
-        var leaves = Enumerable.Range(0, HotLoopLength).Select(makeLeaf).ToArray();
-        var connections = Enumerable.Range(0, HotLoopLength - 1)
-            .Select(index => new FlowchartConnection(
-                new FlowchartEndpoint(leaves[index].ExecutableNodeId),
-                new FlowchartEndpoint(leaves[index + 1].ExecutableNodeId)))
-            .ToArray();
-        return NewFlowchart(leaves, connections, startNodeId: leaves[0].ExecutableNodeId);
-    }
+    private static WorkflowExecutable BuildHotLoopFlowchart(Func<int, ExecutableNode> makeLeaf) =>
+        BenchmarkWorkflows.HotLoop(HotLoopLength, makeLeaf);
 
-    private static WorkflowExecutable NewFlowchart(
-        IReadOnlyCollection<ExecutableNode> leaves,
-        IReadOnlyCollection<FlowchartConnection> connections,
-        string startNodeId)
-    {
-        var root = new ExecutableNode(
-            executableNodeId: FlowchartNodeId,
-            authoredActivityId: "authored-flowchart",
-            activityType: typeof(FlowchartActivity).FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "elsa.flowchart",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, leaves)],
-            structure: new ExecutableActivityStructure(
-                FlowchartActivity.StructureKind,
-                FlowchartActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(
-                    new FlowchartStructure(connections: connections, startNodeId: startNodeId))));
+    private static string LoopNodeId(int index) => BenchmarkWorkflows.LoopNodeId(index);
 
-        return WorkflowExecutionHarness.NewExecutable(root);
-    }
+    private static ExecutableNode NewPureLoopNode(int index) => BenchmarkWorkflows.NoOpLeaf(index);
 
-    private static string LoopNodeId(int index) => $"node-loop-{index}";
-
-    /// <summary>A pure benchmark-local leaf (<see cref="NoOpStep"/>) for the hot-loop body: no external effect.</summary>
-    private static ExecutableNode NewPureLoopNode(int index) =>
-        new(
-            executableNodeId: LoopNodeId(index),
-            authoredActivityId: $"authored-{LoopNodeId(index)}",
-            activityType: typeof(NoOpStep).FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "clr",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>());
-
-    /// <summary>
-    /// A real <see cref="WriteLine"/> CLR leaf with a literal <c>text</c> input. The activity contract is left
-    /// unset so the harness reflects it from the CLR type (its established path for non-probe CLR nodes).
-    /// </summary>
-    private static ExecutableNode NewWriteLineNode(string nodeId, string text)
-    {
-        var stringType = new ValueTypeDescriptor("String");
-        var binding = new RuntimeInputBinding(
-            inputKey: "text",
-            targetType: stringType,
-            effectivePolicy: ValueProtectionPolicy.InstanceInline,
-            source: RuntimeInputBindingSource.Literal,
-            literal: ValueEnvelope.Inline(
-                stringType,
-                JsonSerializer.SerializeToElement(text),
-                ValueProtectionPolicy.InstanceInline));
-
-        return new ExecutableNode(
-            executableNodeId: nodeId,
-            authoredActivityId: $"authored-{nodeId}",
-            activityType: typeof(WriteLine).FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "clr",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding> { ["text"] = binding },
-            metadata: new Dictionary<string, string>());
-    }
+    private static ExecutableNode NewWriteLineNode(string nodeId, string text) => BenchmarkWorkflows.NewWriteLineNode(nodeId, text);
 
     /// <summary>A run measurement: per-iteration wall times, per-iteration commit counts (durable only), and executable-read counts.</summary>
     private sealed record Measurement(IReadOnlyList<double> Walls, IReadOnlyList<long> Commits, IReadOnlyList<long> Reads);
