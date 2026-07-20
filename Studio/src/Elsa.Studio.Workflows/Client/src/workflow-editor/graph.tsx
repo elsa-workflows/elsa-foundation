@@ -8,9 +8,10 @@ import { renderActivityIcon } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowSlotNavigationContext } from "./contexts";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
+import { BpmnElementNode } from "../bpmn/BpmnElementNode";
 import type { WorkflowEdge } from "./editorTypes";
 
-export const nodeTypes = { workflowActivity: WorkflowActivityNode };
+export const nodeTypes = { workflowActivity: WorkflowActivityNode, bpmnElement: BpmnElementNode };
 export const edgeTypes = { workflow: WorkflowFlowEdge };
 
 export function WorkflowActivityNode({ id, data, selected }: NodeProps) {

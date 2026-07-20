@@ -10,6 +10,7 @@ import {
   type ScopeFrame
 } from "../workflowAdapter";
 import { useScopedVariableAnalysis } from "../api/workflowDesign";
+import { findBpmnElement } from "../bpmn/bpmnAdapter";
 import { supportsScopedVariables } from "../scopedVariables";
 import { indexActivityDescriptors, resolveActivityDescriptor } from "./editorHelpers";
 import type { WorkflowNodeAvailabilityLookup } from "./editorTypes";
@@ -48,10 +49,23 @@ export function useWorkflowScope({
   const designerSupport = getActivityDesignerSupport(scopeOwner, scopeOwner ? catalogByVersion.get(scopeOwner.activityVersionId) : undefined);
   const isUnsupportedDesigner = !!scopeOwner && designerSupport === "unsupported";
   const scope = useMemo(() => isUnsupportedDesigner ? null : resolveScope(root, frames, catalogByVersion), [root, frames, catalogByVersion, isUnsupportedDesigner]);
+  // BPMN canvases select ELEMENTS (the canvas node id is the elementId). An activity-bearing element
+  // (task/subprocess) resolves to its bound ActivityNode so the ordinary activity inspector applies; a
+  // pure structure element (event/gateway) has no ActivityNode and is inspected via
+  // `selectedBpmnElement` instead.
+  const selectedBpmnElement = useMemo(
+    () => scope?.slot.mode === "bpmn" ? findBpmnElement(scope.owner, selectedNodeId) : null,
+    [scope, selectedNodeId]
+  );
   const selectedNode = useMemo(() => {
     if (isUnsupportedDesigner && scopeOwner?.nodeId === selectedNodeId) return scopeOwner;
+    if (selectedBpmnElement) {
+      return selectedBpmnElement.childNodeId
+        ? scope?.slot.activities.find(activity => activity.nodeId === selectedBpmnElement.childNodeId) ?? null
+        : null;
+    }
     return scope?.slot.activities.find(activity => activity.nodeId === selectedNodeId) ?? null;
-  }, [isUnsupportedDesigner, scope, scopeOwner, selectedNodeId]);
+  }, [isUnsupportedDesigner, scope, scopeOwner, selectedBpmnElement, selectedNodeId]);
   const selectedDescriptor = useMemo(
     () => selectedNode ? resolveActivityDescriptor(selectedNode, catalogByVersion, descriptorsByType) : null,
     [catalogByVersion, descriptorsByType, selectedNode]
@@ -88,6 +102,9 @@ export function useWorkflowScope({
   // as a flowchart even when the owner's primary slot is a sequence. The only gate is that the owner isn't
   // an opaque/unsupported designer (which suppresses the mirrored canvas entirely).
   const isFlowchartDesigner = !isUnsupportedDesigner && scope?.slot.mode === "flowchart";
+  // BPMN canvases share the free-connection editing model with flowcharts but render structure
+  // elements (events/gateways) alongside activity-bound tasks; see the bpmn adapter.
+  const isBpmnDesigner = !isUnsupportedDesigner && scope?.slot.mode === "bpmn";
   const canAddActivitiesToCanvas = !root || !isUnsupportedDesigner;
 
   return {
@@ -107,6 +124,8 @@ export function useWorkflowScope({
     inspectedSupportsScopedVariables,
     scopedVariableAnalysis,
     isFlowchartDesigner,
+    isBpmnDesigner,
+    selectedBpmnElement,
     canAddActivitiesToCanvas
   };
 }
