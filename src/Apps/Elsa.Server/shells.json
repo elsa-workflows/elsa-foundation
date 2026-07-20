@@ -152,11 +152,13 @@
           "Tasks": {},
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
+          "WorkflowDesignValidations": {},
           "WorkflowsDashboard": {},
           "WorkflowsRuntimeAttention": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeHttp": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Coalesced",

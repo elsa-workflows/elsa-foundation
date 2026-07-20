@@ -18,6 +18,7 @@
           "Secrets": {},
           "SecretsApi": {},
           "WorkflowsDesignApi": {},
+          "WorkflowDesignValidations": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphDesign": {},
           "ActivitiesGraphRuntime": {},
@@ -36,6 +37,7 @@
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Coalesced",
             "MaxSegmentCheckpoints": 50
