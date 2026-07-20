@@ -82,9 +82,28 @@ dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.
   -c Release --no-restore
 ```
 
-Exact-head verification was run on 2026-07-20 after the page-limit remediation:
-`57/57` querying tests passed. The build emitted only existing Groundwork legacy-API
-transition warnings in the shared test substrate and legacy compatibility tests.
+#### Stable-candidate verification
+
+The tested source/test candidate is
+`17a5a937c3180b843f38ed53a6669ff8cdb8c913`. Verification completed at
+`2026-07-20T08:06:58+02:00` (CEST, `Europe/Amsterdam`) with these exact results:
+
+- `dotnet test tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj -c Release --no-restore`
+  — passed `58/58` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
+  — passed `618/618` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj -c Release --no-build`
+  — passed `354/354` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj -c Release --no-build`
+  — passed `490/490` (`0` failed, `0` skipped).
+- `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-build`
+  — passed `251/251` (`0` failed, `0` skipped).
+
+The architecture ratchet required `dotnet restore Elsa.Server.slnx` before its exact
+`--no-build` command so the repository-wide package scan had complete assets. The
+documentation-only follow-up changes only this quickstart. The commands above were
+not rerun on that documentation commit; their evidence remains attached to the tested
+source/test candidate SHA.
 
 ## 3. Run the four-provider black-box suite
 
@@ -188,10 +207,8 @@ dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --
 
 Expected: all preserved domain-objective tests pass; core-provider boundaries and the design-EF removal ratchet pass.
 
-Exact-head verification on 2026-07-20 after the page-limit remediation recorded
-`354/354` workflow-design tests and `490/490` activity-design tests passing. The
-activity-design build emitted only existing obsolete
-`ActivityDefinitionVersion.DescriptorType` warnings.
+The exact stable-candidate results for all three commands are recorded in
+[Stable-candidate verification](#stable-candidate-verification).
 
 ## 8. Audit design EF removal
 
