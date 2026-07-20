@@ -156,7 +156,7 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
         cancellationToken.ThrowIfCancellationRequested();
 
         using var scope = CreateScope(request.StorageScope);
-        var atomicWrite = scope.ServiceProvider.GetRequiredService<GroundworkDesignAtomicWrite>();
+        var atomicWrite = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
         var identities = AtomicityDocumentIdentities.Create(request.StorageScope, request.OperationKey.Value);
         using var operationCancellation = _atomicityFaults.BeginOperation(cancellationToken);
         var atomicRequest = new GroundworkDesignAtomicWriteRequest(

@@ -17,6 +17,7 @@ using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -119,6 +120,21 @@ public class GroundworkWorkflowsDesignRegistrationTests
     {
         using var provider = BuildProvider(services =>
             services.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
+        using var scope = provider.CreateScope();
+
+        var resolved = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
+
+        Assert.IsType<PriorDesignAtomicWriter>(resolved);
+        Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
+    }
+
+    [Fact]
+    public void Groundwork_registration_allows_one_post_composition_design_atomic_writer_replacement()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.Replace(ServiceDescriptor.Scoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
+        using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 
         var resolved = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();

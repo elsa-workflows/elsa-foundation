@@ -732,7 +732,7 @@ public class GroundworkStorageCompositionTests
             x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource)));
         Assert.Equal(ServiceLifetime.Scoped, source.Lifetime);
         var helper = Assert.Single(services.Where(x =>
-            x.ServiceType == typeof(GroundworkDesignAtomicWrite) &&
+            x.ServiceType == typeof(IDesignAtomicWriter) &&
             x.ImplementationType == typeof(GroundworkDesignAtomicWrite)));
         Assert.Equal(ServiceLifetime.Scoped, helper.Lifetime);
     }

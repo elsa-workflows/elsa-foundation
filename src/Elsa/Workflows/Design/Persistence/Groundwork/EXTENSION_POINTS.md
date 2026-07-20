@@ -37,8 +37,12 @@ table before adding the Groundwork implementations, preserving the one-active-pr
 | `IDesignAtomicWriter` | `GroundworkDesignAtomicWrite` |
 | `IDraftOriginator` | `DraftOriginator` |
 
-These feature-owned replacement seams use `TryAddScoped`, so a host or inheriting feature can
-register one specialization before composing the Groundwork workflow-design stores.
+These feature-owned replacement seams use `TryAddScoped`, so a host can register one
+specialization before composing the Groundwork workflow-design stores. An inheriting feature that
+specializes after its base registration must use
+`services.Replace(ServiceDescriptor.Scoped<IContract, Implementation>())`; direct `AddScoped`
+would create an invalid duplicate replacement registration. Both pre-composition preservation and
+post-composition replacement are covered by registration tests.
 `IDesignAtomicWriter` owns replay-safe multi-document mutation, durable operation markers, and
 uncertain-commit reconciliation for both workflow and activity design commands.
 
