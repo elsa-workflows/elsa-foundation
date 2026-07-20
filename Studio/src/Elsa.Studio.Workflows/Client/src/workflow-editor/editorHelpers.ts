@@ -107,6 +107,10 @@ function getCompositionKind(activity: ActivityCatalogItem | undefined) {
     return "sequence";
   }
 
+  if (isBpmnActivity(activity)) {
+    return "bpmn";
+  }
+
   return null;
 }
 
@@ -125,6 +129,11 @@ function isFlowchartActivity(activity: ActivityCatalogItem) {
 function isSequenceActivity(activity: ActivityCatalogItem) {
   const displayName = getActivityDisplay(activity);
   return displayName === "Sequence" || activity.activityTypeKey.endsWith(".Sequence");
+}
+
+function isBpmnActivity(activity: ActivityCatalogItem) {
+  const displayName = getActivityDisplay(activity);
+  return displayName === "BPMN Process" || activity.activityTypeKey.endsWith(".BpmnProcess");
 }
 
 export function isActivityBrowsable(activity: ActivityCatalogItem) {

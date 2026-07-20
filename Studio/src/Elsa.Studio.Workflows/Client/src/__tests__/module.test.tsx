@@ -1444,8 +1444,8 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Create"));
     await waitForText(container, "Create Workflow");
     const rootCards = dialog(container).querySelectorAll(".wf-root-card");
-    expect(rootCards).toHaveLength(2);
-    expect(Array.from(rootCards).map(card => card.querySelector(".wf-root-card-title")?.textContent)).toEqual(["Flowchart", "Sequence"]);
+    expect(rootCards).toHaveLength(3);
+    expect(Array.from(rootCards).map(card => card.querySelector(".wf-root-card-title")?.textContent)).toEqual(["Flowchart", "Sequence", "BPMN"]);
 
     await fill(inputByLabel(container, "Display name"), "Customer onboarding");
     await fill(textareaByLabel(container, "Description"), "Creates the first customer workflow.");

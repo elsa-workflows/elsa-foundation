@@ -6491,3 +6491,39 @@ html[data-theme="brass-instrument"] .wf-chip {
 .wf-bpmn-shape-palette-item:hover {
   border-color: var(--wf-accent);
 }
+
+.wf-bpmn-flow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.wf-bpmn-flow-list > span {
+  color: var(--wf-text-muted, var(--wf-text));
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.wf-bpmn-flow-row {
+  display: grid;
+  align-items: center;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.wf-bpmn-flow-target {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-bpmn-flow-default {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  gap: 4px;
+}

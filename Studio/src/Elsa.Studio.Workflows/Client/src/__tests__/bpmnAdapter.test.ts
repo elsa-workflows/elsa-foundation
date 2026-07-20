@@ -203,3 +203,61 @@ describe("bpmn canvas node factories", () => {
     expect(node.data.element.elementType).toBe("subProcess");
   });
 });
+
+describe("bpmn flow editing helpers", async () => {
+  const { updateBpmnFlow, updateBpmnDefaultFlow } = await import("../bpmn/bpmnAdapter");
+
+  it("updateBpmnFlow patches condition outcome without touching endpoints", () => {
+    const owner = {
+      nodeId: "node-bpmn",
+      activityVersionId: "bpmn@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.bpmn.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          elements: [{ elementId: "gw", elementType: "exclusiveGateway" }, { elementId: "end", elementType: "endEvent" }],
+          sequenceFlows: [{ flowId: "flow-1", sourceRef: "gw", targetRef: "end" }],
+          activities: []
+        }
+      }
+    };
+    const next = updateBpmnFlow(owner, "flow-1", { conditionOutcome: "Approved", sourceRef: "hacked" });
+    const flows = next.structure?.payload.sequenceFlows as Record<string, unknown>[];
+    expect(flows[0].conditionOutcome).toBe("Approved");
+    expect(flows[0].sourceRef).toBe("gw");
+  });
+
+  it("updateBpmnDefaultFlow marks one default, clears siblings and its condition, and stamps defaultFlowId", () => {
+    const owner = {
+      nodeId: "node-bpmn",
+      activityVersionId: "bpmn@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.bpmn.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          elements: [{ elementId: "gw", elementType: "exclusiveGateway" }, { elementId: "a", elementType: "endEvent" }, { elementId: "b", elementType: "endEvent" }],
+          sequenceFlows: [
+            { flowId: "flow-a", sourceRef: "gw", targetRef: "a", isDefault: true },
+            { flowId: "flow-b", sourceRef: "gw", targetRef: "b", conditionOutcome: "B" }
+          ],
+          activities: []
+        }
+      }
+    };
+    const next = updateBpmnDefaultFlow(owner, "gw", "flow-b");
+    const flows = next.structure?.payload.sequenceFlows as Record<string, unknown>[];
+    expect(flows[0].isDefault).toBe(false);
+    expect(flows[1].isDefault).toBe(true);
+    expect(flows[1].conditionOutcome).toBeNull();
+    const elements = next.structure?.payload.elements as Record<string, unknown>[];
+    expect(elements[0].defaultFlowId).toBe("flow-b");
+
+    const cleared = updateBpmnDefaultFlow(next, "gw", null);
+    const clearedFlows = cleared.structure?.payload.sequenceFlows as Record<string, unknown>[];
+    expect(clearedFlows.every(flow => flow.isDefault !== true)).toBe(true);
+  });
+});
