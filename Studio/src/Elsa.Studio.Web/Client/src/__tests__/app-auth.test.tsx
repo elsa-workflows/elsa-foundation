@@ -121,6 +121,20 @@ describe("studio auth mounting", () => {
     expect(headers.get("X-Elsa-Module-Management-Key")).toBeNull();
   });
 
+  it("fails closed when the authenticated Studio context cannot refresh a missing bearer", async () => {
+    const fetchMock = vi.fn(async () => new Response("<html>sign in</html>", { status: 200, headers: { "content-type": "text/html" } }));
+    const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
+    manager.getAccessToken = vi.fn(async () => null);
+    manager.refresh = vi.fn(async (): Promise<AuthSession> => ({ status: "anonymous", roles: [], permissions: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const context = createStudioEndpointContext("https://foundation.example/", manager);
+
+    await expect(context.http.getJson("/_elsa/workflows/dashboard/runs")).rejects.toMatchObject({ status: 401 });
+
+    expect(manager.refresh).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("falls back to the plain SDK client (no auth) and sends no management-key header when no provider is configured", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
