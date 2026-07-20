@@ -177,6 +177,13 @@ public abstract class ActivityDesignContractSuite
             CanonicalSnapshot(version),
             versionDefinition is null ? null : CanonicalSnapshot(versionDefinition));
 
+    /// <summary>Produces the deterministic activity result hash used by provider-oracle evidence.</summary>
+    public static string CanonicalResultHash(
+        ActivityDefinition definition,
+        ActivityDefinitionVersion version,
+        ActivityDefinition? versionDefinition = null) =>
+        DesignPersistenceFixtureData.ResultHash(CanonicalSnapshot(definition, version, versionDefinition));
+
     private static ActivityDefinitionSnapshot CanonicalSnapshot(ActivityDefinition definition) =>
         new(
             definition.Id,

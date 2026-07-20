@@ -98,7 +98,9 @@ public abstract class WorkflowDesignContractSuite
             Assert.NotNull(versionLayout);
             Assert.Equal(versionId, latest!.Id);
             Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, version!.DefinitionId);
-            Assert.Equal(DesignPersistenceFixtureData.WorkflowState().RootActivity, version.State.RootActivity);
+            Assert.Equal(
+                DesignPersistenceFixtureData.ResultHash(DesignPersistenceFixtureData.WorkflowState().RootActivity),
+                DesignPersistenceFixtureData.ResultHash(version.State.RootActivity));
             Assert.Equal(layout, versionLayout!.Records);
             Assert.Null(await versions.FindByIdAsync("missing-workflow-version"));
             Assert.Null(await layouts.FindByVersionIdAsync("missing-workflow-version"));
@@ -139,7 +141,9 @@ public abstract class WorkflowDesignContractSuite
 
         Assert.NotNull(draft);
         Assert.Equal(promotedVersionId, draft!.Draft.SourceVersionId);
-        Assert.Equal(updatedState.RootActivity, draft.Draft.State.RootActivity);
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(updatedState.RootActivity),
+            DesignPersistenceFixtureData.ResultHash(draft.Draft.State.RootActivity));
         Assert.Equal(updatedLayout, draft.Layout);
 
         var events = await fixture.ReadObservedEventsAsync();
@@ -152,11 +156,15 @@ public abstract class WorkflowDesignContractSuite
         var updatedValidation = Assert.Single(validations.Where(x => x.Draft.Id == DesignPersistenceFixtureData.WorkflowDraftId));
         var clonedValidation = Assert.Single(validations.Where(x => x.Draft.Id == cloneId));
         Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, updatedValidation.Draft.WorkflowDefinitionId);
-        Assert.Equal(updatedState, updatedValidation.Draft.State);
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(updatedState),
+            DesignPersistenceFixtureData.ResultHash(updatedValidation.Draft.State));
         Assert.False(updatedValidation.HasErrors);
         Assert.Empty(updatedValidation.Errors);
         Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, clonedValidation.Draft.WorkflowDefinitionId);
-        Assert.Equal(updatedState, clonedValidation.Draft.State);
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(updatedState),
+            DesignPersistenceFixtureData.ResultHash(clonedValidation.Draft.State));
         Assert.False(clonedValidation.HasErrors);
         Assert.Empty(clonedValidation.Errors);
 
@@ -167,14 +175,18 @@ public abstract class WorkflowDesignContractSuite
         var invalidValidation = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<OnDraftValidated>());
         Assert.Equal(cloneId, invalidValidation.Draft.Id);
         Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, invalidValidation.Draft.WorkflowDefinitionId);
-        Assert.Equal(WorkflowDefinitionState.Empty, invalidValidation.Draft.State);
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(WorkflowDefinitionState.Empty),
+            DesignPersistenceFixtureData.ResultHash(invalidValidation.Draft.State));
         Assert.True(invalidValidation.HasErrors);
         Assert.Contains(invalidValidation.Errors, error => error.Type == "RootActivity/Missing");
 
         var invalidDraft = await readScope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>()
             .FindWithLayoutByIdAsync(cloneId);
         Assert.NotNull(invalidDraft);
-        Assert.Equal(WorkflowDefinitionState.Empty, invalidDraft!.Draft.State);
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(WorkflowDefinitionState.Empty),
+            DesignPersistenceFixtureData.ResultHash(invalidDraft!.Draft.State));
         Assert.Empty(invalidDraft.Layout);
     }
 
@@ -218,8 +230,8 @@ public abstract class WorkflowDesignContractSuite
         Assert.Equal(definitionId, draft!.Draft.WorkflowDefinitionId);
         Assert.Equal(definitionId, version!.DefinitionId);
         Assert.Equal("1.0.0", version.Version);
-        Assert.Equal(state, draft.Draft.State);
-        Assert.Equal(state, version.State);
+        Assert.Equal(DesignPersistenceFixtureData.ResultHash(state), DesignPersistenceFixtureData.ResultHash(draft.Draft.State));
+        Assert.Equal(DesignPersistenceFixtureData.ResultHash(state), DesignPersistenceFixtureData.ResultHash(version.State));
         Assert.Empty(draft.Layout);
         Assert.Empty(layout!.Records);
     }
@@ -374,6 +386,13 @@ public abstract class WorkflowDesignContractSuite
                 draft.State),
             new WorkflowDefinitionDraftLayoutSnapshot(CanonicalLayout(layout)));
 
+    /// <summary>Produces the deterministic workflow-draft result hash used by provider-oracle evidence.</summary>
+    public static string CanonicalDraftResultHash(
+        WorkflowDefinition definition,
+        WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout) =>
+        DesignPersistenceFixtureData.ResultHash(CanonicalSnapshot(definition, draft, layout));
+
     internal static WorkflowVersionSnapshot CanonicalSnapshot(
         WorkflowDefinitionVersion version,
         WorkflowDefinitionVersionLayout layout) =>
@@ -396,6 +415,12 @@ public abstract class WorkflowDesignContractSuite
                 layout.TenantId,
                 layout.WorkflowDefinitionVersionId,
                 CanonicalLayout(layout.Records)));
+
+    /// <summary>Produces the deterministic workflow-version result hash used by provider-oracle evidence.</summary>
+    public static string CanonicalVersionResultHash(
+        WorkflowDefinitionVersion version,
+        WorkflowDefinitionVersionLayout layout) =>
+        DesignPersistenceFixtureData.ResultHash(CanonicalSnapshot(version, layout));
 
     private static IReadOnlyList<DesignMetadataSnapshot> CanonicalLayout(
         IEnumerable<DesignMetadataRecord> layout) =>

@@ -431,6 +431,7 @@
     <Project Path="tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/EFCore.Tests/Elsa.Persistence.Groundwork.DesignConformance.EFCore.Tests.csproj" />
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/Composition/">

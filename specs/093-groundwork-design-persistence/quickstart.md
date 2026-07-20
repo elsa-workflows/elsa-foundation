@@ -65,12 +65,8 @@ discard, and reconciliation identities and outcomes, including empty validation 
 restart snapshots contain the authored workflow state and activity descriptor, and assert each
 against the deterministic input before comparing restart hashes.
 
-Concrete EF-oracle and provider fixtures remain T025 and T051–T054 work. Therefore no
-provider-parity or oracle result hashes are claimed at this checkpoint. The focused Release project
-restore/build/test completed with `96` passed tests and one intentional legacy-EF N/A skip (`97` total);
-the skipped probe proves that N/A profile evaluation happens before fixture creation. Executable provider
-scenarios remain pending a
-concrete fixture inheritance target. The T023 harness validates the contract shape only. T025's executable
+The shared-contract scaffold completed with `96` passed tests and one intentional legacy-EF N/A skip
+(`97` total); the skipped probe proves that N/A profile evaluation happens before fixture creation. T025's executable
 `LegacyEfOracle` profile runs exactly five of these rows: partial-staging failure, cancellation, same-scope
 duplicate identities, workflow-draft last-writer-wins, and the single-scope restart snapshot. Its ten explicit
 N/A rows are provider non-success decision; acknowledgement loss, exact replay, key-reuse conflict, and duplicate
@@ -80,11 +76,23 @@ nonempty reason per N/A row. Test-only EF fault injection is permitted for parti
 T025 must not add a production EF operation ledger, scope boundary, or reusable-draft OCC shim. T033/T035's
 exception-taxonomy deferral remains unchanged.
 
-No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads
-that define them are T021–T024. T025 runs the EF SQLite oracle, records the canonical
-behavior hashes, and then records the existing Groundwork red baseline. The test
-inventory hashes in this baseline are not substitutes for result hashes, so T004 remains
-open; it is deliberately not a Phase-2 gate.
+### T004/T025 EF SQLite oracle baseline (2026-07-20)
+
+`Elsa.Persistence.Groundwork.DesignConformance.EFCore.Tests` is a separate provider-leaf test project.
+It applies both existing SQLite migration chains to one temporary file database, recreates the composed
+service provider on restart, uses public design commands/stores plus the real activity reconciler, and
+keeps its partial-staging/cancellation faults in a test-only EF `SaveChangesInterceptor`. Its four
+inherited contract suites completed with `15` passed and `10` intentional LegacyEfOracle N/A skips
+(`25` total); the provider leaf also contains the focused evidence test below.
+
+The deterministic canonical result hashes captured after restart are:
+
+- workflow draft: `8614e1ffb739e65f08a47c60da7c33891fff5f88c32ef5d88eed7b9fd5800369`
+- workflow version: `3fcb29139ffcac2c0fc3d5450d4e2682d3b504b86f31326b16b17f4712ceb9d4`
+- activity definition/version: `8bdeb707ea537e6357a8327b2d7404deb23af9e370c65a03f2e2883b182bf3f1`
+
+These are workload behavior hashes, not test-inventory hashes; the evidence test pins them. The Groundwork
+Target-profile intentional-red baseline remains pending its separate provider fixture and is not claimed here.
 
 ## 1. Restore and build
 
