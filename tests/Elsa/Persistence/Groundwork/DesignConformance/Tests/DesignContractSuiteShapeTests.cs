@@ -155,6 +155,11 @@ public class DesignContractSuiteShapeTests
                 nameof(DesignIsolationAndRestartContractSuite.Workflow_draft_updates_preserve_the_intentional_last_writer_wins_policy)
             }.Order(StringComparer.Ordinal),
             scenarioNames);
+        Assert.All(
+            typeof(DesignIsolationAndRestartContractSuite)
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+                .Where(method => method.GetCustomAttribute<FactAttribute>() is not null),
+            method => Assert.NotNull(method.GetCustomAttribute<SkippableFactAttribute>()));
     }
 
     [Fact]
@@ -179,6 +184,11 @@ public class DesignContractSuiteShapeTests
                 nameof(DesignAtomicityContractSuite.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation)
             }.Order(StringComparer.Ordinal),
             scenarioNames);
+        Assert.All(
+            typeof(DesignAtomicityContractSuite)
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+                .Where(method => method.GetCustomAttribute<FactAttribute>() is not null),
+            method => Assert.NotNull(method.GetCustomAttribute<SkippableFactAttribute>()));
     }
 
     [Fact]

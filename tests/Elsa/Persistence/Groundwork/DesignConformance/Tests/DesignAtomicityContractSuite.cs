@@ -16,7 +16,7 @@ public abstract class DesignAtomicityContractSuite
     protected abstract Task<IDesignPersistenceContractFixture> CreateFixtureAsync(CancellationToken cancellationToken = default);
     protected abstract DesignPersistenceContractProfile ContractProfile { get; }
 
-    [Fact]
+    [SkippableFact]
     public async Task Partial_staging_failure_leaves_no_visible_partial_aggregate()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityPartialStagingFailure);
@@ -34,7 +34,7 @@ public abstract class DesignAtomicityContractSuite
         await AssertNoDurableOutcomeAsync(fixture);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Non_success_provider_decision_rolls_back_all_staged_parts()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityNonSuccessProviderDecision);
@@ -52,7 +52,7 @@ public abstract class DesignAtomicityContractSuite
         await AssertNoDurableOutcomeAsync(fixture);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Cancellation_rolls_back_and_propagates_cancellation()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityCancellation);
@@ -69,7 +69,7 @@ public abstract class DesignAtomicityContractSuite
         await AssertNoDurableOutcomeAsync(fixture);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityLostAcknowledgement);
@@ -96,7 +96,7 @@ public abstract class DesignAtomicityContractSuite
         Assert.Equal(durable.AuthoritativeDurableResultFingerprint, afterReplay.AuthoritativeDurableResultFingerprint);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityExactReplay);
@@ -121,7 +121,7 @@ public abstract class DesignAtomicityContractSuite
         await AssertCommittedExactlyOnceAsync(fixture, DesignPersistenceFixtureData.ScopeB);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityKeyReuseConflict);
@@ -140,7 +140,7 @@ public abstract class DesignAtomicityContractSuite
         Assert.Equal(beforeConflict.AuthoritativeDurableResultFingerprint, afterConflict.AuthoritativeDurableResultFingerprint);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Duplicate_delivery_does_not_duplicate_the_domain_outcome()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityDuplicateDelivery);

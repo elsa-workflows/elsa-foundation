@@ -22,7 +22,7 @@ public abstract class DesignIsolationAndRestartContractSuite
     protected abstract Task<IDesignPersistenceContractFixture> CreateFixtureAsync(CancellationToken cancellationToken = default);
     protected abstract DesignPersistenceContractProfile ContractProfile { get; }
 
-    [Fact]
+    [SkippableFact]
     public async Task Same_point_identities_resolve_only_their_own_scope()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationSamePointIdentities);
@@ -48,7 +48,7 @@ public abstract class DesignIsolationAndRestartContractSuite
         Assert.Equal(DesignPersistenceFixtureData.ScopeB, observedB.VersionLayout.Version.TenantId);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Foreign_point_reads_are_indistinguishable_from_missing_identities()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationForeignPointReads);
@@ -88,7 +88,7 @@ public abstract class DesignIsolationAndRestartContractSuite
             () => activityVersions.GetAsync(DesignPersistenceFixtureData.ActivityVersionId));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Foreign_scope_point_writes_are_rejected_without_mutating_either_scope()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationForeignScopeWrites);
@@ -129,7 +129,7 @@ public abstract class DesignIsolationAndRestartContractSuite
             .FindAsync(new ActivityDefinitionFilter { Id = "foreign-activity-write" }));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Duplicate_workflow_and_activity_identities_are_rejected_within_a_scope()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationDuplicateIdentities);
@@ -175,7 +175,7 @@ public abstract class DesignIsolationAndRestartContractSuite
         Assert.Single(versions, version => version.Version == "1.0.0");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Reusable_activity_draft_rejects_a_stale_expected_revision_without_replacing_state_or_layout()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationReusableActivityDraftOcc);
@@ -219,7 +219,7 @@ public abstract class DesignIsolationAndRestartContractSuite
         Assert.Equal("committed-node", Assert.Single(layout.Records).NodeId);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Workflow_draft_updates_preserve_the_intentional_last_writer_wins_policy()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationWorkflowDraftLastWriterWins);
@@ -248,7 +248,7 @@ public abstract class DesignIsolationAndRestartContractSuite
         Assert.Equal("last-writer", Assert.Single(persisted.Layout).NodeId);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Scope_bound_point_read_snapshots_survive_restart()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationScopeBoundRestart);

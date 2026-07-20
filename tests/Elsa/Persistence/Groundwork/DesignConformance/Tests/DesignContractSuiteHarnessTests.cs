@@ -34,6 +34,14 @@ public class DesignContractSuiteHarnessTests
         await suite.Duplicate_delivery_does_not_duplicate_the_domain_outcome();
     }
 
+    [SkippableFact]
+    public async Task Legacy_ef_oracle_non_applicable_atomicity_row_skips_before_fixture_creation()
+    {
+        var suite = new LegacyEfOracleAtomicityContractSuite();
+
+        await suite.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry();
+    }
+
     private sealed class HarnessActivityDesignContractSuite : ActivityDesignContractSuite
     {
         public HarnessFixture? Fixture { get; private set; }
@@ -51,6 +59,14 @@ public class DesignContractSuiteHarnessTests
 
         protected override Task<IDesignPersistenceContractFixture> CreateFixtureAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IDesignPersistenceContractFixture>(new AtomicityHarnessFixture());
+    }
+
+    private sealed class LegacyEfOracleAtomicityContractSuite : DesignAtomicityContractSuite
+    {
+        protected override DesignPersistenceContractProfile ContractProfile => DesignPersistenceContractProfiles.LegacyEfOracle;
+
+        protected override Task<IDesignPersistenceContractFixture> CreateFixtureAsync(CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("A non-applicable legacy-EF row must skip before it creates a fixture.");
     }
 
     private sealed class HarnessFixture : IDesignPersistenceContractFixture
