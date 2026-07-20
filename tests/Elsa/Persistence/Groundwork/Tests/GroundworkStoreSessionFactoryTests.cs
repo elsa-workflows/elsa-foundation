@@ -123,6 +123,43 @@ public sealed class GroundworkStoreSessionFactoryTests
     }
 
     [Fact]
+    public async Task Ordinary_global_session_is_explicit_bound_and_rejects_privileged_contexts()
+    {
+        var accessor = new MutableAccessContextAccessor(
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var source = new RecordingSessionSource();
+        var factory = new GroundworkStoreSessionFactory(accessor, source);
+
+        await using var session = await factory.CreateOrdinaryGlobalAsync();
+
+        Assert.Equal(DocumentStoreAccess.Global, session.Access);
+        Assert.Equal([DocumentStoreAccess.Global], source.Accesses);
+
+        accessor.Current = PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("repair"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => factory.CreateOrdinaryGlobalAsync().AsTask());
+        Assert.Single(source.Accesses);
+    }
+
+    [Fact]
+    public async Task Ordinary_global_session_rejects_mismatched_resources_and_disposes_the_lease()
+    {
+        var accessor = new MutableAccessContextAccessor(
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var mismatchedLease = new TrackingLease();
+        var source = new RecordingSessionSource
+        {
+            CreateResources = _ => Resources(
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-a")),
+                mismatchedLease)
+        };
+        var factory = new GroundworkStoreSessionFactory(accessor, source);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => factory.CreateOrdinaryGlobalAsync().AsTask());
+
+        Assert.True(mismatchedLease.IsDisposed);
+    }
+
+    [Fact]
     public async Task Factory_rejects_cancellation_before_opening_a_source_and_remains_reusable()
     {
         var accessor = new MutableAccessContextAccessor(

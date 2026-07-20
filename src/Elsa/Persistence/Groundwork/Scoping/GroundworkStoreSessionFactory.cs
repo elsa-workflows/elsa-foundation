@@ -1,5 +1,6 @@
 using System.Runtime.ExceptionServices;
 using Elsa.Persistence.Core;
+using Groundwork.Documents.Scoping;
 
 namespace Elsa.Persistence.Groundwork.Scoping;
 
@@ -17,6 +18,28 @@ public sealed class GroundworkStoreSessionFactory(
         var context = accessContextAccessor.Current
             ?? throw new InvalidOperationException("The current persistence access context is unavailable.");
         var access = GroundworkPersistenceAccessMapper.Map(context, requiredPolicy);
+        return await CreateForAccessAsync(access, cancellationToken);
+    }
+
+    public async ValueTask<GroundworkStoreSession> CreateOrdinaryGlobalAsync(
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var context = accessContextAccessor.Current
+            ?? throw new InvalidOperationException("The current persistence access context is unavailable.");
+        if (context.AccessPolicy != PersistenceAccessPolicy.Ordinary)
+        {
+            throw new InvalidOperationException(
+                "An explicit ordinary global session cannot be acquired from a privileged persistence context.");
+        }
+
+        return await CreateForAccessAsync(DocumentStoreAccess.Global, cancellationToken);
+    }
+
+    private async ValueTask<GroundworkStoreSession> CreateForAccessAsync(
+        DocumentStoreAccess access,
+        CancellationToken cancellationToken)
+    {
         GroundworkStoreSessionResources? resources = null;
         try
         {

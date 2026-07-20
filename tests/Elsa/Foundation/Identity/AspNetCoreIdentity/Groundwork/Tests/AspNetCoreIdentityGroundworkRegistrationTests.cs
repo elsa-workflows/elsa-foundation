@@ -176,6 +176,10 @@ public sealed class AspNetCoreIdentityGroundworkRegistrationTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public ValueTask<GroundworkStoreSession> CreateOrdinaryGlobalAsync(
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public ValueTask<TResult> ExecutePrivilegedAsync<TResult>(
             Func<GroundworkStoreSession, CancellationToken, ValueTask<TResult>> operation,
             CancellationToken cancellationToken = default) =>

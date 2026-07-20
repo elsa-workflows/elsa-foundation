@@ -1,19 +1,22 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Core.Models;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Studio.Preferences.Persistence.Groundwork;
 
-public sealed class GroundworkStudioPreferenceStore(IDocumentStore store) : IStudioPreferenceStore
+public sealed class GroundworkStudioPreferenceStore(IGroundworkStoreSessionFactory sessions) : IStudioPreferenceStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async ValueTask<StudioPreferenceDocument?> FindAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default)
     {
-        var envelope = await store.LoadAsync(StudioPreferencesStorageManifest.DocumentKind, CreateId(key), cancellationToken);
+        var envelope = await WithGlobalStoreAsync(
+            (store, token) => store.LoadAsync(StudioPreferencesStorageManifest.DocumentKind, CreateId(key), token),
+            cancellationToken);
         return envelope is null ? null : Map(envelope);
     }
 
@@ -42,13 +45,15 @@ public sealed class GroundworkStudioPreferenceStore(IDocumentStore store) : IStu
             write.SchemaVersion,
             write.Value.Clone(),
             updatedAt);
-        var result = await store.SaveAsync(
-            new SaveDocumentRequest(
-                StudioPreferencesStorageManifest.DocumentKind,
-                CreateId(key),
-                StudioPreferencesStorageManifest.SchemaVersion,
-                JsonSerializer.Serialize(value, JsonOptions),
-                ExpectedVersion: expectedVersion),
+        var result = await WithGlobalStoreAsync(
+            (store, token) => store.SaveAsync(
+                new SaveDocumentRequest(
+                    StudioPreferencesStorageManifest.DocumentKind,
+                    CreateId(key),
+                    StudioPreferencesStorageManifest.SchemaVersion,
+                    JsonSerializer.Serialize(value, JsonOptions),
+                    ExpectedVersion: expectedVersion),
+                token),
             cancellationToken);
 
         return result.Status switch
@@ -64,6 +69,15 @@ public sealed class GroundworkStudioPreferenceStore(IDocumentStore store) : IStu
         var stored = JsonSerializer.Deserialize<StoredPreference>(envelope.ContentJson, JsonOptions)
                      ?? throw new JsonException("The Studio preference document is empty.");
         return new(stored.Namespace, stored.SchemaVersion, $"rev-{envelope.Version}", stored.Value.Clone(), stored.UpdatedAt);
+    }
+
+    private async ValueTask<TResult> WithGlobalStoreAsync<TResult>(
+        Func<IDocumentStore, CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        await using var session = await sessions.CreateOrdinaryGlobalAsync(cancellationToken);
+        return await operation(session.DocumentStore, cancellationToken);
     }
 
     private static string CreateId(StudioPreferenceKey key)
