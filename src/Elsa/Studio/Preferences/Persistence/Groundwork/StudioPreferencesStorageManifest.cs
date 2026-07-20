@@ -21,7 +21,10 @@ public static class StudioPreferencesStorageManifest
                     StorageIntent.PortableDocument(),
                     LifecyclePolicy.Mutable,
                     IdentityPolicy.StringId(),
-                    TenancyPolicy.Scoped,
+                    // Studio preferences are isolated by the validated subject, tenant, host, and namespace
+                    // carried in the preference key and persisted document. They are therefore stored in the
+                    // explicit global document session rather than inheriting an ambient tenant partition.
+                    TenancyPolicy.Global,
                     ConcurrencyPolicy.Optimistic(),
                     SerializationPolicy.Json(),
                     [],
