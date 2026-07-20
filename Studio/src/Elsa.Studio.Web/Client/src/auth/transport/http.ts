@@ -73,6 +73,7 @@ async function refreshOnce(requestUrl: string, auth: Pick<AuthProviderManager, "
 
   const refresh = auth.refresh()
     .then(session => session.status === "authenticated")
+    .catch(() => false)
     .finally(() => {
       refreshesByOrigin.delete(key);
       if (refreshesByOrigin.size === 0) {
@@ -91,6 +92,7 @@ async function withBearerToken(
   refreshIfMissing = true
 ): Promise<{ init: RequestInit; hasAuthorization: boolean }> {
   const headers = new Headers(init?.headers);
+  removeBlankAuthorization(headers);
   let token = await auth.getAccessToken();
   if (!token && !hasNonEmptyAuthorization(headers) && refreshIfMissing && options.refreshOnUnauthorized !== false) {
     await refreshOnce(requestUrl, auth);
@@ -116,4 +118,10 @@ function authenticationRequiredResponse() {
 
 function hasNonEmptyAuthorization(headers: Headers) {
   return !!headers.get("Authorization")?.trim();
+}
+
+function removeBlankAuthorization(headers: Headers) {
+  if (!hasNonEmptyAuthorization(headers)) {
+    headers.delete("Authorization");
+  }
 }
