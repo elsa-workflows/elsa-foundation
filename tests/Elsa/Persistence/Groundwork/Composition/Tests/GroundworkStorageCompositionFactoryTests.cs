@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Secrets.Persistence.Groundwork;
@@ -294,7 +295,8 @@ public sealed class GroundworkStorageCompositionFactoryTests
         protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
         [
             typeof(WorkflowsDesignGroundworkStorageManifestSource),
-            typeof(ActivitiesDesignGroundworkStorageManifestSource)
+            typeof(ActivitiesDesignGroundworkStorageManifestSource),
+            typeof(GroundworkDesignAtomicWriteStorageManifestSource)
         ];
 
         protected override GroundworkStorageNamingPolicyOptions CreateStorageNamingPolicy() =>

@@ -8,6 +8,8 @@ using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Groundwork.Documents.Store;
@@ -88,6 +90,10 @@ public class GroundworkActivitiesDesignRegistrationTests
         Assert.Same(reusable, sp.GetRequiredService<IDiscardActivityDraftCommand>());
         Assert.Same(reusable, sp.GetRequiredService<IStoreActivityDraftValidationCommand>());
         Assert.Same(reusable, sp.GetRequiredService<IChangeActivityVersionLifecycleCommand>());
+        Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<GroundworkDesignAtomicWrite>());
+        Assert.Single(
+            sp.GetServices<IGroundworkStorageManifestSource>(),
+            source => source is GroundworkDesignAtomicWriteStorageManifestSource);
     }
 
     [Fact]

@@ -15,8 +15,8 @@ public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
     private const string ExpectedGroundworkVersion = "0.0.1-preview.77";
-    private const string ExpectedTargetFingerprint = "0a2a6a806c1b857c6343b3c97180ef9f2ccb7a6b9c9727019551f7dc6101bc8f";
-    private const string ExpectedPlanFingerprint = "66064ba3e4ccb946b8afbf814b46fb84ea00fbce190c8994fab0590f3e8e2808";
+    private const string ExpectedTargetFingerprint = "b87b33275b2f9f52a8756eeb039bb8227a93083a6adacb95cd6a16c2445253d3";
+    private const string ExpectedPlanFingerprint = "d8717f5ebca1755d8aa24473c37da3a2dc823f70d069ec38fa4de40ff2b012f8";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_seventeen_green_eight_red_baseline()
@@ -87,8 +87,22 @@ public sealed class GroundworkTargetBaselineTests
         Assert.Equal(ExpectedGroundworkVersion, PackageVersion(typeof(IDocumentStore).Assembly));
         Assert.Equal(ExpectedGroundworkVersion, packageFamilyVersion);
         Assert.Equal(ExpectedGroundworkVersion, schemaToolVersion);
-        Assert.Equal(ExpectedTargetFingerprint, telemetrySnapshot.TargetFingerprint);
-        Assert.Equal(ExpectedPlanFingerprint, telemetrySnapshot.PlanFingerprint);
+        Assert.True(
+            string.Equals(
+                ExpectedTargetFingerprint,
+                telemetrySnapshot.TargetFingerprint,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                ExpectedPlanFingerprint,
+                telemetrySnapshot.PlanFingerprint,
+                StringComparison.Ordinal),
+            $"""
+             Groundwork schema fingerprint drift.
+             Expected target: {ExpectedTargetFingerprint}
+             Observed target: {telemetrySnapshot.TargetFingerprint}
+             Expected plan:   {ExpectedPlanFingerprint}
+             Observed plan:   {telemetrySnapshot.PlanFingerprint}
+             """);
 
         var evidence = new BaselineEvidence(
             "2",
