@@ -4,13 +4,14 @@ import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2,
 import type { StudioAiContributionApi, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
-import { getExecutable } from "../api/runtime";
+import { getExecutable, getExecutableInputSources } from "../api/runtime";
 import type {
   ActivityCatalogItem,
   DesignMetadataRecord,
   WorkflowDefinitionSummary,
   WorkflowDraft,
   WorkflowExecutableDetails,
+  WorkflowExecutableInputSources,
   WorkflowExecutableReference
 } from "../workflowTypes";
 import {
@@ -26,6 +27,7 @@ import {
   type WorkflowNodeData
 } from "../workflowAdapter";
 import { buildExecutableActivityGraph, ghostNodeLabel, isGhostFact, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
+import { ConversionPlanCaption } from "../ConversionPlanCaption";
 import { formatDate } from "../workflowFormatting";
 import { WfErrorCard } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
@@ -61,6 +63,7 @@ import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 interface ExecutableInspectionData {
   detail: WorkflowExecutableDetails;
   activityCatalog: ActivityCatalogItem[];
+  inputSources: WorkflowExecutableInputSources | null;
 }
 
 type SourceDefinitionState =
@@ -113,7 +116,14 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
         getExecutable(context, artifactId, sourceReferenceId),
         listActivities(context)
       ]);
-      setData({ detail, activityCatalog: activityCatalog.activities });
+      // The summary tree redacts binding source details (literals, pinned conversion plans); the
+      // compiled bindings live behind the input-sources endpoint. Best effort — inspection still
+      // renders from the summary tree when the endpoint or permission is unavailable.
+      const chosenReferenceId = detail.chosenReference?.sourceReferenceId ?? null;
+      const inputSources = chosenReferenceId
+        ? await getExecutableInputSources(context, detail.artifactId, chosenReferenceId).catch(() => null)
+        : null;
+      setData({ detail, activityCatalog: activityCatalog.activities, inputSources });
       setFrames([]);
       setSelectedNodeId(null);
       setState("ready");
@@ -167,7 +177,13 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
   }, [chosenReference?.definitionId, context]);
 
   const graph = useMemo(
-    () => data ? buildExecutableActivityGraph(data.detail.rootActivity, data.activityCatalog) : null,
+    () => data ? buildExecutableActivityGraph(
+      data.detail.rootActivity,
+      data.activityCatalog,
+      data.inputSources?.authoredInputs ?? [],
+      data.inputSources?.compiledInputs ?? [],
+      data.inputSources?.accessState ?? data.inputSources?.access ?? null
+    ) : null,
     [data]
   );
 
@@ -527,9 +543,9 @@ function WorkflowExecutableSidePanel({ detail, graph, chosenReference, sourceDef
   );
 }
 
-// Read-only view of the selected node's Execution Material facts: type identity and input-binding
+// Read-only view of the selected node's Execution Material facts: type identity, input-binding
 // summaries (literals/expressions arrive pre-truncated; reference-typed values only name their
-// type/id, never the secret).
+// type/id, never the secret), each binding's pinned conversion plan, and output captures with theirs.
 function WorkflowExecutableNodePanel({ fact }: { fact: ExecutableGraphNodeFacts | null }) {
   if (!fact) return null;
 
@@ -550,13 +566,32 @@ function WorkflowExecutableNodePanel({ fact }: { fact: ExecutableGraphNodeFacts 
           {fact.inputBindings.map(binding => (
             <div key={binding.inputName}>
               <dt>{binding.inputName}</dt>
-              <dd><span className="wf-chip">{binding.source}</span> {binding.summary ?? ""}</dd>
+              <dd>
+                <span className="wf-chip">{binding.source}</span> {binding.summary ?? ""}
+                <ConversionPlanCaption plan={binding.conversionPlan} />
+              </dd>
             </div>
           ))}
         </dl>
       ) : (
         <p className="wf-muted">No input bindings.</p>
       )}
+      {fact.outputCaptures.length > 0 ? (
+        <>
+          <h4>Output captures</h4>
+          <dl className="wf-instance-meta wf-executable-bindings">
+            {fact.outputCaptures.map(capture => (
+              <div key={capture.outputName}>
+                <dt>{capture.outputName}</dt>
+                <dd>
+                  {capture.storage ? <span className="wf-chip">{capture.storage}</span> : null}
+                  <ConversionPlanCaption plan={capture.conversionPlan} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </>
+      ) : null}
     </section>
   );
 }

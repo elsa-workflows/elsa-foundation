@@ -10,6 +10,7 @@ import {
   startWorkflowDraftTestRun,
   type PublicationIntent
 } from "../api/publishing";
+import { decorateConversionDiagnostic } from "../conversionSettings";
 import { buildExportPayload, downloadWorkflowJson } from "../workflowSerialization";
 import { readWorkflowInputs } from "../workflowReferenceAuthoring";
 import { createDraftSnapshotId, getDraftSignature, isRejectedTestRun } from "./editorHelpers";
@@ -163,7 +164,7 @@ export function useWorkflowOperations({
         } : current);
         setStatus("");
       } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = decorateConversionDiagnostic(error instanceof Error ? error.message : String(error));
         setPublicationReview(current => current ? {
           ...current,
           phase: "review",
@@ -252,7 +253,7 @@ export function useWorkflowOperations({
       setAutosavePaused(false);
     } catch (e) {
       setStatus("");
-      const failureMessage = e instanceof Error ? e.message : String(e);
+      const failureMessage = decorateConversionDiagnostic(e instanceof Error ? e.message : String(e));
       if (promotedVersionId && isStalePreflightError(e)) {
         setPublicationReview(current => current ? {
           ...current,

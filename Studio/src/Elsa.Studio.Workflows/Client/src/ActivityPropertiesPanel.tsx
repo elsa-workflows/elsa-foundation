@@ -27,10 +27,24 @@ import {
   isRepeaterOptOut,
   planExpressionModeTransition,
   readWrappedInput,
+  withConversion,
   withLiteralValue,
   withExpression,
-  writeInputValue
+  writeInputValue,
+  type WrappedActivityInputValue
 } from "./activityProperties";
+import {
+  builtInConversionProfiles,
+  conversionModeDescriptors,
+  describeInferredSource,
+  readConversionMode,
+  readConversionProfile,
+  withConversionMode,
+  withConversionProfile,
+  type ConversionMode,
+  type ConversionProfileReference
+} from "./conversionSettings";
+import { listConversionProfiles } from "./api/expressions";
 import { readOptionsProvider, useActivityInputOptions } from "./activityInputOptions";
 import {
   readWorkflowInputs,
@@ -85,6 +99,7 @@ export function ActivityPropertiesPanel({
 }: ActivityPropertiesPanelProps) {
   const generatedDictionarySessionScope = useId();
   const effectiveDictionarySessionScope = dictionarySessionScope ?? generatedDictionarySessionScope;
+  const conversionProfiles = useConversionProfiles(context);
 
   useEffect(() => () => clearDictionaryEditorSessionScope(effectiveDictionarySessionScope), [effectiveDictionarySessionScope]);
 
@@ -133,6 +148,7 @@ export function ActivityPropertiesPanel({
               editors={editors}
               expressionEditors={expressionEditors}
               expressionDescriptors={expressionDescriptors}
+              conversionProfiles={conversionProfiles}
               onChange={onChange}
             />
           ))}
@@ -183,6 +199,7 @@ function PropertyRow({
   editors,
   expressionEditors,
   expressionDescriptors,
+  conversionProfiles,
   onChange
 }: {
   activity: ActivityNode;
@@ -194,6 +211,7 @@ function PropertyRow({
   editors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   expressionDescriptors: StudioExpressionDescriptor[];
+  conversionProfiles: ConversionProfileReference[];
   onChange(activity: ActivityNode): void;
 }) {
   const readOnly = input.isReadOnly === true;
@@ -460,6 +478,16 @@ function PropertyRow({
           {renderExpressionDiagnostics(inlineDiagnostics)}
         </>
       )}
+      {wrapped ? (
+        <ConversionControl
+          inputLabel={input.displayName || input.name}
+          targetTypeName={input.typeName}
+          wrapped={wrapped}
+          profiles={conversionProfiles}
+          disabled={readOnly}
+          onChange={next => onChange(writeInputValue(activity, input, next))}
+        />
+      ) : null}
       {pendingTransition ? (
         <div
           className="wf-expression-transition-confirmation"
@@ -729,6 +757,136 @@ function UnavailableExpressionEditor({ syntax }: { syntax: string }) {
     <p className="wf-expression-editor-hint" role="status">
       No editor is available for {syntax}. The current value is preserved and read-only.
     </p>
+  );
+}
+
+// Conversion modes reuse the SyntaxPicker listbox; only `type`/`displayName` are read by the picker.
+const conversionModePickerDescriptors: StudioExpressionDescriptor[] = conversionModeDescriptors.map(descriptor => ({
+  type: descriptor.mode,
+  displayName: descriptor.displayName,
+  description: descriptor.description,
+  editingMode: "literal"
+}));
+
+// One request per shell; failures fall back to the built-in profiles (suggestions only — the Profile
+// mode keeps free-form id/version entry, so an unreachable listing never blocks authoring).
+const conversionProfilesCache = new Map<string, Promise<ConversionProfileReference[]>>();
+
+function useConversionProfiles(context: StudioEndpointContext): ConversionProfileReference[] {
+  const [profiles, setProfiles] = useState<ConversionProfileReference[]>(builtInConversionProfiles);
+
+  useEffect(() => {
+    let cancelled = false;
+    const key = context.baseUrl ?? "";
+    let request = conversionProfilesCache.get(key);
+    if (!request) {
+      request = listConversionProfiles(context).catch(() => {
+        conversionProfilesCache.delete(key);
+        return builtInConversionProfiles;
+      });
+      conversionProfilesCache.set(key, request);
+    }
+    request.then(result => {
+      if (!cancelled) setProfiles(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [context]);
+
+  return profiles;
+}
+
+/**
+ * The binding-edge conversion controls (#449, foundation #782): a mode picker defaulting to Auto, a
+ * profile id/version pair for the Profile mode, and the inferred source-representation → destination
+ * caption. The authored request lives on the wrapped input value and rides the wire as
+ * `ArgumentState.conversion`; the published pinned plan is inspected in the Executable Inspector.
+ */
+export function ConversionControl({
+  inputLabel,
+  targetTypeName,
+  wrapped,
+  profiles,
+  disabled,
+  onChange
+}: {
+  inputLabel: string;
+  targetTypeName: string;
+  wrapped: WrappedActivityInputValue;
+  profiles: ConversionProfileReference[];
+  disabled: boolean;
+  onChange(next: WrappedActivityInputValue): void;
+}) {
+  const datalistId = useId();
+  const mode = readConversionMode(wrapped.conversion);
+  const profile = readConversionProfile(wrapped.conversion);
+
+  const setMode = (nextMode: string) => {
+    onChange(withConversion(wrapped, withConversionMode(wrapped.conversion, nextMode as ConversionMode)));
+  };
+
+  const setProfile = (next: ConversionProfileReference) => {
+    onChange(withConversion(wrapped, withConversionProfile(wrapped.conversion, next)));
+  };
+
+  const setProfileId = (id: string) => {
+    // Selecting a known profile id fills the version when the author hasn't typed one yet.
+    const known = profiles.find(candidate => candidate.id === id);
+    setProfile({ id, version: profile?.version || (known?.version ?? "") });
+  };
+
+  return (
+    <div className="wf-conversion-control">
+      <div className="wf-conversion-row">
+        <span className="wf-conversion-label">Conversion</span>
+        <SyntaxPicker
+          label={`${inputLabel} conversion mode`}
+          value={mode}
+          descriptors={conversionModePickerDescriptors}
+          disabled={disabled}
+          onChange={setMode}
+        />
+        <span
+          className="wf-conversion-caption"
+          title="Inferred while authoring; the published executable's pinned plan is authoritative."
+        >
+          {describeInferredSource(wrapped.expression.type, wrapped.expression.value, mode)} → {formatTypeName(targetTypeName)}
+        </span>
+      </div>
+      {mode === "profile" ? (
+        <div className="wf-conversion-profile">
+          <input
+            type="text"
+            aria-label={`${inputLabel} conversion profile id`}
+            placeholder="Profile id"
+            list={datalistId}
+            value={profile?.id ?? ""}
+            disabled={disabled}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            onChange={event => setProfileId(event.target.value)}
+          />
+          <input
+            type="text"
+            aria-label={`${inputLabel} conversion profile version`}
+            placeholder="Version"
+            value={profile?.version ?? ""}
+            disabled={disabled}
+            spellCheck={false}
+            onChange={event => setProfile({ id: profile?.id ?? "", version: event.target.value })}
+          />
+          <datalist id={datalistId}>
+            {profiles.map(candidate => (
+              <option key={`${candidate.id}@${candidate.version}`} value={candidate.id}>
+                {`${candidate.id}@${candidate.version}`}
+              </option>
+            ))}
+          </datalist>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

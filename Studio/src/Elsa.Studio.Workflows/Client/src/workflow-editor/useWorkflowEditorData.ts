@@ -3,6 +3,7 @@ import type { StudioActivityDescriptor, StudioEndpointContext, StudioExpressionD
 import type { ActivityAvailabilityDiagnostics, ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities, listRecommendedActivityDefinitions } from "../api/activityDesign";
+import { ApiCapabilityUnavailableError } from "../api/capabilities";
 import type { RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import { listExpressionDescriptors } from "../api/expressions";
 import { observeReusableActivity } from "../reusableActivityObservability";
@@ -70,6 +71,10 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
       getDefinition(context, definitionId),
       listActivities(context),
       listRecommendedActivityDefinitions(context).catch(error => {
+        // A backend that doesn't advertise the relation has no recommendation concept at all
+        // (null, versus a supported listing that returned nothing): the palette then degrades to
+        // the full activity catalog instead of blocking the editor or rendering empty.
+        if (error instanceof ApiCapabilityUnavailableError) return null;
         observeReusableActivity({
           event: "picker-load",
           surface: "workflow-designer",
@@ -84,10 +89,13 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     markSaved(nextDraft);
     resetHistory(nextDraft);
     loadDraft(nextDraft);
-    const activities = decorateReusableCatalog(nextCatalog.activities ?? [], nextRecommendedDefinitions);
+    const recommendedDefinitions = nextRecommendedDefinitions ?? [];
+    const activities = decorateReusableCatalog(nextCatalog.activities ?? [], recommendedDefinitions);
     setCatalog(activities);
-    setRecommendedDefinitions(nextRecommendedDefinitions);
-    const nextPaletteCatalog = projectRecommendedPalette(activities, nextRecommendedDefinitions);
+    setRecommendedDefinitions(recommendedDefinitions);
+    const nextPaletteCatalog = nextRecommendedDefinitions == null
+      ? activities
+      : projectRecommendedPalette(activities, recommendedDefinitions);
     setPaletteCatalog(nextPaletteCatalog);
     observeReusableActivity({
       event: "picker-load",

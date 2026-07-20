@@ -9,7 +9,8 @@ import type {
   WorkflowExecutableAuthoredInput,
   WorkflowExecutableCompiledInput,
   WorkflowExecutableInputBinding,
-  WorkflowExecutableNode
+  WorkflowExecutableNode,
+  WorkflowExecutableOutputCapture
 } from "./workflowTypes";
 
 // Adapts the Execution Material node tree served by GET /executables/{artifactId} into the authored
@@ -33,6 +34,7 @@ export interface ExecutableGraphNodeFacts {
   structureKind: string | null;
   available: boolean;
   inputBindings: WorkflowExecutableInputBinding[];
+  outputCaptures: WorkflowExecutableOutputCapture[];
   authoredInputs: WorkflowExecutableAuthoredInput[];
   authoredInputsAccess: string | null;
 }
@@ -75,6 +77,7 @@ export function buildExecutableActivityGraph(
       structureKind: node.structureKind ?? null,
       available: !!catalogItem,
       inputBindings: compiledInputsByNodeId.get(node.executableNodeId) ?? node.inputBindings ?? [],
+      outputCaptures: node.outputCaptures ?? [],
       authoredInputs: authoredInputsByNodeId.get(node.executableNodeId) ?? [],
       authoredInputsAccess
     });

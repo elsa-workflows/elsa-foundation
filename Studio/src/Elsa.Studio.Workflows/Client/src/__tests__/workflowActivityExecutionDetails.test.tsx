@@ -318,6 +318,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       activityTypeVersion: activity.activityTypeVersion,
       structureKind: null,
       available: true,
+      outputCaptures: [],
       authoredInputsAccess: "visible",
       authoredInputs: [{ executableNodeId: "node-1", inputKey: "message-key", expressionType: "JavaScript", value: "variables.message" }],
       inputBindings: [{
@@ -392,6 +393,7 @@ describe("WorkflowActivityExecutionDetails", () => {
           activityTypeVersion: activity.activityTypeVersion,
           structureKind: null,
           available: true,
+          outputCaptures: [],
           authoredInputsAccess: "permissionHidden",
           authoredInputs: [],
           inputBindings: []

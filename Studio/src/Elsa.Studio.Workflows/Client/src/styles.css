@@ -6527,3 +6527,74 @@ html[data-theme="brass-instrument"] .wf-chip {
   font-size: 12px;
   gap: 4px;
 }
+
+/* --- Binding conversion controls (issue #449) ------------------------------------------------- */
+
+.wf-conversion-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wf-conversion-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-conversion-label {
+  flex: 0 0 auto;
+  color: var(--wf-muted-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wf-conversion-row .wf-syntax-picker {
+  width: auto;
+  min-width: 96px;
+}
+
+.wf-conversion-row .wf-syntax-picker-trigger {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.wf-conversion-caption {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--wf-muted-text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-conversion-profile {
+  display: flex;
+  gap: 6px;
+}
+
+.wf-conversion-profile input {
+  min-width: 0;
+  flex: 2 1 auto;
+}
+
+.wf-conversion-profile input + input {
+  flex: 1 1 auto;
+  max-width: 90px;
+}
+
+/* Pinned-plan summary on Executable Inspector binding and output-capture rows. */
+.wf-conversion-plan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--wf-muted-text);
+  font-size: 11px;
+}
+
+.wf-conversion-plan-fingerprint {
+  font-size: 10px;
+}
