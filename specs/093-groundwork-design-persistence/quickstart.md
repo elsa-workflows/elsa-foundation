@@ -67,7 +67,8 @@ against the deterministic input before comparing restart hashes.
 Concrete EF-oracle and provider fixtures remain T025 and T051–T054 work. Therefore no
 provider-parity or oracle result hashes are claimed at this checkpoint. The focused Release project
 restore/build/test completed with `96` passed tests and one intentional legacy-EF N/A skip (`97` total);
-executable provider scenarios remain pending a
+the skipped probe proves that N/A profile evaluation happens before fixture creation. Executable provider
+scenarios remain pending a
 concrete fixture inheritance target. The T023 harness validates the contract shape only. T025's executable
 `LegacyEfOracle` profile runs exactly five of these rows: partial-staging failure, cancellation, same-scope
 duplicate identities, workflow-draft last-writer-wins, and restart. Its nine explicit N/A rows are provider
