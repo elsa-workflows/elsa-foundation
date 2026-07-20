@@ -31,6 +31,8 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
     {
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionId);
+        List<DeleteDocumentRequest>? deletes = null;
+        PermanentDeleteResult? resolvedResult = null;
         var outcome = await GroundworkDesignAtomicCommand.ExecuteAsync(
             atomicWrite,
             operationKey,
@@ -43,6 +45,15 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind
             ],
             async (context, token) =>
+            {
+                var stagedDeletes = deletes ?? throw new InvalidOperationException(
+                    "Permanent-delete aggregate resolution did not complete before staging.");
+                foreach (var delete in stagedDeletes)
+                    await context.DeleteAsync(delete, token);
+                return resolvedResult!;
+            },
+            cancellationToken: cancellationToken,
+            beforeAttempt: async token =>
             {
                 var definition = await definitionStore.FindByIdAsync(definitionId, token)
                                  ?? throw new ArgumentException(
@@ -57,7 +68,7 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
                 foreach (var guard in deletionGuards ?? [])
                     await guard.EnsureCanDeleteAsync(definitionId, token);
 
-                var deletes = new List<DeleteDocumentRequest>();
+                var resolvedDeletes = new List<DeleteDocumentRequest>();
                 var drafts = await draftStore.ListByWorkflowDefinitionIdAsync(definitionId, token);
                 foreach (var draft in drafts)
                     accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
@@ -67,7 +78,7 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
                         store,
                         GroundworkDesignDocumentSerialization.Create(payloadSerializer),
                         accessContextAccessor);
-                    deletes.AddRange(drafts.Select(draft => draftDocuments.ToDeleteRequest(draft.Id)));
+                    resolvedDeletes.AddRange(drafts.Select(draft => draftDocuments.ToDeleteRequest(draft.Id)));
                 }
 
                 var versions = await versionStore.ListByDefinitionAsync(definitionId, token);
@@ -78,29 +89,27 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
                     if (layout is not null)
                     {
                         accessContextAccessor.Current.EnsureTenantScope(layout.TenantId);
-                        deletes.Add(GroundworkDocumentWriter.ToDeleteRequest(
+                        resolvedDeletes.Add(GroundworkDocumentWriter.ToDeleteRequest(
                             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
                             layout.Id));
                     }
 
-                    deletes.Add(GroundworkDocumentWriter.ToDeleteRequest(
+                    resolvedDeletes.Add(GroundworkDocumentWriter.ToDeleteRequest(
                         WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
                         version.Id));
                 }
 
-                deletes.Add(GroundworkDocumentWriter.ToDeleteRequest(
+                resolvedDeletes.Add(GroundworkDocumentWriter.ToDeleteRequest(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
                     definitionId));
-                foreach (var delete in deletes)
-                    await context.DeleteAsync(delete, token);
-                return new PermanentDeleteResult(
+                deletes = resolvedDeletes;
+                resolvedResult = new PermanentDeleteResult(
                     definitionId,
                     versions.Count,
                     drafts.Count,
                     definition.DeletedAt.Value,
                     definition.DeletedReason);
-            },
-            cancellationToken: cancellationToken);
+            });
 
         if (outcome.ShouldPublishPostCommitOutcome)
         {
