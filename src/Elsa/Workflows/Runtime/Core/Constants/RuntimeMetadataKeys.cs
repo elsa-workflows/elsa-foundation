@@ -95,6 +95,21 @@ public static class RuntimeMetadataKeys
     public const string InstanceName = "runtime.instanceName";
 
     /// <summary>
+    /// System-metadata key on a workflow execution recording the effective checkpoint cadence the run executes under
+    /// (ADR 0032 R5): the <see cref="Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableCheckpointCadence"/> mode
+    /// alias (<c>"Immediate"</c> or <c>"Coalesced"</c>), resolved at start from the pinned executable's authored cadence
+    /// over the host default. This per-run stamp is what the instance read model reports, so an instance shows the
+    /// cadence it actually ran under even after the host default is later reconfigured. Absent for runs predating it.
+    /// </summary>
+    public const string CheckpointCadence = "runtime.checkpointCadence";
+
+    /// <summary>
+    /// System-metadata key on a workflow execution recording the effective bounded segment cap for a
+    /// <c>"Coalesced"</c> <see cref="CheckpointCadence"/> stamp (ADR 0032 R5). Absent under an Immediate stamp.
+    /// </summary>
+    public const string CheckpointMaxSegmentCheckpoints = "runtime.checkpointMaxSegmentCheckpoints";
+
+    /// <summary>
     /// Metadata key on a durable value carrying a workflow identity slot (correlation id / instance name) for the
     /// execution-time expression carrier (ADR 0030 identity), tagged with the slot name (<c>"correlationId"</c> or
     /// <c>"instanceName"</c>). A <c>Correlate</c>/<c>SetName</c> leaf projects the assigned value into a durable
