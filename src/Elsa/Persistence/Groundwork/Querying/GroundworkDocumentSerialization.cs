@@ -17,11 +17,11 @@ namespace Elsa.Persistence.Groundwork.Querying;
 /// <para>
 /// Exclusion is driven by a resolver around <see cref="DefaultJsonTypeInfoResolver"/> rather than
 /// <c>[JsonIgnore]</c> on the domain types, so the core entities stay free of persistence concerns. The
-/// resolver also retains the explicit exclusion set so query translation can distinguish stable canonical
-/// exclusions from conditional <see cref="JsonPropertyInfo.ShouldSerialize"/> predicates. Excluded members
-/// are only suppressed from <b>output</b> — they remain in the contract so an entity's parameterized
-/// constructor can still bind on read (the member is simply absent from the document and falls back to its
-/// default).
+/// resolver also reports whether each member is unconditionally included, excluded, or conditionally
+/// serialized, so query translation never has to invoke or infer the meaning of
+/// <see cref="JsonPropertyInfo.ShouldSerialize"/>. Excluded members are only suppressed from <b>output</b> —
+/// they remain in the contract so an entity's parameterized constructor can still bind on read (the member
+/// is simply absent from the document and falls back to its default).
 /// </para>
 /// </summary>
 public static class GroundworkDocumentSerialization
@@ -54,11 +54,23 @@ public static class GroundworkDocumentSerialization
         return CreateOptions(excluded);
     }
 
-    internal static bool IsExplicitlyExcluded(
+    internal static PropertySerializationStatus GetPropertySerializationStatus(
         JsonSerializerOptions options,
-        JsonPropertyInfo property) =>
-        options.TypeInfoResolver is IStablePropertyExclusionResolver resolver &&
-        resolver.IsExplicitlyExcluded(property);
+        JsonPropertyInfo property)
+    {
+        if (options.TypeInfoResolver is IStablePropertySerializationResolver resolver)
+            return resolver.GetPropertySerializationStatus(property, options);
+
+        var ignoreCondition = GetIgnoreCondition(property);
+        if (ignoreCondition == JsonIgnoreCondition.Always)
+            return PropertySerializationStatus.Excluded;
+
+        return ignoreCondition is JsonIgnoreCondition.WhenWritingDefault or JsonIgnoreCondition.WhenWritingNull ||
+               IsAffectedByDefaultIgnoreCondition(options, property.PropertyType) ||
+               property.ShouldSerialize is not null
+            ? PropertySerializationStatus.Conditional
+            : PropertySerializationStatus.UnconditionallyIncluded;
+    }
 
     private static JsonSerializerOptions CreateOptions(HashSet<string> excluded) =>
         new(JsonSerializerDefaults.Web)
@@ -66,13 +78,15 @@ public static class GroundworkDocumentSerialization
             TypeInfoResolver = new GroundworkDocumentTypeInfoResolver(excluded)
         };
 
-    private interface IStablePropertyExclusionResolver
+    private interface IStablePropertySerializationResolver
     {
-        bool IsExplicitlyExcluded(JsonPropertyInfo property);
+        PropertySerializationStatus GetPropertySerializationStatus(
+            JsonPropertyInfo property,
+            JsonSerializerOptions options);
     }
 
     private sealed class GroundworkDocumentTypeInfoResolver(HashSet<string> excluded)
-        : IJsonTypeInfoResolver, IStablePropertyExclusionResolver
+        : IJsonTypeInfoResolver, IStablePropertySerializationResolver
     {
         private readonly DefaultJsonTypeInfoResolver _inner = new();
 
@@ -91,10 +105,55 @@ public static class GroundworkDocumentSerialization
             return typeInfo;
         }
 
-        public bool IsExplicitlyExcluded(JsonPropertyInfo property) =>
+        public PropertySerializationStatus GetPropertySerializationStatus(
+            JsonPropertyInfo property,
+            JsonSerializerOptions options)
+        {
+            if (IsExplicitlyExcluded(property))
+                return PropertySerializationStatus.Excluded;
+
+            var ignoreCondition = GetIgnoreCondition(property);
+            if (ignoreCondition == JsonIgnoreCondition.Always)
+                return PropertySerializationStatus.Excluded;
+            if (ignoreCondition is JsonIgnoreCondition.WhenWritingDefault or JsonIgnoreCondition.WhenWritingNull)
+                return PropertySerializationStatus.Conditional;
+            if (ignoreCondition == JsonIgnoreCondition.Never)
+                return PropertySerializationStatus.UnconditionallyIncluded;
+            if (property.ShouldSerialize is not null)
+                return PropertySerializationStatus.Conditional;
+
+            return IsAffectedByDefaultIgnoreCondition(options, property.PropertyType)
+                ? PropertySerializationStatus.Conditional
+                : PropertySerializationStatus.UnconditionallyIncluded;
+        }
+
+        private bool IsExplicitlyExcluded(JsonPropertyInfo property) =>
             excluded.Contains(property.Name) ||
             property.AttributeProvider is PropertyInfo member && excluded.Contains(member.Name);
     }
+
+    internal enum PropertySerializationStatus
+    {
+        UnconditionallyIncluded,
+        Excluded,
+        Conditional
+    }
+
+    private static JsonIgnoreCondition? GetIgnoreCondition(JsonPropertyInfo property) =>
+        property.AttributeProvider is PropertyInfo member
+            ? member.GetCustomAttribute<JsonIgnoreAttribute>(true)?.Condition
+            : null;
+
+    internal static bool IsAffectedByDefaultIgnoreCondition(
+        JsonSerializerOptions options,
+        Type propertyType) =>
+        options.DefaultIgnoreCondition switch
+        {
+            JsonIgnoreCondition.WhenWritingDefault => true,
+            JsonIgnoreCondition.WhenWritingNull =>
+                !propertyType.IsValueType || Nullable.GetUnderlyingType(propertyType) is not null,
+            _ => false
+        };
 
     private sealed class PayloadDelegatingConverterFactory(IPayloadSerializer payloadSerializer, HashSet<Type> delegatedTypes) : JsonConverterFactory
     {

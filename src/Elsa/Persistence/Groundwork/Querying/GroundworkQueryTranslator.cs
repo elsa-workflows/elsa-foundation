@@ -2,7 +2,6 @@ using System.Collections;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Primitives.Entities;
@@ -169,14 +168,25 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
     {
         var jsonProperty = _entityTypeInfo.Properties.SingleOrDefault(candidate =>
             candidate.AttributeProvider is PropertyInfo candidateProperty && candidateProperty == property);
-        if (jsonProperty is null ||
-            jsonProperty.AttributeProvider?.GetCustomAttributes(typeof(JsonIgnoreAttribute), true)
-                .OfType<JsonIgnoreAttribute>()
-                .Any(attribute => attribute.Condition == JsonIgnoreCondition.Always) == true ||
-            GroundworkDocumentSerialization.IsExplicitlyExcluded(_jsonOptions, jsonProperty))
+        if (jsonProperty is null)
         {
             throw new GroundworkQueryTranslationException(
                 $"Property '{property.DeclaringType?.FullName}.{property.Name}' is excluded from canonical JSON and cannot be queried.");
+        }
+
+        var serializationStatus = GroundworkDocumentSerialization.GetPropertySerializationStatus(
+            _jsonOptions,
+            jsonProperty);
+        if (serializationStatus == GroundworkDocumentSerialization.PropertySerializationStatus.Excluded)
+        {
+            throw new GroundworkQueryTranslationException(
+                $"Property '{property.DeclaringType?.FullName}.{property.Name}' is excluded from canonical JSON and cannot be queried.");
+        }
+
+        if (serializationStatus == GroundworkDocumentSerialization.PropertySerializationStatus.Conditional)
+        {
+            throw new GroundworkQueryTranslationException(
+                $"Property '{property.DeclaringType?.FullName}.{property.Name}' does not have stable presence in canonical JSON and cannot be queried.");
         }
 
         var serializedName = jsonProperty.Name;

@@ -310,37 +310,58 @@ public sealed class GroundworkQueryTranslatorTests
     }
 
     [Fact]
-    public void Keeps_when_writing_default_properties_queryable()
+    public void Keeps_members_certified_as_unconditionally_included_by_the_groundwork_resolver_queryable()
+    {
+        var translator = new GroundworkQueryTranslator<DesignDocument>(
+            GroundworkDocumentSerialization.Create([]));
+        var source = Query<DesignDocument>.Where(
+            x => x.NeverOmittedLabel,
+            QueryOp.Equal,
+            "invoice");
+
+        var result = TranslateDocuments(translator, source);
+
+        Assert.Equal(
+            "entity.neverOmittedLabel",
+            Assert.Single(Assert.Single(result.Clauses).Comparisons).Path);
+    }
+
+    [Fact]
+    public void Rejects_when_writing_default_properties()
     {
         var source = Query<DesignDocument>.Where(
             x => x.DefaultOmittedSequence,
             QueryOp.Equal,
             0);
 
-        var result = TranslateDocuments(source);
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            TranslateDocuments(source));
 
-        Assert.Equal(
-            "entity.defaultOmittedSequence",
-            Assert.Single(Assert.Single(result.Clauses).Comparisons).Path);
+        Assert.Contains(nameof(DesignDocument.DefaultOmittedSequence), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("stable", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void Keeps_when_writing_null_properties_queryable()
+    public void Rejects_when_writing_null_properties()
     {
         var source = Query<DesignDocument>.Where(
             x => x.NullOmittedLabel,
             QueryOp.Equal,
             null);
 
-        var result = TranslateDocuments(source);
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            TranslateDocuments(source));
 
-        Assert.Equal(
-            "entity.nullOmittedLabel",
-            Assert.Single(Assert.Single(result.Clauses).Comparisons).Path);
+        Assert.Contains(nameof(DesignDocument.NullOmittedLabel), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("stable", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void Keeps_value_dependent_resolver_predicates_queryable()
+    [Theory]
+    [InlineData(ShouldSerializePredicate.ConstantFalse)]
+    [InlineData(ShouldSerializePredicate.ConstantTrue)]
+    [InlineData(ShouldSerializePredicate.ValueDependent)]
+    public void Rejects_untrusted_resolver_should_serialize_predicates(
+        ShouldSerializePredicate predicate)
     {
         var options = new JsonSerializerOptions(Json)
         {
@@ -353,7 +374,14 @@ public sealed class GroundworkQueryTranslatorTests
                         if (typeInfo.Type == typeof(DesignDocument))
                         {
                             typeInfo.Properties.Single(property => property.Name == "sequence")
-                                .ShouldSerialize = static (_, value) => value is int number && number > 0;
+                                .ShouldSerialize = predicate switch
+                                {
+                                    ShouldSerializePredicate.ConstantFalse => static (_, _) => false,
+                                    ShouldSerializePredicate.ConstantTrue => static (_, _) => true,
+                                    ShouldSerializePredicate.ValueDependent =>
+                                        static (_, value) => value is int number && number > 0,
+                                    _ => throw new ArgumentOutOfRangeException(nameof(predicate), predicate, null)
+                                };
                         }
                     }
                 }
@@ -361,6 +389,61 @@ public sealed class GroundworkQueryTranslatorTests
         };
         var translator = new GroundworkQueryTranslator<DesignDocument>(options);
         var source = Query<DesignDocument>.Where(x => x.Sequence, QueryOp.Equal, 0);
+
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            TranslateDocuments(translator, source));
+
+        Assert.Contains(nameof(DesignDocument.Sequence), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("stable", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Rejects_properties_affected_by_options_level_when_writing_default()
+    {
+        var options = new JsonSerializerOptions(Json)
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault
+        };
+        var translator = new GroundworkQueryTranslator<DesignDocument>(options);
+        var source = Query<DesignDocument>
+            .Where(x => x.Sequence, QueryOp.Equal, 0)
+            .OrderBy(x => x.Sequence);
+
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            TranslateDocuments(translator, source));
+
+        Assert.Contains(nameof(DesignDocument.Sequence), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("stable", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Rejects_nullable_properties_affected_by_options_level_when_writing_null()
+    {
+        var options = new JsonSerializerOptions(Json)
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+        var translator = new GroundworkQueryTranslator<DesignDocument>(options);
+        var source = Query<DesignDocument>.Where(x => x.Description, QueryOp.Equal, null);
+
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            TranslateDocuments(translator, source));
+
+        Assert.Contains(nameof(DesignDocument.Description), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("stable", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Keeps_non_nullable_properties_unaffected_by_options_level_when_writing_null_queryable()
+    {
+        var options = new JsonSerializerOptions(Json)
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+        var translator = new GroundworkQueryTranslator<DesignDocument>(options);
+        var source = Query<DesignDocument>
+            .Where(x => x.Sequence, QueryOp.Equal, 0)
+            .OrderBy(x => x.Sequence);
 
         var result = TranslateDocuments(translator, source);
 
@@ -434,11 +517,21 @@ public sealed class GroundworkQueryTranslatorTests
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? NullOmittedLabel { get; init; }
 
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+        public string NeverOmittedLabel { get; init; } = "";
+
         [JsonIgnore]
         public string TransientLabel { get; init; } = "";
     }
 
     private sealed class FailingValue;
+
+    public enum ShouldSerializePredicate
+    {
+        ConstantFalse,
+        ConstantTrue,
+        ValueDependent
+    }
 
     private sealed class FailingValueConverter : JsonConverter<FailingValue>
     {
