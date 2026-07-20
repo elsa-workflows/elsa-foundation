@@ -79,7 +79,14 @@ public class InMemoryOpenTelemetryStore : IOpenTelemetryStore
     {
         var take = ClampTake(filter.Take);
         var serviceResourceIds = ResolveResourceIds(filter.ServiceName);
+
+        // Merge-then-filter: a trace's records may arrive across batches (multi-cycle drains, OTLP re-exports), so
+        // filters must see the merged summary — filtering per record and keeping the last would hide an earlier
+        // batch's error status and misreport duration/span counts.
         var items = _traces.Snapshot()
+            .OrderBy(x => x.StartTime)
+            .GroupBy(x => x.TraceId, StringComparer.OrdinalIgnoreCase)
+            .Select(x => TelemetryTraceMerger.Merge([.. x]))
             .Where(x => string.IsNullOrWhiteSpace(filter.TraceId) || Matches(x.TraceId, filter.TraceId))
             .Where(x => filter.Status == null || x.Status == filter.Status)
             .Where(x => filter.From == null || x.StartTime >= filter.From)
@@ -89,8 +96,6 @@ public class InMemoryOpenTelemetryStore : IOpenTelemetryStore
             .Where(x => serviceResourceIds == null || x.ResourceIds.Any(serviceResourceIds.Contains))
             .Where(x => string.IsNullOrWhiteSpace(filter.Search) || Matches(x.TraceId, filter.Search) || Matches(x.Name, filter.Search))
             .OrderBy(x => x.StartTime)
-            .GroupBy(x => x.TraceId, StringComparer.OrdinalIgnoreCase)
-            .Select(x => x.Last())
             .TakeLast(take)
             .ToList();
 
@@ -99,9 +104,14 @@ public class InMemoryOpenTelemetryStore : IOpenTelemetryStore
 
     public ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, CancellationToken cancellationToken = default)
     {
-        var trace = _traces.Snapshot().LastOrDefault(x => string.Equals(x.TraceId, traceId, StringComparison.OrdinalIgnoreCase));
-        if (trace == null)
+        var records = _traces.Snapshot()
+            .Where(x => string.Equals(x.TraceId, traceId, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.StartTime)
+            .ToList();
+        if (records.Count == 0)
             return ValueTask.FromResult<OpenTelemetryTraceDetail?>(null);
+
+        var trace = TelemetryTraceMerger.Merge(records);
 
         var spans = _spans.Snapshot()
             .Where(x => string.Equals(x.TraceId, traceId, StringComparison.OrdinalIgnoreCase))

@@ -56,6 +56,7 @@ the ingestion domain: nothing that could carry user payload or a security token 
 |---|---|---|
 | `elsa.workflow.execution_id` | drain, dispatch, activity.execute, checkpoint.commit | The workflow execution id. |
 | `elsa.drain.max_work_items` | drain | Requested work-item cap (absent when unbounded). |
+| `elsa.drain.outermost` | drain | Present (`true`) when the drain is not nested inside another engine drain. Set by the engine at drain start — it knows nesting (a child workflow drains inside the parent's dispatch) — so listeners never re-derive "outermost" from parent ids, which fail when a host span (e.g. the ASP.NET Core request activity) is the drain's direct parent. |
 | `elsa.drain.items_processed` | drain | Work items processed this cycle. |
 | `elsa.drain.stop_reason` | drain | Why the cycle stopped, when a non-default reason applies. |
 | `elsa.work_item.id` | dispatch, activity.execute | The work item's id. |
