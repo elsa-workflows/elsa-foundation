@@ -4,13 +4,14 @@ import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2,
 import type { StudioAiContributionApi, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
-import { getExecutable } from "../api/runtime";
+import { getExecutable, getExecutableInputSources } from "../api/runtime";
 import type {
   ActivityCatalogItem,
   DesignMetadataRecord,
   WorkflowDefinitionSummary,
   WorkflowDraft,
   WorkflowExecutableDetails,
+  WorkflowExecutableInputSources,
   WorkflowExecutableReference
 } from "../workflowTypes";
 import {
@@ -62,6 +63,7 @@ import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 interface ExecutableInspectionData {
   detail: WorkflowExecutableDetails;
   activityCatalog: ActivityCatalogItem[];
+  inputSources: WorkflowExecutableInputSources | null;
 }
 
 type SourceDefinitionState =
@@ -114,7 +116,14 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
         getExecutable(context, artifactId, sourceReferenceId),
         listActivities(context)
       ]);
-      setData({ detail, activityCatalog: activityCatalog.activities });
+      // The summary tree redacts binding source details (literals, pinned conversion plans); the
+      // compiled bindings live behind the input-sources endpoint. Best effort — inspection still
+      // renders from the summary tree when the endpoint or permission is unavailable.
+      const chosenReferenceId = detail.chosenReference?.sourceReferenceId ?? null;
+      const inputSources = chosenReferenceId
+        ? await getExecutableInputSources(context, detail.artifactId, chosenReferenceId).catch(() => null)
+        : null;
+      setData({ detail, activityCatalog: activityCatalog.activities, inputSources });
       setFrames([]);
       setSelectedNodeId(null);
       setState("ready");
@@ -168,7 +177,13 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
   }, [chosenReference?.definitionId, context]);
 
   const graph = useMemo(
-    () => data ? buildExecutableActivityGraph(data.detail.rootActivity, data.activityCatalog) : null,
+    () => data ? buildExecutableActivityGraph(
+      data.detail.rootActivity,
+      data.activityCatalog,
+      data.inputSources?.authoredInputs ?? [],
+      data.inputSources?.compiledInputs ?? [],
+      data.inputSources?.accessState ?? data.inputSources?.access ?? null
+    ) : null,
     [data]
   );
 

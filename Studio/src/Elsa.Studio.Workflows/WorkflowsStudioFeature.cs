@@ -8,7 +8,7 @@ namespace Elsa.Studio.Workflows;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Workflows")]
-[StudioModule("workflows", "Workflows", "1.0.7", "navigation", "routes", "http", "workflow-designer")]
+[StudioModule("workflows", "Workflows", "1.0.8", "navigation", "routes", "http", "workflow-designer")]
 [ShellFeature(
     name: "WorkflowsStudio",
     DisplayName = "Workflows Studio module",
