@@ -299,7 +299,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
-    public async Task SubmitWorkflowDefinition_stamps_created_entities()
+    public async Task SubmitWorkflowDefinition_stamps_created_entities_and_preserves_scope_identity()
     {
         var command = new GroundworkSubmitWorkflowDefinitionCommand(
             _identities,
@@ -320,6 +320,10 @@ public class GroundworkWorkflowDefinitionCommandTests
         AssertStamped(draft!);
         AssertStamped(version);
         AssertStamped(layout!);
+        Assert.Equal(GroundworkTestAccess.DefaultScopeValue, definition.TenantId);
+        Assert.Equal(GroundworkTestAccess.DefaultScopeValue, draft!.TenantId);
+        Assert.Equal(GroundworkTestAccess.DefaultScopeValue, version.TenantId);
+        Assert.Equal(GroundworkTestAccess.DefaultScopeValue, layout!.TenantId);
     }
 
     private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null);

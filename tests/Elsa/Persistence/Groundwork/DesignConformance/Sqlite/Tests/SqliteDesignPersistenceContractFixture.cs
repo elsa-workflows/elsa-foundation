@@ -7,7 +7,9 @@ using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Events;
 using Elsa.Events.Core.Contracts;
+using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
@@ -19,6 +21,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Design.Validations.Core.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -159,16 +162,25 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<ISystemClock>(new DesignPersistenceFixtureData.FixedSystemClock(DesignPersistenceFixtureData.Epoch));
         services.AddSingleton<IIdentityGenerator, SequentialIdentityGenerator>();
-        services.AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>();
+        services.AddSingleton<IDistributedLockProvider, ImmediateDesignContractLockProvider>();
         services.AddSingleton<IPayloadSerializer, DesignPersistenceFixtureData.DeterministicPayloadSerializer>();
-        services.AddSingleton(_events);
-        services.AddScoped<GroundworkTargetEventPublisher>();
-        services.AddScoped<IInlineEventPublisher>(sp => sp.GetRequiredService<GroundworkTargetEventPublisher>());
-        services.AddScoped<IDeferredEventPublisher>(sp => sp.GetRequiredService<GroundworkTargetEventPublisher>());
+        new EventsFeature().ConfigureServices(services);
+        services.AddScoped<IDeferredEventPublisher>(sp =>
+            new GroundworkTargetDeferredEventPublisher(
+                sp.GetRequiredService<IEventPublisher>(),
+                _events));
         services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
         services.AddGroundworkSqliteUnifiedPersistence(ConnectionString, autoApplyOnStartup: false);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
+        services.AddScoped<IEventHandler<OnGroundworkStorageComposing>>(
+            _ => new GroundworkTargetCaptureHandler<OnGroundworkStorageComposing>(_events));
+        services.AddScoped<IEventHandler<OnDraftValidating>>(
+            _ => new GroundworkTargetCaptureHandler<OnDraftValidating>(_events));
+        services.AddScoped<IEventHandler<OnActivityVersionsReconciling>>(sp =>
+            new GroundworkTargetReconciliationHandler(
+                sp.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                _events));
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
@@ -229,71 +241,47 @@ internal sealed class GroundworkTargetEventCapture(GroundworkBaselineTelemetry t
     public void RecordReconciliationPass() => telemetry.RecordReconciliationPass();
 }
 
-internal sealed class GroundworkTargetEventPublisher(
-    IServiceProvider services,
-    IPersistenceAccessContextAccessor accessContext,
-    GroundworkTargetEventCapture capture) : IInlineEventPublisher, IDeferredEventPublisher
+internal sealed class GroundworkTargetDeferredEventPublisher(
+    IEventPublisher eventPublisher,
+    GroundworkTargetEventCapture capture)
+    : IDeferredEventPublisher
 {
-
-    Task IInlineEventPublisher.Publish(IEvent @event, CancellationToken cancellationToken) =>
-        PublishAsync(@event, cancellationToken);
-
-    Task IDeferredEventPublisher.Publish(IEvent @event, CancellationToken cancellationToken) =>
-        PublishAsync(@event, cancellationToken);
-
-    private async Task PublishAsync(IEvent @event, CancellationToken cancellationToken)
+    public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         capture.Record(@event);
-        switch (@event)
-        {
-            case OnGroundworkStorageComposing composing:
-                foreach (var handler in services.GetServices<IEventHandler<OnGroundworkStorageComposing>>())
-                    await handler.Handle(composing, cancellationToken);
-                break;
-            case Elsa.Workflows.Design.Validations.Core.Events.OnDraftValidating validating:
-                foreach (var handler in services.GetServices<
-                             IEventHandler<Elsa.Workflows.Design.Validations.Core.Events.OnDraftValidating>>())
-                    await handler.Handle(validating, cancellationToken);
-                break;
-            case OnActivityVersionsReconciling reconciling:
-                capture.RecordReconciliationPass();
-                foreach (var handler in services.GetServices<IEventHandler<OnActivityVersionsReconciling>>())
-                    await handler.Handle(reconciling, cancellationToken);
-                var storageScope = accessContext.Current.Scope?.Value
-                                   ?? throw new InvalidOperationException(
-                                       "Activity reconciliation requires a scope-bound persistence access context.");
-                foreach (var candidate in capture.Candidates(storageScope))
-                    reconciling.Versions.Add(candidate);
-                break;
-        }
+        return eventPublisher.Publish(@event, EventPublishingStrategy.Background, cancellationToken);
     }
 }
 
-internal sealed class ImmediateDistributedLockProvider : IDistributedLockProvider
+internal sealed class GroundworkTargetCaptureHandler<TEvent>(GroundworkTargetEventCapture capture)
+    : IEventHandler<TEvent>
+    where TEvent : IEvent
 {
-    public IDistributedSynchronizationHandle? TryAcquireLock(
-        string name,
-        TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default) => new Handle();
-
-    public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(
-        string name,
-        TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
-
-    public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(
-        string name,
-        TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
-
-    private sealed class Handle : IDistributedSynchronizationHandle
+    public Task Handle(TEvent @event, CancellationToken cancellationToken)
     {
-        public CancellationToken HandleLostToken => CancellationToken.None;
-        public void Dispose() { }
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        cancellationToken.ThrowIfCancellationRequested();
+        capture.Record(@event);
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class GroundworkTargetReconciliationHandler(
+    IPersistenceAccessContextAccessor accessContext,
+    GroundworkTargetEventCapture capture)
+    : IEventHandler<OnActivityVersionsReconciling>
+{
+    public Task Handle(OnActivityVersionsReconciling @event, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        capture.Record(@event);
+        capture.RecordReconciliationPass();
+        var storageScope = accessContext.Current.Scope?.Value
+                           ?? throw new InvalidOperationException(
+                               "Activity reconciliation requires a scope-bound persistence access context.");
+        foreach (var candidate in capture.Candidates(storageScope))
+            @event.Versions.Add(candidate);
+        return Task.CompletedTask;
     }
 }
 
@@ -363,6 +351,7 @@ internal sealed record GroundworkBaselineTelemetrySnapshot(
 internal static class GroundworkSchemaCli
 {
     private const string ConnectionEnvironmentVariable = "ELSA_DESIGN_GROUNDWORK_SQLITE_CONNECTION";
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromMinutes(2);
 
     public static async Task<GroundworkSchemaEvidence> ApplyFreshAsync(
         string connectionString,
@@ -421,21 +410,73 @@ internal static class GroundworkSchemaCli
 
         using var process = Process.Start(start)
                             ?? throw new InvalidOperationException("Could not start the Groundwork schema tool.");
-        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-        var output = await outputTask;
-        var error = await errorTask;
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(CommandTimeout);
+
         try
         {
-            using var document = JsonDocument.Parse(output);
-            return new(process.ExitCode, document.RootElement.Clone(), error);
+            await process.WaitForExitAsync(timeout.Token);
+            var output = await outputTask;
+            var error = await errorTask;
+            try
+            {
+                using var document = JsonDocument.Parse(output);
+                return new(process.ExitCode, document.RootElement.Clone(), error);
+            }
+            catch (JsonException exception)
+            {
+                throw new InvalidOperationException(
+                    $"Groundwork schema tool emitted invalid JSON (exit {process.ExitCode}); stderr digest {Digest(error)}.",
+                    exception);
+            }
         }
-        catch (JsonException exception)
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new InvalidOperationException(
-                $"Groundwork schema tool emitted invalid JSON (exit {process.ExitCode}); stderr digest {Digest(error)}.",
+            throw new TimeoutException(
+                $"Groundwork schema tool command '{command}' exceeded its {CommandTimeout.TotalSeconds:0}-second timeout.",
                 exception);
+        }
+        finally
+        {
+            await TerminateAndReapAsync(process);
+        }
+    }
+
+    public static string ToolPackageVersion()
+    {
+        using var manifest = JsonDocument.Parse(
+            File.ReadAllText(Path.Join(FindRepositoryRoot(), ".config", "dotnet-tools.json")));
+        return manifest.RootElement
+                   .GetProperty("tools")
+                   .GetProperty("groundwork.tool")
+                   .GetProperty("version")
+                   .GetString()
+               ?? throw new InvalidOperationException("The Groundwork tool manifest omits its package version.");
+    }
+
+    private static async Task TerminateAndReapAsync(Process process)
+    {
+        if (!process.HasExited)
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // The process exited between HasExited and Kill.
+            }
+        }
+
+        try
+        {
+            await process.WaitForExitAsync(CancellationToken.None);
+        }
+        catch (InvalidOperationException)
+        {
+            // The process has no associated operating-system handle left to reap.
         }
     }
 

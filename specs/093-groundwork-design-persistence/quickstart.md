@@ -115,23 +115,31 @@ intentional-red matrix:
   `same-scope-identity-rejection-absent`.
 
 The runner fails if any expected green becomes red, any expected red becomes green, or a red row
-does not match its narrow classification. The run used the Groundwork library/tool family
+does not match its narrow classification. It also derives and pins the loaded Groundwork Core,
+Documents, SQLite, and local-tool package versions plus the exact target and plan fingerprints;
+schema-tool processes have a bounded timeout and are killed and reaped on timeout or cancellation.
+The run used the Groundwork library/tool family
 `0.0.1-preview.77`, target fingerprint
 `22e3b8afe1564edc52ae126b5d049b21d1db72f38d1ceac6a1c2b9ddc144fa6d`, and plan fingerprint
 `e2c71279ddd7cc8506f45601bd128347a30c89fcd70a32afeec67928f9b86275`.
-It also exposed and fixed one target correctness defect: promotion now copies the validated
-scope-bound draft's `TenantId` to both the immutable workflow version and its layout.
+It also exposed and fixed target correctness defects: promotion now copies the validated
+scope-bound draft's `TenantId` to both the immutable workflow version and its layout, and
+submission stamps the active scope onto every newly created aggregate member.
+Both provider fixtures dispatch through Elsa's scoped event pipeline; the EF cancellation probe
+pins the same linked token at the public command, event handler, EF interceptor, and exception.
 
 Ordinary CI writes no evidence file. Operators can opt in to the sanitized allowlisted JSON
 artifact without exposing connection strings, database paths, or scope identities:
 
 ```bash
 ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR=/path/to/evidence \
-dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite.Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj -c Release
+dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj -c Release
 ```
 
 This closes only T025's Target-profile baseline. T051's broader SQLite fixture, schema-drift hooks,
-and later full provider conformance remain pending.
+and later full provider conformance remain pending. The green lifecycle rows still traverse the
+existing load-all/client-evaluation read path and are not bounded-query evidence; T026–T029 remain
+the authority for removing that path.
 
 ## 1. Restore and build
 
@@ -219,7 +227,7 @@ The implementation phase adds each concrete fixture in a separate leaf test proj
 reference the shared contract project and may reference only their own provider SDK:
 
 ```bash
-dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite.Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj -c Release --no-build
+dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj -c Release --no-build
 dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/SqlServer.Tests/Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests.csproj -c Release --no-build
 dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql.Tests/Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests.csproj -c Release --no-build
 dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb.Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj -c Release --no-build

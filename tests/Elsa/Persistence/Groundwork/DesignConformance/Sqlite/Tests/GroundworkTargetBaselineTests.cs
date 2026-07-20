@@ -1,8 +1,12 @@
 using System.Security.Cryptography;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
+using Groundwork.Core.Manifests;
+using Groundwork.Documents.Store;
+using Groundwork.Sqlite.Documents;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
@@ -10,6 +14,9 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.77";
+    private const string ExpectedTargetFingerprint = "22e3b8afe1564edc52ae126b5d049b21d1db72f38d1ceac6a1c2b9ddc144fa6d";
+    private const string ExpectedPlanFingerprint = "e2c71279ddd7cc8506f45601bd128347a30c89fcd70a32afeec67928f9b86275";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_seventeen_green_eight_red_baseline()
@@ -74,12 +81,22 @@ public sealed class GroundworkTargetBaselineTests
         Assert.True(drift.Length == 0, JsonSerializer.Serialize(drift, JsonOptions));
 
         var telemetrySnapshot = telemetry.Snapshot();
+        var packageFamilyVersion = PackageVersion(typeof(SqliteDocumentStore).Assembly);
+        var schemaToolVersion = GroundworkSchemaCli.ToolPackageVersion();
+        Assert.Equal(ExpectedGroundworkVersion, PackageVersion(typeof(StorageManifest).Assembly));
+        Assert.Equal(ExpectedGroundworkVersion, PackageVersion(typeof(IDocumentStore).Assembly));
+        Assert.Equal(ExpectedGroundworkVersion, packageFamilyVersion);
+        Assert.Equal(ExpectedGroundworkVersion, schemaToolVersion);
+        Assert.Equal(ExpectedTargetFingerprint, telemetrySnapshot.TargetFingerprint);
+        Assert.Equal(ExpectedPlanFingerprint, telemetrySnapshot.PlanFingerprint);
+
         var evidence = new BaselineEvidence(
-            "1",
+            "2",
             DesignPersistenceContractProfiles.Target.Name,
             "sqlite",
             "groundwork",
-            "0.0.1-preview.77",
+            packageFamilyVersion,
+            schemaToolVersion,
             "sqlite-file",
             typeof(Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema).FullName!,
             telemetrySnapshot.TargetFingerprint,
@@ -96,7 +113,7 @@ public sealed class GroundworkTargetBaselineTests
     }
 
     private const string Atomicity = GroundworkTargetAtomicityUnavailableException.Classification;
-    private const string DuplicateIdentity = "same-scope-identity-rejection-absent";
+    private const string DuplicateIdentity = DesignDuplicateIdentityAcceptedException.Classification;
 
     private static Scenario Green(string name, Func<Task> execute) =>
         new(name, ExpectedOutcome.Green, execute, exception => exception is null ? null : "unexpected-failure");
@@ -107,8 +124,7 @@ public sealed class GroundworkTargetBaselineTests
             if (classification == Atomicity && exception is GroundworkTargetAtomicityUnavailableException)
                 return Atomicity;
             if (classification == DuplicateIdentity
-                && exception is Xunit.Sdk.XunitException
-                && exception.Message.Contains("Assert.NotNull() Failure", StringComparison.Ordinal))
+                && exception is DesignDuplicateIdentityAcceptedException)
                 return DuplicateIdentity;
             return null;
         });
@@ -127,6 +143,18 @@ public sealed class GroundworkTargetBaselineTests
 
     private static string Digest(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    private static string PackageVersion(Assembly assembly)
+    {
+        var informationalVersion = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+        var packageVersion = informationalVersion?.Split('+', 2)[0];
+        return !string.IsNullOrWhiteSpace(packageVersion)
+            ? packageVersion
+            : throw new InvalidOperationException(
+                $"Assembly '{assembly.GetName().Name}' does not declare an informational package version.");
+    }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -155,6 +183,7 @@ public sealed class GroundworkTargetBaselineTests
         string Provider,
         string ProviderFamily,
         string PackageFamilyVersion,
+        string SchemaToolVersion,
         string Topology,
         string ManifestType,
         string TargetFingerprint,

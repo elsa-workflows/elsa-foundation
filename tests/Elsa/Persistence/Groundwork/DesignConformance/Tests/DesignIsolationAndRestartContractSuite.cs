@@ -6,6 +6,7 @@ using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -31,6 +32,7 @@ public abstract class DesignIsolationAndRestartContractSuite
 
         var scopeA = await SeedScopeAsync(fixture, DesignPersistenceFixtureData.ScopeA, "scope A");
         var scopeB = await SeedScopeAsync(fixture, DesignPersistenceFixtureData.ScopeB, "scope B");
+        await AssertSubmittedAggregateOwnsScopeAsync(fixture, DesignPersistenceFixtureData.ScopeA);
 
         var observedA = await ReadScopeSnapshotAsync(fixture, DesignPersistenceFixtureData.ScopeA, scopeA.PromotedVersionId);
         var observedB = await ReadScopeSnapshotAsync(fixture, DesignPersistenceFixtureData.ScopeB, scopeB.PromotedVersionId);
@@ -135,20 +137,24 @@ public abstract class DesignIsolationAndRestartContractSuite
         SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationDuplicateIdentities);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
-        await SeedScopeAsync(fixture, DesignPersistenceFixtureData.ScopeA, "scope A");
+        var seeded = await SeedScopeAsync(fixture, DesignPersistenceFixtureData.ScopeA, "scope A");
+        var before = await ReadScopeSnapshotAsync(fixture, DesignPersistenceFixtureData.ScopeA, seeded.PromotedVersionId);
+        var beforeHash = DesignPersistenceFixtureData.ResultHash(before);
 
+        bool duplicateWorkflowAccepted;
         using (var duplicateWorkflowScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
         {
             var duplicateWorkflow = DesignPersistenceFixtureData.WorkflowDefinition();
             duplicateWorkflow.Name = "duplicate workflow";
             var duplicateDraft = DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState("duplicate-workflow-root"));
-            await AssertNonCancellationFailureAsync(() => duplicateWorkflowScope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+            duplicateWorkflowAccepted = await WasDuplicateAcceptedAsync(() => duplicateWorkflowScope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
                 duplicateWorkflow,
                 duplicateDraft,
                 DesignPersistenceFixtureData.WorkflowDraftLayout(),
                 CancellationToken.None));
         }
 
+        bool duplicateActivityAccepted;
         using (var duplicateActivityScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
         {
             var duplicateActivityDefinition = DesignPersistenceFixtureData.ActivityDefinition();
@@ -156,17 +162,18 @@ public abstract class DesignIsolationAndRestartContractSuite
             var duplicateActivityVersion = DesignPersistenceFixtureData.ActivityVersion(
                 id: "activity-http-request-duplicate-v1",
                 definitionId: duplicateActivityDefinition.Id);
-            await AssertNonCancellationFailureAsync(() => duplicateActivityScope.ServiceProvider.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+            duplicateActivityAccepted = await WasDuplicateAcceptedAsync(() => duplicateActivityScope.ServiceProvider.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
                 duplicateActivityDefinition,
                 duplicateActivityVersion,
                 CancellationToken.None));
         }
 
+        bool duplicateSemanticVersionAccepted;
         using (var duplicateSemanticVersionScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
         {
             var duplicateSemanticVersion = DesignPersistenceFixtureData.ActivityVersion(
                 id: "activity-http-request-v1-duplicate");
-            await AssertNonCancellationFailureAsync(() => duplicateSemanticVersionScope.ServiceProvider.GetRequiredService<IAddCommand<ActivityDefinitionVersion>>().Add(
+            duplicateSemanticVersionAccepted = await WasDuplicateAcceptedAsync(() => duplicateSemanticVersionScope.ServiceProvider.GetRequiredService<IAddCommand<ActivityDefinitionVersion>>().Add(
                 duplicateSemanticVersion,
                 CancellationToken.None));
         }
@@ -177,8 +184,28 @@ public abstract class DesignIsolationAndRestartContractSuite
             .GetAsync(DesignPersistenceFixtureData.WorkflowDefinitionId);
         var activity = await readServices.GetRequiredService<IActivityDefinitionStore>()
             .GetAsync(DesignPersistenceFixtureData.ActivityDefinitionId);
-        var versions = await readServices.GetRequiredService<IActivityDefinitionVersionStore>()
+        var duplicateActivity = await readServices.GetRequiredService<IActivityDefinitionStore>()
+            .FindAsync(new ActivityDefinitionFilter { Id = "activity-http-request-duplicate" });
+        var versionStore = readServices.GetRequiredService<IActivityDefinitionVersionStore>();
+        var versions = await versionStore
             .ListByDefinitionAsync(DesignPersistenceFixtureData.ActivityDefinitionId);
+        var allVersions = await versionStore.ListAsync();
+
+        if (duplicateWorkflowAccepted || duplicateActivityAccepted || duplicateSemanticVersionAccepted)
+        {
+            Assert.True(
+                duplicateWorkflowAccepted && workflow.Name == "duplicate workflow"
+                || duplicateActivityAccepted && duplicateActivity is not null
+                || duplicateSemanticVersionAccepted && versions.Any(version => version.Id == "activity-http-request-v1-duplicate"),
+                "A duplicate write was acknowledged but none of its duplicate identities became observable.");
+            throw new DesignDuplicateIdentityAcceptedException();
+        }
+
+        var after = await ReadScopeSnapshotAsync(fixture, DesignPersistenceFixtureData.ScopeA, seeded.PromotedVersionId);
+        Assert.Equal(beforeHash, DesignPersistenceFixtureData.ResultHash(after));
+        Assert.Null(duplicateActivity);
+        Assert.DoesNotContain(allVersions, version => version.Id == "activity-http-request-duplicate-v1");
+        Assert.DoesNotContain(allVersions, version => version.Id == "activity-http-request-v1-duplicate");
         Assert.Equal("Order processing scope A", workflow.Name);
         Assert.Equal("Send HTTP request scope A", activity.DisplayName);
         Assert.Single(versions, version => version.Version == "1.0.0");
@@ -320,6 +347,38 @@ public abstract class DesignIsolationAndRestartContractSuite
         return new(versionId);
     }
 
+    private static async Task AssertSubmittedAggregateOwnsScopeAsync(
+        IDesignPersistenceContractFixture fixture,
+        string storageScope)
+    {
+        SubmittedWorkflowDefinition submitted;
+        using (var writeScope = fixture.CreateScope(storageScope))
+        {
+            submitted = await writeScope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>().Execute(
+                "Scoped submitted workflow",
+                "Proves every submitted aggregate member owns the active storage scope.",
+                DesignPersistenceFixtureData.WorkflowState());
+        }
+
+        using var readScope = fixture.CreateScope(storageScope);
+        var services = readScope.ServiceProvider;
+        var definition = await services.GetRequiredService<IWorkflowDefinitionStore>()
+            .GetAsync(submitted.DefinitionId);
+        var draft = await services.GetRequiredService<IWorkflowDefinitionDraftStore>()
+            .FindWithLayoutByIdAsync(submitted.DraftId);
+        var version = await services.GetRequiredService<IWorkflowDefinitionVersionStore>()
+            .GetAsync(submitted.VersionId);
+        var layout = await services.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>()
+            .FindByVersionIdAsync(submitted.VersionId);
+
+        Assert.NotNull(draft);
+        Assert.NotNull(layout);
+        Assert.Equal(storageScope, definition.TenantId);
+        Assert.Equal(storageScope, draft!.Draft.TenantId);
+        Assert.Equal(storageScope, version.TenantId);
+        Assert.Equal(storageScope, layout!.TenantId);
+    }
+
     private static async Task<ScopeSnapshot> ReadScopeSnapshotAsync(
         IDesignPersistenceContractFixture fixture,
         string storageScope,
@@ -354,6 +413,16 @@ public abstract class DesignIsolationAndRestartContractSuite
 
         Assert.NotNull(exception);
         Assert.False(exception is OperationCanceledException, "A conflict or rejected write must not be reported as cancellation.");
+    }
+
+    private static async Task<bool> WasDuplicateAcceptedAsync(Func<Task> operation)
+    {
+        var exception = await Record.ExceptionAsync(operation);
+        if (exception is null)
+            return true;
+
+        Assert.False(exception is OperationCanceledException, "A duplicate rejection must not be reported as cancellation.");
+        return false;
     }
 
     private static async Task AssertSameMissingOutcomeAsync(

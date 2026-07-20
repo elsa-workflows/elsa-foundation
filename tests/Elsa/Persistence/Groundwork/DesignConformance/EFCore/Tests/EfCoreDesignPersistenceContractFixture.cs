@@ -3,10 +3,11 @@ using System.Reflection;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Events;
 using Elsa.Events.Core.Contracts;
+using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.EFCore.Events;
-using Elsa.Persistence.EFCore.Handlers;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting.Services;
@@ -34,8 +35,7 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
 {
     private readonly string _databasePath = Path.Join(Path.GetTempPath(), $"elsa-design-ef-oracle-{Guid.NewGuid():N}.db");
     private readonly EfAtomicityFaultController _faults = new();
-    private readonly OracleEventPublisher _events = new();
-    private IReadOnlyCollection<ActivityDefinitionVersion> _reconciliationCandidates = [];
+    private readonly OracleEventCapture _events = new();
     private ServiceProvider _services = null!;
 
     private EfCoreDesignPersistenceContractFixture()
@@ -91,7 +91,7 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
     {
         EnsureScope(storageScope);
         cancellationToken.ThrowIfCancellationRequested();
-        _reconciliationCandidates = candidates.ToArray();
+        _events.StageCandidates(candidates);
         return Task.CompletedTask;
     }
 
@@ -176,8 +176,6 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
     private async Task OpenAsync(CancellationToken cancellationToken)
     {
         _services = BuildServices();
-        _events.ResetSubscriptions();
-        WireEventHandlers(_services, _events);
 
         await using var scope = _services.CreateAsyncScope();
         var workflows = scope.ServiceProvider.GetRequiredService<IDbContextFactory<WorkflowsDesignDbContext>>();
@@ -194,46 +192,25 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<ISystemClock>(new DesignPersistenceFixtureData.FixedSystemClock(DesignPersistenceFixtureData.Epoch));
         services.AddSingleton<IIdentityGenerator, SequentialIdentityGenerator>();
-        services.AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>();
-        services.AddSingleton<IInlineEventPublisher>(_events);
-        services.AddSingleton<IDeferredEventPublisher>(_events);
+        services.AddSingleton<IDistributedLockProvider, ImmediateDesignContractLockProvider>();
         services.AddSingleton<EfAtomicityFaultController>(_faults);
         services.AddSingleton<SaveChangesInterceptor>(_faults.Interceptor);
         services.AddSingleton<JsonPayloadConverterRegistry>();
         services.AddSingleton<IPayloadSerializer, JsonPayloadSerializer>();
+        new EventsFeature().ConfigureServices(services);
+        services.AddScoped<IDeferredEventPublisher>(sp =>
+            new OracleDeferredEventPublisher(sp.GetRequiredService<IEventPublisher>(), _events));
 
         new OracleWorkflowsFeature(ConnectionString, _faults.Interceptor).ConfigureServices(services);
         new OracleActivitiesFeature(ConnectionString, _faults.Interceptor).ConfigureServices(services);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
+        services.AddScoped<IEventHandler<OnActivityVersionsReconciling>>(
+            _ => new OracleActivityReconciliationHandler(_events));
+        services.AddScoped<IEventHandler<OnEntitySaving>>(
+            _ => new OracleCancellationTokenProbeHandler(_faults));
 
         return services.BuildServiceProvider(validateScopes: true);
-    }
-
-    private void WireEventHandlers(ServiceProvider services, OracleEventPublisher publisher)
-    {
-        publisher.Subscribe<OnEntitySaving>(async @event =>
-        {
-            await using var scope = services.CreateAsyncScope();
-            await new ApplyEntitySavingHandlers(scope.ServiceProvider).Handle(@event, CancellationToken.None);
-        });
-        publisher.Subscribe<OnEntityLoading>(async @event =>
-        {
-            await using var scope = services.CreateAsyncScope();
-            await new ApplyEntityLoadingHandlers(scope.ServiceProvider).Handle(@event, CancellationToken.None);
-        });
-        publisher.Subscribe<Elsa.Workflows.Design.Validations.Core.Events.OnDraftValidating>(async @event =>
-        {
-            await using var scope = services.CreateAsyncScope();
-            foreach (var handler in scope.ServiceProvider.GetServices<IEventHandler<Elsa.Workflows.Design.Validations.Core.Events.OnDraftValidating>>())
-                await handler.Handle(@event, CancellationToken.None);
-        });
-        publisher.Subscribe<OnActivityVersionsReconciling>(@event =>
-        {
-            foreach (var candidate in _reconciliationCandidates)
-                @event.Versions.Add(candidate);
-            return Task.CompletedTask;
-        });
     }
 
     private string ConnectionString => $"Data Source={_databasePath}";
@@ -280,6 +257,7 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
 internal sealed class EfAtomicityFaultController
 {
     private EfAtomicityFaultLease? _armed;
+    private CancellationToken? _eventHandlerToken;
 
     public SaveChangesInterceptor Interceptor { get; }
     public EfCancellationProbeEvidence? CancellationProbeEvidence { get; private set; }
@@ -299,8 +277,15 @@ internal sealed class EfAtomicityFaultController
             throw new InvalidOperationException("Only one EF atomicity fault may be armed at a time.");
 
         _armed = new EfAtomicityFaultLease(this, plan);
+        _eventHandlerToken = null;
         CancellationProbeEvidence = null;
         return _armed;
+    }
+
+    public void ObserveEventHandlerToken(CancellationToken cancellationToken)
+    {
+        if (_armed is { Plan.Action: DesignAtomicityFaultAction.Cancel })
+            _eventHandlerToken = cancellationToken;
     }
 
     public EfAtomicityOperationCancellation BeginOperation(CancellationToken callerToken)
@@ -320,6 +305,12 @@ internal sealed class EfAtomicityFaultController
         lease.Trigger();
         if (lease.Plan.Action == DesignAtomicityFaultAction.Cancel)
         {
+            if (_eventHandlerToken is not { } eventHandlerToken || eventHandlerToken != lease.OperationToken)
+            {
+                throw new InvalidOperationException(
+                    "The Elsa event pipeline did not carry the public command cancellation token to its handlers.");
+            }
+
             if (providerToken != lease.OperationToken)
             {
                 throw new InvalidOperationException(
@@ -327,7 +318,7 @@ internal sealed class EfAtomicityFaultController
             }
 
             lease.Cancel();
-            CancellationProbeEvidence = new(lease.OperationToken, providerToken);
+            CancellationProbeEvidence = new(lease.OperationToken, eventHandlerToken, providerToken);
             providerToken.ThrowIfCancellationRequested();
             throw new InvalidOperationException("The injected EF cancellation token was not observed as cancelled.");
         }
@@ -413,15 +404,13 @@ internal sealed class EfAtomicityOperationCancellation : IDisposable
 
 internal sealed record EfCancellationProbeEvidence(
     CancellationToken CommandToken,
+    CancellationToken EventHandlerToken,
     CancellationToken ProviderToken);
 
-internal sealed class OracleEventPublisher : IInlineEventPublisher, IDeferredEventPublisher
+internal sealed class OracleEventCapture
 {
     private readonly ConcurrentQueue<IEvent> _events = new();
-    private readonly List<(Type EventType, Func<IEvent, Task> Handler)> _subscriptions = [];
-
-    public void Subscribe<T>(Func<T, Task> handler) where T : class, IEvent =>
-        _subscriptions.Add((typeof(T), @event => handler((T)@event)));
+    private IReadOnlyCollection<ActivityDefinitionVersion> _reconciliationCandidates = [];
 
     public void Clear()
     {
@@ -430,45 +419,47 @@ internal sealed class OracleEventPublisher : IInlineEventPublisher, IDeferredEve
         }
     }
 
-    public void ResetSubscriptions() => _subscriptions.Clear();
-
     public IReadOnlyList<IEvent> Snapshot() => _events.ToArray();
 
-    Task IInlineEventPublisher.Publish(IEvent @event, CancellationToken cancellationToken) => PublishAsync(@event, cancellationToken);
-    Task IDeferredEventPublisher.Publish(IEvent @event, CancellationToken cancellationToken) => PublishAsync(@event, cancellationToken);
+    public void Record(IEvent @event) => _events.Enqueue(@event);
 
-    private async Task PublishAsync(IEvent @event, CancellationToken cancellationToken)
+    public void StageCandidates(IReadOnlyCollection<ActivityDefinitionVersion> candidates) =>
+        _reconciliationCandidates = candidates.ToArray();
+
+    public IReadOnlyCollection<ActivityDefinitionVersion> Candidates => _reconciliationCandidates;
+}
+
+internal sealed class OracleDeferredEventPublisher(
+    IEventPublisher eventPublisher,
+    OracleEventCapture capture) : IDeferredEventPublisher
+{
+    public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _events.Enqueue(@event);
-        foreach (var subscription in _subscriptions.Where(subscription => subscription.EventType.IsInstanceOfType(@event)))
-            await subscription.Handler(@event);
+        capture.Record(@event);
+        return eventPublisher.Publish(@event, EventPublishingStrategy.Background, cancellationToken);
     }
 }
 
-internal sealed class ImmediateDistributedLockProvider : IDistributedLockProvider
+internal sealed class OracleActivityReconciliationHandler(OracleEventCapture capture)
+    : IEventHandler<OnActivityVersionsReconciling>
 {
-    public IDistributedSynchronizationHandle? TryAcquireLock(
-        string name,
-        TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default) => new Handle();
-
-    public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(
-        string name,
-        TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
-
-    public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(
-        string name,
-        TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
-
-    private sealed class Handle : IDistributedSynchronizationHandle
+    public Task Handle(OnActivityVersionsReconciling @event, CancellationToken cancellationToken)
     {
-        public CancellationToken HandleLostToken => CancellationToken.None;
-        public void Dispose() { }
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        cancellationToken.ThrowIfCancellationRequested();
+        capture.Record(@event);
+        foreach (var candidate in capture.Candidates)
+            @event.Versions.Add(candidate);
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class OracleCancellationTokenProbeHandler(EfAtomicityFaultController controller)
+    : IEventHandler<OnEntitySaving>
+{
+    public Task Handle(OnEntitySaving @event, CancellationToken cancellationToken)
+    {
+        controller.ObserveEventHandlerToken(cancellationToken);
+        return Task.CompletedTask;
     }
 }

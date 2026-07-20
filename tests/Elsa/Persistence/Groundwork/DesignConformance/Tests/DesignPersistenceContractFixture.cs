@@ -175,6 +175,16 @@ public sealed record DesignAtomicityOperationResult(
     DesignAtomicityOperationStatus Status,
     string? AuthoritativeResultFingerprint);
 
+/// <summary>
+/// Proves that a provider acknowledged a same-scope duplicate and made that duplicate observable.
+/// The target-baseline runner recognizes only this sentinel as the intentional T024 red outcome.
+/// </summary>
+public sealed class DesignDuplicateIdentityAcceptedException()
+    : Exception("A same-scope duplicate identity was acknowledged and became observable.")
+{
+    public const string Classification = "same-scope-identity-rejection-absent";
+}
+
 /// <summary>Provider-neutral observable state for the canonical multi-document operation.</summary>
 public sealed record DesignAtomicitySnapshot(
     int VisibleAggregatePartCount,

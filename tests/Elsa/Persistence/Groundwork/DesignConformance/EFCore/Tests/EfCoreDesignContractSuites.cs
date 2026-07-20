@@ -50,9 +50,11 @@ public sealed class EfCoreAtomicityCancellationEvidenceTests
         var evidence = fixture.CancellationProbeEvidence
             ?? throw new InvalidOperationException("The EF interceptor did not capture cancellation-token evidence.");
 
+        Assert.Equal(evidence.CommandToken, evidence.EventHandlerToken);
         Assert.Equal(evidence.CommandToken, evidence.ProviderToken);
         Assert.Equal(evidence.CommandToken, exception.CancellationToken);
         Assert.True(evidence.CommandToken.IsCancellationRequested);
+        Assert.True(evidence.EventHandlerToken.IsCancellationRequested);
         Assert.True(evidence.ProviderToken.IsCancellationRequested);
         Assert.True(exception.CancellationToken.IsCancellationRequested);
         Assert.True(fault.WasTriggered);
