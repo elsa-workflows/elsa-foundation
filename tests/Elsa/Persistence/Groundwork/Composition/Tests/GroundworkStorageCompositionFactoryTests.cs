@@ -1,4 +1,6 @@
 using Elsa.Events.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Groundwork;
+using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
@@ -6,6 +8,8 @@ using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Secrets.Persistence.Groundwork;
 using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Design.Persistence.Groundwork;
+using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
@@ -102,6 +106,62 @@ public sealed class GroundworkStorageCompositionFactoryTests
     }
 
     [Fact]
+    public void Reference_deployment_schema_unions_exact_workflow_and_activity_physical_definitions()
+    {
+        var manifest = new GroundworkAllFeaturesDeploymentSchema().CreateManifest();
+        var expectedUnits = WorkflowsDesignStorageManifest.Create().StorageUnits
+            .Concat(ActivitiesDesignStorageManifest.Create().StorageUnits)
+            .ToArray();
+
+        Assert.Equal("elsa-documents", manifest.Identity.Value);
+        Assert.Equal("elsa.documents", manifest.Owner.Value);
+        Assert.Equal("1.0.0", manifest.Version.Value);
+        foreach (var expected in expectedUnits)
+        {
+            var actual = Assert.Single(manifest.StorageUnits, unit => unit.Identity == expected.Identity);
+            var expectedStorage = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
+                Assert.IsType<StorageUnitPhysicalStorage>(expected.PhysicalStorage).Policy);
+            var actualStorage = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
+                Assert.IsType<StorageUnitPhysicalStorage>(actual.PhysicalStorage).Policy);
+
+            Assert.Equal(expectedStorage.Definition, actualStorage.Definition);
+            Assert.Equal(
+                expected.PhysicalStorage.LogicalIndexes.Select(index => index.Identity),
+                actual.PhysicalStorage.LogicalIndexes.Select(index => index.Identity));
+            Assert.Equal(
+                expected.PhysicalStorage.BoundedQueries.Select(query => query.Identity),
+                actual.PhysicalStorage.BoundedQueries.Select(query => query.Identity));
+        }
+    }
+
+    [Fact]
+    public void Deployment_schema_exposes_one_host_naming_policy_for_both_design_families()
+    {
+        var source = new PrefixedDesignDeploymentSchema();
+        var manifest = source.CreateManifest();
+        var namePolicy = source.CreateNamePolicy();
+
+        Assert.Equal(
+            "host_workflowDefinition",
+            namePolicy.ResolveName(new PhysicalNameContext(
+                new StorageUnitIdentity(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind),
+                PhysicalObjectKind.PrimaryStorage,
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind)));
+        Assert.Equal(
+            "host_activityDefinition",
+            namePolicy.ResolveName(new PhysicalNameContext(
+                new StorageUnitIdentity(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind),
+                PhysicalObjectKind.PrimaryStorage,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind)));
+        Assert.Contains(
+            manifest.StorageUnits,
+            unit => unit.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+        Assert.Contains(
+            manifest.StorageUnits,
+            unit => unit.Identity.Value == ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+    }
+
+    [Fact]
     public void Identity_reference_deployment_schema_registers_as_the_exact_runtime_authority()
     {
         var services = new ServiceCollection();
@@ -180,6 +240,18 @@ public sealed class GroundworkStorageCompositionFactoryTests
     {
         protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
             [typeof(SecretsGroundworkStorageManifestSource)];
+    }
+
+    public sealed class PrefixedDesignDeploymentSchema : GroundworkDeploymentSchemaManifestSource
+    {
+        protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
+        [
+            typeof(WorkflowsDesignGroundworkStorageManifestSource),
+            typeof(ActivitiesDesignGroundworkStorageManifestSource)
+        ];
+
+        protected override GroundworkStorageNamingPolicyOptions CreateStorageNamingPolicy() =>
+            new("design-host-prefix-v1", context => $"host_{context.FeatureDefaultLogicalName}");
     }
 
     private static GroundworkProviderCapabilitySnapshot ProviderCapabilities()

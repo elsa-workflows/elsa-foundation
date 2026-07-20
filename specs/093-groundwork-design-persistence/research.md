@@ -116,3 +116,13 @@ T020 creates and maintains this ledger at class granularity. Every feature class
 - MongoDB bounded mutations and portable Unicode/long searchable values remain active upstream work. The design lane must consume a version that provides the exact operations and comparison semantics it declares; it must not emulate missing behavior locally.
 - Document identity case policy is an Identity/OpenIddict dependency and is not required to change existing ordinal design document IDs in this slice.
 - The targeted constitution amendment remains pending until complete zero-EF compliance; this plan does not require an interim exception.
+
+## Phase 2 implementation reconciliation
+
+The unified-composition architecture advanced after the original T012/T013 file targets were drafted. The
+stable `elsa-documents` identity, `elsa.documents` owner, and `1.0.0` version now live in
+`GroundworkStorageCompositionDescriptor`; `GroundworkStorageCompositionValidator` performs the selected
+manifest union. `GroundworkDeploymentSchemaManifestSource` is the provider-neutral deployment source and
+host naming-policy bridge. `GroundworkUnifiedManifest` deliberately remains only a compatibility facade, so
+the design manifests are not hard-coded into it. Direct composition tests cover the workflow/activity union
+and a host-supplied naming policy across both design families.
