@@ -356,6 +356,28 @@ public sealed class GroundworkPersistenceCoverageTests
     }
 
     [Fact]
+    public void Internal_design_operation_ledger_is_explicitly_owned_outside_the_frozen_ALL32_contract_denominator()
+    {
+        var findings = Reconcile(
+            ReadLedger(),
+            Inventory(manifestStorageUnits: [ManifestUnit("runtime", "DesignOperationDocumentKind")]));
+
+        Assert.Empty(findings);
+    }
+
+    [Fact]
+    public void Unknown_internal_manifest_unit_cannot_bypass_the_coverage_model()
+    {
+        var findings = Reconcile(
+            ReadLedger(),
+            Inventory(manifestStorageUnits: [ManifestUnit("runtime", "UnknownInternalDocumentKind")]));
+
+        Assert.Equal(
+            ["runtime manifest storage unit 'UnknownInternalDocumentKind' has no explicit coverage-ledger row mapping."],
+            findings);
+    }
+
+    [Fact]
     public void Pre_existing_644_duplicate_cannot_advance_past_externally_blocked()
     {
         var ledger = ReadLedger();

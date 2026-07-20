@@ -2,6 +2,8 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -64,6 +66,10 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkSubmitWorkflowDefinitionCommand>(sp.GetRequiredService<ISubmitWorkflowDefinitionCommand>());
         Assert.IsType<GroundworkCloneDraftFromVersionCommand>(sp.GetRequiredService<ICloneDraftFromVersionCommand>());
         Assert.IsType<WorkflowDefinitionLookup>(sp.GetRequiredService<IWorkflowDefinitionLookup>());
+        Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<GroundworkDesignAtomicWrite>());
+        Assert.Single(
+            sp.GetServices<IGroundworkStorageManifestSource>(),
+            source => source is GroundworkDesignAtomicWriteStorageManifestSource);
     }
 
     [Fact]

@@ -15,16 +15,20 @@ internal sealed class GroundworkPersistenceReconciler
 
     private readonly IReadOnlyList<GroundworkPersistenceRowMapping> _mappings;
     private readonly IReadOnlyDictionary<string, GroundworkDeferredPersistenceContract> _deferredContracts;
+    private readonly IReadOnlySet<GroundworkInternalStorageUnitMapping> _internalStorageUnits;
 
     private GroundworkPersistenceReconciler(
         IReadOnlyList<GroundworkPersistenceRowMapping> mappings,
-        IReadOnlyCollection<GroundworkDeferredPersistenceContract> deferredContracts)
+        IReadOnlyCollection<GroundworkDeferredPersistenceContract> deferredContracts,
+        IReadOnlyCollection<GroundworkInternalStorageUnitMapping> internalStorageUnits)
     {
         _mappings = mappings;
         _deferredContracts = deferredContracts.ToDictionary(item => item.Contract, StringComparer.Ordinal);
+        _internalStorageUnits = internalStorageUnits.ToHashSet();
     }
 
-    public static GroundworkPersistenceReconciler CreateDefault() => new(DefaultMappings, DeferredContracts);
+    public static GroundworkPersistenceReconciler CreateDefault() =>
+        new(DefaultMappings, DeferredContracts, InternalStorageUnits);
 
     public IReadOnlyList<string> Reconcile(
         JsonObject ledger,
@@ -286,6 +290,12 @@ internal sealed class GroundworkPersistenceReconciler
                     registration.StorageUnits.Contains(unit.StorageUnit, StringComparer.Ordinal));
                 if (representedByRegistration)
                     continue;
+                if (_internalStorageUnits.Any(mapping =>
+                        mapping.Owner == unit.Owner &&
+                        mapping.StorageUnit == unit.StorageUnit))
+                {
+                    continue;
+                }
 
                 findings.Add(
                     $"{unit.Owner} manifest storage unit '{unit.StorageUnit}' has no explicit coverage-ledger row mapping.");
@@ -435,6 +445,13 @@ internal sealed class GroundworkPersistenceReconciler
         new("IExternalPayloadStore", "the host-selected external payload provider")
     ];
 
+    // Infrastructure units that deliberately do not implement a public Elsa persistence contract belong to
+    // their owning work-unit evidence instead of the frozen spec 094 ALL32 contract denominator.
+    private static readonly GroundworkInternalStorageUnitMapping[] InternalStorageUnits =
+    [
+        new("runtime", "DesignOperationDocumentKind", "#641/T030")
+    ];
+
     private static GroundworkPersistenceRowMapping Map(
         string owner,
         string? contract,
@@ -469,3 +486,8 @@ internal sealed record GroundworkPersistenceRowMapping(
     string? StorageUnit);
 
 internal sealed record GroundworkDeferredPersistenceContract(string Contract, string Authority);
+
+internal sealed record GroundworkInternalStorageUnitMapping(
+    string Owner,
+    string StorageUnit,
+    string Authority);
