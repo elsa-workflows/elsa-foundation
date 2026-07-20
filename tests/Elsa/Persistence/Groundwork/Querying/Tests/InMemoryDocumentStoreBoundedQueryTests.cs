@@ -88,19 +88,41 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
                 QueryIdentity,
                 [DocumentQueryClause.Of(DocumentQueryComparison.Equal(GroupPath, "selected"))],
                 latestPerKeyPath: NamePath));
-        await RejectBeforeIoAsync(
-            store,
-            new DocumentQuery(
-                DocumentKind,
-                QueryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(NamePath, "alpha"))]));
-
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => store.CountAsync(ValidQuery()));
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => store.QueryAsync(new DocumentQuery(DocumentKind, "missing-query")));
 
         Assert.Equal(0, store.DocumentQueryCount);
+    }
+
+    [Fact]
+    public async Task Rejects_document_results_without_a_page_limit_before_query_io()
+    {
+        var store = new InMemoryDocumentStore(CreateManifest());
+
+        await RejectBeforeIoAsync(
+            store,
+            new DocumentQuery(
+                DocumentKind,
+                QueryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(GroupPath, "selected"))],
+                [new DocumentQueryOrder(ScorePath, PhysicalSortDirection.Descending)]));
+    }
+
+    [Fact]
+    public async Task Rejects_document_results_with_a_nonpositive_page_limit_before_query_io()
+    {
+        var store = new InMemoryDocumentStore(CreateManifest());
+
+        await RejectBeforeIoAsync(
+            store,
+            new DocumentQuery(
+                DocumentKind,
+                QueryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(GroupPath, "selected"))],
+                [new DocumentQueryOrder(ScorePath, PhysicalSortDirection.Descending)],
+                take: 0));
     }
 
     [Fact]
@@ -129,7 +151,8 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
             DocumentKind,
             QueryIdentity,
             comparisons.Select(DocumentQueryClause.Of).ToArray(),
-            [new DocumentQueryOrder(ScorePath, PhysicalSortDirection.Descending)]);
+            [new DocumentQueryOrder(ScorePath, PhysicalSortDirection.Descending)],
+            take: 50);
 
     private static async Task SaveAsync(
         InMemoryDocumentStore store,

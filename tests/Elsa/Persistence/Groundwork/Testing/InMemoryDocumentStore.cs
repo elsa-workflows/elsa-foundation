@@ -294,6 +294,12 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
                 $"Document query '{query.QueryIdentity}' does not declare result operation '{expectedOperation}'.");
         }
 
+        if (expectedOperation == BoundedQueryResultOperation.Documents && query.Take is not > 0)
+        {
+            throw new InvalidOperationException(
+                $"Document query '{query.QueryIdentity}' must declare a positive page limit.");
+        }
+
         var logicalIndex = unit.PhysicalStorage!.LogicalIndexes.Single(
             index => index.Identity == declaration.IndexIdentity);
         var predicates = declaration.PredicateFields.Count == 0

@@ -67,8 +67,13 @@ while retaining a legacy-declaration fallback for manifests that have not yet be
 physicalized. A physical declaration takes precedence when the transitional manifest
 also retains the corresponding legacy declaration, matching provider route binding.
 The substrate now rejects undeclared operators, paths, disjunction, ordering, paging,
-latest-per-key selection, required residual omissions, and unsupported terminal
-operations before I/O; it also observes cancellation before I/O.
+latest-per-key selection, required residual omissions, unsupported terminal
+operations, and physical `Documents` queries without a positive page limit before I/O;
+it also observes cancellation before I/O. The legacy-declaration fallback remains limited
+to manifests that have not yet been physicalized. The ratified contract requires stable
+ordering when the public query shape requests it (for example, latest-version and
+catalog routes); it does not add an implicit order requirement to every otherwise
+unordered document page.
 
 ```bash
 dotnet test tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj \
@@ -77,9 +82,9 @@ dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.
   -c Release --no-restore
 ```
 
-Observed results: `36/36` querying tests and `612/612` runtime Groundwork tests passed.
-The build emitted only the existing Groundwork legacy-API transition warnings in the
-shared test substrate and legacy compatibility tests.
+Exact-head verification was run on 2026-07-20 after the page-limit remediation:
+`57/57` querying tests passed. The build emitted only existing Groundwork legacy-API
+transition warnings in the shared test substrate and legacy compatibility tests.
 
 ## 3. Run the four-provider black-box suite
 
@@ -182,6 +187,11 @@ dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --
 ```
 
 Expected: all preserved domain-objective tests pass; core-provider boundaries and the design-EF removal ratchet pass.
+
+Exact-head verification on 2026-07-20 after the page-limit remediation recorded
+`354/354` workflow-design tests and `490/490` activity-design tests passing. The
+activity-design build emitted only existing obsolete
+`ActivityDefinitionVersion.DescriptorType` warnings.
 
 ## 8. Audit design EF removal
 
