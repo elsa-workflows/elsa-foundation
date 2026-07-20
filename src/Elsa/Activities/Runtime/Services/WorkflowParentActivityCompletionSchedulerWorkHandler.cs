@@ -275,6 +275,19 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     continuation,
                     cancellationToken);
 
+                var absorptionPlan = await PlanChildFaultAbsorptionAsync(
+                    serviceProvider,
+                    activityExecutionStateStore,
+                    workItem,
+                    payload,
+                    context.GetChildFaultAbsorptionRequests(),
+                    continuation,
+                    childFaulted,
+                    completedChildState,
+                    cancellationToken);
+                if (absorptionPlan is not null)
+                    subtreeCancellationPlans = [.. subtreeCancellationPlans, absorptionPlan];
+
                 if (continuation.IsComplete && parentActivity is IRuntimeActivityCheckpointParticipant checkpointParticipant)
                 {
                     var persistedValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workItem.WorkflowExecutionId, cancellationToken);
@@ -625,27 +638,120 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             if (target.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered)
                 continue;
 
-            var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
-                [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
-                [RuntimeMetadataKeys.ScopeCancellationReason] = request.Reason,
-                [RuntimeMetadataKeys.SubtreeCancellationRequestedBy] = payload.ActivityExecutionId
-            };
-            foreach (var item in request.Metadata)
-                metadata[item.Key] = item.Value;
-
             plans.Add(await planner.PlanAsync(
                 workItem.WorkflowExecutionId,
                 target,
                 allStates,
                 subStatus: "ParentCancelled",
-                metadata,
+                NewStagedCancellationMetadata(workItem, request.Reason, payload.ActivityExecutionId, request.Metadata),
                 occurredAt,
                 cancellationToken));
         }
 
         return plans;
+    }
+
+    /// <summary>
+    /// Validates and plans the child-fault absorption the structural callback staged (spec 115):
+    /// the evaluation's incident resolves and the faulted child's leftover subtree is reclaimed,
+    /// riding the same commit as the continuation. Returns <see langword="null"/> when nothing was
+    /// staged; an already-terminal incident is a legal redelivery race and only skips the resolution.
+    /// </summary>
+    private async ValueTask<ActivitySubtreeCancellationPlan?> PlanChildFaultAbsorptionAsync(
+        IServiceProvider serviceProvider,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCompleteActivityCommandPayload payload,
+        IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> requests,
+        RuntimeStructuralContinuation continuation,
+        bool childFaulted,
+        ActivityExecutionState faultedChildState,
+        CancellationToken cancellationToken)
+    {
+        if (requests.Count == 0)
+            return null;
+
+        if (!childFaulted)
+            throw new InvalidOperationException("A child-fault absorption is only valid in a child-fault evaluation.");
+        if (requests.Count > 1)
+            throw new InvalidOperationException("A child-fault evaluation cannot stage a fault absorption more than once.");
+        if (continuation.Kind is RuntimeStructuralContinuationKind.Fault or RuntimeStructuralContinuationKind.Cancel)
+            throw new InvalidOperationException("A faulting or cancelling structural decision cannot also absorb the child fault.");
+
+        var request = requests.Single();
+        var evaluationIncidentId = ReadIncidentId(workItem);
+        if (evaluationIncidentId is null || !StringComparer.Ordinal.Equals(request.IncidentId, evaluationIncidentId))
+            throw new InvalidOperationException($"Child-fault absorption names incident '{request.IncidentId}', but this evaluation carries incident '{evaluationIncidentId ?? "<none>"}'.");
+
+        var incidentStateStore = serviceProvider.GetRequiredService<IIncidentStateStore>();
+        var incident = await incidentStateStore.FindAsync(workItem.WorkflowExecutionId, request.IncidentId, cancellationToken)
+            ?? throw new InvalidOperationException($"Child-fault absorption references missing incident '{request.IncidentId}'.");
+
+        var occurredAt = _timeProvider.GetUtcNow();
+        var planner = serviceProvider.GetRequiredService<ActivitySubtreeCancellationPlanner>();
+        var allStates = await activityExecutionStateStore.ListAllAsync(workItem.WorkflowExecutionId, cancellationToken);
+        var plan = await planner.PlanAsync(
+            workItem.WorkflowExecutionId,
+            faultedChildState,
+            allStates,
+            subStatus: "FaultAbsorbed",
+            NewStagedCancellationMetadata(workItem, request.Reason, payload.ActivityExecutionId, request.Metadata),
+            occurredAt,
+            cancellationToken);
+
+        // The absorbed incident resolves instead of being suppressed with the rest of the subtree.
+        var incidentChanges = plan.IncidentChanges
+            .Where(item => !StringComparer.Ordinal.Equals(item.IncidentId, incident.IncidentId))
+            .ToList();
+        if (incident.Status is not (IncidentStatus.Resolved or IncidentStatus.Suppressed))
+            incidentChanges.Add(ResolveAbsorbedIncident(incident, request, payload.ActivityExecutionId, workItem, occurredAt));
+
+        return plan with { IncidentChanges = incidentChanges };
+    }
+
+    private static IncidentState ResolveAbsorbedIncident(
+        IncidentState incident,
+        RuntimeChildFaultAbsorptionRequest request,
+        string absorbingActivityExecutionId,
+        RuntimeSchedulerWorkItem workItem,
+        DateTimeOffset resolvedAt)
+    {
+        var metadata = incident.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.FaultAbsorbedBy] = absorbingActivityExecutionId;
+        metadata[RuntimeMetadataKeys.FaultAbsorptionReason] = request.Reason;
+        metadata[RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId;
+
+        return new IncidentState(
+            incident.IncidentId,
+            incident.WorkflowExecutionId,
+            incident.ActivityExecutionId,
+            incident.ExecutableNodeId,
+            incident.Severity,
+            IncidentStatus.Resolved,
+            IncidentResolutionAction.Continue,
+            incident.FailureType,
+            incident.Message,
+            incident.CreatedAt,
+            resolvedAt,
+            metadata);
+    }
+
+    private static Dictionary<string, string> NewStagedCancellationMetadata(
+        RuntimeSchedulerWorkItem workItem,
+        string reason,
+        string requestedByActivityExecutionId,
+        IReadOnlyDictionary<string, string> requestMetadata)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
+            [RuntimeMetadataKeys.ScopeCancellationReason] = reason,
+            [RuntimeMetadataKeys.SubtreeCancellationRequestedBy] = requestedByActivityExecutionId
+        };
+        foreach (var item in requestMetadata)
+            metadata[item.Key] = item.Value;
+        return metadata;
     }
 
     private async ValueTask RecordParentFaultAsync(
@@ -810,7 +916,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 state,
                 metadata))
             .ToArray();
-        var incidentChanges = plans.SelectMany(plan => plan.SuppressedIncidents)
+        var incidentChanges = plans.SelectMany(plan => plan.IncidentChanges)
             .Select(incident => new RuntimeStateChange<IncidentState>(
                 incident.IncidentId,
                 RuntimeStateChangeOperation.Upsert,

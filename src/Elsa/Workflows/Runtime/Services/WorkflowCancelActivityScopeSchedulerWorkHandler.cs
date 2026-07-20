@@ -103,7 +103,7 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
                     metadata)).ToArray(),
                 bookmarks: [],
                 durableValues: [],
-                incidents: plan.SuppressedIncidents.Select(incident => new RuntimeStateChange<IncidentState>(
+                incidents: plan.IncidentChanges.Select(incident => new RuntimeStateChange<IncidentState>(
                     incident.IncidentId,
                     RuntimeStateChangeOperation.Upsert,
                     incident,

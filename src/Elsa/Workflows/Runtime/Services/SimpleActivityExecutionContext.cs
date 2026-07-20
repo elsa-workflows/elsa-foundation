@@ -60,6 +60,7 @@ public sealed class SimpleActivityExecutionContext(
 
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
     private readonly List<RuntimeChildSubtreeCancellationRequest> _childSubtreeCancellationRequests = [];
+    private readonly List<RuntimeChildFaultAbsorptionRequest> _childFaultAbsorptionRequests = [];
 
     public IActivity Activity { get; } = activity;
     public CancellationToken CancellationToken { get; } = cancellationToken;
@@ -107,6 +108,17 @@ public sealed class SimpleActivityExecutionContext(
 
     public IReadOnlyCollection<RuntimeChildSubtreeCancellationRequest> GetChildSubtreeCancellationRequests() =>
         _childSubtreeCancellationRequests.ToArray();
+
+    public void RequestChildFaultAbsorption(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        _childFaultAbsorptionRequests.Add(new RuntimeChildFaultAbsorptionRequest(incidentId, reason, metadata));
+    }
+
+    public IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> GetChildFaultAbsorptionRequests() =>
+        _childFaultAbsorptionRequests.ToArray();
 
     /// <summary>Projects the engine context to the deliberately smaller ordinary activity context.</summary>
     public ActivityExecutionContext ToActivityExecutionContext() =>

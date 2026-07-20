@@ -318,6 +318,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 throw new InvalidOperationException("An initial structural execution cannot defer without scheduling at least one child activity.");
             if (context.GetChildSubtreeCancellationRequests().Count > 0)
                 throw new InvalidOperationException("An initial structural execution cannot cancel child subtrees; cancellation requests are only valid during a child-completion evaluation (spec 112).");
+            if (context.GetChildFaultAbsorptionRequests().Count > 0)
+                throw new InvalidOperationException("An initial structural execution cannot absorb child faults; absorption requests are only valid during a child-fault evaluation (spec 115).");
 
             if (returnedTransition is IStatefulActivitySuspensionTransition statefulSuspension)
             {
