@@ -38,13 +38,15 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         int? take = null)
     {
         ArgumentNullException.ThrowIfNull(query);
-        ValidateResultShape(resultOperation, take);
+        ValidateResultShape(documentKind, queryIdentity, resultOperation, take);
 
-        var clauses = query.Clauses.Select(TranslateClause).ToArray();
+        var clauses = query.Clauses
+            .Select(clause => TranslateClause(clause, documentKind, queryIdentity))
+            .ToArray();
         var order = query.Order is null
             ? Array.Empty<DocumentQueryOrder>()
             : [new DocumentQueryOrder(
-                ResolvePath(query.Order.FieldSelector),
+                ResolvePath(query.Order.FieldSelector, documentKind, queryIdentity),
                 query.Order.Direction == Elsa.Primitives.Persistence.OrderDirection.Descending
                     ? PhysicalSortDirection.Descending
                     : PhysicalSortDirection.Ascending)];
@@ -60,13 +62,18 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
     }
 
     private static void ValidateResultShape(
+        string documentKind,
+        string queryIdentity,
         BoundedQueryResultOperation resultOperation,
         int? take)
     {
         if (!Enum.IsDefined(resultOperation))
         {
             throw new GroundworkQueryTranslationException(
-                $"Query result operation '{resultOperation}' is not supported by the Groundwork translator.");
+                $"Query result operation '{resultOperation}' is not supported by the Groundwork translator.",
+                documentKind,
+                queryIdentity,
+                typeof(TEntity));
         }
 
         if (resultOperation != BoundedQueryResultOperation.Documents)
@@ -75,17 +82,23 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         if (take is not > 0)
         {
             throw new GroundworkQueryTranslationException(
-                "Document query results require a positive take bound before they can be sent to a provider.");
+                "Document query results require a positive take bound before they can be sent to a provider.",
+                documentKind,
+                queryIdentity,
+                typeof(TEntity));
         }
     }
 
-    private DocumentQueryClause TranslateClause(IReadOnlyList<QueryComparison<TEntity>> clause)
+    private DocumentQueryClause TranslateClause(
+        IReadOnlyList<QueryComparison<TEntity>> clause,
+        string documentKind,
+        string queryIdentity)
     {
         if (clause.Count == 0)
             return DocumentQueryClause.MatchNone;
 
         var comparisons = clause
-            .Select(TranslateComparison)
+            .Select(comparison => TranslateComparison(comparison, documentKind, queryIdentity))
             .Where(comparison => comparison is not null)
             .Cast<DocumentQueryComparison>()
             .ToArray();
@@ -94,33 +107,42 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
             : new DocumentQueryClause(comparisons);
     }
 
-    private DocumentQueryComparison? TranslateComparison(QueryComparison<TEntity> comparison)
+    private DocumentQueryComparison? TranslateComparison(
+        QueryComparison<TEntity> comparison,
+        string documentKind,
+        string queryIdentity)
     {
-        var path = ResolvePath(comparison.FieldSelector);
+        var path = ResolvePath(comparison.FieldSelector, documentKind, queryIdentity);
         return comparison.Operator switch
         {
-            QueryOp.Equal => DocumentQueryComparison.Equal(path, SerializeScalar(comparison.Value, comparison)),
-            QueryOp.In => TranslateMembership(path, comparison),
-            QueryOp.Contains => TranslateContains(path, comparison),
+            QueryOp.Equal => DocumentQueryComparison.Equal(path, SerializeScalar(comparison.Value, comparison, documentKind, queryIdentity)),
+            QueryOp.In => TranslateMembership(path, comparison, documentKind, queryIdentity),
+            QueryOp.Contains => TranslateContains(path, comparison, documentKind, queryIdentity),
             _ => throw Failure(
                 comparison,
-                $"Query operator '{comparison.Operator}' is not supported by the Groundwork translator.")
+                $"Query operator '{comparison.Operator}' is not supported by the Groundwork translator.",
+                documentKind,
+                queryIdentity)
         };
     }
 
     private DocumentQueryComparison? TranslateMembership(
         string path,
-        QueryComparison<TEntity> comparison)
+        QueryComparison<TEntity> comparison,
+        string documentKind,
+        string queryIdentity)
     {
         if (comparison.Value is string || comparison.Value is not IEnumerable values)
         {
             throw Failure(
                 comparison,
-                $"Query operator '{QueryOp.In}' requires a set value.");
+                $"Query operator '{QueryOp.In}' requires a set value.",
+                documentKind,
+                queryIdentity);
         }
 
         var serialized = values.Cast<object?>()
-            .Select(value => SerializeScalar(value, comparison))
+            .Select(value => SerializeScalar(value, comparison, documentKind, queryIdentity))
             .ToArray();
         return serialized.Length == 0
             ? null
@@ -129,19 +151,26 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
 
     private DocumentQueryComparison TranslateContains(
         string path,
-        QueryComparison<TEntity> comparison)
+        QueryComparison<TEntity> comparison,
+        string documentKind,
+        string queryIdentity)
     {
         if (comparison.Value is not string value)
         {
             throw Failure(
                 comparison,
-                $"Query operator '{QueryOp.Contains}' requires a non-null string value.");
+                $"Query operator '{QueryOp.Contains}' requires a non-null string value.",
+                documentKind,
+                queryIdentity);
         }
 
         return DocumentQueryComparison.Contains(path, value);
     }
 
-    private string ResolvePath(LambdaExpression selector)
+    private string ResolvePath(
+        LambdaExpression selector,
+        string documentKind,
+        string queryIdentity)
     {
         var body = selector.Body;
         if (body is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked } unary)
@@ -151,20 +180,29 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
             member.Member is not PropertyInfo property)
         {
             throw new GroundworkQueryTranslationException(
-                $"The Groundwork query translator requires a direct property member selector; got '{body}'.");
+                $"The Groundwork query translator requires a direct property member selector; got '{body}'.",
+                documentKind,
+                queryIdentity,
+                typeof(TEntity));
         }
 
-        return ResolvePath(property);
+        return ResolvePath(property, documentKind, queryIdentity);
     }
 
-    private string ResolvePath(PropertyInfo property)
+    private string ResolvePath(
+        PropertyInfo property,
+        string documentKind,
+        string queryIdentity)
     {
         var jsonProperty = _entityTypeInfo.Properties.SingleOrDefault(candidate =>
             candidate.AttributeProvider is PropertyInfo candidateProperty && candidateProperty == property);
         if (jsonProperty is null)
         {
             throw new GroundworkQueryTranslationException(
-                $"Property '{property.DeclaringType?.FullName}.{property.Name}' is excluded from canonical JSON and cannot be queried.");
+                $"Property '{property.DeclaringType?.FullName}.{property.Name}' is excluded from canonical JSON and cannot be queried.",
+                documentKind,
+                queryIdentity,
+                typeof(TEntity));
         }
 
         var serializationStatus = GroundworkDocumentSerialization.GetPropertySerializationStatus(
@@ -173,20 +211,29 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         if (serializationStatus == GroundworkDocumentSerialization.PropertySerializationStatus.Excluded)
         {
             throw new GroundworkQueryTranslationException(
-                $"Property '{property.DeclaringType?.FullName}.{property.Name}' is excluded from canonical JSON and cannot be queried.");
+                $"Property '{property.DeclaringType?.FullName}.{property.Name}' is excluded from canonical JSON and cannot be queried.",
+                documentKind,
+                queryIdentity,
+                typeof(TEntity));
         }
 
         if (serializationStatus == GroundworkDocumentSerialization.PropertySerializationStatus.Conditional)
         {
             throw new GroundworkQueryTranslationException(
-                $"Property '{property.DeclaringType?.FullName}.{property.Name}' does not have stable presence in canonical JSON and cannot be queried.");
+                $"Property '{property.DeclaringType?.FullName}.{property.Name}' does not have stable presence in canonical JSON and cannot be queried.",
+                documentKind,
+                queryIdentity,
+                typeof(TEntity));
         }
 
         var serializedName = jsonProperty.Name;
         if (string.IsNullOrWhiteSpace(serializedName))
         {
             throw new GroundworkQueryTranslationException(
-                $"Property '{property.DeclaringType?.FullName}.{property.Name}' has no stable serialized name.");
+                $"Property '{property.DeclaringType?.FullName}.{property.Name}' has no stable serialized name.",
+                documentKind,
+                queryIdentity,
+                typeof(TEntity));
         }
 
         return $"{EntityPath}.{serializedName}";
@@ -194,7 +241,9 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
 
     private string? SerializeScalar(
         object? value,
-        QueryComparison<TEntity> comparison)
+        QueryComparison<TEntity> comparison,
+        string documentKind,
+        string queryIdentity)
     {
         if (value is null)
             return null;
@@ -211,10 +260,12 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
                 JsonValueKind.Null => null,
                 _ => throw Failure(
                     comparison,
-                    $"Value type '{value.GetType().FullName}' is not a scalar JSON query value.")
+                    $"Value type '{value.GetType().FullName}' is not a scalar JSON query value.",
+                    documentKind,
+                    queryIdentity)
             };
         }
-        catch (GroundworkQueryTranslationException)
+        catch (GroundworkQueryException)
         {
             throw;
         }
@@ -222,12 +273,17 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         {
             throw new GroundworkQueryTranslationException(
                 $"Value for property '{comparison.FieldName}' could not be serialized as a stable query scalar.",
+                documentKind,
+                queryIdentity,
+                typeof(TEntity),
                 exception);
         }
     }
 
     private static GroundworkQueryTranslationException Failure(
         QueryComparison<TEntity> comparison,
-        string message) =>
-        new($"{message} Property: '{comparison.FieldName}'.");
+        string message,
+        string documentKind,
+        string queryIdentity) =>
+        new($"{message} Property: '{comparison.FieldName}'.", documentKind, queryIdentity, typeof(TEntity));
 }

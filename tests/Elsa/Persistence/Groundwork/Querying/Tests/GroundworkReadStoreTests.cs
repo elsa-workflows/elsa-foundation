@@ -108,10 +108,13 @@ public class GroundworkReadStoreTests
             CollectionValue,
             Json);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => store.QueryAsync(Query<Doc>.All()));
+        var exception = await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() => store.QueryAsync(Query<Doc>.All()));
 
         Assert.Contains(DocumentKind, exception.Message, StringComparison.Ordinal);
         Assert.Contains("bounded", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(DocumentKind, exception.DocumentKind);
+        Assert.Equal(ListAllQuery, exception.QueryIdentity);
+        Assert.Equal(typeof(Doc), exception.EntityType);
     }
 
     [Fact]
@@ -121,11 +124,176 @@ public class GroundworkReadStoreTests
         await documentStore.SaveAsync(new SaveDocumentRequest(DocumentKind, "bad", SchemaVersion, "null"));
         var store = new GroundworkReadStore<Doc>(documentStore, DocumentKind, ListAllQuery, CollectionField, CollectionValue, Json);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<GroundworkCorruptPayloadException>(() =>
             store.FirstOrDefaultAsync(Query<Doc>.Where(x => x.Id, QueryOp.Equal, "bad")));
 
         Assert.Contains(DocumentKind, exception.Message);
         Assert.Contains("bad", exception.Message);
+        Assert.Equal(DocumentKind, exception.DocumentKind);
+        Assert.Equal("bad", exception.DocumentId);
+        Assert.Equal(typeof(Doc), exception.EntityType);
+    }
+
+    [Fact]
+    public async Task Invalid_json_payload_preserves_the_deserialization_failure()
+    {
+        var documentStore = new InMemoryDocumentStore(BuildManifest());
+        await documentStore.SaveAsync(new SaveDocumentRequest(DocumentKind, "invalid-json", SchemaVersion, "{"));
+        var store = new GroundworkReadStore<Doc>(documentStore, DocumentKind, ListAllQuery, CollectionField, CollectionValue, Json);
+
+        var exception = await Assert.ThrowsAsync<GroundworkCorruptPayloadException>(() =>
+            store.FirstOrDefaultAsync(Query<Doc>.Where(x => x.Id, QueryOp.Equal, "invalid-json")));
+
+        Assert.Equal(DocumentKind, exception.DocumentKind);
+        Assert.Equal("invalid-json", exception.DocumentId);
+        Assert.Equal(typeof(Doc), exception.EntityType);
+        Assert.IsType<JsonException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Tenant_agnostic_query_requires_an_authorized_session_factory()
+    {
+        var store = new GroundworkReadStore<Doc>(
+            new InMemoryDocumentStore(BuildManifest()),
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json);
+
+        var exception = await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.QueryAsync(Query<Doc>.All().IgnoreTenant()));
+
+        Assert.Equal(DocumentKind, exception.DocumentKind);
+        Assert.Equal(ListAllQuery, exception.QueryIdentity);
+        Assert.Equal(typeof(Doc), exception.EntityType);
+    }
+
+    [Fact]
+    public async Task Point_read_provider_failure_preserves_context_and_inner_exception()
+    {
+        var providerFailure = new IOException("point-read-failed");
+        var store = new GroundworkReadStore<Doc>(
+            new ThrowingDocumentStore(BuildManifest(), providerFailure),
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json);
+
+        var exception = await Assert.ThrowsAsync<GroundworkProviderFailureException>(() =>
+            store.FirstOrDefaultAsync(Query<Doc>.Where(x => x.Id, QueryOp.Equal, "point-id")));
+
+        Assert.Equal(DocumentKind, exception.DocumentKind);
+        Assert.Equal("point-id", exception.DocumentId);
+        Assert.Equal(typeof(Doc), exception.EntityType);
+        Assert.Same(providerFailure, exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Bounded_query_provider_failure_preserves_context_and_inner_exception()
+    {
+        var providerFailure = new IOException("bounded-read-failed");
+        var store = new GroundworkReadStore<Doc>(
+            new ThrowingDocumentStore(BuildManifest(), providerFailure),
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json,
+            new ThrowingBoundedDocumentStore(providerFailure));
+
+        var exception = await Assert.ThrowsAsync<GroundworkProviderFailureException>(() =>
+            store.QueryAsync(Query<Doc>.All()));
+
+        Assert.Equal(DocumentKind, exception.DocumentKind);
+        Assert.Equal(ListAllQuery, exception.QueryIdentity);
+        Assert.Equal(typeof(Doc), exception.EntityType);
+        Assert.Same(providerFailure, exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Cancellation_is_not_wrapped_by_the_query_boundary()
+    {
+        var cancellation = new OperationCanceledException("cancelled");
+        var store = new GroundworkReadStore<Doc>(
+            new ThrowingDocumentStore(BuildManifest(), cancellation),
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json);
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            store.FirstOrDefaultAsync(Query<Doc>.Where(x => x.Id, QueryOp.Equal, "point-id")));
+
+        Assert.Same(cancellation, exception);
+    }
+
+    [Fact]
+    public async Task Bounded_query_cancellation_is_not_wrapped_by_the_query_boundary()
+    {
+        var cancellation = new OperationCanceledException("cancelled");
+        var store = new GroundworkReadStore<Doc>(
+            new ThrowingDocumentStore(BuildManifest(), cancellation),
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json,
+            new ThrowingBoundedDocumentStore(cancellation));
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            store.QueryAsync(Query<Doc>.All()));
+
+        Assert.Same(cancellation, exception);
+    }
+
+    [Fact]
+    public async Task Existing_groundwork_query_exceptions_are_not_double_wrapped()
+    {
+        var existing = new GroundworkQueryReadinessException(
+            "already-classified",
+            DocumentKind,
+            ListAllQuery,
+            null,
+            typeof(Doc));
+        var store = new GroundworkReadStore<Doc>(
+            new ThrowingDocumentStore(BuildManifest(), existing),
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json);
+
+        var exception = await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.FirstOrDefaultAsync(Query<Doc>.Where(x => x.Id, QueryOp.Equal, "point-id")));
+
+        Assert.Same(existing, exception);
+    }
+
+    [Fact]
+    public async Task Existing_groundwork_query_exceptions_from_bounded_queries_are_not_double_wrapped()
+    {
+        var existing = new GroundworkQueryReadinessException(
+            "already-classified",
+            DocumentKind,
+            ListAllQuery,
+            null,
+            typeof(Doc));
+        var store = new GroundworkReadStore<Doc>(
+            new ThrowingDocumentStore(BuildManifest(), existing),
+            DocumentKind,
+            ListAllQuery,
+            CollectionField,
+            CollectionValue,
+            Json,
+            new ThrowingBoundedDocumentStore(existing));
+
+        var exception = await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.QueryAsync(Query<Doc>.All()));
+
+        Assert.Same(existing, exception);
     }
 
     [Fact]
@@ -275,5 +443,31 @@ public class GroundworkReadStoreTests
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             inner.BeginAsync(scope, cancellationToken);
+    }
+
+#pragma warning disable GW0004 // The test double must implement the complete IDocumentStore bridge surface.
+    private sealed class ThrowingDocumentStore(StorageManifest manifest, Exception exception) : IDocumentStore
+    {
+        private readonly InMemoryDocumentStore _inner = new(manifest);
+
+        public TransactionBoundary TransactionBoundary => _inner.TransactionBoundary;
+        public DocumentStoreAccess Access => _inner.Access;
+        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) => _inner.SaveAsync(request, cancellationToken);
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) => Task.FromException<DocumentEnvelope?>(exception);
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) => _inner.DeleteAsync(request, cancellationToken);
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) => _inner.QueryAsync(query, cancellationToken);
+        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => _inner.QueryAsync(query, cancellationToken);
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => _inner.FirstOrDefaultAsync(query, cancellationToken);
+        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => _inner.AnyAsync(query, cancellationToken);
+        public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) => _inner.BeginAsync(scope, cancellationToken);
+    }
+#pragma warning restore GW0004
+
+    private sealed class ThrowingBoundedDocumentStore(Exception exception) : IBoundedDocumentStore
+    {
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) => Task.FromException<DocumentQueryResult>(exception);
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) => Task.FromException<long>(exception);
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) => Task.FromException<DocumentEnvelope?>(exception);
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) => Task.FromException<bool>(exception);
     }
 }

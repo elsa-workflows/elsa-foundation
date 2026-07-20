@@ -142,6 +142,11 @@ public sealed class GroundworkQueryTranslatorTests
                 Query<DesignDocument>.All().OrderBy(x => x.Id)));
 
         Assert.Contains("positive take", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(DocumentKind, exception.DocumentKind);
+        Assert.Equal(QueryIdentity, exception.QueryIdentity);
+        Assert.Null(exception.DocumentId);
+        Assert.Equal(typeof(DesignDocument), exception.EntityType);
+        Assert.IsAssignableFrom<GroundworkQueryException>(exception);
     }
 
     [Theory]

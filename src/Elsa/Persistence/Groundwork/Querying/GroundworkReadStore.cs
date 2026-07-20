@@ -83,7 +83,30 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
         // a point read has no explicit target partition.
         if (!query.TenantAgnostic && TryGetIdEquality(query, out var id))
         {
-            var envelope = await _store.LoadAsync(_documentKind, id, cancellationToken);
+            DocumentEnvelope? envelope;
+            try
+            {
+                envelope = await _store.LoadAsync(_documentKind, id, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (GroundworkQueryException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new GroundworkProviderFailureException(
+                    $"Provider point read for document '{id}' of kind '{_documentKind}' failed.",
+                    _documentKind,
+                    null,
+                    id,
+                    typeof(TEntity),
+                    exception);
+            }
+
             return envelope is null ? null : Deserialize(envelope);
         }
 
@@ -105,15 +128,24 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
         if (!query.TenantAgnostic)
             return evaluate(await LoadAllAsync(BoundedStore(), cancellationToken));
 
-        var sessions = _sessions ?? throw new InvalidOperationException(
-            $"Tenant-agnostic queries for '{_documentKind}' require an authorized Groundwork session factory.");
+        var sessions = _sessions ?? throw new GroundworkQueryReadinessException(
+            $"Tenant-agnostic queries for '{_documentKind}' require an authorized Groundwork session factory.",
+            _documentKind,
+            _collectionQueryIdentity,
+            null,
+            typeof(TEntity));
+
         return await sessions.ExecutePrivilegedAcrossScopesAsync(
             async (session, token) =>
             {
                 if (session.Access.Kind != DocumentStoreAccessKind.PrivilegedAcrossScopes)
                 {
-                    throw new InvalidOperationException(
-                        "Tenant-agnostic persistence queries require explicit privileged across-scope access.");
+                    throw new GroundworkQueryReadinessException(
+                        "Tenant-agnostic persistence queries require explicit privileged across-scope access.",
+                        _documentKind,
+                        _collectionQueryIdentity,
+                        null,
+                        typeof(TEntity));
                 }
 
                 return evaluate(await LoadAllAsync(session.BoundedDocumentStore, token));
@@ -125,24 +157,70 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
         IBoundedDocumentStore boundedStore,
         CancellationToken cancellationToken)
     {
-        var envelopes = (await boundedStore.QueryAsync(
-            new DocumentQuery(
+        IReadOnlyList<DocumentEnvelope> envelopes;
+        try
+        {
+            envelopes = (await boundedStore.QueryAsync(
+                new DocumentQuery(
+                    _documentKind,
+                    _collectionQueryIdentity,
+                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(_collectionFieldPath, _collectionValue))]),
+                cancellationToken)).Documents;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (GroundworkQueryException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new GroundworkProviderFailureException(
+                $"Provider bounded query '{_collectionQueryIdentity}' for kind '{_documentKind}' failed.",
                 _documentKind,
                 _collectionQueryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(_collectionFieldPath, _collectionValue))]),
-            cancellationToken)).Documents;
+                null,
+                typeof(TEntity),
+                exception);
+        }
 
         return envelopes.Select(Deserialize).ToList();
     }
 
-    private IBoundedDocumentStore BoundedStore() => _boundedStore ?? throw new InvalidOperationException(
-        $"Queries for '{_documentKind}' require an admitted bounded document-store runtime.");
+    private IBoundedDocumentStore BoundedStore() => _boundedStore ?? throw new GroundworkQueryReadinessException(
+        $"Queries for '{_documentKind}' require an admitted bounded document-store runtime.",
+        _documentKind,
+        _collectionQueryIdentity,
+        null,
+        typeof(TEntity));
 
     private TEntity Deserialize(DocumentEnvelope envelope)
     {
-        var document = JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(envelope.ContentJson, _jsonOptions);
-        return document?.Entity
-            ?? throw new InvalidOperationException($"Document '{envelope.Id}' of kind '{_documentKind}' could not be deserialized as {typeof(TEntity).Name}.");
+        try
+        {
+            var document = JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(envelope.ContentJson, _jsonOptions);
+            return document?.Entity
+                ?? throw new GroundworkCorruptPayloadException(
+                    $"Document '{envelope.Id}' of kind '{_documentKind}' could not be deserialized as {typeof(TEntity).Name}.",
+                    _documentKind,
+                    envelope.Id,
+                    typeof(TEntity));
+        }
+        catch (GroundworkQueryException)
+        {
+            throw;
+        }
+        catch (JsonException exception)
+        {
+            throw new GroundworkCorruptPayloadException(
+                $"Document '{envelope.Id}' of kind '{_documentKind}' could not be deserialized as {typeof(TEntity).Name}.",
+                _documentKind,
+                envelope.Id,
+                typeof(TEntity),
+                exception);
+        }
     }
 
     // A query is a pure by-id read when it is a single equality comparison on the Id field, with no
