@@ -105,7 +105,7 @@ public sealed class RuntimeScheduleActivityStateTests
             executable.Identity,
             schedulingProvenance: inheritedProvenance));
 
-        var state = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        var state = Assert.Single(await _activityStateStore.ListAllAsync("wfexec-1"));
         Assert.Equal("actexec-1", state.ExecutionScopeId);
         Assert.Equal(state.ExecutionScopeId, state.Provenance.ExecutionScopeId);
         Assert.Equal("actexec-parent", state.Provenance.ParentActivityExecutionId);
