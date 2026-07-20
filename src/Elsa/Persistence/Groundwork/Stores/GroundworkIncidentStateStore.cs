@@ -115,43 +115,42 @@ public sealed class GroundworkIncidentStateStore(
         return states.Where(state => state.IsBlocking).ToArray();
     }
 
-    /// <summary>
-    /// Reads every active incident through two declared status/keyset routes. This is intentionally
-    /// separate from the legacy per-workflow list: attention needs a complete tenant-scoped view but
-    /// must never fall back to an unbounded document scan or an N+1 execution lookup.
-    /// </summary>
-    internal async ValueTask<IReadOnlyCollection<IncidentState>> ListActiveForAttentionAsync(
+    /// <summary>Reads one declared, keyset-bounded page of active incidents.</summary>
+    internal async ValueTask<IncidentAttentionPage> QueryAttentionPageAsync(
+        IncidentStatus status,
+        string? continuation = null,
+        int take = ElsaGroundworkQueryRoutes.MaximumResultCount,
         CancellationToken cancellationToken = default)
     {
-        var incidents = new List<IncidentState>();
-        foreach (var status in new[] { IncidentStatus.Open, IncidentStatus.Blocking })
-        {
-            string? continuation = null;
-            do
-            {
-                var result = await BoundedStore.QueryAsync(
-                    new DocumentQuery(
-                        DocumentKind,
-                        ElsaRuntimeStorageManifest.PageAttentionIncidentsByStatusQuery,
-                        [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                            ElsaRuntimeStorageManifest.StatusField,
-                            ((int)status).ToString(CultureInfo.InvariantCulture)))],
-                        [
-                            new DocumentQueryOrder(ElsaRuntimeStorageManifest.CreatedAtField),
-                            new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
-                            new DocumentQueryOrder(ElsaRuntimeStorageManifest.IncidentIdField)
-                        ],
-                        take: ElsaGroundworkQueryRoutes.MaximumResultCount,
-                        continuation: continuation),
-                    cancellationToken);
-                incidents.AddRange(result.Documents
-                    .Select(Serializer.Deserialize<IncidentState>)
-                    .Where(incident => incident.Status == status));
-                continuation = result.NextContinuation;
-            } while (continuation is not null);
-        }
+        if (status is not (IncidentStatus.Open or IncidentStatus.Blocking))
+            throw new ArgumentOutOfRangeException(nameof(status), "Attention supports only open and blocking incidents.");
+        if (take is <= 0 or > ElsaGroundworkQueryRoutes.MaximumResultCount)
+            throw new ArgumentOutOfRangeException(nameof(take));
 
-        return incidents;
+        var clauses = new List<DocumentQueryClause>
+        {
+            DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                ElsaRuntimeStorageManifest.StatusField,
+                ((int)status).ToString(CultureInfo.InvariantCulture)))
+        };
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageAttentionIncidentsByStatusQuery,
+                clauses,
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.CreatedAtField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.IncidentIdField)
+                ],
+                take: take,
+                continuation: continuation),
+            cancellationToken);
+        var items = result.Documents
+            .Select(Serializer.Deserialize<IncidentState>)
+            .Where(incident => incident.Status == status)
+            .ToArray();
+        return new IncidentAttentionPage(items, result.NextContinuation);
     }
 
     private async ValueTask<LoadedIncident?> LoadByLogicalIdentityAsync(
@@ -183,3 +182,5 @@ public sealed class GroundworkIncidentStateStore(
 
     private sealed record LoadedIncident(IncidentState State, long Version);
 }
+
+internal sealed record IncidentAttentionPage(IReadOnlyList<IncidentState> Items, string? NextContinuation);

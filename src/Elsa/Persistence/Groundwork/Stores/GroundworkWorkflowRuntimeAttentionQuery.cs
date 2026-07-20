@@ -6,8 +6,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 
 /// <summary>
 /// Complete, tenant-bound workflow runtime attention query over the Groundwork runtime stores.
-/// Both data sets are traversed through declared finite pages; this adapter deliberately avoids
-/// the compatibility <c>ListAllAsync</c> APIs and per-execution incident reads.
+/// Both data sets are traversed through declared finite pages; healthy execution history is never
+/// read, and the returned selection remains bounded by the requested item count.
 /// </summary>
 public sealed class GroundworkWorkflowRuntimeAttentionQuery(
     GroundworkWorkflowExecutionStateStore executions,
@@ -27,57 +27,98 @@ public sealed class GroundworkWorkflowRuntimeAttentionQuery(
                 "RUNTIME_ATTENTION_TENANT_REQUIRED",
                 "Workflow runtime attention requires an authenticated tenant scope.");
 
-        var executionsById = await ListTenantExecutionsAsync(request.TenantId, cancellationToken);
-        var activeIncidents = await incidents.ListActiveForAttentionAsync(cancellationToken);
         var observedAt = _timeProvider.GetUtcNow();
-        var incidentRecords = activeIncidents
-            .Where(incident => executionsById.TryGetValue(incident.WorkflowExecutionId, out _))
-            .Select(incident => MapIncident(incident, executionsById[incident.WorkflowExecutionId], observedAt));
-        var executionIdsWithIncidents = activeIncidents
-            .Where(incident => executionsById.ContainsKey(incident.WorkflowExecutionId))
-            .Select(incident => incident.WorkflowExecutionId)
-            .ToHashSet(StringComparer.Ordinal);
-        var faultRecords = executionsById.Values
-            .Where(execution => execution.Status == WorkflowExecutionStatus.Faulted)
-            .Where(execution => !executionIdsWithIncidents.Contains(execution.WorkflowExecutionId))
-            .Select(execution => MapFault(execution, observedAt));
-        var all = incidentRecords
-            .Concat(faultRecords)
-            .OrderBy(record => record.Kind switch
+        var top = new List<WorkflowRuntimeAttentionRecord>(request.MaximumItems);
+        var activeExecutionIds = new HashSet<string>(StringComparer.Ordinal);
+        var executionCache = new Dictionary<string, WorkflowExecutionState?>(StringComparer.Ordinal);
+        var totalCount = 0;
+
+        foreach (var status in new[] { IncidentStatus.Open, IncidentStatus.Blocking })
+        {
+            string? continuation = null;
+            do
             {
-                WorkflowRuntimeAttentionKind.BlockingIncident => 0,
-                WorkflowRuntimeAttentionKind.FaultedExecution => 1,
-                _ => 2
-            })
-            .ThenByDescending(record => record.LastObservedAt)
-            .ThenBy(record => record.WorkflowExecutionId, StringComparer.Ordinal)
-            .ThenBy(record => record.IncidentId, StringComparer.Ordinal)
-            .ToArray();
+                var page = await incidents.QueryAttentionPageAsync(
+                    status,
+                    continuation: continuation,
+                    cancellationToken: cancellationToken);
+                foreach (var incident in page.Items)
+                {
+                    if (!executionCache.TryGetValue(incident.WorkflowExecutionId, out var execution))
+                    {
+                        execution = await executions.FindAsync(incident.WorkflowExecutionId, cancellationToken);
+                        executionCache.Add(incident.WorkflowExecutionId, execution);
+                    }
+                    if (execution is null || !StringComparer.Ordinal.Equals(execution.TenantId, request.TenantId))
+                        continue;
 
-        return new WorkflowRuntimeAttentionSnapshot(all.Length, all.Take(request.MaximumItems).ToArray());
-    }
+                    activeExecutionIds.Add(incident.WorkflowExecutionId);
+                    totalCount = checked(totalCount + 1);
+                    Consider(top, MapIncident(incident, execution, observedAt), request.MaximumItems);
+                }
 
-    private async ValueTask<IReadOnlyDictionary<string, WorkflowExecutionState>> ListTenantExecutionsAsync(
-        string tenantId,
-        CancellationToken cancellationToken)
-    {
-        var states = new Dictionary<string, WorkflowExecutionState>(StringComparer.Ordinal);
+                continuation = page.NextContinuation;
+            } while (continuation is not null);
+        }
+
         string? cursor = null;
         do
         {
             var page = await executions.QueryPageAsync(
                 new WorkflowExecutionStatePageQuery(
                     ElsaGroundworkQueryRoutes.MaximumResultCount,
-                    TenantId: tenantId,
+                    TenantId: request.TenantId,
+                    Status: WorkflowExecutionStatus.Faulted,
                     Cursor: cursor),
                 cancellationToken);
-            foreach (var state in page.Items)
-                states.Add(state.WorkflowExecutionId, state);
+            foreach (var execution in page.Items)
+            {
+                if (activeExecutionIds.Contains(execution.WorkflowExecutionId))
+                    continue;
+
+                totalCount = checked(totalCount + 1);
+                Consider(top, MapFault(execution, observedAt), request.MaximumItems);
+            }
+
             cursor = page.NextCursor;
         } while (cursor is not null);
 
-        return states;
+        return new WorkflowRuntimeAttentionSnapshot(totalCount, top);
     }
+
+    private static void Consider(
+        List<WorkflowRuntimeAttentionRecord> top,
+        WorkflowRuntimeAttentionRecord candidate,
+        int maximumItems)
+    {
+        top.Add(candidate);
+        top.Sort(CompareAttention);
+        if (top.Count > maximumItems)
+            top.RemoveAt(top.Count - 1);
+    }
+
+    private static int CompareAttention(WorkflowRuntimeAttentionRecord left, WorkflowRuntimeAttentionRecord right)
+    {
+        var kind = AttentionKindOrder(left.Kind).CompareTo(AttentionKindOrder(right.Kind));
+        if (kind != 0)
+            return kind;
+
+        var observed = right.LastObservedAt.CompareTo(left.LastObservedAt);
+        if (observed != 0)
+            return observed;
+
+        var executionId = StringComparer.Ordinal.Compare(left.WorkflowExecutionId, right.WorkflowExecutionId);
+        return executionId != 0
+            ? executionId
+            : StringComparer.Ordinal.Compare(left.IncidentId ?? string.Empty, right.IncidentId ?? string.Empty);
+    }
+
+    private static int AttentionKindOrder(WorkflowRuntimeAttentionKind kind) => kind switch
+    {
+        WorkflowRuntimeAttentionKind.BlockingIncident => 0,
+        WorkflowRuntimeAttentionKind.FaultedExecution => 1,
+        _ => 2
+    };
 
     private static WorkflowRuntimeAttentionRecord MapIncident(
         IncidentState incident,

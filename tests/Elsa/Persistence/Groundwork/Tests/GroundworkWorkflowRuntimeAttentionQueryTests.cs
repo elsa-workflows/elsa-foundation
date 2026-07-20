@@ -43,6 +43,18 @@ public sealed class GroundworkWorkflowRuntimeAttentionQueryTests
         await incidents.SaveAsync(Incident("incident-blocked", "blocked", IncidentStatus.Blocking, Now.AddMinutes(-2)));
         await incidents.SaveAsync(Incident("incident-open", "open", IncidentStatus.Open, Now.AddMinutes(-1)));
         await incidents.SaveAsync(Incident("incident-orphan", "missing", IncidentStatus.Blocking, Now));
+        var foreignExecutions = new GroundworkWorkflowExecutionStateStore(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            GroundworkTestAccess.AccessContext("tenant-2"),
+            fixture.BoundedDocumentStore);
+        await foreignExecutions.SaveAsync(Execution(
+            "foreign-fault",
+            "definition-foreign",
+            WorkflowExecutionStatus.Faulted,
+            Now,
+            tenantId: "tenant-2"));
+        await incidents.SaveAsync(Incident("incident-foreign", "foreign-fault", IncidentStatus.Blocking, Now));
 
         var result = await query.QueryAsync(Request(maximumItems: 10));
 
@@ -69,6 +81,65 @@ public sealed class GroundworkWorkflowRuntimeAttentionQueryTests
                 Assert.Equal(WorkflowRuntimeAttentionKind.OpenIncident, record.Kind);
             });
         Assert.All(result.Records, record => Assert.Null(record.SanitizedSummary));
+    }
+
+    [Fact]
+    public async Task Attention_pages_only_faulted_executions_and_keeps_exact_totals_across_multiple_pages()
+    {
+        await using var fixture = Fixture();
+        var bounded = new RecordingBoundedDocumentStore(fixture.BoundedDocumentStore);
+        var (executions, incidents, query) = Stores(fixture, bounded);
+
+        for (var index = 0; index < 600; index++)
+        {
+            await executions.SaveAsync(Execution(
+                $"healthy-{index:D4}",
+                "definition-healthy",
+                WorkflowExecutionStatus.Completed,
+                Now.AddMinutes(-2000 - index)));
+        }
+
+        for (var index = 0; index <= ElsaGroundworkQueryRoutes.MaximumResultCount; index++)
+        {
+            await executions.SaveAsync(Execution(
+                $"fault-{index:D4}",
+                "definition-fault",
+                WorkflowExecutionStatus.Faulted,
+                Now.AddMinutes(-index)));
+        }
+
+        await incidents.SaveAsync(Incident(
+            "incident-blocking",
+            $"fault-{ElsaGroundworkQueryRoutes.MaximumResultCount:D4}",
+            IncidentStatus.Blocking,
+            Now));
+
+        var result = await query.QueryAsync(Request(maximumItems: 3));
+
+        Assert.Equal(ElsaGroundworkQueryRoutes.MaximumResultCount + 1, result.TotalCount);
+        Assert.Collection(
+            result.Records,
+            record =>
+            {
+                Assert.Equal("incident-blocking", record.IncidentId);
+                Assert.Equal(WorkflowRuntimeAttentionKind.BlockingIncident, record.Kind);
+            },
+            record => Assert.Equal("fault-0000", record.WorkflowExecutionId),
+            record => Assert.Equal("fault-0001", record.WorkflowExecutionId));
+
+        var executionPages = bounded.Queries
+            .Where(documentQuery => documentQuery.QueryIdentity == ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery)
+            .ToArray();
+        Assert.True(executionPages.Length >= 2);
+        Assert.All(executionPages, documentQuery =>
+            Assert.Contains(
+                documentQuery.Clauses.SelectMany(clause => clause.Comparisons),
+                comparison => comparison.Path == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField &&
+                              comparison.Values.SequenceEqual([((int)WorkflowExecutionStatus.Faulted).ToString()])));
+        Assert.Equal(
+            2,
+            bounded.Queries.Count(documentQuery =>
+                documentQuery.QueryIdentity == ElsaRuntimeStorageManifest.PageAttentionIncidentsByStatusQuery));
     }
 
     [Fact]
@@ -105,16 +176,24 @@ public sealed class GroundworkWorkflowRuntimeAttentionQueryTests
         GroundworkWorkflowExecutionStateStore Executions,
         GroundworkIncidentStateStore Incidents,
         GroundworkWorkflowRuntimeAttentionQuery Query) Stores(GroundworkDocumentStoreFixture fixture)
+        => Stores(fixture, fixture.BoundedDocumentStore);
+
+    private static (
+        GroundworkWorkflowExecutionStateStore Executions,
+        GroundworkIncidentStateStore Incidents,
+        GroundworkWorkflowRuntimeAttentionQuery Query) Stores(
+        GroundworkDocumentStoreFixture fixture,
+        IBoundedDocumentStore boundedStore)
     {
         var executions = new GroundworkWorkflowExecutionStateStore(
             fixture.DocumentStore,
             GroundworkTestSerialization.Serializer,
             GroundworkTestAccess.AccessContext("tenant-1"),
-            fixture.BoundedDocumentStore);
+            boundedStore);
         var incidents = new GroundworkIncidentStateStore(
             fixture.DocumentStore,
             GroundworkTestSerialization.Serializer,
-            fixture.BoundedDocumentStore);
+            boundedStore);
         return (executions, incidents, new GroundworkWorkflowRuntimeAttentionQuery(
             executions,
             incidents,
@@ -128,7 +207,8 @@ public sealed class GroundworkWorkflowRuntimeAttentionQueryTests
         string id,
         string definitionId,
         WorkflowExecutionStatus status,
-        DateTimeOffset timestamp) => new(
+        DateTimeOffset timestamp,
+        string tenantId = "tenant-1") => new(
         id,
         new($"artifact-{id}", definitionId, "version-1", "1.0.0", "hash-1"),
         status,
@@ -139,7 +219,7 @@ public sealed class GroundworkWorkflowRuntimeAttentionQueryTests
         status.IsTerminal() ? timestamp : null,
         null,
         null,
-        "tenant-1",
+        tenantId,
         new Dictionary<string, string>());
 
     private static IncidentState Incident(
