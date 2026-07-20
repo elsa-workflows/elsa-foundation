@@ -16,7 +16,20 @@ dotnet package search Groundwork.Tool --prerelease --take 20 --format json
 ```
 
 The requested `0.0.1-preview.75` was not public at capture time. No package version was
-changed; T001 remains open until that exact compatible family is available.
+changed. T001 is complete because it records the actual baseline; T009 selects and pins
+the later released binary-compatible family needed for physical-storage/query work.
+
+## Provider image baseline
+
+| Provider | Captured image / mode | Source of record |
+|---|---|---|
+| SQLite | Embedded | Provider has no container image. |
+| SQL Server | `mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04` | SQL Server provider driver and unified-host fixture. |
+| PostgreSQL | `postgres:17.6-alpine3.22` | Pinned provider driver. |
+| MongoDB | `mongo:7.0.24` | MongoDB provider driver and replica-set fixture. |
+
+One existing PostgreSQL unified-host fixture uses `postgres:16-alpine`; T053 selects
+and records its fixture image with the provider evidence.
 
 ## Focused behavior inventory
 
@@ -59,5 +72,7 @@ Groundwork-storage and legacy-descriptor obsolescence warnings, plus `NU1510` in
 
 This is a test-inventory and scaffold baseline, not a workload correctness baseline.
 It does **not** claim EF SQLite result hashes, provider parity, query plans, or
-performance metrics. T021–T025 must first create fixed black-box workloads; T004 can
-then record their EF SQLite result hashes without treating test discovery as an oracle.
+performance metrics. T021–T024 must first create the fixed black-box scenarios; T025
+then runs the EF SQLite oracle and completes T004 without treating test discovery as an
+oracle. T004 is not a Phase-2 gate and does not replace T067–T069's fixed-scale
+performance and physical-form-selection matrix.
