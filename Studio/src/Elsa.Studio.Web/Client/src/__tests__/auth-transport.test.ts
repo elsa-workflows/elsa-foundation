@@ -100,6 +100,20 @@ describe("authenticated HTTP transport", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("fails closed without contacting a protected endpoint when preflight refresh rejects", async () => {
+    const fetchMock = vi.fn(async () => new Response("unexpected", { status: 200 }));
+    const auth = {
+      getAccessToken: vi.fn(async () => null),
+      refresh: vi.fn(async (): Promise<AuthSession> => { throw new Error("refresh failed"); })
+    };
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock, requireAuthorization: true });
+
+    await expect(client.getJson("/_elsa/workflows/dashboard/runs")).rejects.toMatchObject({ status: 401 });
+
+    expect(auth.refresh).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("keeps public requests bearer-less when a preflight refresh finds no session", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ public: true }), { status: 200 }));
     const auth = {
@@ -140,6 +154,22 @@ describe("authenticated HTTP transport", () => {
 
     expect(auth.refresh).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("removes a blank caller authorization header before sending a public request", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ public: true }), { status: 200 }));
+    const auth = {
+      getAccessToken: vi.fn(async () => null),
+      refresh: vi.fn(async (): Promise<AuthSession> => ({ status: "anonymous", roles: [], permissions: [] }))
+    };
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, {
+      fetch: fetchMock,
+      refreshOnUnauthorized: false
+    });
+
+    await expect(client.getJson("/_elsa/public/status", { headers: { Authorization: "   " } })).resolves.toEqual({ public: true });
+
+    expect(new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers).get("Authorization")).toBeNull();
   });
 
   it("does not preflight refresh when unauthorized retries are disabled", async () => {
