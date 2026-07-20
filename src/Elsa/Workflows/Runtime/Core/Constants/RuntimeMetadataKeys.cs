@@ -225,6 +225,8 @@ public static class RuntimeMetadataKeys
     public const string RetrySourceActivityExecutionId = "runtime.retrySourceActivityExecutionId";
     public const string RetryReason = "runtime.retryReason";
     public const string ScopeCancellationReason = "runtime.scopeCancellationReason";
+    /// <summary>Activity execution id of the structural parent that staged a child-subtree cancellation (spec 112).</summary>
+    public const string SubtreeCancellationRequestedBy = "runtime.subtreeCancellationRequestedBy";
     public const string Reason = "runtime.reason";
     public const string ResumeReason = "runtime.resumeReason";
     public const string ResumeSchedulerWorkItemId = "runtime.resumeSchedulerWorkItemId";

@@ -100,6 +100,32 @@ public sealed class GraphActivityRecoveryTests
     }
 
     [Fact]
+    public async Task CancellationWins_SuppressesBlockingIncidentsInsideTheScope()
+    {
+        await using var provider = Provider();
+        var states = provider.GetRequiredService<IActivityExecutionStateStore>();
+        var incidents = provider.GetRequiredService<IIncidentStateStore>();
+        await states.SaveAsync(State("outer", null, "outer", ActivityExecutionStatus.Suspended));
+        await states.SaveAsync(State("child", "outer", "outer", ActivityExecutionStatus.Faulted));
+        await incidents.SaveAsync(new IncidentState(
+            "incident-child", WorkflowId, "child", "child-node",
+            IncidentSeverity.Error, IncidentStatus.Blocking, IncidentResolutionAction.WaitForIntervention,
+            "TestFault", "child faulted", Now, null));
+
+        var handler = provider.GetServices<IWorkflowSchedulerWorkHandler>()
+            .Single(item => item is WorkflowCancelActivityScopeSchedulerWorkHandler);
+        await handler.HandleAsync(CancelWorkItem());
+
+        Assert.Empty(await incidents.ListBlockingAsync(WorkflowId));
+        var incident = (await incidents.FindAsync(WorkflowId, "incident-child"))!;
+        Assert.Equal(IncidentStatus.Suppressed, incident.Status);
+        Assert.NotNull(incident.ResolvedAt);
+        Assert.Equal("operator-request", incident.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        var commit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
+        Assert.Single(commit.Commit.StateChanges.Incidents);
+    }
+
+    [Fact]
     public async Task CompletionWins_CancellationCannotOverwriteTheTerminalBoundary()
     {
         await using var provider = Provider();

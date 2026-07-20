@@ -156,6 +156,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
+        services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
         services.TryAddScoped<IWorkflowDrainOrchestrator, WorkflowDrainOrchestrator>();
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
