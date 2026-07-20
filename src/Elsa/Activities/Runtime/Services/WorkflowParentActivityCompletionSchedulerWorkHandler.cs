@@ -147,6 +147,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         if (ActivityAttemptActivationClaimer.WasParentCompletionProcessed(completedChildState))
             return;
 
+        // spec 112 FR-8: a completion evaluation for a child this parent already cancelled is late by
+        // definition — ack it without invoking the structural callback.
+        if (completedChildState.Status == ActivityExecutionStatus.Cancelled)
+            return;
+
         var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
         var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
         var checkpointCommitter = serviceProvider.GetService<RuntimeCheckpointCommitter>();
@@ -162,6 +167,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
         SimpleActivityExecutionContext? context = null;
         RuntimeStructuralContinuation? continuation = null;
+        IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellationPlans = [];
         ActivityExecutionState? callbackBypassParentState = null;
         IReadOnlyCollection<RuntimeSchedulerWorkItem> callbackBypassContinuationWorkItems = [];
         ActivityActivationLease? activationLease = null;
@@ -260,6 +266,15 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 if (!continuation.IsDeferred && scheduledChildren.Count > 0)
                     throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same child-completion evaluation.");
 
+                subtreeCancellationPlans = await PlanChildSubtreeCancellationsAsync(
+                    serviceProvider,
+                    activityExecutionStateStore,
+                    workItem,
+                    payload,
+                    context.GetChildSubtreeCancellationRequests(),
+                    continuation,
+                    cancellationToken);
+
                 if (continuation.IsComplete && parentActivity is IRuntimeActivityCheckpointParticipant checkpointParticipant)
                 {
                     var persistedValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workItem.WorkflowExecutionId, cancellationToken);
@@ -343,6 +358,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 ActivityAttemptActivationClaimer.MarkParentCompletionProcessed(completedChildState, workItem.WorkItemId),
                 [],
                 callbackBypassContinuationWorkItems,
+                [],
                 valueSnapshots,
                 cancellationToken);
             return;
@@ -435,6 +451,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 ActivityAttemptActivationClaimer.MarkParentCompletionProcessed(completedChildState, workItem.WorkItemId),
                 childScheduleRequests,
                 [],
+                subtreeCancellationPlans,
                 valueSnapshots,
                 cancellationToken);
             return;
@@ -563,9 +580,72 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             payload,
             completedParentState,
             ReadCompletionOutcomeNames(completedParentState),
+            subtreeCancellationPlans,
             containerVariableSnapshots,
             completionDurableValueChanges,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Validates and plans the child-subtree cancellations the structural callback staged (spec 112).
+    /// Structural misuse (unknown target, non-child target, duplicate, terminal continuation) faults the
+    /// evaluation; a target that is already terminal is a legal first-completion-wins race and is skipped.
+    /// </summary>
+    private async ValueTask<IReadOnlyCollection<ActivitySubtreeCancellationPlan>> PlanChildSubtreeCancellationsAsync(
+        IServiceProvider serviceProvider,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCompleteActivityCommandPayload payload,
+        IReadOnlyCollection<RuntimeChildSubtreeCancellationRequest> requests,
+        RuntimeStructuralContinuation continuation,
+        CancellationToken cancellationToken)
+    {
+        if (requests.Count == 0)
+            return [];
+
+        if (continuation.Kind is RuntimeStructuralContinuationKind.Fault or RuntimeStructuralContinuationKind.Cancel)
+            throw new InvalidOperationException("A faulting or cancelling structural decision cannot also cancel child subtrees in the same child-completion evaluation.");
+
+        var duplicateTarget = requests.GroupBy(request => request.ChildActivityExecutionId, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicateTarget is not null)
+            throw new InvalidOperationException($"Child subtree cancellation targets activity execution '{duplicateTarget.Key}' more than once.");
+
+        var planner = serviceProvider.GetRequiredService<ActivitySubtreeCancellationPlanner>();
+        var allStates = await activityExecutionStateStore.ListAllAsync(workItem.WorkflowExecutionId, cancellationToken);
+        var byId = allStates.ToDictionary(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal);
+        var occurredAt = _timeProvider.GetUtcNow();
+        var plans = new List<ActivitySubtreeCancellationPlan>(requests.Count);
+        foreach (var request in requests)
+        {
+            if (!byId.TryGetValue(request.ChildActivityExecutionId, out var target))
+                throw new InvalidOperationException($"Child subtree cancellation references missing activity execution '{request.ChildActivityExecutionId}'.");
+            if (!StringComparer.Ordinal.Equals(target.ParentActivityExecutionId, payload.ActivityExecutionId))
+                throw new InvalidOperationException($"Child subtree cancellation targets activity execution '{request.ChildActivityExecutionId}', which is not a child of parent activity execution '{payload.ActivityExecutionId}'.");
+            if (target.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered)
+                continue;
+
+            var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+                [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
+                [RuntimeMetadataKeys.ScopeCancellationReason] = request.Reason,
+                [RuntimeMetadataKeys.SubtreeCancellationRequestedBy] = payload.ActivityExecutionId
+            };
+            foreach (var item in request.Metadata)
+                metadata[item.Key] = item.Value;
+
+            plans.Add(await planner.PlanAsync(
+                workItem.WorkflowExecutionId,
+                target,
+                allStates,
+                subStatus: "ParentCancelled",
+                metadata,
+                occurredAt,
+                cancellationToken));
+        }
+
+        return plans;
     }
 
     private async ValueTask RecordParentFaultAsync(
@@ -707,6 +787,69 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         }
     }
 
+    /// <summary>
+    /// Projects planned subtree cancellations (spec 112) onto the typed change-set slots of the one
+    /// commit that also persists the parent's continuation (FR-7 single-commit atomicity).
+    /// </summary>
+    private static async ValueTask<SubtreeCancellationCommitChanges> BuildSubtreeCancellationChangesAsync(
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        IReadOnlyCollection<ActivitySubtreeCancellationPlan> plans,
+        string checkpointId,
+        DateTimeOffset occurredAt,
+        IReadOnlyDictionary<string, string> metadata,
+        CancellationToken cancellationToken)
+    {
+        if (plans.Count == 0)
+            return SubtreeCancellationCommitChanges.Empty;
+
+        var cancelledStates = plans.SelectMany(plan => plan.CancelledStates).ToArray();
+        var activityExecutionChanges = cancelledStates
+            .Select(state => new RuntimeStateChange<ActivityExecutionState>(
+                state.Execution.ActivityExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                state,
+                metadata))
+            .ToArray();
+        var incidentChanges = plans.SelectMany(plan => plan.SuppressedIncidents)
+            .Select(incident => new RuntimeStateChange<IncidentState>(
+                incident.IncidentId,
+                RuntimeStateChangeOperation.Upsert,
+                incident,
+                metadata))
+            .ToArray();
+        var inspectionChanges = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>(cancelledStates.Length);
+        if (inspectionAccumulator is not null)
+        {
+            foreach (var state in cancelledStates)
+            {
+                var projection = await inspectionAccumulator.BuildProjectionAsync(
+                    state, checkpointId, occurredAt, metadata: metadata, cancellationToken: cancellationToken);
+                inspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                    state.Execution.ActivityExecutionId,
+                    RuntimeStateChangeOperation.Upsert,
+                    projection,
+                    metadata));
+            }
+        }
+
+        return new SubtreeCancellationCommitChanges(
+            activityExecutionChanges,
+            incidentChanges,
+            inspectionChanges,
+            plans.Select(plan => plan.Cleanup).ToArray(),
+            cancelledStates.Select(state => state.Execution.ActivityExecutionId).ToArray());
+    }
+
+    private sealed record SubtreeCancellationCommitChanges(
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> ActivityExecutions,
+        IReadOnlyCollection<RuntimeStateChange<IncidentState>> Incidents,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> Inspections,
+        IReadOnlyCollection<ActivityScopeCleanupRequest> Cleanups,
+        IReadOnlyCollection<string> CancelledActivityExecutionIds)
+    {
+        public static readonly SubtreeCancellationCommitChanges Empty = new([], [], [], [], []);
+    }
+
     private async ValueTask CommitDeferredParentActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
@@ -717,6 +860,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         ActivityExecutionState processedChildState,
         IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
         IReadOnlyCollection<RuntimeSchedulerWorkItem> continuationWorkItems,
+        IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellations,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken)
     {
@@ -751,6 +895,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     Metadata: metadata)
             ];
         var childWorkItems = NewChildActivityScheduleWorkItems(idGenerator, parentCompletionWorkItem, parentCompletionPayload, scheduleRequests).ToArray();
+        var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
+            inspectionAccumulator, subtreeCancellations, checkpointId, occurredAt, metadata, cancellationToken);
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{parentCompletionWorkItem.WorkItemId}:activity-inspection-captured:{parentCompletionPayload.ActivityExecutionId}",
             Checkpoint: new RuntimeCheckpoint(
@@ -761,7 +907,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 ActivityExecutionIds:
                 [
                     parentCompletionPayload.ActivityExecutionId,
-                    processedChildState.Execution.ActivityExecutionId
+                    processedChildState.Execution.ActivityExecutionId,
+                    .. cancellationChanges.CancelledActivityExecutionIds
                 ],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
@@ -778,13 +925,15 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                         StateId: processedChildState.Execution.ActivityExecutionId,
                         Operation: RuntimeStateChangeOperation.Upsert,
                         State: processedChildState,
-                        Metadata: metadata)
+                        Metadata: metadata),
+                    .. cancellationChanges.ActivityExecutions
                 ],
                 bookmarks: [],
                 durableValues: [],
-                incidents: [],
+                incidents: cancellationChanges.Incidents,
                 operational: [],
-                activityExecutionInspections: inspectionChanges),
+                activityExecutionInspections: [.. inspectionChanges, .. cancellationChanges.Inspections],
+                activityScopeCleanups: cancellationChanges.Cleanups),
             PostCommitIntents: childWorkItems
                 .Concat(continuationWorkItems)
                 .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, workItem, occurredAt))
@@ -801,6 +950,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         RuntimeCompleteActivityCommandPayload parentCompletionPayload,
         ActivityExecutionState completedParentState,
         IReadOnlyCollection<string> outcomeNames,
+        IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellations,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         CancellationToken cancellationToken)
@@ -830,6 +980,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 metadata: metadata,
                 cancellationToken: cancellationToken);
         var completionWorkItem = NewCompletionWorkItem(parentCompletionWorkItem, parentCompletionPayload, completedParentState);
+        var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
+            inspectionAccumulator, subtreeCancellations, checkpointId, occurredAt, metadata, cancellationToken);
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{parentCompletionWorkItem.WorkItemId}:parent-activity-completed:{parentCompletionPayload.ActivityExecutionId}",
             Checkpoint: new RuntimeCheckpoint(
@@ -837,7 +989,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 Name: RuntimeCheckpointNames.ActivityCompleted,
                 WorkflowExecutionId: parentCompletionWorkItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
-                ActivityExecutionIds: [parentCompletionPayload.ActivityExecutionId],
+                ActivityExecutionIds: [parentCompletionPayload.ActivityExecutionId, .. cancellationChanges.CancelledActivityExecutionIds],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
@@ -848,22 +1000,28 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                         StateId: parentCompletionPayload.ActivityExecutionId,
                         Operation: RuntimeStateChangeOperation.Upsert,
                         State: completedParentState,
-                        Metadata: metadata)
+                        Metadata: metadata),
+                    .. cancellationChanges.ActivityExecutions
                 ],
                 bookmarks: [],
                 durableValues: durableValueChanges,
-                incidents: [],
+                incidents: cancellationChanges.Incidents,
                 operational: [],
                 activityExecutionInspections: inspection is null
-                    ? []
+                    ?
+                    [
+                        .. cancellationChanges.Inspections
+                    ]
                     :
                     [
                         new RuntimeStateChange<ActivityExecutionInspectionProjection>(
                             StateId: parentCompletionPayload.ActivityExecutionId,
                             Operation: RuntimeStateChangeOperation.Upsert,
                             State: inspection,
-                            Metadata: metadata)
-                    ]),
+                            Metadata: metadata),
+                        .. cancellationChanges.Inspections
+                    ],
+                activityScopeCleanups: cancellationChanges.Cleanups),
             PostCommitIntents: [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, completionWorkItem, occurredAt)],
             Metadata: metadata);
 

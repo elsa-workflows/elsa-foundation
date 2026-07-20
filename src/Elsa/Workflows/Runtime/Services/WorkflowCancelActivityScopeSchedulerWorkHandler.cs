@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <summary>Cancels one composite activity scope without changing the enclosing workflow identity.</summary>
 public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
     IActivityExecutionStateStore activityExecutionStateStore,
-    IActivityScopeCleanupStore cleanupStore,
+    ActivitySubtreeCancellationPlanner cancellationPlanner,
     RuntimeCheckpointCommitter checkpointCommitter,
     IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
     TimeProvider timeProvider) : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
@@ -53,9 +53,6 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
         if (outer.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered)
             return null;
 
-        var scopedStates = TraverseScope(outer, allStates, cancellationToken);
-        var scopeIds = scopedStates.Select(state => state.Execution.ActivityExecutionId).ToHashSet(StringComparer.Ordinal);
-        var cleanup = await cleanupStore.CaptureAsync(workItem.WorkflowExecutionId, command.ExecutionScopeId, scopeIds, cancellationToken);
         var occurredAt = timeProvider.GetUtcNow();
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -66,21 +63,17 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
             [RuntimeMetadataKeys.ActivityExecutionId] = command.ActivityExecutionId,
             [RuntimeMetadataKeys.ScopeCancellationReason] = command.Reason
         };
-        var cancelled = scopedStates
-            .Where(IsCancellable)
-            .Select(state => state with
-            {
-                Status = ActivityExecutionStatus.Cancelled,
-                SubStatus = "ScopeCancelled",
-                CompletedAt = occurredAt,
-                Metadata = Merge(state.Metadata, metadata)
-            })
-            .OrderBy(state => state.ExecutionSequence)
-            .ThenBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
-            .ToArray();
+        var plan = await cancellationPlanner.PlanAsync(
+            workItem.WorkflowExecutionId,
+            outer,
+            allStates,
+            subStatus: "ScopeCancelled",
+            metadata,
+            occurredAt,
+            cancellationToken);
         var checkpointId = $"checkpoint:{workItem.WorkItemId}:activity-scope-cancelled:{command.ExecutionScopeId}";
-        var inspections = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>(cancelled.Length);
-        foreach (var state in cancelled)
+        var inspections = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>(plan.CancelledStates.Count);
+        foreach (var state in plan.CancelledStates)
         {
             var projection = await inspectionAccumulator.BuildProjectionAsync(
                 state, checkpointId, occurredAt, metadata: metadata, cancellationToken: cancellationToken);
@@ -98,65 +91,28 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
                 RuntimeCheckpointNames.ActivityCancelled,
                 workItem.WorkflowExecutionId,
                 occurredAt,
-                cancelled.Select(state => state.Execution.ActivityExecutionId).ToArray(),
+                plan.CancelledStates.Select(state => state.Execution.ActivityExecutionId).ToArray(),
                 metadata),
             new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
                 scheduler: null,
-                activityExecutions: cancelled.Select(state => new RuntimeStateChange<ActivityExecutionState>(
+                activityExecutions: plan.CancelledStates.Select(state => new RuntimeStateChange<ActivityExecutionState>(
                     state.Execution.ActivityExecutionId,
                     RuntimeStateChangeOperation.Upsert,
                     state,
                     metadata)).ToArray(),
                 bookmarks: [],
                 durableValues: [],
-                incidents: [],
+                incidents: plan.SuppressedIncidents.Select(incident => new RuntimeStateChange<IncidentState>(
+                    incident.IncidentId,
+                    RuntimeStateChangeOperation.Upsert,
+                    incident,
+                    metadata)).ToArray(),
                 operational: [],
                 activityExecutionInspections: inspections,
-                activityScopeCleanups: [cleanup]),
+                activityScopeCleanups: [plan.Cleanup]),
             PostCommitIntents: [],
             Metadata: metadata);
-    }
-
-    private static IReadOnlyList<ActivityExecutionState> TraverseScope(
-        ActivityExecutionState outer,
-        IReadOnlyCollection<ActivityExecutionState> allStates,
-        CancellationToken cancellationToken)
-    {
-        var children = allStates.Where(state => state.ParentActivityExecutionId is not null)
-            .GroupBy(state => state.ParentActivityExecutionId!, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.OrderBy(state => state.ExecutionSequence)
-                .ThenBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
-        var result = new List<ActivityExecutionState>();
-        var queue = new Queue<ActivityExecutionState>();
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        queue.Enqueue(outer);
-        while (queue.TryDequeue(out var state))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!visited.Add(state.Execution.ActivityExecutionId))
-                continue;
-            result.Add(state);
-            if (!children.TryGetValue(state.Execution.ActivityExecutionId, out var directChildren))
-                continue;
-            foreach (var child in directChildren)
-                queue.Enqueue(child);
-        }
-
-        return result;
-    }
-
-    private static bool IsCancellable(ActivityExecutionState state) =>
-        state.Status is ActivityExecutionStatus.Scheduled or ActivityExecutionStatus.Running or ActivityExecutionStatus.Waiting or ActivityExecutionStatus.Suspended;
-
-    private static IReadOnlyDictionary<string, string> Merge(
-        IReadOnlyDictionary<string, string> existing,
-        IReadOnlyDictionary<string, string> additions)
-    {
-        var result = existing.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        foreach (var item in additions)
-            result[item.Key] = item.Value;
-        return result;
     }
 
     private static CancelActivityScopeCommand Deserialize(RuntimeSchedulerWorkItem workItem)

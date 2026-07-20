@@ -59,6 +59,7 @@ public sealed class SimpleActivityExecutionContext(
     }
 
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
+    private readonly List<RuntimeChildSubtreeCancellationRequest> _childSubtreeCancellationRequests = [];
 
     public IActivity Activity { get; } = activity;
     public CancellationToken CancellationToken { get; } = cancellationToken;
@@ -92,6 +93,20 @@ public sealed class SimpleActivityExecutionContext(
 
     public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>
         _childActivityScheduleRequests.ToArray();
+
+    public void RequestChildSubtreeCancellation(
+        string childActivityExecutionId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        _childSubtreeCancellationRequests.Add(new RuntimeChildSubtreeCancellationRequest(
+            childActivityExecutionId,
+            reason,
+            metadata));
+    }
+
+    public IReadOnlyCollection<RuntimeChildSubtreeCancellationRequest> GetChildSubtreeCancellationRequests() =>
+        _childSubtreeCancellationRequests.ToArray();
 
     /// <summary>Projects the engine context to the deliberately smaller ordinary activity context.</summary>
     public ActivityExecutionContext ToActivityExecutionContext() =>
