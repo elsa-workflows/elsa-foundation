@@ -1,0 +1,12 @@
+<Project>
+  <Import Project="InjectedProviderReferences.props" />
+
+  <Target Name="ResolveReferences">
+    <ItemGroup>
+      <ReferencePath Include="Groundwork.Documents.dll">
+        <NuGetPackageId>Groundwork.Documents</NuGetPackageId>
+        <ReferenceSourceTarget>InjectedProviderReferencePath</ReferenceSourceTarget>
+      </ReferencePath>
+    </ItemGroup>
+  </Target>
+</Project>
