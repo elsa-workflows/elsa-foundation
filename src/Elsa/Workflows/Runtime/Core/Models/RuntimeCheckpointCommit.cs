@@ -301,7 +301,8 @@ public sealed class RuntimePostCommitIntent
         JsonElement? payload,
         IReadOnlyDictionary<string, string>? metadata = null,
         string? dependsOnWaitRegistrationId = null,
-        RuntimeWaitDependentIntentFailurePolicy? waitFailurePolicy = null)
+        RuntimeWaitDependentIntentFailurePolicy? waitFailurePolicy = null,
+        RuntimeSchedulerWorkItem? materializedSchedulerWorkItem = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -326,6 +327,7 @@ public sealed class RuntimePostCommitIntent
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         DependsOnWaitRegistrationId = dependsOnWaitRegistrationId;
         WaitFailurePolicy = waitFailurePolicy;
+        MaterializedSchedulerWorkItem = materializedSchedulerWorkItem;
     }
 
     public string IntentId { get; }
@@ -339,6 +341,18 @@ public sealed class RuntimePostCommitIntent
     public string? DependsOnWaitRegistrationId { get; }
     public RuntimeWaitDependentIntentFailurePolicy? WaitFailurePolicy { get; }
     public bool IsWaitDependent => !string.IsNullOrWhiteSpace(DependsOnWaitRegistrationId);
+
+    /// <summary>
+    /// In-process-only conduit (WU-3, spec 109): the already-materialized <see cref="RuntimeSchedulerWorkItem"/> this
+    /// <c>EnqueueSchedulerWork</c> intent's <see cref="Payload"/> was serialized from. Set by
+    /// <c>SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent</c> so the checkpoint committer can hand it to the
+    /// live drain's in-process-hop carrier without re-parsing. <b>Never serialized</b> (<see cref="JsonIgnoreAttribute"/>):
+    /// the durable <see cref="Payload"/> is the sole authoritative form, so any store that persists this intent strips
+    /// the conduit and the delivery path deserializes as usual. Null for non-continuation intents and after any
+    /// durable round-trip.
+    /// </summary>
+    [JsonIgnore]
+    public RuntimeSchedulerWorkItem? MaterializedSchedulerWorkItem { get; }
 
     internal static void ValidateKind(string kind, string parameterName)
     {
