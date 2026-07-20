@@ -5,15 +5,15 @@
     "coverageEntryId": "runtime-scheduler-state",
     "provider": "sqlite",
     "providerIdentity": "groundwork-sqlite",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "file-backed-distinct-connections",
-    "manifestFingerprint": "48ccfae8967e642ad5cc64768952a9548198844eb28656e44d9dc21c4e005cdc",
+    "manifestFingerprint": "ee110ed94a838be73d3ac352c71767c540235324e157c98b6a5122d215326828",
     "executionPath": "provider-driver/sqlite/runtime-scheduler-state/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
     "outcome": "pass",
     "evidence": "evidence/sqlite/runtime-scheduler-state/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "a84d955e5006dd5d78dfcca145e961528248a8af13a85379b6ddceed0dae6f77"
+    "evidenceSha256": "862ff0675e8bc956331ce94462d19a725bff747f8253d061ed7ea0407c693e19"
   },
   {
     "scenarioId": "ordinary-round-trip",
@@ -21,15 +21,15 @@
     "coverageEntryId": "runtime-scheduler-state",
     "provider": "sqlserver",
     "providerIdentity": "groundwork-sqlserver",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-sqlserver-container",
-    "manifestFingerprint": "af403c3397f1e15c74e7188c72589106a75a66ea5d153089bc7002fd32ac9b04",
+    "manifestFingerprint": "d77aec6c094a70a7806880a2a4ab3fd0c07b1e2bd11a4d2040406141990ecbb7",
     "executionPath": "provider-driver/sqlserver/runtime-scheduler-state/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
     "outcome": "pass",
     "evidence": "evidence/sqlserver/runtime-scheduler-state/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "2fbcbb36491fb0ed41e66d5b0ea1fbea250a6a6dcc0090c9e128d66f5b362f29"
+    "evidenceSha256": "a9efc418a6013e74ebac8f73d05d7c35e21c39c6986e83e046813d7b93b04e04"
   },
   {
     "scenarioId": "ordinary-round-trip",
@@ -37,15 +37,15 @@
     "coverageEntryId": "runtime-scheduler-state",
     "provider": "postgresql",
     "providerIdentity": "groundwork-postgresql",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-postgresql-container",
-    "manifestFingerprint": "78351eef5610e8f11b2d431bdfe30784d78e40202e30041262860bfaf6e7c476",
+    "manifestFingerprint": "70c8668402ecb1b27708e7c5e0080190c63a9bf9d7fe6184c7c695d3d4753914",
     "executionPath": "provider-driver/postgresql/runtime-scheduler-state/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
     "outcome": "pass",
     "evidence": "evidence/postgresql/runtime-scheduler-state/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "924d0271267a3be9f83d5d97c88ae8b35f425082db9ecb919b8098a72cf9df60"
+    "evidenceSha256": "ed9dcf7cea316f5f51d00706a04641cdc28e27e8ad88149d02b38b4dccc85663"
   },
   {
     "scenarioId": "ordinary-round-trip",
@@ -53,15 +53,15 @@
     "coverageEntryId": "runtime-scheduler-state",
     "provider": "mongodb",
     "providerIdentity": "groundwork-mongodb",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "transaction-capable-replica-set",
-    "manifestFingerprint": "a6363bd015ef9c16085387f5e9cf424d84f76ca58cd315912d6a088771d6468a",
+    "manifestFingerprint": "0a429b872895598a68a6c9db286ca2ea897a6a8ceec8aca729f1284133398f52",
     "executionPath": "provider-driver/mongodb/runtime-scheduler-state/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
     "outcome": "pass",
     "evidence": "evidence/mongodb/runtime-scheduler-state/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "d3b27325e0588825d5b4193835a0c2829de4a53245dc8f43c5ea8ddbe9fd077c"
+    "evidenceSha256": "16b1a463421b8581d43a10e472fd95e6b1e5e33967fc14783a05dd0afcabce8e"
   },
   {
     "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -69,16 +69,16 @@
     "coverageEntryId": "runtime-scheduler-state",
     "provider": "sqlite",
     "providerIdentity": "groundwork-sqlite",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "file-backed-distinct-connections",
-    "manifestFingerprint": "48ccfae8967e642ad5cc64768952a9548198844eb28656e44d9dc21c4e005cdc",
+    "manifestFingerprint": "ee110ed94a838be73d3ac352c71767c540235324e157c98b6a5122d215326828",
     "executionPath": "provider-driver/sqlite/runtime-scheduler-state/9ff7253c911b2760",
     "clients": 2,
     "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
     "outcome": "pass",
     "restartScenario": "dispose-and-reopen-same-database",
     "evidence": "evidence/sqlite/runtime-scheduler-state/9ff7253c911b2760.json",
-    "evidenceSha256": "09c3ebe33dbcb0a909883dfff1836abdf4f3a5c2f412056482fa5f687bf7a685"
+    "evidenceSha256": "39070327effac3294b9457b7be103024446a5d6849c6cf4a87aefed9696fdf10"
   },
   {
     "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -86,16 +86,16 @@
     "coverageEntryId": "runtime-scheduler-state",
     "provider": "sqlserver",
     "providerIdentity": "groundwork-sqlserver",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-sqlserver-container",
-    "manifestFingerprint": "af403c3397f1e15c74e7188c72589106a75a66ea5d153089bc7002fd32ac9b04",
+    "manifestFingerprint": "d77aec6c094a70a7806880a2a4ab3fd0c07b1e2bd11a4d2040406141990ecbb7",
     "executionPath": "provider-driver/sqlserver/runtime-scheduler-state/9ff7253c911b2760",
     "clients": 2,
     "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
     "outcome": "pass",
     "restartScenario": "dispose-and-reopen-same-database",
     "evidence": "evidence/sqlserver/runtime-scheduler-state/9ff7253c911b2760.json",
-    "evidenceSha256": "22c66f8fa4b41ff61cd49ab7656665c9305d8f986c58f15e677878298eca7a6d"
+    "evidenceSha256": "df4d883de6d66a23e5e25e8d3a08894efc8af58584ce06f17db652105fe0595e"
   },
   {
     "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -103,16 +103,16 @@
     "coverageEntryId": "runtime-scheduler-state",
     "provider": "postgresql",
     "providerIdentity": "groundwork-postgresql",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-postgresql-container",
-    "manifestFingerprint": "78351eef5610e8f11b2d431bdfe30784d78e40202e30041262860bfaf6e7c476",
+    "manifestFingerprint": "70c8668402ecb1b27708e7c5e0080190c63a9bf9d7fe6184c7c695d3d4753914",
     "executionPath": "provider-driver/postgresql/runtime-scheduler-state/9ff7253c911b2760",
     "clients": 2,
     "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
     "outcome": "pass",
     "restartScenario": "dispose-and-reopen-same-database",
     "evidence": "evidence/postgresql/runtime-scheduler-state/9ff7253c911b2760.json",
-    "evidenceSha256": "f643baad307f132c60317ef6f5ed3879fc08a863475ac81de068505a363fc042"
+    "evidenceSha256": "ca51951a4e58459ff813c6cc2d6824afc96294b3a27af90fd01e275980485591"
   },
   {
     "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -120,15 +120,15 @@
     "coverageEntryId": "runtime-scheduler-state",
     "provider": "mongodb",
     "providerIdentity": "groundwork-mongodb",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "transaction-capable-replica-set",
-    "manifestFingerprint": "a6363bd015ef9c16085387f5e9cf424d84f76ca58cd315912d6a088771d6468a",
+    "manifestFingerprint": "0a429b872895598a68a6c9db286ca2ea897a6a8ceec8aca729f1284133398f52",
     "executionPath": "provider-driver/mongodb/runtime-scheduler-state/9ff7253c911b2760",
     "clients": 2,
     "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
     "outcome": "pass",
     "restartScenario": "dispose-and-reopen-same-database",
     "evidence": "evidence/mongodb/runtime-scheduler-state/9ff7253c911b2760.json",
-    "evidenceSha256": "13a3893faa4c9e102b2a28a1c45cb985347a20490dc675f699eae0c4bfa336d6"
+    "evidenceSha256": "48043e0e5c937b1671e7ddef397eda399ce6ea5149940284e30cbd01c99d9ffc"
   }
 ]

@@ -5,15 +5,15 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "sqlite",
     "providerIdentity": "groundwork-sqlite",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "file-backed-distinct-connections",
-    "manifestFingerprint": "357b2f34ad9d59fa97b97697952c4d9d6f73278759e388ef999a2ff70b4b1f55",
+    "manifestFingerprint": "dd0a56f50743faa280c092b2f709f5275ae9eee64128ce71e3157597e5363e80",
     "executionPath": "provider-driver/sqlite/distributed-command-transport/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
     "outcome": "pass",
     "evidence": "evidence/sqlite/distributed-command-transport/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "571c740c73c81aaa809f287f18fbcb6354cfe962f0072051c292b13ad155d610"
+    "evidenceSha256": "42f84ac220c009245d5172bad92e9d8b34be4ee573808c18c637977a2f8297bd"
   },
   {
     "scenarioId": "ordinary-round-trip",
@@ -21,15 +21,15 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "sqlserver",
     "providerIdentity": "groundwork-sqlserver",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-sqlserver-container",
-    "manifestFingerprint": "13ea7bd8d719599ccf914aa3342627f8ceff38df9066bfcaaed9f78b0724523f",
+    "manifestFingerprint": "88662b9a14325d4b52ab2d75d208f99f5db03d7a98d8492092bc691b2fdf5cdf",
     "executionPath": "provider-driver/sqlserver/distributed-command-transport/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
     "outcome": "pass",
     "evidence": "evidence/sqlserver/distributed-command-transport/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "83afbdf4093e04ec1c9f50188040a866a93de58b9f335495a658003d68fdf587"
+    "evidenceSha256": "435035724071e988983b7b104125b25d817887d526c7553ded935049afcaf58e"
   },
   {
     "scenarioId": "ordinary-round-trip",
@@ -37,15 +37,15 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "postgresql",
     "providerIdentity": "groundwork-postgresql",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-postgresql-container",
-    "manifestFingerprint": "fa37b55e1cb88c4e51eb93351249b5626bc5420705f86cee45c79e3170c4ab59",
+    "manifestFingerprint": "f0067afcc77e9835f0de79e81d8a484711d626e5ffb4016fdfdf3d281d9f3d6b",
     "executionPath": "provider-driver/postgresql/distributed-command-transport/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
     "outcome": "pass",
     "evidence": "evidence/postgresql/distributed-command-transport/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "14da1d3b6fb5393c5e9fc9e5b7d69f0936d5b1fbe1810d502a79e608eb1f22b7"
+    "evidenceSha256": "d6646d130688da9f51b616ea61b0dd8892c4911eb6a07e4119145a3399340514"
   },
   {
     "scenarioId": "ordinary-round-trip",
@@ -53,15 +53,15 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "mongodb",
     "providerIdentity": "groundwork-mongodb",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "transaction-capable-replica-set",
-    "manifestFingerprint": "7980149bab0427138208d61616c81e89c59c79428b98d83f4fe4eb116fc1f0bc",
+    "manifestFingerprint": "cd19d8546c408dc71445affbae1436d563885b738af66193abddba03ee5c54c5",
     "executionPath": "provider-driver/mongodb/distributed-command-transport/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
     "outcome": "pass",
     "evidence": "evidence/mongodb/distributed-command-transport/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "3b59dfe01ee7af1d05edcdcf7fd23b124dd8edf25403575154f81b8e17c76789"
+    "evidenceSha256": "e300ea848842ae94ab2b93e7e25ac73188e353c1f0e860c2fa9b3820004821c4"
   },
   {
     "scenarioId": "queryShape:count-pending-by-execution",
@@ -69,9 +69,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "sqlite",
     "providerIdentity": "groundwork-sqlite",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "file-backed-distinct-connections",
-    "manifestFingerprint": "9720b542240858e0c51ca4782073b070c690bab0c809d102baa7097b09ca3ca3",
+    "manifestFingerprint": "4e6141f6183107ed70088c7d502132c117ab7d1836110e873af8c5871e351ceb",
     "executionPath": "provider-driver/sqlite/distributed-command-transport/4fb3e89fc9e6911a",
     "clients": 1,
     "resultHash": "dc8f0223c75299c7958f3a64fcbcf5c687ce72c744bc3f0523f09fc25303bbc9",
@@ -82,7 +82,7 @@
     "nativeEvidence": "evidence/sqlite/distributed-command-transport/4fb3e89fc9e6911a.plan.txt",
     "evidence": "evidence/sqlite/distributed-command-transport/4fb3e89fc9e6911a.json",
     "nativeEvidenceSha256": "4791de451470eb3c28b70d1901a3125c435134766c78c359d93574a184429b0c",
-    "evidenceSha256": "1c48774fa0d1add4d4b83d2bc258b04aa204cbd28098ffe3044570da2fb788f4"
+    "evidenceSha256": "975b7937d686c300333b06eee8ab11540c24b04aaae4d81cebdfeb7476f7cfe3"
   },
   {
     "scenarioId": "queryShape:count-pending-by-execution",
@@ -90,9 +90,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "sqlserver",
     "providerIdentity": "groundwork-sqlserver",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-sqlserver-container",
-    "manifestFingerprint": "84cde3e37fb5c2e0050d57665fac025c21ff5216da53f7efa31b2eb4dc10c4c6",
+    "manifestFingerprint": "768571c92263a0696520844f5dda3f7ea3c95238ace780e6996d76c54cc1121f",
     "executionPath": "provider-driver/sqlserver/distributed-command-transport/4fb3e89fc9e6911a",
     "clients": 1,
     "resultHash": "dc8f0223c75299c7958f3a64fcbcf5c687ce72c744bc3f0523f09fc25303bbc9",
@@ -102,8 +102,8 @@
     "documentKind": "executionCommandTransport",
     "nativeEvidence": "evidence/sqlserver/distributed-command-transport/4fb3e89fc9e6911a.plan.txt",
     "evidence": "evidence/sqlserver/distributed-command-transport/4fb3e89fc9e6911a.json",
-    "nativeEvidenceSha256": "0ceb9793ccfa57c7f126f7c6c1c0c81ecaa55b3715bcb03d6af64c45700759ce",
-    "evidenceSha256": "428b3307272d1d0a997f44764290da4448031278cf72afc3ca88ae054e02bc7a"
+    "nativeEvidenceSha256": "65504788d1aa2add74c32fd3eb90b669ff3f75ae85156174283aa0f27b95fd4b",
+    "evidenceSha256": "dc7eb15be7fd0f25d0ccd98cce7706a87ff6256bb0549e67574f4daf60502dda"
   },
   {
     "scenarioId": "queryShape:count-pending-by-execution",
@@ -111,9 +111,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "postgresql",
     "providerIdentity": "groundwork-postgresql",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-postgresql-container",
-    "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+    "manifestFingerprint": "05d94c77ad46223907f0c8e876c1aa12e12bfb996aced4795ad48720dc3de4ad",
     "executionPath": "provider-driver/postgresql/distributed-command-transport/4fb3e89fc9e6911a",
     "clients": 1,
     "resultHash": "dc8f0223c75299c7958f3a64fcbcf5c687ce72c744bc3f0523f09fc25303bbc9",
@@ -124,7 +124,7 @@
     "nativeEvidence": "evidence/postgresql/distributed-command-transport/4fb3e89fc9e6911a.plan.txt",
     "evidence": "evidence/postgresql/distributed-command-transport/4fb3e89fc9e6911a.json",
     "nativeEvidenceSha256": "e96022ea72d8160e487962454395f8e6d9811c21e584a22a47f617fd67b076c7",
-    "evidenceSha256": "1b4d3892d26ed1bd0ebaf9e6e391e0e2c7802fc2ac57a70e2129a12fa0c7fbe1"
+    "evidenceSha256": "a3db380bd35690db89fc5c485e0f7e5369b95a8ac225d1cc7e8aa167ac44741a"
   },
   {
     "scenarioId": "queryShape:count-pending-by-execution",
@@ -132,9 +132,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "mongodb",
     "providerIdentity": "groundwork-mongodb",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "transaction-capable-replica-set",
-    "manifestFingerprint": "08dbfcbaa3b2d9e756833a46dcdffbe57cab0e655576e2b9b2b8226df9f697ec",
+    "manifestFingerprint": "8428ffbb867d1049b92861967f05d3c1a190cc5edfc724aea2072e4948d9542f",
     "executionPath": "provider-driver/mongodb/distributed-command-transport/4fb3e89fc9e6911a",
     "clients": 1,
     "resultHash": "dc8f0223c75299c7958f3a64fcbcf5c687ce72c744bc3f0523f09fc25303bbc9",
@@ -144,8 +144,8 @@
     "documentKind": "executionCommandTransport",
     "nativeEvidence": "evidence/mongodb/distributed-command-transport/4fb3e89fc9e6911a.plan.txt",
     "evidence": "evidence/mongodb/distributed-command-transport/4fb3e89fc9e6911a.json",
-    "nativeEvidenceSha256": "98b1c52a91922653d258309054bf61753ea526ce2b4a0263ae6b8bdd0490cf06",
-    "evidenceSha256": "57b721f674836d49a092e0c817ddac68168858fb3bdee7a4897a6f0523035ffa"
+    "nativeEvidenceSha256": "6fd396558ec9e3d49e9cf3ceb6220a68ea37df436d6df5d398f06256132e119b",
+    "evidenceSha256": "204744c5a9a07d45539bb690feceeb6959f7f8d4929052113a0d73df1ce9fe10"
   },
   {
     "scenarioId": "queryShape:lease-visible-by-execution-bounded",
@@ -153,9 +153,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "sqlite",
     "providerIdentity": "groundwork-sqlite",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "file-backed-distinct-connections",
-    "manifestFingerprint": "9720b542240858e0c51ca4782073b070c690bab0c809d102baa7097b09ca3ca3",
+    "manifestFingerprint": "4e6141f6183107ed70088c7d502132c117ab7d1836110e873af8c5871e351ceb",
     "executionPath": "provider-driver/sqlite/distributed-command-transport/c5b6defeb8de81a5",
     "clients": 1,
     "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
@@ -166,7 +166,7 @@
     "nativeEvidence": "evidence/sqlite/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
     "evidence": "evidence/sqlite/distributed-command-transport/c5b6defeb8de81a5.json",
     "nativeEvidenceSha256": "6d96187f26478806eae9e095fdffb4a0e0c36d10d02df0ea911cfc5fdc49c06a",
-    "evidenceSha256": "7bf9db4fdaa6d9f2c2513ecac33c0804f3d6ee9a6512c6138528ec33a9a1c62f"
+    "evidenceSha256": "ca7a33f106336a81316f7358f12ed87f1699554ac26dfff1f92b5afc3dcb427b"
   },
   {
     "scenarioId": "queryShape:lease-visible-by-execution-bounded",
@@ -174,9 +174,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "sqlserver",
     "providerIdentity": "groundwork-sqlserver",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-sqlserver-container",
-    "manifestFingerprint": "84cde3e37fb5c2e0050d57665fac025c21ff5216da53f7efa31b2eb4dc10c4c6",
+    "manifestFingerprint": "768571c92263a0696520844f5dda3f7ea3c95238ace780e6996d76c54cc1121f",
     "executionPath": "provider-driver/sqlserver/distributed-command-transport/c5b6defeb8de81a5",
     "clients": 1,
     "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
@@ -186,8 +186,8 @@
     "documentKind": "executionCommandTransport",
     "nativeEvidence": "evidence/sqlserver/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
     "evidence": "evidence/sqlserver/distributed-command-transport/c5b6defeb8de81a5.json",
-    "nativeEvidenceSha256": "e69a76e714ee8de313b2694b139fdeac1240ef53c7238d9e89236670b7419c70",
-    "evidenceSha256": "f6fb859ac4fdb5481472fef75c5cadea1e30b989d94609cf478ba2f6f72b2cc0"
+    "nativeEvidenceSha256": "51974d483c7711fb05d5f708cc48e1445a1d0761645ae99ea51c92736f50f687",
+    "evidenceSha256": "9aaff933bb72e5cc120300b8804b4563abd89c8a1b576a79a23ba514a845349e"
   },
   {
     "scenarioId": "queryShape:lease-visible-by-execution-bounded",
@@ -195,9 +195,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "postgresql",
     "providerIdentity": "groundwork-postgresql",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-postgresql-container",
-    "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+    "manifestFingerprint": "05d94c77ad46223907f0c8e876c1aa12e12bfb996aced4795ad48720dc3de4ad",
     "executionPath": "provider-driver/postgresql/distributed-command-transport/c5b6defeb8de81a5",
     "clients": 1,
     "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
@@ -207,8 +207,8 @@
     "documentKind": "executionCommandTransport",
     "nativeEvidence": "evidence/postgresql/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
     "evidence": "evidence/postgresql/distributed-command-transport/c5b6defeb8de81a5.json",
-    "nativeEvidenceSha256": "7b3174c805943c3bdba53d882c758508a839d81d2fec59be009aae00c6ff5d39",
-    "evidenceSha256": "8bf88dee5611dd826411c1590ac59163cb03e36f707fde0ab351bfd096e3108e"
+    "nativeEvidenceSha256": "047c038743910ff2e5ddcdc50cd34cccc5390a14988684d6290e7d2a5460e63a",
+    "evidenceSha256": "c9a1b865bc41e35409fb56cc34a573ca9b6c0e0747ed8ca72209a0d0c9c4def8"
   },
   {
     "scenarioId": "queryShape:lease-visible-by-execution-bounded",
@@ -216,9 +216,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "mongodb",
     "providerIdentity": "groundwork-mongodb",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "transaction-capable-replica-set",
-    "manifestFingerprint": "08dbfcbaa3b2d9e756833a46dcdffbe57cab0e655576e2b9b2b8226df9f697ec",
+    "manifestFingerprint": "8428ffbb867d1049b92861967f05d3c1a190cc5edfc724aea2072e4948d9542f",
     "executionPath": "provider-driver/mongodb/distributed-command-transport/c5b6defeb8de81a5",
     "clients": 1,
     "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
@@ -228,8 +228,8 @@
     "documentKind": "executionCommandTransport",
     "nativeEvidence": "evidence/mongodb/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
     "evidence": "evidence/mongodb/distributed-command-transport/c5b6defeb8de81a5.json",
-    "nativeEvidenceSha256": "43e0e18b9e61ed5d1595d555afd94e7fd329ff96308b29f306f43fbb10ad262d",
-    "evidenceSha256": "3a4cb0dd71ce3a6ebbe5456d0e680aebb09b857037d2234ce92e03ee5613324e"
+    "nativeEvidenceSha256": "790c0f646ad4f300f4c7e71bec9d0c13a91fcf13d7a9a7d99e6b87ba0e21dfec",
+    "evidenceSha256": "d20c0520735dd9e76715dce951ec757ff581f73b0f0d63e067a996caa3b2611d"
   },
   {
     "scenarioId": "queryShape:list-pending-execution-ids-bounded",
@@ -237,9 +237,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "sqlite",
     "providerIdentity": "groundwork-sqlite",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "file-backed-distinct-connections",
-    "manifestFingerprint": "9720b542240858e0c51ca4782073b070c690bab0c809d102baa7097b09ca3ca3",
+    "manifestFingerprint": "4e6141f6183107ed70088c7d502132c117ab7d1836110e873af8c5871e351ceb",
     "executionPath": "provider-driver/sqlite/distributed-command-transport/ab14d5a3451e98c3",
     "clients": 1,
     "resultHash": "c10492fef6630062ca664f570e11844504e95a02d7e95429f1501ff9349b4213",
@@ -250,7 +250,7 @@
     "nativeEvidence": "evidence/sqlite/distributed-command-transport/ab14d5a3451e98c3.plan.txt",
     "evidence": "evidence/sqlite/distributed-command-transport/ab14d5a3451e98c3.json",
     "nativeEvidenceSha256": "e9cd757da142e52a61973e0ee715b74312c9656ed939b500c8d2627818bd15a6",
-    "evidenceSha256": "1365660df57adfcc37b5f29cc3ac5da62c8b179bebe15f03a388845dfeb7b6fa"
+    "evidenceSha256": "10471034e97e56ce559295f610d2a72c12a14d4bc0669b062f839b2b60541fda"
   },
   {
     "scenarioId": "queryShape:list-pending-execution-ids-bounded",
@@ -258,9 +258,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "sqlserver",
     "providerIdentity": "groundwork-sqlserver",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-sqlserver-container",
-    "manifestFingerprint": "84cde3e37fb5c2e0050d57665fac025c21ff5216da53f7efa31b2eb4dc10c4c6",
+    "manifestFingerprint": "768571c92263a0696520844f5dda3f7ea3c95238ace780e6996d76c54cc1121f",
     "executionPath": "provider-driver/sqlserver/distributed-command-transport/ab14d5a3451e98c3",
     "clients": 1,
     "resultHash": "c10492fef6630062ca664f570e11844504e95a02d7e95429f1501ff9349b4213",
@@ -270,8 +270,8 @@
     "documentKind": "executionCommandTransport",
     "nativeEvidence": "evidence/sqlserver/distributed-command-transport/ab14d5a3451e98c3.plan.txt",
     "evidence": "evidence/sqlserver/distributed-command-transport/ab14d5a3451e98c3.json",
-    "nativeEvidenceSha256": "15c3b5000c328b4d4cf0390df04c0683e9f2bd469f7bb8409cbdb806b0d52e6a",
-    "evidenceSha256": "4b8edd77211f0b3ce616a7588dbc8ab73e011983e6a7e892112ff9ff276a2448"
+    "nativeEvidenceSha256": "57db14373d4d7f10c3cb62ffc2f0e80d86157cefcbb7e0a1ca4dfe2167309c1d",
+    "evidenceSha256": "7d9056f2a627d65dfbabb27863fba6c41ba727abd8c07a5c36acba619574ffa0"
   },
   {
     "scenarioId": "queryShape:list-pending-execution-ids-bounded",
@@ -279,9 +279,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "postgresql",
     "providerIdentity": "groundwork-postgresql",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-postgresql-container",
-    "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+    "manifestFingerprint": "05d94c77ad46223907f0c8e876c1aa12e12bfb996aced4795ad48720dc3de4ad",
     "executionPath": "provider-driver/postgresql/distributed-command-transport/ab14d5a3451e98c3",
     "clients": 1,
     "resultHash": "c10492fef6630062ca664f570e11844504e95a02d7e95429f1501ff9349b4213",
@@ -291,8 +291,8 @@
     "documentKind": "executionCommandTransport",
     "nativeEvidence": "evidence/postgresql/distributed-command-transport/ab14d5a3451e98c3.plan.txt",
     "evidence": "evidence/postgresql/distributed-command-transport/ab14d5a3451e98c3.json",
-    "nativeEvidenceSha256": "b9970a6d695cd296948da70c226d5532f34b0962ea6ef55133b0c3145a7ec1fb",
-    "evidenceSha256": "c71b3e89592a6124da12af31e343e6c2565f0cf1079e87b7c6096387629c7105"
+    "nativeEvidenceSha256": "39c22fbd1b02c3107b6338c6f8e5c6b5ef05a26a48ab8a30f67295fb245c6fed",
+    "evidenceSha256": "33b4521eb88a45764ba2fd5a1db8db0d24843312b7701d137e9144829fb95d23"
   },
   {
     "scenarioId": "queryShape:list-pending-execution-ids-bounded",
@@ -300,9 +300,9 @@
     "coverageEntryId": "distributed-command-transport",
     "provider": "mongodb",
     "providerIdentity": "groundwork-mongodb",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "transaction-capable-replica-set",
-    "manifestFingerprint": "08dbfcbaa3b2d9e756833a46dcdffbe57cab0e655576e2b9b2b8226df9f697ec",
+    "manifestFingerprint": "8428ffbb867d1049b92861967f05d3c1a190cc5edfc724aea2072e4948d9542f",
     "executionPath": "provider-driver/mongodb/distributed-command-transport/ab14d5a3451e98c3",
     "clients": 1,
     "resultHash": "c10492fef6630062ca664f570e11844504e95a02d7e95429f1501ff9349b4213",
@@ -312,8 +312,8 @@
     "documentKind": "executionCommandTransport",
     "nativeEvidence": "evidence/mongodb/distributed-command-transport/ab14d5a3451e98c3.plan.txt",
     "evidence": "evidence/mongodb/distributed-command-transport/ab14d5a3451e98c3.json",
-    "nativeEvidenceSha256": "224bd8b192a9ff401d9170b3833141df5870596802b7b7b73387c1a9cb8d1be3",
-    "evidenceSha256": "28a7797403df63dc4c95d2d7d62a6dccd30c82770195d8bba81028d637b45ce2"
+    "nativeEvidenceSha256": "6db4b8f32704f7e1561f4fd5c78c10cb6683e7d093cb171bf70cf05edc63b7fa",
+    "evidenceSha256": "24d7d053292895e64a45eeacf44ed0b572f095b014723cadca90ee04313371e3"
   },
   {
     "scenarioId": "ordinary-round-trip",
@@ -321,15 +321,15 @@
     "coverageEntryId": "distributed-execution-placement",
     "provider": "sqlite",
     "providerIdentity": "groundwork-sqlite",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "file-backed-distinct-connections",
-    "manifestFingerprint": "357b2f34ad9d59fa97b97697952c4d9d6f73278759e388ef999a2ff70b4b1f55",
+    "manifestFingerprint": "dd0a56f50743faa280c092b2f709f5275ae9eee64128ce71e3157597e5363e80",
     "executionPath": "provider-driver/sqlite/distributed-execution-placement/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "867154168f8ee88c35c7db72c504ab4b0457eca7ff387ce5c1a898561628abc2",
     "outcome": "pass",
     "evidence": "evidence/sqlite/distributed-execution-placement/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "f7007bc3a6a7f88ffcc165ab4c349e1da7ef8fa4ff970ac481eaf8fe5963da2c"
+    "evidenceSha256": "04c4df18d784fe886c2e0e4c96f6ccadd323214b48248ccf35fb3cdc147c7463"
   },
   {
     "scenarioId": "ordinary-round-trip",
@@ -337,15 +337,15 @@
     "coverageEntryId": "distributed-execution-placement",
     "provider": "sqlserver",
     "providerIdentity": "groundwork-sqlserver",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-sqlserver-container",
-    "manifestFingerprint": "13ea7bd8d719599ccf914aa3342627f8ceff38df9066bfcaaed9f78b0724523f",
+    "manifestFingerprint": "88662b9a14325d4b52ab2d75d208f99f5db03d7a98d8492092bc691b2fdf5cdf",
     "executionPath": "provider-driver/sqlserver/distributed-execution-placement/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "867154168f8ee88c35c7db72c504ab4b0457eca7ff387ce5c1a898561628abc2",
     "outcome": "pass",
     "evidence": "evidence/sqlserver/distributed-execution-placement/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "5bf8ea574524fdbd42449ba189e973e0b1c415d341400d307570b85ae6c149bb"
+    "evidenceSha256": "523b1e1c731c2a55d04df53757e547b0dc12fe4bc54fb4ea48eb29aca94d15a3"
   },
   {
     "scenarioId": "ordinary-round-trip",
@@ -353,15 +353,15 @@
     "coverageEntryId": "distributed-execution-placement",
     "provider": "postgresql",
     "providerIdentity": "groundwork-postgresql",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-postgresql-container",
-    "manifestFingerprint": "fa37b55e1cb88c4e51eb93351249b5626bc5420705f86cee45c79e3170c4ab59",
+    "manifestFingerprint": "f0067afcc77e9835f0de79e81d8a484711d626e5ffb4016fdfdf3d281d9f3d6b",
     "executionPath": "provider-driver/postgresql/distributed-execution-placement/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "867154168f8ee88c35c7db72c504ab4b0457eca7ff387ce5c1a898561628abc2",
     "outcome": "pass",
     "evidence": "evidence/postgresql/distributed-execution-placement/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "8888f8c62744cca9923d687cfbb4face30caf11cd66cea340d7b5415c5b41ed3"
+    "evidenceSha256": "60ad888bd71c665a1c1317c1ac8cf179f67af5cc65fbb2ac7c95cf80b4e34f9b"
   },
   {
     "scenarioId": "ordinary-round-trip",
@@ -369,15 +369,15 @@
     "coverageEntryId": "distributed-execution-placement",
     "provider": "mongodb",
     "providerIdentity": "groundwork-mongodb",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "transaction-capable-replica-set",
-    "manifestFingerprint": "7980149bab0427138208d61616c81e89c59c79428b98d83f4fe4eb116fc1f0bc",
+    "manifestFingerprint": "cd19d8546c408dc71445affbae1436d563885b738af66193abddba03ee5c54c5",
     "executionPath": "provider-driver/mongodb/distributed-execution-placement/0e7ae6dd54aaea28",
     "clients": 2,
     "resultHash": "867154168f8ee88c35c7db72c504ab4b0457eca7ff387ce5c1a898561628abc2",
     "outcome": "pass",
     "evidence": "evidence/mongodb/distributed-execution-placement/0e7ae6dd54aaea28.json",
-    "evidenceSha256": "a6e02d84e84e2f60a28fdbbaeebd8e7b011076a37f7813e5579957eba3a45584"
+    "evidenceSha256": "353a7fc9182fd304fc826518c492f61cd64a652900fb091c64271ffb28d220fb"
   },
   {
     "scenarioId": "queryShape:list-owned-or-current-bounded",
@@ -385,9 +385,9 @@
     "coverageEntryId": "distributed-execution-placement",
     "provider": "sqlite",
     "providerIdentity": "groundwork-sqlite",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "file-backed-distinct-connections",
-    "manifestFingerprint": "9720b542240858e0c51ca4782073b070c690bab0c809d102baa7097b09ca3ca3",
+    "manifestFingerprint": "4e6141f6183107ed70088c7d502132c117ab7d1836110e873af8c5871e351ceb",
     "executionPath": "provider-driver/sqlite/distributed-execution-placement/8c0c25e23488bc42",
     "clients": 1,
     "resultHash": "fd8fd18024360a016cccba61f70801cf114c7c53798cda2896288eabb76a2100",
@@ -398,7 +398,7 @@
     "nativeEvidence": "evidence/sqlite/distributed-execution-placement/8c0c25e23488bc42.plan.txt",
     "evidence": "evidence/sqlite/distributed-execution-placement/8c0c25e23488bc42.json",
     "nativeEvidenceSha256": "5018b519e0d2980b828421acc80c0a92f281727e946e16b41347a9ea0451d0c5",
-    "evidenceSha256": "d4892d0587bd6de51d734cefb28c653063b74944585febfdf4c5c5a5f0b420a2"
+    "evidenceSha256": "21623adad3d1a5849cdc3d7281d020b48b45c6f40e7632b10b74ef05e8aa81c6"
   },
   {
     "scenarioId": "queryShape:list-owned-or-current-bounded",
@@ -406,9 +406,9 @@
     "coverageEntryId": "distributed-execution-placement",
     "provider": "sqlserver",
     "providerIdentity": "groundwork-sqlserver",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-sqlserver-container",
-    "manifestFingerprint": "84cde3e37fb5c2e0050d57665fac025c21ff5216da53f7efa31b2eb4dc10c4c6",
+    "manifestFingerprint": "768571c92263a0696520844f5dda3f7ea3c95238ace780e6996d76c54cc1121f",
     "executionPath": "provider-driver/sqlserver/distributed-execution-placement/8c0c25e23488bc42",
     "clients": 1,
     "resultHash": "fd8fd18024360a016cccba61f70801cf114c7c53798cda2896288eabb76a2100",
@@ -418,8 +418,8 @@
     "documentKind": "executionPlacement",
     "nativeEvidence": "evidence/sqlserver/distributed-execution-placement/8c0c25e23488bc42.plan.txt",
     "evidence": "evidence/sqlserver/distributed-execution-placement/8c0c25e23488bc42.json",
-    "nativeEvidenceSha256": "717858f0625c4d824f9d4ef84c6e0c4a39c128a605f5e171952621aa016011a3",
-    "evidenceSha256": "5e867a93eb2fba2f4daae97485e5df0f36e5fc8099e6a638349797570284448a"
+    "nativeEvidenceSha256": "4c3fcb25f464e8d6dd34a3a4035aad023daac1faab74c066a25962d24d9cc334",
+    "evidenceSha256": "28e486b7b6adf9e08de47ca01fec1a327806e3d4ed57ca4fbdec84f622cb0c3d"
   },
   {
     "scenarioId": "queryShape:list-owned-or-current-bounded",
@@ -427,9 +427,9 @@
     "coverageEntryId": "distributed-execution-placement",
     "provider": "postgresql",
     "providerIdentity": "groundwork-postgresql",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "real-postgresql-container",
-    "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+    "manifestFingerprint": "05d94c77ad46223907f0c8e876c1aa12e12bfb996aced4795ad48720dc3de4ad",
     "executionPath": "provider-driver/postgresql/distributed-execution-placement/8c0c25e23488bc42",
     "clients": 1,
     "resultHash": "fd8fd18024360a016cccba61f70801cf114c7c53798cda2896288eabb76a2100",
@@ -439,8 +439,8 @@
     "documentKind": "executionPlacement",
     "nativeEvidence": "evidence/postgresql/distributed-execution-placement/8c0c25e23488bc42.plan.txt",
     "evidence": "evidence/postgresql/distributed-execution-placement/8c0c25e23488bc42.json",
-    "nativeEvidenceSha256": "3d20f872dee2ffecb9f1e69e3b2e6e973f5a6d3b007d2bde0d3a2d8bd143d360",
-    "evidenceSha256": "c55944e22380fcab404f3e46ea06f0532d6900dc6c6bacc94499be26ab2cb8b0"
+    "nativeEvidenceSha256": "b172f5f46e80d3fada2d6462768f3da335d87a5a3d82ca17317b182ce7035b07",
+    "evidenceSha256": "92e8017ad5376897c9bf6a7172971a013b19c854f50c36f02a053e853a5188e7"
   },
   {
     "scenarioId": "queryShape:list-owned-or-current-bounded",
@@ -448,9 +448,9 @@
     "coverageEntryId": "distributed-execution-placement",
     "provider": "mongodb",
     "providerIdentity": "groundwork-mongodb",
-    "providerVersion": "0.0.1-preview.72",
+    "providerVersion": "0.0.1-preview.76",
     "topology": "transaction-capable-replica-set",
-    "manifestFingerprint": "08dbfcbaa3b2d9e756833a46dcdffbe57cab0e655576e2b9b2b8226df9f697ec",
+    "manifestFingerprint": "8428ffbb867d1049b92861967f05d3c1a190cc5edfc724aea2072e4948d9542f",
     "executionPath": "provider-driver/mongodb/distributed-execution-placement/8c0c25e23488bc42",
     "clients": 1,
     "resultHash": "fd8fd18024360a016cccba61f70801cf114c7c53798cda2896288eabb76a2100",
@@ -460,7 +460,7 @@
     "documentKind": "executionPlacement",
     "nativeEvidence": "evidence/mongodb/distributed-execution-placement/8c0c25e23488bc42.plan.txt",
     "evidence": "evidence/mongodb/distributed-execution-placement/8c0c25e23488bc42.json",
-    "nativeEvidenceSha256": "7b2ceeaf5959814d70628a9286f0ba5ab694cee7b944a4a806495a31e74d4350",
-    "evidenceSha256": "e56d505ccb7f88b32c46c10bd95431520a6d1ee3093f71be2512418b284e4282"
+    "nativeEvidenceSha256": "37141d1912e37e3c94aa126cf24d9b9276867f7d2b8f010fa4202cce75ad3dc6",
+    "evidenceSha256": "02ca846deee9a8b4133ddd0e90f9fbe4889deccf95ca8abdb09850529e1e2dbe"
   }
 ]
