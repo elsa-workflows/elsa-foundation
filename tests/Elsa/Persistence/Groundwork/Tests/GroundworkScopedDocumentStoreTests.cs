@@ -179,6 +179,27 @@ public sealed class GroundworkScopedDocumentStoreTests
     }
 
     [Fact]
+    public void Public_session_constructor_enforces_resource_and_audit_access_binding()
+    {
+        var access = DocumentStoreAccess.Scoped(new StorageScope("tenant-a"));
+        var otherAccess = DocumentStoreAccess.Scoped(new StorageScope("tenant-b"));
+        var privileged = GroundworkPersistenceAccessMapper.Map(
+            PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("repair")),
+            PersistenceAccessPolicy.Privileged);
+        var emitter = new RecordingEmitter();
+        var mismatchedAudit = new GroundworkPrivilegedAccessAudit(
+            Guid.NewGuid(),
+            DocumentStoreAccessKind.PrivilegedAcrossScopes,
+            "host",
+            "repair");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            new GroundworkStoreSession(access, Resources(otherAccess)));
+        Assert.Throws<ArgumentException>(() =>
+            new GroundworkStoreSession(privileged, Resources(privileged), emitter, mismatchedAudit));
+    }
+
+    [Fact]
     public async Task Public_session_constructor_preserves_default_and_cleanup_failure_behavior()
     {
         var access = DocumentStoreAccess.Scoped(new StorageScope("tenant-a"));

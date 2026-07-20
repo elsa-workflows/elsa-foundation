@@ -227,7 +227,7 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
         {
             throw;
         }
-        catch (JsonException exception)
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
             throw new GroundworkCorruptPayloadException(
                 $"Document '{envelope.Id}' of kind '{_documentKind}' could not be deserialized as {typeof(TEntity).Name}.",

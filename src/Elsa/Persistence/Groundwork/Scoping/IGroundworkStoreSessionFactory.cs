@@ -82,7 +82,13 @@ public sealed class GroundworkStoreSession : IAsyncDisposable
         GroundworkPrivilegedAccessAudit? privilegedAccessAudit = null)
     {
         Access = access ?? throw new ArgumentNullException(nameof(access));
-        _resources = resources ?? throw new ArgumentNullException(nameof(resources));
+        ArgumentNullException.ThrowIfNull(resources);
+        if (resources.DocumentStore.Access != access)
+        {
+            throw new InvalidOperationException(
+                "The Groundwork session resources are bound to a different access context.");
+        }
+
         var hasEmitter = privilegedAccessEmitter is not null;
         var hasAudit = privilegedAccessAudit is not null;
         if (access.IsPrivileged ? !hasEmitter || !hasAudit : hasEmitter || hasAudit)
@@ -91,7 +97,14 @@ public sealed class GroundworkStoreSession : IAsyncDisposable
                 "Privileged sessions require an audit emitter and acquisition identity; ordinary sessions require neither.",
                 nameof(privilegedAccessEmitter));
         }
+        if (privilegedAccessAudit is not null && privilegedAccessAudit.AccessKind != access.Kind)
+        {
+            throw new ArgumentException(
+                "The privileged acquisition audit must describe the session access kind.",
+                nameof(privilegedAccessAudit));
+        }
 
+        _resources = resources;
         _privilegedAccessEmitter = privilegedAccessEmitter;
         _privilegedAccessAudit = privilegedAccessAudit;
     }

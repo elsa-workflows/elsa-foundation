@@ -150,6 +150,7 @@ public static class BoundedDocumentQueryPager
         }
 
         var documents = new List<DocumentEnvelope>();
+        var seenDocuments = new HashSet<(string? Scope, string Id)>();
         long? totalCount = null;
         var skip = 0;
         while (true)
@@ -193,6 +194,15 @@ public static class BoundedDocumentQueryPager
                     throw new InvalidOperationException(
                         $"Document query '{queryIdentity}' provider stopped before the reported total count was exhausted.");
                 break;
+            }
+
+            foreach (var document in result.Documents)
+            {
+                if (!seenDocuments.Add((document.Scope?.Value, document.Id)))
+                {
+                    throw new InvalidOperationException(
+                        $"Document query '{queryIdentity}' repeated a previously seen storage identity while offset paging.");
+                }
             }
 
             documents.AddRange(result.Documents);

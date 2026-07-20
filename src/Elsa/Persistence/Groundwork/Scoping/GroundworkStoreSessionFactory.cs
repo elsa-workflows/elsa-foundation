@@ -21,12 +21,6 @@ public sealed class GroundworkStoreSessionFactory(
         try
         {
             resources = await source.OpenAsync(access, cancellationToken);
-            if (resources.DocumentStore.Access != access)
-            {
-                throw new InvalidOperationException(
-                    "The Groundwork session source returned resources bound to a different access context.");
-            }
-
             GroundworkPrivilegedAccessAudit? audit = null;
             IGroundworkPrivilegedAccessEmitter? sessionEmitter = null;
             if (access.IsPrivileged)

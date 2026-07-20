@@ -200,7 +200,7 @@ public sealed class GroundworkStoreSessionFactoryTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             factory.CreateAsync(PersistenceAccessPolicy.Ordinary).AsTask());
 
-        Assert.Equal("The Groundwork session source returned resources bound to a different access context.", exception.Message);
+        Assert.Equal("The Groundwork session resources are bound to a different access context.", exception.Message);
         Assert.Equal(1, mismatchedLease.DisposeCount);
         Assert.Contains(exception.Data.Values.Cast<object>(), value => ReferenceEquals(value, cleanupFailure));
     }
