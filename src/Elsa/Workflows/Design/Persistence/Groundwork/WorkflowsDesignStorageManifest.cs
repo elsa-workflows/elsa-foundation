@@ -11,8 +11,9 @@ public static class WorkflowsDesignStorageManifest
 {
     public const string SchemaVersion = "1.0.0";
 
-    // Kept until the later workflow design store/translator migration moves existing readers to the bounded routes below.
-    // These values are not declared as indexes or portable queries in this manifest.
+    // Transitional bounded compatibility route, removed when the later workflow design store/translator migration
+    // moves existing readers to the dedicated routes below. It is physical and admitted, never a legacy declaration.
+    public const string ByCollectionIndex = "by-collection";
     public const string CollectionField = "collection";
     public const string ListAllQuery = "list-all";
 
@@ -71,6 +72,7 @@ public static class WorkflowsDesignStorageManifest
     {
         var indexes = new[]
         {
+            LogicalIndex(ByCollectionIndex, [CollectionField]),
             LogicalIndex("definition-by-id-point", [DocumentIdField], unique: true),
             LogicalIndex("definition-by-id-list", [DefinitionIdField]),
             LogicalIndex("definition-by-name", [DefinitionNameField, DefinitionIdField]),
@@ -79,6 +81,7 @@ public static class WorkflowsDesignStorageManifest
         };
         var physicalIndexes = new[]
         {
+            PhysicalIndex(ByCollectionIndex, "collection"),
             PointLookupIndex("definition-by-id-point"),
             PhysicalIndex("definition-by-id-list", "definition_id"),
             PhysicalIndex("definition-by-name", "name", "definition_id"),
@@ -87,6 +90,7 @@ public static class WorkflowsDesignStorageManifest
         };
         var queries = new[]
         {
+            Query(ListAllQuery, ByCollectionIndex, [Predicate(CollectionField, PortableQueryOperation.Equal)], QueryPagingSupport.Offset, QuerySortSupport.None, [BoundedQueryResultOperation.Documents]),
             Query(FindDefinitionByIdQuery, "definition-by-id-point", [Predicate(DocumentIdField, PortableQueryOperation.Equal)], QueryPagingSupport.None, QuerySortSupport.None, [BoundedQueryResultOperation.First, BoundedQueryResultOperation.Any]),
             Query(ListDefinitionsByIdQuery, "definition-by-id-list", [Predicate(DefinitionIdField, PortableQueryOperation.Equal, PortableQueryOperation.In)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], sortFields: [Sort(DefinitionIdField)]),
             Query(ListDefinitionsByNameQuery, "definition-by-name", [Predicate(DefinitionNameField, PortableQueryOperation.Equal, PortableQueryOperation.In)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], sortFields: [Sort(DefinitionNameField), Sort(DefinitionIdField)]),
@@ -97,6 +101,7 @@ public static class WorkflowsDesignStorageManifest
             WorkflowDefinitionDocumentKind,
             "Workflow definition",
             [
+                Column("collection", CollectionField, false),
                 Column("definition_id", DefinitionIdField, false),
                 Column("name", DefinitionNameField),
                 Column("description", DefinitionDescriptionField),
@@ -111,6 +116,7 @@ public static class WorkflowsDesignStorageManifest
     {
         var indexes = new[]
         {
+            LogicalIndex(ByCollectionIndex, [CollectionField]),
             LogicalIndex("version-by-id", [DocumentIdField], unique: true),
             LogicalIndex("versions-by-definition", [VersionDefinitionIdField, VersionSemVerSortKeyField, VersionIdField]),
             LogicalIndex("version-by-definition-and-sort-key", [VersionDefinitionIdField, VersionSemVerSortKeyField], unique: true),
@@ -118,6 +124,7 @@ public static class WorkflowsDesignStorageManifest
         };
         var physicalIndexes = new[]
         {
+            PhysicalIndex(ByCollectionIndex, "collection"),
             PointLookupIndex("version-by-id"),
             PhysicalIndex("versions-by-definition", "definition_id", "sem_ver_sort_key", "version_id"),
             PhysicalIndex("version-by-definition-and-sort-key", true, "definition_id", "sem_ver_sort_key"),
@@ -129,6 +136,7 @@ public static class WorkflowsDesignStorageManifest
         };
         var queries = new[]
         {
+            Query(ListAllQuery, ByCollectionIndex, [Predicate(CollectionField, PortableQueryOperation.Equal)], QueryPagingSupport.Offset, QuerySortSupport.None, [BoundedQueryResultOperation.Documents]),
             Query(FindVersionByIdQuery, "version-by-id", [Predicate(DocumentIdField, PortableQueryOperation.Equal)], QueryPagingSupport.None, QuerySortSupport.None, [BoundedQueryResultOperation.First, BoundedQueryResultOperation.Any]),
             Query(ListVersionsByDefinitionQuery, "versions-by-definition", [Predicate(VersionDefinitionIdField, PortableQueryOperation.Equal, PortableQueryOperation.In)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], sortFields: [Sort(VersionDefinitionIdField), Sort(VersionSemVerSortKeyField), Sort(VersionIdField)]),
             Query(FindVersionByDefinitionAndSortKeyQuery, "version-by-definition-and-sort-key", [Predicate(VersionDefinitionIdField, PortableQueryOperation.Equal), Predicate(VersionSemVerSortKeyField, PortableQueryOperation.Equal)], QueryPagingSupport.None, QuerySortSupport.None, [BoundedQueryResultOperation.First, BoundedQueryResultOperation.Any]),
@@ -138,6 +146,7 @@ public static class WorkflowsDesignStorageManifest
             WorkflowDefinitionVersionDocumentKind,
             "Workflow definition version",
             [
+                Column("collection", CollectionField, false),
                 Column("version_id", VersionIdField, false),
                 Column("definition_id", VersionDefinitionIdField, false),
                 Column("sem_ver_sort_key", VersionSemVerSortKeyField, false)
@@ -151,12 +160,14 @@ public static class WorkflowsDesignStorageManifest
     {
         var indexes = new[]
         {
+            LogicalIndex(ByCollectionIndex, [CollectionField]),
             LogicalIndex("draft-by-id", [DocumentIdField], unique: true),
             LogicalIndex("drafts-by-definition", [DraftDefinitionIdField, DraftLastModifiedAtField, DraftCreatedAtField, DraftIdField]),
             LogicalIndex("current-draft-by-definition", [DraftDefinitionIdField, DraftLastModifiedAtField, DraftCreatedAtField, DraftIdField])
         };
         var physicalIndexes = new[]
         {
+            PhysicalIndex(ByCollectionIndex, "collection"),
             PointLookupIndex("draft-by-id"),
             OrderedPhysicalIndex(
                 "drafts-by-definition",
@@ -173,6 +184,7 @@ public static class WorkflowsDesignStorageManifest
         };
         var queries = new[]
         {
+            Query(ListAllQuery, ByCollectionIndex, [Predicate(CollectionField, PortableQueryOperation.Equal)], QueryPagingSupport.Offset, QuerySortSupport.None, [BoundedQueryResultOperation.Documents]),
             Query(FindDraftByIdQuery, "draft-by-id", [Predicate(DocumentIdField, PortableQueryOperation.Equal)], QueryPagingSupport.None, QuerySortSupport.None, [BoundedQueryResultOperation.First, BoundedQueryResultOperation.Any]),
             Query(ListDraftsByDefinitionQuery, "drafts-by-definition", [Predicate(DraftDefinitionIdField, PortableQueryOperation.Equal, PortableQueryOperation.In)], QueryPagingSupport.Offset, QuerySortSupport.Descending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], sortFields: CurrentDraftSort()),
             Query(FindCurrentDraftByDefinitionQuery, "current-draft-by-definition", [Predicate(DraftDefinitionIdField, PortableQueryOperation.Equal)], QueryPagingSupport.None, QuerySortSupport.Descending, [BoundedQueryResultOperation.First], sortFields: CurrentDraftSort())
@@ -181,6 +193,7 @@ public static class WorkflowsDesignStorageManifest
             WorkflowDefinitionDraftDocumentKind,
             "Workflow definition draft",
             [
+                Column("collection", CollectionField, false),
                 Column("draft_id", DraftIdField, false),
                 Column("definition_id", DraftDefinitionIdField, false),
                 DateTimeColumn("last_modified_at", DraftLastModifiedAtField, false),
@@ -193,16 +206,17 @@ public static class WorkflowsDesignStorageManifest
 
     private static StorageUnit LayoutUnit()
     {
-        var indexes = new[] { LogicalIndex("layout-by-version", [LayoutVersionIdField], true) };
-        var physicalIndexes = new[] { PhysicalIndex("layout-by-version", true, "version_id") };
+        var indexes = new[] { LogicalIndex(ByCollectionIndex, [CollectionField]), LogicalIndex("layout-by-version", [LayoutVersionIdField], true) };
+        var physicalIndexes = new[] { PhysicalIndex(ByCollectionIndex, "collection"), PhysicalIndex("layout-by-version", true, "version_id") };
         var queries = new[]
         {
+            Query(ListAllQuery, ByCollectionIndex, [Predicate(CollectionField, PortableQueryOperation.Equal)], QueryPagingSupport.Offset, QuerySortSupport.None, [BoundedQueryResultOperation.Documents]),
             Query(FindLayoutByVersionQuery, "layout-by-version", [Predicate(LayoutVersionIdField, PortableQueryOperation.Equal)], QueryPagingSupport.None, QuerySortSupport.None, [BoundedQueryResultOperation.First, BoundedQueryResultOperation.Any])
         };
         return PhysicalUnit(
             WorkflowDefinitionVersionLayoutDocumentKind,
             "Workflow definition version layout",
-            [Column("version_id", LayoutVersionIdField, false)],
+            [Column("collection", CollectionField, false), Column("version_id", LayoutVersionIdField, false)],
             indexes,
             physicalIndexes,
             queries);
