@@ -58,8 +58,9 @@ public abstract class DesignAtomicityContractSuite
             DesignAtomicityFaultPhase.BeforeProviderDecision,
             DesignAtomicityFaultAction.Cancel));
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.ExecuteAtomicityOperationAsync(Request()));
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.ExecuteAtomicityOperationAsync(Request()));
 
+        Assert.True(exception.CancellationToken.IsCancellationRequested);
         Assert.True(fault.WasTriggered);
         await AssertNoDurableOutcomeAsync(fixture);
     }
@@ -79,13 +80,15 @@ public abstract class DesignAtomicityContractSuite
         Assert.NotNull(exception);
         Assert.False(exception is OperationCanceledException);
         Assert.True(fault.WasTriggered);
-        await AssertCommittedExactlyOnceAsync(fixture);
+        var durable = await AssertCommittedExactlyOnceAsync(fixture);
 
         var replay = await fixture.ExecuteAtomicityOperationAsync(request);
 
         Assert.Equal(DesignAtomicityOperationStatus.Replayed, replay.Status);
-        Assert.False(string.IsNullOrWhiteSpace(replay.AuthoritativeResultFingerprint));
-        await AssertCommittedExactlyOnceAsync(fixture);
+        Assert.Equal(durable.AuthoritativeDurableResultFingerprint, replay.AuthoritativeResultFingerprint);
+        var afterReplay = await AssertCommittedExactlyOnceAsync(fixture);
+        Assert.Equal(durable.CanonicalAggregateStateFingerprint, afterReplay.CanonicalAggregateStateFingerprint);
+        Assert.Equal(durable.AuthoritativeDurableResultFingerprint, afterReplay.AuthoritativeDurableResultFingerprint);
     }
 
     [Fact]
@@ -119,12 +122,15 @@ public abstract class DesignAtomicityContractSuite
         await fixture.ValidateReadinessAsync();
 
         var committed = await fixture.ExecuteAtomicityOperationAsync(Request());
+        var beforeConflict = await AssertCommittedExactlyOnceAsync(fixture);
         var conflict = await fixture.ExecuteAtomicityOperationAsync(Request(ChangedFingerprint));
 
         Assert.Equal(DesignAtomicityOperationStatus.Committed, committed.Status);
         Assert.Equal(DesignAtomicityOperationStatus.Conflict, conflict.Status);
         Assert.Null(conflict.AuthoritativeResultFingerprint);
-        await AssertCommittedExactlyOnceAsync(fixture);
+        var afterConflict = await AssertCommittedExactlyOnceAsync(fixture);
+        Assert.Equal(beforeConflict.CanonicalAggregateStateFingerprint, afterConflict.CanonicalAggregateStateFingerprint);
+        Assert.Equal(beforeConflict.AuthoritativeDurableResultFingerprint, afterConflict.AuthoritativeDurableResultFingerprint);
     }
 
     [Fact]
@@ -161,7 +167,7 @@ public abstract class DesignAtomicityContractSuite
         Assert.Equal(0, snapshot.PublishedOutcomeCount);
     }
 
-    private static async Task AssertCommittedExactlyOnceAsync(
+    private static async Task<DesignAtomicitySnapshot> AssertCommittedExactlyOnceAsync(
         IDesignPersistenceContractFixture fixture,
         string storageScope = DesignPersistenceFixtureData.ScopeA)
     {
@@ -171,5 +177,8 @@ public abstract class DesignAtomicityContractSuite
         Assert.Equal(snapshot.ExpectedAggregatePartCount, snapshot.VisibleAggregatePartCount);
         Assert.Equal(1, snapshot.DurableOutcomeCount);
         Assert.Equal(1, snapshot.PublishedOutcomeCount);
+        Assert.False(string.IsNullOrWhiteSpace(snapshot.CanonicalAggregateStateFingerprint));
+        Assert.False(string.IsNullOrWhiteSpace(snapshot.AuthoritativeDurableResultFingerprint));
+        return snapshot;
     }
 }

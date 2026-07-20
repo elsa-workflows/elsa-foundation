@@ -271,6 +271,8 @@ public class DesignContractSuiteHarnessTests
 
             var resultFingerprint = $"result:{request.StorageScope}:{request.CanonicalRequestFingerprint.Value}";
             scope.VisibleAggregatePartCount = AggregatePartCount;
+            scope.CanonicalAggregateStateFingerprint = $"aggregate:{request.StorageScope}:{request.CanonicalRequestFingerprint.Value}";
+            scope.AuthoritativeDurableResultFingerprint = resultFingerprint;
             scope.Ledger.Add(request.OperationKey.Value, new(request.CanonicalRequestFingerprint.Value, resultFingerprint));
             scope.PublishedOutcomeCount++;
 
@@ -296,7 +298,7 @@ public class DesignContractSuiteHarnessTests
             plan.Action switch
             {
                 DesignAtomicityFaultAction.Throw => throw new InvalidOperationException("Injected atomicity failure before the durable provider decision."),
-                DesignAtomicityFaultAction.Cancel => throw new OperationCanceledException("Injected atomicity cancellation before the durable provider decision."),
+                DesignAtomicityFaultAction.Cancel => throw InjectedCancellation("Injected atomicity cancellation before the durable provider decision."),
                 DesignAtomicityFaultAction.ReturnNonSuccess => new(DesignAtomicityOperationStatus.Rejected, null),
                 _ => throw new ArgumentOutOfRangeException(nameof(plan))
             };
@@ -307,10 +309,17 @@ public class DesignContractSuiteHarnessTests
             plan.Action switch
             {
                 DesignAtomicityFaultAction.Throw => throw new InvalidOperationException("Injected acknowledgement loss after the durable provider decision."),
-                DesignAtomicityFaultAction.Cancel => throw new OperationCanceledException("Injected acknowledgement cancellation after the durable provider decision."),
+                DesignAtomicityFaultAction.Cancel => throw InjectedCancellation("Injected acknowledgement cancellation after the durable provider decision."),
                 DesignAtomicityFaultAction.ReturnNonSuccess => new(DesignAtomicityOperationStatus.Rejected, resultFingerprint),
                 _ => throw new ArgumentOutOfRangeException(nameof(plan))
             };
+
+        private static OperationCanceledException InjectedCancellation(string message)
+        {
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            return new OperationCanceledException(message, cancellation.Token);
+        }
 
         private AtomicityScopeState ScopeState(string storageScope)
         {
@@ -331,12 +340,16 @@ public class DesignContractSuiteHarnessTests
             public Dictionary<string, LedgerEntry> Ledger { get; } = new(StringComparer.Ordinal);
             public int VisibleAggregatePartCount { get; set; }
             public int PublishedOutcomeCount { get; set; }
+            public string? CanonicalAggregateStateFingerprint { get; set; }
+            public string? AuthoritativeDurableResultFingerprint { get; set; }
 
             public DesignAtomicitySnapshot Snapshot() => new(
                 VisibleAggregatePartCount,
                 AggregatePartCount,
                 Ledger.Count,
-                PublishedOutcomeCount);
+                PublishedOutcomeCount,
+                CanonicalAggregateStateFingerprint,
+                AuthoritativeDurableResultFingerprint);
         }
 
         private sealed class AtomicityFaultLease(DesignAtomicityFaultPlan plan, Action onDispose) : IDesignAtomicityFaultLease

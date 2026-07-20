@@ -250,6 +250,10 @@ public class DesignContractSuiteShapeTests
         Assert.NotNull(snapshot);
         Assert.Equal(typeof(Task<DesignAtomicitySnapshot>), snapshot!.ReturnType);
 
+        var snapshotProperties = typeof(DesignAtomicitySnapshot).GetProperties();
+        Assert.Equal(typeof(string), snapshotProperties.Single(x => x.Name == "CanonicalAggregateStateFingerprint").PropertyType);
+        Assert.Equal(typeof(string), snapshotProperties.Single(x => x.Name == "AuthoritativeDurableResultFingerprint").PropertyType);
+
         Assert.Equal(
             new[]
             {

@@ -164,4 +164,6 @@ public sealed record DesignAtomicitySnapshot(
     int VisibleAggregatePartCount,
     int ExpectedAggregatePartCount,
     int DurableOutcomeCount,
-    int PublishedOutcomeCount);
+    int PublishedOutcomeCount,
+    string? CanonicalAggregateStateFingerprint,
+    string? AuthoritativeDurableResultFingerprint);
