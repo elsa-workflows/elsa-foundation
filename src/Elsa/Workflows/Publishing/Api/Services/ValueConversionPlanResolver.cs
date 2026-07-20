@@ -22,26 +22,29 @@ public sealed class ValueConversionPlanResolver(
         ValueConversionMode mode = ValueConversionMode.Auto,
         ValueConversionProfileReference? profile = null,
         ValueConversionLimits? limits = null,
-        JsonElement? options = null)
+        JsonElement? options = null,
+        ValueConversionBindingContext? binding = null)
     {
         ArgumentNullException.ThrowIfNull(sourceType);
         ArgumentNullException.ThrowIfNull(targetType);
 
         if (sourceRepresentation == ValueRepresentation.TransientResource)
-            throw Reject(sourceType, sourceRepresentation, targetType, mode, profile,
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, binding,
+                ValueConversionRejectionReason.TransientResourceBinding,
                 "transient resources cannot cross a durable workflow binding.");
 
         if (mode == ValueConversionMode.None)
         {
             if (!ValueConversionCompatibility.SameType(sourceType, targetType))
-                throw Reject(sourceType, sourceRepresentation, targetType, mode, profile,
+                throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, binding,
+                    ValueConversionRejectionReason.NoneModeContractMismatch,
                     "mode 'None' requires an exact source and target contract match.");
 
             return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.Identity, null, limits, options);
         }
 
         if (mode is ValueConversionMode.Json or ValueConversionMode.Xml or ValueConversionMode.Profile)
-            return ResolveExplicitProfile(sourceType, sourceRepresentation, targetType, mode, profile, limits, options);
+            return ResolveExplicitProfile(sourceType, sourceRepresentation, targetType, mode, profile, limits, options, binding);
 
         if (ValueConversionCompatibility.SameType(sourceType, targetType))
             return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.Identity, null, limits, options);
@@ -78,11 +81,13 @@ public sealed class ValueConversionPlanResolver(
             !ValueConversionCompatibility.IsCanonicalAnyTarget(targetType) &&
             !ValueConversionCompatibility.IsJsonObjectTarget(targetType))
         {
-            throw Reject(sourceType, sourceRepresentation, targetType, mode, profile,
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, binding,
+                ValueConversionRejectionReason.JsonTypedTargetRequired,
                 "JSON conversion requires a registered typed target alias.");
         }
 
-        throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, ExplainAutomaticRejection(sourceType, targetType));
+        var (autoReason, autoMessage) = ExplainAutomaticRejection(sourceType, targetType);
+        throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, binding, autoReason, autoMessage);
     }
 
     private ValueConversionPlan ResolveExplicitProfile(
@@ -92,10 +97,12 @@ public sealed class ValueConversionPlanResolver(
         ValueConversionMode mode,
         ValueConversionProfileReference? profile,
         ValueConversionLimits? limits,
-        JsonElement? options)
+        JsonElement? options,
+        ValueConversionBindingContext? binding)
     {
         if (sourceRepresentation != ValueRepresentation.FormattedContent)
-            throw Reject(sourceType, sourceRepresentation, targetType, mode, profile,
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, binding,
+                ValueConversionRejectionReason.ExplicitProfileRequiresFormattedContent,
                 "an explicit conversion profile requires a source declared as formatted content; ordinary text and binary values are not format-sniffed.");
 
         var pinnedProfile = mode switch
@@ -103,26 +110,32 @@ public sealed class ValueConversionPlanResolver(
             ValueConversionMode.Json => new ValueConversionProfileReference("elsa.json", "1"),
             ValueConversionMode.Xml => new ValueConversionProfileReference("elsa.xml", "1"),
             ValueConversionMode.Profile when profile is not null => profile,
-            _ => throw Reject(sourceType, sourceRepresentation, targetType, mode, profile,
+            _ => throw Reject(sourceType, sourceRepresentation, targetType, mode, profile, binding,
+                ValueConversionRejectionReason.NamedProfileReferenceRequired,
                 "named-profile mode requires a profile id and version.")
         };
 
         if (mode == ValueConversionMode.Xml && ValueConversionCompatibility.IsCanonicalAnyTarget(targetType))
-            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile,
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile, binding,
+                ValueConversionRejectionReason.XmlCanonicalAnyUnsupported,
                 "XML has no universal canonical Any projection; select a documented XML-to-JSON profile instead.");
 
         if (!ProfileRegistry.TryGet(pinnedProfile, out var definition))
-            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile,
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile, binding,
+                ValueConversionRejectionReason.ProfileNotAvailable,
                 "the requested profile id and version are not available to publication.");
 
         if (!definition.Supports(sourceRepresentation, targetType))
-            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile,
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile, binding,
+                ValueConversionRejectionReason.ProfileUnsupportedContract,
                 "the requested profile does not support this source representation and target contract.");
         if (StringComparer.Ordinal.Equals(pinnedProfile.Id, "elsa.json") && !IsJsonProfileTarget(targetType))
-            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile,
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile, binding,
+                ValueConversionRejectionReason.JsonProfileTargetInvalid,
                 "JSON conversion requires Any, JsonObject, or a registered typed target alias.");
         if (StringComparer.Ordinal.Equals(pinnedProfile.Id, "elsa.xml") && !IsXmlProfileTarget(targetType))
-            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile,
+            throw Reject(sourceType, sourceRepresentation, targetType, mode, pinnedProfile, binding,
+                ValueConversionRejectionReason.XmlProfileTargetInvalid,
                 "XML conversion requires a registered typed target alias; XML has no universal canonical Any projection.");
 
         return Create(sourceType, sourceRepresentation, targetType, mode, ValueConversionOperation.Profile, pinnedProfile, limits, options);
@@ -166,16 +179,16 @@ public sealed class ValueConversionPlanResolver(
             limits,
             options);
 
-    private static string ExplainAutomaticRejection(ValueTypeDescriptor source, ValueTypeDescriptor target)
+    private static (ValueConversionRejectionReason Reason, string Message) ExplainAutomaticRejection(ValueTypeDescriptor source, ValueTypeDescriptor target)
     {
         if (!ValueConversionCompatibility.IsSafeCollectionShapeConversion(source.CollectionKind, target.CollectionKind) &&
             (source.CollectionKind != CollectionKind.Single || target.CollectionKind != CollectionKind.Single))
-            return "collection shape changes are ambiguous under Auto.";
+            return (ValueConversionRejectionReason.AutomaticCollectionShapeAmbiguous, "collection shape changes are ambiguous under Auto.");
 
         if (ValueConversionCompatibility.IsNumeric(source.Alias) && ValueConversionCompatibility.IsNumeric(target.Alias))
-            return "numeric narrowing or cross-family numeric conversion is lossy under Auto.";
+            return (ValueConversionRejectionReason.AutomaticNumericLossy, "numeric narrowing or cross-family numeric conversion is lossy under Auto.");
 
-        return "no deterministic, supported Auto conversion exists for these contracts.";
+        return (ValueConversionRejectionReason.AutomaticUnsupported, "no deterministic, supported Auto conversion exists for these contracts.");
     }
 
     private static ValueConversionPublicationException Reject(
@@ -184,8 +197,10 @@ public sealed class ValueConversionPlanResolver(
         ValueTypeDescriptor targetType,
         ValueConversionMode mode,
         ValueConversionProfileReference? profile,
+        ValueConversionBindingContext? binding,
+        ValueConversionRejectionReason reasonCode,
         string reason) =>
-        new(sourceType, sourceRepresentation, targetType, mode, profile, reason);
+        ValueConversionPublicationException.Rejected(sourceType, sourceRepresentation, targetType, mode, profile, reasonCode, reason, binding);
 
 }
 
@@ -234,35 +249,130 @@ public sealed class BuiltInValueConversionProfileRegistry : IValueConversionProf
             .ToArray();
 }
 
+/// <summary>The workflow binding a conversion failure originated from, threaded from the compilation context.</summary>
+public enum ValueConversionBindingKind
+{
+    /// <summary>An authored activity input binding.</summary>
+    Input,
+
+    /// <summary>An authored activity output capture into a workflow variable.</summary>
+    Output,
+
+    /// <summary>A direct activity-result input binding resolved by the result plan linker.</summary>
+    ActivityResult
+}
+
+/// <summary>
+/// Identifies the failing node and binding reference key so a conversion rejection can be reported as
+/// structured diagnostics rather than reparsed from a message string.
+/// </summary>
+public sealed record ValueConversionBindingContext(
+    string NodeId,
+    string ReferenceKey,
+    ValueConversionBindingKind Kind);
+
+/// <summary>Stable machine-readable reason a conversion could not be resolved at publication.</summary>
+public enum ValueConversionRejectionReason
+{
+    TransientResourceBinding,
+    NoneModeContractMismatch,
+    JsonTypedTargetRequired,
+    ExplicitProfileRequiresFormattedContent,
+    NamedProfileReferenceRequired,
+    XmlCanonicalAnyUnsupported,
+    ProfileNotAvailable,
+    ProfileUnsupportedContract,
+    JsonProfileTargetInvalid,
+    XmlProfileTargetInvalid,
+    AutomaticCollectionShapeAmbiguous,
+    AutomaticNumericLossy,
+    AutomaticUnsupported,
+    ProducerNodeMissing,
+    ProducerResultContractMissing,
+    UnknownResultProjection
+}
+
 /// <summary>Publication failure with the complete pinned-contract context needed to fix a binding.</summary>
 public sealed class ValueConversionPublicationException : ArgumentException
 {
-    public ValueConversionPublicationException(
-        ValueTypeDescriptor sourceType,
-        ValueRepresentation sourceRepresentation,
+    private ValueConversionPublicationException(
+        string message,
+        ValueConversionRejectionReason reasonCode,
+        string reason,
+        ValueTypeDescriptor? sourceType,
+        ValueRepresentation? sourceRepresentation,
         ValueTypeDescriptor targetType,
         ValueConversionMode mode,
         ValueConversionProfileReference? profile,
-        string reason)
-        : base($"VF-COER-001: Cannot resolve conversion from source representation '{sourceRepresentation}' and contract " +
-               $"'{Describe(sourceType)}' to target contract '{Describe(targetType)}' using mode '{mode}'" +
-               $"{(profile is null ? string.Empty : $" and profile '{profile.Id}@{profile.Version}'")}: {reason}")
+        ValueConversionBindingContext? binding)
+        : base(message)
     {
+        ReasonCode = reasonCode;
+        Reason = reason;
         SourceType = sourceType;
         SourceRepresentation = sourceRepresentation;
         TargetType = targetType;
         Mode = mode;
         Profile = profile;
-        Reason = reason;
+        Binding = binding;
     }
 
-    public ValueTypeDescriptor SourceType { get; }
-    public ValueRepresentation SourceRepresentation { get; }
+    /// <summary>Stable reason code identifying the rejection, independent of the human message.</summary>
+    public ValueConversionRejectionReason ReasonCode { get; }
+
+    /// <summary>The human-readable explanation appended to the diagnostic message.</summary>
+    public string Reason { get; }
+
+    /// <summary>The resolved source contract, or <c>null</c> when the source contract could not be resolved.</summary>
+    public ValueTypeDescriptor? SourceType { get; }
+
+    /// <summary>The resolved source representation, or <c>null</c> when the source contract could not be resolved.</summary>
+    public ValueRepresentation? SourceRepresentation { get; }
+
     public ValueTypeDescriptor TargetType { get; }
     public ValueConversionMode Mode { get; }
     public ValueConversionProfileReference? Profile { get; }
-    public string Reason { get; }
 
-    private static string Describe(ValueTypeDescriptor type) =>
+    /// <summary>The failing node and binding reference key, when threaded from the compilation context.</summary>
+    public ValueConversionBindingContext? Binding { get; }
+
+    /// <summary>Rejects a conversion whose full source and target contracts are known.</summary>
+    public static ValueConversionPublicationException Rejected(
+        ValueTypeDescriptor sourceType,
+        ValueRepresentation sourceRepresentation,
+        ValueTypeDescriptor targetType,
+        ValueConversionMode mode,
+        ValueConversionProfileReference? profile,
+        ValueConversionRejectionReason reasonCode,
+        string reason,
+        ValueConversionBindingContext? binding = null) =>
+        new(
+            $"VF-COER-001: Cannot resolve conversion from source representation '{sourceRepresentation}' and contract " +
+            $"'{DescribeContract(sourceType)}' to target contract '{DescribeContract(targetType)}' using mode '{mode}'" +
+            $"{(profile is null ? string.Empty : $" and profile '{profile.Id}@{profile.Version}'")}: {reason}",
+            reasonCode,
+            reason,
+            sourceType,
+            sourceRepresentation,
+            targetType,
+            mode,
+            profile,
+            binding);
+
+    /// <summary>
+    /// Rejects a direct activity-result binding whose producer source contract could not be resolved.
+    /// The caller supplies the verbatim human message so existing linker diagnostics are preserved.
+    /// </summary>
+    public static ValueConversionPublicationException SourceContractUnavailable(
+        string message,
+        ValueConversionRejectionReason reasonCode,
+        ValueTypeDescriptor targetType,
+        ValueConversionMode mode,
+        ValueConversionProfileReference? profile,
+        ValueConversionBindingContext binding) =>
+        new(message, reasonCode, message, null, null, targetType, mode, profile, binding);
+
+    /// <summary>Formats a portable type contract as <c>alias/collectionKind/schema:version</c>.</summary>
+    public static string DescribeContract(ValueTypeDescriptor type) =>
         $"{type.Alias}/{type.CollectionKind}/schema:{type.SchemaVersion?.ToString() ?? "none"}";
 }
