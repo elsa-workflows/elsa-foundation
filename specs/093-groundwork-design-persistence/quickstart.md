@@ -12,6 +12,24 @@ This guide is the executable evidence checklist for issue #641. Commands assume 
 - One binary-compatible Groundwork version across `Groundwork.Core`, `Groundwork.Documents`, all four provider packages, and `Groundwork.Tool`.
 - Provider connection values supplied through environment variables; never commit or pass secrets in process-visible command arguments.
 
+## Baseline record (T001/T004 publication-gated)
+
+The work unit is based on `origin/main` commit `d1548991f`, captured on 2026-07-20.
+The repository currently pins the Groundwork library family, including SQL Server and
+MongoDB, and `Groundwork.Tool` to `0.0.1-preview.72`. The public preview feed reports
+`Groundwork.Tool` `0.0.1-preview.73` as its newest release; `0.0.1-preview.75` is not
+available. T001 intentionally remains open until that requested, binary-compatible
+release can be pinned as one package/tool family.
+
+The pre-extraction EF behavioral suite inventories are 354 workflow-design tests and
+467 activity-design tests. Their focused restore and discovery succeeded at this base.
+The shared fixture scaffold currently has 4 deterministic-fixture tests. See
+[baseline evidence](evidence/baseline.md) for the commands and precise evidence scope.
+
+No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads
+that define them are T021–T025. The test inventory hashes in the baseline record are not
+substitutes for result hashes, so T004 remains open.
+
 ## 1. Restore and build
 
 ```bash

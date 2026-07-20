@@ -24,13 +24,13 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 **Purpose**: Establish the exact current surface, temporary oracle, upstream version, and test scaffolding before changing behavior.
 
 - [ ] T001 Record branch base, Groundwork package/tool version, provider images, and current focused/full test counts in `specs/093-groundwork-design-persistence/quickstart.md`
-- [ ] T002 Reconcile every current workflow/activity design store and command with the coverage list in `specs/093-groundwork-design-persistence/contracts/design-persistence-contract.md`
-- [ ] T003 Classify every EF-referencing design test by preserved domain objective versus removable EF mechanism and populate the exact per-test architect approval ledger in `specs/093-groundwork-design-persistence/research.md`; T072/T073 may not delete a test without its approved ledger row
+- [X] T002 Reconcile every current workflow/activity design store and command with the coverage list in `specs/093-groundwork-design-persistence/contracts/design-persistence-contract.md`
+- [X] T003 Classify every EF-referencing design test by preserved domain objective versus removable EF mechanism and populate the exact per-test architect approval ledger in `specs/093-groundwork-design-persistence/test-removal-ledger.md` (linked from `research.md`); T072/T073 may not delete a test without its approved ledger row
 - [ ] T004 Capture the temporary EF SQLite oracle result hashes and behavior baseline in `specs/093-groundwork-design-persistence/quickstart.md`
-- [ ] T005 Create `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj` and add it to `Elsa.Server.slnx`
-- [ ] T006 [P] Add the released `Groundwork.SqlServer`, `Groundwork.MongoDb`, and matching provider test/tool package versions to `Directory.Packages.props`
-- [ ] T007 [P] Add a pinned `Groundwork.Tool` entry matching the library version in `.config/dotnet-tools.json`
-- [ ] T008 Add deterministic design catalog fixtures, clocks, identifiers, scopes, and payload serializers in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignPersistenceFixtureData.cs`
+- [X] T005 Create `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj` and add it to `Elsa.Server.slnx`
+- [X] T006 [P] Add the released `Groundwork.SqlServer`, `Groundwork.MongoDb`, and matching provider test/tool package versions to `Directory.Packages.props`
+- [X] T007 [P] Add a pinned `Groundwork.Tool` entry matching the library version in `.config/dotnet-tools.json`
+- [X] T008 Add deterministic design catalog fixtures, clocks, identifiers, scopes, and payload serializers in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignPersistenceFixtureData.cs`
 
 **Checkpoint**: Current behavior and test objectives are recorded; the shared test project restores without changing production composition.
 
