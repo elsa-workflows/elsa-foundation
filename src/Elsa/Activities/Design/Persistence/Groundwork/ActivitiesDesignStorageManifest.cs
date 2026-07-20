@@ -21,6 +21,7 @@ public static class ActivitiesDesignStorageManifest
     public const string ByDefinitionVersionIndex = "by-definition-version";
     public const string ByOwnerVersionIndex = "by-owner-version";
     public const string ByDependencyVersionIndex = "by-dependency-version";
+    public const string DeterministicDocumentOrderIndexSuffix = "-by-document-id";
     public const string CollectionField = "collection";
     public const string DocumentIdField = PhysicalDocumentFieldPaths.Id;
     public static IReadOnlyList<DocumentQueryOrder> DeterministicDocumentOrder { get; } =
@@ -221,6 +222,7 @@ public static class ActivitiesDesignStorageManifest
                     new ActivityQuery(
                         ActivityForkCandidateExpiredQuery,
                         ActivityForkCandidateRetentionIndex,
+                        ActivityForkCandidateRetentionIndex,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
                         QuerySortSupport.None,
                         QueryPagingSupport.Offset)
@@ -285,6 +287,7 @@ public static class ActivitiesDesignStorageManifest
 
     private static ActivityQuery Query(string name, string indexName) => new(
         name,
+        DeterministicDocumentOrderIndex(indexName),
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         QuerySortSupport.Ascending,
@@ -472,22 +475,26 @@ public static class ActivitiesDesignStorageManifest
         var documentIdOrderedIndexes = queries
             .Where(query => query.SortFields?.Any(field =>
                 field.Path == DocumentIdField && field.Direction == PhysicalSortDirection.Ascending) == true)
-            .Select(query => query.IndexIdentity)
+            .Select(query => query.SourceIndexIdentity)
             .ToHashSet(StringComparer.Ordinal);
         if (indexes.Any(index => index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)))
         {
             throw new InvalidOperationException(
                 "A unique activity-design index cannot be used by an id-sorted exhaustive route; declare a separate non-unique ordered route.");
         }
-        var logicalIndexes = indexes
+        var orderedSuccessors = indexes
+            .Where(index => !index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity))
+            .Select(index => index with
+            {
+                Identity = DeterministicDocumentOrderIndex(index.Identity),
+                Fields = [.. index.Fields, DocumentIdField]
+            })
+            .ToArray();
+        var allIndexes = indexes.Concat(orderedSuccessors).ToArray();
+        var logicalIndexes = allIndexes
             .Select(index => new LogicalIndexDeclaration(
                 index.Identity,
-                [
-                    .. index.Fields.Select(field => new IndexField(field, IndexValueKind.Keyword)),
-                    .. (!index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)
-                        ? new[] { new IndexField(DocumentIdField, IndexValueKind.Keyword) }
-                        : Array.Empty<IndexField>())
-                ],
+                index.Fields.Select(field => new IndexField(field, IndexValueKind.Keyword)).ToArray(),
                 IndexValueKind.Keyword,
                 index.IsUnique,
                 MissingValueBehavior.Excluded))
@@ -505,13 +512,23 @@ public static class ActivitiesDesignStorageManifest
                 index.Identity,
                 [
                     new PhysicalIndexColumnDefinition("storage_scope", 0),
-                    .. index.Fields.Select((field, order) => new PhysicalIndexColumnDefinition(ColumnName(field), order + 1)),
-                    .. (!index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)
-                        ? new[] { new PhysicalIndexColumnDefinition("id_comparison_key", index.Fields.Length + 1, PhysicalSortDirection.Ascending) }
-                        : Array.Empty<PhysicalIndexColumnDefinition>())
+                    .. index.Fields.Select((field, order) => new PhysicalIndexColumnDefinition(ColumnName(field), order + 1))
                 ],
                 isUnique: index.IsUnique,
                 missingValueBehavior: MissingValueBehavior.Excluded))
+            .Concat(orderedSuccessors.Select(index => new PhysicalIndexDefinition(
+                index.Identity,
+                [
+                    new PhysicalIndexColumnDefinition("storage_scope", 0),
+                    .. index.Fields.Select((field, order) => new PhysicalIndexColumnDefinition(
+                        field == DocumentIdField ? "id_comparison_key" : ColumnName(field),
+                        order + 1,
+                        field == DocumentIdField
+                            ? PhysicalSortDirection.Ascending
+                            : default))
+                ],
+                isUnique: index.IsUnique,
+                missingValueBehavior: MissingValueBehavior.Excluded)))
             .ToArray();
         var boundedQueries = queries
             .Select(query => new BoundedQueryDeclaration(
@@ -525,7 +542,7 @@ public static class ActivitiesDesignStorageManifest
                 predicateFields:
                 [
                     new BoundedQueryPredicateField(
-                        indexes.Single(index => index.Identity == query.IndexIdentity).Fields[0],
+                        indexes.Single(index => index.Identity == query.SourceIndexIdentity).Fields[0],
                         query.Operations)
                 ]))
             .ToArray();
@@ -591,11 +608,15 @@ public static class ActivitiesDesignStorageManifest
         [field],
         false);
 
+    private static string DeterministicDocumentOrderIndex(string indexIdentity) =>
+        $"{indexIdentity}{DeterministicDocumentOrderIndexSuffix}";
+
     private sealed record ActivityIndex(string Identity, string[] Fields, bool IsUnique);
 
     private sealed record ActivityQuery(
         string Identity,
         string IndexIdentity,
+        string SourceIndexIdentity,
         IReadOnlySet<PortableQueryOperation> Operations,
         QuerySortSupport SortSupport,
         QueryPagingSupport PagingSupport,
