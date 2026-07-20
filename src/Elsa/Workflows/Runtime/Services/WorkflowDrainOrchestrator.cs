@@ -16,6 +16,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
+    private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowDrainOrchestrator(
@@ -88,7 +89,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IRuntimeCheckpointCadenceResolver? cadenceResolver = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
@@ -102,6 +104,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _ownershipContextAccessor = ownershipContextAccessor;
         _coalescingScopeFactory = coalescingScopeFactory;
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
+        _cadenceResolver = cadenceResolver;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
@@ -221,30 +224,51 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         RuntimeSchedulerDrainRequest request,
         CancellationToken cancellationToken)
     {
-        // Default path: no coalescing scope factory registered, so the drain runs with Immediate persistence. While this
-        // live drain owns the execution (bounded by the RT-2 single-writer lease), push a delivery scope so the
-        // post-commit outbox processor delivers EnqueueSchedulerWork intents in-memory (idempotent enqueue + direct
-        // Delivered mark) instead of taking the durable claim round-trip (WU-2). The scope is deliberately NOT pushed on
-        // the coalescing path below: there the overlay session is authoritative and folds continuations itself.
+        // Default path: no coalescing scope factory registered, so the drain runs with Immediate persistence.
         if (_coalescingScopeFactory is null)
-        {
-            using var liveDrainScope = _liveDrainDeliveryAccessor is { } accessor
-                ? accessor.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId))
-                : null;
-            var plainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
-            await NotifyObserversAsync(envelope, plainResult, cancellationToken);
-            return plainResult;
-        }
+            return await DrainImmediateAsync(envelope, request, cancellationToken);
+
+        // Coalescing host, but cadence is resolved per execution (ADR 0032 R5). A workflow that authored Immediate must
+        // run Immediate even though the host default is Coalesced: skip establishing the session entirely and take the
+        // immediate path, so no relaxable checkpoint is deferred for this run. The mandatory-boundary set is unaffected
+        // either way — those flush immediately under both policies. Authored cadence is read off the pinned executable
+        // (or the run's own per-run stamp on resume); when no resolver is registered the host default (coalesce) stands.
+        var cadence = _cadenceResolver is not null
+            ? await _cadenceResolver.ResolveAsync(envelope, cancellationToken)
+            : null;
+
+        if (cadence is { Coalesced: false })
+            return await DrainImmediateAsync(envelope, request, cancellationToken);
 
         // Coalescing path: establish the ambient session for the drain, then fold-and-flush the buffered segment at
         // quiescence. The flush runs inside the active ownership scope so W5 fencing gates the single durable write. If
         // the drain throws, the flush is skipped and the scope is disposed with its buffer discarded, so a crash
-        // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery.
-        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId);
+        // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery. A null cadence (no
+        // resolver registered) coalesces with the host-configured cap, byte-identical to pre-R5 behavior.
+        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId, cadence?.MaxSegmentCheckpoints);
         var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
         await scope.FlushAtQuiescenceAsync(cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
+    }
+
+    // Immediate persistence for a single drain. While this live drain owns the execution (bounded by the RT-2
+    // single-writer lease), push a delivery scope so the post-commit outbox processor delivers EnqueueSchedulerWork
+    // intents in-memory (idempotent enqueue + direct Delivered mark) instead of taking the durable claim round-trip
+    // (WU-2). Deliberately NOT used on the coalescing path: there the overlay session is authoritative and folds
+    // continuations itself. Reused both when no coalescing factory is registered and when a per-run authored Immediate
+    // cadence opts this run out of coalescing on an otherwise-coalesced host (ADR 0032 R5).
+    private async ValueTask<RuntimeSchedulerDrainResult> DrainImmediateAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        RuntimeSchedulerDrainRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var liveDrainScope = _liveDrainDeliveryAccessor is { } accessor
+            ? accessor.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId))
+            : null;
+        var plainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
+        await NotifyObserversAsync(envelope, plainResult, cancellationToken);
+        return plainResult;
     }
 
     private async ValueTask<RuntimeSchedulerDrainResult> DrainSchedulerAndPostCommitWorkAsync(

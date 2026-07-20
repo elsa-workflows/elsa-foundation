@@ -2,6 +2,7 @@
   "collection": "workflowExecutable",
   "deletionGuard": null,
   "executable": {
+    "checkpointCadence": null,
     "compatibilityMetadata": {
       "slice": "slice-1"
     },

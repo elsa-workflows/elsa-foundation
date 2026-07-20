@@ -57,9 +57,9 @@ public sealed class GetWorkflowInstanceRequestHandler(
                 : WorkflowOutputView.Redacted(output.CapturedAt),
             StringComparer.Ordinal);
 
-        // Checkpoint cadence + inspection granularity (ADR 0032 R3) are host-configuration-derived, so they are resolved
-        // at view-assembly time rather than persisted per instance.
-        var cadence = checkpointCadenceInspector.Resolve();
+        // Checkpoint cadence + inspection granularity (ADR 0032 R3/R5): prefer the run's own per-run cadence stamp so an
+        // instance reports the cadence it actually executed under, falling back to the host projection for legacy runs.
+        var cadence = checkpointCadenceInspector.Resolve(state);
 
         return new GetWorkflowInstanceResponse(new WorkflowInstanceDetailsView(
             WorkflowInstanceSummaryView.From(state, activityPage.TotalCount, incidents.Length, canInspectSensitiveValues),
