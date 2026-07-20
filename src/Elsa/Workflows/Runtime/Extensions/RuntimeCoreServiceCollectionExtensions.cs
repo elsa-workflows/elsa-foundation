@@ -210,7 +210,26 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IRuntimeCheckpointCadenceResolver, RuntimeCheckpointCadenceResolver>();
         services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
         services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
-        services.TryAddScoped<RuntimeCheckpointCommitter>();
+        // WU-3 / spec 109: the in-process-hop fast path is on by default. A host or a guardrail test can disable it by
+        // registering RuntimeInProcessHopFastPathOptions { Enabled = false } before this call; the durable deserialize
+        // path then runs everywhere and MUST commit byte-identical state (ADR 0031 follow-up (c)).
+        services.TryAddSingleton<RuntimeInProcessHopFastPathOptions>();
+        // Explicit factory (not greedy ctor selection): the coalescing session accessor is only registered when the
+        // coalescing feature is enabled, so the committer's widest constructor is not always satisfiable by the
+        // container. The factory injects each optional collaborator with GetService so the live-drain accessor and
+        // fast-path options are wired in every configuration.
+        services.TryAddScoped(serviceProvider =>
+            new RuntimeCheckpointCommitter(
+                serviceProvider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>(),
+                serviceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>(),
+                serviceProvider.GetService<IRuntimeExecutionOwnershipContextAccessor>(),
+                serviceProvider.GetService<IWorkflowEngineTracer>(),
+                serviceProvider.GetServices<IRuntimeCheckpointCommitEnricher>(),
+                serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>(),
+                serviceProvider.GetService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
+                serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
+                serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
+                serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>()));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCheckpointEnricher>());
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();

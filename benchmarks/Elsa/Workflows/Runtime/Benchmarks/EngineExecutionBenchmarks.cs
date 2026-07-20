@@ -184,6 +184,45 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             $"Expected ReplaySafe-leaf commits/run ({coalescedCommits}) < External-leaf commits/run ({coalescedExternalCommits}) under Coalesced.");
     }
 
+    // ---- In-process-hop fast path A/B (spec 109, ADR 0031 follow-up (a)) ------------------------------------
+    // Before/after for the in-process-hop payload short-circuit: the same shape measured with the fast path DISABLED
+    // (durable deserialize path everywhere) and ENABLED (default). Step-0 profiling found the per-hop JSON round-trip is
+    // ~0.4% of a durable hop and ~2% of an in-memory hop, so the delta here is expected to be small (often within
+    // run-to-run noise) — the point of the unit is that the short-circuit stays byte-identical (guardrail test), not a
+    // large throughput win. A/B reported for the in-memory 2-node, in-memory hot loop, and durable hot loop.
+
+    [Fact]
+    public async Task FastPathAb_InMemory_2Node()
+    {
+        var off = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: false)), BuildFlowchartWithWriteLine, AssertTwoNodeCompleted);
+        Report("2-node · in-memory · fast-path OFF (before)", off);
+        var on = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: true)), BuildFlowchartWithWriteLine, AssertTwoNodeCompleted);
+        Report("2-node · in-memory · fast-path ON (after)", on);
+    }
+
+    [Fact]
+    public async Task FastPathAb_InMemory_HotLoop()
+    {
+        var off = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: false)), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · in-memory · fast-path OFF (before)", off);
+        var on = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: true)), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · in-memory · fast-path ON (after)", on);
+    }
+
+    [Fact]
+    public async Task FastPathAb_Durable_HotLoop()
+    {
+        // NOTE: durable-SQLite wall time is dominated by fsync + OS-page-cache warmup, which biases whichever
+        // measurement runs second (verified by swapping the order — the effect follows position, not the flag). Read
+        // commits/run (identical) and the guardrail (byte-identical state), not the wall delta, for correctness; the
+        // fast-path wall effect is within warmup noise on these small payloads, matching the Step-0 finding that the
+        // per-hop JSON round-trip is a sub-percent share of a durable hop.
+        var off = await MeasureAsync(() => NewDurableSqliteHarnessAsync(coalesce: false, fastPathEnabled: false), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · durable-sqlite · Immediate · fast-path OFF (before)", off);
+        var on = await MeasureAsync(() => NewDurableSqliteHarnessAsync(coalesce: false, fastPathEnabled: true), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · durable-sqlite · Immediate · fast-path ON (after)", on);
+    }
+
     // ---- Measurement engine ---------------------------------------------------------------------------------
 
     /// <summary>
@@ -365,15 +404,16 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
 
     // ---- Harness construction -------------------------------------------------------------------------------
 
-    private static HarnessLease NewInMemoryLease()
+    private static HarnessLease NewInMemoryLease(bool fastPathEnabled = true)
     {
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .ConfigureServices(services => services.AddSingleton(new RuntimeInProcessHopFastPathOptions { Enabled = fastPathEnabled }))
             .Build(ActivityExecutionIds);
         return new HarnessLease(harness, store: null, databasePath: null);
     }
 
-    private static async ValueTask<HarnessLease> NewDurableSqliteHarnessAsync(bool coalesce, int? maxSegmentCheckpoints = null)
+    private static async ValueTask<HarnessLease> NewDurableSqliteHarnessAsync(bool coalesce, int? maxSegmentCheckpoints = null, bool fastPathEnabled = true)
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-engine-bench-{Guid.NewGuid():N}.db");
         var store = await SqliteDocumentStoreFactory.CreateAsync(
@@ -403,6 +443,8 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
                         if (maxSegmentCheckpoints is { } cap)
                             options.MaxSegmentCheckpoints = cap;
                     });
+
+                services.AddSingleton(new RuntimeInProcessHopFastPathOptions { Enabled = fastPathEnabled });
             })
             .Build(ActivityExecutionIds);
 
