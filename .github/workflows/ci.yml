@@ -66,6 +66,9 @@ jobs:
       - name: Restore
         run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
 
+      - name: Restore repository-local .NET tools
+        run: dotnet tool restore
+
       - name: Build (full solution, including test projects)
         # Building the whole solution -- test projects included -- is what catches
         # semantic-merge compile breaks like #543.
