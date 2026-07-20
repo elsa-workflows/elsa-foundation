@@ -50,7 +50,7 @@
 
 ## Decision 5: Preserve atomic domain transitions with provider-native UoW
 
-**Decision**: Continue to use Groundwork document units of work for multi-document design commands, check `TransactionBoundary` before any operation, roll back on every non-success outcome or exception, and keep operation identity/fingerprint stable across retry. Single-document draft mutations remain atomic document replacements with OCC. MongoDB readiness requires a transaction-capable topology.
+**Decision**: Continue to use Groundwork document units of work for multi-document design commands, check `TransactionBoundary` before any operation, and roll back on every non-success outcome or exception. Every retryable design mutation receives an explicit caller-stable operation/idempotency key on its request contract. That operation key is separate from the canonical fingerprint derived from the request's mutation material: an exact key-plus-fingerprint replay returns the authoritative prior result, while reuse of the key with a different fingerprint conflicts without mutation. Single-document draft mutations remain atomic document replacements with OCC. MongoDB readiness requires a transaction-capable topology.
 
 **Rationale**: Add-definition, add-version, promote, submit, and permanent delete span related documents. Partial visibility is incompatible with the existing domain behavior. Groundwork now exposes the deployment-dependent transaction boundary explicitly.
 
@@ -58,6 +58,8 @@
 
 - Compensating writes on providers without atomicity: rejected for this design lane because readers could observe impossible intermediate states.
 - Sequential autonomous document writes with retry: rejected because convergence after failure does not prevent transient partial visibility.
+- Ambient scoped operation context: rejected because the mutation contract would hide a correctness-critical replay identity and make cross-process retries dependent on host plumbing.
+- Entity-derived operation identity: rejected because generated-identity operations cannot reconcile a committed write after a lost acknowledgement without a caller-stable key.
 
 ## Decision 6: Ship and test four coherent provider compositions
 
@@ -72,7 +74,7 @@
 
 ## Decision 7: Migrate test objectives before deleting EF tests
 
-**Decision**: Extract black-box behavior fixtures from existing EF-centric tests, run them against the temporary EF oracle and every Groundwork provider, then remove only the EF setup/mechanism assertions after parity and performance evidence is recorded. Preserve domain-objective tests such as immutability, event sequencing, SemVer resolution, layout behavior, and failure recovery. Before deleting any existing test, record the exact test, its classified objective, its replacement evidence or reason the objective is invalid, and explicit architect approval in the test-removal ledger in this document; general approval of the migration is not approval to delete an individual test.
+**Decision**: Extract black-box behavior fixtures from existing EF-centric tests, run their overlapping legacy behavior against the temporary EF oracle and every Groundwork provider, then remove only the EF setup/mechanism assertions after parity and performance evidence is recorded. The shared contract remains authoritative for the target Groundwork semantics. A scenario that the legacy EF model cannot represent—specifically scope-local reuse of the same identity and reusable-activity draft OCC—is recorded as not applicable to the EF oracle and still runs against Groundwork; no throwaway EF shim is added and the target contract is not weakened. Preserve domain-objective tests such as immutability, event sequencing, SemVer resolution, layout behavior, and failure recovery. Before deleting any existing test, record the exact test, its classified objective, its replacement evidence or reason the objective is invalid, and explicit architect approval in the test-removal ledger in this document; general approval of the migration is not approval to delete an individual test.
 
 **Rationale**: Framework §2.21.1 requires test objective continuity. Several current tests assert EF metadata as a proxy for domain immutability; those objectives must become provider-neutral observable stale-write/conflict tests before their EF mechanics disappear.
 
@@ -80,6 +82,7 @@
 
 - Delete every test containing an EF namespace with the EF projects: rejected because many assert durable domain behavior rather than EF itself.
 - Keep a permanent EF oracle project: rejected by the zero-EF completion condition.
+- Add EF-only compatibility shims for target-only scope/OCC semantics: rejected because the oracle measures legacy behavior rather than manufacturing a second implementation of the target.
 
 ## Decision 8: Gate physical-form selection with reproducible evidence
 

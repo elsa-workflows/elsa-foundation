@@ -102,6 +102,7 @@ public class DesignContractSuiteShapeTests
     {
         Assert.True(typeof(WorkflowDesignContractSuite).IsAbstract);
         Assert.True(typeof(ActivityDesignContractSuite).IsAbstract);
+        Assert.True(typeof(DesignAtomicityContractSuite).IsAbstract);
         Assert.True(typeof(DesignIsolationAndRestartContractSuite).IsAbstract);
 
         var referencedAssemblies = Assembly.GetExecutingAssembly()
@@ -149,6 +150,30 @@ public class DesignContractSuiteShapeTests
                 nameof(DesignIsolationAndRestartContractSuite.Same_point_identities_resolve_only_their_own_scope),
                 nameof(DesignIsolationAndRestartContractSuite.Scope_bound_point_read_snapshots_survive_restart),
                 nameof(DesignIsolationAndRestartContractSuite.Workflow_draft_updates_preserve_the_intentional_last_writer_wins_policy)
+            }.Order(StringComparer.Ordinal),
+            scenarioNames);
+    }
+
+    [Fact]
+    public void Atomicity_suite_declares_the_complete_provider_neutral_contract_matrix()
+    {
+        var scenarioNames = typeof(DesignAtomicityContractSuite)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Where(method => method.GetCustomAttribute<FactAttribute>() is not null)
+            .Select(method => method.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            new[]
+            {
+                nameof(DesignAtomicityContractSuite.Cancellation_rolls_back_and_propagates_cancellation),
+                nameof(DesignAtomicityContractSuite.Duplicate_delivery_does_not_duplicate_the_domain_outcome),
+                nameof(DesignAtomicityContractSuite.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry),
+                nameof(DesignAtomicityContractSuite.Non_success_provider_decision_rolls_back_all_staged_parts),
+                nameof(DesignAtomicityContractSuite.Partial_staging_failure_leaves_no_visible_partial_aggregate),
+                nameof(DesignAtomicityContractSuite.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result),
+                nameof(DesignAtomicityContractSuite.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation)
             }.Order(StringComparer.Ordinal),
             scenarioNames);
     }
@@ -202,7 +227,7 @@ public class DesignContractSuiteShapeTests
     }
 
     [Fact]
-    public void Fixture_exposes_staging_and_actual_event_observation_but_no_reconciliation_shortcut()
+    public void Fixture_exposes_staging_event_observation_and_provider_neutral_atomicity_controls()
     {
         var fixtureType = typeof(IDesignPersistenceContractFixture);
 
@@ -212,6 +237,39 @@ public class DesignContractSuiteShapeTests
         var observation = fixtureType.GetMethod(nameof(IDesignPersistenceContractFixture.ReadObservedEventsAsync));
         Assert.NotNull(observation);
         Assert.Equal(typeof(Task<IReadOnlyList<IEvent>>), observation!.ReturnType);
+
+        var armFault = fixtureType.GetMethod(nameof(IDesignPersistenceContractFixture.ArmAtomicityFaultAsync));
+        Assert.NotNull(armFault);
+        Assert.Equal(typeof(Task<IDesignAtomicityFaultLease>), armFault!.ReturnType);
+
+        var operation = fixtureType.GetMethod(nameof(IDesignPersistenceContractFixture.ExecuteAtomicityOperationAsync));
+        Assert.NotNull(operation);
+        Assert.Equal(typeof(Task<DesignAtomicityOperationResult>), operation!.ReturnType);
+
+        var snapshot = fixtureType.GetMethod(nameof(IDesignPersistenceContractFixture.ReadAtomicitySnapshotAsync));
+        Assert.NotNull(snapshot);
+        Assert.Equal(typeof(Task<DesignAtomicitySnapshot>), snapshot!.ReturnType);
+
+        Assert.Equal(
+            new[]
+            {
+                DesignAtomicityFaultPhase.AfterStagedWrite,
+                DesignAtomicityFaultPhase.BeforeProviderDecision,
+                DesignAtomicityFaultPhase.AfterDurableDecision
+            },
+            Enum.GetValues<DesignAtomicityFaultPhase>());
+        Assert.Equal(
+            new[]
+            {
+                DesignAtomicityFaultAction.Throw,
+                DesignAtomicityFaultAction.Cancel,
+                DesignAtomicityFaultAction.ReturnNonSuccess
+            },
+            Enum.GetValues<DesignAtomicityFaultAction>());
+
+        var requestProperties = typeof(DesignAtomicityOperationRequest).GetProperties();
+        Assert.Equal(typeof(DesignAtomicityOperationKey), requestProperties.Single(x => x.Name == "OperationKey").PropertyType);
+        Assert.Equal(typeof(DesignCanonicalRequestFingerprint), requestProperties.Single(x => x.Name == "CanonicalRequestFingerprint").PropertyType);
     }
 
     private static IEnumerable<Type> ExpandType(Type type)

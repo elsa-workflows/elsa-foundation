@@ -41,12 +41,17 @@ They exercise readiness, scoped lifecycle reads and writes, point-read scope iso
 non-disclosure and write rejection, scope-local duplicate identities, true reusable-activity-draft
 OCC, the workflow draft's intentional last-writer-wins policy, restart/result-hash parity, draft and
 version layout round-trips, clone provenance, validation rejection, descriptor serialization,
-SemVer identity, missing outcomes, permanent-delete outcomes, and reconciliation idempotency. T023's
-failure-injection, acknowledgement-replay, and duplicate-event scenarios remain separately pending. The
-scenarios reference only Elsa core contracts plus `IDesignPersistenceContractFixture`. The reusable
-test assembly is guarded against provider SDK assembly references. T025 and T051–T054 must therefore
-place concrete EF-oracle and provider fixtures in separate provider-specific test projects that
-reference this shared project; provider SDK references must not enter the shared assembly. T024
+SemVer identity, missing outcomes, permanent-delete outcomes, and reconciliation idempotency. T023 adds
+provider-neutral atomicity fault contracts for `AfterStagedWrite`, `BeforeProviderDecision`, and
+`AfterDurableDecision`, with throw, cancellation, and non-success actions. Its canonical operation request
+carries a caller-stable operation/idempotency key separately from the canonical request fingerprint. The
+shared suite proves partial-staging rollback, non-success rollback, cancellation propagation, durable-result
+reconciliation after acknowledgement loss, exact replay, same-key/different-fingerprint conflict without
+mutation, and duplicate-outcome suppression. The scenarios reference only Elsa core contracts plus
+`IDesignPersistenceContractFixture`. The reusable test assembly is guarded against provider SDK assembly
+references. T025 and T051–T054 must therefore place concrete EF-oracle and provider fixtures in separate
+provider-specific test projects that reference this shared project; provider SDK references must not enter the
+shared assembly. T024
 currently asserts non-cancellation conflict classification plus unchanged state; T033/T035 own the
 final domain-scoped write-conflict exception taxonomy and direct adapter mapping coverage. Fixture
 staging is explicitly non-persisting; the activity suite proves both the candidate definition and
@@ -59,8 +64,9 @@ against the deterministic input before comparing restart hashes.
 
 Concrete EF-oracle and provider fixtures remain T025 and T051–T054 work. Therefore no
 provider-parity or oracle result hashes are claimed at this checkpoint. The focused Release project
-restore/build/test completed with `93/93` tests; executable provider scenarios remain pending a
-concrete fixture inheritance target.
+restore/build/test completed with `95/95` tests; executable provider scenarios remain pending a
+concrete fixture inheritance target. The T023 harness validates the contract shape only; T025 requires only
+the rows that overlap legacy EF observable behavior and must not introduce an EF idempotency/fault shim.
 
 No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads
 that define them are T021–T024. T025 runs the EF SQLite oracle, records the canonical

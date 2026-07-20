@@ -20,6 +20,20 @@ public class DesignContractSuiteHarnessTests
         Assert.Equal(2, suite.Fixture!.ReconcileCalls);
     }
 
+    [Fact]
+    public async Task Atomicity_contract_scenarios_execute_against_the_provider_neutral_harness()
+    {
+        var suite = new HarnessAtomicityContractSuite();
+
+        await suite.Partial_staging_failure_leaves_no_visible_partial_aggregate();
+        await suite.Non_success_provider_decision_rolls_back_all_staged_parts();
+        await suite.Cancellation_rolls_back_and_propagates_cancellation();
+        await suite.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry();
+        await suite.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result();
+        await suite.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation();
+        await suite.Duplicate_delivery_does_not_duplicate_the_domain_outcome();
+    }
+
     private sealed class HarnessActivityDesignContractSuite : ActivityDesignContractSuite
     {
         public HarnessFixture? Fixture { get; private set; }
@@ -29,6 +43,12 @@ public class DesignContractSuiteHarnessTests
             Fixture = new HarnessFixture();
             return Task.FromResult<IDesignPersistenceContractFixture>(Fixture);
         }
+    }
+
+    private sealed class HarnessAtomicityContractSuite : DesignAtomicityContractSuite
+    {
+        protected override Task<IDesignPersistenceContractFixture> CreateFixtureAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IDesignPersistenceContractFixture>(new AtomicityHarnessFixture());
     }
 
     private sealed class HarnessFixture : IDesignPersistenceContractFixture
@@ -72,6 +92,21 @@ public class DesignContractSuiteHarnessTests
 
         public Task<IReadOnlyList<IEvent>> ReadObservedEventsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<IEvent>>(_events.ToArray());
+
+        public Task<IDesignAtomicityFaultLease> ArmAtomicityFaultAsync(
+            DesignAtomicityFaultPlan plan,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<IDesignAtomicityFaultLease>(new NotSupportedException("The reconciliation harness does not execute atomic-write scenarios."));
+
+        public Task<DesignAtomicityOperationResult> ExecuteAtomicityOperationAsync(
+            DesignAtomicityOperationRequest request,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<DesignAtomicityOperationResult>(new NotSupportedException("The reconciliation harness does not execute atomic-write scenarios."));
+
+        public Task<DesignAtomicitySnapshot> ReadAtomicitySnapshotAsync(
+            string storageScope,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<DesignAtomicitySnapshot>(new NotSupportedException("The reconciliation harness does not execute atomic-write scenarios."));
 
         public ValueTask DisposeAsync() => _services.DisposeAsync();
 
@@ -156,5 +191,151 @@ public class DesignContractSuiteHarnessTests
 
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ActivityDefinitionVersion>>(versions.ToArray());
+    }
+
+    private sealed class AtomicityHarnessFixture : IDesignPersistenceContractFixture
+    {
+        private const int AggregatePartCount = 2;
+        private readonly ServiceProvider _services = new ServiceCollection().BuildServiceProvider();
+        private readonly Dictionary<string, LedgerEntry> _ledger = new(StringComparer.Ordinal);
+        private AtomicityFaultLease? _armedFault;
+        private int _visibleAggregatePartCount;
+        private int _publishedOutcomeCount;
+
+        public string Provider => "atomicity-contract-harness";
+
+        public IServiceScope CreateScope(string storageScope) => _services.CreateScope();
+
+        public Task RestartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task ValidateReadinessAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task StageActivityReconciliationCandidatesAsync(
+            string storageScope,
+            IReadOnlyCollection<ActivityDefinitionVersion> candidates,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public void ClearObservedEvents()
+        {
+        }
+
+        public Task<IReadOnlyList<IEvent>> ReadObservedEventsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<IEvent>>([]);
+
+        public Task<IDesignAtomicityFaultLease> ArmAtomicityFaultAsync(
+            DesignAtomicityFaultPlan plan,
+            CancellationToken cancellationToken = default)
+        {
+            if (_armedFault is not null)
+                throw new InvalidOperationException("Only one atomicity fault may be armed at a time.");
+
+            var lease = new AtomicityFaultLease(plan, () => _armedFault = null);
+            _armedFault = lease;
+            return Task.FromResult<IDesignAtomicityFaultLease>(lease);
+        }
+
+        public Task<DesignAtomicityOperationResult> ExecuteAtomicityOperationAsync(
+            DesignAtomicityOperationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ArgumentException.ThrowIfNullOrWhiteSpace(request.StorageScope);
+
+            if (_ledger.TryGetValue(request.OperationKey.Value, out var existing))
+            {
+                return Task.FromResult(existing.Fingerprint == request.CanonicalRequestFingerprint.Value
+                    ? new DesignAtomicityOperationResult(DesignAtomicityOperationStatus.Replayed, existing.ResultFingerprint)
+                    : new DesignAtomicityOperationResult(DesignAtomicityOperationStatus.Conflict, null));
+            }
+
+            return Task.FromResult(ExecuteInitialAttempt(request));
+        }
+
+        public Task<DesignAtomicitySnapshot> ReadAtomicitySnapshotAsync(
+            string storageScope,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new DesignAtomicitySnapshot(
+                _visibleAggregatePartCount,
+                AggregatePartCount,
+                _ledger.Count,
+                _publishedOutcomeCount));
+
+        public ValueTask DisposeAsync() => _services.DisposeAsync();
+
+        private DesignAtomicityOperationResult ExecuteInitialAttempt(DesignAtomicityOperationRequest request)
+        {
+            if (TryTrigger(DesignAtomicityFaultPhase.AfterStagedWrite, out var stagedFault))
+                return ApplyPreDecisionFault(stagedFault!);
+
+            if (TryTrigger(DesignAtomicityFaultPhase.BeforeProviderDecision, out var decisionFault))
+                return ApplyPreDecisionFault(decisionFault!);
+
+            var resultFingerprint = $"result:{request.StorageScope}:{request.CanonicalRequestFingerprint.Value}";
+            _visibleAggregatePartCount = AggregatePartCount;
+            _ledger.Add(request.OperationKey.Value, new(request.CanonicalRequestFingerprint.Value, resultFingerprint));
+            _publishedOutcomeCount++;
+
+            if (TryTrigger(DesignAtomicityFaultPhase.AfterDurableDecision, out var acknowledgementFault))
+                return ApplyAfterDurableDecisionFault(acknowledgementFault!, resultFingerprint);
+
+            return new(DesignAtomicityOperationStatus.Committed, resultFingerprint);
+        }
+
+        private bool TryTrigger(DesignAtomicityFaultPhase phase, out DesignAtomicityFaultPlan? plan)
+        {
+            plan = null;
+
+            if (_armedFault is null || _armedFault.WasTriggered || _armedFault.Plan.Phase != phase)
+                return false;
+
+            _armedFault.Trigger();
+            plan = _armedFault.Plan;
+            return true;
+        }
+
+        private static DesignAtomicityOperationResult ApplyPreDecisionFault(DesignAtomicityFaultPlan plan) =>
+            plan.Action switch
+            {
+                DesignAtomicityFaultAction.Throw => throw new InvalidOperationException("Injected atomicity failure before the durable provider decision."),
+                DesignAtomicityFaultAction.Cancel => throw new OperationCanceledException("Injected atomicity cancellation before the durable provider decision."),
+                DesignAtomicityFaultAction.ReturnNonSuccess => new(DesignAtomicityOperationStatus.Rejected, null),
+                _ => throw new ArgumentOutOfRangeException(nameof(plan))
+            };
+
+        private static DesignAtomicityOperationResult ApplyAfterDurableDecisionFault(
+            DesignAtomicityFaultPlan plan,
+            string resultFingerprint) =>
+            plan.Action switch
+            {
+                DesignAtomicityFaultAction.Throw => throw new InvalidOperationException("Injected acknowledgement loss after the durable provider decision."),
+                DesignAtomicityFaultAction.Cancel => throw new OperationCanceledException("Injected acknowledgement cancellation after the durable provider decision."),
+                DesignAtomicityFaultAction.ReturnNonSuccess => new(DesignAtomicityOperationStatus.Rejected, resultFingerprint),
+                _ => throw new ArgumentOutOfRangeException(nameof(plan))
+            };
+
+        private sealed record LedgerEntry(string Fingerprint, string ResultFingerprint);
+
+        private sealed class AtomicityFaultLease(DesignAtomicityFaultPlan plan, Action onDispose) : IDesignAtomicityFaultLease
+        {
+            private readonly Action _onDispose = onDispose;
+            private bool _disposed;
+
+            public DesignAtomicityFaultPlan Plan { get; } = plan;
+            public bool WasTriggered { get; private set; }
+
+            public void Trigger() => WasTriggered = true;
+
+            public ValueTask DisposeAsync()
+            {
+                if (!_disposed)
+                {
+                    _disposed = true;
+                    _onDispose();
+                }
+
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 }
