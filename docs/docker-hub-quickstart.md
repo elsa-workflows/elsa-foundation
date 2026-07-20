@@ -123,8 +123,10 @@ mount nothing at all, Studio toggles land on the container's writable layer: the
 
 > **Scripting against the API directly?** `POST modularity/features/apply` takes the **full desired
 > feature set**, not a delta — the file's features node is replaced by exactly what you send.
-> Studio always sends the complete catalog with flipped flags; a hand-rolled request containing
-> only the one feature you're toggling will silently wipe every other feature from the file.
+> Studio always sends the complete catalog with flipped flags. A hand-rolled request that omits
+> currently-enabled features is rejected with HTTP 400 naming the omitted features: include every
+> enabled feature — with `enabled: false` to disable it — rather than only the one you're toggling.
+> (Images published before this guard silently wiped every omitted feature from the file instead.)
 
 ## Configuration precedence
 
