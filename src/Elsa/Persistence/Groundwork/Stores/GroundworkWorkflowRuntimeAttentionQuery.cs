@@ -1,4 +1,3 @@
-using Elsa.Attention.Core;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 
