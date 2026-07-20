@@ -22,7 +22,6 @@
     <Project Path="src/Elsa/Git/Elsa.Git.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/">
-    <Project Path="src/Elsa/Activities/Bpmn/Elsa.Activities.Bpmn.csproj" />
     <Project Path="src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
     <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <Project Path="src/Elsa/Activities/Http/Elsa.Activities.Http.csproj" />
@@ -30,6 +29,10 @@
     <Project Path="src/Elsa/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
     <Project Path="src/Elsa/Activities/Scripting/Elsa.Activities.Scripting.csproj" />
     <Project Path="src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Activities/Bpmn/">
+    <Project Path="src/Elsa/Activities/Bpmn/Elsa.Activities.Bpmn.csproj" />
+    <Project Path="src/Elsa/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Graph/">
     <Project Path="src/Elsa/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
@@ -315,6 +318,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Bpmn/">
     <Project Path="tests/Elsa/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Activities/Bpmn/Interchange/">
+    <Project Path="tests/Elsa/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Flowchart/">
     <Project Path="tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj" />
