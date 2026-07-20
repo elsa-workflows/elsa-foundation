@@ -931,7 +931,7 @@ public sealed class GroundworkReusableActivityStoreTests
         public DateTimeOffset UtcNow { get; } = new(2026, 1, 1, 1, 0, 0, TimeSpan.Zero);
     }
 
-    private sealed class RaceInjectingDocumentStore(InMemoryDocumentStore inner, SaveDocumentRequest conflict) : IDocumentStore
+    private sealed class RaceInjectingDocumentStore(InMemoryDocumentStore inner, SaveDocumentRequest conflict) : IDocumentStore, IBoundedDocumentStore
     {
         private int _injected;
 
@@ -959,6 +959,18 @@ public sealed class GroundworkReusableActivityStoreTests
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             inner.AnyAsync(query, cancellationToken);
 
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.CountAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+
         public async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
         {
             if (Interlocked.Exchange(ref _injected, 1) == 0)
@@ -969,54 +981,10 @@ public sealed class GroundworkReusableActivityStoreTests
 
     internal sealed class ActivityDesignTestBoundedDocumentStore(IDocumentStore documents) : IBoundedDocumentStore
     {
-        public async Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
-        {
-            if (query.QueryIdentity == ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery)
-            {
-                var expiredComparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
-                Assert.Equal(QueryComparisonOperator.LessThanOrEqual, expiredComparison.Operator);
-                var retainBefore = Assert.Single(expiredComparison.Values)!;
-                var memory = Assert.IsType<InMemoryDocumentStore>(documents);
-                var expiredMatches = memory
-                    .Snapshot(query.DocumentKind)
-                    .Where(x =>
-                    {
-                        using var json = JsonDocument.Parse(x.ContentJson);
-                        var retentionKey = json.RootElement
-                            .GetProperty("entity")
-                            .GetProperty("retentionKey")
-                            .GetString();
-                        return StringComparer.Ordinal.Compare(retentionKey, retainBefore) <= 0;
-                    })
-                    .ToArray();
-                IEnumerable<DocumentEnvelope> expiredPage = expiredMatches.Skip(query.Skip ?? 0);
-                if (query.Take is { } expiredTake)
-                    expiredPage = expiredPage.Take(expiredTake);
-                return new DocumentQueryResult(expiredPage.ToArray(), expiredMatches.Length);
-            }
-            var index = query.QueryIdentity switch
-            {
-                ActivitiesDesignStorageManifest.ListAllQuery => ActivitiesDesignStorageManifest.ByCollectionIndex,
-                "list-by-definition" => ActivitiesDesignStorageManifest.ByDefinitionIndex,
-                "list-by-head-version" => ActivitiesDesignStorageManifest.ByHeadVersionIndex,
-                "list-by-draft" => ActivitiesDesignStorageManifest.ByDraftIndex,
-                "list-by-definition-version" => ActivitiesDesignStorageManifest.ByDefinitionVersionIndex,
-                "list-by-owner-version" => ActivitiesDesignStorageManifest.ByOwnerVersionIndex,
-                "list-by-dependency-version" => ActivitiesDesignStorageManifest.ByDependencyVersionIndex,
-                _ => throw new InvalidOperationException($"Unexpected activity-design test query '{query.QueryIdentity}'.")
-            };
-            var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
-            Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
-            var value = Assert.Single(comparison.Values)!;
-
-#pragma warning disable GW0004
-            var matches = await documents.QueryAsync(new DocumentStoreQuery(query.DocumentKind, index, value), cancellationToken);
-#pragma warning restore GW0004
-            IEnumerable<DocumentEnvelope> page = matches.Skip(query.Skip ?? 0);
-            if (query.Take is { } take)
-                page = page.Take(take);
-            return new DocumentQueryResult(page.ToArray(), matches.Count);
-        }
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            (documents as IBoundedDocumentStore ?? throw new InvalidOperationException(
+                "Activity-design bounded-query tests require an admitted bounded document store."))
+            .QueryAsync(query, cancellationToken);
 
         public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
             (await QueryAsync(query, cancellationToken)).TotalCount;
