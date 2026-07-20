@@ -162,7 +162,9 @@ public sealed class GroundworkSourceActivityPublicationCommand(
                 "list-by-definition",
                 [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                     ActivitiesDesignStorageManifest.DefinitionIdField,
-                    definitionId))]),
+                    definitionId))],
+                ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
+                take: 2),
             cancellationToken);
         return matches.Documents.Count switch
         {
