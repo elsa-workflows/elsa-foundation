@@ -4,6 +4,7 @@ using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -53,13 +54,16 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddScoped<IActivityExecutionHierarchyReader>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
         services.AddScoped<IActivityExecutionHierarchyWriter>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
         services.RemoveAll<IWorkflowExecutionStateStore>();
-        services.AddScoped<IWorkflowExecutionStateStore>(serviceProvider => new GroundworkWorkflowExecutionStateStore(
+        services.RemoveAll<GroundworkWorkflowExecutionStateStore>();
+        services.AddScoped<GroundworkWorkflowExecutionStateStore>(serviceProvider => new GroundworkWorkflowExecutionStateStore(
             serviceProvider.GetRequiredService<IDocumentStore>(),
             serviceProvider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>(),
             serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>(),
             serviceProvider.GetService<IBoundedDocumentStore>()
             ?? serviceProvider.GetRequiredService<IDocumentStore>() as IBoundedDocumentStore
             ?? throw new InvalidOperationException("Workflow-execution queries require an admitted bounded document-store runtime.")));
+        services.AddScoped<IWorkflowExecutionStateStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<GroundworkWorkflowExecutionStateStore>());
         services.RemoveAll<IWorkflowTestScopeStore>();
         services.RemoveAll<IWorkflowTestScopeAdmissionStore>();
         services.RemoveAll<IWorkflowTestScopeCleanupStore>();
@@ -78,7 +82,12 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IWorkflowHoldStateStore>();
         services.AddScoped<IWorkflowHoldStateStore, GroundworkWorkflowHoldStateStore>();
         services.RemoveAll<IIncidentStateStore>();
-        services.AddScoped<IIncidentStateStore, GroundworkIncidentStateStore>();
+        services.RemoveAll<GroundworkIncidentStateStore>();
+        services.AddScoped<GroundworkIncidentStateStore>();
+        services.AddScoped<IIncidentStateStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<GroundworkIncidentStateStore>());
+        services.RemoveAll<IWorkflowRuntimeAttentionQuery>();
+        services.AddScoped<IWorkflowRuntimeAttentionQuery, GroundworkWorkflowRuntimeAttentionQuery>();
         services.RemoveAll<IWorkflowDispatchStore>();
         services.RemoveAll<IWorkflowDispatchQueryStore>();
         services.RemoveAll<IWorkflowDispatchDeleteStore>();

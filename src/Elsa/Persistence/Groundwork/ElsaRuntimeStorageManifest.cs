@@ -80,6 +80,8 @@ public static class ElsaRuntimeStorageManifest
     public const string ByScopeIndex = "by-scope";
     public const string ByRetiredIndex = "by-retired";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
+    public const string IncidentIdField = "incidentId";
+    public const string CreatedAtField = "createdAt";
     public const string CollectionField = "collection";
     public const string StimulusHashField = "stimulusHash";
     public const string StimulusTypeField = "stimulusType";
@@ -357,6 +359,11 @@ public static class ElsaRuntimeStorageManifest
     public const string ListRecoveryByHeartbeatAndOwnerQuery = "list-recovery-by-heartbeat-and-owner";
     public const string WorkflowHoldStateDocumentKind = "controlPlaneState";
     public const string IncidentStateDocumentKind = "incidentState";
+    public const string IncidentAttentionStatusOrderIndex = "by-status-created-at-workflow-and-incident";
+    public const string IncidentAttentionStatusIndex = "by-incident-attention-status";
+    public const string IncidentAttentionCreatedAtIndex = "by-incident-attention-created-at";
+    public const string IncidentAttentionIncidentIdIndex = "by-incident-id";
+    public const string PageAttentionIncidentsByStatusQuery = "page-attention-by-status";
 
     // Durable idempotency ledger for the checkpoint writer. A marker document keyed by CommitId records
     // that a checkpoint commit has been fully applied, so an at-least-once redelivery of the same commit

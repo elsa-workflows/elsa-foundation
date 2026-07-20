@@ -1,7 +1,10 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
+using System.Globalization;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -110,6 +113,45 @@ public sealed class GroundworkIncidentStateStore(
     {
         var states = await ListAsync(workflowExecutionId, cancellationToken);
         return states.Where(state => state.IsBlocking).ToArray();
+    }
+
+    /// <summary>
+    /// Reads every active incident through two declared status/keyset routes. This is intentionally
+    /// separate from the legacy per-workflow list: attention needs a complete tenant-scoped view but
+    /// must never fall back to an unbounded document scan or an N+1 execution lookup.
+    /// </summary>
+    internal async ValueTask<IReadOnlyCollection<IncidentState>> ListActiveForAttentionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var incidents = new List<IncidentState>();
+        foreach (var status in new[] { IncidentStatus.Open, IncidentStatus.Blocking })
+        {
+            string? continuation = null;
+            do
+            {
+                var result = await BoundedStore.QueryAsync(
+                    new DocumentQuery(
+                        DocumentKind,
+                        ElsaRuntimeStorageManifest.PageAttentionIncidentsByStatusQuery,
+                        [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                            ElsaRuntimeStorageManifest.StatusField,
+                            ((int)status).ToString(CultureInfo.InvariantCulture)))],
+                        [
+                            new DocumentQueryOrder(ElsaRuntimeStorageManifest.CreatedAtField),
+                            new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                            new DocumentQueryOrder(ElsaRuntimeStorageManifest.IncidentIdField)
+                        ],
+                        take: ElsaGroundworkQueryRoutes.MaximumResultCount,
+                        continuation: continuation),
+                    cancellationToken);
+                incidents.AddRange(result.Documents
+                    .Select(Serializer.Deserialize<IncidentState>)
+                    .Where(incident => incident.Status == status));
+                continuation = result.NextContinuation;
+            } while (continuation is not null);
+        }
+
+        return incidents;
     }
 
     private async ValueTask<LoadedIncident?> LoadByLogicalIdentityAsync(
