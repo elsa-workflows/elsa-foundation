@@ -2,6 +2,7 @@ using System.Collections;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Primitives.Entities;
@@ -41,7 +42,13 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         ValidateResultShape(query, resultOperation, take);
 
         var clauses = query.Clauses.Select(TranslateClause).ToArray();
-        var order = TranslateOrder(query, resultOperation);
+        var order = query.Order is null
+            ? Array.Empty<DocumentQueryOrder>()
+            : [new DocumentQueryOrder(
+                ResolvePath(query.Order.FieldSelector),
+                query.Order.Direction == Elsa.Primitives.Persistence.OrderDirection.Descending
+                    ? PhysicalSortDirection.Descending
+                    : PhysicalSortDirection.Ascending)];
 
         return new DocumentQuery(
             documentKind,
@@ -58,6 +65,12 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         BoundedQueryResultOperation resultOperation,
         int? take)
     {
+        if (!Enum.IsDefined(resultOperation))
+        {
+            throw new GroundworkQueryTranslationException(
+                $"Query result operation '{resultOperation}' is not supported by the Groundwork translator.");
+        }
+
         if (resultOperation != BoundedQueryResultOperation.Documents)
             return;
 
@@ -72,29 +85,6 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
             throw new GroundworkQueryTranslationException(
                 "Document query results require a deterministic order before they can be sent to a provider.");
         }
-    }
-
-    private DocumentQueryOrder[] TranslateOrder(
-        Query<TEntity> query,
-        BoundedQueryResultOperation resultOperation)
-    {
-        if (query.Order is null)
-            return [];
-
-        var direction = query.Order.Direction == Elsa.Primitives.Persistence.OrderDirection.Descending
-            ? PhysicalSortDirection.Descending
-            : PhysicalSortDirection.Ascending;
-        var primaryPath = ResolvePath(query.Order.FieldSelector);
-        if (resultOperation != BoundedQueryResultOperation.Documents || primaryPath == ResolveEntityIdPath())
-            return [new DocumentQueryOrder(primaryPath, direction)];
-
-        // A caller's sort key may have duplicate values. The canonical entity ID makes the page
-        // sequence reproducible without changing the requested primary ordering.
-        return
-        [
-            new DocumentQueryOrder(primaryPath, direction),
-            new DocumentQueryOrder(ResolveEntityIdPath(), direction)
-        ];
     }
 
     private DocumentQueryClause TranslateClause(IReadOnlyList<QueryComparison<TEntity>> clause)
@@ -175,14 +165,15 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         return ResolvePath(property);
     }
 
-    private string ResolveEntityIdPath() =>
-        ResolvePath(typeof(Entity).GetProperty(nameof(Entity.Id))!);
-
     private string ResolvePath(PropertyInfo property)
     {
         var jsonProperty = _entityTypeInfo.Properties.SingleOrDefault(candidate =>
             candidate.AttributeProvider is PropertyInfo candidateProperty && candidateProperty == property);
-        if (jsonProperty is null || IsAlwaysExcluded(jsonProperty))
+        if (jsonProperty is null ||
+            jsonProperty.AttributeProvider?.GetCustomAttributes(typeof(JsonIgnoreAttribute), true)
+                .OfType<JsonIgnoreAttribute>()
+                .Any(attribute => attribute.Condition == JsonIgnoreCondition.Always) == true ||
+            GroundworkDocumentSerialization.IsExplicitlyExcluded(_jsonOptions, jsonProperty))
         {
             throw new GroundworkQueryTranslationException(
                 $"Property '{property.DeclaringType?.FullName}.{property.Name}' is excluded from canonical JSON and cannot be queried.");
@@ -196,35 +187,6 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         }
 
         return $"{EntityPath}.{serializedName}";
-    }
-
-    private static bool IsAlwaysExcluded(JsonPropertyInfo property)
-    {
-        if (property.ShouldSerialize is not { } shouldSerialize)
-            return false;
-
-        try
-        {
-            return !shouldSerialize(null!, CreateNonNullProbe(property.PropertyType));
-        }
-        catch (Exception)
-        {
-            // A value-dependent resolver predicate cannot be proven to exclude the member from the
-            // canonical shape at translation time, so keep the member available to query.
-            return false;
-        }
-    }
-
-    private static object? CreateNonNullProbe(Type propertyType)
-    {
-        var type = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
-        if (type == typeof(string))
-            return string.Empty;
-
-        if (type.IsValueType)
-            return Activator.CreateInstance(type);
-
-        return System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(type);
     }
 
     private string? SerializeScalar(

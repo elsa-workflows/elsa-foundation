@@ -82,7 +82,9 @@ public sealed class GroundworkQueryTranslatorTests
     [Theory]
     [InlineData(false, PhysicalSortDirection.Ascending)]
     [InlineData(true, PhysicalSortDirection.Descending)]
-    public void Translates_single_field_order(bool descending, PhysicalSortDirection expectedDirection)
+    public void Emits_only_the_callers_declared_order_prefix(
+        bool descending,
+        PhysicalSortDirection expectedDirection)
     {
         var source = descending
             ? Query<DesignDocument>.All().OrderByDescending(x => x.Sequence)
@@ -90,18 +92,9 @@ public sealed class GroundworkQueryTranslatorTests
 
         var result = _translator.Translate(DocumentKind, QueryIdentity, source, take: 25);
 
-        Assert.Collection(
-            result.Order,
-            order =>
-            {
-                Assert.Equal("entity.sequence", order.Path);
-                Assert.Equal(expectedDirection, order.Direction);
-            },
-            order =>
-            {
-                Assert.Equal("entity.id", order.Path);
-                Assert.Equal(expectedDirection, order.Direction);
-            });
+        var order = Assert.Single(result.Order);
+        Assert.Equal("entity.sequence", order.Path);
+        Assert.Equal(expectedDirection, order.Direction);
     }
 
     [Theory]
@@ -177,6 +170,22 @@ public sealed class GroundworkQueryTranslatorTests
                 take: 1));
 
         Assert.Contains("deterministic order", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Rejects_an_undefined_result_operation_before_a_provider_can_execute()
+    {
+        var invalidOperation = (BoundedQueryResultOperation)(-1);
+
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            _translator.Translate(
+                DocumentKind,
+                QueryIdentity,
+                Query<DesignDocument>.All(),
+                invalidOperation));
+
+        Assert.Contains("result operation", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("-1", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -287,7 +296,7 @@ public sealed class GroundworkQueryTranslatorTests
     };
 
     [Fact]
-    public void Rejects_members_suppressed_by_the_canonical_type_info_resolver()
+    public void Rejects_members_with_explicit_constant_false_canonical_suppression()
     {
         var translator = new GroundworkQueryTranslator<DesignDocument>(
             GroundworkDocumentSerialization.Create([nameof(Entity.RowNumber)]));
@@ -298,6 +307,66 @@ public sealed class GroundworkQueryTranslatorTests
 
         Assert.Contains(nameof(Entity.RowNumber), exception.Message, StringComparison.Ordinal);
         Assert.Contains("excluded", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Keeps_when_writing_default_properties_queryable()
+    {
+        var source = Query<DesignDocument>.Where(
+            x => x.DefaultOmittedSequence,
+            QueryOp.Equal,
+            0);
+
+        var result = TranslateDocuments(source);
+
+        Assert.Equal(
+            "entity.defaultOmittedSequence",
+            Assert.Single(Assert.Single(result.Clauses).Comparisons).Path);
+    }
+
+    [Fact]
+    public void Keeps_when_writing_null_properties_queryable()
+    {
+        var source = Query<DesignDocument>.Where(
+            x => x.NullOmittedLabel,
+            QueryOp.Equal,
+            null);
+
+        var result = TranslateDocuments(source);
+
+        Assert.Equal(
+            "entity.nullOmittedLabel",
+            Assert.Single(Assert.Single(result.Clauses).Comparisons).Path);
+    }
+
+    [Fact]
+    public void Keeps_value_dependent_resolver_predicates_queryable()
+    {
+        var options = new JsonSerializerOptions(Json)
+        {
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver
+            {
+                Modifiers =
+                {
+                    typeInfo =>
+                    {
+                        if (typeInfo.Type == typeof(DesignDocument))
+                        {
+                            typeInfo.Properties.Single(property => property.Name == "sequence")
+                                .ShouldSerialize = static (_, value) => value is int number && number > 0;
+                        }
+                    }
+                }
+            }
+        };
+        var translator = new GroundworkQueryTranslator<DesignDocument>(options);
+        var source = Query<DesignDocument>.Where(x => x.Sequence, QueryOp.Equal, 0);
+
+        var result = TranslateDocuments(translator, source);
+
+        Assert.Equal(
+            "entity.sequence",
+            Assert.Single(Assert.Single(result.Clauses).Comparisons).Path);
     }
 
     [Fact]
@@ -358,6 +427,12 @@ public sealed class GroundworkQueryTranslatorTests
         public int Sequence { get; init; }
 
         public DateTimeOffset PublishedAt { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int DefaultOmittedSequence { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? NullOmittedLabel { get; init; }
 
         [JsonIgnore]
         public string TransientLabel { get; init; } = "";

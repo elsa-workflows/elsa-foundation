@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -14,10 +15,13 @@ namespace Elsa.Persistence.Groundwork.Querying;
 /// <c>RowNumber</c> identity column) and cross-aggregate navigation properties (fetched via an explicit second
 /// read instead of being embedded).
 /// <para>
-/// Exclusion is driven by a <see cref="DefaultJsonTypeInfoResolver"/> modifier rather than <c>[JsonIgnore]</c>
-/// on the domain types, so the core entities stay free of persistence concerns. Excluded members are only
-/// suppressed from <b>output</b> — they remain in the contract so an entity's parameterized constructor can
-/// still bind on read (the member is simply absent from the document and falls back to its default).
+/// Exclusion is driven by a resolver around <see cref="DefaultJsonTypeInfoResolver"/> rather than
+/// <c>[JsonIgnore]</c> on the domain types, so the core entities stay free of persistence concerns. The
+/// resolver also retains the explicit exclusion set so query translation can distinguish stable canonical
+/// exclusions from conditional <see cref="JsonPropertyInfo.ShouldSerialize"/> predicates. Excluded members
+/// are only suppressed from <b>output</b> — they remain in the contract so an entity's parameterized
+/// constructor can still bind on read (the member is simply absent from the document and falls back to its
+/// default).
 /// </para>
 /// </summary>
 public static class GroundworkDocumentSerialization
@@ -33,13 +37,7 @@ public static class GroundworkDocumentSerialization
         var excluded = new HashSet<string>(excludedMembers, StringComparer.OrdinalIgnoreCase);
         var delegated = new HashSet<Type>(payloadDelegatedTypes);
 
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
-        {
-            TypeInfoResolver = new DefaultJsonTypeInfoResolver
-            {
-                Modifiers = { typeInfo => SuppressExcludedMembers(typeInfo, excluded) }
-            }
-        };
+        var options = CreateOptions(excluded);
 
         options.Converters.Add(new PayloadDelegatingConverterFactory(payloadSerializer, delegated));
         return options;
@@ -53,26 +51,49 @@ public static class GroundworkDocumentSerialization
     public static JsonSerializerOptions Create(IReadOnlyCollection<string> excludedMembers)
     {
         var excluded = new HashSet<string>(excludedMembers, StringComparer.OrdinalIgnoreCase);
-
-        return new JsonSerializerOptions(JsonSerializerDefaults.Web)
-        {
-            TypeInfoResolver = new DefaultJsonTypeInfoResolver
-            {
-                Modifiers = { typeInfo => SuppressExcludedMembers(typeInfo, excluded) }
-            }
-        };
+        return CreateOptions(excluded);
     }
 
-    private static void SuppressExcludedMembers(JsonTypeInfo typeInfo, HashSet<string> excluded)
-    {
-        if (typeInfo.Kind != JsonTypeInfoKind.Object)
-            return;
+    internal static bool IsExplicitlyExcluded(
+        JsonSerializerOptions options,
+        JsonPropertyInfo property) =>
+        options.TypeInfoResolver is IStablePropertyExclusionResolver resolver &&
+        resolver.IsExplicitlyExcluded(property);
 
-        foreach (var property in typeInfo.Properties)
+    private static JsonSerializerOptions CreateOptions(HashSet<string> excluded) =>
+        new(JsonSerializerDefaults.Web)
         {
-            if (excluded.Contains(property.Name))
-                property.ShouldSerialize = static (_, _) => false;
+            TypeInfoResolver = new GroundworkDocumentTypeInfoResolver(excluded)
+        };
+
+    private interface IStablePropertyExclusionResolver
+    {
+        bool IsExplicitlyExcluded(JsonPropertyInfo property);
+    }
+
+    private sealed class GroundworkDocumentTypeInfoResolver(HashSet<string> excluded)
+        : IJsonTypeInfoResolver, IStablePropertyExclusionResolver
+    {
+        private readonly DefaultJsonTypeInfoResolver _inner = new();
+
+        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
+        {
+            var typeInfo = _inner.GetTypeInfo(type, options);
+            if (typeInfo?.Kind != JsonTypeInfoKind.Object)
+                return typeInfo;
+
+            foreach (var property in typeInfo.Properties)
+            {
+                if (IsExplicitlyExcluded(property))
+                    property.ShouldSerialize = static (_, _) => false;
+            }
+
+            return typeInfo;
         }
+
+        public bool IsExplicitlyExcluded(JsonPropertyInfo property) =>
+            excluded.Contains(property.Name) ||
+            property.AttributeProvider is PropertyInfo member && excluded.Contains(member.Name);
     }
 
     private sealed class PayloadDelegatingConverterFactory(IPayloadSerializer payloadSerializer, HashSet<Type> delegatedTypes) : JsonConverterFactory
