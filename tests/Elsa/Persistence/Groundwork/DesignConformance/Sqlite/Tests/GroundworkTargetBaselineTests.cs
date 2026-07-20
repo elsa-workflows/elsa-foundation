@@ -44,7 +44,7 @@ public sealed class GroundworkTargetBaselineTests
             Green(nameof(atomicity.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry), atomicity.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry),
             Green(nameof(atomicity.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result), atomicity.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result),
             Green(nameof(atomicity.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation), atomicity.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation),
-            Green(nameof(atomicity.Duplicate_delivery_does_not_duplicate_the_domain_outcome), atomicity.Duplicate_delivery_does_not_duplicate_the_domain_outcome),
+            Green(nameof(atomicity.Duplicate_delivery_does_not_repeat_the_fixture_post_commit_outcome), atomicity.Duplicate_delivery_does_not_repeat_the_fixture_post_commit_outcome),
             Green(nameof(isolation.Same_point_identities_resolve_only_their_own_scope), isolation.Same_point_identities_resolve_only_their_own_scope),
             Green(nameof(isolation.Foreign_point_reads_are_indistinguishable_from_missing_identities), isolation.Foreign_point_reads_are_indistinguishable_from_missing_identities),
             Green(nameof(isolation.Foreign_scope_point_writes_are_rejected_without_mutating_either_scope), isolation.Foreign_scope_point_writes_are_rejected_without_mutating_either_scope),

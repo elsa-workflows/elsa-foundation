@@ -154,7 +154,7 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
             VisibleAggregatePartCount: visible,
             ExpectedAggregatePartCount: 3,
             DurableOutcomeCount: 0,
-            PublishedOutcomeCount: 0,
+            PostCommitOutcomeCount: 0,
             CanonicalAggregateStateFingerprint: null,
             AuthoritativeDurableResultFingerprint: null);
     }

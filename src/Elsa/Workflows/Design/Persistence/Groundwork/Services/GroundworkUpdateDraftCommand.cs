@@ -79,7 +79,7 @@ public sealed class GroundworkUpdateDraftCommand(
         {
             await deferredEventPublisher.Publish(
                 new OnDraftValidated(outcome.Value.Draft, outcome.Value.Errors),
-                cancellationToken);
+                CancellationToken.None);
         }
     }
 

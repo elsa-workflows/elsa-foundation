@@ -183,12 +183,30 @@ conflict/rejection, uncertain-commit, and other domain outcomes retain their exi
 Repeated provider composition resolves every public store/command, the shared atomic helper, and
 each manifest source exactly once per scope.
 
-The SQLite Target profile now executes all seven atomicity scenarios through a real scoped
-`GroundworkDesignAtomicWrite` over two admitted workflow document kinds plus the durable marker.
-Its test-only fault seam injects a throw after one staged write, a rejected provider decision,
-cancellation, and a post-durable lost acknowledgement. Exact replay uses the same logical
-operation identity in two storage scopes, proving that isolation comes from the storage boundary
-rather than from scope material embedded in the key. Evidence schema `3` advances the immutable
+Lost-acknowledgement reconciliation now detaches post-commit lifecycle-event enqueue from the
+caller token that may have been cancelled after the durable commit. Create, update, and discard
+tests prove one enqueue after reconciliation and none on the subsequent replay, preserving the
+established best-effort/at-most-once deferred-event policy without claiming durable event
+delivery. Promotion performs its marker lookup before source reads and locks, so an exact replay
+returns the authoritative version even after the source draft is discarded. Submit validation
+runs only after a marker miss, so mutable activity-structure projections cannot invalidate an
+already committed exact replay. Clone retains its existing semantics: immutable source
+state/layout are part of the delegated create fingerprint, and changed material conflicts.
+
+The SQLite Target profile now executes all seven provider-transaction atomicity scenarios through
+a real scoped `GroundworkDesignAtomicWrite` over two admitted workflow document kinds plus the
+durable marker. Its fixture-local post-commit observation proves retry/replay control flow only;
+it is not a domain-event publication. Separately, the composed SQLite host invokes the public
+`ICreateDraftCommand`, starts Elsa's real background event dispatcher, captures
+`OnDraftCreated` in its ScopeA pipeline handler only after verifying the draft through
+`IWorkflowDefinitionDraftStore`. Its test-only fault seam injects a throw after one staged write,
+a rejected provider decision, cancellation, and a post-durable lost acknowledgement. Exact replay
+uses the same logical operation identity in two storage scopes, proving that isolation comes from
+the storage boundary rather than from scope
+material embedded in the key. `OnDraftCreated` intentionally does not carry a storage scope and
+the background dispatcher opens a fresh scope, so this lifecycle-event evidence is explicitly
+limited to the ScopeA fixture; it does not prove cross-scope event-context propagation. Evidence
+schema `3` advances the immutable
 catalog from `17/8` to `25` green and `0` intentional-red scenarios while retaining target
 fingerprint `b87b33275b2f9f52a8756eeb039bb8227a93083a6adacb95cd6a16c2445253d3`
 and plan fingerprint `d8717f5ebca1755d8aa24473c37da3a2dc823f70d069ec38fa4de40ff2b012f8`.
@@ -197,9 +215,10 @@ The integrated pre-review candidate passed:
 
 - persistence core: `43/43`;
 - Groundwork querying: `126/126`;
-- workflow design Groundwork: `71/71`;
+- workflow design Groundwork: `76/76`;
 - activity design Groundwork: `66/66`;
-- SQLite atomicity contract: `7/7`;
+- focused SQLite atomicity/lifecycle suite: `8/8` — `7/7` provider-transaction scenarios plus
+  `1/1` public `ICreateDraftCommand`/`OnDraftCreated` durability scenario;
 - SQLite 25-scenario Target-profile baseline: `1/1`, with all `25` logical scenarios green;
 - shared design conformance: `96` passed and `1` intentional profile-shape skip;
 - temporary EF oracle: `17` passed and `10` explicitly inapplicable skips;

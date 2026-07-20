@@ -95,10 +95,10 @@ public sealed class GroundworkCreateDraftCommand(
                     committed.Draft.Id,
                     committed.Draft.WorkflowDefinitionId,
                     committed.Draft.SourceVersionId),
-                cancellationToken);
+                CancellationToken.None);
             await deferredEventPublisher.Publish(
                 new OnDraftValidated(committed.Draft, committed.Errors),
-                cancellationToken);
+                CancellationToken.None);
         }
 
         return outcome.Value.Draft.Id;

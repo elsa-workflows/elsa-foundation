@@ -63,7 +63,7 @@ public sealed class GroundworkDiscardDraftCommand(
         {
             await deferredEventPublisher.Publish(
                 new OnDraftDiscarded(draftId, workflowDefinitionId),
-                cancellationToken);
+                CancellationToken.None);
         }
     }
 

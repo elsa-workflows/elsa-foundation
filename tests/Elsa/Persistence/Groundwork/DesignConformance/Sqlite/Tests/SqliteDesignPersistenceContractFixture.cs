@@ -19,9 +19,12 @@ using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Events;
@@ -37,8 +40,13 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
     private readonly GroundworkBaselineTelemetry _telemetry;
     private readonly GroundworkTargetEventCapture _events;
     private readonly GroundworkTargetAtomicityFaultController _atomicityFaults = new();
-    private readonly ConcurrentDictionary<string, byte> _publishedAtomicOutcomes = new(StringComparer.Ordinal);
+    // This is a fixture-local continuation observation for the raw-document atomicity probe. It
+    // intentionally does not stand in for an IEvent or a workflow lifecycle publication.
+    private readonly ConcurrentDictionary<string, byte> _postCommitAtomicOutcomes = new(StringComparer.Ordinal);
     private ServiceProvider _services = null!;
+    private CancellationTokenSource? _backgroundEventCancellation;
+    private IReadOnlyList<IBackgroundTask> _backgroundEventTasks = [];
+    private Task[] _backgroundEventExecutions = [];
 
     private SqliteDesignPersistenceContractFixture(GroundworkBaselineTelemetry telemetry)
     {
@@ -89,6 +97,7 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
 
     public async Task RestartAsync(CancellationToken cancellationToken = default)
     {
+        await StopBackgroundEventsAsync(cancellationToken);
         await _services.DisposeAsync();
         RestartCount++;
         _telemetry.RecordRestart();
@@ -124,6 +133,14 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(_events.Snapshot());
+    }
+
+    internal Task<OnDraftCreated> WaitForPublishedDraftCreatedAsync(
+        string draftId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return _events.WaitForPublishedDraftCreatedAsync(draftId, cancellationToken);
     }
 
     public Task<IDesignAtomicityFaultLease> ArmAtomicityFaultAsync(
@@ -172,7 +189,7 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
 
         var mapped = MapAtomicityResult(result);
         if (mapped.Status is DesignAtomicityOperationStatus.Committed)
-            _publishedAtomicOutcomes.TryAdd(OutcomeKey(request.StorageScope, request.OperationKey.Value), 0);
+            _postCommitAtomicOutcomes.TryAdd(OutcomeKey(request.StorageScope, request.OperationKey.Value), 0);
 
         _atomicityFaults.ThrowIfTriggered(
             DesignAtomicityFaultPhase.AfterDurableDecision,
@@ -209,7 +226,7 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
             VisibleAggregatePartCount: visibleParts,
             ExpectedAggregatePartCount: 2,
             DurableOutcomeCount: marker is null ? 0 : 1,
-            PublishedOutcomeCount: marker is not null && _publishedAtomicOutcomes.ContainsKey(
+            PostCommitOutcomeCount: marker is not null && _postCommitAtomicOutcomes.ContainsKey(
                 OutcomeKey(storageScope, AtomicitySnapshotOperationKey)) ? 1 : 0,
             CanonicalAggregateStateFingerprint: definition is not null && version is not null
                 ? Digest($"{definition.ContentJson}\n{version.ContentJson}")
@@ -220,7 +237,10 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
     public async ValueTask DisposeAsync()
     {
         if (_services is not null)
+        {
+            await StopBackgroundEventsAsync(CancellationToken.None);
             await _services.DisposeAsync();
+        }
         try
         {
             Directory.Delete(_directory, recursive: true);
@@ -236,12 +256,42 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
         _services = BuildServices();
         foreach (var initializer in _services.GetServices<IShellInitializer>())
             await initializer.InitializeAsync(cancellationToken);
+
+        _backgroundEventCancellation = new CancellationTokenSource();
+        _backgroundEventTasks = _services.GetServices<IBackgroundTask>().ToArray();
+        foreach (var task in _backgroundEventTasks)
+            await task.StartAsync(_backgroundEventCancellation.Token);
+        _backgroundEventExecutions = _backgroundEventTasks
+            .Select(task => task.ExecuteAsync(_backgroundEventCancellation.Token))
+            .ToArray();
+    }
+
+    private async Task StopBackgroundEventsAsync(CancellationToken cancellationToken)
+    {
+        if (_backgroundEventCancellation is null)
+            return;
+
+        try
+        {
+            foreach (var task in _backgroundEventTasks)
+                await task.StopAsync(cancellationToken);
+            await Task.WhenAll(_backgroundEventExecutions);
+        }
+        finally
+        {
+            _backgroundEventCancellation.Cancel();
+            _backgroundEventCancellation.Dispose();
+            _backgroundEventCancellation = null;
+            _backgroundEventTasks = [];
+            _backgroundEventExecutions = [];
+        }
     }
 
     private ServiceProvider BuildServices()
     {
         var services = new ServiceCollection();
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>));
+        services.AddSingleton(_events);
         services.AddSingleton<ISystemClock>(new DesignPersistenceFixtureData.FixedSystemClock(DesignPersistenceFixtureData.Epoch));
         services.AddSingleton<IIdentityGenerator, SequentialIdentityGenerator>();
         services.AddSingleton<IDistributedLockProvider, ImmediateDesignContractLockProvider>();
@@ -259,6 +309,7 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
             _ => new GroundworkTargetCaptureHandler<OnGroundworkStorageComposing>(_events));
         services.AddScoped<IEventHandler<OnDraftValidating>>(
             _ => new GroundworkTargetCaptureHandler<OnDraftValidating>(_events));
+        services.AddScoped<IEventHandler<OnDraftCreated>, GroundworkTargetDraftCreatedCaptureHandler>();
         services.AddScoped<IEventHandler<OnActivityVersionsReconciling>>(sp =>
             new GroundworkTargetReconciliationHandler(
                 sp.GetRequiredService<IPersistenceAccessContextAccessor>(),
@@ -282,7 +333,8 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
             WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
             WorkflowsDesignStorageManifest.SchemaVersion,
             definition,
-            GroundworkDesignJson.Options) with { ExpectedVersion = 0 };
+            GroundworkDesignJson.Options) with
+        { ExpectedVersion = 0 };
     }
 
     private static SaveDocumentRequest VersionSave(AtomicityDocumentIdentities identities, string storageScope)
@@ -300,7 +352,8 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
             WorkflowsDesignStorageManifest.SchemaVersion,
             version,
-            GroundworkDesignJson.Options) with { ExpectedVersion = 0 };
+            GroundworkDesignJson.Options) with
+        { ExpectedVersion = 0 };
     }
 
     private static DesignAtomicityOperationResult MapAtomicityResult(GroundworkDesignAtomicWriteResult result) =>
@@ -530,6 +583,9 @@ internal sealed class GroundworkTargetAtomicityOperationCancellation : IDisposab
 internal sealed class GroundworkTargetEventCapture(GroundworkBaselineTelemetry telemetry)
 {
     private readonly ConcurrentQueue<IEvent> _events = new();
+    private readonly ConcurrentQueue<OnDraftCreated> _publishedDraftCreatedEvents = new();
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<OnDraftCreated>> _publishedDraftCreatedWaiters =
+        new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, IReadOnlyCollection<ActivityDefinitionVersion>> _candidates =
         new(StringComparer.Ordinal);
 
@@ -544,6 +600,10 @@ internal sealed class GroundworkTargetEventCapture(GroundworkBaselineTelemetry t
         while (_events.TryDequeue(out _))
         {
         }
+
+        while (_publishedDraftCreatedEvents.TryDequeue(out _))
+        {
+        }
     }
 
     public IReadOnlyList<IEvent> Snapshot() => _events.ToArray();
@@ -554,6 +614,27 @@ internal sealed class GroundworkTargetEventCapture(GroundworkBaselineTelemetry t
     }
 
     public void RecordReconciliationPass() => telemetry.RecordReconciliationPass();
+    public Task<OnDraftCreated> WaitForPublishedDraftCreatedAsync(string draftId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(draftId);
+        var waiter = _publishedDraftCreatedWaiters
+            .GetOrAdd(draftId, _ => new(TaskCreationOptions.RunContinuationsAsynchronously));
+        var observed = _publishedDraftCreatedEvents.FirstOrDefault(@event => @event.DraftId == draftId);
+        if (observed is not null)
+        {
+            _publishedDraftCreatedWaiters.TryRemove(draftId, out _);
+            waiter.TrySetResult(observed);
+        }
+
+        return waiter.Task.WaitAsync(cancellationToken);
+    }
+
+    public void RecordPublishedDraftCreated(OnDraftCreated @event)
+    {
+        _publishedDraftCreatedEvents.Enqueue(@event);
+        if (_publishedDraftCreatedWaiters.TryRemove(@event.DraftId, out var waiter))
+            waiter.TrySetResult(@event);
+    }
 }
 
 internal sealed class GroundworkTargetDeferredEventPublisher(
@@ -578,6 +659,34 @@ internal sealed class GroundworkTargetCaptureHandler<TEvent>(GroundworkTargetEve
         cancellationToken.ThrowIfCancellationRequested();
         capture.Record(@event);
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Observes the real, background-dispatched lifecycle-event pipeline only after the public
+/// draft store can read the created draft. This is deliberately separate from the raw-document
+/// atomicity probe and its fixture-local post-commit observation.
+/// </summary>
+internal sealed class GroundworkTargetDraftCreatedCaptureHandler(
+    IPersistenceAccessContextBinder accessContextBinder,
+    IWorkflowDefinitionDraftStore drafts,
+    GroundworkTargetEventCapture capture)
+    : IEventHandler<OnDraftCreated>
+{
+    public async Task Handle(OnDraftCreated @event, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        // OnDraftCreated intentionally carries aggregate identity rather than a persistence scope.
+        // The SQLite lifecycle evidence exercises ScopeA, so the background handler binds that
+        // explicit test scope before using the same public read port as an application consumer.
+        accessContextBinder.Bind(PersistenceAccessContext.Scoped(new PersistenceScope(DesignPersistenceFixtureData.ScopeA)));
+        if (await drafts.FindWithLayoutByIdAsync(@event.DraftId, cancellationToken) is null)
+        {
+            throw new InvalidOperationException(
+                "OnDraftCreated reached the composed event pipeline before its draft was durable.");
+        }
+
+        capture.RecordPublishedDraftCreated(@event);
     }
 }
 

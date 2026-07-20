@@ -48,3 +48,21 @@ public sealed class HookEventPublisher : IInlineEventPublisher, IDeferredEventPu
         return Task.CompletedTask;
     }
 }
+
+/// <summary>
+/// Captures deferred enqueues while honoring cancellation, so post-commit command tests can prove
+/// that a cancelled request token cannot suppress a notification for a durable mutation.
+/// </summary>
+public sealed class CancellationAwareDeferredEventPublisher : IDeferredEventPublisher
+{
+    public List<IEvent> Events { get; } = [];
+    public List<CancellationToken> CancellationTokens { get; } = [];
+
+    public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
+    {
+        CancellationTokens.Add(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        Events.Add(@event);
+        return Task.CompletedTask;
+    }
+}

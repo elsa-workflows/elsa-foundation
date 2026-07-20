@@ -141,7 +141,7 @@ public abstract class DesignAtomicityContractSuite
     }
 
     [SkippableFact]
-    public async Task Duplicate_delivery_does_not_duplicate_the_domain_outcome()
+    public async Task Duplicate_delivery_does_not_repeat_the_fixture_post_commit_outcome()
     {
         SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityDuplicateDelivery);
         await using var fixture = await CreateFixtureAsync();
@@ -153,7 +153,7 @@ public abstract class DesignAtomicityContractSuite
 
         var snapshot = await fixture.ReadAtomicitySnapshotAsync(DesignPersistenceFixtureData.ScopeA);
         Assert.Equal(1, snapshot.DurableOutcomeCount);
-        Assert.Equal(1, snapshot.PublishedOutcomeCount);
+        Assert.Equal(1, snapshot.PostCommitOutcomeCount);
     }
 
     private static DesignAtomicityOperationRequest Request(DesignCanonicalRequestFingerprint? fingerprint = null) =>
@@ -172,7 +172,7 @@ public abstract class DesignAtomicityContractSuite
 
         Assert.Equal(0, snapshot.VisibleAggregatePartCount);
         Assert.Equal(0, snapshot.DurableOutcomeCount);
-        Assert.Equal(0, snapshot.PublishedOutcomeCount);
+        Assert.Equal(0, snapshot.PostCommitOutcomeCount);
         Assert.True(string.IsNullOrWhiteSpace(snapshot.CanonicalAggregateStateFingerprint));
         Assert.True(string.IsNullOrWhiteSpace(snapshot.AuthoritativeDurableResultFingerprint));
     }
@@ -186,7 +186,7 @@ public abstract class DesignAtomicityContractSuite
         Assert.True(snapshot.ExpectedAggregatePartCount > 1, "The atomicity fixture must exercise a multi-document operation.");
         Assert.Equal(snapshot.ExpectedAggregatePartCount, snapshot.VisibleAggregatePartCount);
         Assert.Equal(1, snapshot.DurableOutcomeCount);
-        Assert.Equal(1, snapshot.PublishedOutcomeCount);
+        Assert.Equal(1, snapshot.PostCommitOutcomeCount);
         Assert.False(string.IsNullOrWhiteSpace(snapshot.CanonicalAggregateStateFingerprint));
         Assert.False(string.IsNullOrWhiteSpace(snapshot.AuthoritativeDurableResultFingerprint));
         return snapshot;

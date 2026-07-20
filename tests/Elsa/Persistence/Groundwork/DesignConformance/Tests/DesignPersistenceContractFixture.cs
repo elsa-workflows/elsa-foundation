@@ -67,8 +67,10 @@ public interface IDesignPersistenceContractFixture : IAsyncDisposable
 
     /// <summary>
     /// Reads the observable state of the fixture's canonical multi-document operation. The counts
-    /// intentionally describe logical aggregate parts, durable outcomes, and published outcomes
-    /// rather than provider documents, tables, transactions, or SDK types.
+    /// intentionally describe logical aggregate parts, durable outcomes, and a fixture-local
+    /// post-commit completion observation rather than provider documents, tables, transactions,
+    /// SDK types, or domain-event publication. Provider-specific composed-host tests observe public
+    /// command/event durability separately.
     /// </summary>
     Task<DesignAtomicitySnapshot> ReadAtomicitySnapshotAsync(
         string storageScope,
@@ -190,7 +192,7 @@ public sealed record DesignAtomicitySnapshot(
     int VisibleAggregatePartCount,
     int ExpectedAggregatePartCount,
     int DurableOutcomeCount,
-    int PublishedOutcomeCount,
+    int PostCommitOutcomeCount,
     string? CanonicalAggregateStateFingerprint,
     string? AuthoritativeDurableResultFingerprint);
 

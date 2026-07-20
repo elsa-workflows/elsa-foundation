@@ -36,7 +36,6 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(state);
-        SubmittedActivityTreeValidator.Validate(state.RootActivity, activityStructureService);
         var requestMaterial = new SubmitDefinitionRequestMaterial(
             name,
             description,
@@ -140,7 +139,13 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
                 await context.SaveAsync(layoutSave, token);
                 return new SubmittedWorkflowDefinition(definitionId, draftId, versionId);
             },
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken,
+            beforeAttempt: token =>
+            {
+                token.ThrowIfCancellationRequested();
+                SubmittedActivityTreeValidator.Validate(state.RootActivity, activityStructureService);
+                return Task.CompletedTask;
+            });
         return outcome.Value;
     }
 

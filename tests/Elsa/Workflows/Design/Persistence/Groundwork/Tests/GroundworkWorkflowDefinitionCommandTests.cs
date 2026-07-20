@@ -15,6 +15,9 @@ using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Groundwork.Core.Transactions;
+using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -268,6 +271,90 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task CreateDraft_reconciles_lost_acknowledgement_and_enqueues_events_despite_caller_cancellation_without_replaying_them()
+    {
+        using var callerCancellation = new CancellationTokenSource();
+        var store = new AcknowledgementLostAfterCommitDocumentStore(_store, callerCancellation);
+        var deferredEvents = new CancellationAwareDeferredEventPublisher();
+        var command = new GroundworkCreateDraftCommand(
+            _identities,
+            _locks,
+            store,
+            new GroundworkDesignAtomicWrite(store),
+            Payloads,
+            _events,
+            deferredEvents,
+            _clock,
+            _accessContext);
+        var key = NextKey();
+
+        var draftId = await command.Execute(key, "definition-1", EmptyState(), cancellationToken: callerCancellation.Token);
+        var replay = await command.Execute(key, "definition-1", EmptyState(), cancellationToken: CancellationToken.None);
+
+        Assert.True(callerCancellation.IsCancellationRequested);
+        Assert.True(store.ReconciliationUsedFreshToken);
+        Assert.Equal(draftId, replay);
+        Assert.Collection(
+            deferredEvents.Events,
+            @event => Assert.IsType<OnDraftCreated>(@event),
+            @event => Assert.IsType<OnDraftValidated>(@event));
+        Assert.All(deferredEvents.CancellationTokens, token => Assert.False(token.IsCancellationRequested));
+    }
+
+    [Fact]
+    public async Task UpdateDraft_reconciles_lost_acknowledgement_and_enqueues_event_despite_caller_cancellation_without_replaying_it()
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-1", EmptyState(), cancellationToken: CancellationToken.None);
+        using var callerCancellation = new CancellationTokenSource();
+        var store = new AcknowledgementLostAfterCommitDocumentStore(_store, callerCancellation);
+        var deferredEvents = new CancellationAwareDeferredEventPublisher();
+        var command = new GroundworkUpdateDraftCommand(
+            _locks,
+            store,
+            new GroundworkDesignAtomicWrite(store),
+            Payloads,
+            _events,
+            deferredEvents,
+            _clock,
+            _accessContext);
+        var key = NextKey();
+        var request = new UpdateDraftRequest(draftId, EmptyState(), []);
+
+        await command.Execute(key, request, callerCancellation.Token);
+        await command.Execute(key, request, CancellationToken.None);
+
+        Assert.True(callerCancellation.IsCancellationRequested);
+        Assert.True(store.ReconciliationUsedFreshToken);
+        Assert.Collection(deferredEvents.Events, @event => Assert.IsType<OnDraftValidated>(@event));
+        Assert.All(deferredEvents.CancellationTokens, token => Assert.False(token.IsCancellationRequested));
+    }
+
+    [Fact]
+    public async Task DiscardDraft_reconciles_lost_acknowledgement_and_enqueues_event_despite_caller_cancellation_without_replaying_it()
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-1", EmptyState(), cancellationToken: CancellationToken.None);
+        using var callerCancellation = new CancellationTokenSource();
+        var store = new AcknowledgementLostAfterCommitDocumentStore(_store, callerCancellation);
+        var deferredEvents = new CancellationAwareDeferredEventPublisher();
+        var command = new GroundworkDiscardDraftCommand(
+            _locks,
+            store,
+            new GroundworkDesignAtomicWrite(store),
+            Payloads,
+            deferredEvents,
+            _accessContext);
+        var key = NextKey();
+
+        await command.Execute(key, draftId, callerCancellation.Token);
+        await command.Execute(key, draftId, CancellationToken.None);
+
+        Assert.True(callerCancellation.IsCancellationRequested);
+        Assert.True(store.ReconciliationUsedFreshToken);
+        Assert.Collection(deferredEvents.Events, @event => Assert.IsType<OnDraftDiscarded>(@event));
+        Assert.All(deferredEvents.CancellationTokens, token => Assert.False(token.IsCancellationRequested));
+    }
+
+    [Fact]
     public async Task UpdateDraft_replaces_layout_atomically_and_errors_are_derived()
     {
         var draftId = await CreateCommand().Execute(NextKey(), "definition-1", EmptyState(), [new DesignMetadataRecord("old", 0, 0, 100, 100)], cancellationToken: CancellationToken.None);
@@ -336,6 +423,39 @@ public class GroundworkWorkflowDefinitionCommandTests
         var layout = await VersionLayoutStore().FindByVersionIdAsync(versionId);
         Assert.Equal(scope, version.TenantId);
         Assert.Equal(scope, layout!.TenantId);
+    }
+
+    [Fact]
+    public async Task PromoteDraft_replay_returns_the_committed_version_after_the_source_draft_is_discarded_without_relocking()
+    {
+        var draftId = await CreateCommand().Execute(
+            NextKey(),
+            "definition-1",
+            EmptyState(),
+            cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+        var operationKey = NextKey();
+        var versionId = await promote.Execute(operationKey, draftId, CancellationToken.None);
+        var discard = new GroundworkDiscardDraftCommand(
+            _locks,
+            _store,
+            AtomicWrite(),
+            Payloads,
+            _events,
+            _accessContext);
+        await discard.Execute(NextKey(), draftId, CancellationToken.None);
+        var draftLockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
+        var definitionLockKey = WorkflowDesignPersistenceLockKeys.DefinitionKey("definition-1");
+        var draftLockCount = _locks.AcquireCounts[draftLockKey];
+        var definitionLockCount = _locks.AcquireCounts[definitionLockKey];
+        var saveCount = _store.SaveCount;
+
+        var replayedVersionId = await promote.Execute(operationKey, draftId, CancellationToken.None);
+
+        Assert.Equal(versionId, replayedVersionId);
+        Assert.Equal(saveCount, _store.SaveCount);
+        Assert.Equal(draftLockCount, _locks.AcquireCounts[draftLockKey]);
+        Assert.Equal(definitionLockCount, _locks.AcquireCounts[definitionLockKey]);
     }
 
     [Fact]
@@ -510,6 +630,42 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.Equal(GroundworkTestAccess.DefaultScopeValue, layout!.TenantId);
     }
 
+    [Fact]
+    public async Task SubmitWorkflowDefinition_replay_skips_validation_against_changed_activity_structure()
+    {
+        var activityStructure = new MutableActivityStructureService();
+        var command = new GroundworkSubmitWorkflowDefinitionCommand(
+            _identities,
+            _store,
+            AtomicWrite(),
+            Payloads,
+            activityStructure,
+            _clock,
+            _accessContext);
+        var operationKey = NextKey();
+        var state = MinimalState();
+        var submitted = await command.Execute(
+            operationKey,
+            "Definition",
+            "Description",
+            state,
+            CancellationToken.None);
+        var saveCount = _store.SaveCount;
+        var validationProjectionCount = activityStructure.ProjectionCount;
+        activityStructure.InvalidChild = new ActivityNode("child", "", [], []);
+
+        var replayed = await command.Execute(
+            operationKey,
+            "Definition",
+            "Description",
+            state,
+            CancellationToken.None);
+
+        Assert.Equal(submitted, replayed);
+        Assert.Equal(saveCount, _store.SaveCount);
+        Assert.Equal(validationProjectionCount, activityStructure.ProjectionCount);
+    }
+
     private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null);
 
     private static WorkflowDefinitionState MinimalState() => new(
@@ -613,5 +769,102 @@ public class GroundworkWorkflowDefinitionCommandTests
         public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => null;
         public IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
         public bool SupportsScopedVariables(ActivityNode activity) => false;
+    }
+
+    private sealed class MutableActivityStructureService : IActivityStructureService
+    {
+        public ActivityNode? InvalidChild { get; set; }
+        public int ProjectionCount { get; private set; }
+
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
+        {
+            ProjectionCount++;
+            return InvalidChild is null ? [] : [new ActivityChildProjection("Body", [InvalidChild])];
+        }
+
+        public ActivityNode ReplaceChildren(
+            ActivityNode activity,
+            IReadOnlyCollection<ActivityChildProjection> childProjections) => activity;
+
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => null;
+        public IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
+        public bool SupportsScopedVariables(ActivityNode activity) => false;
+    }
+
+    private sealed class AcknowledgementLostAfterCommitDocumentStore(
+        IDocumentStore inner,
+        CancellationTokenSource callerCancellation) : IDocumentStore
+    {
+        private int _ledgerLoads;
+
+        public bool ReconciliationUsedFreshToken { get; private set; }
+        public global::Groundwork.Documents.Scoping.DocumentStoreAccess Access => inner.Access;
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+
+        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default)
+        {
+            if (documentKind == GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind &&
+                Interlocked.Increment(ref _ledgerLoads) > 1)
+            {
+                ReconciliationUsedFreshToken = !cancellationToken.IsCancellationRequested;
+            }
+
+            return inner.LoadAsync(documentKind, id, cancellationToken);
+        }
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+#pragma warning disable GW0004
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<global::Groundwork.Documents.Store.DocumentQueryResult> QueryAsync(
+            global::Groundwork.Documents.Store.PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            global::Groundwork.Documents.Store.PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) => inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(
+            global::Groundwork.Documents.Store.PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) => inner.AnyAsync(query, cancellationToken);
+#pragma warning restore GW0004
+
+        public async Task<IDocumentUnitOfWork> BeginAsync(
+            DocumentCommitScope scope,
+            CancellationToken cancellationToken = default) =>
+            new AcknowledgementLostAfterCommitUnitOfWork(
+                await inner.BeginAsync(scope, cancellationToken),
+                callerCancellation);
+    }
+
+    private sealed class AcknowledgementLostAfterCommitUnitOfWork(
+        IDocumentUnitOfWork inner,
+        CancellationTokenSource callerCancellation) : IDocumentUnitOfWork
+    {
+        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public async Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            await inner.CommitAsync(cancellationToken);
+            await callerCancellation.CancelAsync();
+            throw new DocumentCommitAcknowledgementUncertainException(
+                [GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind]);
+        }
+
+        public Task RollbackAsync(CancellationToken cancellationToken = default) => inner.RollbackAsync(cancellationToken);
+        public ValueTask DisposeAsync() => inner.DisposeAsync();
     }
 }
