@@ -59,6 +59,28 @@ dotnet test tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence
 
 Expected: registration, serialization, command, atomic rollback, and unified-host scenarios all pass.
 
+### Phase 2 bounded-query substrate evidence (T019)
+
+On 2026-07-20, the canonical in-memory Groundwork test substrate was updated to
+validate the selected physical bounded-query declaration before counting provider I/O,
+while retaining a legacy-declaration fallback for manifests that have not yet been
+physicalized. A physical declaration takes precedence when the transitional manifest
+also retains the corresponding legacy declaration, matching provider route binding.
+The substrate now rejects undeclared operators, paths, disjunction, ordering, paging,
+latest-per-key selection, required residual omissions, and unsupported terminal
+operations before I/O; it also observes cancellation before I/O.
+
+```bash
+dotnet test tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj \
+  -c Release --no-restore
+dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj \
+  -c Release --no-restore
+```
+
+Observed results: `36/36` querying tests and `612/612` runtime Groundwork tests passed.
+The build emitted only the existing Groundwork legacy-API transition warnings in the
+shared test substrate and legacy compatibility tests.
+
 ## 3. Run the four-provider black-box suite
 
 The implementation phase creates one shared design conformance project whose fixtures select each real provider:
