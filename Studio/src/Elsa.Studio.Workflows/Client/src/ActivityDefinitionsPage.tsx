@@ -2,7 +2,11 @@ import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Database, RefreshCw, Search } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext, StudioRuntimeSettings, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import type { ActivityDefinitionCollectionRequest, ActivityDefinitionManagementView } from "./activityDefinitionTypes";
+import {
+  isActivityDefinitionEnumValue,
+  type ActivityDefinitionCollectionRequest,
+  type ActivityDefinitionManagementView
+} from "./activityDefinitionTypes";
 import { classifyActivityDefinitionReadFailure, redactActivityDefinitionManagementCache, useActivityDefinitions } from "./api/activityDesign";
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
@@ -239,7 +243,8 @@ function ActivityDefinitionFailure({ kind, onRetry }: { kind: ReturnType<typeof 
 }
 
 function AuthorityBadge({ kind }: { kind: string }) {
-  return <span className={`ad-badge ${kind === "Design" ? "is-design" : "is-source"}`}>{kind === "Design" ? "Design owned" : "Source owned"}</span>;
+  const designOwned = isActivityDefinitionEnumValue(kind, "Design");
+  return <span className={`ad-badge ${designOwned ? "is-design" : "is-source"}`}>{designOwned ? "Design owned" : "Source owned"}</span>;
 }
 
 function useDebouncedValue(value: string, delay: number) {

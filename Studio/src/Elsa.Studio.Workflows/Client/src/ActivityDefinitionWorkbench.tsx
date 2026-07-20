@@ -2,7 +2,13 @@ import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent, type R
 import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, GitBranch, Layers3, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { ActivityDefinitionDraftManagementView, ActivityDefinitionManagementView, ActivityDefinitionVersionLifecycleAction, ActivityDefinitionVersionManagementView } from "./activityDefinitionTypes";
+import {
+  isActivityDefinitionEnumValue,
+  type ActivityDefinitionDraftManagementView,
+  type ActivityDefinitionManagementView,
+  type ActivityDefinitionVersionLifecycleAction,
+  type ActivityDefinitionVersionManagementView
+} from "./activityDefinitionTypes";
 import { activityDesignKeys, classifyActivityDefinitionReadFailure, redactActivityDefinitionChildCache, redactActivityDefinitionManagementCache, useActivityDefinition, useActivityDefinitionDraft, useActivityDefinitionDrafts, useActivityDefinitionVersion, useActivityDefinitionVersions } from "./api/activityDesign";
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
 import { ActivityDefinitionDraftDialog, isActionAllowed } from "./ActivityDefinitionDraftManagementDialogs";
@@ -108,7 +114,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   useEffect(() => {
     if (!detail || requestedActionHandled.current || !requestedDraftActionVersionId) return;
     requestedActionHandled.current = true;
-    const designOwned = detail.definition.contentAuthority.kind === "Design";
+    const designOwned = isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design");
     if (designOwned && isActionAllowed(detail.actions, "create-draft")) setDraftDialogSource(requestedDraftActionVersionId);
   }, [detail, requestedDraftActionVersionId]);
 
@@ -131,10 +137,10 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
     { id: "relationships", label: "Dependencies & usage" }
   ];
 
-  const designOwned = detail.definition.contentAuthority.kind === "Design";
+  const designOwned = isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design");
   const canCreateDraft = designOwned && isActionAllowed(detail.actions, "create-draft");
   const forkAllowed = !designOwned && isActionAllowed(detail.actions, "fork-definition");
-  const recommendedActiveVersion = detail.lifecycle.recommendation?.lifecycle === "Active"
+  const recommendedActiveVersion = isActivityDefinitionEnumValue(detail.lifecycle.recommendation?.lifecycle, "Active")
     ? detail.lifecycle.recommendation
     : null;
   const canFork = forkAllowed && Boolean(recommendedActiveVersion);
@@ -149,7 +155,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
     <dl className="ad-identity-strip">
       <div><dt>Activity Type Key</dt><dd><code>{detail.definition.activityTypeKey}</code></dd></div>
       <div><dt>Definition identity</dt><dd><code>{detail.definition.definitionId}</code></dd></div>
-      <div><dt>Authority</dt><dd>{detail.definition.contentAuthority.kind === "Design" ? "Design owned" : "Source owned"}</dd></div>
+      <div><dt>Authority</dt><dd>{isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design") ? "Design owned" : "Source owned"}</dd></div>
       <div><dt>Authority key</dt><dd><code>{detail.definition.contentAuthority.authorityKey}</code></dd></div>
       {!designOwned ? <div><dt>Source identity</dt><dd><code>{detail.definition.contentAuthority.sourceId ?? "Not disclosed"}</code></dd></div> : null}
       <div><dt>Provider</dt><dd>{provider}</dd></div>

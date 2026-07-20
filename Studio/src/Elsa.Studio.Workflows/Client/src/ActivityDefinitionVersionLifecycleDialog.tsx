@@ -8,6 +8,7 @@ import type {
   ActivityDefinitionVersionManagementView,
   ActivityRecommendationDecision
 } from "./activityDefinitionTypes";
+import { isActivityDefinitionEnumValue } from "./activityDefinitionTypes";
 import {
   activityDesignKeys,
   getActivityDefinition,
@@ -61,7 +62,7 @@ export function ActivityDefinitionVersionLifecycleDialog({
   });
   const replacements = useMemo(() => (candidatesQuery.data ?? []).filter(item =>
     item.version.versionId !== version.version.versionId &&
-    item.version.lifecycle === "Active"
+    isActivityDefinitionEnumValue(item.version.lifecycle, "Active")
   ), [candidatesQuery.data, version.version.versionId]);
   const effectiveReplacementId = replacementVersionId || replacements[0]?.version.versionId || "";
   const invalidatesRecommendation = version.isRecommended && (action === "retire" || action === "revoke");

@@ -9,6 +9,7 @@ import type {
   ActivityDefinitionForkReceipt,
   ActivityDefinitionManagementView
 } from "./activityDefinitionTypes";
+import { isActivityDefinitionEnumValue } from "./activityDefinitionTypes";
 import {
   applyActivityDefinitionFork,
   getActivityDefinitionForkStatus,
@@ -229,7 +230,7 @@ function ensurePreviewMatchesRequest(
   if (
     preview.source.definitionId !== definitionId ||
     preview.source.versionId !== sourceVersionId ||
-    preview.source.lifecycle !== "Active" ||
+    !isActivityDefinitionEnumValue(preview.source.lifecycle, "Active") ||
     preview.providerMigration.targetProviderKey !== targetProviderKey ||
     preview.providerMigration.targetProviderSchemaVersion !== targetProviderSchemaVersion ||
     preview.target.providerKey !== targetProviderKey ||
