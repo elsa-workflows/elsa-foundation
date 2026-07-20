@@ -114,5 +114,8 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton(TimeProvider.System);
         services.AddRequestHandlersFrom(assembly);
         services.AddApiCapability(PublishingApiCapabilities.StaticDeclaration);
+        // The conversion-profiles endpoint is served here (it reads IValueConversionProfileRegistry) but advertised
+        // under the client's expressions capability; the source merges that relation into elsa.api.expressions.
+        services.AddApiCapabilitySource<ConversionProfilesCapabilitySource>();
     }
 }

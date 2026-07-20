@@ -55,6 +55,30 @@ Visual/API callers use the same JSON shape:
 pickers. Hosts that only support lookup can keep implementing `TryGet`; the
 default `List()` result is empty.
 
+### Profile picker endpoint
+
+`GET publishing/value-conversion/profiles` projects the active shell registry for
+authoring pickers. It is gated by the `expressions.read` permission and advertised
+in the API capability document under the `elsa.api.expressions` capability as
+relation `conversion-profiles`; clients that predate the relation fall back
+gracefully. The default host returns the built-in `elsa.json@1` and `elsa.xml@1`
+profiles, and a host-registered `IValueConversionProfileRegistry` surfaces its own
+profiles. Each item carries the versioned profile identity plus the capabilities
+publication resolves against, so a picker cannot pin a profile the executable would
+reject:
+
+```json
+{
+  "items": [
+    {
+      "profile": { "id": "elsa.json", "version": "1" },
+      "supportedSourceRepresentations": ["StructuredValue", "FormattedContent"],
+      "supportedTargetAliases": ["*"]
+    }
+  ]
+}
+```
+
 ## Executable controls
 
 The durable binding edge owns conversion policy. Publication resolves authored
