@@ -137,38 +137,47 @@ public abstract class DesignIsolationAndRestartContractSuite
         await fixture.ValidateReadinessAsync();
         await SeedScopeAsync(fixture, DesignPersistenceFixtureData.ScopeA, "scope A");
 
-        using var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
-        var services = scope.ServiceProvider;
-        var duplicateWorkflow = DesignPersistenceFixtureData.WorkflowDefinition();
-        duplicateWorkflow.Name = "duplicate workflow";
-        var duplicateDraft = DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState("duplicate-workflow-root"));
-        await AssertNonCancellationFailureAsync(() => services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
-            duplicateWorkflow,
-            duplicateDraft,
-            DesignPersistenceFixtureData.WorkflowDraftLayout(),
-            CancellationToken.None));
+        using (var duplicateWorkflowScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
+        {
+            var duplicateWorkflow = DesignPersistenceFixtureData.WorkflowDefinition();
+            duplicateWorkflow.Name = "duplicate workflow";
+            var duplicateDraft = DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState("duplicate-workflow-root"));
+            await AssertNonCancellationFailureAsync(() => duplicateWorkflowScope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+                duplicateWorkflow,
+                duplicateDraft,
+                DesignPersistenceFixtureData.WorkflowDraftLayout(),
+                CancellationToken.None));
+        }
 
-        var duplicateActivityDefinition = DesignPersistenceFixtureData.ActivityDefinition();
-        duplicateActivityDefinition.Id = "activity-http-request-duplicate";
-        var duplicateActivityVersion = DesignPersistenceFixtureData.ActivityVersion(
-            id: "activity-http-request-duplicate-v1",
-            definitionId: duplicateActivityDefinition.Id);
-        await AssertNonCancellationFailureAsync(() => services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
-            duplicateActivityDefinition,
-            duplicateActivityVersion,
-            CancellationToken.None));
+        using (var duplicateActivityScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
+        {
+            var duplicateActivityDefinition = DesignPersistenceFixtureData.ActivityDefinition();
+            duplicateActivityDefinition.Id = "activity-http-request-duplicate";
+            var duplicateActivityVersion = DesignPersistenceFixtureData.ActivityVersion(
+                id: "activity-http-request-duplicate-v1",
+                definitionId: duplicateActivityDefinition.Id);
+            await AssertNonCancellationFailureAsync(() => duplicateActivityScope.ServiceProvider.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+                duplicateActivityDefinition,
+                duplicateActivityVersion,
+                CancellationToken.None));
+        }
 
-        var duplicateSemanticVersion = DesignPersistenceFixtureData.ActivityVersion(
-            id: "activity-http-request-v1-duplicate");
-        await AssertNonCancellationFailureAsync(() => services.GetRequiredService<IAddCommand<ActivityDefinitionVersion>>().Add(
-            duplicateSemanticVersion,
-            CancellationToken.None));
+        using (var duplicateSemanticVersionScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
+        {
+            var duplicateSemanticVersion = DesignPersistenceFixtureData.ActivityVersion(
+                id: "activity-http-request-v1-duplicate");
+            await AssertNonCancellationFailureAsync(() => duplicateSemanticVersionScope.ServiceProvider.GetRequiredService<IAddCommand<ActivityDefinitionVersion>>().Add(
+                duplicateSemanticVersion,
+                CancellationToken.None));
+        }
 
-        var workflow = await services.GetRequiredService<IWorkflowDefinitionStore>()
+        using var readScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
+        var readServices = readScope.ServiceProvider;
+        var workflow = await readServices.GetRequiredService<IWorkflowDefinitionStore>()
             .GetAsync(DesignPersistenceFixtureData.WorkflowDefinitionId);
-        var activity = await services.GetRequiredService<IActivityDefinitionStore>()
+        var activity = await readServices.GetRequiredService<IActivityDefinitionStore>()
             .GetAsync(DesignPersistenceFixtureData.ActivityDefinitionId);
-        var versions = await services.GetRequiredService<IActivityDefinitionVersionStore>()
+        var versions = await readServices.GetRequiredService<IActivityDefinitionVersionStore>()
             .ListByDefinitionAsync(DesignPersistenceFixtureData.ActivityDefinitionId);
         Assert.Equal("Order processing scope A", workflow.Name);
         Assert.Equal("Send HTTP request scope A", activity.DisplayName);
@@ -249,9 +258,25 @@ public abstract class DesignIsolationAndRestartContractSuite
     }
 
     [SkippableFact]
-    public async Task Scope_bound_point_read_snapshots_survive_restart()
+    public async Task Single_scope_point_read_snapshot_survives_restart()
     {
-        SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationScopeBoundRestart);
+        SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationSingleScopeRestart);
+        await using var fixture = await CreateFixtureAsync();
+        await fixture.ValidateReadinessAsync();
+
+        var scopeA = await SeedScopeAsync(fixture, DesignPersistenceFixtureData.ScopeA, "scope A");
+        var beforeA = await ReadScopeSnapshotAsync(fixture, DesignPersistenceFixtureData.ScopeA, scopeA.PromotedVersionId);
+
+        await fixture.RestartAsync();
+
+        var afterA = await ReadScopeSnapshotAsync(fixture, DesignPersistenceFixtureData.ScopeA, scopeA.PromotedVersionId);
+        Assert.Equal(DesignPersistenceFixtureData.ResultHash(beforeA), DesignPersistenceFixtureData.ResultHash(afterA));
+    }
+
+    [SkippableFact]
+    public async Task Cross_scope_same_identity_point_read_snapshots_survive_restart()
+    {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.IsolationCrossScopeSameIdentityRestart);
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
 

@@ -200,7 +200,8 @@ public enum DesignPersistenceContractScenario
     IsolationDuplicateIdentities,
     IsolationReusableActivityDraftOcc,
     IsolationWorkflowDraftLastWriterWins,
-    IsolationScopeBoundRestart
+    IsolationSingleScopeRestart,
+    IsolationCrossScopeSameIdentityRestart
 }
 
 /// <summary>Whether a profile can execute a scenario, with an explicit reason when it cannot.</summary>
@@ -288,6 +289,7 @@ public static class DesignPersistenceContractProfiles
             [DesignPersistenceContractScenario.IsolationDuplicateIdentities] = DesignPersistenceScenarioApplicability.Applicable(),
             [DesignPersistenceContractScenario.IsolationReusableActivityDraftOcc] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF reusable activity drafts do not expose the target expected-revision replace contract."),
             [DesignPersistenceContractScenario.IsolationWorkflowDraftLastWriterWins] = DesignPersistenceScenarioApplicability.Applicable(),
-            [DesignPersistenceContractScenario.IsolationScopeBoundRestart] = DesignPersistenceScenarioApplicability.Applicable()
+            [DesignPersistenceContractScenario.IsolationSingleScopeRestart] = DesignPersistenceScenarioApplicability.Applicable(),
+            [DesignPersistenceContractScenario.IsolationCrossScopeSameIdentityRestart] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF identity keys are global and cannot represent cross-scope same-identity restart isolation.")
         });
 }

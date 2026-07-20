@@ -91,7 +91,8 @@
 | Same-scope duplicate identities | applicable | applicable | — |
 | Reusable activity draft OCC | applicable | N/A | No expected-revision replace contract. |
 | Workflow draft last-writer-wins | applicable | applicable | — |
-| Scope-bound restart | applicable | applicable | — |
+| Single-scope restart snapshot | applicable | applicable | — |
+| Cross-scope same-identity restart isolation | applicable | N/A | Legacy EF identity keys are global and cannot represent cross-scope same-identity restart isolation. |
 
 **Rationale**: Framework §2.21.1 requires test objective continuity. Several current tests assert EF metadata as a proxy for domain immutability; those objectives must become provider-neutral observable stale-write/conflict tests before their EF mechanics disappear.
 

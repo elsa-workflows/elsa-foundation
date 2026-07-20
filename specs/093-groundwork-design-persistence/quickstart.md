@@ -39,8 +39,9 @@ evidence](evidence/baseline.md) for the commands and precise evidence scope.
 The shared project now contains abstract, executable-by-inheritance workflow and activity suites.
 They exercise readiness, scoped lifecycle reads and writes, point-read scope isolation, wrong-scope
 non-disclosure and write rejection, scope-local duplicate identities, true reusable-activity-draft
-OCC, the workflow draft's intentional last-writer-wins policy, restart/result-hash parity, draft and
-version layout round-trips, clone provenance, validation rejection, descriptor serialization,
+OCC, the workflow draft's intentional last-writer-wins policy, single-scope restart/result-hash parity,
+and Groundwork-target cross-scope same-identity restart isolation; they also exercise draft and version
+layout round-trips, clone provenance, validation rejection, descriptor serialization,
 SemVer identity, missing outcomes, permanent-delete outcomes, and reconciliation idempotency. T023 adds
 provider-neutral atomicity fault contracts for `AfterStagedWrite`, `BeforeProviderDecision`, and
 `AfterDurableDecision`, with throw, cancellation, and non-success actions. Its canonical operation request
@@ -71,9 +72,10 @@ the skipped probe proves that N/A profile evaluation happens before fixture crea
 scenarios remain pending a
 concrete fixture inheritance target. The T023 harness validates the contract shape only. T025's executable
 `LegacyEfOracle` profile runs exactly five of these rows: partial-staging failure, cancellation, same-scope
-duplicate identities, workflow-draft last-writer-wins, and restart. Its nine explicit N/A rows are provider
-non-success decision; acknowledgement loss, exact replay, key-reuse conflict, and duplicate delivery; same
-identities across scopes; foreign reads and writes; and reusable-activity-draft OCC. The profile records a
+duplicate identities, workflow-draft last-writer-wins, and the single-scope restart snapshot. Its ten explicit
+N/A rows are provider non-success decision; acknowledgement loss, exact replay, key-reuse conflict, and duplicate
+delivery; same identities across scopes; foreign reads and writes; reusable-activity-draft OCC; and cross-scope
+same-identity restart isolation. The profile records a
 nonempty reason per N/A row. Test-only EF fault injection is permitted for partial staging and cancellation;
 T025 must not add a production EF operation ledger, scope boundary, or reusable-draft OCC shim. T033/T035's
 exception-taxonomy deferral remains unchanged.

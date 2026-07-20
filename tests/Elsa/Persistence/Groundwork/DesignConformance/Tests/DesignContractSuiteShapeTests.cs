@@ -146,12 +146,13 @@ public class DesignContractSuiteShapeTests
         Assert.Equal(
             new[]
             {
+                nameof(DesignIsolationAndRestartContractSuite.Cross_scope_same_identity_point_read_snapshots_survive_restart),
                 nameof(DesignIsolationAndRestartContractSuite.Duplicate_workflow_and_activity_identities_are_rejected_within_a_scope),
                 nameof(DesignIsolationAndRestartContractSuite.Foreign_point_reads_are_indistinguishable_from_missing_identities),
                 nameof(DesignIsolationAndRestartContractSuite.Foreign_scope_point_writes_are_rejected_without_mutating_either_scope),
                 nameof(DesignIsolationAndRestartContractSuite.Reusable_activity_draft_rejects_a_stale_expected_revision_without_replacing_state_or_layout),
                 nameof(DesignIsolationAndRestartContractSuite.Same_point_identities_resolve_only_their_own_scope),
-                nameof(DesignIsolationAndRestartContractSuite.Scope_bound_point_read_snapshots_survive_restart),
+                nameof(DesignIsolationAndRestartContractSuite.Single_scope_point_read_snapshot_survives_restart),
                 nameof(DesignIsolationAndRestartContractSuite.Workflow_draft_updates_preserve_the_intentional_last_writer_wins_policy)
             }.Order(StringComparer.Ordinal),
             scenarioNames);
@@ -217,7 +218,8 @@ public class DesignContractSuiteShapeTests
             [DesignPersistenceContractScenario.IsolationDuplicateIdentities] = null,
             [DesignPersistenceContractScenario.IsolationReusableActivityDraftOcc] = "Legacy EF reusable activity drafts do not expose the target expected-revision replace contract.",
             [DesignPersistenceContractScenario.IsolationWorkflowDraftLastWriterWins] = null,
-            [DesignPersistenceContractScenario.IsolationScopeBoundRestart] = null
+            [DesignPersistenceContractScenario.IsolationSingleScopeRestart] = null,
+            [DesignPersistenceContractScenario.IsolationCrossScopeSameIdentityRestart] = "Legacy EF identity keys are global and cannot represent cross-scope same-identity restart isolation."
         };
 
         Assert.Equal(expected.Keys.Order(), legacyEfOracle.Applicability.Keys.Order());
@@ -230,7 +232,7 @@ public class DesignContractSuiteShapeTests
         }
 
         Assert.Equal(5, legacyEfOracle.Applicability.Values.Count(applicability => applicability.IsApplicable));
-        Assert.Equal(9, legacyEfOracle.Applicability.Values.Count(applicability => !applicability.IsApplicable));
+        Assert.Equal(10, legacyEfOracle.Applicability.Values.Count(applicability => !applicability.IsApplicable));
     }
 
     [Fact]
