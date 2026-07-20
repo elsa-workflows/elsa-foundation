@@ -23,6 +23,7 @@ public static class ElsaRuntimeStorageManifest
     public const int RuntimeStatusProjectionLength = 32;
     public const int RuntimeExecutionIdProjectionLength = 128;
     public const int RuntimeCollectionProjectionLength = 128;
+    public const int DurableTimerClaimOrderKeyProjectionLength = 84;
     public const int SchedulerWorkOrderKeyProjectionLength = 170;
     public const int BookmarkStimulusLookupKeyProjectionLength = 64;
     public const int WorkflowDispatchIdProjectionLength = 76;

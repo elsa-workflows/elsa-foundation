@@ -989,6 +989,51 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
+    public async Task Durable_timer_declares_the_claim_due_physical_route_and_its_sort()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.DurableTimerDocumentKind);
+
+        var route = Assert.Single(
+            unit.PhysicalStorage!.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerByClaimOrder, route.IndexIdentity);
+        Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, route.ExecutionClass);
+        Assert.Collection(
+            route.PredicateFields,
+            claimOrder =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField, claimOrder.Path);
+                Assert.Contains(PortableQueryOperation.LessThanOrEqual, claimOrder.Operations);
+            });
+        Assert.Collection(
+            route.SortFields,
+            claimOrder =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField, claimOrder.Path);
+                Assert.Equal(PhysicalSortDirection.Ascending, claimOrder.Direction);
+            });
+
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage.Policy).Definition;
+        var claimOrderColumn = Assert.Single(
+            physical.ProjectedColumns,
+            column => column.Path == ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField);
+        Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyProjectionLength, claimOrderColumn.Length);
+        var claimOrderIndex = Assert.Single(
+            physical.Indexes,
+            index => index.LogicalName == ElsaRuntimeStorageManifest.DurableTimerByClaimOrder);
+        Assert.Collection(
+            claimOrderIndex.Columns,
+            scope => Assert.Equal(new DocumentEnvelopeDefinition().StorageScopeColumn, scope.ColumnLogicalName),
+            claimOrder =>
+            {
+                Assert.Equal(claimOrderColumn.LogicalName, claimOrder.ColumnLogicalName);
+                Assert.Equal(PhysicalSortDirection.Ascending, claimOrder.Direction);
+            });
+    }
+
+    [Fact]
     public async Task Execution_liveness_declares_finite_owner_aware_recovery_routes()
     {
         var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
