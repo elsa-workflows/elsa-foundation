@@ -83,11 +83,7 @@ public sealed class GroundworkStoreSession : IAsyncDisposable
     {
         Access = access ?? throw new ArgumentNullException(nameof(access));
         ArgumentNullException.ThrowIfNull(resources);
-        if (resources.DocumentStore.Access != access)
-        {
-            throw new InvalidOperationException(
-                "The Groundwork session resources are bound to a different access context.");
-        }
+        ValidateResourceAccess(access, resources);
 
         var hasEmitter = privilegedAccessEmitter is not null;
         var hasAudit = privilegedAccessAudit is not null;
@@ -97,16 +93,29 @@ public sealed class GroundworkStoreSession : IAsyncDisposable
                 "Privileged sessions require an audit emitter and acquisition identity; ordinary sessions require neither.",
                 nameof(privilegedAccessEmitter));
         }
-        if (privilegedAccessAudit is not null && privilegedAccessAudit.AccessKind != access.Kind)
+        if (privilegedAccessAudit is not null && !GroundworkPrivilegedAccessBinding.Matches(access, privilegedAccessAudit))
         {
             throw new ArgumentException(
-                "The privileged acquisition audit must describe the session access kind.",
+                "The privileged acquisition audit must describe the session access kind, scope, and purpose.",
                 nameof(privilegedAccessAudit));
         }
 
         _resources = resources;
         _privilegedAccessEmitter = privilegedAccessEmitter;
         _privilegedAccessAudit = privilegedAccessAudit;
+    }
+
+    internal static void ValidateResourceAccess(
+        DocumentStoreAccess access,
+        GroundworkStoreSessionResources resources)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        ArgumentNullException.ThrowIfNull(resources);
+        if (resources.DocumentStore.Access != access)
+        {
+            throw new InvalidOperationException(
+                "The Groundwork session resources are bound to a different access context.");
+        }
     }
 
     public DocumentStoreAccess Access { get; }

@@ -206,6 +206,31 @@ public sealed class GroundworkStoreSessionFactoryTests
     }
 
     [Fact]
+    public async Task Privileged_mismatched_source_access_is_rejected_before_audit_acquisition()
+    {
+        var accessor = new MutableAccessContextAccessor(
+            PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("host-repair")));
+        var lease = new TrackingLease();
+        var source = new RecordingSessionSource
+        {
+            CreateResources = _ => Resources(
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-b")),
+                lease)
+        };
+        var sink = new GroundworkPrivilegedAccessSink();
+        var factory = new GroundworkStoreSessionFactory(
+            accessor,
+            source,
+            new GroundworkPrivilegedAccessRecorder(sink));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            factory.CreateAsync(PersistenceAccessPolicy.Privileged).AsTask());
+
+        Assert.Equal(1, lease.DisposeCount);
+        Assert.Empty(sink.Snapshot());
+    }
+
+    [Fact]
     public async Task Acquisition_telemetry_failure_releases_resources_and_preserves_telemetry_failure()
     {
         var accessor = new MutableAccessContextAccessor(

@@ -21,6 +21,7 @@ public sealed class GroundworkStoreSessionFactory(
         try
         {
             resources = await source.OpenAsync(access, cancellationToken);
+            GroundworkStoreSession.ValidateResourceAccess(access, resources);
             GroundworkPrivilegedAccessAudit? audit = null;
             IGroundworkPrivilegedAccessEmitter? sessionEmitter = null;
             if (access.IsPrivileged)

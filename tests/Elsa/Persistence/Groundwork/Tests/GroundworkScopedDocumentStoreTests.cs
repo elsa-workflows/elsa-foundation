@@ -162,7 +162,7 @@ public sealed class GroundworkScopedDocumentStoreTests
         var audit = new GroundworkPrivilegedAccessAudit(
             Guid.NewGuid(),
             privileged.Kind,
-            "host",
+            "global",
             "repair");
 
         await using var ordinarySession = new GroundworkStoreSession(ordinary, Resources(ordinary));
@@ -190,13 +190,32 @@ public sealed class GroundworkScopedDocumentStoreTests
         var mismatchedAudit = new GroundworkPrivilegedAccessAudit(
             Guid.NewGuid(),
             DocumentStoreAccessKind.PrivilegedAcrossScopes,
-            "host",
+            "across-scopes",
             "repair");
+        var scopedPrivileged = GroundworkPersistenceAccessMapper.Map(
+            PersistenceAccessContext.PrivilegedScoped(
+                new PersistenceScope("tenant-a"),
+                new PersistenceAccessPurpose("repair")),
+            PersistenceAccessPolicy.Privileged);
+        var recorder = new GroundworkPrivilegedAccessRecorder(new GroundworkPrivilegedAccessSink());
+        var scopedAudit = recorder.RecordAcquisition(scopedPrivileged);
 
         Assert.Throws<InvalidOperationException>(() =>
             new GroundworkStoreSession(access, Resources(otherAccess)));
         Assert.Throws<ArgumentException>(() =>
             new GroundworkStoreSession(privileged, Resources(privileged), emitter, mismatchedAudit));
+        Assert.Throws<ArgumentException>(() =>
+            new GroundworkStoreSession(
+                scopedPrivileged,
+                Resources(scopedPrivileged),
+                recorder,
+                scopedAudit with { ScopeReference = "sha256:different-scope" }));
+        Assert.Throws<ArgumentException>(() =>
+            new GroundworkStoreSession(
+                scopedPrivileged,
+                Resources(scopedPrivileged),
+                recorder,
+                scopedAudit with { Purpose = "different-purpose" }));
     }
 
     [Fact]

@@ -28,6 +28,40 @@ public sealed record GroundworkPrivilegedAccessAudit(
     string ScopeReference,
     string Purpose);
 
+internal static class GroundworkPrivilegedAccessBinding
+{
+    public static GroundworkPrivilegedAccessAudit Create(DocumentStoreAccess access)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.IsPrivileged || access.Privilege is null)
+            throw new ArgumentException("Privilege acquisition records require privileged document-store access.", nameof(access));
+
+        return new GroundworkPrivilegedAccessAudit(
+            Guid.NewGuid(),
+            access.Kind,
+            ScopeReference(access),
+            access.Privilege.Reason);
+    }
+
+    public static bool Matches(DocumentStoreAccess access, GroundworkPrivilegedAccessAudit audit) =>
+        access.IsPrivileged &&
+        access.Privilege is not null &&
+        audit.AccessKind == access.Kind &&
+        string.Equals(audit.ScopeReference, ScopeReference(access), StringComparison.Ordinal) &&
+        string.Equals(audit.Purpose, access.Privilege.Reason, StringComparison.Ordinal);
+
+    private static string ScopeReference(DocumentStoreAccess access) => access.Kind switch
+    {
+        DocumentStoreAccessKind.PrivilegedScoped when access.Scope is not null =>
+            $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(access.Scope.Value))).ToLowerInvariant()}",
+        DocumentStoreAccessKind.PrivilegedGlobal => "global",
+        DocumentStoreAccessKind.PrivilegedAcrossScopes => "across-scopes",
+        DocumentStoreAccessKind.PrivilegedScoped =>
+            throw new ArgumentException("Privileged scoped access requires a storage scope.", nameof(access)),
+        _ => throw new ArgumentException("Privilege acquisition records require privileged access.", nameof(access))
+    };
+}
+
 /// <summary>A bounded sanitized privilege event. Raw tenant and exception values are never retained.</summary>
 public sealed record GroundworkPrivilegedAccessRecord(
     long Sequence,
@@ -168,15 +202,7 @@ public sealed class GroundworkPrivilegedAccessRecorder(GroundworkPrivilegedAcces
 
     public GroundworkPrivilegedAccessAudit RecordAcquisition(DocumentStoreAccess access)
     {
-        ArgumentNullException.ThrowIfNull(access);
-        if (!access.IsPrivileged || access.Privilege is null)
-            throw new ArgumentException("Privilege acquisition records require privileged document-store access.", nameof(access));
-
-        var audit = new GroundworkPrivilegedAccessAudit(
-            Guid.NewGuid(),
-            access.Kind,
-            GetScopeReference(access),
-            access.Privilege.Reason);
+        var audit = GroundworkPrivilegedAccessBinding.Create(access);
         sink.RecordAcquisition(audit);
         return audit;
     }
@@ -208,14 +234,4 @@ public sealed class GroundworkPrivilegedAccessRecorder(GroundworkPrivilegedAcces
         sink.RecordOutcome(audit, outcome, failure, cleanupFailure);
     }
 
-    private static string GetScopeReference(DocumentStoreAccess access) => access.Kind switch
-    {
-        DocumentStoreAccessKind.PrivilegedScoped when access.Scope is not null =>
-            $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(access.Scope.Value))).ToLowerInvariant()}",
-        DocumentStoreAccessKind.PrivilegedGlobal => "global",
-        DocumentStoreAccessKind.PrivilegedAcrossScopes => "across-scopes",
-        DocumentStoreAccessKind.PrivilegedScoped =>
-            throw new ArgumentException("Privileged scoped access requires a storage scope.", nameof(access)),
-        _ => throw new ArgumentException("Privilege acquisition records require privileged access.", nameof(access))
-    };
 }
