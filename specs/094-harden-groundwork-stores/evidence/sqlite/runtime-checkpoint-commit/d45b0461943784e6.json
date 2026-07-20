@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "failureWindow:during-provider-decision",
+  "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.77",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "596cdcd3ea36a4f75a3ed6552aaa05856952d523a21fa1c1a880c69066670bfe",
+  "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/d45b0461943784e6",
+  "clients": 2,
+  "resultHash": "9f3dd8b6cd1a0b9b1e4770284f0ba1711cf47c1b34171c09685cd76e3973d030",
+  "outcome": "pass",
+  "failureWindow": "during-provider-decision",
+  "evidence": "evidence/sqlite/runtime-checkpoint-commit/d45b0461943784e6.json"
+}

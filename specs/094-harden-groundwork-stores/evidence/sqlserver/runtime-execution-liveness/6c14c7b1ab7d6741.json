@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:strictly-increasing-fence",
+  "sourceScenarioId": "runtime-execution-ownership-fencing",
+  "coverageEntryId": "runtime-execution-liveness",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.77",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "17b3d0314c0666e35e0f6cfc8798a9f418f5646aa426fb40dc8a69e131f410bf",
+  "executionPath": "provider-driver/sqlserver/runtime-execution-liveness/6c14c7b1ab7d6741",
+  "clients": 2,
+  "resultHash": "ef22d67b91d092f0a448ed0cd2d25d44a88e4eeea55ddc789b858ff7463b7503",
+  "outcome": "pass",
+  "concurrencySemantic": "strictly-increasing-fence",
+  "evidence": "evidence/sqlserver/runtime-execution-liveness/6c14c7b1ab7d6741.json"
+}

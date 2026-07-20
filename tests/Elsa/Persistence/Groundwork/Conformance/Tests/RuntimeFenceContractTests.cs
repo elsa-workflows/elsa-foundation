@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Conformance.Tests.Probes;
 using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
@@ -53,7 +54,12 @@ public sealed class RuntimeFenceContractTests
 
         foreach (var (window, decisionIsDurable) in CheckpointFailureWindows())
             await AssertCheckpointBundleFailureAndReopenAsync(driver, window, decisionIsDurable);
+
+        await AssertCheckpointBundleProcessRestartAsync(driver);
     }
+
+    internal Task Runtime_checkpoint_bundle_survives_a_real_process_restart_on_every_persistent_provider(string providerKey) =>
+        Runtime_fence_contract_is_enforced_by_every_persistent_provider(providerKey);
 
     private static async Task AssertPhysicalClientsAsync(GroundworkProviderDriver driver, string providerKey)
     {
@@ -245,6 +251,37 @@ public sealed class RuntimeFenceContractTests
             (windows.DuringProviderDecision!.Value.Value, true),
             (windows.AfterDurableDecision.Value, true)
         ];
+    }
+
+    private static async Task AssertCheckpointBundleProcessRestartAsync(GroundworkProviderDriver driver)
+    {
+        var commit = FullBundleCommit("checkpoint-failure-after-durable-decision-before-caller-acknowledgement");
+        var payload = new RuntimeCheckpointRestartProbePayload(
+            commit.CommitId,
+            commit.WorkflowExecutionId,
+            "activity-full",
+            "bookmark-full",
+            "value-full",
+            "incident-full",
+            "operational-full",
+            OwnershipStateId(commit.WorkflowExecutionId),
+            OutboxId(commit));
+        await using (var reopenedClient = await driver.OpenPhysicalClientAsync())
+        {
+            _ = await RuntimeCheckpointRestartProbe.VerifyAsync(
+                reopenedClient.DocumentStore,
+                GroundworkProviderTestSerialization.Serializer,
+                GroundworkTestAccess.DefaultAccessContextAccessor,
+                payload);
+        }
+
+        var request = RuntimeCheckpointRestartProbe.CreateRequest(payload);
+
+        var result = await driver.RunInNewProcessAsync(request);
+
+        Assert.Equal(request.PayloadSha256, result.PayloadSha256);
+        Assert.NotEqual(Environment.ProcessId, result.ProcessId);
+        Assert.True(result.DocumentVersion >= 1);
     }
 
     private static RuntimeExecutionOwnershipService Ownership(

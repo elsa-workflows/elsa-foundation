@@ -7,9 +7,11 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
-    private const string ExpectedGroundworkVersion = "0.0.1-preview.76";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.77";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
+    private const string CheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/ledger-attachments/runtime-checkpoint-fence.json";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -65,6 +67,60 @@ public sealed class GroundworkCoverageLedgerTests
         Assert.Empty(findings);
         Assert.Equal(32, actualEntryIds.Length);
         Assert.Equal(ExpectedEntryIds.Order(StringComparer.Ordinal), actualEntryIds);
+    }
+
+    [Fact]
+    public void Checked_in_checkpoint_fence_attachment_is_imported_exactly_once_by_declared_tuple()
+    {
+        var ledger = ReadLedger();
+        var attachmentPath = Path.Combine(
+            RepoRoot,
+            CheckpointFenceAttachmentRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        var attachmentRecords = JsonNode.Parse(File.ReadAllText(attachmentPath))?.AsArray()
+                                    ?.OfType<JsonObject>()
+                                    .ToArray()
+                                ?? throw new InvalidOperationException(
+                                    $"Checkpoint/fence ledger attachment '{attachmentPath}' is empty.");
+        var expectedRecordsByEntry = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["runtime-checkpoint-commit"] = 28,
+            ["runtime-execution-liveness"] = 4,
+            ["runtime-post-commit-outbox"] = 4
+        };
+        var attachmentRecordsByEntry = attachmentRecords
+            .GroupBy(record => record["coverageEntryId"]!.GetValue<string>(), StringComparer.Ordinal)
+            .ToDictionary(records => records.Key, records => records.Count(), StringComparer.Ordinal);
+        var attachmentEntryIds = expectedRecordsByEntry.Keys.ToHashSet(StringComparer.Ordinal);
+        var ledgerRecords = Entries(ledger)
+            .Where(entry => attachmentEntryIds.Contains(EntryIdOf(entry)))
+            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
+                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
+            .Where(record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion)
+            .ToArray();
+        var attachmentByKey = attachmentRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
+        var ledgerByKey = ledgerRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(36, attachmentRecords.Length);
+        Assert.Equal(
+            expectedRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+            attachmentRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+        Assert.All(attachmentRecords, record =>
+        {
+            Assert.Equal(ExpectedGroundworkVersion, record["providerVersion"]?.GetValue<string>());
+            Assert.Equal("pass", record["outcome"]?.GetValue<string>());
+        });
+        Assert.All(attachmentByKey, records => Assert.Single(records));
+        Assert.All(ledgerByKey, records => Assert.Single(records));
+        Assert.Equal(
+            attachmentByKey.Select(records => records.Key).Order(StringComparer.Ordinal),
+            ledgerByKey.Select(records => records.Key).Order(StringComparer.Ordinal));
+        foreach (var attachment in attachmentByKey)
+        {
+            var ledgerRecord = ledgerByKey.Single(records => records.Key == attachment.Key).Single();
+            Assert.True(
+                JsonNode.DeepEquals(attachment.Single(), ledgerRecord),
+                $"Checkpoint/fence evidence tuple '{attachment.Key}' differs from its attachment record.");
+        }
     }
 
     [Fact]
@@ -399,6 +455,40 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
+    public void Implemented_rows_reject_misfiled_provider_evidence_before_they_are_complete()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        var record = EvidenceRecord(EntryId, "sqlite", "ordinary-round-trip");
+        record["coverageEntryId"] = "runtime-checkpoint-commit";
+        WriteEvidenceArtifacts([record]);
+        entry["providerEvidence"]!["sqlite"] = new JsonArray(record);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"{EntryId}: sqlite evidence record 'ordinary-round-trip' declares coverage entry 'runtime-checkpoint-commit'.",
+            findings);
+    }
+
+    [Fact]
+    public void Implemented_rows_reject_nonpassing_current_generation_evidence()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        var record = EvidenceRecord(EntryId, "sqlite", "ordinary-round-trip");
+        record["outcome"] = "classified-readiness-failure";
+        WriteEvidenceArtifacts([record]);
+        entry["providerEvidence"]!["sqlite"] = new JsonArray(record);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"{EntryId}: sqlite evidence record 'ordinary-round-trip' is not passing.",
+            findings);
+    }
+
+    [Fact]
     public void Evidence_complete_requires_provider_native_query_evidence()
     {
         var ledger = ReadLedger();
@@ -690,9 +780,13 @@ public sealed class GroundworkCoverageLedgerTests
     private static GroundworkCoverageLedgerValidator CreateEvidenceValidator() =>
         new(SchemaPath, ExpectedEntryIds, TestEvidenceRoot);
 
-    private static JsonObject ReadLedger() =>
-        JsonNode.Parse(File.ReadAllText(LedgerPath))?.AsObject()
-        ?? throw new InvalidOperationException($"Coverage ledger '{LedgerPath}' is empty.");
+    private static JsonObject ReadLedger()
+    {
+        var ledger = JsonNode.Parse(File.ReadAllText(LedgerPath))?.AsObject()
+                     ?? throw new InvalidOperationException($"Coverage ledger '{LedgerPath}' is empty.");
+        StageCurrentEvidenceArtifacts(ledger);
+        return ledger;
+    }
 
     private static JsonObject ReadImmutableActivationLedger()
     {
@@ -721,6 +815,12 @@ public sealed class GroundworkCoverageLedgerTests
     private static string EntryIdOf(JsonObject entry) =>
         entry["id"]?.GetValue<string>()
         ?? throw new InvalidOperationException("Coverage ledger entry has no id.");
+
+    private static string EvidenceTuple(JsonObject record) => string.Join(
+        '|',
+        record["coverageEntryId"]?.GetValue<string>() ?? "<missing-entry>",
+        record["scenarioId"]?.GetValue<string>() ?? "<missing-scenario>",
+        record["provider"]?.GetValue<string>() ?? "<missing-provider>");
 
     private static void AddCompleteEvidence(JsonObject entry)
     {
@@ -815,6 +915,31 @@ public sealed class GroundworkCoverageLedgerTests
                 GroundworkEvidenceArtifactContract.ArtifactPayload(record).ToJsonString());
             record["evidenceSha256"] = GroundworkEvidenceArtifactContract.FileSha256(evidencePath);
         }
+    }
+
+    private static void StageCurrentEvidenceArtifacts(JsonObject ledger)
+    {
+        foreach (var record in Entries(ledger)
+                     .SelectMany(entry => entry["providerEvidence"]!.AsObject().SelectMany(provider =>
+                         provider.Value!.AsArray().OfType<JsonObject>()))
+                     .Where(record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion))
+        {
+            StageArtifact(record["evidence"]!.GetValue<string>());
+            if (record["nativeEvidence"]?.GetValue<string>() is { } nativeEvidence)
+                StageArtifact(nativeEvidence);
+        }
+    }
+
+    private static void StageArtifact(string relativePath)
+    {
+        var sourcePath = Path.Combine(
+            RepoRoot,
+            "specs",
+            "094-harden-groundwork-stores",
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+        var targetPath = ArtifactPath(relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+        File.Copy(sourcePath, targetPath, overwrite: true);
     }
 
     private static string ArtifactPath(string relativePath) => Path.Combine(

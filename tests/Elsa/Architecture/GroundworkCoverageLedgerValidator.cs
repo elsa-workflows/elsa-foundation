@@ -327,8 +327,16 @@ internal sealed class GroundworkCoverageLedgerValidator
         if (outcome == "explicit-exclusion" && status != "excluded")
             findings.Add($"{id}: explicit-exclusion must use terminal status 'excluded'.");
 
-        if (status is not null && EvidenceCompleteStatuses.Contains(status, StringComparer.Ordinal))
-            ValidateEvidenceCompleteness(entry, id, status, groundworkVersion, findings);
+        var evidenceIsComplete = status is not null && EvidenceCompleteStatuses.Contains(status, StringComparer.Ordinal);
+        var evidenceByProvider = ValidateRecordedEvidence(
+            entry,
+            id,
+            groundworkVersion,
+            evidenceIsComplete,
+            findings);
+
+        if (evidenceIsComplete)
+            ValidateEvidenceCompleteness(entry, id, status!, evidenceByProvider, findings);
 
         if (status is "performance-complete" or "ready")
         {
@@ -355,86 +363,16 @@ internal sealed class GroundworkCoverageLedgerValidator
         JsonObject entry,
         string id,
         string status,
-        string? groundworkVersion,
+        IReadOnlyDictionary<string, IReadOnlyList<JsonObject>> evidenceByProvider,
         ICollection<string> findings)
     {
-        var evidenceByProvider = new Dictionary<string, IReadOnlyList<JsonObject>>(StringComparer.Ordinal);
         foreach (var provider in new[] { "sqlite", "sqlserver", "postgresql", "mongodb" })
         {
-            if (entry["providerEvidence"]?[provider] is not JsonArray evidence || evidence.Count == 0)
+            var records = evidenceByProvider[provider];
+            if (records.Count == 0)
             {
                 findings.Add($"{id}: status '{status}' requires {provider} provider evidence.");
-                evidenceByProvider[provider] = [];
                 continue;
-            }
-
-            var records = evidence.OfType<JsonObject>().ToArray();
-            evidenceByProvider[provider] = records;
-            foreach (var duplicateScenario in records
-                         .Select(record => StringValue(record, "scenarioId"))
-                         .Where(scenario => scenario is not null)
-                         .Cast<string>()
-                         .GroupBy(scenario => scenario, StringComparer.Ordinal)
-                         .Where(group => group.Count() > 1))
-            {
-                findings.Add($"{id}: {provider} evidence scenario '{duplicateScenario.Key}' occurs {duplicateScenario.Count()} times.");
-            }
-
-            foreach (var record in records)
-            {
-                var scenarioId = StringValue(record, "scenarioId") ?? "<missing>";
-                var declaredEntryId = StringValue(record, "coverageEntryId");
-                if (declaredEntryId != id)
-                {
-                    findings.Add(
-                        $"{id}: {provider} evidence record '{scenarioId}' declares coverage entry '{declaredEntryId ?? "<missing>"}'.");
-                }
-
-                var declaredProvider = StringValue(record, "provider");
-                if (declaredProvider != provider)
-                {
-                    findings.Add(
-                        $"{id}: {provider} evidence record '{scenarioId}' declares provider '{declaredProvider ?? "<missing>"}'.");
-                }
-
-                var expectedProviderIdentity = ProviderIdentity(provider);
-                var providerIdentity = StringValue(record, "providerIdentity");
-                if (providerIdentity != expectedProviderIdentity)
-                {
-                    findings.Add(
-                        $"{id}: {provider} evidence record '{scenarioId}' requires provider identity '{expectedProviderIdentity}'; found '{providerIdentity ?? "<missing>"}'.");
-                }
-
-                var providerVersion = StringValue(record, "providerVersion");
-                if (providerVersion != groundworkVersion)
-                {
-                    findings.Add(
-                        $"{id}: {provider} evidence record '{scenarioId}' uses provider version '{providerVersion ?? "<missing>"}', not ledger Groundwork version '{groundworkVersion ?? "<missing>"}'.");
-                }
-
-                var topology = StringValue(record, "topology");
-                var allowedTopologies = ProviderTopologies(provider);
-                if (!allowedTopologies.Contains(topology, StringComparer.Ordinal))
-                {
-                    findings.Add(
-                        allowedTopologies.Count == 1
-                            ? $"{id}: {provider} evidence record '{scenarioId}' requires topology '{allowedTopologies[0]}'; found '{topology ?? "<missing>"}'."
-                            : $"{id}: {provider} evidence record '{scenarioId}' requires one of [{string.Join(", ", allowedTopologies)}]; found '{topology ?? "<missing>"}'.");
-                }
-
-                ValidateCatalogBinding(entry, id, provider, record, scenarioId, findings);
-                ValidateEvidenceArtifacts(id, provider, record, scenarioId, findings);
-
-                if (StringValue(record, "outcome") != "pass")
-                    findings.Add($"{id}: {provider} evidence record '{scenarioId}' is not passing.");
-
-                if ((record.ContainsKey("concurrencySemantic") ||
-                     record.ContainsKey("failureWindow") ||
-                     record.ContainsKey("restartScenario")) &&
-                    IntValue(record, "clients") is not >= 2)
-                {
-                    findings.Add($"{id}: {provider} evidence record '{scenarioId}' must use at least two independent clients.");
-                }
             }
 
             ValidateObligations(entry, id, provider, records, "queryShapes", "queryShape", findings);
@@ -475,6 +413,96 @@ internal sealed class GroundworkCoverageLedgerValidator
             if (hashes > 1)
                 findings.Add($"{id}: scenario '{scenarioId}' has non-equivalent provider result hashes.");
         }
+    }
+
+    private IReadOnlyDictionary<string, IReadOnlyList<JsonObject>> ValidateRecordedEvidence(
+        JsonObject entry,
+        string id,
+        string? groundworkVersion,
+        bool requireCurrentGeneration,
+        ICollection<string> findings)
+    {
+        var evidenceByProvider = new Dictionary<string, IReadOnlyList<JsonObject>>(StringComparer.Ordinal);
+        foreach (var provider in new[] { "sqlite", "sqlserver", "postgresql", "mongodb" })
+        {
+            var records = entry["providerEvidence"]?[provider] is JsonArray evidence
+                ? evidence.OfType<JsonObject>()
+                    .Where(record => requireCurrentGeneration ||
+                                     StringValue(record, "providerVersion") == groundworkVersion)
+                    .ToArray()
+                : [];
+            evidenceByProvider[provider] = records;
+
+            foreach (var duplicateScenario in records
+                         .Select(record => StringValue(record, "scenarioId"))
+                         .Where(scenario => scenario is not null)
+                         .Cast<string>()
+                         .GroupBy(scenario => scenario, StringComparer.Ordinal)
+                         .Where(group => group.Count() > 1))
+            {
+                findings.Add($"{id}: {provider} evidence scenario '{duplicateScenario.Key}' occurs {duplicateScenario.Count()} times.");
+            }
+
+            foreach (var record in records)
+            {
+                var scenarioId = StringValue(record, "scenarioId") ?? "<missing>";
+                var declaredEntryId = StringValue(record, "coverageEntryId");
+                if (declaredEntryId != id)
+                {
+                    findings.Add(
+                        $"{id}: {provider} evidence record '{scenarioId}' declares coverage entry '{declaredEntryId ?? "<missing>"}'.");
+                }
+
+                var declaredProvider = StringValue(record, "provider");
+                if (declaredProvider != provider)
+                {
+                    findings.Add(
+                        $"{id}: {provider} evidence record '{scenarioId}' declares provider '{declaredProvider ?? "<missing>"}'.");
+                }
+
+                var expectedProviderIdentity = ProviderIdentity(provider);
+                var providerIdentity = StringValue(record, "providerIdentity");
+                if (providerIdentity != expectedProviderIdentity)
+                {
+                    findings.Add(
+                        $"{id}: {provider} evidence record '{scenarioId}' requires provider identity '{expectedProviderIdentity}'; found '{providerIdentity ?? "<missing>"}'.");
+                }
+
+                var providerVersion = StringValue(record, "providerVersion");
+                if (requireCurrentGeneration && providerVersion != groundworkVersion)
+                {
+                    findings.Add(
+                        $"{id}: {provider} evidence record '{scenarioId}' uses provider version '{providerVersion ?? "<missing>"}', not ledger Groundwork version '{groundworkVersion ?? "<missing>"}'.");
+                }
+
+                var topology = StringValue(record, "topology");
+                var allowedTopologies = ProviderTopologies(provider);
+                if (!allowedTopologies.Contains(topology, StringComparer.Ordinal))
+                {
+                    findings.Add(
+                        allowedTopologies.Count == 1
+                            ? $"{id}: {provider} evidence record '{scenarioId}' requires topology '{allowedTopologies[0]}'; found '{topology ?? "<missing>"}'."
+                            : $"{id}: {provider} evidence record '{scenarioId}' requires one of [{string.Join(", ", allowedTopologies)}]; found '{topology ?? "<missing>"}'.");
+                }
+
+                ValidateCatalogBinding(entry, id, provider, record, scenarioId, findings);
+                ValidateEvidenceArtifacts(id, provider, record, scenarioId, findings);
+
+                if (StringValue(record, "outcome") != "pass")
+                    findings.Add($"{id}: {provider} evidence record '{scenarioId}' is not passing.");
+
+                if ((record.ContainsKey("concurrencySemantic") ||
+                     record.ContainsKey("failureWindow") ||
+                     record.ContainsKey("restartScenario")) &&
+                    IntValue(record, "clients") is not >= 2)
+                {
+                    findings.Add($"{id}: {provider} evidence record '{scenarioId}' must use at least two independent clients.");
+                }
+            }
+
+        }
+
+        return evidenceByProvider;
     }
 
     private void ValidateCatalogBinding(

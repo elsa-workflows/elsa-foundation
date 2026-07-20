@@ -62,26 +62,88 @@ internal static class RuntimeProviderEvidenceScenarios
         "runtime-publication-projection-state"
     ];
 
-    public static IReadOnlyList<string> UnpublishedObligations { get; } =
-    [
-        "B5: the real-provider fence contract now proves the complete checkpoint state bundle across the three provider-decision windows and a physical reopen. It still has no published four-provider ledger artifacts, process-restart proof, workflow-execution-state parity, or #646 performance verdict; none of those claims may be inferred from the contract probe.",
-        "B7: primary-identity reads (the find-* obligations) have no bounded native-plan probe; they remain unpublished. All mapped bounded routes are publishable through explicit ledger-to-route mappings.",
-        "B8: concurrency semantics and process-restart evidence remain unpublished; all three named provider-decision failure windows are covered for every operational row."
-    ];
-
-    public static async Task<GroundworkScenarioResult> RunCheckpointStaleFenceAsync(string providerKey)
+    /// <summary>
+    /// Executes the complete physical checkpoint/fence contract once. Result factories below may project that
+    /// one execution into only the catalog scenarios it directly proves; they never manufacture a row outcome.
+    /// </summary>
+    public static async Task<RuntimeCheckpointFenceEvidence> CaptureCheckpointFenceEvidenceAsync(string providerKey)
     {
         await new RuntimeFenceContractTests()
             .Runtime_fence_contract_is_enforced_by_every_persistent_provider(providerKey);
 
-        return await ResultAsync(
-            providerKey,
-            "runtime-execution-ownership-fencing",
-            "runtime-checkpoint-commit",
+        return new RuntimeCheckpointFenceEvidence(await DescribeAsync(providerKey));
+    }
+
+    public static GroundworkScenarioResult CreateCheckpointFenceResult(
+        RuntimeCheckpointFenceEvidence evidence,
+        string coverageEntryId)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+        const string scenarioId = "runtime-execution-ownership-fencing";
+        return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
+            coverageEntryId,
+            evidence.Descriptor,
+            Composition(evidence.Descriptor, scenarioId),
             clients: 2,
             [
-                new GroundworkScenarioObservation("atomic-stale-fence-rejection", "verified"),
-                new GroundworkScenarioObservation("checkpoint-replay", "verified")
+                new GroundworkScenarioObservation("stale-commit-count", "1"),
+                new GroundworkScenarioObservation("token-order", "strictly-increasing"),
+                new GroundworkScenarioObservation("winner-count", "1")
+            ]);
+    }
+
+    public static GroundworkScenarioResult CreateCheckpointIdempotencyResult(
+        RuntimeCheckpointFenceEvidence evidence,
+        string coverageEntryId)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+        const string scenarioId = "runtime-checkpoint-idempotency";
+        return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
+            coverageEntryId,
+            evidence.Descriptor,
+            Composition(evidence.Descriptor, scenarioId),
+            clients: 2,
+            [
+                new GroundworkScenarioObservation("conflicting-replay", "rejected"),
+                new GroundworkScenarioObservation("durable-outcome-count", "1"),
+                new GroundworkScenarioObservation("equivalent-replay", "verified")
+            ]);
+    }
+
+    public static GroundworkScenarioResult CreateCheckpointFailureRecoveryResult(
+        RuntimeCheckpointFenceEvidence evidence,
+        string coverageEntryId,
+        string failureWindow)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+        const string scenarioId = "runtime-checkpoint-failure-recovery";
+        return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
+            coverageEntryId,
+            evidence.Descriptor,
+            Composition(evidence.Descriptor, scenarioId),
+            clients: 2,
+            [
+                new GroundworkScenarioObservation("committed-bundle-count", "1"),
+                new GroundworkScenarioObservation("partial-bundle-count", "0"),
+                new GroundworkScenarioObservation("recovered-state", "verified")
+            ],
+            failureWindow: failureWindow);
+    }
+
+    public static GroundworkScenarioResult CreateCheckpointProcessRestartResult(
+        RuntimeCheckpointFenceEvidence evidence,
+        string coverageEntryId)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+        const string scenarioId = "runtime-checkpoint-bundle-process-restart";
+        return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
+            coverageEntryId,
+            evidence.Descriptor,
+            Composition(evidence.Descriptor, scenarioId),
+            clients: 2,
+            [
+                new GroundworkScenarioObservation("child-process-rehydration", "verified"),
+                new GroundworkScenarioObservation("complete-bundle-count", "1")
             ]);
     }
 
@@ -289,3 +351,5 @@ internal sealed record RuntimeOperationalFailureWindowEvidence(
     GroundworkProviderDescriptor Descriptor,
     string WindowId,
     bool DecisionIsDurable);
+
+internal sealed record RuntimeCheckpointFenceEvidence(GroundworkProviderDescriptor Descriptor);

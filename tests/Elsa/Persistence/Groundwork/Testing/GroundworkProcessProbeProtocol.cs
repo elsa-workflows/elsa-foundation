@@ -288,7 +288,7 @@ public sealed class GroundworkProcessProbeRunner
     }
 
     private static bool ShouldEchoPayloadDigest(GroundworkProcessProbeOperation operation) =>
-        operation is GroundworkProcessProbeOperation.Save;
+        operation is GroundworkProcessProbeOperation.Save or GroundworkProcessProbeOperation.RuntimeCheckpointVerifyBundle;
 
     public static string ResolveHelperAssemblyPath()
     {

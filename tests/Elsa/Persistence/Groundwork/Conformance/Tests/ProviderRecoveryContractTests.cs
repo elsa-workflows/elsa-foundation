@@ -376,6 +376,8 @@ public sealed class ProviderRecoveryContractTests
     [
         Probe(["runtime-ordinary-state-revision-and-reopen"], RunRuntimeStateRestartEvidenceAsync),
         Probe(["runtime-checkpoint-failure-recovery"], AssertRuntimeFailureRecoveryAsync, FailureWindows()),
+        Probe(["runtime-checkpoint-bundle-process-restart"], providerKey => new RuntimeFenceContractTests()
+            .Runtime_checkpoint_bundle_survives_a_real_process_restart_on_every_persistent_provider(providerKey)),
         Probe(["runtime-scheduler-poison-restart"], providerKey => new RuntimeDeliveryContractTests()
             .Scheduler_poison_record_survives_restart_on_every_provider(providerKey)),
         Probe(["runtime-cancellation-dispose-and-reuse"], AssertRuntimeCancellationAndReuseAsync),

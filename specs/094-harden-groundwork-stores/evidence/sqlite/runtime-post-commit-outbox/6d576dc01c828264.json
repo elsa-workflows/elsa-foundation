@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+  "sourceScenarioId": "runtime-checkpoint-idempotency",
+  "coverageEntryId": "runtime-post-commit-outbox",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.77",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "ee80f551817a8de617d225bb0731b6304a189d475c5c0d56bae7e805076f5897",
+  "executionPath": "provider-driver/sqlite/runtime-post-commit-outbox/6d576dc01c828264",
+  "clients": 2,
+  "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
+  "outcome": "pass",
+  "concurrencySemantic": "checkpoint-bundle-write",
+  "evidence": "evidence/sqlite/runtime-post-commit-outbox/6d576dc01c828264.json"
+}
