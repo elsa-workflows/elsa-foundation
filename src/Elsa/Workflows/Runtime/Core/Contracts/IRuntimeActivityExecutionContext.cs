@@ -34,6 +34,19 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         IReadOnlyDictionary<string, string>? metadata = null);
 
     IReadOnlyCollection<RuntimeChildSubtreeCancellationRequest> GetChildSubtreeCancellationRequests();
+
+    /// <summary>
+    /// Stages absorption of the child fault this evaluation is processing (spec 115). Only valid
+    /// during a child-fault evaluation with a <c>Defer</c> or <c>Complete</c> continuation;
+    /// <paramref name="incidentId"/> must name the evaluation's incident. Applied atomically in the
+    /// same checkpoint commit as the continuation.
+    /// </summary>
+    void RequestChildFaultAbsorption(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null);
+
+    IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> GetChildFaultAbsorptionRequests();
 }
 
 /// <summary>

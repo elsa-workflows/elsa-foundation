@@ -233,43 +233,13 @@ public sealed class ChildSubtreeCancellationExecutionTests
             .ListAllBookmarkStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId);
 
     private static WorkflowExecutable NewExecutable(ExecutableNode root, IReadOnlyCollection<string>? waitingNodeIds = null) =>
-        new(
-            identity: WorkflowExecutionHarness.Identity,
-            rootActivity: root,
-            resumeTargets: (waitingNodeIds ?? []).ToDictionary(
-                nodeId => $"resume:{nodeId}:{WaitingActivity.ResumeTargetKey}",
-                nodeId => new WorkflowExecutableResumeTarget(
-                    $"resume:{nodeId}:{WaitingActivity.ResumeTargetKey}",
-                    nodeId,
-                    "ResumeAsync",
-                    new Dictionary<string, string>(),
-                    LocalResumeTargetId: WaitingActivity.ResumeTargetKey),
-                StringComparer.Ordinal),
-            createdAt: new DateTimeOffset(2026, 6, 12, 12, 0, 0, TimeSpan.Zero),
-            compatibilityMetadata: new Dictionary<string, string>());
+        StructuralExecutionTestSupport.NewExecutable(root, waitingNodeIds);
 
     private static ExecutableNode NewStructuralNode(string nodeId, Type activityType, params ExecutableNode[] children) =>
-        new(
-            executableNodeId: nodeId,
-            authoredActivityId: $"authored-{nodeId}",
-            activityType: activityType.FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "test/structural",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { type = "structural" }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot("Test.Children", children)]);
+        StructuralExecutionTestSupport.NewStructuralNode(nodeId, activityType, children);
 
     private static ExecutableNode NewWaitingNode(string nodeId) =>
-        new(
-            executableNodeId: nodeId,
-            authoredActivityId: $"authored-{nodeId}",
-            activityType: typeof(WaitingActivity).FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "test/waiting",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { type = "waiting" }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>());
+        StructuralExecutionTestSupport.NewWaitingNode(nodeId);
 
     /// <summary>What the parent under test should do on its first child-completion callback.</summary>
     public sealed record SubtreeCancellationDirective(string TargetActivityExecutionId, string Reason = "test-cancel")
@@ -318,26 +288,6 @@ public sealed class ChildSubtreeCancellationExecutionTests
         }
     }
 
-    /// <summary>Wraps one child; absorbs nothing (defers) on child fault so a blocking incident stays put.</summary>
-    public sealed class PassthroughStructuralActivity : StructuralActivity,
-        IRuntimeStructuralActivity,
-        IRuntimeActivityChildCompletionHandler,
-        IRuntimeActivityChildFaultHandler
-    {
-        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
-        {
-            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
-            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
-            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
-        }
-
-        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
-            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
-
-        public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context) =>
-            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
-    }
-
     /// <summary>Illegally stages a cancellation during initial structural execution (spec 112 FR-2).</summary>
     public sealed class InitialCancellationStructuralActivity(SubtreeCancellationDirective directive) : StructuralActivity,
         IRuntimeStructuralActivity,
@@ -353,23 +303,5 @@ public sealed class ChildSubtreeCancellationExecutionTests
 
         public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
             ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
-    }
-
-    public sealed record WaitState(string Marker);
-
-    public sealed record WaitTrigger(bool Released);
-
-    /// <summary>A leaf that suspends on a bookmark and only completes when externally resumed.</summary>
-    public sealed class WaitingActivity : StatefulActivity<ActivityUnit, WaitState, WaitTrigger>
-    {
-        public const string ResumeTargetKey = "wait";
-
-        protected override ValueTask<ActivityTransition<ActivityUnit, WaitState>> ExecuteAsync(ActivityExecutionContext context) =>
-            ValueTask.FromResult(Suspend(
-                new WaitState("waiting"),
-                [new ActivityTriggerRegistration<WaitTrigger>(ResumeTargetKey, "TestWait", "wait:42")]));
-
-        protected override ValueTask<ActivityTransition<ActivityUnit, WaitState>> ResumeAsync(ActivityResumeContext<WaitState, WaitTrigger> context) =>
-            ValueTask.FromResult(Complete(ActivityUnit.Value, ActivityOutcomes.Done));
     }
 }

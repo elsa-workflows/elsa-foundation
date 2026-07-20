@@ -44,7 +44,7 @@ public sealed class ActivitySubtreeCancellationPlanner(
             .OrderBy(state => state.ExecutionSequence)
             .ThenBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
             .ToArray();
-        var suppressedIncidents = (await incidentStateStore.ListAsync(workflowExecutionId, cancellationToken))
+        var incidentChanges = (await incidentStateStore.ListAsync(workflowExecutionId, cancellationToken))
             .Where(incident => incident.ActivityExecutionId is { } activityExecutionId &&
                                scopeIds.Contains(activityExecutionId) &&
                                incident.Status is IncidentStatus.Open or IncidentStatus.Blocking)
@@ -52,7 +52,7 @@ public sealed class ActivitySubtreeCancellationPlanner(
             .Select(incident => Suppress(incident, occurredAt, metadata))
             .ToArray();
 
-        return new ActivitySubtreeCancellationPlan(root.Execution.ActivityExecutionId, cancelled, cleanup, suppressedIncidents);
+        return new ActivitySubtreeCancellationPlan(root.Execution.ActivityExecutionId, cancelled, cleanup, incidentChanges);
     }
 
     private static IReadOnlyList<ActivityExecutionState> TraverseSubtree(
@@ -115,9 +115,14 @@ public sealed class ActivitySubtreeCancellationPlanner(
     }
 }
 
-/// <summary>One subtree-cancellation's exact state effects; applied by the caller in one atomic checkpoint commit.</summary>
+/// <summary>
+/// One subtree-cancellation's exact state effects; applied by the caller in one atomic checkpoint
+/// commit. <see cref="IncidentChanges"/> holds the incident upserts the plan carries — the planner
+/// emits suppressions for the subtree's non-terminal incidents, and a caller may amend the list
+/// (e.g. spec 115 swaps the absorbed incident's suppression for a resolution).
+/// </summary>
 public sealed record ActivitySubtreeCancellationPlan(
     string RootActivityExecutionId,
     IReadOnlyList<ActivityExecutionState> CancelledStates,
     ActivityScopeCleanupRequest Cleanup,
-    IReadOnlyList<IncidentState> SuppressedIncidents);
+    IReadOnlyList<IncidentState> IncidentChanges);
