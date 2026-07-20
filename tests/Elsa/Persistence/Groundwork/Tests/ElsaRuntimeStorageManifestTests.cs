@@ -31,6 +31,9 @@ public sealed class ElsaRuntimeStorageManifestTests
         try
         {
             var legacyManifest = CreatePreAttentionRuntimeManifest();
+            var currentManifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
+            foreach (var (documentKind, path, expectedLength) in CompatibilityProjectionLengths)
+                AssertRouteProjectionLength(currentManifest, documentKind, path, expectedLength);
             var legacySource = await CreateSqliteSchemaSourceAsync(legacyManifest);
             await using (var connection = new SqliteConnection(connectionString))
             {
@@ -41,7 +44,7 @@ public sealed class ElsaRuntimeStorageManifestTests
                 Assert.NotEqual(PhysicalSchemaApplicationOutcome.AuthorizationRequired, applied.Outcome);
             }
 
-            var currentSource = await CreateSqliteSchemaSourceAsync(ElsaRuntimeStorageManifest.CreatePhysicalized());
+            var currentSource = await CreateSqliteSchemaSourceAsync(currentManifest);
             await using var inspectionConnection = new SqliteConnection(connectionString);
             var admission = await currentSource.InspectRuntimeAdmissionAsync(
                 new SqlitePhysicalSchemaExecutor(inspectionConnection),
@@ -1344,6 +1347,41 @@ public sealed class ElsaRuntimeStorageManifestTests
                 .ToArray()
         };
     }
+
+    private static void AssertRouteProjectionLength(
+        StorageManifest manifest,
+        string documentKind,
+        string path,
+        int expectedLength)
+    {
+        var unit = manifest.StorageUnits.Single(candidate => candidate.Identity.Value == documentKind);
+        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage!.Policy).Definition;
+        Assert.Equal(expectedLength, Assert.Single(table.ProjectedColumns, column => column.Path == path).Length);
+    }
+
+    private static IReadOnlyList<(string DocumentKind, string Path, int ExpectedLength)> CompatibilityProjectionLengths { get; } =
+    [
+        (
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+            ElsaRuntimeStorageManifest.CollectionField,
+            ElsaRuntimeStorageManifest.RuntimeCollectionProjectionLength),
+        (
+            ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+            ElsaRuntimeStorageManifest.CollectionField,
+            ElsaRuntimeStorageManifest.RuntimeCollectionProjectionLength),
+        (
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+            ElsaRuntimeStorageManifest.ArtifactIdField,
+            ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
+        (
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+            ElsaRuntimeStorageManifest.ScopeField,
+            ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength),
+        (
+            ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+            ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
+            LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength)
+    ];
 
     private static ValueTask<GroundworkPhysicalSchemaManifestSource> CreateSqliteSchemaSourceAsync(StorageManifest manifest)
     {

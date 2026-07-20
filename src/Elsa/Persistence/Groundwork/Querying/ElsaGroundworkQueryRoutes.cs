@@ -191,6 +191,7 @@ public static class ElsaGroundworkQueryRoutes
                                 ElsaRuntimeStorageManifest.IncidentIdField,
                                 ElsaRuntimeStorageManifest.IncidentAttentionIncidentIdIndex,
                                 length: ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
+                            preserveExistingRouteFieldProjections: true,
                             new EnvelopeOrderedRoute(
                                 ElsaRuntimeStorageManifest.IncidentAttentionStatusOrderIndex,
                                 [
@@ -780,6 +781,13 @@ public static class ElsaGroundworkQueryRoutes
     private static StorageUnit PhysicalizeEnvelopeOrderedRoutes(
         StorageUnit unit,
         EnvelopeOrderedField identity,
+        params EnvelopeOrderedRoute[] routes) =>
+        PhysicalizeEnvelopeOrderedRoutes(unit, identity, preserveExistingRouteFieldProjections: false, routes);
+
+    private static StorageUnit PhysicalizeEnvelopeOrderedRoutes(
+        StorageUnit unit,
+        EnvelopeOrderedField identity,
+        bool preserveExistingRouteFieldProjections,
         params EnvelopeOrderedRoute[] routes)
     {
         var storage = unit.PhysicalStorage ?? throw new InvalidOperationException(
@@ -814,8 +822,11 @@ public static class ElsaGroundworkQueryRoutes
             .ToHashSet(StringComparer.Ordinal);
         var projected = definition.ProjectedColumns
             .Where(column => column.Path != identity.Path)
+            .Where(column =>
+                preserveExistingRouteFieldProjections || !routeFieldsByPath.ContainsKey(column.Path))
             .Concat(routeFieldsByPath.Values
-                .Where(field => !existingProjectedPaths.Contains(field.Path))
+                .Where(field =>
+                    !preserveExistingRouteFieldProjections || !existingProjectedPaths.Contains(field.Path))
                 .Select(Projected))
             .Append(new ProjectedColumnDefinition(
                 identity.ProjectedColumn,
