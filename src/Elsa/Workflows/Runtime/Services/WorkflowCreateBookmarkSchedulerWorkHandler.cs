@@ -17,6 +17,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly BookmarkLifecycleNotifier? _bookmarkLifecycleNotifier;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowExecutableReader? _executableReader;
 
     public WorkflowCreateBookmarkSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
@@ -24,7 +25,8 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider,
-        BookmarkLifecycleNotifier? bookmarkLifecycleNotifier = null)
+        BookmarkLifecycleNotifier? bookmarkLifecycleNotifier = null,
+        IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -37,6 +39,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         _inspectionAccumulator = inspectionAccumulator;
         _bookmarkLifecycleNotifier = bookmarkLifecycleNotifier;
         _timeProvider = timeProvider;
+        _executableReader = executableReader;
     }
 
     public string Name => HandlerName;
@@ -90,7 +93,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         cancellationToken.ThrowIfCancellationRequested();
 
         var payload = DeserializePayload(workItem);
-        var executable = await _workflowExecutableStore.FindAsync(payload.PinnedExecutable.ArtifactId, cancellationToken);
+        var executable = await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, payload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(payload.PinnedExecutable.ArtifactId);
 

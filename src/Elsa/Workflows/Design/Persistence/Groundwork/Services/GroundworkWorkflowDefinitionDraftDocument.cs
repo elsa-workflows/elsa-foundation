@@ -4,6 +4,8 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -29,7 +31,19 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
     }
 
     public async Task<GroundworkWorkflowDefinitionDraftDocument?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
-        => CurrentDraft(await ListByWorkflowDefinitionIdAsync(workflowDefinitionId, cancellationToken));
+    {
+        var envelope = await BoundedStore().FirstOrDefaultAsync(
+            new DocumentQuery(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+                WorkflowsDesignStorageManifest.FindCurrentDraftByDefinitionQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+                    workflowDefinitionId))],
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftOrder,
+                resultOperation: BoundedQueryResultOperation.First),
+            cancellationToken);
+        return envelope is null ? null : Deserialize(envelope);
+    }
 
     public async Task<IReadOnlyList<GroundworkWorkflowDefinitionDraftDocument>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
         => await ListByWorkflowDefinitionIdsAsync([workflowDefinitionId], cancellationToken);
@@ -38,21 +52,23 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
         IReadOnlyCollection<string> workflowDefinitionIds,
         CancellationToken cancellationToken = default)
     {
-        var definitionIds = workflowDefinitionIds.ToHashSet(StringComparer.Ordinal);
+        var definitionIds = workflowDefinitionIds.Distinct(StringComparer.Ordinal).ToArray();
+        if (definitionIds.Length == 0)
+            return [];
+
+        var comparison = definitionIds.Length == 1
+            ? DocumentQueryComparison.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdField, definitionIds[0])
+            : DocumentQueryComparison.In(WorkflowsDesignStorageManifest.DraftDefinitionIdField, definitionIds);
         var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
-            boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
-                "Workflow-definition draft queries require an admitted bounded document-store runtime."),
+            BoundedStore(),
             WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-            WorkflowsDesignStorageManifest.ListAllQuery,
-            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                WorkflowsDesignStorageManifest.CollectionField,
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection))],
-            WorkflowsDesignStorageManifest.DeterministicDocumentOrder,
+            WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
+            [DocumentQueryClause.Of(comparison)],
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftOrder,
             cancellationToken);
 
         return documents
             .Select(Deserialize)
-            .Where(document => definitionIds.Contains(document.Entity.WorkflowDefinitionId))
             .ToList();
     }
 
@@ -97,10 +113,7 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
         return new GroundworkWorkflowDefinitionDraftDocument(legacyDocument.Collection, legacyDocument.Entity, []);
     }
 
-    private static GroundworkWorkflowDefinitionDraftDocument? CurrentDraft(IReadOnlyCollection<GroundworkWorkflowDefinitionDraftDocument> drafts) =>
-        drafts
-            .OrderByDescending(x => x.Entity.LastModifiedAt)
-            .ThenByDescending(x => x.Entity.CreatedAt)
-            .ThenByDescending(x => x.Entity.Id, StringComparer.Ordinal)
-            .FirstOrDefault();
+    private IBoundedDocumentStore BoundedStore() =>
+        boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+            "Workflow-definition draft queries require an admitted bounded document-store runtime.");
 }

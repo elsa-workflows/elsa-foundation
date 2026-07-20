@@ -15,7 +15,8 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class RuntimeCheckpointCadenceResolver(
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutionStateStore workflowExecutionStateStore,
-    IEnumerable<CoalescingRuntimeCheckpointPersistenceOptions> hostCoalescingOptions) : IRuntimeCheckpointCadenceResolver
+    IEnumerable<CoalescingRuntimeCheckpointPersistenceOptions> hostCoalescingOptions,
+    IWorkflowExecutableReader? executableReader = null) : IRuntimeCheckpointCadenceResolver
 {
     // Envelope metadata breadcrumb stamped by WorkflowStartDispatcher.CreateDispatchMetadata for the start command.
     private const string ArtifactIdMetadataKey = "runtime.artifactId";
@@ -39,7 +40,7 @@ public sealed class RuntimeCheckpointCadenceResolver(
         if (artifactId is null)
             return HostDefault();
 
-        var executable = await executableStore.FindAsync(artifactId, cancellationToken);
+        var executable = await PinnedExecutableRead.FindAsync(executableReader, executableStore, artifactId, cancellationToken);
         return Resolve(executable);
     }
 

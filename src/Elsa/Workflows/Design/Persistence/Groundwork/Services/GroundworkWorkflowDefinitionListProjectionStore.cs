@@ -1,10 +1,12 @@
-using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -16,25 +18,23 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkWorkflowDefinitionListProjectionStore : IWorkflowDefinitionListProjectionStore
 {
     private readonly GroundworkWorkflowDefinitionDraftDocumentStore _drafts;
-    private readonly GroundworkReadStore<WorkflowDefinitionVersion> _versions;
+    private readonly GroundworkNamedQueryAccess<WorkflowDefinitionVersion> _versions;
 
     public GroundworkWorkflowDefinitionListProjectionStore(
         IDocumentStore store,
         IBoundedDocumentStore boundedStore,
         IPayloadSerializer payloadSerializer,
-        IPersistenceAccessContextAccessor accessContextAccessor)
+        IPersistenceAccessContextAccessor accessContextAccessor,
+        IGroundworkStoreSessionFactory? sessions = null)
     {
         var serialization = GroundworkDesignDocumentSerialization.Create(payloadSerializer);
         _drafts = new GroundworkWorkflowDefinitionDraftDocumentStore(store, serialization, accessContextAccessor, boundedStore);
-        _versions = new GroundworkReadStore<WorkflowDefinitionVersion>(
+        _versions = new GroundworkNamedQueryAccess<WorkflowDefinitionVersion>(
             store,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            WorkflowsDesignStorageManifest.ListAllQuery,
-            WorkflowsDesignStorageManifest.CollectionField,
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
             serialization,
             boundedStore,
-            collectionOrder: WorkflowsDesignStorageManifest.DeterministicDocumentOrder);
+            sessions);
     }
 
     public GroundworkWorkflowDefinitionListProjectionStore(
@@ -59,9 +59,7 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore : IWorkflowD
             return [];
 
         var draftsTask = _drafts.ListByWorkflowDefinitionIdsAsync(definitionIds, cancellationToken);
-        var versionsTask = _versions.QueryAsync(
-            Query<WorkflowDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.In, definitionIds),
-            cancellationToken);
+        var versionsTask = ListVersionsByDefinitionIdsAsync(definitionIds, cancellationToken);
         await Task.WhenAll(draftsTask, versionsTask);
         var drafts = await draftsTask;
         var versionRows = await versionsTask;
@@ -99,4 +97,19 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore : IWorkflowD
             })
             .ToArray();
     }
+
+    private Task<IReadOnlyList<WorkflowDefinitionVersion>> ListVersionsByDefinitionIdsAsync(
+        IReadOnlyCollection<string> definitionIds,
+        CancellationToken cancellationToken) =>
+        _versions.ExecuteAsync(
+            acrossScopes: false,
+            (executor, token) => executor.QueryAsync(
+                WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery,
+                Query<WorkflowDefinitionVersion>.Where(
+                    x => x.DefinitionId,
+                    QueryOp.In,
+                    definitionIds),
+                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionOrder,
+                token),
+            cancellationToken);
 }

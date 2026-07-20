@@ -4,6 +4,8 @@ using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -25,7 +27,8 @@ public class GroundworkWorkflowDefinitionVersionStoreTests
 
     private sealed record Fixture(
         GroundworkWorkflowDefinitionVersionStore Versions,
-        InMemoryDocumentStore Store);
+        InMemoryDocumentStore Store,
+        RecordingBoundedDocumentStore Bounded);
 
     private static async Task<Fixture> SeededAsync(
         IEnumerable<WorkflowDefinitionVersion> versions,
@@ -53,7 +56,11 @@ public class GroundworkWorkflowDefinitionVersionStoreTests
         }
 
         var definitionStore = new GroundworkWorkflowDefinitionStore(store);
-        return new Fixture(new GroundworkWorkflowDefinitionVersionStore(store, definitionStore, Payloads), store);
+        var bounded = new RecordingBoundedDocumentStore(store);
+        return new Fixture(
+            new GroundworkWorkflowDefinitionVersionStore(store, definitionStore, Payloads, bounded),
+            store,
+            bounded);
     }
 
     private static WorkflowDefinitionState EmptyState() => new([], null, [], [], null);
@@ -163,6 +170,39 @@ public class GroundworkWorkflowDefinitionVersionStoreTests
     {
         var fixture = await SeededAsync([Version("v1", "def1", "1.0.0")]);
         Assert.False(await fixture.Versions.ExistsAsync("def1", "9999999999"));
+    }
+
+    [Fact]
+    public async Task Version_reads_use_their_exact_named_routes_and_result_operations()
+    {
+        var version = Version("v1", "def1", "1.0.0");
+        var fixture = await SeededAsync([version]);
+
+        await fixture.Versions.FindLatestVersionAsync("def1");
+        var latest = Assert.Single(fixture.Bounded.Queries);
+        Assert.Equal(WorkflowsDesignStorageManifest.FindLatestVersionQuery, latest.QueryIdentity);
+        Assert.Equal(BoundedQueryResultOperation.First, latest.ResultOperation);
+        Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionLatestVersionOrder, latest.Order);
+
+        fixture.Bounded.Queries.Clear();
+        await fixture.Versions.ListByDefinitionAsync("def1");
+        Assert.All(
+            fixture.Bounded.Queries,
+            query =>
+            {
+                Assert.Equal(WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery, query.QueryIdentity);
+                Assert.Equal(BoundedQueryResultOperation.Documents, query.ResultOperation);
+                Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionOrder, query.Order);
+            });
+
+        fixture.Bounded.Queries.Clear();
+        await fixture.Versions.ExistsAsync("def1", version.SemVerSortKey);
+        var exists = Assert.Single(fixture.Bounded.Queries);
+        Assert.Equal(
+            WorkflowsDesignStorageManifest.FindVersionByDefinitionAndSortKeyQuery,
+            exists.QueryIdentity);
+        Assert.Equal(BoundedQueryResultOperation.Any, exists.ResultOperation);
+        Assert.NotEqual(WorkflowsDesignStorageManifest.ListAllQuery, exists.QueryIdentity);
     }
 
     [Fact]

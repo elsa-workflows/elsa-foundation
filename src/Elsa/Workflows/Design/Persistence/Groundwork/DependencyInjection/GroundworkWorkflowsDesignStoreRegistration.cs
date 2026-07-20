@@ -3,6 +3,7 @@ using Elsa.Primitives.Identity;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -34,6 +35,9 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.AddPersistenceCore();
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, WorkflowsDesignGroundworkStorageManifestSource>());
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, GroundworkDesignAtomicWriteStorageManifestSource>());
+        services.TryAddScoped<GroundworkDesignAtomicWrite>();
 
         services.RemoveAll<IWorkflowDefinitionStore>();
         services.AddScoped<IWorkflowDefinitionStore, GroundworkWorkflowDefinitionStore>();

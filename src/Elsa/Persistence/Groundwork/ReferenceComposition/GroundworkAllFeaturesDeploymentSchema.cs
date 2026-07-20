@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Unified.Composition;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Secrets.Persistence.Groundwork;
 using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork;
@@ -11,9 +12,10 @@ namespace Elsa.Persistence.Groundwork.ReferenceComposition;
 
 /// <summary>
 /// The public, parameterless deployment schema for the shipped unified provider leaves. It selects
-/// Runtime, Secrets, Distributed Runtime, Workflows Design, Activities Design and Publishing with
-/// the identity host naming policy. Identity is intentionally explicit: ASP.NET Core Identity hosts
-/// opt in through the Groundwork Identity feature rather than through substrate provider selection.
+/// Runtime, Secrets, Distributed Runtime, Workflows Design, Activities Design, their shared atomic-operation
+/// ledger, and Publishing with the identity host naming policy. Identity is intentionally explicit:
+/// ASP.NET Core Identity hosts opt in through the Groundwork Identity feature rather than through substrate
+/// provider selection.
 /// </summary>
 public sealed class GroundworkAllFeaturesDeploymentSchema : GroundworkDeploymentSchemaManifestSource
 {
@@ -41,6 +43,7 @@ internal static class GroundworkReferenceDeploymentSchemaSources
         typeof(DistributedGroundworkStorageManifestSource),
         typeof(WorkflowsDesignGroundworkStorageManifestSource),
         typeof(ActivitiesDesignGroundworkStorageManifestSource),
+        typeof(GroundworkDesignAtomicWriteStorageManifestSource),
         typeof(PublishingGroundworkStorageManifestSource)
     ]);
 

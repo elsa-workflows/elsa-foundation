@@ -306,7 +306,21 @@ public class UnifiedGroundworkHostTests
         // union manifest materialized every lane's schema into the one SQLite database.
         await SaveAsync(store, ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-1", "workflowExecutionState");
         await SaveAsync(store, WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, "def-1", "workflowDefinition");
-        await SaveAsync(store, ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, "act-1", "activityDefinition");
+        var activityDefinition = new ActivityDefinition
+        {
+            Id = "act-1",
+            ActivityTypeKey = "Test.Activity",
+            Category = "Test"
+        };
+        await store.SaveAsync(new SaveDocumentRequest(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            activityDefinition.Id,
+            ActivitiesDesignStorageManifest.SchemaVersion,
+            JsonSerializer.Serialize(
+                new GroundworkDocument<ActivityDefinition>(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+                    activityDefinition),
+                GroundworkActivitiesDesignJson.Options)));
         await SaveAsync(store, PublishingGroundworkStorageManifest.PublicationSlotDocumentKind, "slot-1", "publicationSlot");
 
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-1"));

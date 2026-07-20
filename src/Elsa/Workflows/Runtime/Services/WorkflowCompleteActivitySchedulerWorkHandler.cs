@@ -14,6 +14,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IWorkflowExecutableStore? _workflowExecutableStore;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowExecutableReader? _executableReader;
 
     public WorkflowCompleteActivitySchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
@@ -27,7 +28,8 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IWorkflowExecutableStore? workflowExecutableStore,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
@@ -37,6 +39,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         _schedulerWorkQueue = schedulerWorkQueue;
         _workflowExecutableStore = workflowExecutableStore;
         _timeProvider = timeProvider;
+        _executableReader = executableReader;
     }
 
     public string Name => HandlerName;
@@ -186,7 +189,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         if (_workflowExecutableStore is null)
             return DownstreamSchedulingResult.Terminal();
 
-        var executable = await _workflowExecutableStore.FindAsync(continuationSchedulingPayload.PinnedExecutable.ArtifactId, cancellationToken);
+        var executable = await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, continuationSchedulingPayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(continuationSchedulingPayload.PinnedExecutable.ArtifactId);
 

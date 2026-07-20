@@ -19,6 +19,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private readonly IWorkflowExecutableStore? _workflowExecutableStore;
     private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowExecutableReader? _executableReader;
 
     /// <summary>
     /// Constructs the handler. <paramref name="workflowExecutionStateStore"/> is optional: when supplied (the
@@ -33,7 +34,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         TimeProvider timeProvider,
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IWorkflowExecutableStore? workflowExecutableStore = null,
-        IRuntimeCheckpointCadenceResolver? cadenceResolver = null)
+        IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
+        IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
@@ -46,6 +48,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         _workflowExecutableStore = workflowExecutableStore;
         _cadenceResolver = cadenceResolver;
         _timeProvider = timeProvider;
+        _executableReader = executableReader;
     }
 
     public string Name => HandlerName;
@@ -141,7 +144,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             : await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
 
         var executable = StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted) && _workflowExecutableStore is not null
-            ? await _workflowExecutableStore.FindAsync(payload.PinnedExecutable.ArtifactId, cancellationToken)
+            ? await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, payload.PinnedExecutable.ArtifactId, cancellationToken)
             : null;
 
         // ADR 0032 R5: at start, resolve the effective cadence (authored-on-executable over host default) and stamp it

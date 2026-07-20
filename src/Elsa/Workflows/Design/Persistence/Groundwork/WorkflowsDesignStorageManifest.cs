@@ -58,6 +58,45 @@ public static class WorkflowsDesignStorageManifest
     public const string FindCurrentDraftByDefinitionQuery = "find-current-draft-by-definition";
     public const string FindLayoutByVersionQuery = "find-layout-by-version";
 
+    public static IReadOnlyList<DocumentQueryOrder> WorkflowDefinitionIdOrder { get; } =
+        [new(DefinitionIdField, PhysicalSortDirection.Ascending)];
+
+    public static IReadOnlyList<DocumentQueryOrder> WorkflowDefinitionNameOrder { get; } =
+    [
+        new(DefinitionNameField, PhysicalSortDirection.Ascending),
+        new(DefinitionIdField, PhysicalSortDirection.Ascending)
+    ];
+
+    public static IReadOnlyList<DocumentQueryOrder> WorkflowDefinitionDescriptionOrder { get; } =
+    [
+        new(DefinitionDescriptionField, PhysicalSortDirection.Ascending),
+        new(DefinitionIdField, PhysicalSortDirection.Ascending)
+    ];
+
+    public static IReadOnlyList<DocumentQueryOrder> WorkflowDefinitionSearchOrder { get; } =
+        WorkflowDefinitionNameOrder;
+
+    public static IReadOnlyList<DocumentQueryOrder> WorkflowDefinitionVersionOrder { get; } =
+    [
+        new(VersionDefinitionIdField, PhysicalSortDirection.Ascending),
+        new(VersionSemVerSortKeyField, PhysicalSortDirection.Ascending),
+        new(VersionIdField, PhysicalSortDirection.Ascending)
+    ];
+
+    public static IReadOnlyList<DocumentQueryOrder> WorkflowDefinitionLatestVersionOrder { get; } =
+    [
+        new(VersionSemVerSortKeyField, PhysicalSortDirection.Descending),
+        new(VersionIdField, PhysicalSortDirection.Descending)
+    ];
+
+    public static IReadOnlyList<DocumentQueryOrder> WorkflowDefinitionDraftOrder { get; } =
+    [
+        new(DraftDefinitionIdField, PhysicalSortDirection.Ascending),
+        new(DraftLastModifiedAtField, PhysicalSortDirection.Descending),
+        new(DraftCreatedAtField, PhysicalSortDirection.Descending),
+        new(DraftIdField, PhysicalSortDirection.Descending)
+    ];
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-design"),
         new StorageManifestOwner("elsa.workflows.design"),
@@ -95,10 +134,10 @@ public static class WorkflowsDesignStorageManifest
         {
             Query(ListAllQuery, ByCollectionIndex, [Predicate(CollectionField, PortableQueryOperation.Equal)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents], sortFields: [Sort(DocumentIdField)]),
             Query(FindDefinitionByIdQuery, "definition-by-id-point", [Predicate(DocumentIdField, PortableQueryOperation.Equal)], QueryPagingSupport.None, QuerySortSupport.None, [BoundedQueryResultOperation.First, BoundedQueryResultOperation.Any]),
-            Query(ListDefinitionsByIdQuery, "definition-by-id-list", [Predicate(DefinitionIdField, PortableQueryOperation.Equal, PortableQueryOperation.In)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], sortFields: [Sort(DefinitionIdField)]),
-            Query(ListDefinitionsByNameQuery, "definition-by-name", [Predicate(DefinitionNameField, PortableQueryOperation.Equal, PortableQueryOperation.In)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], sortFields: [Sort(DefinitionNameField), Sort(DefinitionIdField)]),
-            Query(ListDefinitionsByDescriptionQuery, "definition-by-description", [Predicate(DefinitionDescriptionField, PortableQueryOperation.Equal)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], sortFields: [Sort(DefinitionDescriptionField), Sort(DefinitionIdField)]),
-            Query(SearchDefinitionsQuery, "definition-by-search", [Predicate(DefinitionNameField, PortableQueryOperation.Contains)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], supportsDisjunction: true, sortFields: [Sort(DefinitionNameField), Sort(DefinitionIdField)], residualPredicateFields: [ResidualPredicate(DefinitionDescriptionField, PortableQueryOperation.Contains), ResidualPredicate(DefinitionIdField, PortableQueryOperation.Contains)])
+            Query(ListDefinitionsByIdQuery, "definition-by-id-list", [Predicate(DefinitionIdField, PortableQueryOperation.Equal, PortableQueryOperation.In, PortableQueryOperation.Contains)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], supportsDisjunction: true, sortFields: [Sort(DefinitionIdField)], residualPredicateFields: DefinitionResiduals(DefinitionIdField)),
+            Query(ListDefinitionsByNameQuery, "definition-by-name", [Predicate(DefinitionNameField, PortableQueryOperation.Equal, PortableQueryOperation.In, PortableQueryOperation.Contains)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], supportsDisjunction: true, sortFields: [Sort(DefinitionNameField), Sort(DefinitionIdField)], residualPredicateFields: DefinitionResiduals(DefinitionNameField)),
+            Query(ListDefinitionsByDescriptionQuery, "definition-by-description", [Predicate(DefinitionDescriptionField, PortableQueryOperation.Equal, PortableQueryOperation.Contains)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], supportsDisjunction: true, sortFields: [Sort(DefinitionDescriptionField), Sort(DefinitionIdField)], residualPredicateFields: DefinitionResiduals(DefinitionDescriptionField)),
+            Query(SearchDefinitionsQuery, "definition-by-search", [Predicate(DefinitionNameField, PortableQueryOperation.Equal, PortableQueryOperation.In, PortableQueryOperation.Contains)], QueryPagingSupport.Offset, QuerySortSupport.Ascending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], supportsDisjunction: true, sortFields: [Sort(DefinitionNameField), Sort(DefinitionIdField)], residualPredicateFields: DefinitionResiduals(DefinitionNameField))
         };
         return PhysicalUnit(
             WorkflowDefinitionDocumentKind,
@@ -300,7 +339,10 @@ public static class WorkflowsDesignStorageManifest
         new(
             identity,
             index,
-            predicates.SelectMany(predicate => predicate.Operations).ToHashSet(),
+            predicates
+                .SelectMany(predicate => predicate.Operations)
+                .Concat(residualPredicateFields?.SelectMany(predicate => predicate.Operations) ?? [])
+                .ToHashSet(),
             sort,
             paging,
             BoundedQueryExecutionClass.ScaleBearing,
@@ -317,16 +359,48 @@ public static class WorkflowsDesignStorageManifest
     private static BoundedQueryResidualPredicateField ResidualPredicate(string path, params PortableQueryOperation[] operations) =>
         new(path, IndexValueKind.Keyword, operations.ToHashSet());
 
+    private static BoundedQueryResidualPredicateField[] DefinitionResiduals(params string[] excludedPaths)
+    {
+        var fields = new[]
+        {
+            (
+                Path: DefinitionIdField,
+                Operations: new[]
+                {
+                    PortableQueryOperation.Equal,
+                    PortableQueryOperation.In,
+                    PortableQueryOperation.Contains
+                }),
+            (
+                Path: DefinitionNameField,
+                Operations: new[]
+                {
+                    PortableQueryOperation.Equal,
+                    PortableQueryOperation.In,
+                    PortableQueryOperation.Contains
+                }),
+            (
+                Path: DefinitionDescriptionField,
+                Operations: new[]
+                {
+                    PortableQueryOperation.Equal,
+                    PortableQueryOperation.Contains
+                })
+        };
+
+        return fields
+            .Where(field => !excludedPaths.Contains(field.Path, StringComparer.Ordinal))
+            .Select(field => ResidualPredicate(field.Path, field.Operations))
+            .ToArray();
+    }
+
     private static BoundedQuerySortField Sort(string path, PhysicalSortDirection direction = PhysicalSortDirection.Ascending) =>
         new(path, direction);
 
     private static BoundedQuerySortField[] CurrentDraftSort() =>
-    [
-        Sort(DraftDefinitionIdField),
-        Sort(DraftLastModifiedAtField, PhysicalSortDirection.Descending),
-        Sort(DraftCreatedAtField, PhysicalSortDirection.Descending),
-        Sort(DraftIdField, PhysicalSortDirection.Descending)
-    ];
+        WorkflowDefinitionDraftOrder
+            .Select(order => Sort(order.Path, order.Direction))
+            .ToArray();
 
     private static ProjectedColumnDefinition Column(string name, string path, bool nullable = true) =>
         new(name, path, PortablePhysicalType.String, Length: 450, IsNullable: nullable);

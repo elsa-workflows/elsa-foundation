@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -19,23 +21,32 @@ public sealed class GroundworkWorkflowDefinitionVersionLayoutStore : IWorkflowDe
     private static readonly JsonSerializerOptions Options =
         GroundworkDocumentSerialization.Create(["RowNumber", "WorkflowDefinitionVersion"]);
 
-    private readonly GroundworkReadStore<WorkflowDefinitionVersionLayout> _reads;
+    private readonly GroundworkNamedQueryAccess<WorkflowDefinitionVersionLayout> _reads;
 
-    public GroundworkWorkflowDefinitionVersionLayoutStore(IDocumentStore store, IBoundedDocumentStore? boundedStore = null)
+    public GroundworkWorkflowDefinitionVersionLayoutStore(
+        IDocumentStore store,
+        IBoundedDocumentStore? boundedStore = null,
+        IGroundworkStoreSessionFactory? sessions = null)
     {
-        _reads = new GroundworkReadStore<WorkflowDefinitionVersionLayout>(
+        _reads = new GroundworkNamedQueryAccess<WorkflowDefinitionVersionLayout>(
             store,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
-            WorkflowsDesignStorageManifest.ListAllQuery,
-            WorkflowsDesignStorageManifest.CollectionField,
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection,
             Options,
             boundedStore,
-            collectionOrder: WorkflowsDesignStorageManifest.DeterministicDocumentOrder);
+            sessions);
     }
 
-    public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default)
-        => _reads.FirstOrDefaultAsync(
-            Query<WorkflowDefinitionVersionLayout>.Where(x => x.WorkflowDefinitionVersionId, QueryOp.Equal, workflowDefinitionVersionId),
+    public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(
+        string workflowDefinitionVersionId,
+        CancellationToken cancellationToken = default) =>
+        _reads.ExecuteAsync(
+            acrossScopes: false,
+            (executor, token) => executor.FirstOrDefaultAsync(
+                WorkflowsDesignStorageManifest.FindLayoutByVersionQuery,
+                Query<WorkflowDefinitionVersionLayout>.Where(
+                    x => x.WorkflowDefinitionVersionId,
+                    QueryOp.Equal,
+                    workflowDefinitionVersionId),
+                token),
             cancellationToken);
 }

@@ -110,10 +110,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         IServiceProvider serviceProvider,
         CancellationToken cancellationToken)
     {
-        var workflowExecutableStore = serviceProvider.GetRequiredService<IWorkflowExecutableStore>();
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
 
-        var executable = await workflowExecutableStore.FindAsync(payload.PinnedExecutable.ArtifactId, cancellationToken);
+        // spec 111: burst-cached pinned-executable read.
+        var executable = await PinnedExecutableRead.FindAsync(serviceProvider, payload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(payload.PinnedExecutable.ArtifactId);
 

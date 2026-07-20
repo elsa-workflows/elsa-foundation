@@ -120,13 +120,51 @@ Documents, SQLite, and local-tool package versions plus the exact target and pla
 schema-tool processes have a bounded timeout and are killed and reaped on timeout or cancellation.
 The run used the Groundwork library/tool family
 `0.0.1-preview.77`, target fingerprint
-`22e3b8afe1564edc52ae126b5d049b21d1db72f38d1ceac6a1c2b9ddc144fa6d`, and plan fingerprint
-`e2c71279ddd7cc8506f45601bd128347a30c89fcd70a32afeec67928f9b86275`.
+`b87b33275b2f9f52a8756eeb039bb8227a93083a6adacb95cd6a16c2445253d3`, and plan fingerprint
+`d8717f5ebca1755d8aa24473c37da3a2dc823f70d069ec38fa4de40ff2b012f8`.
+The T030 reference-composition change intentionally advances both fingerprints by adding the
+scope-bound, dedicated `designOperation` document table and its atomic-commit route; the Target-profile
+behavior matrix remains `17` green and `8` narrowly classified intentional-red rows until T031–T032
+route the workflow and activity commands through that ledger.
 It also exposed and fixed target correctness defects: promotion now copies the validated
 scope-bound draft's `TenantId` to both the immutable workflow version and its layout, and
 submission stamps the active scope onto every newly created aggregate member.
 Both provider fixtures dispatch through Elsa's scoped event pipeline; the EF cancellation probe
 pins the same linked token at the public command, event handler, EF interceptor, and exception.
+
+### T030 shared atomic-write coordinator evidence (2026-07-20)
+
+Implementation candidate `10469b79902b9cb2235f41dcddd1c148c5c7d898` centralizes stable
+operation identity, canonical request fingerprints, replay/conflict inspection, rollback,
+cancellation, marker-race handling, and independently bounded acknowledgement reconciliation in
+`GroundworkDesignAtomicWrite`. Workflow and activity design registrations share one scoped helper
+and one append-only, scope-bound `designOperation` manifest source. The marker uses a dedicated
+physical document table, joins the mutated document kinds in one `CrossUnitAtomic` commit scope,
+and requires both the `AtomicCommit` capability and the `multi-document-transactions` topology.
+Prior successful deliveries return `Replayed` so callers suppress duplicate post-commit outcomes;
+a successful commit recovered after a lost acknowledgement returns `Reconciled` so the current
+attempt can complete its post-commit outcome phase exactly once, just as it does for `Committed`.
+The internal marker unit is explicitly tracked by the architecture inventory without changing the
+frozen spec 094 ALL32 public-contract denominator.
+
+The exact implementation candidate passed:
+
+- `GroundworkDesignAtomicWrite*`: `18/18`;
+- full Groundwork querying: `112/112`;
+- workflow design Groundwork: `60/60`;
+- activity design Groundwork: `51/51`;
+- Groundwork composition: `58/58`;
+- Groundwork unified host: `23/23`;
+- Groundwork core persistence: `637/637`;
+- full architecture ratchets: `261/261`;
+- SQLite Target-profile schema and 25-scenario behavior baseline: passed, preserving `17` green
+  and `8` narrowly classified intentional-red rows;
+- full `Elsa.Server.slnx` Release build: `0` errors and `147` accepted existing warnings;
+- the exact CI-generated container-free filter: all `77` test projects passed.
+
+An independent read-only review was clean after verifying terminal rollback observation against
+Groundwork preview.77's normative `IDocumentUnitOfWork` contract. T031–T032 still own command
+adoption, so this slice does not advance any of the seven intentional-red atomicity rows.
 
 Ordinary CI writes no evidence file. Operators can opt in to the sanitized allowlisted JSON
 artifact without exposing connection strings, database paths, or scope identities:

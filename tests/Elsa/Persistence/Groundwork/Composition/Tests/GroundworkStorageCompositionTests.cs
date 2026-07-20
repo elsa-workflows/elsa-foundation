@@ -8,6 +8,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Unified;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Secrets.Core.Contracts;
@@ -714,6 +715,26 @@ public class GroundworkStorageCompositionTests
             x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
             x.ImplementationType == implementationType));
         Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+    }
+
+    [Fact]
+    public void Workflow_and_activity_design_registrations_share_one_atomic_write_source_and_helper()
+    {
+        var services = new ServiceCollection();
+
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddGroundworkActivitiesDesignStores();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddGroundworkActivitiesDesignStores();
+
+        var source = Assert.Single(services.Where(x =>
+            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
+            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource)));
+        Assert.Equal(ServiceLifetime.Scoped, source.Lifetime);
+        var helper = Assert.Single(services.Where(x =>
+            x.ServiceType == typeof(GroundworkDesignAtomicWrite) &&
+            x.ImplementationType == typeof(GroundworkDesignAtomicWrite)));
+        Assert.Equal(ServiceLifetime.Scoped, helper.Lifetime);
     }
 
     [Fact]

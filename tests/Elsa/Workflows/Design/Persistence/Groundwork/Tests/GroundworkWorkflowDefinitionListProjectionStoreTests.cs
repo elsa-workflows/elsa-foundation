@@ -3,6 +3,8 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -26,12 +28,14 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         await SaveAsync(store, WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
             Version("version-2", "definition-1", "2.0.0"));
+        var bounded = new RecordingBoundedDocumentStore(store);
 
         var projections = await new GroundworkWorkflowDefinitionListProjectionStore(
                 store,
+                bounded,
                 new FakePayloadSerializer(),
                 GroundworkTestAccess.DefaultAccessContextAccessor)
-            .ListByDefinitionIdsAsync(["definition-1", "definition-2"]);
+            .ListByDefinitionIdsAsync(["definition-1", "definition-2", "definition-1"]);
 
         var populated = Assert.Single(projections, x => x.WorkflowDefinitionId == "definition-1");
         Assert.Equal("draft-current", populated.DraftId);
@@ -44,6 +48,37 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         Assert.Null(empty.LatestVersionId);
         Assert.Null(empty.LatestVersion);
         Assert.Equal(0, empty.VersionCount);
+
+        var queries = bounded.Queries.OrderBy(query => query.QueryIdentity, StringComparer.Ordinal).ToArray();
+        Assert.Equal(2, queries.Length);
+        var drafts = queries.Single(query => query.QueryIdentity == WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery);
+        AssertBatchQuery(
+            drafts,
+            WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+            ["definition-1", "definition-2"],
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftOrder);
+        var versions = queries.Single(query => query.QueryIdentity == WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery);
+        AssertBatchQuery(
+            versions,
+            WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+            ["definition-1", "definition-2"],
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionOrder);
+    }
+
+    [Fact]
+    public async Task Empty_definition_set_returns_without_provider_io()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var bounded = new RecordingBoundedDocumentStore(store);
+        var projections = await new GroundworkWorkflowDefinitionListProjectionStore(
+                store,
+                bounded,
+                new FakePayloadSerializer(),
+                GroundworkTestAccess.DefaultAccessContextAccessor)
+            .ListByDefinitionIdsAsync([]);
+
+        Assert.Empty(projections);
+        Assert.Empty(bounded.Queries);
     }
 
     private static async Task SaveAsync<TEntity>(
@@ -70,4 +105,18 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         new(definitionId, version) { Id = id, State = EmptyState() };
 
     private static WorkflowDefinitionState EmptyState() => WorkflowDefinitionState.Empty;
+
+    private static void AssertBatchQuery(
+        DocumentQuery query,
+        string path,
+        IReadOnlyCollection<string> values,
+        IReadOnlyList<DocumentQueryOrder> order)
+    {
+        Assert.Equal(BoundedQueryResultOperation.Documents, query.ResultOperation);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(path, comparison.Path);
+        Assert.Equal(QueryComparisonOperator.In, comparison.Operator);
+        Assert.Equal(values, comparison.Values.Select(value => value!).ToArray());
+        Assert.Equal(order, query.Order);
+    }
 }

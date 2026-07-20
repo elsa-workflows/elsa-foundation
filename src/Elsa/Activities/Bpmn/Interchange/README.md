@@ -32,7 +32,16 @@ standard BPMN representation, so they export as `elsa:conditionOutcome` attribut
 human-readable `conditionExpression` is emitted alongside for other modelers. Layout comes from the
 authored `diagram` payload; a simple grid is synthesized for elements without one.
 
+## HTTP surface
+
+Ingestion-style endpoints (no API capability, mirroring the Elsa3 reusable-import surface); all
+three are pure conversions — nothing is persisted server-side:
+
+- `POST interchange/bpmn/analyze` (`bpmn-interchange.read`) — inventory a document before import.
+- `POST interchange/bpmn/import` (`bpmn-interchange.manage`) — document → `BpmnProcess` node + analysis.
+- `POST interchange/bpmn/export` (`bpmn-interchange.read`) — `BpmnProcess` node → BPMN XML + DI.
+
 ## Not yet in this slice
 
-API endpoints and the Studio import/export UX, `extensionElements` preservation for third-party
-vendor attributes, collaboration/pool export, and the BPMN MIWG conformance corpus.
+The Studio import/export UX, `extensionElements` preservation for third-party vendor attributes,
+collaboration/pool export, and the BPMN MIWG conformance corpus.
