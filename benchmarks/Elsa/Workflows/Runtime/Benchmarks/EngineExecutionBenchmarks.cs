@@ -48,21 +48,32 @@ namespace Elsa.Workflows.Runtime.Benchmarks;
 /// commits/run for each, isolating coalescing's effect. It soft-asserts Coalesced &lt; Immediate on commits/run —
 /// deterministic in this harness (the fold is data-driven, not timing-driven).
 ///
-/// A note on ADR 0032 R2 / the spec's "ReplaySafe" A/B: under Coalesced the pre-activation claim checkpoint
-/// (<c>ActivityAttemptClaimed</c>) is still an UNCONDITIONAL mandatory flush in this base, so the coalesced floor
-/// is ≈ (CLR activity count + terminal) commits — one mandatory claim per leaf. ADR 0032 R2's follow-up (the
-/// contract-level <c>SideEffectProfile { External, ReplaySafe }</c> marker that relaxes that one boundary to
-/// Deferred for pure activities) is NOT yet in this base, so a "leaf marked ReplaySafe vs. left External" A/B
-/// would show no delta here — nothing reads a side-effect marker yet. This benchmark therefore measures what the
-/// current base actually exposes (the Immediate→Coalesced drop, and the per-activity claim floor Coalesced leaves
-/// behind) so the floor the marker will remove is quantified and re-measurable the moment it lands: swap the
-/// hot-loop leaf's contract to <c>ReplaySafe</c> and the Coalesced commits/run should collapse toward ~1–2. The
-/// <c>External-leaf</c> reference measurement (a <c>WriteLine</c> chain under Coalesced) is reported alongside the
-/// pure-leaf Coalesced run to make that "no delta yet" visible: today the two are equal.
+/// The hot-loop leaf A/B isolates ADR 0032 R2 / spec 107 (now in base): the contract-level
+/// <c>SideEffectProfile { External, ReplaySafe }</c> marker makes the pre-activation claim checkpoint
+/// (<c>ActivityAttemptClaimed</c>) a CONDITIONAL flush under Coalesced — <c>ReplaySafe</c> defers the claim into
+/// the coalesced segment, <c>External</c>/unmarked keeps the immediate flush. The two hot-loop variants use
+/// IDENTICAL graphs (same Flowchart root, same 10-leaf straight-line chain, same node count and nesting) where
+/// ONLY the leaf activity class differs: <see cref="NoOpStep"/> (marked
+/// <c>[ActivitySideEffectProfile(ReplaySafe)]</c>) vs <c>WriteLine</c> (unmarked ⇒ External). Any commits/run
+/// delta between them under the same Coalesced policy is therefore attributable to the marker alone.
+///
+/// SEGMENT-CAP INTERACTION (why the A/B pins <see cref="HotLoopSegmentCap"/>): the coalescing session enforces
+/// <c>MaxSegmentCheckpoints</c> (host default 50). A mandatory claim boundary folds AND RESETS the segment, so
+/// with an External leaf the cap never trips (a fresh segment starts at every leaf). Mark the leaf ReplaySafe
+/// and nothing resets the segment any more — the full ~66-checkpoint burst runs into the cap mid-chain, the
+/// session deactivates, and the drain falls back to per-checkpoint Immediate for the remainder. Measured under
+/// the default cap this INVERTS the comparison (ReplaySafe 16 &gt; External 11 commits/run) even though the
+/// marker is engaged. The A/B therefore raises the cap above the burst size for both leaves (same options,
+/// leaf class still the only variable); a separate single-run diagnostic keeps the default-cap behavior visible.
+/// The cap-deactivation fallback is the next optimization target for hot loops longer than the cap — a cap-hit
+/// could fold-and-reset (like a claim boundary) instead of deactivating coalescing for the rest of the drain.
 ///
 /// There are deliberately NO hard latency assertions (they would flake in CI); each iteration asserts only that
-/// the workflow completed. Commit counts are reported and, for the Coalesced&lt;Immediate relationship, softly
-/// asserted (deterministic). Timings/counts are emitted via <see cref="ITestOutputHelper"/>.
+/// the workflow completed. Commit counts are reported and, being deterministic (stable across every observed
+/// iteration), two relationships are softly asserted: Coalesced &lt; Immediate, and ReplaySafe-leaf &lt;
+/// External-leaf under Coalesced. A one-off (untimed) diagnostic run per durable hot-loop variant dumps the
+/// flushed commit kinds — derived from the persisted commit ids — so the residual mandatory boundaries are
+/// named, not guessed. Timings/counts are emitted via <see cref="ITestOutputHelper"/>.
 ///
 /// This project lives under benchmarks/ (not tests/), so neither CI test gate runs it — see the csproj header.
 /// Run on demand with: dotnet test benchmarks/Elsa/Workflows/Runtime/Benchmarks/Elsa.Workflows.Runtime.Benchmarks.csproj
@@ -72,6 +83,14 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     private const int WarmupCount = 2;
     private const int IterationCount = 10;
     private const int HotLoopLength = 10;
+
+    /// <summary>
+    /// Coalescing segment cap for the hot-loop A/B, deliberately above the burst's total checkpoint count (~66)
+    /// so the cap's deactivation fallback cannot fire and the leaf's side-effect profile is the only variable.
+    /// The host default (50) trips mid-burst once ReplaySafe removes the segment-resetting claim boundaries —
+    /// that interaction is documented by the default-cap diagnostic run, not baked into the A/B numbers.
+    /// </summary>
+    private const int HotLoopSegmentCap = 256;
     private const string WriteLineNodeId = "node-writeline";
     private const string FlowchartNodeId = "node-flowchart";
 
@@ -111,22 +130,39 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             () => NewDurableSqliteHarnessAsync(coalesce: false),
             () => BuildHotLoopFlowchart(NewPureLoopNode),
             AssertHotLoopCompleted);
-        Report($"hot-loop×{HotLoopLength} (pure leaf) · durable-sqlite · Immediate", immediate);
+        Report($"hot-loop×{HotLoopLength} (ReplaySafe leaf) · durable-sqlite · Immediate", immediate);
 
         var coalesced = await MeasureAsync(
-            () => NewDurableSqliteHarnessAsync(coalesce: true),
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
             () => BuildHotLoopFlowchart(NewPureLoopNode),
             AssertHotLoopCompleted);
-        Report($"hot-loop×{HotLoopLength} (pure leaf) · durable-sqlite · Coalesced", coalesced);
+        Report($"hot-loop×{HotLoopLength} (ReplaySafe leaf) · durable-sqlite · Coalesced (cap {HotLoopSegmentCap})", coalesced);
 
-        // Reference: the same chain with an External-by-nature leaf (WriteLine) under Coalesced. Because no
-        // side-effect marker is read in this base, its commits/run equal the pure-leaf Coalesced run above —
-        // that equality is the evidence that ADR 0032 R2's ReplaySafe relaxation is not yet wired.
+        // The A/B counterpart: the IDENTICAL chain (same node count, same composite nesting, same connections,
+        // same coalescing options) where only the leaf class differs — WriteLine is unmarked, so its contract
+        // compiles to the fail-safe External profile and its pre-activation claim keeps the mandatory flush.
         var coalescedExternalLeaf = await MeasureAsync(
-            () => NewDurableSqliteHarnessAsync(coalesce: true),
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
             () => BuildHotLoopFlowchart(index => NewWriteLineNode(LoopNodeId(index), $"loop step {index}")),
             AssertHotLoopCompleted);
-        Report($"hot-loop×{HotLoopLength} (External leaf: WriteLine) · durable-sqlite · Coalesced", coalescedExternalLeaf);
+        Report($"hot-loop×{HotLoopLength} (External leaf: WriteLine) · durable-sqlite · Coalesced (cap {HotLoopSegmentCap})", coalescedExternalLeaf);
+
+        // One-off untimed diagnostic runs: name the commit kinds actually flushed, so the residual mandatory
+        // boundaries under each policy/leaf combination are explained rather than guessed. The third run keeps
+        // the HOST-DEFAULT segment cap, documenting the cap-deactivation fallback a ReplaySafe hot loop longer
+        // than the cap runs into (see the class doc: the tail degrades to per-checkpoint Immediate).
+        await DumpCommitBreakdownAsync(
+            $"hot-loop×{HotLoopLength} ReplaySafe leaf · Coalesced (cap {HotLoopSegmentCap})",
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
+            () => BuildHotLoopFlowchart(NewPureLoopNode));
+        await DumpCommitBreakdownAsync(
+            $"hot-loop×{HotLoopLength} External leaf · Coalesced (cap {HotLoopSegmentCap})",
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
+            () => BuildHotLoopFlowchart(index => NewWriteLineNode(LoopNodeId(index), $"loop step {index}")));
+        await DumpCommitBreakdownAsync(
+            $"hot-loop×{HotLoopLength} ReplaySafe leaf · Coalesced (HOST-DEFAULT cap 50 — cap trips mid-burst, tail flushes Immediate)",
+            () => NewDurableSqliteHarnessAsync(coalesce: true),
+            () => BuildHotLoopFlowchart(NewPureLoopNode));
 
         var immediateCommits = TypicalCommits(immediate);
         var coalescedCommits = TypicalCommits(coalesced);
@@ -134,14 +170,18 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
 
         output.WriteLine(
             $"=== hot-loop commit summary === Immediate={immediateCommits}/run  " +
-            $"Coalesced(pure)={coalescedCommits}/run  Coalesced(External leaf)={coalescedExternalCommits}/run  " +
-            $"(ADR 0032 R2 marker not in base ⇒ pure≈External under Coalesced; per-activity claim floor remains)");
+            $"Coalesced(ReplaySafe leaf)={coalescedCommits}/run  Coalesced(External leaf)={coalescedExternalCommits}/run  " +
+            $"(segment cap {HotLoopSegmentCap} for both Coalesced variants)");
 
-        // Deterministic in this harness: coalescing folds the non-mandatory intra-drain checkpoints of a
-        // HotLoopLength-activity burst into the quiescence flush, so it strictly beats per-checkpoint Immediate.
+        // Both relationships are deterministic in this harness (commit counts are stable across iterations):
+        // coalescing folds the non-mandatory intra-drain checkpoints, and the spec-107 ReplaySafe marker
+        // additionally defers the per-leaf ActivityAttemptClaimed flush the External leaf must keep.
         Assert.True(
             coalescedCommits < immediateCommits,
             $"Expected Coalesced commits/run ({coalescedCommits}) < Immediate commits/run ({immediateCommits}).");
+        Assert.True(
+            coalescedCommits < coalescedExternalCommits,
+            $"Expected ReplaySafe-leaf commits/run ({coalescedCommits}) < External-leaf commits/run ({coalescedExternalCommits}) under Coalesced.");
     }
 
     // ---- Measurement engine ---------------------------------------------------------------------------------
@@ -193,6 +233,75 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
         assert(run);
 
         return lease.Store is null ? null : await CountCheckpointCommitsAsync(lease.Store);
+    }
+
+    /// <summary>
+    /// One-off untimed diagnostic: runs the workflow once on a fresh durable harness, then dumps the persisted
+    /// checkpoint-commit documents grouped by commit kind. The persisted marker does not carry the checkpoint
+    /// name, but every emitter builds its <c>CommitId</c> as <c>commit:{workItemId}:{kind-slug}[:{ids…}]</c>
+    /// (e.g. <c>activity-attempt-claimed</c>, <c>activity-completed</c>, <c>workflow-completed</c>), so the
+    /// kebab-case slug segments identify the flushed boundary. This names the residual mandatory flushes under a
+    /// given policy/leaf combination instead of leaving the commit count unexplained.
+    /// </summary>
+    private async Task DumpCommitBreakdownAsync(
+        string label,
+        Func<ValueTask<HarnessLease>> newLease,
+        Func<WorkflowExecutable> executableFactory)
+    {
+        await using var lease = await newLease();
+        var run = await lease.Harness.RunAsync(executableFactory());
+        run.AssertWorkflowCompleted();
+
+#pragma warning disable GW0004
+        var result = await lease.Store!.QueryAsync(
+            new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
+#pragma warning restore GW0004
+
+        var kinds = result.Documents
+            .Select(document =>
+            {
+                using var content = JsonDocument.Parse(document.ContentJson);
+                var root = content.RootElement;
+                var commitId =
+                    root.TryGetProperty("commitId", out var camel) ? camel.GetString() :
+                    root.TryGetProperty("CommitId", out var pascal) ? pascal.GetString() : null;
+                return CommitKindSlug(commitId ?? document.Id);
+            })
+            .GroupBy(kind => kind, StringComparer.Ordinal)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key, StringComparer.Ordinal)
+            .ToArray();
+
+        output.WriteLine($"=== flushed-commit breakdown (1 diagnostic run): {label} — total={result.TotalCount} ===");
+        foreach (var group in kinds)
+            output.WriteLine($"  {group.Count(),3} × {group.Key}");
+    }
+
+    /// <summary>
+    /// The commit-kind slugs the runtime's emitters put into their <c>CommitId</c>s (grep <c>CommitId: $"commit:</c>
+    /// under src/Elsa). Work-item ids also contain kebab-case hops (<c>schedule-child</c>, <c>invoke</c>, …), so a
+    /// naive "alphabetic segments" heuristic drowns the signal; matching this closed set keeps the dump readable.
+    /// </summary>
+    private static readonly string[] KnownCommitKindSlugs =
+    [
+        "activity-attempt-claimed", "activity-scheduled", "activity-started", "activity-completed",
+        "activity-inspection-captured", "parent-activity-completed", "activity-suspended", "activity-cancelled",
+        "bookmark-created", "incident-recorded", "workflow-faulted", "scheduler-poison", "intrinsic", "cancel"
+    ];
+
+    /// <summary>
+    /// Extracts the commit-kind slug from a <c>commit:{workItemId}:{kind-slug}[:{ids…}]</c> id by matching the
+    /// runtime's known kind slugs; unmatched ids (e.g. the terminal continuation-checkpoint flush) fall back to
+    /// their last two segments.
+    /// </summary>
+    private static string CommitKindSlug(string commitId)
+    {
+        foreach (var slug in KnownCommitKindSlugs)
+            if (commitId.Contains($":{slug}", StringComparison.Ordinal))
+                return slug;
+
+        var segments = commitId.Split(':');
+        return segments.Length >= 2 ? $"…{segments[^2]}:{segments[^1]}" : commitId;
     }
 
     private static async Task<long> CountCheckpointCommitsAsync(IDocumentStore store)
@@ -264,7 +373,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
         return new HarnessLease(harness, store: null, databasePath: null);
     }
 
-    private static async ValueTask<HarnessLease> NewDurableSqliteHarnessAsync(bool coalesce)
+    private static async ValueTask<HarnessLease> NewDurableSqliteHarnessAsync(bool coalesce, int? maxSegmentCheckpoints = null)
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-engine-bench-{Guid.NewGuid():N}.db");
         var store = await SqliteDocumentStoreFactory.CreateAsync(
@@ -286,9 +395,14 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
 
                 // Opt into burst-coalescing checkpoint persistence AFTER the durable stores are registered — the
                 // decorator captures the last (durable) registration of each runtime store. Without this call the
-                // runtime keeps its default Immediate policy (every checkpoint is its own commit).
+                // runtime keeps its default Immediate policy (every checkpoint is its own commit). A caller may
+                // pin the segment cap; omitted, the shipped default (50) applies.
                 if (coalesce)
-                    services.AddCoalescingRuntimeCheckpointPersistence();
+                    services.AddCoalescingRuntimeCheckpointPersistence(options =>
+                    {
+                        if (maxSegmentCheckpoints is { } cap)
+                            options.MaxSegmentCheckpoints = cap;
+                    });
             })
             .Build(ActivityExecutionIds);
 
@@ -425,14 +539,15 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
 
 /// <summary>
 /// A pure, benchmark-local CLR leaf: it completes immediately with the single <c>Done</c> outcome and performs
-/// no externally observable side effect (it touches only in-workflow control flow). This is the "hot-loop body"
-/// class ADR 0032 R1 classifies as <c>SideEffectProfile.ReplaySafe</c>. The marker itself is not in this base,
-/// so nothing reads it yet; when ADR 0032 R2's WU-marker lands, declaring this contract <c>ReplaySafe</c> is the
-/// one change that lets the Coalesced hot-loop drop its per-activity <c>ActivityAttemptClaimed</c> flush.
+/// no externally observable side effect (it touches only in-workflow control flow). Declared
+/// <c>[ActivitySideEffectProfile(ReplaySafe)]</c> per ADR 0032 R1 / spec 107, so under the Coalesced policy its
+/// pre-activation <c>ActivityAttemptClaimed</c> checkpoint defers into the coalesced segment instead of flushing
+/// per activity — the exact relaxation the hot-loop A/B measures against the unmarked (External) WriteLine leaf.
 /// Discovered by the runtime type registrar via the AppDomain assembly scan (the benchmark assembly is loaded),
 /// exactly as the shipped primitive activities are.
 /// </summary>
 [ActivityOutcome("Done")]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class NoOpStep : Activity<ActivityUnit>
 {
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
