@@ -391,7 +391,7 @@ public sealed class GroundworkDesignAtomicWriteTests
             callerCancellation.Token);
 
         Assert.True(callerCancellation.IsCancellationRequested);
-        Assert.Equal(GroundworkDesignAtomicWriteStatus.Replayed, result.Status);
+        Assert.Equal(GroundworkDesignAtomicWriteStatus.Reconciled, result.Status);
         Assert.Equal(ResultFingerprint, result.AuthoritativeResultFingerprint);
         Assert.Equal(ResultJson, result.AuthoritativeResultJson);
         Assert.True(documents.ReconciliationUsedFreshToken);

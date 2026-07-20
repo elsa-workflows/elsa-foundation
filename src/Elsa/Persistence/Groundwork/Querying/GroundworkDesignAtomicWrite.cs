@@ -65,7 +65,12 @@ public sealed class GroundworkDesignAtomicWrite
 
         var markerId = CreateMarkerId(request.Operation);
         if (await LoadMarkerAsync(markerId, request.Operation, cancellationToken) is { } existing)
-            return Resolve(existing, request);
+        {
+            return Resolve(
+                existing,
+                request,
+                GroundworkDesignAtomicWriteStatus.Replayed);
+        }
 
         try
         {
@@ -78,7 +83,10 @@ public sealed class GroundworkDesignAtomicWrite
                 var marker = await LoadMarkerAsync(markerId, request.Operation, cancellationToken)
                              ?? throw new GroundworkDesignAtomicWriteUncertainCommitException(
                                  $"Design operation marker '{markerId}' conflicted, but the winning marker could not be reloaded.");
-                return Resolve(marker, request);
+                return Resolve(
+                    marker,
+                    request,
+                    GroundworkDesignAtomicWriteStatus.Replayed);
             }
             catch (OperationCanceledException)
             {
@@ -101,7 +109,12 @@ public sealed class GroundworkDesignAtomicWrite
             try
             {
                 if (await LoadMarkerAsync(markerId, request.Operation, reconciliation.Token) is { } marker)
-                    return Resolve(marker, request);
+                {
+                    return Resolve(
+                        marker,
+                        request,
+                        GroundworkDesignAtomicWriteStatus.Reconciled);
+                }
             }
             catch (OperationCanceledException) when (reconciliation.IsCancellationRequested)
             {
@@ -271,7 +284,8 @@ public sealed class GroundworkDesignAtomicWrite
 
     private static GroundworkDesignAtomicWriteResult Resolve(
         DesignOperationMarker marker,
-        GroundworkDesignAtomicWriteRequest request)
+        GroundworkDesignAtomicWriteRequest request,
+        GroundworkDesignAtomicWriteStatus exactMatchStatus)
     {
         if (!StringComparer.Ordinal.Equals(
                 marker.CanonicalRequestFingerprint,
@@ -280,9 +294,21 @@ public sealed class GroundworkDesignAtomicWrite
             return GroundworkDesignAtomicWriteResult.Conflict();
         }
 
-        return GroundworkDesignAtomicWriteResult.Replayed(
-            marker.AuthoritativeResultFingerprint,
-            marker.AuthoritativeResultJson);
+        return exactMatchStatus switch
+        {
+            GroundworkDesignAtomicWriteStatus.Replayed =>
+                GroundworkDesignAtomicWriteResult.Replayed(
+                    marker.AuthoritativeResultFingerprint,
+                    marker.AuthoritativeResultJson),
+            GroundworkDesignAtomicWriteStatus.Reconciled =>
+                GroundworkDesignAtomicWriteResult.Reconciled(
+                    marker.AuthoritativeResultFingerprint,
+                    marker.AuthoritativeResultJson),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(exactMatchStatus),
+                exactMatchStatus,
+                "An exact marker match can only be classified as replayed or reconciled.")
+        };
     }
 
     private static SaveDocumentRequest CreateMarkerRequest(
@@ -512,9 +538,22 @@ public sealed record GroundworkDesignAtomicWriteStageResult
 
 public enum GroundworkDesignAtomicWriteStatus
 {
+    /// <summary>The current attempt committed and received a definitive provider acknowledgement.</summary>
     Committed,
+
+    /// <summary>
+    /// The current attempt received an uncertain acknowledgement, then confirmed its marker. Callers may
+    /// perform the same post-commit outcome publication they perform for <see cref="Committed"/>.
+    /// </summary>
+    Reconciled,
+
+    /// <summary>A marker from an earlier or competing attempt supplied the authoritative result.</summary>
     Replayed,
+
+    /// <summary>The provider rejected a staged decision and rolled the complete unit of work back.</summary>
     Rejected,
+
+    /// <summary>The operation key already belongs to different canonical mutation material.</summary>
     Conflict
 }
 
@@ -540,6 +579,9 @@ public sealed record GroundworkDesignAtomicWriteResult
 
     internal static GroundworkDesignAtomicWriteResult Replayed(string fingerprint, string json) =>
         new(GroundworkDesignAtomicWriteStatus.Replayed, fingerprint, json);
+
+    internal static GroundworkDesignAtomicWriteResult Reconciled(string fingerprint, string json) =>
+        new(GroundworkDesignAtomicWriteStatus.Reconciled, fingerprint, json);
 
     internal static GroundworkDesignAtomicWriteResult Rejected() =>
         new(GroundworkDesignAtomicWriteStatus.Rejected, null, null);
