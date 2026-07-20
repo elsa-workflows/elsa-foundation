@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Primitives.Entities;
 using Groundwork.Core.PhysicalStorage;
@@ -28,7 +29,7 @@ public sealed class GroundworkQueryTranslatorTests
         object value = sourceOperator == QueryOp.In ? new[] { "alpha", "beta" } : "alpha";
         var source = Query<DesignDocument>.Where(x => x.Category, sourceOperator, value);
 
-        var result = _translator.Translate(DocumentKind, QueryIdentity, source);
+        var result = TranslateDocuments(source);
 
         var comparison = Assert.Single(Assert.Single(result.Clauses).Comparisons);
         Assert.Equal("entity.category", comparison.Path);
@@ -46,7 +47,7 @@ public sealed class GroundworkQueryTranslatorTests
             .Or(x => x.Description, QueryOp.Contains, "order")
             .And(x => x.Category, QueryOp.Equal, "sales");
 
-        var result = _translator.Translate(DocumentKind, QueryIdentity, source);
+        var result = TranslateDocuments(source);
 
         Assert.Collection(
             result.Clauses,
@@ -68,7 +69,7 @@ public sealed class GroundworkQueryTranslatorTests
                 "2026-07-20T03:21:30+00:00",
                 CultureInfo.InvariantCulture));
 
-        var result = _translator.Translate(DocumentKind, QueryIdentity, source);
+        var result = TranslateDocuments(source);
 
         Assert.Equal(
             ["entity.title_text", "entity.sequence", "entity.publishedAt"],
@@ -87,31 +88,95 @@ public sealed class GroundworkQueryTranslatorTests
             ? Query<DesignDocument>.All().OrderByDescending(x => x.Sequence)
             : Query<DesignDocument>.All().OrderBy(x => x.Sequence);
 
-        var result = _translator.Translate(DocumentKind, QueryIdentity, source);
+        var result = _translator.Translate(DocumentKind, QueryIdentity, source, take: 25);
 
-        var order = Assert.Single(result.Order);
-        Assert.Equal("entity.sequence", order.Path);
-        Assert.Equal(expectedDirection, order.Direction);
+        Assert.Collection(
+            result.Order,
+            order =>
+            {
+                Assert.Equal("entity.sequence", order.Path);
+                Assert.Equal(expectedDirection, order.Direction);
+            },
+            order =>
+            {
+                Assert.Equal("entity.id", order.Path);
+                Assert.Equal(expectedDirection, order.Direction);
+            });
     }
 
     [Theory]
-    [InlineData(BoundedQueryResultOperation.Documents)]
     [InlineData(BoundedQueryResultOperation.Count)]
     [InlineData(BoundedQueryResultOperation.Any)]
     [InlineData(BoundedQueryResultOperation.First)]
-    public void Makes_result_operation_and_offset_page_explicit(BoundedQueryResultOperation operation)
+    public void Accepts_bounded_terminal_result_operations_without_a_document_page(BoundedQueryResultOperation operation)
     {
         var result = _translator.Translate(
             DocumentKind,
             QueryIdentity,
             Query<DesignDocument>.All(),
-            operation,
+            operation);
+
+        Assert.Equal(operation, result.ResultOperation);
+        Assert.Null(result.Skip);
+        Assert.Null(result.Take);
+        Assert.Empty(result.Order);
+    }
+
+    [Fact]
+    public void Accepts_bounded_ordered_document_results()
+    {
+        var result = _translator.Translate(
+            DocumentKind,
+            QueryIdentity,
+            Query<DesignDocument>.All().OrderBy(x => x.Id),
+            BoundedQueryResultOperation.Documents,
             skip: 50,
             take: 25);
 
-        Assert.Equal(operation, result.ResultOperation);
+        Assert.Equal(BoundedQueryResultOperation.Documents, result.ResultOperation);
         Assert.Equal(50, result.Skip);
         Assert.Equal(25, result.Take);
+        Assert.Equal("entity.id", Assert.Single(result.Order).Path);
+    }
+
+    [Fact]
+    public void Rejects_document_results_without_a_take_bound_before_a_provider_can_execute()
+    {
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            _translator.Translate(
+                DocumentKind,
+                QueryIdentity,
+                Query<DesignDocument>.All().OrderBy(x => x.Id)));
+
+        Assert.Contains("positive take", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Rejects_document_results_with_a_non_positive_take_bound_before_a_provider_can_execute(int take)
+    {
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            _translator.Translate(
+                DocumentKind,
+                QueryIdentity,
+                Query<DesignDocument>.All().OrderBy(x => x.Id),
+                take: take));
+
+        Assert.Contains("positive take", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Rejects_document_results_without_a_deterministic_order_before_a_provider_can_execute()
+    {
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            _translator.Translate(
+                DocumentKind,
+                QueryIdentity,
+                Query<DesignDocument>.All(),
+                take: 1));
+
+        Assert.Contains("deterministic order", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -119,7 +184,7 @@ public sealed class GroundworkQueryTranslatorTests
     {
         var source = Query<DesignDocument>.Where(x => x.Description, QueryOp.Equal, null);
 
-        var result = _translator.Translate(DocumentKind, QueryIdentity, source);
+        var result = TranslateDocuments(source);
 
         var comparison = Assert.Single(Assert.Single(result.Clauses).Comparisons);
         Assert.Equal("entity.description", comparison.Path);
@@ -131,7 +196,7 @@ public sealed class GroundworkQueryTranslatorTests
     {
         var source = Query<DesignDocument>.Where(x => x.Category, QueryOp.In, Array.Empty<string>());
 
-        var result = _translator.Translate(DocumentKind, QueryIdentity, source);
+        var result = TranslateDocuments(source);
 
         Assert.Empty(Assert.Single(result.Clauses).Comparisons);
     }
@@ -142,7 +207,7 @@ public sealed class GroundworkQueryTranslatorTests
         var source = Query<DesignDocument>.Where(x => x.Description, QueryOp.Contains, null);
 
         var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
-            _translator.Translate(DocumentKind, QueryIdentity, source));
+            TranslateDocuments(source));
 
         Assert.Contains(nameof(QueryOp.Contains), exception.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(DesignDocument.Description), exception.Message, StringComparison.Ordinal);
@@ -154,7 +219,7 @@ public sealed class GroundworkQueryTranslatorTests
         var source = Query<DesignDocument>.Where(x => x.Category, QueryOp.In, "not-a-set");
 
         var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
-            _translator.Translate(DocumentKind, QueryIdentity, source));
+            TranslateDocuments(source));
 
         Assert.Contains(nameof(QueryOp.In), exception.Message, StringComparison.Ordinal);
         Assert.Contains("set", exception.Message, StringComparison.OrdinalIgnoreCase);
@@ -166,7 +231,7 @@ public sealed class GroundworkQueryTranslatorTests
         var source = Query<DesignDocument>.Where(x => x.Title.ToLowerInvariant(), QueryOp.Equal, "invoice");
 
         var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
-            _translator.Translate(DocumentKind, QueryIdentity, source));
+            TranslateDocuments(source));
 
         Assert.Contains("member", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -177,7 +242,7 @@ public sealed class GroundworkQueryTranslatorTests
         var source = Query<DesignDocument>.Where(x => x.TransientLabel, QueryOp.Equal, "invoice");
 
         var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
-            _translator.Translate(DocumentKind, QueryIdentity, source));
+            TranslateDocuments(source));
 
         Assert.Contains("excluded", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(nameof(DesignDocument.TransientLabel), exception.Message, StringComparison.Ordinal);
@@ -190,7 +255,7 @@ public sealed class GroundworkQueryTranslatorTests
         var source = Query<DesignDocument>.Where(x => x.Category, QueryOp.Equal, value);
 
         var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
-            _translator.Translate(DocumentKind, QueryIdentity, source));
+            TranslateDocuments(source));
 
         Assert.Contains("scalar", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(nameof(DesignDocument.Category), exception.Message, StringComparison.Ordinal);
@@ -208,7 +273,7 @@ public sealed class GroundworkQueryTranslatorTests
             new FailingValue());
 
         var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
-            translator.Translate(DocumentKind, QueryIdentity, source));
+            TranslateDocuments(translator, source));
 
         Assert.Contains("serialized", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(nameof(DesignDocument.Category), exception.Message, StringComparison.Ordinal);
@@ -220,6 +285,66 @@ public sealed class GroundworkQueryTranslatorTests
         new { Value = "object" },
         new[] { "array" }
     };
+
+    [Fact]
+    public void Rejects_members_suppressed_by_the_canonical_type_info_resolver()
+    {
+        var translator = new GroundworkQueryTranslator<DesignDocument>(
+            GroundworkDocumentSerialization.Create([nameof(Entity.RowNumber)]));
+        var source = Query<DesignDocument>.Where(x => x.RowNumber, QueryOp.Equal, 1L);
+
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            TranslateDocuments(translator, source));
+
+        Assert.Contains(nameof(Entity.RowNumber), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("excluded", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Uses_property_names_renamed_by_the_canonical_type_info_resolver()
+    {
+        var options = new JsonSerializerOptions(Json)
+        {
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver
+            {
+                Modifiers =
+                {
+                    typeInfo =>
+                    {
+                        if (typeInfo.Type == typeof(DesignDocument))
+                        {
+                            typeInfo.Properties.Single(property => property.Name == "category").Name = "classification";
+                        }
+                    }
+                }
+            }
+        };
+        var translator = new GroundworkQueryTranslator<DesignDocument>(options);
+        var source = Query<DesignDocument>.Where(x => x.Category, QueryOp.Equal, "sales");
+
+        var result = TranslateDocuments(translator, source);
+
+        Assert.Equal("entity.classification", Assert.Single(Assert.Single(result.Clauses).Comparisons).Path);
+    }
+
+    private DocumentQuery TranslateDocuments(Query<DesignDocument> source, int take = 25) =>
+        TranslateDocuments(_translator, source, take);
+
+    private static DocumentQuery TranslateDocuments(
+        GroundworkQueryTranslator<DesignDocument> translator,
+        Query<DesignDocument> source,
+        int take = 25)
+    {
+        if (source.Order is null)
+            source.OrderBy(x => x.Id);
+
+        return translator.Translate(
+            DocumentKind,
+            QueryIdentity,
+            source,
+            BoundedQueryResultOperation.Documents,
+            take: take);
+    }
 
     private sealed class DesignDocument : Entity
     {
