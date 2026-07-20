@@ -9,7 +9,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 public sealed class GroundworkCreateDraftCommand(
-    GroundworkDraftCreationCoordinator coordinator,
+    IDraftOriginator draftOriginator,
     IPayloadSerializer payloadSerializer)
     : ICreateDraftCommand
 {
@@ -36,11 +36,11 @@ public sealed class GroundworkCreateDraftCommand(
                 () => payloadSerializer.Serialize(state)),
             layout.Select(ToMaterial).ToArray(),
             sourceVersionId);
-        return await coordinator.ExecuteAsync(
+        return await draftOriginator.ExecuteAsync(
             operationKey,
             OperationKind,
             requestMaterial,
-            _ => Task.FromResult(new GroundworkDraftCreationInput(
+            _ => Task.FromResult(new DraftOriginationInput(
                 workflowDefinitionId,
                 state,
                 layout,

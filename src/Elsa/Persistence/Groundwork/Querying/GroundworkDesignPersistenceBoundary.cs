@@ -18,12 +18,12 @@ internal static class GroundworkDesignPersistenceBoundary
 
         var failureKind = exception switch
         {
-            GroundworkProviderFailureException or GroundworkDesignAtomicWriteProviderFailureException =>
+            GroundworkProviderFailureException or DesignWriteProviderException =>
                 DesignPersistenceFailureKind.Provider,
             GroundworkCorruptPayloadException or
-                GroundworkDesignAtomicWriteSerializationException or
-                GroundworkDesignAtomicWriteCorruptResultException or
-                GroundworkDesignAtomicWriteCorruptMarkerException =>
+                DesignWriteSerializationException or
+                CorruptDesignResultException or
+                CorruptDesignMarkerException =>
                 DesignPersistenceFailureKind.Serialization,
             _ => (DesignPersistenceFailureKind?)null
         };
@@ -33,15 +33,15 @@ internal static class GroundworkDesignPersistenceBoundary
         var cause = exception switch
         {
             GroundworkProviderFailureException { InnerException: not null } provider => provider.InnerException,
-            GroundworkDesignAtomicWriteProviderFailureException { InnerException: not null } provider => provider.InnerException,
+            DesignWriteProviderException { InnerException: not null } provider => provider.InnerException,
             GroundworkCorruptPayloadException { InnerException: not null } payload => payload.InnerException,
-            GroundworkDesignAtomicWriteSerializationException { InnerException: not null } serialization => serialization.InnerException,
-            GroundworkDesignAtomicWriteCorruptResultException { InnerException: not null } result => result.InnerException,
-            GroundworkDesignAtomicWriteCorruptMarkerException { InnerException: not null } marker => marker.InnerException,
+            DesignWriteSerializationException { InnerException: not null } serialization => serialization.InnerException,
+            CorruptDesignResultException { InnerException: not null } result => result.InnerException,
+            CorruptDesignMarkerException { InnerException: not null } marker => marker.InnerException,
             _ => exception is GroundworkCorruptPayloadException or
-                    GroundworkDesignAtomicWriteSerializationException or
-                    GroundworkDesignAtomicWriteCorruptResultException or
-                    GroundworkDesignAtomicWriteCorruptMarkerException
+                    DesignWriteSerializationException or
+                    CorruptDesignResultException or
+                    CorruptDesignMarkerException
                 ? new InvalidDataException(exception.Message)
                 : exception
         };

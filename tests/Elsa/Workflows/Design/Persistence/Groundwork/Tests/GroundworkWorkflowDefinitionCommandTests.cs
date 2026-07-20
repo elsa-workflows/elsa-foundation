@@ -43,14 +43,14 @@ public class GroundworkWorkflowDefinitionCommandTests
 
     private DesignOperationKey NextKey() => new($"test-operation-{++_operationSequence}");
 
-    private GroundworkDraftCreationCoordinator DraftCreationCoordinator(
+    private IDraftOriginator DraftOriginator(
         IDocumentStore? store = null,
         IPayloadSerializer? payloadSerializer = null,
         IDeferredEventPublisher? deferredEventPublisher = null)
     {
         var documents = store ?? _store;
         var payloads = payloadSerializer ?? Payloads;
-        return new(
+        return new DraftOriginator(
             _identities,
             _locks,
             documents,
@@ -63,7 +63,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     private GroundworkCreateDraftCommand CreateCommand() =>
-        new(DraftCreationCoordinator(), Payloads);
+        new(DraftOriginator(), Payloads);
 
     private GroundworkUpdateDraftCommand UpdateCommand() =>
         new(_locks, _store, AtomicWrite(), Payloads, _events, _events, _clock, _accessContext);
@@ -127,7 +127,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var serializationFailure = new InvalidOperationException("Payload serialization failed.");
         var failingPayloads = new FakePayloadSerializer(serializationFailure);
         var command = new GroundworkCreateDraftCommand(
-            DraftCreationCoordinator(payloadSerializer: failingPayloads),
+            DraftOriginator(payloadSerializer: failingPayloads),
             failingPayloads);
 
         var thrown = await Assert.ThrowsAsync<DesignPersistenceException>(() => command.Execute(
@@ -159,7 +159,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var clone = new GroundworkCloneDraftFromVersionCommand(
             VersionStore(),
             VersionLayoutStore(),
-            DraftCreationCoordinator(),
+            DraftOriginator(),
             _accessContext);
         var key = NextKey();
 
@@ -198,7 +198,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var clone = new GroundworkCloneDraftFromVersionCommand(
             VersionStore(),
             VersionLayoutStore(),
-            DraftCreationCoordinator(),
+            DraftOriginator(),
             _accessContext);
         var operationKey = NextKey();
         var deferredEventsBeforeClone = _events.DeferredEvents.Count;
@@ -246,7 +246,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var clone = new GroundworkCloneDraftFromVersionCommand(
             VersionStore(),
             VersionLayoutStore(),
-            DraftCreationCoordinator(),
+            DraftOriginator(),
             _accessContext);
         var operationKey = NextKey();
         await clone.Execute(operationKey, sourceVersionId, CancellationToken.None);
@@ -284,7 +284,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var clone = new GroundworkCloneDraftFromVersionCommand(
             VersionStore(),
             VersionLayoutStore(),
-            DraftCreationCoordinator(store, deferredEventPublisher: deferredEvents),
+            DraftOriginator(store, deferredEventPublisher: deferredEvents),
             _accessContext);
         var operationKey = NextKey();
 
@@ -425,7 +425,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var store = new AcknowledgementLostAfterCommitDocumentStore(_store, callerCancellation);
         var deferredEvents = new CancellationAwareDeferredEventPublisher();
         var command = new GroundworkCreateDraftCommand(
-            DraftCreationCoordinator(store, deferredEventPublisher: deferredEvents),
+            DraftOriginator(store, deferredEventPublisher: deferredEvents),
             Payloads);
         var key = NextKey();
 

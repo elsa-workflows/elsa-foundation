@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkCloneDraftFromVersionCommand(
     IWorkflowDefinitionVersionStore versionStore,
     IWorkflowDefinitionVersionLayoutStore layoutStore,
-    GroundworkDraftCreationCoordinator coordinator,
+    IDraftOriginator draftOriginator,
     IPersistenceAccessContextAccessor accessContextAccessor)
     : ICloneDraftFromVersionCommand
 {
@@ -23,7 +23,7 @@ public sealed class GroundworkCloneDraftFromVersionCommand(
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceVersionId);
 
-        return await coordinator.ExecuteAsync(
+        return await draftOriginator.ExecuteAsync(
             operationKey,
             OperationKind,
             // Versions are immutable, so their identity is the complete canonical clone request.
@@ -46,7 +46,7 @@ public sealed class GroundworkCloneDraftFromVersionCommand(
                     Inputs: [.. sourceState.Inputs],
                     Outputs: [.. sourceState.Outputs],
                     StrategyOptions: sourceState.StrategyOptions);
-                return new GroundworkDraftCreationInput(
+                return new DraftOriginationInput(
                     sourceVersion.DefinitionId,
                     copiedState,
                     [.. (sourceLayout?.Records ?? [])],

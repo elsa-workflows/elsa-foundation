@@ -6,7 +6,6 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Events;
-using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Validations.Core;
@@ -21,7 +20,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 /// Each caller retains its own public request fingerprint while source expansion runs only after an
 /// exact-replay marker lookup misses.
 /// </summary>
-public sealed class GroundworkDraftCreationCoordinator(
+public sealed class DraftOriginator(
     IIdentityGenerator identityGenerator,
     IDistributedLockProvider lockProvider,
     IDocumentStore store,
@@ -31,12 +30,13 @@ public sealed class GroundworkDraftCreationCoordinator(
     IDeferredEventPublisher deferredEventPublisher,
     ISystemClock clock,
     IPersistenceAccessContextAccessor accessContextAccessor)
+    : IDraftOriginator
 {
-    internal async Task<string> ExecuteAsync<TRequest>(
+    public async Task<string> ExecuteAsync<TRequest>(
         DesignOperationKey operationKey,
         string operationKind,
         TRequest requestMaterial,
-        Func<CancellationToken, Task<GroundworkDraftCreationInput>> resolveInput,
+        Func<CancellationToken, Task<DraftOriginationInput>> resolveInput,
         CancellationToken cancellationToken)
         where TRequest : notnull
     {
@@ -49,10 +49,10 @@ public sealed class GroundworkDraftCreationCoordinator(
             store,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor);
-        GroundworkDraftCreationInput? input = null;
+        DraftOriginationInput? input = null;
         WorkflowDefinitionDraft? draft = null;
         IDistributedSynchronizationHandle? draftLock = null;
-        GroundworkDesignAtomicCommandResult<GroundworkDraftCreationResult> outcome;
+        GroundworkDesignAtomicCommandResult<DraftOriginationResult> outcome;
 
         try
         {
@@ -73,7 +73,7 @@ public sealed class GroundworkDraftCreationCoordinator(
                     await context.SaveAsync(
                         documents.ToSaveRequest(acceptedDraft, acceptedInput.Layout) with { ExpectedVersion = 0 },
                         token);
-                    return new GroundworkDraftCreationResult(acceptedDraft, errors.ToArray());
+                    return new DraftOriginationResult(acceptedDraft, errors.ToArray());
                 },
                 GroundworkDesignDocumentSerialization.Create(payloadSerializer),
                 cancellationToken,
@@ -121,13 +121,6 @@ public sealed class GroundworkDraftCreationCoordinator(
     }
 }
 
-internal sealed record GroundworkDraftCreationInput(
-    string WorkflowDefinitionId,
-    WorkflowDefinitionState State,
-    IReadOnlyCollection<DesignMetadataRecord> Layout,
-    string? SourceVersionId,
-    string? TenantId = null);
-
-internal sealed record GroundworkDraftCreationResult(
+internal sealed record DraftOriginationResult(
     WorkflowDefinitionDraft Draft,
     IReadOnlyList<ValidationError> Errors);

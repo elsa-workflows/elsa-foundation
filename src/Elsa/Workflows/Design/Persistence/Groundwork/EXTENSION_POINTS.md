@@ -20,10 +20,16 @@ Groundwork provider catalog for workflow-design persistence replacement contract
 | `ISubmitWorkflowDefinitionCommand` | `GroundworkSubmitWorkflowDefinitionCommand` |
 | `ICloneDraftFromVersionCommand` | `GroundworkCloneDraftFromVersionCommand` |
 | `IWorkflowDefinitionLookup` | Core `WorkflowDefinitionLookup` |
+| `IDraftOriginator` *(feature contract)* | `DraftOriginator` |
 
 `AddGroundworkWorkflowsDesignStores()` removes existing registrations for these contracts before adding the Groundwork implementations, preserving the one-active-implementation replacement-contract rule.
 
 `IDraftStateDiffEngine` is intentionally absent: per-diff mutation-event publication is retired until an event-sourcing consumer exists, so the engine is no longer registered by this provider (it remains in Core as the tested contract).
+
+`IDraftOriginator` is the provider-feature replacement seam used by the Groundwork create and
+clone commands. It owns identity allocation, per-draft locking, validation, atomic persistence,
+and lifecycle-event publication while each public command retains its own canonical operation
+material. Replace it only when specializing that complete Groundwork origination lifecycle.
 
 ## Document model
 

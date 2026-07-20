@@ -69,7 +69,7 @@ public sealed class GroundworkDesignAtomicWrite
         // This preflight intentionally precedes every provider operation, including the replay lookup.
         if (_store.TransactionBoundary != TransactionBoundary.CrossUnitAtomic)
         {
-            throw new GroundworkDesignAtomicWriteReadinessException(
+            throw new DesignWriteReadinessException(
                 $"Groundwork cannot atomically execute design operation '{request.Operation.OperationKind}' " +
                 $"with key '{request.Operation.OperationKey}' because the active store advertises " +
                 $"transaction boundary '{_store.TransactionBoundary}'.");
@@ -96,7 +96,7 @@ public sealed class GroundworkDesignAtomicWrite
             try
             {
                 var marker = await LoadMarkerAsync(markerId, request.Operation, cancellationToken)
-                             ?? throw new GroundworkDesignAtomicWriteUncertainCommitException(
+                             ?? throw new UncertainDesignCommitException(
                                  $"Design operation marker '{markerId}' conflicted, but the winning marker could not be reloaded.");
                 return Resolve(
                     marker,
@@ -107,13 +107,13 @@ public sealed class GroundworkDesignAtomicWrite
             {
                 throw;
             }
-            catch (GroundworkDesignAtomicWriteUncertainCommitException)
+            catch (UncertainDesignCommitException)
             {
                 throw;
             }
             catch (Exception exception)
             {
-                throw new GroundworkDesignAtomicWriteUncertainCommitException(
+                throw new UncertainDesignCommitException(
                     $"Design operation marker '{markerId}' conflicted, but the winning marker could not be classified.",
                     exception);
             }
@@ -138,13 +138,13 @@ public sealed class GroundworkDesignAtomicWrite
             }
             catch (Exception reconciliationException)
             {
-                throw new GroundworkDesignAtomicWriteUncertainCommitException(
+                throw new UncertainDesignCommitException(
                     $"Design operation '{request.Operation.OperationKind}' with key " +
                     $"'{request.Operation.OperationKey}' may have committed, but its durable marker could not be classified.",
                     new AggregateException(exception, reconciliationException));
             }
 
-            throw new GroundworkDesignAtomicWriteUncertainCommitException(
+            throw new UncertainDesignCommitException(
                 $"Design operation '{request.Operation.OperationKind}' with key " +
                 $"'{request.Operation.OperationKey}' may have committed, but its durable marker could not be reconciled.",
                 exception);
@@ -168,7 +168,7 @@ public sealed class GroundworkDesignAtomicWrite
         }
         catch (Exception exception)
         {
-            throw new GroundworkDesignAtomicWriteProviderFailureException(
+            throw new DesignWriteProviderException(
                 "Groundwork could not begin the design-operation unit of work.",
                 exception);
         }
@@ -225,7 +225,7 @@ public sealed class GroundworkDesignAtomicWrite
                 }
                 catch (Exception exception)
                 {
-                    throw new GroundworkDesignAtomicWriteProviderFailureException(
+                    throw new DesignWriteProviderException(
                         "Groundwork could not commit the design-operation unit of work.",
                         exception);
                 }
@@ -301,7 +301,7 @@ public sealed class GroundworkDesignAtomicWrite
         }
         catch (Exception exception)
         {
-            throw new GroundworkDesignAtomicWriteProviderFailureException(
+            throw new DesignWriteProviderException(
                 $"Groundwork could not read design-operation marker '{markerId}'.",
                 exception);
         }
@@ -479,7 +479,7 @@ public sealed class GroundworkDesignAtomicWrite
         }
     }
 
-    private static GroundworkDesignAtomicWriteCorruptMarkerException CorruptMarker(
+    private static CorruptDesignMarkerException CorruptMarker(
         string markerId,
         Exception exception) =>
         new($"Design operation marker '{markerId}' is corrupt.", markerId, exception);
@@ -559,7 +559,7 @@ public sealed class GroundworkDesignAtomicWriteContext
         }
         catch (Exception exception)
         {
-            throw new GroundworkDesignAtomicWriteProviderFailureException(
+            throw new DesignWriteProviderException(
                 $"Groundwork could not save document '{request.Id}' of kind '{request.DocumentKind}'.",
                 exception);
         }
@@ -584,7 +584,7 @@ public sealed class GroundworkDesignAtomicWriteContext
         }
         catch (Exception exception)
         {
-            throw new GroundworkDesignAtomicWriteProviderFailureException(
+            throw new DesignWriteProviderException(
                 $"Groundwork could not delete document '{request.Id}' of kind '{request.DocumentKind}'.",
                 exception);
         }
@@ -615,7 +615,7 @@ public sealed class GroundworkDesignAtomicWriteContext
         }
         catch (Exception exception)
         {
-            throw new GroundworkDesignAtomicWriteProviderFailureException(
+            throw new DesignWriteProviderException(
                 $"Groundwork could not read document '{id}' of kind '{documentKind}'.",
                 exception);
         }
@@ -701,19 +701,19 @@ public sealed record GroundworkDesignAtomicWriteResult
         new(GroundworkDesignAtomicWriteStatus.Conflict, null, null);
 }
 
-public sealed class GroundworkDesignAtomicWriteReadinessException(string message)
+public sealed class DesignWriteReadinessException(string message)
     : InvalidOperationException(message);
 
 /// <summary>Classifies a raw Groundwork operation failure so a design adapter can map it without a catch-all.</summary>
-public sealed class GroundworkDesignAtomicWriteProviderFailureException(string message, Exception innerException)
+public sealed class DesignWriteProviderException(string message, Exception innerException)
     : InvalidOperationException(message, innerException);
 
-public sealed class GroundworkDesignAtomicWriteUncertainCommitException(
+public sealed class UncertainDesignCommitException(
     string message,
     Exception? innerException = null)
     : InvalidOperationException(message, innerException);
 
-public sealed class GroundworkDesignAtomicWriteCorruptMarkerException(
+public sealed class CorruptDesignMarkerException(
     string message,
     string markerId,
     Exception innerException)

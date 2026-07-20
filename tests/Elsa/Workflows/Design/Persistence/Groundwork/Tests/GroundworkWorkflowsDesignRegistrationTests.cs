@@ -2,6 +2,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
@@ -69,7 +70,7 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkCloneDraftFromVersionCommand>(sp.GetRequiredService<ICloneDraftFromVersionCommand>());
         Assert.IsType<WorkflowDefinitionLookup>(sp.GetRequiredService<IWorkflowDefinitionLookup>());
         Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<GroundworkDesignAtomicWrite>());
-        Assert.IsType<GroundworkDraftCreationCoordinator>(sp.GetRequiredService<GroundworkDraftCreationCoordinator>());
+        Assert.IsType<DraftOriginator>(sp.GetRequiredService<IDraftOriginator>());
         Assert.Single(
             sp.GetServices<IGroundworkStorageManifestSource>(),
             source => source is GroundworkDesignAtomicWriteStorageManifestSource);
@@ -98,6 +99,19 @@ public class GroundworkWorkflowsDesignRegistrationTests
 
         Assert.IsType<GroundworkWorkflowDefinitionStore>(resolved);
         Assert.Single(scope.ServiceProvider.GetServices<IWorkflowDefinitionStore>());
+    }
+
+    [Fact]
+    public void Groundwork_registration_preserves_a_prior_draft_originator()
+    {
+        using var provider = BuildProvider(services =>
+            services.AddScoped<IDraftOriginator, PriorDraftOriginator>());
+        using var scope = provider.CreateScope();
+
+        var resolved = scope.ServiceProvider.GetRequiredService<IDraftOriginator>();
+
+        Assert.IsType<PriorDraftOriginator>(resolved);
+        Assert.Single(scope.ServiceProvider.GetServices<IDraftOriginator>());
     }
 
     [Fact]
@@ -133,7 +147,7 @@ public class GroundworkWorkflowsDesignRegistrationTests
         }
 
         AssertScopedOnce(services, typeof(GroundworkDesignAtomicWrite));
-        AssertScopedOnce(services, typeof(GroundworkDraftCreationCoordinator));
+        AssertScopedOnce(services, typeof(IDraftOriginator));
         Assert.Single(services.Where(x =>
             x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
             x.ImplementationType == typeof(WorkflowsDesignGroundworkStorageManifestSource)));
@@ -154,6 +168,18 @@ public class GroundworkWorkflowsDesignRegistrationTests
         public Task<Core.Entities.WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Core.Entities.WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<Core.Entities.WorkflowDefinition>> ListAsync(Core.Filters.WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class PriorDraftOriginator : IDraftOriginator
+    {
+        public Task<string> ExecuteAsync<TRequest>(
+            DesignOperationKey operationKey,
+            string operationKind,
+            TRequest requestMaterial,
+            Func<CancellationToken, Task<DraftOriginationInput>> resolveInput,
+            CancellationToken cancellationToken)
+            where TRequest : notnull =>
+            Task.FromResult("prior-draft");
     }
 
     private sealed class StubEventPublisher : IInlineEventPublisher, IDeferredEventPublisher

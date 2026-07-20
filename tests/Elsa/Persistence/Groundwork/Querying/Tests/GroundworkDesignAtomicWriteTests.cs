@@ -226,7 +226,7 @@ public sealed class GroundworkDesignAtomicWriteTests
                 marker.Version),
             CancellationToken.None);
 
-        await Assert.ThrowsAsync<GroundworkDesignAtomicWriteCorruptResultException>(() =>
+        await Assert.ThrowsAsync<CorruptDesignResultException>(() =>
             GroundworkDesignAtomicCommand.ExecuteAsync<CommandRequest, CommandResult>(
                 write,
                 operationKey,
@@ -269,7 +269,7 @@ public sealed class GroundworkDesignAtomicWriteTests
         var documents = new PerOperationDocumentStore(inner);
         var write = new GroundworkDesignAtomicWrite(documents);
 
-        await Assert.ThrowsAsync<GroundworkDesignAtomicWriteReadinessException>(() =>
+        await Assert.ThrowsAsync<DesignWriteReadinessException>(() =>
             write.ExecuteAsync(Request(), AcceptedWithoutDomainWritesAsync, CancellationToken.None));
 
         Assert.Equal(0, inner.LoadCount);
@@ -608,7 +608,7 @@ public sealed class GroundworkDesignAtomicWriteTests
             CancellationToken.None);
         var stageCalls = 0;
 
-        await Assert.ThrowsAsync<GroundworkDesignAtomicWriteCorruptMarkerException>(() =>
+        await Assert.ThrowsAsync<CorruptDesignMarkerException>(() =>
             write.ExecuteAsync(
                 Request(),
                 (_, _) =>
@@ -640,7 +640,7 @@ public sealed class GroundworkDesignAtomicWriteTests
             CancellationToken.None);
         var stageCalls = 0;
 
-        await Assert.ThrowsAsync<GroundworkDesignAtomicWriteCorruptMarkerException>(() =>
+        await Assert.ThrowsAsync<CorruptDesignMarkerException>(() =>
             write.ExecuteAsync(
                 Request(),
                 (_, _) =>
@@ -695,7 +695,7 @@ public sealed class GroundworkDesignAtomicWriteTests
             reconciliationTimeout: TimeSpan.FromSeconds(1));
         var stageCalls = 0;
 
-        await Assert.ThrowsAsync<GroundworkDesignAtomicWriteUncertainCommitException>(() =>
+        await Assert.ThrowsAsync<UncertainDesignCommitException>(() =>
             write.ExecuteAsync(
                 Request(),
                 (_, _) =>

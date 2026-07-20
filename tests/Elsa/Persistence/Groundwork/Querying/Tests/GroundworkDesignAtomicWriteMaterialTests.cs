@@ -76,7 +76,7 @@ public class GroundworkDesignAtomicWriteMaterialTests
             "1",
             new ResultMaterial("draft-1"));
 
-        Assert.Throws<GroundworkDesignAtomicWriteCorruptResultException>(() =>
+        Assert.Throws<CorruptDesignResultException>(() =>
             GroundworkDesignAtomicWriteMaterial.Deserialize<ResultMaterial>(
                 "sha256:tampered",
                 material.Json,

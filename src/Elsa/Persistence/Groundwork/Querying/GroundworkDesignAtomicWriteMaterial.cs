@@ -35,7 +35,7 @@ public sealed record GroundworkDesignAtomicWriteMaterial(string Json, string Fin
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            throw new GroundworkDesignAtomicWriteSerializationException(
+            throw new DesignWriteSerializationException(
                 $"The {operationKind} design-operation material could not be serialized.",
                 exception);
         }
@@ -63,23 +63,23 @@ public sealed record GroundworkDesignAtomicWriteMaterial(string Json, string Fin
                 canonicalJson);
             if (!StringComparer.Ordinal.Equals(expectedFingerprint, authoritativeResultFingerprint))
             {
-                throw new GroundworkDesignAtomicWriteCorruptResultException(
+                throw new CorruptDesignResultException(
                     $"The authoritative result for design operation '{operationKind}' does not match its fingerprint.");
             }
 
             return JsonSerializer.Deserialize<T>(
                        authoritativeResultJson,
                        jsonOptions ?? DefaultJsonOptions)
-                   ?? throw new GroundworkDesignAtomicWriteCorruptResultException(
+                   ?? throw new CorruptDesignResultException(
                        $"The authoritative result for design operation '{operationKind}' deserialized to null.");
         }
-        catch (GroundworkDesignAtomicWriteCorruptResultException)
+        catch (CorruptDesignResultException)
         {
             throw;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            throw new GroundworkDesignAtomicWriteCorruptResultException(
+            throw new CorruptDesignResultException(
                 $"The authoritative result for design operation '{operationKind}' could not be deserialized.",
                 exception);
         }
@@ -139,19 +139,19 @@ public sealed record GroundworkDesignAtomicWriteMaterial(string Json, string Fin
     }
 }
 
-public sealed class GroundworkDesignAtomicWriteCorruptResultException : InvalidOperationException
+public sealed class CorruptDesignResultException : InvalidOperationException
 {
-    public GroundworkDesignAtomicWriteCorruptResultException(string message)
+    public CorruptDesignResultException(string message)
         : base(message)
     {
     }
 
-    public GroundworkDesignAtomicWriteCorruptResultException(string message, Exception innerException)
+    public CorruptDesignResultException(string message, Exception innerException)
         : base(message, innerException)
     {
     }
 }
 
 /// <summary>Classifies canonical operation-material serialization failures before they cross a design adapter.</summary>
-public sealed class GroundworkDesignAtomicWriteSerializationException(string message, Exception innerException)
+public sealed class DesignWriteSerializationException(string message, Exception innerException)
     : InvalidOperationException(message, innerException);

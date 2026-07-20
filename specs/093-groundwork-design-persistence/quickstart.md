@@ -190,8 +190,11 @@ established best-effort/at-most-once deferred-event policy without claiming dura
 delivery. Promotion performs its marker lookup before source reads and locks, so an exact replay
 returns the authoritative version even after the source draft is discarded. Submit validation
 runs only after a marker miss, so mutable activity-structure projections cannot invalidate an
-already committed exact replay. Clone retains its existing semantics: immutable source
-state/layout are part of the delegated create fingerprint, and changed material conflicts.
+already committed exact replay. Clone owns a distinct operation kind whose canonical request is
+the immutable source-version identity. Its marker lookup runs before source expansion, identity
+allocation, locking, staging, or event publication, so exact replay returns the authoritative
+draft even after the source version and layout are removed; reusing the key with a different
+source identity conflicts before reading that source.
 
 The SQLite Target profile now executes all seven provider-transaction atomicity scenarios through
 a real scoped `GroundworkDesignAtomicWrite` over two admitted workflow document kinds plus the
@@ -215,7 +218,7 @@ The integrated pre-review candidate passed:
 
 - persistence core: `43/43`;
 - Groundwork querying: `126/126`;
-- workflow design Groundwork: `76/76`;
+- workflow design Groundwork: `80/80`;
 - activity design Groundwork: `66/66`;
 - focused SQLite atomicity/lifecycle suite: `8/8` — `7/7` provider-transaction scenarios plus
   `1/1` public `ICreateDraftCommand`/`OnDraftCreated` durability scenario;
