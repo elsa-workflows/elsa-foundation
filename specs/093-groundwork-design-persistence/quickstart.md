@@ -84,14 +84,19 @@ dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.
 
 #### Stable-candidate verification
 
-The tested source/test candidate is
-`17a5a937c3180b843f38ed53a6669ff8cdb8c913`. Verification completed at
-`2026-07-20T08:06:58+02:00` (CEST, `Europe/Amsterdam`) with these exact results:
+The latest tested source/test candidate is
+`9a68140fae197a06d43bc3c8245725dff778351f`. Verification completed at
+`2026-07-20T08:22:21+02:00` (CEST, `Europe/Amsterdam`) with these exact results:
 
 - `dotnet test tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj -c Release --no-restore`
-  — passed `58/58` (`0` failed, `0` skipped).
+  — passed `59/59` (`0` failed, `0` skipped).
 - `dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj -c Release --no-restore`
   — passed `618/618` (`0` failed, `0` skipped).
+
+The broader cross-suite commands below were last run on source/test candidate
+`17a5a937c3180b843f38ed53a6669ff8cdb8c913` at
+`2026-07-20T08:06:58+02:00` (CEST, `Europe/Amsterdam`):
+
 - `dotnet test tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj -c Release --no-build`
   — passed `354/354` (`0` failed, `0` skipped).
 - `dotnet test tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj -c Release --no-build`
@@ -103,7 +108,7 @@ The architecture ratchet required `dotnet restore Elsa.Server.slnx` before its e
 `--no-build` command so the repository-wide package scan had complete assets. The
 documentation-only follow-up changes only this quickstart. The commands above were
 not rerun on that documentation commit; their evidence remains attached to the tested
-source/test candidate SHA.
+source/test candidate SHAs stated above.
 
 ## 3. Run the four-provider black-box suite
 
