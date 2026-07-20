@@ -248,6 +248,70 @@ and later full provider conformance remain pending. The green lifecycle rows sti
 existing load-all/client-evaluation read path and are not bounded-query evidence; T026–T029 remain
 the authority for removing that path.
 
+### T036 independent review and final US1 evidence (2026-07-21)
+
+The reviewed production candidate is `b468c03e8087f9b7ce7fc16611f2f509899db060` (the six US1
+commits above base `c1663ad4f`). Three independent read-only reviewers examined the exact range
+`c1663ad4f..b468c03e8` on 2026-07-21 across (1) atomicity, rollback, retry/lost-acknowledgement
+reconciliation, replay ordering, cancellation detachment, canonical fingerprints, and EF-oracle
+purity; (2) lifecycle-event semantics and test-objective preservation against the T003 ledger
+(zero test deletions confirmed); and (3) scope isolation, contract-only DI seams
+(`IDesignAtomicWriter`/`IDraftOriginator`), core purity, exception taxonomy, and extension-point
+catalog accuracy. The scope/DI/docs axis was clean; the marker ledger's scope binding, the
+privileged-session `TenantAgnostic` gate, and the renamed exception taxonomy were each explicitly
+verified.
+
+One blocking finding was remediated: the issue-#404 workflow add-version race-rejection objective
+had lost its only test when `AddVersionCommandHandler` became a delegating shell. Commit
+`587334cec` (test-only, additive; the six reviewed production commits are untouched) restores it
+at the Groundwork command level with a deterministic stale-latest replay through the real command
+and stores, asserting `WorkflowDefinitionVersionConflictException` and zero persistence, and adds
+the post-composition `Replace` registration test for `IDraftOriginator` so the workflows
+extension-point catalog's replacement claim is fully covered. The originating reviewer re-verified
+the remediation and declared the axis clean at `587334cec`, which is therefore the final reviewed
+US1 candidate.
+
+Recorded non-blocking findings, none of which change this candidate:
+
+- Relational Groundwork providers surface a cancellation observed after `CommitAsync` was invoked
+  as a plain `OperationCanceledException` instead of
+  `DocumentCommitAcknowledgementUncertainException` (MongoDB already maps it). Elsa state still
+  converges through marker replay and the deferred-event policy is explicitly best-effort/
+  at-most-once, so this is routed upstream as valence-works/groundwork#118 rather than worked
+  around here.
+- `GroundworkDeleteWorkflowDefinitionPermanentlyCommand` performs its aggregate reads inside the
+  atomic stage callback instead of `beforeAttempt`; scope checks and all-or-nothing semantics
+  hold, but the pattern deviation carries provider-conditional read-during-write risk and a
+  benign concurrent-race `Rejected` surface. Owned by the US2/US3 command-hardening window.
+- Draft layout `AdditionalProperties` enters request material via raw JSON text, so a retry that
+  re-serializes with different whitespace/key order fingerprints as a conflict; byte-stable
+  retries are unaffected.
+- The permanent-delete "must be soft-deleted first" guard now throws `InvalidOperationException`
+  (previously `ArgumentException`) in both providers; accepted as the more correct classification
+  for this pre-release codebase.
+- All github-code-quality PR annotations (generic catch clauses, one empty loop body, one manual
+  disposal) were triaged acceptable-by-design: cancellation and already-classified
+  `DesignPersistenceException` outcomes are re-thrown before every generic wrap and no
+  double-wrapping path exists.
+
+Final counts at the reviewed candidate `587334cec`, verified 2026-07-21T01:29+02:00 (CEST):
+
+- persistence core: `43/43`;
+- Groundwork querying: `126/126`;
+- Groundwork core persistence: `637/637`;
+- workflow design Groundwork: `84/84` (82 plus the two remediation tests);
+- activity design Groundwork: `68/68`;
+- shared design conformance: `96` passed and `1` intentional profile-shape skip;
+- SQLite provider leaf: `9/9`;
+- temporary EF oracle: `17` passed and `10` explicitly inapplicable skips;
+- Groundwork unified host: `23/23`;
+- workflow design domain suite: `358/358`;
+- activity design domain suite: `490/490`;
+- workflow design API: `50/50`; activity design API: `5/5`; workflow publishing API: `381/381`;
+- architecture ratchets: `261/261`;
+- full `Elsa.Server.slnx` Release build: `0` errors, `147` accepted existing warnings;
+- `git diff --check`: clean.
+
 ## 1. Restore and build
 
 ```bash
