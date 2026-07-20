@@ -187,9 +187,19 @@ public sealed class RuntimeFenceContractTests
     {
         await driver.ResetPhysicalAsync();
         var commit = FullBundleCommit($"checkpoint-failure-{windowId}");
+        RuntimeExecutionFence expectedFence;
+        long initialOwnershipVersion;
 
         await using (var client = await driver.OpenPhysicalClientAsync())
         {
+            var ownership = await Ownership(client.DocumentStore, "owner-checkpoint-failure")
+                .AcquireAsync(commit.WorkflowExecutionId);
+            expectedFence = ownership.ToFence();
+            initialOwnershipVersion = (await client.DocumentStore.LoadAsync(
+                ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
+                DocumentId.Compose(commit.WorkflowExecutionId, OwnershipStateId(commit.WorkflowExecutionId))))!.Version;
+            commit = commit with { ExpectedFence = expectedFence };
+
             var failures = new GroundworkFailureController();
             failures.FailAt(new GroundworkFailureWindow(windowId));
             var decorated = new GroundworkFailureInjectingDocumentStore(
@@ -206,13 +216,23 @@ public sealed class RuntimeFenceContractTests
 
         await using (var reopenedClient = await driver.OpenPhysicalClientAsync())
         {
-            await AssertFullBundleAsync(reopenedClient.DocumentStore, commit, decisionIsDurable);
+            await AssertFullBundleAsync(
+                reopenedClient.DocumentStore,
+                commit,
+                decisionIsDurable,
+                expectedFence,
+                initialOwnershipVersion + (decisionIsDurable ? 1 : 0));
 
             // Before a durable decision, this is the first successful commit. After it, this is a replay. Both
             // routes must converge to one complete bundle after the physical client is reopened.
             var result = await Writer(reopenedClient.DocumentStore).CommitAsync(commit, Decision);
             Assert.Equal(new[] { OutboxId(commit) }, result.PendingPostCommitWorkIds);
-            await AssertFullBundleAsync(reopenedClient.DocumentStore, commit, present: true);
+            await AssertFullBundleAsync(
+                reopenedClient.DocumentStore,
+                commit,
+                present: true,
+                expectedFence,
+                initialOwnershipVersion + 1);
         }
     }
 
@@ -338,7 +358,10 @@ public sealed class RuntimeFenceContractTests
             IncidentIds: [],
             FaultCount: 0,
             AggregateFaultCount: 0,
-            Metadata: new Dictionary<string, string>());
+            Metadata: new Dictionary<string, string>())
+        {
+            ExecutionScopeId = "activity-full"
+        };
         var inspection = ActivityExecutionInspectionProjection.FromState(activity, $"checkpoint:{commitId}", Now);
         var intent = new RuntimePostCommitIntent(
             "intent-full",
@@ -444,7 +467,12 @@ public sealed class RuntimeFenceContractTests
             commit.CommitId));
     }
 
-    private static async Task AssertFullBundleAsync(IDocumentStore store, RuntimeCheckpointCommit commit, bool present)
+    private static async Task AssertFullBundleAsync(
+        IDocumentStore store,
+        RuntimeCheckpointCommit commit,
+        bool present,
+        RuntimeExecutionFence expectedFence,
+        long expectedOwnershipVersion)
     {
         const string workflowExecutionId = "wf-full-checkpoint-bundle";
         var serializer = GroundworkProviderTestSerialization.Serializer;
@@ -454,21 +482,42 @@ public sealed class RuntimeFenceContractTests
             .FindAsync(workflowExecutionId, "activity-full");
         var inspection = await new GroundworkActivityExecutionInspectionStore(store, serializer)
             .FindAsync(workflowExecutionId, "activity-full");
+        var hierarchy = await store.LoadAsync(
+            ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind,
+            DocumentId.Compose(workflowExecutionId, "activity-full"));
+        var scheduler = await new GroundworkSchedulerStateStore(store, serializer)
+            .FindAsync(workflowExecutionId);
         var bookmark = await new GroundworkBookmarkStateStore(store, serializer)
             .FindAsync(workflowExecutionId, "bookmark-full");
         var value = await new GroundworkDurableValueStateStore(store, serializer)
             .FindAsync(workflowExecutionId, "value-full");
+        var incident = await new GroundworkIncidentStateStore(store, serializer)
+            .FindAsync(workflowExecutionId, "incident-full");
         var liveness = await Liveness(store).FindAsync(workflowExecutionId, "operational-full");
+        var ownership = await Liveness(store).FindAsync(workflowExecutionId, OwnershipStateId(workflowExecutionId));
+        var ownershipEnvelope = await store.LoadAsync(
+            ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
+            DocumentId.Compose(workflowExecutionId, OwnershipStateId(workflowExecutionId)));
         var marker = await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, commit.CommitId);
         var outbox = await store.LoadAsync(ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind, OutboxId(commit));
+
+        Assert.NotNull(ownership);
+        Assert.Equal(expectedFence.LeaseId, ownership!.ExecutionLease!.LeaseId);
+        Assert.Equal(expectedFence.OwnerId, ownership.ExecutionLease.OwnerId);
+        Assert.Equal(expectedFence.FencingToken, ownership.ExecutionLease.FencingToken);
+        Assert.NotNull(ownershipEnvelope);
+        Assert.Equal(expectedOwnershipVersion, ownershipEnvelope!.Version);
 
         if (!present)
         {
             Assert.Null(workflow);
             Assert.Null(activity);
             Assert.Null(inspection);
+            Assert.Null(hierarchy);
+            Assert.Null(scheduler);
             Assert.Null(bookmark);
             Assert.Null(value);
+            Assert.Null(incident);
             Assert.Null(liveness);
             Assert.Null(marker);
             Assert.Null(outbox);
@@ -478,12 +527,17 @@ public sealed class RuntimeFenceContractTests
         Assert.Equal(workflowExecutionId, workflow!.WorkflowExecutionId);
         Assert.Equal("activity-full", activity!.Execution.ActivityExecutionId);
         Assert.Equal("activity-full", inspection!.ActivityExecutionId);
+        Assert.NotNull(hierarchy);
+        Assert.Equal(workflowExecutionId, scheduler!.WorkflowExecutionId);
         Assert.Equal("bookmark-full", bookmark!.BookmarkId);
         Assert.Equal("value-full", value!.DurableValueId);
+        Assert.Equal("incident-full", incident!.IncidentId);
         Assert.Equal("operational-full", liveness!.OperationalStateId);
         Assert.NotNull(marker);
         Assert.NotNull(outbox);
     }
+
+    private static string OwnershipStateId(string workflowExecutionId) => $"ownership:{workflowExecutionId}";
 
     private static JsonElement Json(string json)
     {
