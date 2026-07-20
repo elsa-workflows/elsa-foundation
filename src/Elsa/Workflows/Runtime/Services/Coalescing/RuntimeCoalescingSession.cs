@@ -39,11 +39,14 @@ public sealed class RuntimeCoalescingSession
 
     private readonly List<string> _outboxOrder = [];
     private readonly Dictionary<string, RuntimePostCommitOutboxItem> _outboxItems = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _durablyPersistedOutboxIds = new(StringComparer.Ordinal);
+    private readonly IRuntimePostCommitOutboxStore? _innerOutboxStore;
 
     public RuntimeCoalescingSession(
         string workflowExecutionId,
         IWorkflowSchedulerWorkQueue innerQueue,
-        CoalescingRuntimeCheckpointPersistenceOptions options)
+        CoalescingRuntimeCheckpointPersistenceOptions options,
+        IRuntimePostCommitOutboxStore? innerOutboxStore = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(innerQueue);
@@ -54,6 +57,7 @@ public sealed class RuntimeCoalescingSession
 
         WorkflowExecutionId = workflowExecutionId;
         _innerQueue = innerQueue;
+        _innerOutboxStore = innerOutboxStore;
         MaxSegmentCheckpoints = options.MaxSegmentCheckpoints;
     }
 
@@ -61,9 +65,9 @@ public sealed class RuntimeCoalescingSession
     public int MaxSegmentCheckpoints { get; }
 
     /// <summary>
-    /// <see langword="true"/> while the session is coalescing. An activity-attempt boundary may durably close one
-    /// segment and start another in the same drain; terminal/external boundaries, the cap, and quiescence deactivate
-    /// the session.
+    /// <see langword="true"/> while the session is coalescing. An activity-attempt boundary and the per-segment hop cap
+    /// durably close one segment and start another in the same drain; terminal/external boundaries and quiescence
+    /// deactivate the session.
     /// </summary>
     public bool IsActive { get; private set; } = true;
 
@@ -103,6 +107,87 @@ public sealed class RuntimeCoalescingSession
     {
         ArgumentNullException.ThrowIfNull(changes);
         ApplyToOverlay(changes, includeOutbox: false);
+    }
+
+    /// <summary>
+    /// Advances the overlay past a cap-hit fold-and-flush whose trailing commit stays inside the still-active session.
+    /// Unlike <see cref="RecordDurableBoundaryState"/>, the trailing commit's outbox items enter the overlay too: the
+    /// drain keeps delivering continuation from the working set for the next segment, while the flush already persisted
+    /// those items durably as the crash-redrive guarantee.
+    /// </summary>
+    public void RecordCapFlushState(RuntimeCheckpointStateChangeSet changes)
+    {
+        ArgumentNullException.ThrowIfNull(changes);
+        ApplyToOverlay(changes, includeOutbox: true);
+    }
+
+    /// <summary>
+    /// Records that a mid-drain flush durably persisted these outbox items while the session stays active. Their
+    /// authoritative lifecycle continues in the overlay; <see cref="ReconcileDurablyPersistedOutboxAsync"/> writes the
+    /// overlay outcome back to the durable store at the next flush so no durable <c>Pending</c> residue survives the
+    /// drain and gets redelivered as a duplicate by a later sweep.
+    /// </summary>
+    public void MarkOutboxDurablyPersisted(IEnumerable<RuntimeStateChange<RuntimePostCommitOutboxItem>> changes)
+    {
+        ArgumentNullException.ThrowIfNull(changes);
+        foreach (var change in changes)
+            _durablyPersistedOutboxIds.Add(change.StateId);
+    }
+
+    /// <summary>Whether a mid-drain flush already durably persisted this outbox item.</summary>
+    public bool IsOutboxDurablyPersisted(string outboxItemId) => _durablyPersistedOutboxIds.Contains(outboxItemId);
+
+    /// <summary>
+    /// Whether any durably persisted outbox item has since reached a completed overlay outcome that the durable store
+    /// does not know about yet. When <see langword="true"/> the drain needs one more flush even with an empty buffer.
+    /// </summary>
+    public bool RequiresDurableOutboxReconciliation =>
+        _durablyPersistedOutboxIds.Any(id => _outboxItems[id].Status
+            is RuntimePostCommitOutboxStatus.Delivered
+            or RuntimePostCommitOutboxStatus.FailedFinal);
+
+    /// <summary>
+    /// Writes the overlay delivery outcome of previously durably persisted outbox items back to the durable inner
+    /// outbox store. Called only as part of a flush, after the folded checkpoint commit has landed: reconciling earlier
+    /// would mark an item Delivered durably while its downstream effect (the overlay-enqueued continuation) is still
+    /// memory-only, destroying the crash-redrive guarantee. Items still pending in the overlay stay tracked — their
+    /// durable <c>Pending</c> row remains the crash backstop until they resolve or the drain ends.
+    /// </summary>
+    public async ValueTask ReconcileDurablyPersistedOutboxAsync(DateTimeOffset recordedAtFallback, CancellationToken cancellationToken)
+    {
+        if (_durablyPersistedOutboxIds.Count == 0)
+            return;
+
+        List<string>? reconciled = null;
+        foreach (var outboxItemId in _durablyPersistedOutboxIds)
+        {
+            var item = _outboxItems[outboxItemId];
+            if (item.Status is not (RuntimePostCommitOutboxStatus.Delivered or RuntimePostCommitOutboxStatus.FailedFinal))
+                continue;
+
+            if (_innerOutboxStore is null)
+            {
+                throw new InvalidOperationException(
+                    $"Post-commit outbox item '{outboxItemId}' was durably persisted mid-drain but the coalescing session has no inner outbox store to reconcile its delivery outcome.");
+            }
+
+            await _innerOutboxStore.RecordDeliveryResultAsync(
+                new RuntimePostCommitOutboxDeliveryResult(
+                    outboxItemId,
+                    item.Status,
+                    item.DeliveredAt ?? recordedAtFallback,
+                    item.Status == RuntimePostCommitOutboxStatus.FailedFinal
+                        ? item.LastFailureMessage ?? "Coalesced post-commit delivery failed."
+                        : null),
+                cancellationToken);
+            (reconciled ??= []).Add(outboxItemId);
+        }
+
+        if (reconciled is not null)
+        {
+            foreach (var outboxItemId in reconciled)
+                _durablyPersistedOutboxIds.Remove(outboxItemId);
+        }
     }
 
     private void ApplyToOverlay(RuntimeCheckpointStateChangeSet changes, bool includeOutbox)
@@ -594,13 +679,14 @@ public sealed class RuntimeCoalescingSession
     /// </summary>
     /// <param name="consumeInFlightClaims">
     /// The overlay lists a claimed work item until its claim completes, so the item whose dispatch triggered this very
-    /// flush is still visible here. When the flush closes the session's <b>final</b> segment (the boundary deactivates
-    /// coalescing — suspension, terminal, cap, or quiescence), pass <see langword="true"/>: the flush already carries
-    /// that item's durable effect, no later advance will run, and copying it into the durable inner queue would
-    /// redeliver it to the still-live drain loop as a duplicate dispatch (which then poisons on the replay-conflict
-    /// tripwire). When the session continues (a durable attempt boundary starting the next segment), pass
-    /// <see langword="false"/>: the durable copy is the crash-redrive guarantee for the in-flight user code and the
-    /// next flush counts it consumed once its claim completes.
+    /// flush is still visible here. When the flush already carries that item's durable effect — a boundary that
+    /// deactivates coalescing (suspension, terminal, quiescence) or a cap-hit fold-and-flush whose trailing commit
+    /// rode the in-flight dispatch — pass <see langword="true"/>: keeping a durable copy would redeliver an
+    /// already-applied item (to the still-live drain loop after deactivation, which poisons on the replay-conflict
+    /// tripwire, or on crash recovery mid-drain, where the flushed pending outbox items are the crash-redrive
+    /// guarantee instead). When the session continues past a durable attempt boundary that precedes the in-flight
+    /// user code, pass <see langword="false"/>: there the durable copy is the crash-redrive guarantee for that user
+    /// code and the next flush counts it consumed once its claim completes.
     /// </param>
     public async ValueTask AdvanceInnerQueueAsync(bool consumeInFlightClaims, CancellationToken cancellationToken)
     {
