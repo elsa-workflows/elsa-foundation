@@ -135,9 +135,12 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
     {
         var scheduledAt = _timeProvider.GetUtcNow();
         var provenance = NormalizeProvenance(workItem.WorkflowExecutionId, schedulePayload);
-        var executionScopeId = executableNode.Metadata.ContainsKey("activity.definitionVersionId")
+        var opensExecutionScope = executableNode.Metadata.ContainsKey("activity.definitionVersionId");
+        var executionScopeId = opensExecutionScope
             ? schedulePayload.ActivityExecutionId
             : provenance.ExecutionScopeId;
+        if (opensExecutionScope)
+            provenance = provenance with { ExecutionScopeId = executionScopeId };
         var execution = new ActivityExecution(
             ActivityExecutionId: schedulePayload.ActivityExecutionId,
             WorkflowExecutionId: workItem.WorkflowExecutionId,

@@ -356,15 +356,16 @@ public sealed class ReusableActivityAuthoringService(
         if (!string.Equals(result.DraftId, draft.Id, StringComparison.Ordinal) || result.Revision != draft.Revision)
             throw OperationFailed("The validator returned a result for a different draft revision.");
 
+        var existingValidation = await validationStore.FindAsync(draft.Id, draft.Revision, cancellationToken);
         var validation = new ActivityDraftValidationState
         {
-            Id = NewId("activity-validation"),
+            Id = existingValidation?.Id ?? NewId("activity-validation"),
             TenantId = draft.TenantId,
             DraftId = draft.Id,
             Revision = draft.Revision,
             ValidatedAt = result.ValidatedAt,
             Diagnostics = ActivityDiagnosticOrderer.Order(result.Diagnostics).ToList(),
-            CreatedAt = result.ValidatedAt,
+            CreatedAt = existingValidation?.CreatedAt ?? result.ValidatedAt,
             LastModifiedAt = result.ValidatedAt
         };
         try

@@ -8,7 +8,11 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Activities.Design.Api.Endpoints.Versions;
 
 internal sealed class Retire(ICommandSender sender, ILogger<Retire> logger)
-    : ActivityAuthoringCommandEndpoint<RetireReusableActivityVersion, ReusableActivityVersionLifecycleView>(sender, logger)
+    : ActivityAuthoringRouteCommandEndpoint<RetireReusableActivityVersion, ReusableActivityVersionLifecycleView>(
+        sender,
+        logger,
+        "versionId",
+        static (request, versionId) => request with { VersionId = versionId })
 {
     public override void Configure()
     {
@@ -18,7 +22,11 @@ internal sealed class Retire(ICommandSender sender, ILogger<Retire> logger)
 }
 
 internal sealed class Restore(ICommandSender sender, ILogger<Restore> logger)
-    : ActivityAuthoringCommandEndpoint<RestoreReusableActivityVersion, ReusableActivityVersionLifecycleView>(sender, logger)
+    : ActivityAuthoringRouteCommandEndpoint<RestoreReusableActivityVersion, ReusableActivityVersionLifecycleView>(
+        sender,
+        logger,
+        "versionId",
+        static (request, versionId) => request with { VersionId = versionId })
 {
     public override void Configure()
     {
@@ -28,7 +36,11 @@ internal sealed class Restore(ICommandSender sender, ILogger<Restore> logger)
 }
 
 internal sealed class Revoke(ICommandSender sender, ILogger<Revoke> logger)
-    : ActivityAuthoringCommandEndpoint<RevokeReusableActivityVersion, ReusableActivityVersionLifecycleView>(sender, logger)
+    : ActivityAuthoringRouteCommandEndpoint<RevokeReusableActivityVersion, ReusableActivityVersionLifecycleView>(
+        sender,
+        logger,
+        "versionId",
+        static (request, versionId) => request with { VersionId = versionId })
 {
     public override void Configure()
     {

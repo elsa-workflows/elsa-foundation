@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 using System.Text.Json.Serialization;
+using RouteParam = FastEndpoints.RouteParamAttribute;
 
 namespace Elsa.Activities.Design.Api.Commands;
 
@@ -34,7 +35,7 @@ public sealed record CreateReusableActivityDefinition(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ActivityTypeKey = null) : ICommand<ReusableActivityDefinitionMutationView>;
 
 public sealed record PreviewReusableActivityFork(
-    [property: JsonIgnore] string DefinitionId,
+    [property: RouteParam, JsonIgnore] string DefinitionId,
     string IdempotencyKey,
     string SourceVersionId,
     string Category,
@@ -44,21 +45,21 @@ public sealed record PreviewReusableActivityFork(
     string TargetProviderSchemaVersion) : ICommand<ActivityForkPreviewView>;
 
 public sealed record ApplyReusableActivityFork(
-    [property: JsonIgnore] string CandidateId,
+    [property: RouteParam, JsonIgnore] string CandidateId,
     string RequestFingerprint,
     string IdempotencyKey) : ICommand<ActivityForkReceiptView>;
 
 public sealed record GetReusableActivityForkStatus(
-    [property: JsonIgnore] string IdempotencyKey) : IRequest<ActivityForkReceiptView>;
+    [property: RouteParam, JsonIgnore] string IdempotencyKey) : IRequest<ActivityForkReceiptView>;
 
 public sealed record UpdateReusableActivityDefinition(
-    [property: JsonIgnore] string DefinitionId,
+    [property: RouteParam, JsonIgnore] string DefinitionId,
     string Category,
     string DisplayName,
     string? Description) : ICommand<ActivityDefinitionIdentityView>;
 
 public sealed record CreateReusableActivityDraft(
-    [property: JsonIgnore] string DefinitionId,
+    [property: RouteParam, JsonIgnore] string DefinitionId,
     string? SourceVersionId,
     ActivityProviderManifest? Provider = null,
     ActivityContractView? Contract = null,
@@ -66,12 +67,12 @@ public sealed record CreateReusableActivityDraft(
     string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>;
 
 public sealed record UpdateReusableActivityDraftPresentation(
-    [property: JsonIgnore] string DraftId,
+    [property: RouteParam, JsonIgnore] string DraftId,
     long ExpectedRevision,
     string? PresentationLabel) : ICommand<ReusableActivityDraftView>;
 
 public sealed record CreateReusableActivityDraftConflictCopy(
-    [property: JsonIgnore] string DraftId,
+    [property: RouteParam, JsonIgnore] string DraftId,
     long ExpectedSourceRevision,
     ActivityContractView Contract,
     ActivityProviderManifest Provider,
@@ -79,32 +80,32 @@ public sealed record CreateReusableActivityDraftConflictCopy(
     string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>;
 
 public sealed record ReplaceReusableActivityDraft(
-    [property: JsonIgnore] string DraftId,
+    [property: RouteParam, JsonIgnore] string DraftId,
     long ExpectedRevision,
     ActivityContractView Contract,
     ActivityProviderManifest Provider,
     IReadOnlyList<ActivityLayoutRecord> Layout,
     string? PresentationLabel = null) : ICommand<ReusableActivityDraftView>;
 
-public sealed record DiscardReusableActivityDraft([property: JsonIgnore] string DraftId, long ExpectedRevision) : ICommand;
+public sealed record DiscardReusableActivityDraft([property: RouteParam, JsonIgnore] string DraftId, long ExpectedRevision) : ICommand;
 
-public sealed record ValidateReusableActivityDraft([property: JsonIgnore] string DraftId, long ExpectedRevision) : ICommand<ActivityDraftValidationView>;
+public sealed record ValidateReusableActivityDraft([property: RouteParam, JsonIgnore] string DraftId, long ExpectedRevision) : ICommand<ActivityDraftValidationView>;
 
 public sealed record MigrateReusableActivityDraft(
-    [property: JsonIgnore] string DraftId,
+    [property: RouteParam, JsonIgnore] string DraftId,
     long ExpectedRevision,
     string TargetProviderKey,
     string TargetSchemaVersion) : ICommand<ReusableActivityDraftView>;
 
 public sealed record ProposeReusableActivityContract(
-    [property: JsonIgnore] string DraftId,
+    [property: RouteParam, JsonIgnore] string DraftId,
     long ExpectedRevision,
     string ExpectedProviderKey,
     string ExpectedProviderSchemaVersion,
     string ExpectedManifestFingerprint) : IRequest<ActivityContractProposalView>;
 
 public sealed record ApplyReusableActivityContractProposal(
-    [property: JsonIgnore] string DraftId,
+    [property: RouteParam, JsonIgnore] string DraftId,
     long ExpectedRevision,
     string ExpectedProviderKey,
     string ExpectedProviderSchemaVersion,
