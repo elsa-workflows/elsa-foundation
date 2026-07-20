@@ -34,7 +34,7 @@ full-solution Release discovery found 6,588 tests without executing them. The sh
 fixture scaffold currently has 8 deterministic-fixture tests. See [baseline
 evidence](evidence/baseline.md) for the commands and precise evidence scope.
 
-### T021/T022/T024 shared contract-suite scaffold
+### T021–T024 shared contract-suite scaffold
 
 The shared project now contains abstract, executable-by-inheritance workflow and activity suites.
 They exercise readiness, scoped lifecycle reads and writes, point-read scope isolation, wrong-scope
