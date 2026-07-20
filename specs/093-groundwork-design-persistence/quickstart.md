@@ -34,12 +34,15 @@ full-solution Release discovery found 6,588 tests without executing them. The sh
 fixture scaffold currently has 8 deterministic-fixture tests. See [baseline
 evidence](evidence/baseline.md) for the commands and precise evidence scope.
 
-### T021/T022 shared contract-suite scaffold
+### T021/T022/T024 shared contract-suite scaffold
 
 The shared project now contains abstract, executable-by-inheritance workflow and activity suites.
-They exercise readiness, scoped lifecycle reads and writes, restart/result-hash parity, draft and
+They exercise readiness, scoped lifecycle reads and writes, point-read scope isolation, wrong-scope
+non-disclosure and write rejection, scope-local duplicate identities, true reusable-activity-draft
+OCC, the workflow draft's intentional last-writer-wins policy, restart/result-hash parity, draft and
 version layout round-trips, clone provenance, validation rejection, descriptor serialization,
-SemVer identity, missing outcomes, permanent-delete outcomes, and reconciliation idempotency. The
+SemVer identity, missing outcomes, permanent-delete outcomes, and reconciliation idempotency. T023's
+failure-injection, acknowledgement-replay, and duplicate-event scenarios remain separately pending. The
 scenarios reference only Elsa core contracts plus `IDesignPersistenceContractFixture`. The reusable
 test assembly is guarded against provider SDK assembly references. T025 and T051–T054 must therefore
 place concrete EF-oracle and provider fixtures in separate provider-specific test projects that

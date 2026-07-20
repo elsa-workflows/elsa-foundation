@@ -15,7 +15,11 @@ public interface IDesignPersistenceContractFixture : IAsyncDisposable
     /// <summary>The provider identity written into scenario evidence, for example <c>sqlite</c>.</summary>
     string Provider { get; }
 
-    /// <summary>Creates a scope-bound service provider for one ordinary design request.</summary>
+    /// <summary>
+    /// Creates a fresh scope-bound service provider for one ordinary design request. The returned
+    /// provider is bound to <paramref name="storageScope"/> for every resolved design store and
+    /// command; implementations must not reuse a provider or an access context from another scope.
+    /// </summary>
     IServiceScope CreateScope(string storageScope);
 
     /// <summary>Closes and reopens the same durable target without changing its contents.</summary>

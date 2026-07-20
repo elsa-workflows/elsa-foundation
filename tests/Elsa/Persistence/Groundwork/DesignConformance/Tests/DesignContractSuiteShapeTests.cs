@@ -102,6 +102,7 @@ public class DesignContractSuiteShapeTests
     {
         Assert.True(typeof(WorkflowDesignContractSuite).IsAbstract);
         Assert.True(typeof(ActivityDesignContractSuite).IsAbstract);
+        Assert.True(typeof(DesignIsolationAndRestartContractSuite).IsAbstract);
 
         var referencedAssemblies = Assembly.GetExecutingAssembly()
             .GetReferencedAssemblies()
@@ -126,6 +127,30 @@ public class DesignContractSuiteShapeTests
             "fixture signature assembly",
             signatureTypes.Select(type => type.Assembly.GetName().Name!),
             AllowedAssemblyNames);
+    }
+
+    [Fact]
+    public void Isolation_suite_declares_the_complete_provider_neutral_contract_matrix()
+    {
+        var scenarioNames = typeof(DesignIsolationAndRestartContractSuite)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Where(method => method.GetCustomAttribute<FactAttribute>() is not null)
+            .Select(method => method.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            new[]
+            {
+                nameof(DesignIsolationAndRestartContractSuite.Duplicate_workflow_and_activity_identities_are_rejected_within_a_scope),
+                nameof(DesignIsolationAndRestartContractSuite.Foreign_point_reads_are_indistinguishable_from_missing_identities),
+                nameof(DesignIsolationAndRestartContractSuite.Foreign_scope_point_writes_are_rejected_without_mutating_either_scope),
+                nameof(DesignIsolationAndRestartContractSuite.Reusable_activity_draft_rejects_a_stale_expected_revision_without_replacing_state_or_layout),
+                nameof(DesignIsolationAndRestartContractSuite.Same_point_identities_resolve_only_their_own_scope),
+                nameof(DesignIsolationAndRestartContractSuite.Scope_bound_point_read_snapshots_survive_restart),
+                nameof(DesignIsolationAndRestartContractSuite.Workflow_draft_updates_preserve_the_intentional_last_writer_wins_policy)
+            }.Order(StringComparer.Ordinal),
+            scenarioNames);
     }
 
     [Fact]

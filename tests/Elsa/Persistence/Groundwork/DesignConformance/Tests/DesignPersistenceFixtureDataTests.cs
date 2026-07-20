@@ -111,6 +111,36 @@ public class DesignPersistenceFixtureDataTests
         Assert.Equal(DesignPersistenceFixtureData.ScopeB, candidate.Definition.TenantId);
     }
 
+    [Fact]
+    public void Activity_version_can_target_a_distinct_definition_without_changing_its_scope()
+    {
+        var version = DesignPersistenceFixtureData.ActivityVersion(
+            id: "activity-version-for-another-definition",
+            scope: DesignPersistenceFixtureData.ScopeB,
+            definitionId: "another-activity-definition");
+
+        Assert.Equal("another-activity-definition", version.DefinitionId);
+        Assert.Equal(DesignPersistenceFixtureData.ScopeB, version.TenantId);
+    }
+
+    [Fact]
+    public void Reusable_activity_fixture_keeps_draft_and_layout_scope_revision_and_identity_aligned()
+    {
+        var request = DesignPersistenceFixtureData.ReusableActivityDefinition(DesignPersistenceFixtureData.ScopeB);
+
+        Assert.Equal(DesignPersistenceFixtureData.ReusableActivityDefinitionId, request.Definition.Id);
+        Assert.Equal(request.Definition.Id, request.AuthoringState.DefinitionId);
+        Assert.Equal(request.Definition.Id, request.InitialDraft.DefinitionId);
+        Assert.Equal(request.InitialDraft.Id, request.InitialLayout.DraftId);
+        Assert.Equal(request.InitialDraft.Revision, request.InitialLayout.Revision);
+        Assert.Equal(DesignPersistenceFixtureData.ScopeB, request.Definition.TenantId);
+        Assert.Equal(DesignPersistenceFixtureData.ScopeB, request.AuthoringState.TenantId);
+        Assert.Equal(DesignPersistenceFixtureData.ScopeB, request.InitialDraft.TenantId);
+        Assert.Equal(DesignPersistenceFixtureData.ScopeB, request.InitialLayout.TenantId);
+        Assert.Equal("initial", request.InitialDraft.State.Options["label"]);
+        Assert.Equal("initial", Assert.Single(request.InitialLayout.Records).NodeId);
+    }
+
     public static IEnumerable<object[]> ActivityDefinitionSnapshotProperties =>
         SnapshotPropertyCases<ActivityDesignContractSuite.ActivityDefinitionSnapshot>();
 

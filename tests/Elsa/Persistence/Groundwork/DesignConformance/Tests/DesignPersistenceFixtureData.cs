@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -26,6 +28,10 @@ public static class DesignPersistenceFixtureData
     public const string ActivityVersionId = "activity-http-request-v1";
     public const string ReconciledActivityDefinitionId = "activity-reconciled";
     public const string ReconciledActivityVersionId = "activity-reconciled-v1";
+    public const string ReusableActivityDefinitionId = "activity-reusable";
+    public const string ReusableActivityAuthoringStateId = "activity-reusable-authoring";
+    public const string ReusableActivityDraftId = "activity-reusable-draft";
+    public const string ReusableActivityDraftLayoutId = "activity-reusable-draft-layout";
 
     private static readonly JsonSerializerOptions SerializationOptions = new(JsonSerializerDefaults.Web)
     {
@@ -90,7 +96,11 @@ public static class DesignPersistenceFixtureData
         LastModifiedAt = Epoch
     };
 
-    public static ActivityDefinitionVersion ActivityVersion(string version = "1.0.0", string id = ActivityVersionId, string scope = ScopeA) => new(version, ActivityDefinitionId)
+    public static ActivityDefinitionVersion ActivityVersion(
+        string version = "1.0.0",
+        string id = ActivityVersionId,
+        string scope = ScopeA,
+        string definitionId = ActivityDefinitionId) => new(version, definitionId)
     {
         Id = id,
         TenantId = scope,
@@ -137,6 +147,56 @@ public static class DesignPersistenceFixtureData
             LastModifiedAt = Epoch
         };
     }
+
+    public static CreateActivityDefinitionRequest ReusableActivityDefinition(string scope = ScopeA) => new(
+        new ActivityDefinition
+        {
+            Id = ReusableActivityDefinitionId,
+            TenantId = scope,
+            ActivityTypeKey = "Elsa.Fixture.Reusable",
+            Category = "Fixtures",
+            DisplayName = "Reusable fixture activity",
+            Description = "A deterministic reusable-activity fixture.",
+            CreatedAt = Epoch,
+            LastModifiedAt = Epoch
+        },
+        new ActivityDefinitionAuthoringState
+        {
+            Id = ReusableActivityAuthoringStateId,
+            TenantId = scope,
+            DefinitionId = ReusableActivityDefinitionId,
+            ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design),
+            CreatedAt = Epoch,
+            LastModifiedAt = Epoch
+        },
+        new ActivityDefinitionDraft
+        {
+            Id = ReusableActivityDraftId,
+            TenantId = scope,
+            DefinitionId = ReusableActivityDefinitionId,
+            Revision = 0,
+            State = ReusableActivityDraftState("initial"),
+            CreatedAt = Epoch,
+            LastModifiedAt = Epoch
+        },
+        new ActivityDefinitionDraftLayout
+        {
+            Id = ReusableActivityDraftLayoutId,
+            TenantId = scope,
+            DraftId = ReusableActivityDraftId,
+            Revision = 0,
+            Records = ReusableActivityDraftLayout("initial").ToList(),
+            CreatedAt = Epoch,
+            LastModifiedAt = Epoch
+        });
+
+    public static ActivityDefinitionDraftState ReusableActivityDraftState(string label) => new(
+        new ActivityContract("1", [], [], []),
+        new ActivityProviderManifest("elsa.fixture", "1", JsonSerializer.SerializeToElement(new { kind = "fixture" }, SerializationOptions)),
+        new Dictionary<string, string> { ["label"] = label });
+
+    public static IReadOnlyList<ActivityLayoutRecord> ReusableActivityDraftLayout(string nodeId) =>
+        [new(nodeId, JsonSerializer.SerializeToElement(new { nodeId }, SerializationOptions))];
 
     /// <summary>Computes an invariant result hash for parity assertions and evidence records.</summary>
     public static string ResultHash<T>(T value)
