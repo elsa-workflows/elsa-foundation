@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { defineConfig, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { moduleCssContractPlugin } from "./vite.module.css-contract";
 
 /**
  * Shared vite config for Studio module clients.
@@ -34,7 +35,7 @@ export function defineModuleConfig({
   ];
 
   return defineConfig({
-    plugins: [react()],
+    plugins: [react(), moduleCssContractPlugin()],
     define: {
       "process.env.NODE_ENV": JSON.stringify("production")
     },

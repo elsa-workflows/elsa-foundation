@@ -38,6 +38,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Module CSS contract test
+        run: pnpm --filter @elsa-workflows/studio-workflows exec vitest run src/__tests__/moduleCssContract.test.ts
+
       - name: Check Workflows bundle budget
         run: pnpm check:bundle:workflows
 
