@@ -43,15 +43,15 @@ public abstract class WorkflowDesignContractSuite
         var beforeRestart = await ReadDraftSnapshotAsync(fixture);
         Assert.Equal(
             DesignPersistenceFixtureData.ResultHash(DesignPersistenceFixtureData.WorkflowState()),
-            DesignPersistenceFixtureData.ResultHash(beforeRestart.State));
+            DesignPersistenceFixtureData.ResultHash(beforeRestart.Draft.State));
 
         await fixture.RestartAsync();
         var afterRestart = await ReadDraftSnapshotAsync(fixture);
 
         Assert.Equal(DesignPersistenceFixtureData.ResultHash(beforeRestart), DesignPersistenceFixtureData.ResultHash(afterRestart));
-        Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, afterRestart.DefinitionId);
-        Assert.Equal(DesignPersistenceFixtureData.WorkflowDraftId, afterRestart.DraftId);
-        Assert.Equal(layout, afterRestart.Layout);
+        Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, afterRestart.Definition.Id);
+        Assert.Equal(DesignPersistenceFixtureData.WorkflowDraftId, afterRestart.Draft.Id);
+        Assert.Equal(CanonicalLayout(layout), afterRestart.Layout.Records);
     }
 
     [Fact]
@@ -76,7 +76,13 @@ public abstract class WorkflowDesignContractSuite
                 .Execute(DesignPersistenceFixtureData.WorkflowDraftId);
         }
 
+        var beforeRestart = await ReadVersionSnapshotAsync(fixture, versionId);
         await fixture.RestartAsync();
+        var afterRestart = await ReadVersionSnapshotAsync(fixture, versionId);
+
+        Assert.Equal(
+            DesignPersistenceFixtureData.ResultHash(beforeRestart),
+            DesignPersistenceFixtureData.ResultHash(afterRestart));
 
         using (var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
         {
@@ -324,22 +330,143 @@ public abstract class WorkflowDesignContractSuite
 
         Assert.NotNull(definition);
         Assert.NotNull(draft);
-        return new WorkflowDraftSnapshot(
-            definition!.Id,
-            definition.Name,
-            definition.Description,
-            draft!.Draft.Id,
-            draft.Draft.WorkflowDefinitionId,
-            draft.Draft.State,
-            draft.Layout);
+        return CanonicalSnapshot(definition!, draft!.Draft, draft.Layout);
     }
 
-    private sealed record WorkflowDraftSnapshot(
-        string DefinitionId,
+    private static async Task<WorkflowVersionSnapshot> ReadVersionSnapshotAsync(
+        IDesignPersistenceContractFixture fixture,
+        string versionId)
+    {
+        using var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
+        var services = scope.ServiceProvider;
+        var version = await services.GetRequiredService<IWorkflowDefinitionVersionStore>()
+            .FindByIdAsync(versionId);
+        var layout = await services.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>()
+            .FindByVersionIdAsync(versionId);
+
+        Assert.NotNull(version);
+        Assert.NotNull(layout);
+        return CanonicalSnapshot(version!, layout!);
+    }
+
+    internal static WorkflowDraftSnapshot CanonicalSnapshot(
+        WorkflowDefinition definition,
+        WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout) =>
+        new(
+            new WorkflowDefinitionSnapshot(
+                definition.Id,
+                definition.CreatedAt,
+                definition.LastModifiedAt,
+                definition.TenantId,
+                definition.Name,
+                definition.Description,
+                definition.DeletedAt,
+                definition.DeletedReason,
+                definition.IsSourceOwned),
+            new WorkflowDefinitionDraftSnapshot(
+                draft.Id,
+                draft.CreatedAt,
+                draft.LastModifiedAt,
+                draft.TenantId,
+                draft.WorkflowDefinitionId,
+                draft.SourceVersionId,
+                draft.State),
+            new WorkflowDefinitionDraftLayoutSnapshot(CanonicalLayout(layout)));
+
+    internal static WorkflowVersionSnapshot CanonicalSnapshot(
+        WorkflowDefinitionVersion version,
+        WorkflowDefinitionVersionLayout layout) =>
+        new(
+            new WorkflowDefinitionVersionSnapshot(
+                version.Id,
+                version.CreatedAt,
+                version.LastModifiedAt,
+                version.TenantId,
+                version.Version,
+                version.SemVerSortKey,
+                version.DefinitionId,
+                version.SourceDraftId,
+                version.State,
+                version.SourceCreatedAt),
+            new WorkflowDefinitionVersionLayoutSnapshot(
+                layout.Id,
+                layout.CreatedAt,
+                layout.LastModifiedAt,
+                layout.TenantId,
+                layout.WorkflowDefinitionVersionId,
+                CanonicalLayout(layout.Records)));
+
+    private static IReadOnlyList<DesignMetadataSnapshot> CanonicalLayout(
+        IEnumerable<DesignMetadataRecord> layout) =>
+        layout
+            .OrderBy(record => record.NodeId, StringComparer.Ordinal)
+            .Select(record => new DesignMetadataSnapshot(
+                record.NodeId,
+                record.X,
+                record.Y,
+                record.Width,
+                record.Height,
+                record.AdditionalProperties))
+            .ToArray();
+
+    internal sealed record WorkflowDraftSnapshot(
+        WorkflowDefinitionSnapshot Definition,
+        WorkflowDefinitionDraftSnapshot Draft,
+        WorkflowDefinitionDraftLayoutSnapshot Layout);
+
+    internal sealed record WorkflowDefinitionSnapshot(
+        string Id,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset LastModifiedAt,
+        string? TenantId,
         string Name,
         string? Description,
-        string DraftId,
-        string DraftDefinitionId,
+        DateTimeOffset? DeletedAt,
+        string? DeletedReason,
+        bool IsSourceOwned);
+
+    internal sealed record WorkflowDefinitionDraftSnapshot(
+        string Id,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset LastModifiedAt,
+        string? TenantId,
+        string WorkflowDefinitionId,
+        string? SourceVersionId,
+        WorkflowDefinitionState State);
+
+    internal sealed record WorkflowDefinitionDraftLayoutSnapshot(
+        IReadOnlyList<DesignMetadataSnapshot> Records);
+
+    internal sealed record WorkflowVersionSnapshot(
+        WorkflowDefinitionVersionSnapshot Version,
+        WorkflowDefinitionVersionLayoutSnapshot Layout);
+
+    internal sealed record WorkflowDefinitionVersionSnapshot(
+        string Id,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset LastModifiedAt,
+        string? TenantId,
+        string Version,
+        string SemVerSortKey,
+        string DefinitionId,
+        string? SourceDraftId,
         WorkflowDefinitionState State,
-        IReadOnlyCollection<DesignMetadataRecord> Layout);
+        DateTimeOffset? SourceCreatedAt);
+
+    internal sealed record WorkflowDefinitionVersionLayoutSnapshot(
+        string Id,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset LastModifiedAt,
+        string? TenantId,
+        string WorkflowDefinitionVersionId,
+        IReadOnlyList<DesignMetadataSnapshot> Records);
+
+    internal sealed record DesignMetadataSnapshot(
+        string NodeId,
+        double X,
+        double Y,
+        double? Width,
+        double? Height,
+        System.Text.Json.JsonElement? AdditionalProperties);
 }

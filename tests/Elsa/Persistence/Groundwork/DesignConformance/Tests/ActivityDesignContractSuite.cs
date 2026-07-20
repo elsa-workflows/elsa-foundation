@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
@@ -36,14 +37,14 @@ public abstract class ActivityDesignContractSuite
         var beforeRestart = await ReadActivitySnapshotAsync(fixture);
         Assert.Equal(
             DesignPersistenceFixtureData.ResultHash(DesignPersistenceFixtureData.ActivityVersion().DescriptorPayload),
-            DesignPersistenceFixtureData.ResultHash(beforeRestart.DescriptorPayload));
+            DesignPersistenceFixtureData.ResultHash(beforeRestart.Version.DescriptorPayload));
 
         await fixture.RestartAsync();
         var afterRestart = await ReadActivitySnapshotAsync(fixture);
 
         Assert.Equal(DesignPersistenceFixtureData.ResultHash(beforeRestart), DesignPersistenceFixtureData.ResultHash(afterRestart));
-        Assert.Equal(DesignPersistenceFixtureData.ActivityDefinitionId, afterRestart.DefinitionId);
-        Assert.Equal(DesignPersistenceFixtureData.ActivityVersionId, afterRestart.VersionId);
+        Assert.Equal(DesignPersistenceFixtureData.ActivityDefinitionId, afterRestart.Definition.Id);
+        Assert.Equal(DesignPersistenceFixtureData.ActivityVersionId, afterRestart.Version.Id);
     }
 
     [Fact]
@@ -108,7 +109,7 @@ public abstract class ActivityDesignContractSuite
         var first = await ReadReconciledSnapshotAsync(fixture, candidate);
         Assert.Equal(
             DesignPersistenceFixtureData.ResultHash(candidate.DescriptorPayload),
-            DesignPersistenceFixtureData.ResultHash(first.DescriptorPayload));
+            DesignPersistenceFixtureData.ResultHash(first.Activity.Version.DescriptorPayload));
 
         await fixture.RestartAsync();
         await fixture.StageActivityReconciliationCandidatesAsync(DesignPersistenceFixtureData.ScopeA, [candidate]);
@@ -146,17 +147,7 @@ public abstract class ActivityDesignContractSuite
         var versions = services.GetRequiredService<IActivityDefinitionVersionStore>();
         var version = await versions.GetWithDefinitionAsync(DesignPersistenceFixtureData.ActivityVersionId);
         var versionDefinition = version.Definition ?? throw new InvalidOperationException("The activity version store did not load the owning definition.");
-        return new ActivitySnapshot(
-            definition.Id,
-            definition.ActivityTypeKey,
-            definition.Category,
-            definition.DisplayName,
-            version.Id,
-            version.DefinitionId,
-            version.Version,
-            version.Hash,
-            version.DescriptorPayload,
-            versionDefinition.ActivityTypeKey);
+        return CanonicalSnapshot(definition, version, versionDefinition);
     }
 
     private static async Task<ReconciledActivitySnapshot> ReadReconciledSnapshotAsync(
@@ -173,31 +164,89 @@ public abstract class ActivityDesignContractSuite
             .ListByDefinitionAsync(definition!.Id);
         var reconciled = Assert.Single(versions);
         return new ReconciledActivitySnapshot(
-            definition.Id,
-            reconciled.Id,
-            reconciled.Version,
-            reconciled.Hash,
-            reconciled.DescriptorPayload,
+            CanonicalSnapshot(definition, reconciled),
             versions.Count);
     }
 
-    private sealed record ActivitySnapshot(
-        string DefinitionId,
+    internal static ActivitySnapshot CanonicalSnapshot(
+        ActivityDefinition definition,
+        ActivityDefinitionVersion version,
+        ActivityDefinition? versionDefinition = null) =>
+        new(
+            CanonicalSnapshot(definition),
+            CanonicalSnapshot(version),
+            versionDefinition is null ? null : CanonicalSnapshot(versionDefinition));
+
+    private static ActivityDefinitionSnapshot CanonicalSnapshot(ActivityDefinition definition) =>
+        new(
+            definition.Id,
+            definition.CreatedAt,
+            definition.LastModifiedAt,
+            definition.TenantId,
+            definition.ActivityTypeKey,
+            definition.Category,
+            definition.DisplayName,
+            definition.Description);
+
+    private static ActivityDefinitionVersionSnapshot CanonicalSnapshot(ActivityDefinitionVersion version) =>
+        new(
+            version.Id,
+            version.CreatedAt,
+            version.LastModifiedAt,
+            version.TenantId,
+            version.Version,
+            version.SemVerSortKey,
+            version.DefinitionId,
+            version.ProviderKey,
+            version.ProviderSchemaVersion,
+            version.ConsumerKey,
+            version.ConsumerSchemaVersion,
+            version.DescriptorPayload,
+            version.ExecutionType,
+            version.Inputs.ToArray(),
+            version.Outputs.ToArray(),
+            version.DesignFacets.ToArray(),
+            version.SourceKind,
+            version.SourceId,
+            version.Hash);
+
+    internal sealed record ActivitySnapshot(
+        ActivityDefinitionSnapshot Definition,
+        ActivityDefinitionVersionSnapshot Version,
+        ActivityDefinitionSnapshot? VersionDefinition);
+
+    internal sealed record ActivityDefinitionSnapshot(
+        string Id,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset LastModifiedAt,
+        string? TenantId,
         string ActivityTypeKey,
         string Category,
         string? DisplayName,
-        string VersionId,
-        string VersionDefinitionId,
+        string? Description);
+
+    internal sealed record ActivityDefinitionVersionSnapshot(
+        string Id,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset LastModifiedAt,
+        string? TenantId,
         string Version,
-        string? Hash,
+        string SemVerSortKey,
+        string DefinitionId,
+        string ProviderKey,
+        string ProviderSchemaVersion,
+        string ConsumerKey,
+        string ConsumerSchemaVersion,
         JsonElement DescriptorPayload,
-        string VersionDefinitionActivityTypeKey);
+        ActivityExecutionType ExecutionType,
+        IReadOnlyList<InputDefinition> Inputs,
+        IReadOnlyList<OutputDefinition> Outputs,
+        IReadOnlyList<ActivityDesignFacet> DesignFacets,
+        string SourceKind,
+        string SourceId,
+        string? Hash);
 
     private sealed record ReconciledActivitySnapshot(
-        string DefinitionId,
-        string VersionId,
-        string Version,
-        string? Hash,
-        JsonElement DescriptorPayload,
+        ActivitySnapshot Activity,
         int VersionCount);
 }
