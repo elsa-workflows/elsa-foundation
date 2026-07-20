@@ -75,17 +75,23 @@ public sealed class RuntimeResumptionSweepResult
         int outboxAttemptedCount,
         int outboxDeliveredCount,
         int outboxFailedCount,
-        IReadOnlyCollection<RuntimeResumptionDispatch> dispatches)
+        IReadOnlyCollection<RuntimeResumptionDispatch> dispatches,
+        int terminalExecutionsPurged = 0,
+        int purgedWorkItemCount = 0)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(outboxAttemptedCount);
         ArgumentOutOfRangeException.ThrowIfNegative(outboxDeliveredCount);
         ArgumentOutOfRangeException.ThrowIfNegative(outboxFailedCount);
         ArgumentNullException.ThrowIfNull(dispatches);
+        ArgumentOutOfRangeException.ThrowIfNegative(terminalExecutionsPurged);
+        ArgumentOutOfRangeException.ThrowIfNegative(purgedWorkItemCount);
 
         OutboxAttemptedCount = outboxAttemptedCount;
         OutboxDeliveredCount = outboxDeliveredCount;
         OutboxFailedCount = outboxFailedCount;
         Dispatches = dispatches.ToArray();
+        TerminalExecutionsPurged = terminalExecutionsPurged;
+        PurgedWorkItemCount = purgedWorkItemCount;
     }
 
     public int OutboxAttemptedCount { get; }
@@ -95,7 +101,17 @@ public sealed class RuntimeResumptionSweepResult
     /// <summary>One entry per workflow execution the sweep tried to re-drive.</summary>
     public IReadOnlyCollection<RuntimeResumptionDispatch> Dispatches { get; }
 
-    public bool DidWork => OutboxAttemptedCount > 0 || Dispatches.Count > 0;
+    /// <summary>
+    /// How many discovered executions were already in a terminal status and therefore had their residual scheduler
+    /// work purged instead of being re-driven (spec 113). A non-zero value means backlog discovery surfaced
+    /// completed executions whose stranded work items would otherwise churn a drain span every sweep.
+    /// </summary>
+    public int TerminalExecutionsPurged { get; }
+
+    /// <summary>The total number of residual scheduler work items removed across all purged terminal executions.</summary>
+    public int PurgedWorkItemCount { get; }
+
+    public bool DidWork => OutboxAttemptedCount > 0 || Dispatches.Count > 0 || TerminalExecutionsPurged > 0;
 }
 
 /// <summary>
