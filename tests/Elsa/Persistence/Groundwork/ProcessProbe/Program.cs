@@ -79,6 +79,7 @@ internal static class Program
         {
             GroundworkProcessProbeOperation.Save => await SaveAsync(lease.Store, command, cancellationToken),
             GroundworkProcessProbeOperation.Load => await LoadAsync(lease.Store, command, cancellationToken),
+            GroundworkProcessProbeOperation.RuntimeCheckpointVerifyBundle => await VerifyRuntimeCheckpointBundleAsync(lease.Store, command, cancellationToken),
             GroundworkProcessProbeOperation.IdentityCreateUser => await ExecuteIdentityAsync(command, cancellationToken),
             GroundworkProcessProbeOperation.IdentityFindByNormalizedUserName => await ExecuteIdentityAsync(command, cancellationToken),
             GroundworkProcessProbeOperation.IdentityDuplicateCreate => await ExecuteIdentityAsync(command, cancellationToken),
@@ -128,6 +129,21 @@ internal static class Program
         if (!string.Equals(payload.Collection, ProbeCollection, StringComparison.Ordinal))
             throw new InvalidOperationException("The process-probe payload did not belong to the probe collection.");
         return (GroundworkProcessProbeProtocol.ComputeSha256(payload.Value), document.SchemaVersion, document.Version);
+    }
+
+    private static async Task<(string PayloadSha256, string SchemaVersion, long DocumentVersion)> VerifyRuntimeCheckpointBundleAsync(
+        IDocumentStore store,
+        GroundworkProcessProbeCommand command,
+        CancellationToken cancellationToken)
+    {
+        var payload = RuntimeCheckpointRestartProbe.DecodePayload(command.Request.Value!);
+        var observation = await RuntimeCheckpointRestartProbe.VerifyAsync(
+            store,
+            GroundworkProviderTestSerialization.Serializer,
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            payload,
+            cancellationToken);
+        return (command.Request.PayloadSha256!, command.ProtocolVersion, observation.DocumentVersion);
     }
 
     private static async Task<(string PayloadSha256, string SchemaVersion, long DocumentVersion)> ExecuteIdentityAsync(
@@ -198,6 +214,9 @@ internal static class Program
         GroundworkProcessProbeCommand command,
         CancellationToken cancellationToken)
     {
+        if (command.Request.Operation is GroundworkProcessProbeOperation.RuntimeCheckpointVerifyBundle)
+            return await OpenRuntimePhysicalStoreAsync(command, cancellationToken);
+
         var manifest = ElsaRuntimeStorageManifest.Create();
         var provider = new ProviderIdentity(command.ProviderIdentity, command.ProviderVersion);
         var access = GroundworkTestAccess.DefaultScoped;
@@ -229,6 +248,104 @@ internal static class Program
             _ => throw new ArgumentException("The process-probe provider is unsupported.", nameof(command))
         };
     }
+
+    /// <summary>
+    /// The checkpoint contract writes into the admitted physical target, rather than Groundwork's generic
+    /// documents table. A restart probe must reconstruct that exact target in its child process before it reads.
+    /// </summary>
+    private static ValueTask<StoreLease> OpenRuntimePhysicalStoreAsync(
+        GroundworkProcessProbeCommand command,
+        CancellationToken cancellationToken) =>
+        command.ProviderKey switch
+        {
+            "sqlite" => OpenSqliteRuntimePhysicalStoreAsync(command, cancellationToken),
+            "sqlserver" => OpenSqlServerRuntimePhysicalStoreAsync(command, cancellationToken),
+            "postgresql" => OpenPostgreSqlRuntimePhysicalStoreAsync(command, cancellationToken),
+            "mongodb" => OpenMongoDbRuntimePhysicalStoreAsync(command, cancellationToken),
+            _ => throw new ArgumentException("The runtime checkpoint process-probe provider is unsupported.", nameof(command))
+        };
+
+    private static async ValueTask<StoreLease> OpenSqliteRuntimePhysicalStoreAsync(
+        GroundworkProcessProbeCommand command,
+        CancellationToken cancellationToken)
+    {
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            SqliteGroundworkCapabilities.Runtime(),
+            PhysicalTopology(SqliteGroundworkCapabilities.Provider.Name, "sqlite-file"),
+            SqliteGroundworkCapabilities.PhysicalNames,
+            cancellationToken: cancellationToken);
+        return new StoreLease(new SqlitePhysicalDocumentStore(
+            command.State.ConnectionString,
+            source.CreateManifest(),
+            source.PhysicalTarget.Routes,
+            GroundworkTestAccess.DefaultScoped));
+    }
+
+    private static async ValueTask<StoreLease> OpenSqlServerRuntimePhysicalStoreAsync(
+        GroundworkProcessProbeCommand command,
+        CancellationToken cancellationToken)
+    {
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            SqlServerGroundworkCapabilities.Runtime(),
+            PhysicalTopology(SqlServerGroundworkCapabilities.Provider.Name, "sqlserver"),
+            SqlServerGroundworkCapabilities.PhysicalNames,
+            cancellationToken: cancellationToken);
+        return new StoreLease(new SqlServerPhysicalDocumentStore(
+            command.State.ConnectionString,
+            source.CreateManifest(),
+            source.PhysicalTarget.Routes,
+            GroundworkTestAccess.DefaultScoped));
+    }
+
+    private static async ValueTask<StoreLease> OpenPostgreSqlRuntimePhysicalStoreAsync(
+        GroundworkProcessProbeCommand command,
+        CancellationToken cancellationToken)
+    {
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            PostgreSqlGroundworkCapabilities.Runtime(),
+            PhysicalTopology(PostgreSqlGroundworkCapabilities.Provider.Name, "postgresql"),
+            PostgreSqlGroundworkCapabilities.PhysicalNames,
+            cancellationToken: cancellationToken);
+        return new StoreLease(new PostgreSqlPhysicalDocumentStore(
+            command.State.ConnectionString,
+            source.CreateManifest(),
+            source.PhysicalTarget.Routes,
+            GroundworkTestAccess.DefaultScoped));
+    }
+
+    private static async ValueTask<StoreLease> OpenMongoDbRuntimePhysicalStoreAsync(
+        GroundworkProcessProbeCommand command,
+        CancellationToken cancellationToken)
+    {
+        var topology = await new MongoDbGroundworkRuntimeAdmission().InspectReplicaSetAsync(
+            command.State.ConnectionString,
+            command.State.MongoDatabaseName!,
+            cancellationToken);
+        var source = await GroundworkStoreInitialization.CreateRuntimePhysicalSchemaSourceAsync(
+            MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment(),
+            topology,
+            MongoDbPhysicalNameNormalizer.Instance,
+            MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance,
+            cancellationToken);
+        var handle = await MongoDbDocumentStoreFactory.OpenPhysicalAsync(
+            command.State.ConnectionString,
+            command.State.MongoDatabaseName!,
+            source.CreateManifest(),
+            source.PhysicalTarget.Provider,
+            GroundworkTestAccess.DefaultScoped,
+            source.CreateNamePolicy(),
+            cancellationToken: cancellationToken);
+        return new StoreLease(handle.CreateStore(GroundworkTestAccess.DefaultScoped), handle);
+    }
+
+    private static GroundworkProviderTopologySnapshot PhysicalTopology(string providerName, string description) =>
+        new(
+            providerName,
+            description,
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+            });
 
     private static ValueTask<IdentityStoreLease> OpenIdentityStoreAsync(
         GroundworkProcessProbeCommand command,
@@ -425,6 +542,20 @@ internal static class Program
 
     private static string ProviderFailureCode(Exception exception)
     {
+        if (exception is InvalidOperationException { Message: var message } &&
+            message.StartsWith("The child process could not rehydrate the complete runtime checkpoint bundle: ", StringComparison.Ordinal))
+        {
+            var missing = message["The child process could not rehydrate the complete runtime checkpoint bundle: ".Length..]
+                .TrimEnd('.');
+            return $"runtime-checkpoint-bundle-incomplete-{ToSlug(missing)}";
+        }
+
+        if (exception.GetType().FullName == "Microsoft.Data.Sqlite.SqliteException" &&
+            exception.GetType().GetProperty("SqliteErrorCode")?.GetValue(exception) is int sqliteErrorCode)
+        {
+            return $"provider-operation-failed-sqlite-error-{sqliteErrorCode}";
+        }
+
         if (exception is FileNotFoundException fileNotFound)
         {
             var missing = fileNotFound.FileName;

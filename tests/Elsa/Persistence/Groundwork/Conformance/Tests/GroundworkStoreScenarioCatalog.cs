@@ -420,6 +420,22 @@ internal static class GroundworkStoreScenarioCatalog
                 Failure,
                 failureWindows: FailureWindows),
             Scenario(
+                "runtime-checkpoint-bundle-process-restart",
+                GroundworkStoreScenarioFamily.Runtime,
+                [
+                    "runtime-activity-execution-inspection",
+                    "runtime-activity-execution-state",
+                    "runtime-bookmark-state",
+                    "runtime-checkpoint-commit",
+                    "runtime-durable-value-state",
+                    "runtime-execution-liveness",
+                    "runtime-incident-state",
+                    "runtime-post-commit-outbox",
+                    "runtime-workflow-execution-state"
+                ],
+                ["child-process-rehydration", "complete-bundle-count"],
+                Restart | Race | GroundworkStoreScenarioEvidence.MultiDocumentAtomicity),
+            Scenario(
                 "runtime-execution-liveness-takeover",
                 GroundworkStoreScenarioFamily.Runtime,
                 ["runtime-execution-liveness"],

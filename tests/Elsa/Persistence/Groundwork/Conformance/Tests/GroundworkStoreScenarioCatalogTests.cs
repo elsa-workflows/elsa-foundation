@@ -9,7 +9,7 @@ public class GroundworkStoreScenarioCatalogTests
     [Fact]
     public void Catalog_is_the_exact_sorted_all32_release_gate_denominator()
     {
-        Assert.Equal(40, GroundworkStoreScenarioCatalog.All.Count);
+        Assert.Equal(41, GroundworkStoreScenarioCatalog.All.Count);
         Assert.Equal(32, GroundworkStoreScenarioCatalog.CoverageEntryIds.Count);
         Assert.Equal(
             GroundworkStoreScenarioCatalog.CoverageEntryIds.Order(StringComparer.Ordinal),

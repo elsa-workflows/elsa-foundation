@@ -33,6 +33,8 @@
   <ItemGroup>
     <Compile Include="..\Conformance\Tests\Probes\AspNetCoreIdentityRestartProbe.cs"
              Link="Probes\AspNetCoreIdentityRestartProbe.cs" />
+    <Compile Include="..\Conformance\Tests\Probes\RuntimeCheckpointRestartProbe.cs"
+             Link="Probes\RuntimeCheckpointRestartProbe.cs" />
   </ItemGroup>
 
 </Project>
