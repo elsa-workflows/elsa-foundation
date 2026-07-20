@@ -102,6 +102,71 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Compiles_authored_checkpoint_cadence_onto_the_executable_and_into_the_behavioral_hash()
+    {
+        // ADR 0032 R5: the authored cadence flows design → publish → executable and is behavioral content — a cadence
+        // change is a distinct artifact identity, never a silent alias of the same graph.
+        var now = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
+        var node = Node("write-one", Text("hello"));
+        var unauthored = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
+        var coalesced = await Compiler(WorkflowVersionWithCadence(node, new WorkflowCheckpointCadenceOptions
+        {
+            Mode = "Coalesced",
+            MaxSegmentCheckpoints = 8
+        })).CompileAsync(NewRequest(now));
+        var immediate = await Compiler(WorkflowVersionWithCadence(node, new WorkflowCheckpointCadenceOptions
+        {
+            Mode = "Immediate"
+        })).CompileAsync(NewRequest(now));
+
+        Assert.Null(unauthored.CheckpointCadence);
+        Assert.Equal(new WorkflowExecutableCheckpointCadence("Coalesced", 8), coalesced.CheckpointCadence);
+        Assert.Equal(new WorkflowExecutableCheckpointCadence("Immediate"), immediate.CheckpointCadence);
+
+        // Distinct behavior ⇒ distinct content hash; unauthored stays byte-identical to the pre-cadence payload.
+        Assert.NotEqual(unauthored.Identity.ArtifactHash, coalesced.Identity.ArtifactHash);
+        Assert.NotEqual(unauthored.Identity.ArtifactHash, immediate.Identity.ArtifactHash);
+        Assert.NotEqual(coalesced.Identity.ArtifactHash, immediate.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Blank_authored_cadence_mode_compiles_as_unauthored()
+    {
+        var now = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
+        var node = Node("write-one", Text("hello"));
+        var unauthored = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
+        var blank = await Compiler(WorkflowVersionWithCadence(node, new WorkflowCheckpointCadenceOptions()))
+            .CompileAsync(NewRequest(now));
+
+        Assert.Null(blank.CheckpointCadence);
+        Assert.Equal(unauthored.Identity.ArtifactHash, blank.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Unrecognised_checkpoint_cadence_alias_fails_publication()
+    {
+        var compiler = Compiler(WorkflowVersionWithCadence(
+            Node("write-one", Text("hello")),
+            new WorkflowCheckpointCadenceOptions { Mode = "EveryOtherTuesday" }));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("EveryOtherTuesday", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Non_positive_authored_segment_cap_fails_publication()
+    {
+        var compiler = Compiler(WorkflowVersionWithCadence(
+            Node("write-one", Text("hello")),
+            new WorkflowCheckpointCadenceOptions { Mode = "Coalesced", MaxSegmentCheckpoints = 0 }));
+
+        await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+    }
+
+    [Fact]
     public async Task Resolves_exact_reusable_version_places_template_and_compiles_expression_default()
     {
         var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
@@ -200,6 +265,28 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("flowchart-0affb8fb", executable.RootActivity.ExecutableNodeId);
         Assert.Equal(FlowchartActivity.StructureKind, executable.RootActivity.Structure?.Kind);
         Assert.Equal("writeline-1a75fea9", Assert.Single(executable.RootActivity.ChildSlots).Activities.Single().ExecutableNodeId);
+    }
+
+    // ADR 0032 R1 / spec 107: the [ActivitySideEffectProfile] attribute is folded into the pinned contract by
+    // the publish-time compiler. Flowchart is declared ReplaySafe; WriteLine (unmarked) defaults to External.
+    [Fact]
+    public async Task Compiler_folds_the_declared_side_effect_profile_into_the_pinned_contract()
+    {
+        var root = FlowchartNode("flowchart-0affb8fb", [Node("writeline-1a75fea9", Text("hello"))]);
+        var publication = SourceOwnedPublication(
+            _flowchartActivity,
+            ActivityDefinitionVersionResolutionKind.AuthorableActivity);
+        var compiler = CompilerWithPublication(root, publication, _writeLineActivity, _flowchartActivity);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe,
+            executable.RootActivity.ActivityContract!.SideEffectProfile);
+        var writeLine = Assert.Single(executable.RootActivity.ChildSlots).Activities.Single();
+        Assert.Equal(
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+            writeLine.ActivityContract!.SideEffectProfile);
     }
 
     [Fact]
@@ -1556,6 +1643,21 @@ public sealed class WorkflowExecutableCompilerTests
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
             State = new WorkflowDefinitionState(variables ?? [], rootActivity, inputs ?? [], [], null)
+        };
+
+    private static WorkflowDefinitionVersion WorkflowVersionWithCadence(
+        ActivityNode? rootActivity,
+        WorkflowCheckpointCadenceOptions checkpointCadence) =>
+        new("definition-1", "1.0.0")
+        {
+            Id = "version-1",
+            Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
+            State = new WorkflowDefinitionState(
+                [],
+                rootActivity,
+                [],
+                [],
+                new WorkflowStrategyOptions { CheckpointCadence = checkpointCadence })
         };
 
     private static InputDefinition WorkflowInput(

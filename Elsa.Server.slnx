@@ -22,6 +22,7 @@
     <Project Path="src/Elsa/Git/Elsa.Git.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/">
+    <Project Path="src/Elsa/Activities/Bpmn/Elsa.Activities.Bpmn.csproj" />
     <Project Path="src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
     <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <Project Path="src/Elsa/Activities/Http/Elsa.Activities.Http.csproj" />
@@ -312,6 +313,9 @@
   <Folder Name="/tests/Elsa/Activities/DispatchWorkflow/">
     <Project Path="tests/Elsa/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Activities/Bpmn/">
+    <Project Path="tests/Elsa/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Activities/Flowchart/">
     <Project Path="tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj" />
   </Folder>
@@ -425,6 +429,9 @@
     <Project Path="tests/Elsa/Persistence/Groundwork/ProcessProbe/Elsa.Persistence.Groundwork.ProcessProbe.csproj" />
     <Project Path="tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj" />
     <Project Path="tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/Composition/">
     <Project Path="tests/Elsa/Persistence/Groundwork/Composition/Tests/Elsa.Persistence.Groundwork.Composition.Tests.csproj" />

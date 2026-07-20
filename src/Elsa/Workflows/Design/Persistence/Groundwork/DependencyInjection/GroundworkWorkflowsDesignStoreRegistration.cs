@@ -38,12 +38,6 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.RemoveAll<IWorkflowDefinitionStore>();
         services.AddScoped<IWorkflowDefinitionStore, GroundworkWorkflowDefinitionStore>();
 
-        services.RemoveAll<IWorkflowDefinitionPageStore>();
-        services.AddScoped<IWorkflowDefinitionPageStore, GroundworkWorkflowDefinitionStore>();
-
-        services.RemoveAll<IWorkflowFolderStore>();
-        services.AddScoped<IWorkflowFolderStore, GroundworkWorkflowFolderStore>();
-
         services.RemoveAll<IWorkflowDefinitionVersionStore>();
         services.AddScoped<IWorkflowDefinitionVersionStore, GroundworkWorkflowDefinitionVersionStore>();
 
@@ -64,12 +58,6 @@ public static class GroundworkWorkflowsDesignStoreRegistration
 
         services.RemoveAll<ISaveWorkflowDefinitionCommand>();
         services.AddScoped<ISaveWorkflowDefinitionCommand, GroundworkSaveWorkflowDefinitionCommand>();
-
-        services.RemoveAll<IMoveWorkflowDefinitionsCommand>();
-        services.AddScoped<IMoveWorkflowDefinitionsCommand, GroundworkMoveWorkflowDefinitionsCommand>();
-
-        services.RemoveAll<IRestructureWorkflowFoldersCommand>();
-        services.AddScoped<IRestructureWorkflowFoldersCommand, GroundworkRestructureWorkflowFoldersCommand>();
 
         services.RemoveAll<IDeleteWorkflowDefinitionPermanentlyCommand>();
         services.AddScoped<IDeleteWorkflowDefinitionPermanentlyCommand, GroundworkDeleteWorkflowDefinitionPermanentlyCommand>();

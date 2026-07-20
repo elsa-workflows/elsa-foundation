@@ -5,6 +5,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Groundwork.Querying;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -443,7 +444,8 @@ public sealed class GroundworkActivityManagementProjectionWriter(
                         ActivitiesDesignStorageManifest.ManagementValidToField,
                         SequenceKey(long.MaxValue)))
                 ],
-                take: 1),
+                take: 1)
+                .Select(BoundedQueryResultOperation.First),
             cancellationToken);
         return envelope is null ? null : new(Deserialize<T>(envelope, kind), envelope);
     }

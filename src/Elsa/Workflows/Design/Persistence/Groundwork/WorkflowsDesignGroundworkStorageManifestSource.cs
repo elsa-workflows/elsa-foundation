@@ -12,15 +12,13 @@ public sealed class WorkflowsDesignGroundworkStorageManifestSource : IGroundwork
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = WorkflowsDesignStorageManifest.CreatePhysicalized();
+        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(WorkflowsDesignStorageManifest.Create());
 
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity,
             manifest,
             [
                 typeof(IWorkflowDefinitionStore),
-                typeof(IWorkflowDefinitionPageStore),
-                typeof(IWorkflowFolderStore),
                 typeof(IWorkflowDefinitionVersionStore),
                 typeof(IWorkflowDefinitionDraftStore),
                 typeof(IWorkflowDefinitionListProjectionStore),

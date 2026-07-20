@@ -334,7 +334,8 @@ public sealed class ActivityTemplatePlacer(
             contract.Inputs.Values,
             contract.Result,
             contract.Outcomes,
-            contract.Activation);
+            contract.Activation,
+            contract.SideEffectProfile);
     }
 
     private static ExecutableNode CloneWithChildSlots(ExecutableNode node, IReadOnlyCollection<ExecutableChildSlot> childSlots) => new(

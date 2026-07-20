@@ -10,5 +10,5 @@ route-predicate=true
 finite-limit=16
 materialized-candidate-count=16
 command-count=2
-command-0=Count|count|mongodb-json|index-scan|placement-by-owner-expiry|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope,workflowExecutionIdKey|1||4e870961b343734c54fa06f69c72ebabd7d9da6bb229499afbe29c9007c146f3
-command-1=Page|page|mongodb-json|index-scan|placement-by-owner-expiry|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope,workflowExecutionIdKey|16|ownerIdLookupKey:Ascending:false,expiresAt:Ascending:false,workflowExecutionIdKey:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|df11c6a513e2e7172270a0ab03ec22ffec9f9e6d5e67ba86eecccc2dd6eb9f3c
+command-0=Count|count|mongodb-json|index-scan|placement-by-owner-expiry|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope,workflowExecutionIdKey|1||0a31e567a3937abe8e27b4f0adcac8903b33170eb541855ba89af50b3c58e757
+command-1=Page|page|mongodb-json|index-scan|placement-by-owner-expiry|document_kind,expiresAt,ownerIdComparisonKey,ownerIdLookupKey,storage_scope,workflowExecutionIdKey|16|ownerIdLookupKey:Ascending:false,expiresAt:Ascending:false,workflowExecutionIdKey:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|1c10a3830414f51c6db15ac42e669bc4cc109aa3820094404cfc6071f7473c86

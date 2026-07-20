@@ -83,7 +83,8 @@ public sealed class WorkflowExecutable
         WorkflowExecutableInputContract? inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency>? dependencies,
         IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements,
-        IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements)
+        IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements,
+        WorkflowExecutableCheckpointCadence? checkpointCadence = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(rootActivity);
@@ -99,6 +100,7 @@ public sealed class WorkflowExecutable
         ResumeTargets = new ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>(resumeTargets.ToDictionary(target => target.Key, target => target.Value, StringComparer.Ordinal));
         InputContract = inputContract;
         Dependencies = SnapshotDependencies(dependencies, NodesById);
+        CheckpointCadence = checkpointCadence;
         CreatedAt = createdAt;
         CompatibilityMetadata = new ReadOnlyDictionary<string, string>(compatibilityMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
         RuntimeRequirements = Array.AsReadOnly((runtimeRequirements ?? [])
@@ -124,6 +126,14 @@ public sealed class WorkflowExecutable
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets { get; }
     public WorkflowExecutableInputContract? InputContract { get; }
     public IReadOnlyCollection<WorkflowExecutableDependency> Dependencies { get; }
+
+    /// <summary>
+    /// The authored per-workflow checkpoint cadence compiled into this artifact (ADR 0032 R5), or <see langword="null"/>
+    /// when the workflow authored none and the host default applies. Part of the behavioral content hash: a cadence
+    /// change is a distinct executable identity, so it can never be silently aliased onto a same-graph artifact.
+    /// </summary>
+    public WorkflowExecutableCheckpointCadence? CheckpointCadence { get; }
+
     public DateTimeOffset CreatedAt { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
     public IReadOnlyCollection<RuntimeRequirement> RuntimeRequirements { get; }

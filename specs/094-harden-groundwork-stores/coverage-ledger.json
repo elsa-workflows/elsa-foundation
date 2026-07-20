@@ -2,7 +2,7 @@
   "$schema": "./contracts/coverage-ledger.schema.json",
   "schemaVersion": 1,
   "feature": "094-harden-groundwork-stores",
-  "groundworkVersion": "0.0.1-preview.72",
+  "groundworkVersion": "0.0.1-preview.76",
   "baselineRef": "c9aa5fd8f7cfa6c86b2f37885a2446f3f4b82103",
   "mandatoryProviders": [
     "sqlite",
@@ -636,15 +636,15 @@
             "coverageEntryId": "runtime-scheduler-state",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "48ccfae8967e642ad5cc64768952a9548198844eb28656e44d9dc21c4e005cdc",
+            "manifestFingerprint": "ee110ed94a838be73d3ac352c71767c540235324e157c98b6a5122d215326828",
             "executionPath": "provider-driver/sqlite/runtime-scheduler-state/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
             "outcome": "pass",
             "evidence": "evidence/sqlite/runtime-scheduler-state/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "a84d955e5006dd5d78dfcca145e961528248a8af13a85379b6ddceed0dae6f77"
+            "evidenceSha256": "862ff0675e8bc956331ce94462d19a725bff747f8253d061ed7ea0407c693e19"
           },
           {
             "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -652,16 +652,16 @@
             "coverageEntryId": "runtime-scheduler-state",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "48ccfae8967e642ad5cc64768952a9548198844eb28656e44d9dc21c4e005cdc",
+            "manifestFingerprint": "ee110ed94a838be73d3ac352c71767c540235324e157c98b6a5122d215326828",
             "executionPath": "provider-driver/sqlite/runtime-scheduler-state/9ff7253c911b2760",
             "clients": 2,
             "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
             "outcome": "pass",
             "restartScenario": "dispose-and-reopen-same-database",
             "evidence": "evidence/sqlite/runtime-scheduler-state/9ff7253c911b2760.json",
-            "evidenceSha256": "09c3ebe33dbcb0a909883dfff1836abdf4f3a5c2f412056482fa5f687bf7a685"
+            "evidenceSha256": "39070327effac3294b9457b7be103024446a5d6849c6cf4a87aefed9696fdf10"
           }
         ],
         "sqlserver": [
@@ -671,15 +671,15 @@
             "coverageEntryId": "runtime-scheduler-state",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "af403c3397f1e15c74e7188c72589106a75a66ea5d153089bc7002fd32ac9b04",
+            "manifestFingerprint": "d77aec6c094a70a7806880a2a4ab3fd0c07b1e2bd11a4d2040406141990ecbb7",
             "executionPath": "provider-driver/sqlserver/runtime-scheduler-state/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
             "outcome": "pass",
             "evidence": "evidence/sqlserver/runtime-scheduler-state/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "2fbcbb36491fb0ed41e66d5b0ea1fbea250a6a6dcc0090c9e128d66f5b362f29"
+            "evidenceSha256": "a9efc418a6013e74ebac8f73d05d7c35e21c39c6986e83e046813d7b93b04e04"
           },
           {
             "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -687,16 +687,16 @@
             "coverageEntryId": "runtime-scheduler-state",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "af403c3397f1e15c74e7188c72589106a75a66ea5d153089bc7002fd32ac9b04",
+            "manifestFingerprint": "d77aec6c094a70a7806880a2a4ab3fd0c07b1e2bd11a4d2040406141990ecbb7",
             "executionPath": "provider-driver/sqlserver/runtime-scheduler-state/9ff7253c911b2760",
             "clients": 2,
             "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
             "outcome": "pass",
             "restartScenario": "dispose-and-reopen-same-database",
             "evidence": "evidence/sqlserver/runtime-scheduler-state/9ff7253c911b2760.json",
-            "evidenceSha256": "22c66f8fa4b41ff61cd49ab7656665c9305d8f986c58f15e677878298eca7a6d"
+            "evidenceSha256": "df4d883de6d66a23e5e25e8d3a08894efc8af58584ce06f17db652105fe0595e"
           }
         ],
         "postgresql": [
@@ -706,15 +706,15 @@
             "coverageEntryId": "runtime-scheduler-state",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "78351eef5610e8f11b2d431bdfe30784d78e40202e30041262860bfaf6e7c476",
+            "manifestFingerprint": "70c8668402ecb1b27708e7c5e0080190c63a9bf9d7fe6184c7c695d3d4753914",
             "executionPath": "provider-driver/postgresql/runtime-scheduler-state/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
             "outcome": "pass",
             "evidence": "evidence/postgresql/runtime-scheduler-state/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "924d0271267a3be9f83d5d97c88ae8b35f425082db9ecb919b8098a72cf9df60"
+            "evidenceSha256": "ed9dcf7cea316f5f51d00706a04641cdc28e27e8ad88149d02b38b4dccc85663"
           },
           {
             "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -722,16 +722,16 @@
             "coverageEntryId": "runtime-scheduler-state",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "78351eef5610e8f11b2d431bdfe30784d78e40202e30041262860bfaf6e7c476",
+            "manifestFingerprint": "70c8668402ecb1b27708e7c5e0080190c63a9bf9d7fe6184c7c695d3d4753914",
             "executionPath": "provider-driver/postgresql/runtime-scheduler-state/9ff7253c911b2760",
             "clients": 2,
             "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
             "outcome": "pass",
             "restartScenario": "dispose-and-reopen-same-database",
             "evidence": "evidence/postgresql/runtime-scheduler-state/9ff7253c911b2760.json",
-            "evidenceSha256": "f643baad307f132c60317ef6f5ed3879fc08a863475ac81de068505a363fc042"
+            "evidenceSha256": "ca51951a4e58459ff813c6cc2d6824afc96294b3a27af90fd01e275980485591"
           }
         ],
         "mongodb": [
@@ -741,15 +741,15 @@
             "coverageEntryId": "runtime-scheduler-state",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "a6363bd015ef9c16085387f5e9cf424d84f76ca58cd315912d6a088771d6468a",
+            "manifestFingerprint": "0a429b872895598a68a6c9db286ca2ea897a6a8ceec8aca729f1284133398f52",
             "executionPath": "provider-driver/mongodb/runtime-scheduler-state/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
             "outcome": "pass",
             "evidence": "evidence/mongodb/runtime-scheduler-state/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "d3b27325e0588825d5b4193835a0c2829de4a53245dc8f43c5ea8ddbe9fd077c"
+            "evidenceSha256": "16b1a463421b8581d43a10e472fd95e6b1e5e33967fc14783a05dd0afcabce8e"
           },
           {
             "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -757,16 +757,16 @@
             "coverageEntryId": "runtime-scheduler-state",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "a6363bd015ef9c16085387f5e9cf424d84f76ca58cd315912d6a088771d6468a",
+            "manifestFingerprint": "0a429b872895598a68a6c9db286ca2ea897a6a8ceec8aca729f1284133398f52",
             "executionPath": "provider-driver/mongodb/runtime-scheduler-state/9ff7253c911b2760",
             "clients": 2,
             "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
             "outcome": "pass",
             "restartScenario": "dispose-and-reopen-same-database",
             "evidence": "evidence/mongodb/runtime-scheduler-state/9ff7253c911b2760.json",
-            "evidenceSha256": "13a3893faa4c9e102b2a28a1c45cb985347a20490dc675f699eae0c4bfa336d6"
+            "evidenceSha256": "48043e0e5c937b1671e7ddef397eda399ce6ea5149940284e30cbd01c99d9ffc"
           }
         ]
       },
@@ -1285,16 +1285,16 @@
             "coverageEntryId": "iam-application",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "ce1e14e01dcecef5817ee8a3951f5e26158f2f272447607e15bf83d6b2b95a31",
+            "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
             "executionPath": "provider-driver/sqlite/iam-application/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "ef9862768d4fa503e756713c546f0eddb51f320aa1c8a4c08472bf073fdf4977",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/sqlite/iam-application/1bb827c7c0312cbb.json",
-            "evidenceSha256": "94dc73e5624b721babdee7a6704fad888fe6fb7d2d78e9b4dfe0059537fc121a"
+            "evidenceSha256": "f889875fecda05ff5b51c6df7ef4a21e118023c38fa46836905c4b8379ae6dc6"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -1302,15 +1302,15 @@
             "coverageEntryId": "iam-application",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "ce1e14e01dcecef5817ee8a3951f5e26158f2f272447607e15bf83d6b2b95a31",
+            "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
             "executionPath": "provider-driver/sqlite/iam-application/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "ef9862768d4fa503e756713c546f0eddb51f320aa1c8a4c08472bf073fdf4977",
             "outcome": "pass",
             "evidence": "evidence/sqlite/iam-application/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "bfbe7d35ce88e1398d20022a22513dd38a5ad965778ab3feb0cb17f9b5cef1dd"
+            "evidenceSha256": "e50af901eb8a273613ab80304cb38d0d3a9ac7c6730c24cce125e607029e679e"
           }
         ],
         "sqlserver": [
@@ -1320,16 +1320,16 @@
             "coverageEntryId": "iam-application",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7de71c654b4095da3509e2f88b1471ff30f5b9dd1a80b5c4079acd9306c44511",
+            "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
             "executionPath": "provider-driver/sqlserver/iam-application/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "ef9862768d4fa503e756713c546f0eddb51f320aa1c8a4c08472bf073fdf4977",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/sqlserver/iam-application/1bb827c7c0312cbb.json",
-            "evidenceSha256": "c0d1953c836fb629b6db54c56fffe4f0c39685746849127a09ebe82a13d4e6c8"
+            "evidenceSha256": "05bd4d4ca838ef96e8c3d989204084b7554a3e7cf5e34fdee6f79c44bd9330ec"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -1337,15 +1337,15 @@
             "coverageEntryId": "iam-application",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7de71c654b4095da3509e2f88b1471ff30f5b9dd1a80b5c4079acd9306c44511",
+            "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
             "executionPath": "provider-driver/sqlserver/iam-application/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "ef9862768d4fa503e756713c546f0eddb51f320aa1c8a4c08472bf073fdf4977",
             "outcome": "pass",
             "evidence": "evidence/sqlserver/iam-application/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "2a2b10cf4056367fbe4327b22e976c774b2996082a476e646d28f4c7f1cc964f"
+            "evidenceSha256": "efbb1b5b496228d8cdc780380c035377fce94587a62e0b21ec591cdc1147036f"
           }
         ],
         "postgresql": [
@@ -1355,16 +1355,16 @@
             "coverageEntryId": "iam-application",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "efa1d18c664b9633d8afec57d8483219f7972c2813bde555f97790d6bfee510a",
+            "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
             "executionPath": "provider-driver/postgresql/iam-application/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "ef9862768d4fa503e756713c546f0eddb51f320aa1c8a4c08472bf073fdf4977",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/postgresql/iam-application/1bb827c7c0312cbb.json",
-            "evidenceSha256": "846d2a63e2e3db77750ec9fbbe60a7b670aa961c8b566caebbeb73c8695b2872"
+            "evidenceSha256": "6e6e731d670325817cf577f8aa6da03ef895fbe5c47e029144bcc3845b85afd1"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -1372,15 +1372,15 @@
             "coverageEntryId": "iam-application",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "efa1d18c664b9633d8afec57d8483219f7972c2813bde555f97790d6bfee510a",
+            "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
             "executionPath": "provider-driver/postgresql/iam-application/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "ef9862768d4fa503e756713c546f0eddb51f320aa1c8a4c08472bf073fdf4977",
             "outcome": "pass",
             "evidence": "evidence/postgresql/iam-application/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "5f965dd720b47fb702c738cba3b041ff6084632a296dfaef922464c7e7d962b0"
+            "evidenceSha256": "f1ecb292fec3f95cc988bd0b11abb0f340f05d0dbe7df9ee866582cc9eb88fcf"
           }
         ],
         "mongodb": [
@@ -1390,16 +1390,16 @@
             "coverageEntryId": "iam-application",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+            "manifestFingerprint": "2731ed7527d51812e81a93bdfce108de5a252e902d5902de4738871d4f951008",
             "executionPath": "provider-driver/mongodb/iam-application/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "ef9862768d4fa503e756713c546f0eddb51f320aa1c8a4c08472bf073fdf4977",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/mongodb/iam-application/1bb827c7c0312cbb.json",
-            "evidenceSha256": "56df4c7bc86462fd74b110cebbe093dfc93478aba4960073b1c49a75acad507e"
+            "evidenceSha256": "c9859687be4c5ed4b77215be56986a95105ef09b19a530b5d5a25113baa66d06"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -1407,15 +1407,15 @@
             "coverageEntryId": "iam-application",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+            "manifestFingerprint": "2731ed7527d51812e81a93bdfce108de5a252e902d5902de4738871d4f951008",
             "executionPath": "provider-driver/mongodb/iam-application/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "ef9862768d4fa503e756713c546f0eddb51f320aa1c8a4c08472bf073fdf4977",
             "outcome": "pass",
             "evidence": "evidence/mongodb/iam-application/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "411afc834efb3ffd09f235739088083a7e8b0aef1c6df8b045212ae083f122b0"
+            "evidenceSha256": "02ff2771aa0dd0d9718e55c054e42bb3c567f3fb60a4063288a7d54870cb34c1"
           }
         ]
       },
@@ -1464,15 +1464,15 @@
             "coverageEntryId": "iam-credential",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "ce1e14e01dcecef5817ee8a3951f5e26158f2f272447607e15bf83d6b2b95a31",
+            "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
             "executionPath": "provider-driver/sqlite/iam-credential/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "63b3a91983178d2f7966c3a328152fbd81f1ca582b45610d23c1449d01e637fe",
             "outcome": "pass",
             "evidence": "evidence/sqlite/iam-credential/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "809aed8ae115dedba114385ee92cee73415e9c18cf2a25240d30b3b8acdd8530"
+            "evidenceSha256": "62c54773361c25042b6f6a9c03cfc04513f2a0f98eabae123204c04a621e8acf"
           }
         ],
         "sqlserver": [
@@ -1482,15 +1482,15 @@
             "coverageEntryId": "iam-credential",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7de71c654b4095da3509e2f88b1471ff30f5b9dd1a80b5c4079acd9306c44511",
+            "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
             "executionPath": "provider-driver/sqlserver/iam-credential/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "63b3a91983178d2f7966c3a328152fbd81f1ca582b45610d23c1449d01e637fe",
             "outcome": "pass",
             "evidence": "evidence/sqlserver/iam-credential/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "aca3cf028930e413b51c0406422845b8f9f256f0d217a423db558cc22910c7d4"
+            "evidenceSha256": "91fb36012b85f72fabe3cae6d3852d3c68e720287716bea599766e5d63e93142"
           }
         ],
         "postgresql": [
@@ -1500,15 +1500,15 @@
             "coverageEntryId": "iam-credential",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "efa1d18c664b9633d8afec57d8483219f7972c2813bde555f97790d6bfee510a",
+            "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
             "executionPath": "provider-driver/postgresql/iam-credential/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "63b3a91983178d2f7966c3a328152fbd81f1ca582b45610d23c1449d01e637fe",
             "outcome": "pass",
             "evidence": "evidence/postgresql/iam-credential/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "ece35dcbd4160f6f06caccedfffa24342139d037b6bf623aba642c500ed4f757"
+            "evidenceSha256": "dcd428c3fda7c3f22ae29fab020b1b45de54dd58dcec36376d164803850d4ff0"
           }
         ],
         "mongodb": [
@@ -1518,15 +1518,15 @@
             "coverageEntryId": "iam-credential",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+            "manifestFingerprint": "2731ed7527d51812e81a93bdfce108de5a252e902d5902de4738871d4f951008",
             "executionPath": "provider-driver/mongodb/iam-credential/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "63b3a91983178d2f7966c3a328152fbd81f1ca582b45610d23c1449d01e637fe",
             "outcome": "pass",
             "evidence": "evidence/mongodb/iam-credential/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "3d9ed6073442f208da83fa9bcfe09b0da8f3fe6518ba3b8982a96091d60eaf1b"
+            "evidenceSha256": "4329d005a4adc0116dc28cbc57de0cbf201e3dd24dafc9a6707808885ca8262b"
           }
         ]
       },
@@ -1619,16 +1619,16 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "ce1e14e01dcecef5817ee8a3951f5e26158f2f272447607e15bf83d6b2b95a31",
+            "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
             "executionPath": "provider-driver/sqlite/iam-claim-mapping/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/sqlite/iam-claim-mapping/1bb827c7c0312cbb.json",
-            "evidenceSha256": "4d9a3b3626920577ed0a3096de677b5502bc3cfc4f832eb5221fb0fe1aed88e3"
+            "evidenceSha256": "2e4215b8abbc457d1be4805906ec486a1afd80ac8ed07f12cc18cc0289fb7a56"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -1636,15 +1636,15 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "ce1e14e01dcecef5817ee8a3951f5e26158f2f272447607e15bf83d6b2b95a31",
+            "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
             "executionPath": "provider-driver/sqlite/iam-claim-mapping/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
             "outcome": "pass",
             "evidence": "evidence/sqlite/iam-claim-mapping/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "fada383a1e24ef467a64a45b83d3e8e9b6cbd02776ebfd9afe4e92d1f924f8c4"
+            "evidenceSha256": "a609fce6c43f315eafd6f7066b22989f1ea3ed2f2460e6efc27e6f7352752739"
           },
           {
             "scenarioId": "queryShape:list-by-tenant-and-provider-bounded",
@@ -1652,9 +1652,9 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "49580aec39da155941d0a7cb19a2a88ef16cc75ebeacad32b45a689407176cd1",
+            "manifestFingerprint": "ec0b55aac9c8b5dbf9c25dbe86e8d1512ee2a0615935c4dc0bc5aaa999fffa07",
             "executionPath": "provider-driver/sqlite/iam-claim-mapping/a2d06a866ee4e37f",
             "clients": 1,
             "resultHash": "66540d93f9b0d8c0d7f5cf19777989c0d48f083dbb6555cedd0e96054ce4ccc2",
@@ -1665,7 +1665,7 @@
             "nativeEvidence": "evidence/sqlite/iam-claim-mapping/a2d06a866ee4e37f.plan.txt",
             "evidence": "evidence/sqlite/iam-claim-mapping/a2d06a866ee4e37f.json",
             "nativeEvidenceSha256": "19d17f94993f0c946f24de2cf2f034f7390f8aa0d56c6f6a90cb96df7ed74003",
-            "evidenceSha256": "655e58a9586b822b7bf3e0536dcacec03d1ee4c47542f75f01560a7c2b16132b"
+            "evidenceSha256": "914f84fcbc66151a28a7d02c6d604e9608dedf64f8f79a5115e05dcea535dbdb"
           }
         ],
         "sqlserver": [
@@ -1675,16 +1675,16 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7de71c654b4095da3509e2f88b1471ff30f5b9dd1a80b5c4079acd9306c44511",
+            "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
             "executionPath": "provider-driver/sqlserver/iam-claim-mapping/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/sqlserver/iam-claim-mapping/1bb827c7c0312cbb.json",
-            "evidenceSha256": "9d5b37b58641c83a2a9c65abf4aa6f9c06787c56741775fd00c25797c2a5446d"
+            "evidenceSha256": "00a563325c2082f3a8b24dbcc762728b48c977dbcd159220978856a9f97d797a"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -1692,15 +1692,15 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7de71c654b4095da3509e2f88b1471ff30f5b9dd1a80b5c4079acd9306c44511",
+            "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
             "executionPath": "provider-driver/sqlserver/iam-claim-mapping/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
             "outcome": "pass",
             "evidence": "evidence/sqlserver/iam-claim-mapping/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "89ca627fbb3171bb647a3107c882a72a4a2cc9cb20bdda78d8f5c3ea4cbbf2f2"
+            "evidenceSha256": "76fd512126c6a61c9fe3619d3d3edff5a36c21852c7912e5bd2a9cfba7cf83dd"
           },
           {
             "scenarioId": "queryShape:list-by-tenant-and-provider-bounded",
@@ -1708,9 +1708,9 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "e4cb37aaab79326f6af9678ddfb8fec2b800d4780c0c36e1e452c1ea4107c717",
+            "manifestFingerprint": "d41bf4ad7bd325f38d6bd3ef783fce35a496465934f2899f3d2b9a02b68c6af5",
             "executionPath": "provider-driver/sqlserver/iam-claim-mapping/a2d06a866ee4e37f",
             "clients": 1,
             "resultHash": "66540d93f9b0d8c0d7f5cf19777989c0d48f083dbb6555cedd0e96054ce4ccc2",
@@ -1720,8 +1720,8 @@
             "documentKind": "identityClaimMapping",
             "nativeEvidence": "evidence/sqlserver/iam-claim-mapping/a2d06a866ee4e37f.plan.txt",
             "evidence": "evidence/sqlserver/iam-claim-mapping/a2d06a866ee4e37f.json",
-            "nativeEvidenceSha256": "93bf73e1a375a76e06d5567cbda91f9518b04f2505333b500cad4c229c9936b5",
-            "evidenceSha256": "b89a5c57836c93dd93cde671a1bd4c48d0c77f5bf1f9d089cc715b38754c82fc"
+            "nativeEvidenceSha256": "f3e63b7b6858fbd979881454173942ace64f154fa444bfea308050d70ed890ef",
+            "evidenceSha256": "6ad7b902a9cee658f5ae33211b308c7fa73eacdbb7cdcb4e5013ea48deab45d6"
           }
         ],
         "postgresql": [
@@ -1731,16 +1731,16 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "efa1d18c664b9633d8afec57d8483219f7972c2813bde555f97790d6bfee510a",
+            "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
             "executionPath": "provider-driver/postgresql/iam-claim-mapping/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/postgresql/iam-claim-mapping/1bb827c7c0312cbb.json",
-            "evidenceSha256": "fee4671290e7cda97ff40e65e0a45a50c0176d4711b9c7df7b8aa73485d5b574"
+            "evidenceSha256": "e085e7ce0f63b55fc41819fb485cbb5e78e96f78a2f910344bb8b8e2dead34c8"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -1748,15 +1748,15 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "efa1d18c664b9633d8afec57d8483219f7972c2813bde555f97790d6bfee510a",
+            "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
             "executionPath": "provider-driver/postgresql/iam-claim-mapping/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
             "outcome": "pass",
             "evidence": "evidence/postgresql/iam-claim-mapping/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "c6e72e48bf2843e7740b69912b363c712dd91bea7ced1da94845d99fadaa241b"
+            "evidenceSha256": "4c350b55789366bdbaeda6e957723c9618b6ab9783e381e0aaf35db4384e72c4"
           },
           {
             "scenarioId": "queryShape:list-by-tenant-and-provider-bounded",
@@ -1764,9 +1764,9 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "0b6667509704ad3aae846da7afea339269fd01599a6b90153dd6deb049825562",
+            "manifestFingerprint": "d31e1f2ce4082ec813f65e6e8aa1dcb3124cefca7a472c36feb12cefa8b7bf4a",
             "executionPath": "provider-driver/postgresql/iam-claim-mapping/a2d06a866ee4e37f",
             "clients": 1,
             "resultHash": "66540d93f9b0d8c0d7f5cf19777989c0d48f083dbb6555cedd0e96054ce4ccc2",
@@ -1776,8 +1776,8 @@
             "documentKind": "identityClaimMapping",
             "nativeEvidence": "evidence/postgresql/iam-claim-mapping/a2d06a866ee4e37f.plan.txt",
             "evidence": "evidence/postgresql/iam-claim-mapping/a2d06a866ee4e37f.json",
-            "nativeEvidenceSha256": "6ab6af8e7e7633b8ed56d29a6976cf1021f972440a00438966b711d9ccc196a2",
-            "evidenceSha256": "9774bb1c5776cbda216607ed16cb5b8ac15ab7c437a64e8f3046a7c1c10b6ce8"
+            "nativeEvidenceSha256": "37ef6480957b9b850174cd90829bcbcef44b5987258158b7404c5213362f22f9",
+            "evidenceSha256": "e1eec5c233061e0a2cf488259520f6d8e73e6e9d32db7712d7c65744edb1fecc"
           }
         ],
         "mongodb": [
@@ -1787,16 +1787,16 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+            "manifestFingerprint": "2731ed7527d51812e81a93bdfce108de5a252e902d5902de4738871d4f951008",
             "executionPath": "provider-driver/mongodb/iam-claim-mapping/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/mongodb/iam-claim-mapping/1bb827c7c0312cbb.json",
-            "evidenceSha256": "951783f1c906308a90a9fb13fa1217714e61e4bcfe9fd7f7c212fe12d073e184"
+            "evidenceSha256": "d2ad97aec0967d157007ecad263918b6bedc4325bc4bf057ecb7a96dc0ac6820"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -1804,15 +1804,15 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+            "manifestFingerprint": "2731ed7527d51812e81a93bdfce108de5a252e902d5902de4738871d4f951008",
             "executionPath": "provider-driver/mongodb/iam-claim-mapping/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
             "outcome": "pass",
             "evidence": "evidence/mongodb/iam-claim-mapping/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "35c197591259ce6e34f77c56f65eb0ac0f6daa1e92ce6a8f0ca6e84db6d3c360"
+            "evidenceSha256": "5a95fdcbad5d341ac1ce5d726abc4f73642b324fb91356095685b671f070258a"
           },
           {
             "scenarioId": "queryShape:list-by-tenant-and-provider-bounded",
@@ -1820,9 +1820,9 @@
             "coverageEntryId": "iam-claim-mapping",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "4e4d62d1fdde773f31becc6cb0e26a5f8c16a982a80841e07690b7d18b9fd05c",
+            "manifestFingerprint": "ca7589c3af95905f20c62410fbc90ab17b925ee59b16357f94df798365434332",
             "executionPath": "provider-driver/mongodb/iam-claim-mapping/a2d06a866ee4e37f",
             "clients": 1,
             "resultHash": "66540d93f9b0d8c0d7f5cf19777989c0d48f083dbb6555cedd0e96054ce4ccc2",
@@ -1832,8 +1832,8 @@
             "documentKind": "identityClaimMapping",
             "nativeEvidence": "evidence/mongodb/iam-claim-mapping/a2d06a866ee4e37f.plan.txt",
             "evidence": "evidence/mongodb/iam-claim-mapping/a2d06a866ee4e37f.json",
-            "nativeEvidenceSha256": "3a08bc26458c20a04ce5cfa8337ea6ecb052bdcfbfe8d0d25124bd90e98c6342",
-            "evidenceSha256": "0861adc27b0765e1fedb59c683a7c5141f3398aabc24d8bc02b61dc389a1bf3d"
+            "nativeEvidenceSha256": "1baf9da666c06d9c94b6be6358b9a639b2ce4c8010b6a7f5cabfa8af92462ee5",
+            "evidenceSha256": "e7e0f690837507f7e128ff47d271108b50f26dac6d3a68ad36a89edae1e2f077"
           }
         ]
       },
@@ -1883,15 +1883,15 @@
             "coverageEntryId": "iam-provider-configuration-tenant",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "ce1e14e01dcecef5817ee8a3951f5e26158f2f272447607e15bf83d6b2b95a31",
+            "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
             "executionPath": "provider-driver/sqlite/iam-provider-configuration-tenant/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "a35baa6c3136ea6ba45c61658cd9252e39b28651ed2bf2cc69b4881392159897",
             "outcome": "pass",
             "evidence": "evidence/sqlite/iam-provider-configuration-tenant/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "26f2fe08e09132633d6fdf65a8049c397bb59cf6b90c3f027b00145e50a7ea5f"
+            "evidenceSha256": "7d2852be7ba77a8f7affd385734c9b39193f3fd1a7907fa765ac9ba4c04ec72b"
           }
         ],
         "sqlserver": [
@@ -1901,15 +1901,15 @@
             "coverageEntryId": "iam-provider-configuration-tenant",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7de71c654b4095da3509e2f88b1471ff30f5b9dd1a80b5c4079acd9306c44511",
+            "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
             "executionPath": "provider-driver/sqlserver/iam-provider-configuration-tenant/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "a35baa6c3136ea6ba45c61658cd9252e39b28651ed2bf2cc69b4881392159897",
             "outcome": "pass",
             "evidence": "evidence/sqlserver/iam-provider-configuration-tenant/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "1d5b51cc2c24a0a695311e6ac3ce598524982354d44d462c0a3d0d8e77161551"
+            "evidenceSha256": "98a166ff4aa4821de41e6d244c36c6fa7046c5b853ce35c4c2519c87eeb01fc5"
           }
         ],
         "postgresql": [
@@ -1919,15 +1919,15 @@
             "coverageEntryId": "iam-provider-configuration-tenant",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "efa1d18c664b9633d8afec57d8483219f7972c2813bde555f97790d6bfee510a",
+            "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
             "executionPath": "provider-driver/postgresql/iam-provider-configuration-tenant/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "a35baa6c3136ea6ba45c61658cd9252e39b28651ed2bf2cc69b4881392159897",
             "outcome": "pass",
             "evidence": "evidence/postgresql/iam-provider-configuration-tenant/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "8f69ade310da868d4f60a631adc619bae21c08d3018c70e8c182a3594956f9ec"
+            "evidenceSha256": "1a2da6cefb0ceeeec17c92edfa7e2b06e375bb273d011d119939b721a968fcde"
           }
         ],
         "mongodb": [
@@ -1937,15 +1937,15 @@
             "coverageEntryId": "iam-provider-configuration-tenant",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+            "manifestFingerprint": "2731ed7527d51812e81a93bdfce108de5a252e902d5902de4738871d4f951008",
             "executionPath": "provider-driver/mongodb/iam-provider-configuration-tenant/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "a35baa6c3136ea6ba45c61658cd9252e39b28651ed2bf2cc69b4881392159897",
             "outcome": "pass",
             "evidence": "evidence/mongodb/iam-provider-configuration-tenant/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "9f653da613d178e070344fa178c394dd9255a8116b2a9c2d83b3b60a4d4515b0"
+            "evidenceSha256": "5f979d1f97426f8ee05c69062198849d74bca0e9eb64aaf07265adcba8660be7"
           }
         ]
       },
@@ -1998,15 +1998,15 @@
             "coverageEntryId": "iam-provider-configuration-global",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "ce1e14e01dcecef5817ee8a3951f5e26158f2f272447607e15bf83d6b2b95a31",
+            "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
             "executionPath": "provider-driver/sqlite/iam-provider-configuration-global/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "654b40702badbf1fa38bd50c9326bfac21fdde310670e168959063f12f915594",
             "outcome": "pass",
             "evidence": "evidence/sqlite/iam-provider-configuration-global/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "43a7e2371e6c8b5a9de7467c54988e9df692ebcccd18efb4f80859230889553c"
+            "evidenceSha256": "4570f733cb4e4272c7d580644fc293bbe101bb6952a110fc79cfc51941fd2659"
           }
         ],
         "sqlserver": [
@@ -2016,15 +2016,15 @@
             "coverageEntryId": "iam-provider-configuration-global",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7de71c654b4095da3509e2f88b1471ff30f5b9dd1a80b5c4079acd9306c44511",
+            "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
             "executionPath": "provider-driver/sqlserver/iam-provider-configuration-global/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "654b40702badbf1fa38bd50c9326bfac21fdde310670e168959063f12f915594",
             "outcome": "pass",
             "evidence": "evidence/sqlserver/iam-provider-configuration-global/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "74df565d36cff487a07b87bc11043a98f4995110ecdd5cbe70d1ab86fb1a53cf"
+            "evidenceSha256": "ec858229555bb1288dbce449e18284f2842bcb3705c3fe87a81512d3835f516d"
           }
         ],
         "postgresql": [
@@ -2034,15 +2034,15 @@
             "coverageEntryId": "iam-provider-configuration-global",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "efa1d18c664b9633d8afec57d8483219f7972c2813bde555f97790d6bfee510a",
+            "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
             "executionPath": "provider-driver/postgresql/iam-provider-configuration-global/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "654b40702badbf1fa38bd50c9326bfac21fdde310670e168959063f12f915594",
             "outcome": "pass",
             "evidence": "evidence/postgresql/iam-provider-configuration-global/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "48b2c65da37d7fa6c5d6aea8478a6a06bf708f962bdd7f68b51e8343ee6cff29"
+            "evidenceSha256": "32a4dc9c2bc73f5748a8630f1f0cf0f0afb1aa129d9aa06df8c813e3119bcdb7"
           }
         ],
         "mongodb": [
@@ -2052,15 +2052,15 @@
             "coverageEntryId": "iam-provider-configuration-global",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+            "manifestFingerprint": "2731ed7527d51812e81a93bdfce108de5a252e902d5902de4738871d4f951008",
             "executionPath": "provider-driver/mongodb/iam-provider-configuration-global/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "654b40702badbf1fa38bd50c9326bfac21fdde310670e168959063f12f915594",
             "outcome": "pass",
             "evidence": "evidence/mongodb/iam-provider-configuration-global/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "d27720f6b238d1a2a6cb4529147fd3b52c7ed9b2a79986d431bc473085095615"
+            "evidenceSha256": "28cb554b767e8ff0a20fb36f37d68a1cb673b5a194b42344f99294debc9756af"
           }
         ]
       },
@@ -2111,16 +2111,16 @@
             "coverageEntryId": "iam-tenant-membership",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "ce1e14e01dcecef5817ee8a3951f5e26158f2f272447607e15bf83d6b2b95a31",
+            "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
             "executionPath": "provider-driver/sqlite/iam-tenant-membership/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/sqlite/iam-tenant-membership/1bb827c7c0312cbb.json",
-            "evidenceSha256": "56b0e7c9f39846d051bcbe3834da5cce4d3cf9ee6c719fbd5defa76e95ce6a68"
+            "evidenceSha256": "629322e2170fbbdb672e1e7b7cffcb5afa60c76c33e383c3316b3d83c57f1fcd"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -2128,15 +2128,15 @@
             "coverageEntryId": "iam-tenant-membership",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "ce1e14e01dcecef5817ee8a3951f5e26158f2f272447607e15bf83d6b2b95a31",
+            "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
             "executionPath": "provider-driver/sqlite/iam-tenant-membership/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
             "outcome": "pass",
             "evidence": "evidence/sqlite/iam-tenant-membership/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "8c74e4012f5412d88a7a8a2961c7254035544070fef665851f7f74507dc56489"
+            "evidenceSha256": "904fbffb5e376270205a0090d3940ad468e086c9da88cf9dc242fdbeb27342d8"
           }
         ],
         "sqlserver": [
@@ -2146,16 +2146,16 @@
             "coverageEntryId": "iam-tenant-membership",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7de71c654b4095da3509e2f88b1471ff30f5b9dd1a80b5c4079acd9306c44511",
+            "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
             "executionPath": "provider-driver/sqlserver/iam-tenant-membership/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/sqlserver/iam-tenant-membership/1bb827c7c0312cbb.json",
-            "evidenceSha256": "41e0f8c5024434d22221c1beab5e850e83eb5f77898eacccbe1fd1b0530c7c47"
+            "evidenceSha256": "89949e5519f84de995589453616332d323bec2cac6a7b2a6030d1ddc4c9d6d11"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -2163,15 +2163,15 @@
             "coverageEntryId": "iam-tenant-membership",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7de71c654b4095da3509e2f88b1471ff30f5b9dd1a80b5c4079acd9306c44511",
+            "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
             "executionPath": "provider-driver/sqlserver/iam-tenant-membership/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
             "outcome": "pass",
             "evidence": "evidence/sqlserver/iam-tenant-membership/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "811a8bbe2b71d4e2ab597b944117dfa1defa67e60c08a2273e9ac3cd418e5adc"
+            "evidenceSha256": "3290d214c347a8429ea70f0e15fe258a4c7b36dbb51f3af96bc9f41b286ef593"
           }
         ],
         "postgresql": [
@@ -2181,16 +2181,16 @@
             "coverageEntryId": "iam-tenant-membership",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "efa1d18c664b9633d8afec57d8483219f7972c2813bde555f97790d6bfee510a",
+            "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
             "executionPath": "provider-driver/postgresql/iam-tenant-membership/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/postgresql/iam-tenant-membership/1bb827c7c0312cbb.json",
-            "evidenceSha256": "c28141c0e1bc741d18e324d235ad761d8aad42b81614e9af1a7025ad331478a7"
+            "evidenceSha256": "9510a599a0bd667e361ab8476fa9c5269418f26cc814c77708846403986893f0"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -2198,15 +2198,15 @@
             "coverageEntryId": "iam-tenant-membership",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "efa1d18c664b9633d8afec57d8483219f7972c2813bde555f97790d6bfee510a",
+            "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
             "executionPath": "provider-driver/postgresql/iam-tenant-membership/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
             "outcome": "pass",
             "evidence": "evidence/postgresql/iam-tenant-membership/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "f2379238079f77b5d98657b0f9baf40de88b9c1d5e31aa321fd0964f01604abb"
+            "evidenceSha256": "23fcd235cf57816768a1d39592ff36cef7c3ae33a116d0f73584ad01685ed014"
           }
         ],
         "mongodb": [
@@ -2216,16 +2216,16 @@
             "coverageEntryId": "iam-tenant-membership",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+            "manifestFingerprint": "2731ed7527d51812e81a93bdfce108de5a252e902d5902de4738871d4f951008",
             "executionPath": "provider-driver/mongodb/iam-tenant-membership/1bb827c7c0312cbb",
             "clients": 2,
             "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/mongodb/iam-tenant-membership/1bb827c7c0312cbb.json",
-            "evidenceSha256": "006e3068789922e2a1998cb1bb6f3ec0bdb508587d6efb7daacad8c2bb973f69"
+            "evidenceSha256": "ae9900b47efb0fb8a91758a05735aa244b28c47da9c533c6c96f783fbfceef18"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -2233,15 +2233,15 @@
             "coverageEntryId": "iam-tenant-membership",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "f60d31df114c512301496885785770fae20936422697ec5ad477e5d556361053",
+            "manifestFingerprint": "2731ed7527d51812e81a93bdfce108de5a252e902d5902de4738871d4f951008",
             "executionPath": "provider-driver/mongodb/iam-tenant-membership/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
             "outcome": "pass",
             "evidence": "evidence/mongodb/iam-tenant-membership/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "87c38432bac45e71c0473b8369d394ea0c5a5a979e4d2cab4cf2812512321f28"
+            "evidenceSha256": "dc653d3920ab81c5056688073d0b5f930b30391c68cc14f119fa1f8148f43bae"
           }
         ]
       },
@@ -2293,16 +2293,16 @@
             "coverageEntryId": "secrets-repository",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "cc09d70dd91060e819b1fcd647989411ccd08ebe25ab3458326a354f3301873e",
+            "manifestFingerprint": "f348141abb561ae5c537a18de78d6fc6ec0471a24018dc8f830ed88a1fede881",
             "executionPath": "provider-driver/sqlite/secrets-repository/6aab3a9a20f9fcdf",
             "clients": 2,
             "resultHash": "c77369cef77aa4d608f57f4e42483e901761f588cdbcbeb7ff5b33d7a3993927",
             "outcome": "pass",
             "concurrencySemantic": "create-only-try-add",
             "evidence": "evidence/sqlite/secrets-repository/6aab3a9a20f9fcdf.json",
-            "evidenceSha256": "6e072794217fb948f340093abb47a36863edacb571aaf95b948e628dee548301"
+            "evidenceSha256": "fec68823b8cb6d39934e5e1d582e3ac6fe66330a067052ed7c4c0b8e4c35af7c"
           },
           {
             "scenarioId": "concurrencySemantic:expected-version-save",
@@ -2310,16 +2310,16 @@
             "coverageEntryId": "secrets-repository",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "cc09d70dd91060e819b1fcd647989411ccd08ebe25ab3458326a354f3301873e",
+            "manifestFingerprint": "f348141abb561ae5c537a18de78d6fc6ec0471a24018dc8f830ed88a1fede881",
             "executionPath": "provider-driver/sqlite/secrets-repository/1bb827c7c0312cbb",
             "clients": 3,
             "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/sqlite/secrets-repository/1bb827c7c0312cbb.json",
-            "evidenceSha256": "43554e7cefa8ed42a433ea6031955989dfb9bb5798e32352d29a92fa7ed633bc"
+            "evidenceSha256": "cfda1e10a574578eb5a254f40e51ed156531d87e6d07012808a61c6119aaf1f3"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -2327,15 +2327,15 @@
             "coverageEntryId": "secrets-repository",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "cc09d70dd91060e819b1fcd647989411ccd08ebe25ab3458326a354f3301873e",
+            "manifestFingerprint": "f348141abb561ae5c537a18de78d6fc6ec0471a24018dc8f830ed88a1fede881",
             "executionPath": "provider-driver/sqlite/secrets-repository/0e7ae6dd54aaea28",
             "clients": 3,
             "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
             "outcome": "pass",
             "evidence": "evidence/sqlite/secrets-repository/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "ebd988f54b27348c8c98a15af6be11fe6b92f62aaa9b47bcf83898591301b5a3"
+            "evidenceSha256": "5317b60b473e8e237e29beaad5567b9b7761ef31de0d04c566460a1aa9e2beb3"
           },
           {
             "scenarioId": "queryShape:list-by-scope-bounded",
@@ -2343,9 +2343,9 @@
             "coverageEntryId": "secrets-repository",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "7d0ebea6c84c455d8009e45e5fc9008fcc69725fa85bafe2c9a93f5c03c3bfce",
+            "manifestFingerprint": "cad8c6cac2b615316455c3ab729cfe04867d0cbf35bbdb31d0a50c9be27e9933",
             "executionPath": "provider-driver/sqlite/secrets-repository/5e4cbf89c5b8c6b3",
             "clients": 1,
             "resultHash": "431d17322fb0725388591d89aeb57d9f700c56b064e1c9e5b35dfd637c20ec40",
@@ -2356,7 +2356,7 @@
             "nativeEvidence": "evidence/sqlite/secrets-repository/5e4cbf89c5b8c6b3.plan.txt",
             "evidence": "evidence/sqlite/secrets-repository/5e4cbf89c5b8c6b3.json",
             "nativeEvidenceSha256": "f81fc83e2fae36cb930ce6a9a2cf696a573766fd1ffd4373f09dbdb41f10ee98",
-            "evidenceSha256": "ec8de24ccdb2a71449eeda6deeb14e699bc57c5748f36ca129a01b0599b9276e"
+            "evidenceSha256": "58655e1a2ee401aebedae1b19635fef56e5dbfa75413e71954ed694f947019de"
           }
         ],
         "sqlserver": [
@@ -2366,16 +2366,16 @@
             "coverageEntryId": "secrets-repository",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "e66998c0e2274a7add468384abbe318409f282a63c0ce85244baca74213b2794",
+            "manifestFingerprint": "8978689b19c72ba33dd45610de2d55fb6b4adaae6b3a1240a6e175291e0416bd",
             "executionPath": "provider-driver/sqlserver/secrets-repository/6aab3a9a20f9fcdf",
             "clients": 2,
             "resultHash": "c77369cef77aa4d608f57f4e42483e901761f588cdbcbeb7ff5b33d7a3993927",
             "outcome": "pass",
             "concurrencySemantic": "create-only-try-add",
             "evidence": "evidence/sqlserver/secrets-repository/6aab3a9a20f9fcdf.json",
-            "evidenceSha256": "b1f6a7c3be9375e2820b4f33a5161d182d1b6d4b328924a31b526fdec8777050"
+            "evidenceSha256": "2034a4d407b44ed28cdff04c3f3affdffa6cc12c6819b4f61edf5e232a7cbcf7"
           },
           {
             "scenarioId": "concurrencySemantic:expected-version-save",
@@ -2383,16 +2383,16 @@
             "coverageEntryId": "secrets-repository",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "e66998c0e2274a7add468384abbe318409f282a63c0ce85244baca74213b2794",
+            "manifestFingerprint": "8978689b19c72ba33dd45610de2d55fb6b4adaae6b3a1240a6e175291e0416bd",
             "executionPath": "provider-driver/sqlserver/secrets-repository/1bb827c7c0312cbb",
             "clients": 3,
             "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/sqlserver/secrets-repository/1bb827c7c0312cbb.json",
-            "evidenceSha256": "81fac334fa705dd1702c3716243c5219f9853cb676630d34e302adcc1f5fe480"
+            "evidenceSha256": "febbe66cb10b4ad41787e23f437b06f49a6a61f166c63c40bc31fa95f612ec60"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -2400,15 +2400,15 @@
             "coverageEntryId": "secrets-repository",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "e66998c0e2274a7add468384abbe318409f282a63c0ce85244baca74213b2794",
+            "manifestFingerprint": "8978689b19c72ba33dd45610de2d55fb6b4adaae6b3a1240a6e175291e0416bd",
             "executionPath": "provider-driver/sqlserver/secrets-repository/0e7ae6dd54aaea28",
             "clients": 3,
             "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
             "outcome": "pass",
             "evidence": "evidence/sqlserver/secrets-repository/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "459c1e9aeb2dff32709a72351a22be73c701d3c7fd38a80588ce4197bb637750"
+            "evidenceSha256": "fb215472d5067389bb42c4997c9e409a025dce7f3e85232cec951c20d478f327"
           },
           {
             "scenarioId": "queryShape:list-by-scope-bounded",
@@ -2416,9 +2416,9 @@
             "coverageEntryId": "secrets-repository",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7cccdf1b86deac61e00cc8733a15d1c51b6af0d64fd3b41c5813942e1bf09c62",
+            "manifestFingerprint": "12f321425cc00c0ead55da06ea7e5d4a7ae6cc33bd613318fc3bd92133ee582b",
             "executionPath": "provider-driver/sqlserver/secrets-repository/5e4cbf89c5b8c6b3",
             "clients": 1,
             "resultHash": "431d17322fb0725388591d89aeb57d9f700c56b064e1c9e5b35dfd637c20ec40",
@@ -2428,8 +2428,8 @@
             "documentKind": "secret",
             "nativeEvidence": "evidence/sqlserver/secrets-repository/5e4cbf89c5b8c6b3.plan.txt",
             "evidence": "evidence/sqlserver/secrets-repository/5e4cbf89c5b8c6b3.json",
-            "nativeEvidenceSha256": "19f05d5f043ac9eb1927788fbf5335c8626115406031cb3795a759ec42e675d1",
-            "evidenceSha256": "83656a51d782d0ab43bed32ba2b0530be6efeae759d575cdf4ba799f4383c7e6"
+            "nativeEvidenceSha256": "a8f07a6ae38ab3ceffb1e5a0e6bac5a4c9c77af09388aeab0a7ff57f882614a2",
+            "evidenceSha256": "14f80739ddaa2d29ddd6258c7bdbca72bdc81da0a7d1a39590233ec2c8bf0062"
           }
         ],
         "postgresql": [
@@ -2439,16 +2439,16 @@
             "coverageEntryId": "secrets-repository",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "552a6eda8b328782b673e087f71613cb70b422a196bba29a05a852193c0068ca",
+            "manifestFingerprint": "48198431770deeda479f17b412b09430d1df43ecdf2886bd10d0ee7e2841676d",
             "executionPath": "provider-driver/postgresql/secrets-repository/6aab3a9a20f9fcdf",
             "clients": 2,
             "resultHash": "c77369cef77aa4d608f57f4e42483e901761f588cdbcbeb7ff5b33d7a3993927",
             "outcome": "pass",
             "concurrencySemantic": "create-only-try-add",
             "evidence": "evidence/postgresql/secrets-repository/6aab3a9a20f9fcdf.json",
-            "evidenceSha256": "f1c8b6382697113f4b83eaad0387be7ad863274c06355c4b1f26aef9da6ea81e"
+            "evidenceSha256": "58df0fdf413ff170aaaa6ea3c2ba8b0e1d48b586d60042ffa51fb5c66c5262b0"
           },
           {
             "scenarioId": "concurrencySemantic:expected-version-save",
@@ -2456,16 +2456,16 @@
             "coverageEntryId": "secrets-repository",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "552a6eda8b328782b673e087f71613cb70b422a196bba29a05a852193c0068ca",
+            "manifestFingerprint": "48198431770deeda479f17b412b09430d1df43ecdf2886bd10d0ee7e2841676d",
             "executionPath": "provider-driver/postgresql/secrets-repository/1bb827c7c0312cbb",
             "clients": 3,
             "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/postgresql/secrets-repository/1bb827c7c0312cbb.json",
-            "evidenceSha256": "2f0493354fdb6579a55b382ea08fee218323ddae06d2d5fe443adba12cffd7e0"
+            "evidenceSha256": "f08fab0ead94af99b3949a65e0dc2add502fda9c451d6a484470866ec1017277"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -2473,15 +2473,15 @@
             "coverageEntryId": "secrets-repository",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "552a6eda8b328782b673e087f71613cb70b422a196bba29a05a852193c0068ca",
+            "manifestFingerprint": "48198431770deeda479f17b412b09430d1df43ecdf2886bd10d0ee7e2841676d",
             "executionPath": "provider-driver/postgresql/secrets-repository/0e7ae6dd54aaea28",
             "clients": 3,
             "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
             "outcome": "pass",
             "evidence": "evidence/postgresql/secrets-repository/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "df5f33f6b8c2bf2277da40f7a03686c7932c2baa5b1fee51a064b9c6d9f71610"
+            "evidenceSha256": "cd63265b5e34577b4c5db3d5d9564dd83754b4310f642e8ad3a790a9d40f47f9"
           },
           {
             "scenarioId": "queryShape:list-by-scope-bounded",
@@ -2489,9 +2489,9 @@
             "coverageEntryId": "secrets-repository",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "b3d85766a6138ce9a22d9943fcfdcce13db60fde3fe955b1e8106e1c9f911c22",
+            "manifestFingerprint": "36c85dbce35e42e62796217caa7723b717e215eb15467ced26b599d3a7b61028",
             "executionPath": "provider-driver/postgresql/secrets-repository/5e4cbf89c5b8c6b3",
             "clients": 1,
             "resultHash": "431d17322fb0725388591d89aeb57d9f700c56b064e1c9e5b35dfd637c20ec40",
@@ -2501,8 +2501,8 @@
             "documentKind": "secret",
             "nativeEvidence": "evidence/postgresql/secrets-repository/5e4cbf89c5b8c6b3.plan.txt",
             "evidence": "evidence/postgresql/secrets-repository/5e4cbf89c5b8c6b3.json",
-            "nativeEvidenceSha256": "ee0be5cb88e6c87e51bf526dd7ac742673a3da03a49a7dc53134f98d1f980e7a",
-            "evidenceSha256": "65d70dbdf4a9690345d237624a4da9cc006b5e954be48f4fdec3bc37086da7dc"
+            "nativeEvidenceSha256": "eab44480c08a533a8bb8009b2561ac1d3dad0de97998793f3e39f570cc93621d",
+            "evidenceSha256": "014858ba3e5ff318c95ba5e9d0795f6a4a06d12612a329617b177f62f21e3048"
           }
         ],
         "mongodb": [
@@ -2512,16 +2512,16 @@
             "coverageEntryId": "secrets-repository",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "82ce36f3c7cf4acd90c1a0c23f9048fd8282394c4f3d01d93ef81c611ac92f97",
+            "manifestFingerprint": "82bd2e11bb1da14b2a331cad53a4a5b69a0b811c21892e4c2b759bb3cec36af5",
             "executionPath": "provider-driver/mongodb/secrets-repository/6aab3a9a20f9fcdf",
             "clients": 2,
             "resultHash": "c77369cef77aa4d608f57f4e42483e901761f588cdbcbeb7ff5b33d7a3993927",
             "outcome": "pass",
             "concurrencySemantic": "create-only-try-add",
             "evidence": "evidence/mongodb/secrets-repository/6aab3a9a20f9fcdf.json",
-            "evidenceSha256": "de13fc5c12a62d83ead9171a11afc421372b88f9ce125a78e463b727e4938d37"
+            "evidenceSha256": "6e79744aefc85e67bd77f51dd04bdf75ee8e926c7611d4424decdbb608303a82"
           },
           {
             "scenarioId": "concurrencySemantic:expected-version-save",
@@ -2529,16 +2529,16 @@
             "coverageEntryId": "secrets-repository",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "82ce36f3c7cf4acd90c1a0c23f9048fd8282394c4f3d01d93ef81c611ac92f97",
+            "manifestFingerprint": "82bd2e11bb1da14b2a331cad53a4a5b69a0b811c21892e4c2b759bb3cec36af5",
             "executionPath": "provider-driver/mongodb/secrets-repository/1bb827c7c0312cbb",
             "clients": 3,
             "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
             "outcome": "pass",
             "concurrencySemantic": "expected-version-save",
             "evidence": "evidence/mongodb/secrets-repository/1bb827c7c0312cbb.json",
-            "evidenceSha256": "bcf8836d7468dccf978035b26e39e7e8373b3ee524110613f26f648bb91a718b"
+            "evidenceSha256": "f9bc0a30b0a7265ac34af576e4b8cb5f989f6feaed78fad0b967977eaa61afb3"
           },
           {
             "scenarioId": "ordinary-round-trip",
@@ -2546,15 +2546,15 @@
             "coverageEntryId": "secrets-repository",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "82ce36f3c7cf4acd90c1a0c23f9048fd8282394c4f3d01d93ef81c611ac92f97",
+            "manifestFingerprint": "82bd2e11bb1da14b2a331cad53a4a5b69a0b811c21892e4c2b759bb3cec36af5",
             "executionPath": "provider-driver/mongodb/secrets-repository/0e7ae6dd54aaea28",
             "clients": 3,
             "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
             "outcome": "pass",
             "evidence": "evidence/mongodb/secrets-repository/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "9957be7121ba186682cde53174679955b2a679f21729b06c46d2109373e2327e"
+            "evidenceSha256": "cae643e0725d44136ea3519db8264c8bcf23db9166b72c9a769d078770f8536d"
           },
           {
             "scenarioId": "queryShape:list-by-scope-bounded",
@@ -2562,9 +2562,9 @@
             "coverageEntryId": "secrets-repository",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "7c722d7affd7df503deab8acaea328044547f61013066bfee7b8f15dc8a84b91",
+            "manifestFingerprint": "48537d944a702e56b0a9ab6ab2f511b021c6547791bc79a0bb166deab966ebfd",
             "executionPath": "provider-driver/mongodb/secrets-repository/5e4cbf89c5b8c6b3",
             "clients": 1,
             "resultHash": "431d17322fb0725388591d89aeb57d9f700c56b064e1c9e5b35dfd637c20ec40",
@@ -2574,8 +2574,8 @@
             "documentKind": "secret",
             "nativeEvidence": "evidence/mongodb/secrets-repository/5e4cbf89c5b8c6b3.plan.txt",
             "evidence": "evidence/mongodb/secrets-repository/5e4cbf89c5b8c6b3.json",
-            "nativeEvidenceSha256": "5abfda135de9653c35cef6dde1504fc44b0d6cb5c3bd9331f2e7dcb285e385f8",
-            "evidenceSha256": "82b9fc29cb1f578f5df9dec971552a8c309f73d53d9d4bfb6e637420c1f9867f"
+            "nativeEvidenceSha256": "c1585b1d6c92cda57c2db121403c0ba5798f09b2a3f302c2321f411c712c0764",
+            "evidenceSha256": "aafe02d08a2f9fb951be1c7396a285104143f1b610482826c40e9a659bb6b051"
           }
         ]
       },
@@ -2628,15 +2628,15 @@
             "coverageEntryId": "distributed-execution-placement",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "357b2f34ad9d59fa97b97697952c4d9d6f73278759e388ef999a2ff70b4b1f55",
+            "manifestFingerprint": "dd0a56f50743faa280c092b2f709f5275ae9eee64128ce71e3157597e5363e80",
             "executionPath": "provider-driver/sqlite/distributed-execution-placement/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "867154168f8ee88c35c7db72c504ab4b0457eca7ff387ce5c1a898561628abc2",
             "outcome": "pass",
             "evidence": "evidence/sqlite/distributed-execution-placement/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "f7007bc3a6a7f88ffcc165ab4c349e1da7ef8fa4ff970ac481eaf8fe5963da2c"
+            "evidenceSha256": "04c4df18d784fe886c2e0e4c96f6ccadd323214b48248ccf35fb3cdc147c7463"
           },
           {
             "scenarioId": "queryShape:list-owned-or-current-bounded",
@@ -2644,9 +2644,9 @@
             "coverageEntryId": "distributed-execution-placement",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "9720b542240858e0c51ca4782073b070c690bab0c809d102baa7097b09ca3ca3",
+            "manifestFingerprint": "4e6141f6183107ed70088c7d502132c117ab7d1836110e873af8c5871e351ceb",
             "executionPath": "provider-driver/sqlite/distributed-execution-placement/8c0c25e23488bc42",
             "clients": 1,
             "resultHash": "fd8fd18024360a016cccba61f70801cf114c7c53798cda2896288eabb76a2100",
@@ -2657,7 +2657,7 @@
             "nativeEvidence": "evidence/sqlite/distributed-execution-placement/8c0c25e23488bc42.plan.txt",
             "evidence": "evidence/sqlite/distributed-execution-placement/8c0c25e23488bc42.json",
             "nativeEvidenceSha256": "5018b519e0d2980b828421acc80c0a92f281727e946e16b41347a9ea0451d0c5",
-            "evidenceSha256": "d4892d0587bd6de51d734cefb28c653063b74944585febfdf4c5c5a5f0b420a2"
+            "evidenceSha256": "21623adad3d1a5849cdc3d7281d020b48b45c6f40e7632b10b74ef05e8aa81c6"
           }
         ],
         "sqlserver": [
@@ -2667,15 +2667,15 @@
             "coverageEntryId": "distributed-execution-placement",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "13ea7bd8d719599ccf914aa3342627f8ceff38df9066bfcaaed9f78b0724523f",
+            "manifestFingerprint": "88662b9a14325d4b52ab2d75d208f99f5db03d7a98d8492092bc691b2fdf5cdf",
             "executionPath": "provider-driver/sqlserver/distributed-execution-placement/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "867154168f8ee88c35c7db72c504ab4b0457eca7ff387ce5c1a898561628abc2",
             "outcome": "pass",
             "evidence": "evidence/sqlserver/distributed-execution-placement/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "5bf8ea574524fdbd42449ba189e973e0b1c415d341400d307570b85ae6c149bb"
+            "evidenceSha256": "523b1e1c731c2a55d04df53757e547b0dc12fe4bc54fb4ea48eb29aca94d15a3"
           },
           {
             "scenarioId": "queryShape:list-owned-or-current-bounded",
@@ -2683,9 +2683,9 @@
             "coverageEntryId": "distributed-execution-placement",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "84cde3e37fb5c2e0050d57665fac025c21ff5216da53f7efa31b2eb4dc10c4c6",
+            "manifestFingerprint": "768571c92263a0696520844f5dda3f7ea3c95238ace780e6996d76c54cc1121f",
             "executionPath": "provider-driver/sqlserver/distributed-execution-placement/8c0c25e23488bc42",
             "clients": 1,
             "resultHash": "fd8fd18024360a016cccba61f70801cf114c7c53798cda2896288eabb76a2100",
@@ -2695,8 +2695,8 @@
             "documentKind": "executionPlacement",
             "nativeEvidence": "evidence/sqlserver/distributed-execution-placement/8c0c25e23488bc42.plan.txt",
             "evidence": "evidence/sqlserver/distributed-execution-placement/8c0c25e23488bc42.json",
-            "nativeEvidenceSha256": "717858f0625c4d824f9d4ef84c6e0c4a39c128a605f5e171952621aa016011a3",
-            "evidenceSha256": "5e867a93eb2fba2f4daae97485e5df0f36e5fc8099e6a638349797570284448a"
+            "nativeEvidenceSha256": "4c3fcb25f464e8d6dd34a3a4035aad023daac1faab74c066a25962d24d9cc334",
+            "evidenceSha256": "28e486b7b6adf9e08de47ca01fec1a327806e3d4ed57ca4fbdec84f622cb0c3d"
           }
         ],
         "postgresql": [
@@ -2706,15 +2706,15 @@
             "coverageEntryId": "distributed-execution-placement",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "fa37b55e1cb88c4e51eb93351249b5626bc5420705f86cee45c79e3170c4ab59",
+            "manifestFingerprint": "f0067afcc77e9835f0de79e81d8a484711d626e5ffb4016fdfdf3d281d9f3d6b",
             "executionPath": "provider-driver/postgresql/distributed-execution-placement/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "867154168f8ee88c35c7db72c504ab4b0457eca7ff387ce5c1a898561628abc2",
             "outcome": "pass",
             "evidence": "evidence/postgresql/distributed-execution-placement/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "8888f8c62744cca9923d687cfbb4face30caf11cd66cea340d7b5415c5b41ed3"
+            "evidenceSha256": "60ad888bd71c665a1c1317c1ac8cf179f67af5cc65fbb2ac7c95cf80b4e34f9b"
           },
           {
             "scenarioId": "queryShape:list-owned-or-current-bounded",
@@ -2722,9 +2722,9 @@
             "coverageEntryId": "distributed-execution-placement",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+            "manifestFingerprint": "05d94c77ad46223907f0c8e876c1aa12e12bfb996aced4795ad48720dc3de4ad",
             "executionPath": "provider-driver/postgresql/distributed-execution-placement/8c0c25e23488bc42",
             "clients": 1,
             "resultHash": "fd8fd18024360a016cccba61f70801cf114c7c53798cda2896288eabb76a2100",
@@ -2734,8 +2734,8 @@
             "documentKind": "executionPlacement",
             "nativeEvidence": "evidence/postgresql/distributed-execution-placement/8c0c25e23488bc42.plan.txt",
             "evidence": "evidence/postgresql/distributed-execution-placement/8c0c25e23488bc42.json",
-            "nativeEvidenceSha256": "3d20f872dee2ffecb9f1e69e3b2e6e973f5a6d3b007d2bde0d3a2d8bd143d360",
-            "evidenceSha256": "c55944e22380fcab404f3e46ea06f0532d6900dc6c6bacc94499be26ab2cb8b0"
+            "nativeEvidenceSha256": "b172f5f46e80d3fada2d6462768f3da335d87a5a3d82ca17317b182ce7035b07",
+            "evidenceSha256": "92e8017ad5376897c9bf6a7172971a013b19c854f50c36f02a053e853a5188e7"
           }
         ],
         "mongodb": [
@@ -2745,15 +2745,15 @@
             "coverageEntryId": "distributed-execution-placement",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "7980149bab0427138208d61616c81e89c59c79428b98d83f4fe4eb116fc1f0bc",
+            "manifestFingerprint": "cd19d8546c408dc71445affbae1436d563885b738af66193abddba03ee5c54c5",
             "executionPath": "provider-driver/mongodb/distributed-execution-placement/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "867154168f8ee88c35c7db72c504ab4b0457eca7ff387ce5c1a898561628abc2",
             "outcome": "pass",
             "evidence": "evidence/mongodb/distributed-execution-placement/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "a6e02d84e84e2f60a28fdbbaeebd8e7b011076a37f7813e5579957eba3a45584"
+            "evidenceSha256": "353a7fc9182fd304fc826518c492f61cd64a652900fb091c64271ffb28d220fb"
           },
           {
             "scenarioId": "queryShape:list-owned-or-current-bounded",
@@ -2761,9 +2761,9 @@
             "coverageEntryId": "distributed-execution-placement",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "08dbfcbaa3b2d9e756833a46dcdffbe57cab0e655576e2b9b2b8226df9f697ec",
+            "manifestFingerprint": "8428ffbb867d1049b92861967f05d3c1a190cc5edfc724aea2072e4948d9542f",
             "executionPath": "provider-driver/mongodb/distributed-execution-placement/8c0c25e23488bc42",
             "clients": 1,
             "resultHash": "fd8fd18024360a016cccba61f70801cf114c7c53798cda2896288eabb76a2100",
@@ -2773,8 +2773,8 @@
             "documentKind": "executionPlacement",
             "nativeEvidence": "evidence/mongodb/distributed-execution-placement/8c0c25e23488bc42.plan.txt",
             "evidence": "evidence/mongodb/distributed-execution-placement/8c0c25e23488bc42.json",
-            "nativeEvidenceSha256": "7b2ceeaf5959814d70628a9286f0ba5ab694cee7b944a4a806495a31e74d4350",
-            "evidenceSha256": "e56d505ccb7f88b32c46c10bd95431520a6d1ee3093f71be2512418b284e4282"
+            "nativeEvidenceSha256": "37141d1912e37e3c94aa126cf24d9b9276867f7d2b8f010fa4202cce75ad3dc6",
+            "evidenceSha256": "02ca846deee9a8b4133ddd0e90f9fbe4889deccf95ca8abdb09850529e1e2dbe"
           }
         ]
       },
@@ -2829,15 +2829,15 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "357b2f34ad9d59fa97b97697952c4d9d6f73278759e388ef999a2ff70b4b1f55",
+            "manifestFingerprint": "dd0a56f50743faa280c092b2f709f5275ae9eee64128ce71e3157597e5363e80",
             "executionPath": "provider-driver/sqlite/distributed-command-transport/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
             "outcome": "pass",
             "evidence": "evidence/sqlite/distributed-command-transport/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "571c740c73c81aaa809f287f18fbcb6354cfe962f0072051c292b13ad155d610"
+            "evidenceSha256": "42f84ac220c009245d5172bad92e9d8b34be4ee573808c18c637977a2f8297bd"
           },
           {
             "scenarioId": "queryShape:count-pending-by-execution",
@@ -2845,9 +2845,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "9720b542240858e0c51ca4782073b070c690bab0c809d102baa7097b09ca3ca3",
+            "manifestFingerprint": "4e6141f6183107ed70088c7d502132c117ab7d1836110e873af8c5871e351ceb",
             "executionPath": "provider-driver/sqlite/distributed-command-transport/4fb3e89fc9e6911a",
             "clients": 1,
             "resultHash": "dc8f0223c75299c7958f3a64fcbcf5c687ce72c744bc3f0523f09fc25303bbc9",
@@ -2858,7 +2858,7 @@
             "nativeEvidence": "evidence/sqlite/distributed-command-transport/4fb3e89fc9e6911a.plan.txt",
             "evidence": "evidence/sqlite/distributed-command-transport/4fb3e89fc9e6911a.json",
             "nativeEvidenceSha256": "4791de451470eb3c28b70d1901a3125c435134766c78c359d93574a184429b0c",
-            "evidenceSha256": "1c48774fa0d1add4d4b83d2bc258b04aa204cbd28098ffe3044570da2fb788f4"
+            "evidenceSha256": "975b7937d686c300333b06eee8ab11540c24b04aaae4d81cebdfeb7476f7cfe3"
           },
           {
             "scenarioId": "queryShape:lease-visible-by-execution-bounded",
@@ -2866,9 +2866,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "9720b542240858e0c51ca4782073b070c690bab0c809d102baa7097b09ca3ca3",
+            "manifestFingerprint": "4e6141f6183107ed70088c7d502132c117ab7d1836110e873af8c5871e351ceb",
             "executionPath": "provider-driver/sqlite/distributed-command-transport/c5b6defeb8de81a5",
             "clients": 1,
             "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
@@ -2879,7 +2879,7 @@
             "nativeEvidence": "evidence/sqlite/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
             "evidence": "evidence/sqlite/distributed-command-transport/c5b6defeb8de81a5.json",
             "nativeEvidenceSha256": "6d96187f26478806eae9e095fdffb4a0e0c36d10d02df0ea911cfc5fdc49c06a",
-            "evidenceSha256": "7bf9db4fdaa6d9f2c2513ecac33c0804f3d6ee9a6512c6138528ec33a9a1c62f"
+            "evidenceSha256": "ca7a33f106336a81316f7358f12ed87f1699554ac26dfff1f92b5afc3dcb427b"
           },
           {
             "scenarioId": "queryShape:list-pending-execution-ids-bounded",
@@ -2887,9 +2887,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "9720b542240858e0c51ca4782073b070c690bab0c809d102baa7097b09ca3ca3",
+            "manifestFingerprint": "4e6141f6183107ed70088c7d502132c117ab7d1836110e873af8c5871e351ceb",
             "executionPath": "provider-driver/sqlite/distributed-command-transport/ab14d5a3451e98c3",
             "clients": 1,
             "resultHash": "c10492fef6630062ca664f570e11844504e95a02d7e95429f1501ff9349b4213",
@@ -2900,7 +2900,7 @@
             "nativeEvidence": "evidence/sqlite/distributed-command-transport/ab14d5a3451e98c3.plan.txt",
             "evidence": "evidence/sqlite/distributed-command-transport/ab14d5a3451e98c3.json",
             "nativeEvidenceSha256": "e9cd757da142e52a61973e0ee715b74312c9656ed939b500c8d2627818bd15a6",
-            "evidenceSha256": "1365660df57adfcc37b5f29cc3ac5da62c8b179bebe15f03a388845dfeb7b6fa"
+            "evidenceSha256": "10471034e97e56ce559295f610d2a72c12a14d4bc0669b062f839b2b60541fda"
           }
         ],
         "sqlserver": [
@@ -2910,15 +2910,15 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "13ea7bd8d719599ccf914aa3342627f8ceff38df9066bfcaaed9f78b0724523f",
+            "manifestFingerprint": "88662b9a14325d4b52ab2d75d208f99f5db03d7a98d8492092bc691b2fdf5cdf",
             "executionPath": "provider-driver/sqlserver/distributed-command-transport/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
             "outcome": "pass",
             "evidence": "evidence/sqlserver/distributed-command-transport/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "83afbdf4093e04ec1c9f50188040a866a93de58b9f335495a658003d68fdf587"
+            "evidenceSha256": "435035724071e988983b7b104125b25d817887d526c7553ded935049afcaf58e"
           },
           {
             "scenarioId": "queryShape:count-pending-by-execution",
@@ -2926,9 +2926,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "84cde3e37fb5c2e0050d57665fac025c21ff5216da53f7efa31b2eb4dc10c4c6",
+            "manifestFingerprint": "768571c92263a0696520844f5dda3f7ea3c95238ace780e6996d76c54cc1121f",
             "executionPath": "provider-driver/sqlserver/distributed-command-transport/4fb3e89fc9e6911a",
             "clients": 1,
             "resultHash": "dc8f0223c75299c7958f3a64fcbcf5c687ce72c744bc3f0523f09fc25303bbc9",
@@ -2938,8 +2938,8 @@
             "documentKind": "executionCommandTransport",
             "nativeEvidence": "evidence/sqlserver/distributed-command-transport/4fb3e89fc9e6911a.plan.txt",
             "evidence": "evidence/sqlserver/distributed-command-transport/4fb3e89fc9e6911a.json",
-            "nativeEvidenceSha256": "0ceb9793ccfa57c7f126f7c6c1c0c81ecaa55b3715bcb03d6af64c45700759ce",
-            "evidenceSha256": "428b3307272d1d0a997f44764290da4448031278cf72afc3ca88ae054e02bc7a"
+            "nativeEvidenceSha256": "65504788d1aa2add74c32fd3eb90b669ff3f75ae85156174283aa0f27b95fd4b",
+            "evidenceSha256": "dc7eb15be7fd0f25d0ccd98cce7706a87ff6256bb0549e67574f4daf60502dda"
           },
           {
             "scenarioId": "queryShape:lease-visible-by-execution-bounded",
@@ -2947,9 +2947,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "84cde3e37fb5c2e0050d57665fac025c21ff5216da53f7efa31b2eb4dc10c4c6",
+            "manifestFingerprint": "768571c92263a0696520844f5dda3f7ea3c95238ace780e6996d76c54cc1121f",
             "executionPath": "provider-driver/sqlserver/distributed-command-transport/c5b6defeb8de81a5",
             "clients": 1,
             "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
@@ -2959,8 +2959,8 @@
             "documentKind": "executionCommandTransport",
             "nativeEvidence": "evidence/sqlserver/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
             "evidence": "evidence/sqlserver/distributed-command-transport/c5b6defeb8de81a5.json",
-            "nativeEvidenceSha256": "e69a76e714ee8de313b2694b139fdeac1240ef53c7238d9e89236670b7419c70",
-            "evidenceSha256": "f6fb859ac4fdb5481472fef75c5cadea1e30b989d94609cf478ba2f6f72b2cc0"
+            "nativeEvidenceSha256": "51974d483c7711fb05d5f708cc48e1445a1d0761645ae99ea51c92736f50f687",
+            "evidenceSha256": "9aaff933bb72e5cc120300b8804b4563abd89c8a1b576a79a23ba514a845349e"
           },
           {
             "scenarioId": "queryShape:list-pending-execution-ids-bounded",
@@ -2968,9 +2968,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "84cde3e37fb5c2e0050d57665fac025c21ff5216da53f7efa31b2eb4dc10c4c6",
+            "manifestFingerprint": "768571c92263a0696520844f5dda3f7ea3c95238ace780e6996d76c54cc1121f",
             "executionPath": "provider-driver/sqlserver/distributed-command-transport/ab14d5a3451e98c3",
             "clients": 1,
             "resultHash": "c10492fef6630062ca664f570e11844504e95a02d7e95429f1501ff9349b4213",
@@ -2980,8 +2980,8 @@
             "documentKind": "executionCommandTransport",
             "nativeEvidence": "evidence/sqlserver/distributed-command-transport/ab14d5a3451e98c3.plan.txt",
             "evidence": "evidence/sqlserver/distributed-command-transport/ab14d5a3451e98c3.json",
-            "nativeEvidenceSha256": "15c3b5000c328b4d4cf0390df04c0683e9f2bd469f7bb8409cbdb806b0d52e6a",
-            "evidenceSha256": "4b8edd77211f0b3ce616a7588dbc8ab73e011983e6a7e892112ff9ff276a2448"
+            "nativeEvidenceSha256": "57db14373d4d7f10c3cb62ffc2f0e80d86157cefcbb7e0a1ca4dfe2167309c1d",
+            "evidenceSha256": "7d9056f2a627d65dfbabb27863fba6c41ba727abd8c07a5c36acba619574ffa0"
           }
         ],
         "postgresql": [
@@ -2991,15 +2991,15 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "fa37b55e1cb88c4e51eb93351249b5626bc5420705f86cee45c79e3170c4ab59",
+            "manifestFingerprint": "f0067afcc77e9835f0de79e81d8a484711d626e5ffb4016fdfdf3d281d9f3d6b",
             "executionPath": "provider-driver/postgresql/distributed-command-transport/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
             "outcome": "pass",
             "evidence": "evidence/postgresql/distributed-command-transport/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "14da1d3b6fb5393c5e9fc9e5b7d69f0936d5b1fbe1810d502a79e608eb1f22b7"
+            "evidenceSha256": "d6646d130688da9f51b616ea61b0dd8892c4911eb6a07e4119145a3399340514"
           },
           {
             "scenarioId": "queryShape:count-pending-by-execution",
@@ -3007,9 +3007,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+            "manifestFingerprint": "05d94c77ad46223907f0c8e876c1aa12e12bfb996aced4795ad48720dc3de4ad",
             "executionPath": "provider-driver/postgresql/distributed-command-transport/4fb3e89fc9e6911a",
             "clients": 1,
             "resultHash": "dc8f0223c75299c7958f3a64fcbcf5c687ce72c744bc3f0523f09fc25303bbc9",
@@ -3020,7 +3020,7 @@
             "nativeEvidence": "evidence/postgresql/distributed-command-transport/4fb3e89fc9e6911a.plan.txt",
             "evidence": "evidence/postgresql/distributed-command-transport/4fb3e89fc9e6911a.json",
             "nativeEvidenceSha256": "e96022ea72d8160e487962454395f8e6d9811c21e584a22a47f617fd67b076c7",
-            "evidenceSha256": "1b4d3892d26ed1bd0ebaf9e6e391e0e2c7802fc2ac57a70e2129a12fa0c7fbe1"
+            "evidenceSha256": "a3db380bd35690db89fc5c485e0f7e5369b95a8ac225d1cc7e8aa167ac44741a"
           },
           {
             "scenarioId": "queryShape:lease-visible-by-execution-bounded",
@@ -3028,9 +3028,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+            "manifestFingerprint": "05d94c77ad46223907f0c8e876c1aa12e12bfb996aced4795ad48720dc3de4ad",
             "executionPath": "provider-driver/postgresql/distributed-command-transport/c5b6defeb8de81a5",
             "clients": 1,
             "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
@@ -3040,8 +3040,8 @@
             "documentKind": "executionCommandTransport",
             "nativeEvidence": "evidence/postgresql/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
             "evidence": "evidence/postgresql/distributed-command-transport/c5b6defeb8de81a5.json",
-            "nativeEvidenceSha256": "7b3174c805943c3bdba53d882c758508a839d81d2fec59be009aae00c6ff5d39",
-            "evidenceSha256": "8bf88dee5611dd826411c1590ac59163cb03e36f707fde0ab351bfd096e3108e"
+            "nativeEvidenceSha256": "047c038743910ff2e5ddcdc50cd34cccc5390a14988684d6290e7d2a5460e63a",
+            "evidenceSha256": "c9a1b865bc41e35409fb56cc34a573ca9b6c0e0747ed8ca72209a0d0c9c4def8"
           },
           {
             "scenarioId": "queryShape:list-pending-execution-ids-bounded",
@@ -3049,9 +3049,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "6d5f9698fbba08131844fc552c1f222e2b1c72795e1a9ac52d9ce4204e09952b",
+            "manifestFingerprint": "05d94c77ad46223907f0c8e876c1aa12e12bfb996aced4795ad48720dc3de4ad",
             "executionPath": "provider-driver/postgresql/distributed-command-transport/ab14d5a3451e98c3",
             "clients": 1,
             "resultHash": "c10492fef6630062ca664f570e11844504e95a02d7e95429f1501ff9349b4213",
@@ -3061,8 +3061,8 @@
             "documentKind": "executionCommandTransport",
             "nativeEvidence": "evidence/postgresql/distributed-command-transport/ab14d5a3451e98c3.plan.txt",
             "evidence": "evidence/postgresql/distributed-command-transport/ab14d5a3451e98c3.json",
-            "nativeEvidenceSha256": "b9970a6d695cd296948da70c226d5532f34b0962ea6ef55133b0c3145a7ec1fb",
-            "evidenceSha256": "c71b3e89592a6124da12af31e343e6c2565f0cf1079e87b7c6096387629c7105"
+            "nativeEvidenceSha256": "39c22fbd1b02c3107b6338c6f8e5c6b5ef05a26a48ab8a30f67295fb245c6fed",
+            "evidenceSha256": "33b4521eb88a45764ba2fd5a1db8db0d24843312b7701d137e9144829fb95d23"
           }
         ],
         "mongodb": [
@@ -3072,15 +3072,15 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "7980149bab0427138208d61616c81e89c59c79428b98d83f4fe4eb116fc1f0bc",
+            "manifestFingerprint": "cd19d8546c408dc71445affbae1436d563885b738af66193abddba03ee5c54c5",
             "executionPath": "provider-driver/mongodb/distributed-command-transport/0e7ae6dd54aaea28",
             "clients": 2,
             "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
             "outcome": "pass",
             "evidence": "evidence/mongodb/distributed-command-transport/0e7ae6dd54aaea28.json",
-            "evidenceSha256": "3b59dfe01ee7af1d05edcdcf7fd23b124dd8edf25403575154f81b8e17c76789"
+            "evidenceSha256": "e300ea848842ae94ab2b93e7e25ac73188e353c1f0e860c2fa9b3820004821c4"
           },
           {
             "scenarioId": "queryShape:count-pending-by-execution",
@@ -3088,9 +3088,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "08dbfcbaa3b2d9e756833a46dcdffbe57cab0e655576e2b9b2b8226df9f697ec",
+            "manifestFingerprint": "8428ffbb867d1049b92861967f05d3c1a190cc5edfc724aea2072e4948d9542f",
             "executionPath": "provider-driver/mongodb/distributed-command-transport/4fb3e89fc9e6911a",
             "clients": 1,
             "resultHash": "dc8f0223c75299c7958f3a64fcbcf5c687ce72c744bc3f0523f09fc25303bbc9",
@@ -3100,8 +3100,8 @@
             "documentKind": "executionCommandTransport",
             "nativeEvidence": "evidence/mongodb/distributed-command-transport/4fb3e89fc9e6911a.plan.txt",
             "evidence": "evidence/mongodb/distributed-command-transport/4fb3e89fc9e6911a.json",
-            "nativeEvidenceSha256": "98b1c52a91922653d258309054bf61753ea526ce2b4a0263ae6b8bdd0490cf06",
-            "evidenceSha256": "57b721f674836d49a092e0c817ddac68168858fb3bdee7a4897a6f0523035ffa"
+            "nativeEvidenceSha256": "6fd396558ec9e3d49e9cf3ceb6220a68ea37df436d6df5d398f06256132e119b",
+            "evidenceSha256": "204744c5a9a07d45539bb690feceeb6959f7f8d4929052113a0d73df1ce9fe10"
           },
           {
             "scenarioId": "queryShape:lease-visible-by-execution-bounded",
@@ -3109,9 +3109,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "08dbfcbaa3b2d9e756833a46dcdffbe57cab0e655576e2b9b2b8226df9f697ec",
+            "manifestFingerprint": "8428ffbb867d1049b92861967f05d3c1a190cc5edfc724aea2072e4948d9542f",
             "executionPath": "provider-driver/mongodb/distributed-command-transport/c5b6defeb8de81a5",
             "clients": 1,
             "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
@@ -3121,8 +3121,8 @@
             "documentKind": "executionCommandTransport",
             "nativeEvidence": "evidence/mongodb/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
             "evidence": "evidence/mongodb/distributed-command-transport/c5b6defeb8de81a5.json",
-            "nativeEvidenceSha256": "43e0e18b9e61ed5d1595d555afd94e7fd329ff96308b29f306f43fbb10ad262d",
-            "evidenceSha256": "3a4cb0dd71ce3a6ebbe5456d0e680aebb09b857037d2234ce92e03ee5613324e"
+            "nativeEvidenceSha256": "790c0f646ad4f300f4c7e71bec9d0c13a91fcf13d7a9a7d99e6b87ba0e21dfec",
+            "evidenceSha256": "d20c0520735dd9e76715dce951ec757ff581f73b0f0d63e067a996caa3b2611d"
           },
           {
             "scenarioId": "queryShape:list-pending-execution-ids-bounded",
@@ -3130,9 +3130,9 @@
             "coverageEntryId": "distributed-command-transport",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.72",
+            "providerVersion": "0.0.1-preview.76",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "08dbfcbaa3b2d9e756833a46dcdffbe57cab0e655576e2b9b2b8226df9f697ec",
+            "manifestFingerprint": "8428ffbb867d1049b92861967f05d3c1a190cc5edfc724aea2072e4948d9542f",
             "executionPath": "provider-driver/mongodb/distributed-command-transport/ab14d5a3451e98c3",
             "clients": 1,
             "resultHash": "c10492fef6630062ca664f570e11844504e95a02d7e95429f1501ff9349b4213",
@@ -3142,8 +3142,8 @@
             "documentKind": "executionCommandTransport",
             "nativeEvidence": "evidence/mongodb/distributed-command-transport/ab14d5a3451e98c3.plan.txt",
             "evidence": "evidence/mongodb/distributed-command-transport/ab14d5a3451e98c3.json",
-            "nativeEvidenceSha256": "224bd8b192a9ff401d9170b3833141df5870596802b7b7b73387c1a9cb8d1be3",
-            "evidenceSha256": "28a7797403df63dc4c95d2d7d62a6dccd30c82770195d8bba81028d637b45ce2"
+            "nativeEvidenceSha256": "6db4b8f32704f7e1561f4fd5c78c10cb6683e7d093cb171bf70cf05edc63b7fa",
+            "evidenceSha256": "24d7d053292895e64a45eeacf44ed0b572f095b014723cadca90ee04313371e3"
           }
         ]
       },

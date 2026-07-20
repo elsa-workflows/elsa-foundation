@@ -1,4 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
@@ -14,7 +15,8 @@ public sealed class GetWorkflowInstanceRequestHandler(
     IIncidentStateStore incidentStateStore,
     IDurableValueStateStore durableValueStateStore,
     IRuntimePayloadCapturePolicy payloadCapturePolicy,
-    IActivityExecutionInspectionAuthorizationContext authorization)
+    IActivityExecutionInspectionAuthorizationContext authorization,
+    RuntimeCheckpointCadenceInspector checkpointCadenceInspector)
     : IRequestHandler<GetWorkflowInstance, GetWorkflowInstanceResponse>
 {
     public async Task<GetWorkflowInstanceResponse> Handle(GetWorkflowInstance request, CancellationToken cancellationToken)
@@ -55,11 +57,18 @@ public sealed class GetWorkflowInstanceRequestHandler(
                 : WorkflowOutputView.Redacted(output.CapturedAt),
             StringComparer.Ordinal);
 
+        // Checkpoint cadence + inspection granularity (ADR 0032 R3/R5): prefer the run's own per-run cadence stamp so an
+        // instance reports the cadence it actually executed under, falling back to the host projection for legacy runs.
+        var cadence = checkpointCadenceInspector.Resolve(state);
+
         return new GetWorkflowInstanceResponse(new WorkflowInstanceDetailsView(
             WorkflowInstanceSummaryView.From(state, activityPage.TotalCount, incidents.Length, canInspectSensitiveValues),
             activities,
             incidents,
             outputs,
+            cadence.CheckpointCadence,
+            cadence.MaxSegmentCheckpoints,
+            cadence.InspectionGranularity,
             activityPage.NextContinuationToken));
     }
 }

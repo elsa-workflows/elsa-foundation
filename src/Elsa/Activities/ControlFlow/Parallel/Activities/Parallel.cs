@@ -68,6 +68,7 @@ namespace Elsa.Activities.Parallel.Activities;
     ChildProperty = "activity",
     LabelProperty = "name",
     SlotNameTemplate = "Parallel.Branch[{name}]")]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Parallel(IActivityExecutionStateStore activityExecutionStateStore) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler
 {
     public const string BranchSlotPrefix = "Parallel.Branch[";

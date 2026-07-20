@@ -71,7 +71,11 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                     SqliteGroundworkCapabilities.PhysicalNames,
                     cancellationToken);
 
-            await using var inspectionConnection = new SqliteConnection(connectionString);
+            // Route through Groundwork's connection factory so the WAL/synchronous/busy-timeout pragmas apply.
+            // A bare SqliteConnection here would create (and forever admit) the database in rollback-journal
+            // mode: journal_mode is a persistent per-database property, and this initializer's connections are
+            // the first to touch the file.
+            await using var inspectionConnection = SqliteConnectionFactory.Create(connectionString);
             var admission = await source.InspectRuntimeAdmissionAsync(
                 new SqlitePhysicalSchemaExecutor(inspectionConnection),
                 new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = autoApplyOnStartup },
@@ -94,7 +98,9 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                     SqliteConnection? connection = null;
                     try
                     {
-                        connection = new SqliteConnection(connectionString);
+                        // Every store session must open through the pragma factory: journal_mode=WAL persists
+                        // per-database, but synchronous=NORMAL and busy_timeout are per-connection.
+                        connection = SqliteConnectionFactory.Create(connectionString);
                         await connection.OpenAsync(ct);
                         var store = new SqlitePhysicalDocumentStore(
                             connection,

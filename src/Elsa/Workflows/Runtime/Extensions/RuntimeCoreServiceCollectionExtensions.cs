@@ -94,6 +94,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         // WU-1 / spec 105: scoped transport shared by the same-scope drainer and checkpoint committer so a checkpoint
         // commit can fold the claimed work item's acknowledgement into its unit-of-work.
         services.TryAddScoped<IRuntimeConsumedSchedulerWorkClaimAccessor, RuntimeConsumedSchedulerWorkClaimAccessor>();
+        // Live-drain delivery marker (WU-2). Always registered because Immediate is the default cost model: the drain
+        // orchestrator pushes a scope while it owns an execution so the post-commit outbox processor delivers
+        // EnqueueSchedulerWork intents in-memory. The coalescing feature leaves this untouched; it never pushes a scope.
+        services.TryAddSingleton<IRuntimeLiveDrainDeliveryAccessor, AsyncLocalRuntimeLiveDrainDeliveryAccessor>();
         services.TryAddScoped<IRuntimeExecutionOwnershipService>(serviceProvider =>
             new RuntimeExecutionOwnershipService(
                 serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
@@ -138,7 +142,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimeFaultCapturePolicy>(),
                 serviceProvider.GetService<IWorkflowDispatchStore>(),
                 serviceProvider.GetServices<IPostCommitFailureProjector>(),
-                serviceProvider.GetService<ILogger<RuntimePostCommitOutboxProcessor>>()));
+                serviceProvider.GetService<ILogger<RuntimePostCommitOutboxProcessor>>(),
+                serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
+                serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>()));
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
@@ -201,6 +207,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
+        services.TryAddScoped<IRuntimeCheckpointCadenceResolver, RuntimeCheckpointCadenceResolver>();
         services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
         services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
         services.TryAddScoped<RuntimeCheckpointCommitter>();

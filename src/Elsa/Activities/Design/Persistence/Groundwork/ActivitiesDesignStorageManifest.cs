@@ -6,18 +6,7 @@ using Groundwork.Core.Queries;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork;
 
-/// <summary>
-/// Provider-neutral Groundwork storage manifest describing the activity <b>design</b> document kinds. It is
-/// the activities-lane counterpart of <c>WorkflowsDesignStorageManifest</c>: a host selects the concrete
-/// provider (SQLite, SQL Server, PostgreSQL, MongoDB, ...) without changing this description, so the same
-/// host-selected document provider can back every Elsa module.
-/// <para>
-/// Legacy aggregate units retain their <b>by-collection keyword index</b> contract. Management projection
-/// units are different: they declare explicit physical entity tables and admitted scale-bearing bounded
-/// queries so visibility, temporal predicates, search, filters, ordering, paging, and exact counts execute
-/// at the selected provider boundary.
-/// </para>
-/// </summary>
+/// <summary>Provider-neutral physical storage declaration for activity design persistence.</summary>
 public static class ActivitiesDesignStorageManifest
 {
     // Frozen legacy stamp. Groundwork physicalizes additive document kinds/indexes from the manifest;
@@ -225,7 +214,7 @@ public static class ActivitiesDesignStorageManifest
                 ],
                 [
                     Query(ListAllQuery, ByCollectionIndex),
-                    new PortableQueryDeclaration(
+                    new ActivityQuery(
                         ActivityForkCandidateExpiredQuery,
                         ActivityForkCandidateRetentionIndex,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
@@ -278,29 +267,19 @@ public static class ActivitiesDesignStorageManifest
     private static StorageUnit Unit(
         string documentKind,
         string label,
-        IndexDeclaration[] indexes,
-        PortableQueryDeclaration[] queries) =>
+        ActivityIndex[] indexes,
+        ActivityQuery[] queries) =>
         Unit(documentKind, label, indexes, queries, LifecyclePolicy.Mutable);
 
     private static StorageUnit Unit(
         string documentKind,
         string label,
-        IndexDeclaration[] indexes,
-        PortableQueryDeclaration[] queries,
-        LifecyclePolicy lifecycle) => new(
-        new StorageUnitIdentity(documentKind),
-        label,
-        StorageIntent.PortableDocument(),
-        lifecycle,
-        IdentityPolicy.StringId(),
-        TenancyPolicy.Scoped,
-        ConcurrencyPolicy.Optimistic(),
-        SerializationPolicy.Json(),
-        indexes,
-        queries,
-        PhysicalizationPolicy.Portable);
+        ActivityIndex[] indexes,
+        ActivityQuery[] queries,
+        LifecyclePolicy lifecycle) =>
+        PhysicalUnit(documentKind, label, lifecycle, indexes, queries);
 
-    private static PortableQueryDeclaration Query(string name, string indexName) => new(
+    private static ActivityQuery Query(string name, string indexName) => new(
         name,
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
@@ -314,17 +293,7 @@ public static class ActivitiesDesignStorageManifest
         string pageQuery,
         string logicalIdField)
     {
-        var unit = Unit(
-            documentKind,
-            label,
-            [
-                Keyword("management-by-id", logicalIdField),
-                Keyword("management-by-sort", ManagementSortField)
-            ],
-            [
-                Query(currentQuery, "management-by-id"),
-                Query(pageQuery, "management-by-sort")
-            ]);
+        var unit = BaseUnit(documentKind, label, LifecyclePolicy.Mutable);
         var columns = new[]
         {
             Column("resource_id", ManagementResourceIdField, false),
@@ -488,11 +457,97 @@ public static class ActivitiesDesignStorageManifest
         params PortableQueryOperation[] operations) =>
         new(path, IndexValueKind.Keyword, operations.ToHashSet());
 
+    private static StorageUnit PhysicalUnit(
+        string documentKind,
+        string label,
+        LifecyclePolicy lifecycle,
+        ActivityIndex[] indexes,
+        ActivityQuery[] queries)
+    {
+        var logicalIndexes = indexes
+            .Select(index => new LogicalIndexDeclaration(
+                index.Identity,
+                index.Fields.Select(field => new IndexField(field, IndexValueKind.Keyword)).ToArray(),
+                IndexValueKind.Keyword,
+                index.IsUnique,
+                MissingValueBehavior.Excluded))
+            .ToArray();
+        var indexedColumns = indexes
+            .SelectMany(index => index.Fields)
+            .Distinct(StringComparer.Ordinal)
+            .Select(field => Column(ColumnName(field), field))
+            .ToArray();
+        var columns = indexedColumns.Length == 0
+            ? [Column("entity_id", "entity.id", false)]
+            : indexedColumns;
+        var physicalIndexes = indexes
+            .Select(index => new PhysicalIndexDefinition(
+                index.Identity,
+                [
+                    new PhysicalIndexColumnDefinition("storage_scope", 0),
+                    .. index.Fields.Select((field, order) => new PhysicalIndexColumnDefinition(ColumnName(field), order + 1))
+                ],
+                isUnique: index.IsUnique,
+                missingValueBehavior: MissingValueBehavior.Excluded))
+            .ToArray();
+        var boundedQueries = queries
+            .Select(query => new BoundedQueryDeclaration(
+                query.Identity,
+                query.IndexIdentity,
+                query.Operations,
+                query.SortSupport,
+                query.PagingSupport,
+                BoundedQueryExecutionClass.ScaleBearing,
+                sortFields: query.SortSupport == QuerySortSupport.None
+                    ? null
+                    : [new BoundedQuerySortField(indexes.Single(index => index.Identity == query.IndexIdentity).Fields[0], PhysicalSortDirection.Ascending)],
+                predicateFields:
+                [
+                    new BoundedQueryPredicateField(
+                        indexes.Single(index => index.Identity == query.IndexIdentity).Fields[0],
+                        query.Operations)
+                ]))
+            .ToArray();
+
+        var unit = BaseUnit(documentKind, label, lifecycle);
+        return unit with
+        {
+            PhysicalStorage = new StorageUnitPhysicalStorage(
+                StorageUnitProvisioningMode.Declared,
+                PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.PhysicalEntityTable(documentKind, columns, indexes: physicalIndexes)),
+                logicalIndexes,
+                boundedQueries)
+        };
+    }
+
+    private static StorageUnit BaseUnit(string documentKind, string label, LifecyclePolicy lifecycle)
+    {
+#pragma warning disable GW0001 // Bridge-release constructor requirement; the legacy declaration collections are intentionally empty.
+        return new StorageUnit(
+            new StorageUnitIdentity(documentKind),
+            label,
+            StorageIntent.PortableDocument(),
+            lifecycle,
+            IdentityPolicy.StringId(),
+            TenancyPolicy.Scoped,
+            ConcurrencyPolicy.Optimistic(),
+            SerializationPolicy.Json(),
+            [],
+            [],
+            PhysicalizationPolicy.Portable);
+#pragma warning restore GW0001
+    }
+
     private static string ColumnName(string path) => path switch
     {
         DefinitionIdField => "definition_id",
         DraftIdField => "draft_id",
         DefinitionVersionIdField => "definition_version_id",
+        HeadVersionIdField => "head_version_id",
+        OwnerVersionIdField => "owner_version_id",
+        DependencyVersionIdField => "dependency_version_id",
+        CollectionField => "collection",
+        ActivityForkCandidateRetentionField => "retention_key",
         ManagementVisibilityField => "visibility",
         ManagementValidFromField => "valid_from",
         ManagementValidToField => "valid_to",
@@ -504,21 +559,23 @@ public static class ActivitiesDesignStorageManifest
         ManagementRecommendationProviderField => "recommendation_provider",
         ManagementDraftStatusField => "draft_status",
         ManagementVersionLifecycleField => "version_lifecycle",
-        _ => throw new ArgumentOutOfRangeException(nameof(path), path, null)
+        _ => path.Replace('.', '_')
     };
 
-    private static IndexDeclaration Keyword(
+    private static ActivityIndex Keyword(
         string identity,
         string field,
         params PortableQueryOperation[] operations) => new(
         identity,
-        [new IndexField(field)],
-        IndexValueKind.Keyword,
-        false,
-        true,
-        MissingValueBehavior.Excluded,
-        operations.Length == 0
-            ? new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }
-            : operations.ToHashSet(),
-        IndexPhysicalizationPolicy.Optimized);
+        [field],
+        false);
+
+    private sealed record ActivityIndex(string Identity, string[] Fields, bool IsUnique);
+
+    private sealed record ActivityQuery(
+        string Identity,
+        string IndexIdentity,
+        IReadOnlySet<PortableQueryOperation> Operations,
+        QuerySortSupport SortSupport,
+        QueryPagingSupport PagingSupport);
 }

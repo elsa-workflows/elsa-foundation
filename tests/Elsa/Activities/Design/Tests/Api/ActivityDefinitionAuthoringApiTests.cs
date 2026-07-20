@@ -157,6 +157,89 @@ public sealed class ActivityDefinitionAuthoringApiTests
                 "reason"), options));
     }
 
+    [Theory]
+    [InlineData(typeof(PreviewReusableActivityFork), nameof(PreviewReusableActivityFork.DefinitionId))]
+    [InlineData(typeof(ApplyReusableActivityFork), nameof(ApplyReusableActivityFork.CandidateId))]
+    [InlineData(typeof(CreateReusableActivityDraft), nameof(CreateReusableActivityDraft.DefinitionId))]
+    [InlineData(typeof(UpdateReusableActivityDefinition), nameof(UpdateReusableActivityDefinition.DefinitionId))]
+    [InlineData(typeof(ReplaceReusableActivityDraft), nameof(ReplaceReusableActivityDraft.DraftId))]
+    [InlineData(typeof(UpdateReusableActivityDraftPresentation), nameof(UpdateReusableActivityDraftPresentation.DraftId))]
+    [InlineData(typeof(CreateReusableActivityDraftConflictCopy), nameof(CreateReusableActivityDraftConflictCopy.DraftId))]
+    [InlineData(typeof(DiscardReusableActivityDraft), nameof(DiscardReusableActivityDraft.DraftId))]
+    [InlineData(typeof(ValidateReusableActivityDraft), nameof(ValidateReusableActivityDraft.DraftId))]
+    [InlineData(typeof(MigrateReusableActivityDraft), nameof(MigrateReusableActivityDraft.DraftId))]
+    [InlineData(typeof(ProposeReusableActivityContract), nameof(ProposeReusableActivityContract.DraftId))]
+    [InlineData(typeof(ApplyReusableActivityContractProposal), nameof(ApplyReusableActivityContractProposal.DraftId))]
+    [InlineData(typeof(RetireReusableActivityVersion), nameof(RetireReusableActivityVersion.VersionId))]
+    [InlineData(typeof(RestoreReusableActivityVersion), nameof(RestoreReusableActivityVersion.VersionId))]
+    [InlineData(typeof(RevokeReusableActivityVersion), nameof(RevokeReusableActivityVersion.VersionId))]
+    [InlineData(typeof(SetRecommendedReusableActivityVersion), nameof(SetRecommendedReusableActivityVersion.DefinitionId))]
+    [InlineData(typeof(PreviewActivityDraftDiff), nameof(PreviewActivityDraftDiff.DraftId))]
+    [InlineData(typeof(ApplyActivityUpgradePlan), nameof(ApplyActivityUpgradePlan.PlanId))]
+    [InlineData(typeof(RefreshActivityUpgradePlan), nameof(RefreshActivityUpgradePlan.PlanId))]
+    public void Mutating_route_identifiers_are_explicitly_bound_from_the_route(Type requestType, string propertyName)
+    {
+        var property = requestType.GetProperty(propertyName);
+
+        Assert.NotNull(property);
+        Assert.NotNull(property!.GetCustomAttribute<RouteParamAttribute>());
+        Assert.NotNull(property.GetCustomAttribute<System.Text.Json.Serialization.JsonIgnoreAttribute>());
+    }
+
+    public static TheoryData<string, string, string, object> RouteBoundDispatches => new()
+    {
+        {
+            "Drafts.Replace",
+            "draftId",
+            nameof(ReplaceReusableActivityDraft.DraftId),
+            new ReplaceReusableActivityDraft(
+                null!,
+                3,
+                new("1", [], [], []),
+                new("provider", "1", Json("{}")),
+                [])
+        },
+        {
+            "Drafts.ProposeContract",
+            "draftId",
+            nameof(ProposeReusableActivityContract.DraftId),
+            new ProposeReusableActivityContract(null!, 3, "provider", "1", "sha256:manifest")
+        },
+        {
+            "Drafts.Discard",
+            "draftId",
+            nameof(DiscardReusableActivityDraft.DraftId),
+            new DiscardReusableActivityDraft(null!, 3)
+        }
+    };
+
+    [Theory]
+    [MemberData(nameof(RouteBoundDispatches))]
+    public async Task Route_identifiers_are_injected_before_mediator_dispatch(
+        string endpointName,
+        string routeParameterName,
+        string propertyName,
+        object request)
+    {
+        const string routeValue = "draft-from-route";
+        var sender = new CapturingMediatorSender();
+        var endpoint = CreateEndpoint(
+            $"{Root}.{endpointName}",
+            context => context.Request.RouteValues[routeParameterName] = routeValue,
+            sender);
+        var handle = endpoint.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Single(method => method.Name == "HandleAsync"
+                              && method.GetParameters() is [var first, var second]
+                              && first.ParameterType == request.GetType()
+                              && second.ParameterType == typeof(CancellationToken));
+
+        var invocation = (Task)handle.Invoke(endpoint, [request, CancellationToken.None])!;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => invocation);
+        Assert.NotNull(sender.Message);
+        Assert.Equal(routeValue, sender.Message!.GetType().GetProperty(propertyName)!.GetValue(sender.Message));
+    }
+
     [Fact]
     public void Create_request_accepts_an_optional_activity_type_key_and_opaque_provider_payload()
     {
@@ -403,11 +486,21 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
     private static EndpointDefinition ConfiguredDefinition(string endpointTypeName)
     {
+        var endpoint = CreateEndpoint(endpointTypeName, _ => { });
+        endpoint.Configure();
+        return endpoint.Definition;
+    }
+
+    private static BaseEndpoint CreateEndpoint(
+        string endpointTypeName,
+        Action<DefaultHttpContext> configureContext,
+        CapturingMediatorSender? sender = null)
+    {
         var endpointType = typeof(CreateReusableActivityDefinition).Assembly.GetType(endpointTypeName, throwOnError: true)!;
         var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
             .Single()
             .GetParameters()
-            .Select(x => ResolveDependency(x.ParameterType))
+            .Select(x => ResolveDependency(x.ParameterType, sender))
             .ToArray();
         var create = typeof(Factory).GetMethods()
             .Single(x => x.Name == nameof(Factory.Create)
@@ -416,15 +509,13 @@ public sealed class ActivityDefinitionAuthoringApiTests
                          && first.ParameterType == typeof(Action<DefaultHttpContext>)
                          && second.ParameterType == typeof(object[]))
             .MakeGenericMethod(endpointType);
-        var endpoint = (BaseEndpoint)create.Invoke(null, [(Action<DefaultHttpContext>)(_ => { }), dependencies])!;
-        endpoint.Configure();
-        return endpoint.Definition;
+        return (BaseEndpoint)create.Invoke(null, [configureContext, dependencies])!;
     }
 
-    private static object ResolveDependency(Type type)
+    private static object ResolveDependency(Type type, CapturingMediatorSender? sender)
     {
-        if (type == typeof(IRequestSender)) return new StubRequestSender();
-        if (type == typeof(ICommandSender)) return new StubCommandSender();
+        if (type == typeof(IRequestSender)) return sender is null ? new StubRequestSender() : sender;
+        if (type == typeof(ICommandSender)) return sender is null ? new StubCommandSender() : sender;
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Microsoft.Extensions.Logging.ILogger<>))
         {
             var loggerType = typeof(NullLogger<>).MakeGenericType(type.GetGenericArguments()[0]);
@@ -452,5 +543,32 @@ public sealed class ActivityDefinitionAuthoringApiTests
             throw new InvalidOperationException("Configuration-only test.");
         public Task Send(Elsa.Mediator.Core.Contracts.ICommand command, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Configuration-only test.");
+    }
+
+    private sealed class CapturingMediatorSender : ICommandSender, IRequestSender
+    {
+        public object? Message { get; private set; }
+
+        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
+        {
+            Message = request;
+            return Task.FromException<T>(new OperationCanceledException());
+        }
+
+        public Task<T> Send<T>(
+            Elsa.Mediator.Core.Contracts.ICommand<T> command,
+            CancellationToken cancellationToken = default) where T : notnull
+        {
+            Message = command;
+            return Task.FromException<T>(new OperationCanceledException());
+        }
+
+        public Task Send(
+            Elsa.Mediator.Core.Contracts.ICommand command,
+            CancellationToken cancellationToken = default)
+        {
+            Message = command;
+            return Task.FromException(new OperationCanceledException());
+        }
     }
 }

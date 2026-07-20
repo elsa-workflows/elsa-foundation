@@ -117,11 +117,11 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [091-structured-logs-replay-cursors](../../specs/091-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
 | [092-domain-owned-apis](../../specs/092-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |
 | [092-reusable-activity-definitions](../../specs/092-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Draft | - | 104 | 0 | retained, deferred, out of scope |
-| [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 0 | 88 | - |
+| [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 10 | 78 | - |
 | [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 99 | 6 | - |
 | [095-groundwork-aspnetcore-identity](../../specs/095-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
 | [095-runtime-intent-handlers](../../specs/095-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
-| [095-value-flow-redesign](../../specs/095-value-flow-redesign/spec.md) | Replace Memory-Block Value Flow | Draft | - | 117 | 0 | out of scope |
+| [095-value-flow-redesign](../../specs/095-value-flow-redesign/spec.md) | Replace Memory-Block Value Flow | Draft | - | 117 | 0 | retained, deferred, out of scope |
 | [096-dispatch-workflow-fire-and-forget](../../specs/096-dispatch-workflow-fire-and-forget/spec.md) | Dispatch a Published Workflow Fire-and-Forget | Approved | - | 40 | 0 | retained, out of scope, construct-only |
 | [097-dispatch-dependency-hardening](../../specs/097-dispatch-dependency-hardening/spec.md) | Deterministic and Bounded Workflow Dispatch | Draft | - | 60 | 0 | retained, deferred, construct-only |
 | [098-dispatch-durability-inspection](../../specs/098-dispatch-durability-inspection/spec.md) | Durable and Inspectable Detached Dispatch | Approved | - | 53 | 0 | retained |
@@ -132,3 +132,6 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [103-dispatch-distributed-execution](../../specs/103-dispatch-distributed-execution/spec.md) | Execute DispatchWorkflow Across Distributed Nodes | Draft | - | 32 | 0 | - |
 | [104-dispatch-parent-audit](../../specs/104-dispatch-parent-audit/spec.md) | DispatchWorkflow Parent Audit Remediation | unknown | - | 27 | 0 | retained |
 | [105-drain-step-single-transaction](../../specs/105-drain-step-single-transaction/spec.md) | Single Durable Transaction per Drain Step (fold work-item ack into the checkpoint commit) | Draft | - | 0 | 0 | deferred, out of scope |
+| [106-openiddict-groundwork-stores](../../specs/106-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 0 | 73 | retained |
+| [106-runtime-live-drain-delivery](../../specs/106-runtime-live-drain-delivery/spec.md) | In-memory live-drain EnqueueSchedulerWork delivery (Immediate mode) | unknown | - | 0 | 0 | retained |
+| [107-side-effect-profile](../../specs/107-side-effect-profile/spec.md) | Author-Declared Side-Effect Profile Gates the Pre-Activation Claim Boundary | Draft | - | 0 | 0 | deferred, out of scope |

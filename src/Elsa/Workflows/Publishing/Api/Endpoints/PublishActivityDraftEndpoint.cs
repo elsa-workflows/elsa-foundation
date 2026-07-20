@@ -4,6 +4,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
+using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -24,7 +25,8 @@ internal sealed class PublishActivityDraftEndpoint(
     {
         try
         {
-            var response = await requestSender.Send(request, cancellationToken);
+            var routedRequest = request with { DraftId = Route<string>("draftId")! };
+            var response = await requestSender.Send(routedRequest, cancellationToken);
             HttpContext.Response.Headers.Location =
                 $"/design/activities/publications/{Uri.EscapeDataString(response.IdempotencyKey)}";
             await Send.ResponseAsync(response, StatusCodes.Status201Created, cancellationToken);

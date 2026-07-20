@@ -7,6 +7,16 @@ public static class RuntimeMetadataKeys
     public const string CompletionOutcomeNames = "runtime.completionOutcomeNames";
     public const string CheckpointRequirement = "runtime.checkpointRequirement";
     public const string CheckpointRequirementMandatory = "Mandatory";
+    /// <summary>
+    /// Transport for the resolved <c>SideEffectProfile</c> of the CLR activity a pre-activation attempt-claim
+    /// checkpoint belongs to (ADR 0032 R2). The contract is the source of truth; the claimer stamps the resolved
+    /// value here so the coalescing persistence policy can decide whether the claim boundary may be deferred
+    /// (<c>ReplaySafe</c>) or must flush immediately (<c>External</c> / absent). Its value is the profile name
+    /// (<see cref="CheckpointSideEffectProfileReplaySafe"/> / <see cref="CheckpointSideEffectProfileExternal"/>).
+    /// </summary>
+    public const string CheckpointSideEffectProfile = "runtime.checkpointSideEffectProfile";
+    public const string CheckpointSideEffectProfileExternal = "External";
+    public const string CheckpointSideEffectProfileReplaySafe = "ReplaySafe";
     public const string ActivityExecutionId = "runtime.activityExecutionId";
     /// <summary>
     /// Attempt identity durably claimed by an InvokeActivity delivery before CLR activation. If the same open
@@ -83,6 +93,21 @@ public static class RuntimeMetadataKeys
     /// workflow-execution state change. Absent when no name has been assigned.
     /// </summary>
     public const string InstanceName = "runtime.instanceName";
+
+    /// <summary>
+    /// System-metadata key on a workflow execution recording the effective checkpoint cadence the run executes under
+    /// (ADR 0032 R5): the <see cref="Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableCheckpointCadence"/> mode
+    /// alias (<c>"Immediate"</c> or <c>"Coalesced"</c>), resolved at start from the pinned executable's authored cadence
+    /// over the host default. This per-run stamp is what the instance read model reports, so an instance shows the
+    /// cadence it actually ran under even after the host default is later reconfigured. Absent for runs predating it.
+    /// </summary>
+    public const string CheckpointCadence = "runtime.checkpointCadence";
+
+    /// <summary>
+    /// System-metadata key on a workflow execution recording the effective bounded segment cap for a
+    /// <c>"Coalesced"</c> <see cref="CheckpointCadence"/> stamp (ADR 0032 R5). Absent under an Immediate stamp.
+    /// </summary>
+    public const string CheckpointMaxSegmentCheckpoints = "runtime.checkpointMaxSegmentCheckpoints";
 
     /// <summary>
     /// Metadata key on a durable value carrying a workflow identity slot (correlation id / instance name) for the

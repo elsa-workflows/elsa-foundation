@@ -25,8 +25,8 @@ namespace Elsa.Server;
 /// <para>
 /// This feature closes that gap the way the docs prescribe — "a host wires ... a bare listener to the source name" —
 /// without adding an OpenTelemetry SDK or an HTTP loopback exporter (which would fight the dev TLS cert). It attaches an
-/// in-process <see cref="ActivityListener"/> that samples the engine source and, when a root drain span completes, folds
-/// its span tree into an <see cref="OpenTelemetryBatch"/> and feeds it to <see cref="IOpenTelemetryIngestor"/> — the same
+/// in-process <see cref="ActivityListener"/> that samples the engine source and, when the outermost drain span of a
+/// trace completes, folds its span tree into an <see cref="OpenTelemetryBatch"/> and feeds it to <see cref="IOpenTelemetryIngestor"/> — the same
 /// contract the OTLP/HTTP receiver uses — so the batch flows through redaction, the store, and the live feed unchanged.
 /// </para>
 /// </remarks>
@@ -35,7 +35,9 @@ namespace Elsa.Server;
     DisplayName = "Diagnostics: OpenTelemetry Engine Bridge",
     Description = "Forwards the workflow engine's ActivitySource spans into the OpenTelemetry ingestion store so the timing view is populated in a self-contained host.",
     DependsOn = new object[] { "DiagnosticsOpenTelemetry", "WorkflowsRuntimeTracing" })]
-internal sealed class OpenTelemetryEngineTracingBridgeFeature : IShellFeature
+// Must be public: CShells feature discovery scans exported types only, so an internal feature class never
+// enters the runtime feature catalog and is silently dropped from every shell that requests it.
+public sealed class OpenTelemetryEngineTracingBridgeFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -65,37 +67,80 @@ internal sealed class StopEngineTracingBridgeTerminator(OpenTelemetryEngineTraci
     }
 }
 
+/// <summary>Tuning knobs for the bridge's pending-trace buffer; defaults are production values, overridden in tests.</summary>
+internal sealed class OpenTelemetryEngineTracingBridgeOptions
+{
+    /// <summary>Minimum interval between opportunistic sweeps of the pending-trace table.</summary>
+    public long SweepIntervalMs { get; init; } = 30_000;
+
+    /// <summary>Age after which a pending trace with spans still open is dropped as abandoned.</summary>
+    public long MaxPendingAgeMs { get; init; } = 5 * 60_000;
+
+    /// <summary>
+    /// Quiet period after which a complete drainless entry (no open spans, no outermost drain observed — e.g. the
+    /// coalescing quiescence flush commit) is published by the sweep instead of waiting for a drain that never comes.
+    /// </summary>
+    public long QuietPublishDelayMs { get; init; } = 30_000;
+
+    /// <summary>Cap on concurrently buffered pending traces; oldest-first eviction beyond it.</summary>
+    public int MaxPendingTraces { get; init; } = 512;
+
+    /// <summary>Monotonic millisecond clock; tests substitute a controllable source.</summary>
+    public Func<long> TickSource { get; init; } = static () => Environment.TickCount64;
+}
+
 /// <summary>
 /// Subscribes the engine <see cref="ActivitySource"/> and forwards completed span trees to the OpenTelemetry ingestor.
 /// </summary>
-internal sealed class OpenTelemetryEngineTracingBridge(
-    IOpenTelemetryIngestor ingestor,
-    ILogger<OpenTelemetryEngineTracingBridge> logger)
+internal sealed class OpenTelemetryEngineTracingBridge
 {
     // Mirrors the OTLP parser's resource shape (resource id == service name when no instance id is present).
     private const string ServiceName = "elsa-workflow-engine";
 
-    // Bounded-buffer policy: a pending trace that never sees its root drain span stop (listener attached mid-drain,
-    // aborted drain, engine spans emitted outside a drain) must not leak forever on a long-lived server. Sweeps run
-    // opportunistically from OnActivityStopped, are rate-limited by SweepIntervalMs, drop entries older than
-    // MaxPendingAgeMs, and cap the table at MaxPendingTraces with oldest-first eviction.
-    private const long SweepIntervalMs = 30_000;
-    private const long MaxPendingAgeMs = 5 * 60_000;
-    private const int MaxPendingTraces = 512;
+    private readonly IOpenTelemetryIngestor _ingestor;
+    private readonly ILogger<OpenTelemetryEngineTracingBridge> _logger;
+    private readonly OpenTelemetryEngineTracingBridgeOptions _options;
+    private readonly Func<long> _ticks;
 
-    // Spans complete child-first and the ROOT drain span last, so a trace's spans are buffered under its trace id until
-    // the parentless drain span stops; at that point the whole tree is folded into one batch — matching the OTLP
-    // receiver, which also derives the TelemetryTrace from the batch's spans. Nested drains (ChildStartExecutor runs a
-    // child workflow's drain inside the parent's) stop earlier with a parent span id, so they buffer like any child span.
-    private readonly ConcurrentDictionary<string, PendingTrace> _pending = new(StringComparer.OrdinalIgnoreCase);
+    // Spans complete child-first and the OUTERMOST drain span last, so a trace's spans are buffered under its trace id
+    // until a drain the engine tagged outermost (elsa.drain.outermost — set by StartDrainCycle, which knows nesting)
+    // stops with no other engine span of the trace still open; at that point the whole tree is folded into one batch —
+    // matching the OTLP receiver, which also derives the TelemetryTrace from the batch's spans. Nested drains
+    // (ChildStartExecutor runs a child workflow's drain inside the parent's) carry no outermost tag and stop while the
+    // parent's dispatch span is still open, so they buffer like any child span. A synchronous multi-cycle drain
+    // publishes one batch per cycle under the shared ASP.NET request trace id; the stores merge those records into one
+    // trace summary, so per-cycle batches are correct here.
+    //
+    // The open-span count deliberately covers EVERY engine span, not just drains: it doubles as the completeness check
+    // for DRAINLESS entries — engine spans that never sit under a drain, concretely the checkpoint-commit span the
+    // coalescing quiescence flush emits after the drain loop. Those entries are published by the sweep once quiet
+    // (instead of being dropped); a drain-only depth counter could never tell whether such an entry is complete.
+    private readonly ConcurrentDictionary<ActivityTraceId, PendingTrace> _pending = new();
     private long _lastSweepTicks;
     private ActivityListener? _listener;
     private int _started;
+
+    public OpenTelemetryEngineTracingBridge(
+        IOpenTelemetryIngestor ingestor,
+        ILogger<OpenTelemetryEngineTracingBridge> logger,
+        OpenTelemetryEngineTracingBridgeOptions? options = null)
+    {
+        _ingestor = ingestor;
+        _logger = logger;
+        _options = options ?? new OpenTelemetryEngineTracingBridgeOptions();
+        _ticks = _options.TickSource;
+    }
 
     private sealed class PendingTrace(long createdAtTicks)
     {
         public readonly List<TelemetrySpan> Spans = [];
         public readonly long CreatedAtTicks = createdAtTicks;
+        public long LastTouchedTicks = createdAtTicks;
+        public int OpenSpanCount;
+
+        // Set (under the Spans lock) when the entry is published or evicted; a contender still holding the reference
+        // must retry against a fresh table entry instead of mutating a snapshot that already left the table.
+        public bool Closed;
     }
 
     public void Start()
@@ -108,11 +153,12 @@ internal sealed class OpenTelemetryEngineTracingBridge(
             ShouldListenTo = source => source.Name == WorkflowEngineTelemetry.ActivitySourceName,
             Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
             SampleUsingParentId = static (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData,
+            ActivityStarted = OnActivityStarted,
             ActivityStopped = OnActivityStopped,
         };
 
         ActivitySource.AddActivityListener(_listener);
-        logger.LogInformation(
+        _logger.LogInformation(
             "OpenTelemetry engine tracing bridge attached to ActivitySource '{Source}'.",
             WorkflowEngineTelemetry.ActivitySourceName);
     }
@@ -124,6 +170,27 @@ internal sealed class OpenTelemetryEngineTracingBridge(
         _pending.Clear();
     }
 
+    private void OnActivityStarted(Activity activity)
+    {
+        if (activity.Source.Name != WorkflowEngineTelemetry.ActivitySourceName)
+            return;
+
+        var now = _ticks();
+        while (true)
+        {
+            var entry = GetOrAddEntry(activity.TraceId, now);
+            lock (entry.Spans)
+            {
+                if (entry.Closed)
+                    continue;
+
+                entry.OpenSpanCount++;
+                entry.LastTouchedTicks = now;
+                return;
+            }
+        }
+    }
+
     private void OnActivityStopped(Activity activity)
     {
         if (activity.Source.Name != WorkflowEngineTelemetry.ActivitySourceName)
@@ -132,61 +199,103 @@ internal sealed class OpenTelemetryEngineTracingBridge(
         try
         {
             var span = MapSpan(activity);
-            var entry = _pending.GetOrAdd(span.TraceId, static _ => new PendingTrace(Environment.TickCount64));
+            var now = _ticks();
 
-            // Only a ROOT drain span flushes the trace. Nested drains (a child workflow drained inside the parent's
-            // drain via ChildStartExecutor) share the trace id but carry a parent span id and stop before the parent's
-            // root, so publishing there would emit a partial tree plus a second batch for the same trace id.
-            var isRootDrain = activity.OperationName == WorkflowEngineTelemetry.DrainSpanName &&
-                              activity.ParentSpanId == default;
+            // Only the engine-tagged OUTERMOST drain span flushes the trace, and only once every other engine span of
+            // the trace has stopped (the count guards against a second top-level engine tree sharing the trace id, e.g.
+            // two workflows executed in one HTTP request). Nested drains carry no tag and stop while the parent's
+            // dispatch span is still open, so publishing there would emit a partial tree.
+            var isOutermostDrain = activity.OperationName == WorkflowEngineTelemetry.DrainSpanName &&
+                                   activity.GetTagItem(WorkflowEngineTelemetry.DrainOutermostTag) is true;
 
             List<TelemetrySpan>? completed = null;
-            lock (entry.Spans)
+            while (true)
             {
-                entry.Spans.Add(span);
-                if (isRootDrain)
-                    completed = [.. entry.Spans];
+                var entry = GetOrAddEntry(activity.TraceId, now);
+                lock (entry.Spans)
+                {
+                    if (entry.Closed)
+                        continue;
+
+                    // Clamp at zero: a listener attached mid-drain sees stops without matching starts.
+                    if (entry.OpenSpanCount > 0)
+                        entry.OpenSpanCount--;
+                    entry.Spans.Add(span);
+                    entry.LastTouchedTicks = now;
+                    if (isOutermostDrain && entry.OpenSpanCount == 0)
+                    {
+                        completed = [.. entry.Spans];
+                        CloseEntry(activity.TraceId, entry);
+                    }
+
+                    break;
+                }
             }
 
             if (completed is not null)
-            {
-                _pending.TryRemove(span.TraceId, out _);
-                Publish(span.TraceId, completed);
-            }
+                Publish(activity.TraceId, completed);
 
             SweepIfDue();
         }
         catch (Exception ex)
         {
-            logger.LogError(
+            _logger.LogError(
                 ex,
                 "Failed to bridge engine telemetry activity '{OperationName}' into the OpenTelemetry ingestion store.",
                 activity.OperationName);
         }
     }
 
-    // Opportunistic bounded eviction, rate-limited to one sweep per SweepIntervalMs (a single Interlocked exchange on
-    // the hot path otherwise). Drops pending traces whose root drain span never stopped once they exceed MaxPendingAgeMs,
-    // then enforces MaxPendingTraces with oldest-first eviction.
+    private PendingTrace GetOrAddEntry(ActivityTraceId traceId, long now) =>
+        _pending.TryGetValue(traceId, out var entry) ? entry : _pending.GetOrAdd(traceId, new PendingTrace(now));
+
+    // Callers must hold the entry lock.
+    private void CloseEntry(ActivityTraceId traceId, PendingTrace entry)
+    {
+        entry.Closed = true;
+        _pending.TryRemove(traceId, out _);
+    }
+
+    // Opportunistic bounded maintenance, rate-limited to one sweep per SweepIntervalMs (a single Interlocked exchange
+    // on the hot path otherwise). Three passes: complete drainless entries (no open spans, quiet for
+    // QuietPublishDelayMs — the coalescing quiescence flush commit is the canonical producer) are PUBLISHED; entries
+    // that still have open spans after MaxPendingAgeMs are dropped as abandoned; then MaxPendingTraces is enforced
+    // with oldest-first eviction.
     private void SweepIfDue()
     {
-        var now = Environment.TickCount64;
+        var now = _ticks();
         var last = Volatile.Read(ref _lastSweepTicks);
-        if (now - last < SweepIntervalMs)
+        if (now - last < _options.SweepIntervalMs)
             return;
 
         // Single sweeper wins; losers return immediately without scanning.
         if (Interlocked.CompareExchange(ref _lastSweepTicks, now, last) != last)
             return;
 
+        List<(ActivityTraceId TraceId, List<TelemetrySpan> Spans)>? publish = null;
         var dropped = 0;
         foreach (var pair in _pending)
         {
-            if (now - pair.Value.CreatedAtTicks > MaxPendingAgeMs && _pending.TryRemove(pair.Key, out _))
-                dropped++;
+            var entry = pair.Value;
+            lock (entry.Spans)
+            {
+                if (entry.Closed)
+                    continue;
+
+                if (entry.OpenSpanCount == 0 && entry.Spans.Count > 0 && now - entry.LastTouchedTicks >= _options.QuietPublishDelayMs)
+                {
+                    CloseEntry(pair.Key, entry);
+                    (publish ??= []).Add((pair.Key, [.. entry.Spans]));
+                }
+                else if (now - entry.CreatedAtTicks > _options.MaxPendingAgeMs)
+                {
+                    CloseEntry(pair.Key, entry);
+                    dropped++;
+                }
+            }
         }
 
-        var excess = _pending.Count - MaxPendingTraces;
+        var excess = _pending.Count - _options.MaxPendingTraces;
         if (excess > 0)
         {
             foreach (var pair in _pending.ToArray().OrderBy(x => x.Value.CreatedAtTicks))
@@ -194,23 +303,34 @@ internal sealed class OpenTelemetryEngineTracingBridge(
                 if (excess <= 0)
                     break;
 
-                if (_pending.TryRemove(pair.Key, out _))
+                var entry = pair.Value;
+                lock (entry.Spans)
                 {
+                    if (entry.Closed)
+                        continue;
+
+                    CloseEntry(pair.Key, entry);
                     dropped++;
                     excess--;
                 }
             }
         }
 
+        if (publish is not null)
+        {
+            foreach (var (traceId, spans) in publish)
+                Publish(traceId, spans);
+        }
+
         if (dropped > 0)
         {
-            logger.LogWarning(
-                "Dropped {Count} pending engine telemetry trace(s) that never completed a root drain span.",
+            _logger.LogWarning(
+                "Dropped {Count} pending engine telemetry trace(s) whose spans never completed.",
                 dropped);
         }
     }
 
-    private void Publish(string traceId, IReadOnlyList<TelemetrySpan> spans)
+    private void Publish(ActivityTraceId traceId, IReadOnlyList<TelemetrySpan> spans)
     {
         var resource = new TelemetryResource(
             ServiceName,
@@ -223,7 +343,7 @@ internal sealed class OpenTelemetryEngineTracingBridge(
 
         var batch = new OpenTelemetryBatch(
             [resource],
-            [CreateTrace(traceId, spans)],
+            [CreateTrace(traceId.ToHexString(), spans)],
             spans,
             [],
             [],
@@ -238,11 +358,11 @@ internal sealed class OpenTelemetryEngineTracingBridge(
     {
         try
         {
-            await ingestor.IngestAsync(batch, CancellationToken.None);
+            await _ingestor.IngestAsync(batch, CancellationToken.None);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to ingest engine telemetry batch into the OpenTelemetry store.");
+            _logger.LogError(ex, "Failed to ingest engine telemetry batch into the OpenTelemetry store.");
         }
     }
 

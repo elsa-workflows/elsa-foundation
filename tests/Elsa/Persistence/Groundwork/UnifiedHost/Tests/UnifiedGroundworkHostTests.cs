@@ -18,6 +18,7 @@ using Elsa.Primitives.Contracts;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Serialization.Core;
+using Microsoft.Data.Sqlite;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -463,7 +464,11 @@ public class UnifiedGroundworkHostTests
     }
 
     private static Task SaveAsync(IDocumentStore store, string kind, string id, string collection) =>
-        store.SaveAsync(new SaveDocumentRequest(kind, id, "1.0.0", $"{{\"collection\":\"{collection}\"}}"));
+        store.SaveAsync(new SaveDocumentRequest(
+            kind,
+            id,
+            "1.0.0",
+            JsonSerializer.Serialize(new { collection, entity = new { id } })));
 
     private sealed class TenantAccessContextAccessor : IPersistenceAccessContextAccessor
     {
@@ -488,6 +493,32 @@ public class UnifiedGroundworkHostTests
         ActivePublicationId: null,
         TenantId: null,
         ExpiresAt: expiresAt);
+
+    [Fact]
+    public async Task Admitted_database_runs_in_wal_journal_mode()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        await using var provider = await BuildHostAsync(database.ConnectionString);
+
+        // Drive one durable write through the store so a session connection (not just the admission
+        // connection) has opened the database.
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var stateStore = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
+            _ = await stateStore.FindAsync("wal-probe", CancellationToken.None);
+        }
+
+        // journal_mode is a persistent per-database property. If the unified host's initializer or session
+        // factory ever opens the file with a bare SqliteConnection again (bypassing Groundwork's pragma
+        // factory), a fresh database is created — and stays — in rollback-journal mode, which costs 2-3
+        // fsyncs per commit and serializes writers against readers.
+        await using var probe = new SqliteConnection(database.ConnectionString);
+        await probe.OpenAsync();
+        await using var command = probe.CreateCommand();
+        command.CommandText = "PRAGMA journal_mode;";
+        var mode = (string?)await command.ExecuteScalarAsync();
+        Assert.Equal("wal", mode, ignoreCase: true);
+    }
 
     private sealed class TemporarySqliteDatabase : IAsyncDisposable
     {

@@ -15,6 +15,7 @@ namespace Elsa.Activities.Sequence.Activities;
 [ActivityChildSlot("Sequence.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
 [ActivityOutcome(ActivityOutcomes.Break)]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Sequence : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string ActivitiesSlotName = "Sequence.Activities";

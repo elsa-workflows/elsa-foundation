@@ -85,198 +85,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /design/workflows/definitions/page:
-    get:
-      tags: [Workflow Design]
-      operationId: pageWorkflowDefinitions
-      description: Optional capability relation `workflow-definitions-page`; present only when the selected persistence provider admits the bounded browse route.
-      parameters:
-        - name: pageSize
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
-        - name: continuationToken
-          in: query
-          schema: { type: string }
-        - $ref: '#/components/parameters/Search'
-        - name: state
-          in: query
-          schema: { $ref: '#/components/schemas/DefinitionListState' }
-        - name: folderId
-          in: query
-          schema: { type: string, minLength: 1, maxLength: 64 }
-        - name: unfiled
-          in: query
-          schema: { type: boolean }
-      responses:
-        '200':
-          description: A bounded definition-summary page and opaque forward continuation
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WorkflowDefinitionPage' }
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /design/workflows/definitions/move:
-    post:
-      tags: [Workflow Design]
-      operationId: moveWorkflowDefinitionsToFolder
-      description: Optional capability relation `workflow-definition-folder-move`; atomically changes only server-owned folder placement for every selected logical definition.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MoveWorkflowDefinitionsRequest'
-      responses:
-        '204':
-          description: Every selected definition was moved to the requested folder, or to Unfiled.
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-
-  /design/workflows/folders:
-    get:
-      tags: [Workflow Design]
-      operationId: listWorkflowFolders
-      description: Optional capability relation `workflow-folders`; lists direct children only.
-      parameters:
-        - name: parentId
-          in: query
-          schema: { type: [string, 'null'], minLength: 1, maxLength: 64 }
-        - name: pageSize
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
-        - name: continuationToken
-          in: query
-          schema: { type: string }
-      responses:
-        '200':
-          description: A bounded direct-child folder page
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WorkflowFolderPage' }
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    post:
-      tags: [Workflow Design]
-      operationId: createWorkflowFolder
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateWorkflowFolderRequest' }
-      responses:
-        '201':
-          description: Created workflow folder
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WorkflowFolder' }
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-
-  /design/workflows/folders/{folderId}:
-    parameters:
-      - $ref: '#/components/parameters/FolderId'
-    get:
-      tags: [Workflow Design]
-      operationId: getWorkflowFolder
-      responses:
-        '200':
-          description: Folder plus ordered ancestors
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WorkflowFolderDetails' }
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    delete:
-      tags: [Workflow Design]
-      operationId: deleteEmptyWorkflowFolder
-      description: Optional capability relation `workflow-folder-delete-empty`; rejects folders with direct children or definitions, including soft-deleted definitions.
-      responses:
-        '204': { description: Empty folder deleted }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-
-  /design/workflows/folders/{folderId}/rename:
-    parameters:
-      - $ref: '#/components/parameters/FolderId'
-    post:
-      tags: [Workflow Design]
-      operationId: renameWorkflowFolder
-      description: Optional capability relation `workflow-folder-rename`.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/RenameWorkflowFolderRequest' }
-      responses:
-        '200':
-          description: Updated public folder view
-          content: { application/json: { schema: { $ref: '#/components/schemas/WorkflowFolder' } } }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-
-  /design/workflows/folders/{folderId}/move:
-    parameters:
-      - $ref: '#/components/parameters/FolderId'
-    post:
-      tags: [Workflow Design]
-      operationId: moveWorkflowFolder
-      description: Optional capability relation `workflow-folder-move`; explicit null parentId moves to root.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/MoveWorkflowFolderRequest' }
-      responses:
-        '200':
-          description: Updated public folder view
-          content: { application/json: { schema: { $ref: '#/components/schemas/WorkflowFolder' } } }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
 
   /design/workflows/definitions/{definitionId}:
     parameters:
@@ -1033,14 +841,6 @@ components:
       required: true
       schema:
         type: string
-    FolderId:
-      name: folderId
-      in: path
-      required: true
-      schema:
-        type: string
-        minLength: 1
-        maxLength: 64
     DraftId:
       name: draftId
       in: path
@@ -1183,25 +983,6 @@ components:
         latestVersionId: { type: [string, 'null'] }
         latestVersion: { type: [string, 'null'] }
         versionCount: { type: integer, minimum: 0 }
-        folderId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
-    WorkflowDefinitionPageItem:
-      allOf:
-        - $ref: '#/components/schemas/WorkflowDefinitionSummary'
-        - type: object
-          required: [folderBreadcrumb]
-          properties:
-            folderBreadcrumb:
-              type: array
-              items: { $ref: '#/components/schemas/WorkflowFolderBreadcrumbItem' }
-    WorkflowDefinitionPage:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/WorkflowDefinitionPageItem'
-        nextContinuationToken: { type: [string, 'null'] }
     WorkflowDefinitionDetails:
       allOf:
         - $ref: '#/components/schemas/WorkflowDefinitionSummary'
@@ -1221,7 +1002,6 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         description: { type: [string, 'null'] }
-        folderId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
         initialState:
           oneOf:
             - $ref: '#/components/schemas/WorkflowDefinitionState'
@@ -1235,16 +1015,6 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         description: { type: [string, 'null'] }
-    MoveWorkflowDefinitionsRequest:
-      type: object
-      required: [definitionIds, folderId]
-      properties:
-        definitionIds:
-          type: array
-          minItems: 1
-          uniqueItems: true
-          items: { type: string, minLength: 1 }
-        folderId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
     WorkflowDraft:
       type: object
       required: [id, definitionId, state, layout]
@@ -1637,54 +1407,10 @@ components:
             state:
               type: object
               additionalProperties: true
-    WorkflowFolder:
-      type: object
-      required: [id, name, normalizedName, createdAt, lastModifiedAt]
-      properties:
-        id: { type: string, minLength: 1, maxLength: 64 }
-        parentId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
-        name: { type: string, maxLength: 128 }
-        normalizedName: { type: string, maxLength: 128 }
-        createdAt: { type: string, format: date-time }
-        lastModifiedAt: { type: string, format: date-time }
-    WorkflowFolderBreadcrumbItem:
-      type: object
-      required: [id, name]
-      properties:
-        id: { type: string, minLength: 1, maxLength: 64 }
-        name: { type: string, maxLength: 128 }
-    WorkflowFolderPage:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: { $ref: '#/components/schemas/WorkflowFolder' }
-        nextContinuationToken: { type: [string, 'null'] }
-    WorkflowFolderDetails:
-      type: object
-      required: [folder, ancestors]
-      properties:
-        folder: { $ref: '#/components/schemas/WorkflowFolder' }
-        ancestors:
-          type: array
-          items: { $ref: '#/components/schemas/WorkflowFolder' }
-    CreateWorkflowFolderRequest:
-      type: object
-      required: [name]
-      properties:
-        name: { type: string, minLength: 1, maxLength: 128 }
-        parentId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
-    RenameWorkflowFolderRequest:
-      type: object
-      required: [name]
-      properties:
-        name: { type: string, minLength: 1, maxLength: 128 }
-    MoveWorkflowFolderRequest:
-      type: object
-      required: [parentId]
-      properties:
-        parentId: { type: [string, 'null'], minLength: 1, maxLength: 64 }
+            # Host-configuration-derived checkpoint cadence + implied inspection granularity (ADR 0032 R3).
+            checkpointCadence: { type: string, enum: [Immediate, Coalesced] }
+            maxSegmentCheckpoints: { type: [integer, 'null'], minimum: 1 }
+            inspectionGranularity: { type: string, enum: [activity-level, boundary-level] }
     RuntimeDiagnosticsSettings:
       type: object
       additionalProperties: true

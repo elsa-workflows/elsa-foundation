@@ -10,5 +10,5 @@ route-predicate=true
 finite-limit=512
 materialized-candidate-count=512
 command-count=2
-command-0=Count|count|mongodb-json|index-scan|identity-claim-mapping-by-provider|document_kind,providerLookupKey,storage_scope|1||96e85ce1801202ac6508da6b45cbf3cd62b77b79ae29e4c5191e96de00b3629a
-command-1=Page|page|mongodb-json|index-scan|identity-claim-mapping-by-provider|document_kind,providerLookupKey,storage_scope|512|storage_scope:Ascending:true,id_comparison_key:Ascending:true|d3741b0306f2245ec463c30e9ae7c1093e078dabbb71c9b5bc171b526224c919
+command-0=Count|count|mongodb-json|index-scan|identity-claim-mapping-by-provider|document_kind,providerLookupKey,storage_scope|1||860964678c89db6f5df2b2d3f20f0024b62f8b2ae796532eeaf25ea9fb54efdc
+command-1=Page|page|mongodb-json|index-scan|identity-claim-mapping-by-provider|document_kind,providerLookupKey,storage_scope|512|storage_scope:Ascending:true,id_comparison_key:Ascending:true|e64174df3fa85104213a572bb99b3effd9653c2cc2e8fd11e091f57ba8f7cf64

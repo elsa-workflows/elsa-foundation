@@ -83,7 +83,8 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
                 ActivitiesDesignStorageManifest.ManagementDefinitionsQuery,
                 clauses,
                 [new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementSortField)],
-                take: 1),
+                take: 1)
+                .Select(global::Groundwork.Core.PhysicalStorage.BoundedQueryResultOperation.First),
             cancellationToken);
         return envelope is null
             ? null

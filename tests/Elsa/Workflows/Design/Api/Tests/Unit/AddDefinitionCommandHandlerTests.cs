@@ -2,12 +2,9 @@ using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Projections;
-using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
-using Elsa.Workflows.Design.Persistence.Core.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
@@ -44,74 +41,6 @@ public sealed class AddDefinitionCommandHandlerTests
         Assert.Equal(persistence.Draft.WorkflowDefinitionId, result.Draft.DefinitionId);
         Assert.Null(result.Draft.State.RootActivity);
         Assert.Equal(layout, Assert.Single(result.Draft.Layout));
-    }
-
-    [Fact]
-    public async Task Creation_returns_the_persisted_folder_placement_without_adding_it_to_authored_state()
-    {
-        var identities = new SequentialIdentityGenerator();
-        var persistence = new RecordingAddWorkflowDefinitionCommand();
-        var handler = new AddDefinitionCommandHandler(
-            new WorkflowDefinitionFactory(identities),
-            new WorkflowDefinitionDraftFactory(identities),
-            persistence);
-
-        var result = await handler.Handle(
-            new AddDefinition("Filed workflow", null, FolderId: "folder-1"),
-            CancellationToken.None);
-
-        Assert.Equal("folder-1", persistence.Definition!.FolderId);
-        Assert.Equal("folder-1", result.Definition.FolderId);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData(" ")]
-    public async Task Creation_rejects_a_blank_folder_identifier_instead_of_reinterpreting_it_as_unfiled(string folderId)
-    {
-        var identities = new SequentialIdentityGenerator();
-        var persistence = new RecordingAddWorkflowDefinitionCommand();
-        var handler = new AddDefinitionCommandHandler(
-            new WorkflowDefinitionFactory(identities),
-            new WorkflowDefinitionDraftFactory(identities),
-            persistence);
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            handler.Handle(new AddDefinition("Filed workflow", null, FolderId: folderId), CancellationToken.None));
-
-        Assert.Null(persistence.Definition);
-    }
-
-    [Fact]
-    public async Task Creation_rejects_an_overlong_folder_identifier()
-    {
-        var identities = new SequentialIdentityGenerator();
-        var persistence = new RecordingAddWorkflowDefinitionCommand();
-        var handler = new AddDefinitionCommandHandler(
-            new WorkflowDefinitionFactory(identities),
-            new WorkflowDefinitionDraftFactory(identities),
-            persistence);
-
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            handler.Handle(
-                new AddDefinition(
-                    "Filed workflow",
-                    null,
-                    FolderId: new string('f', WorkflowFolderNames.MaximumIdentifierLength + 1)),
-                CancellationToken.None));
-    }
-
-    [Fact]
-    public void Authored_and_version_projection_does_not_expose_current_folder_placement()
-    {
-        IWorkflowDefinition authoredOrVersionDefinition = new WorkflowDefinition
-        {
-            Id = "definition-1",
-            Name = "Historical",
-            FolderId = "current-folder"
-        };
-
-        Assert.Null(authoredOrVersionDefinition.ToView().FolderId);
     }
 
     private sealed class RecordingAddWorkflowDefinitionCommand : IAddWorkflowDefinitionCommand

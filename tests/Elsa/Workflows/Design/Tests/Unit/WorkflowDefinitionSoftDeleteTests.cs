@@ -59,16 +59,6 @@ public sealed class WorkflowDefinitionSoftDeleteTests
     }
 
     [Fact]
-    public void From_preserves_folder_placement_only_for_an_existing_persistence_entity()
-    {
-        var existing = new WorkflowDefinition { Id = "persisted", Name = "Persisted", FolderId = "folder-1" };
-        var source = new WorkflowDefinitionModel("new-source", "Source", null);
-
-        Assert.Equal("folder-1", WorkflowDefinition.From(existing).FolderId);
-        Assert.Null(WorkflowDefinition.From(source).FolderId);
-    }
-
-    [Fact]
     public async Task Soft_deleted_definitions_are_excluded_from_active_query_and_included_in_deleted_query()
     {
         using var host = WorkflowsDesignTestHost.Create();

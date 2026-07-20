@@ -31,7 +31,8 @@ public sealed class WorkflowExecutableHasher
     public string ComputeHash(
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
-        IReadOnlyCollection<WorkflowExecutableDependency> dependencies)
+        IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
+        WorkflowExecutableCheckpointCadence? checkpointCadence = null)
     {
         ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(inputContract);
@@ -39,7 +40,7 @@ public sealed class WorkflowExecutableHasher
 
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
-            WriteBehavioralPayload(writer, rootActivity, inputContract, dependencies);
+            WriteBehavioralPayload(writer, rootActivity, inputContract, dependencies, checkpointCadence);
 
         return Hash(stream.ToArray());
     }
@@ -185,11 +186,24 @@ public sealed class WorkflowExecutableHasher
         Utf8JsonWriter writer,
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
-        IReadOnlyCollection<WorkflowExecutableDependency> dependencies)
+        IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
+        WorkflowExecutableCheckpointCadence? checkpointCadence)
     {
         writer.WriteStartObject();
         writer.WriteNumber("schemaVersion", 1);
         writer.WriteString("rootNodeId", rootActivity.ExecutableNodeId);
+
+        // Authored checkpoint cadence is behavioral content (ADR 0032 R5): it changes the artifact's durability
+        // behavior, so equal-hash must imply equal cadence. Written only when authored, so a workflow that authors no
+        // cadence hashes byte-identically to before this field existed — existing artifact ids and goldens are stable.
+        if (checkpointCadence is not null)
+        {
+            writer.WriteStartObject("checkpointCadence");
+            writer.WriteString("mode", checkpointCadence.Mode);
+            if (checkpointCadence.MaxSegmentCheckpoints is { } maxSegmentCheckpoints)
+                writer.WriteNumber("maxSegmentCheckpoints", maxSegmentCheckpoints);
+            writer.WriteEndObject();
+        }
 
         writer.WriteStartArray("nodes");
         foreach (var node in FlattenExecutableActivities(rootActivity).OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal))
