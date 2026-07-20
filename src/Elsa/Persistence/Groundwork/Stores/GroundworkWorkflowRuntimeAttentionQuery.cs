@@ -67,11 +67,8 @@ public sealed class GroundworkWorkflowRuntimeAttentionQuery(
                 request.TenantId,
                 cursor,
                 cancellationToken);
-            foreach (var execution in page.Items)
+            foreach (var execution in page.Items.Where(x => !activeExecutionIds.Contains(x.WorkflowExecutionId)))
             {
-                if (activeExecutionIds.Contains(execution.WorkflowExecutionId))
-                    continue;
-
                 totalCount = checked(totalCount + 1);
                 Consider(top, MapFault(execution, observedAt), request.MaximumItems);
             }

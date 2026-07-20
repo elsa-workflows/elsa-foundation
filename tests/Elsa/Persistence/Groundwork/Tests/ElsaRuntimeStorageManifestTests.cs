@@ -25,7 +25,7 @@ public sealed class ElsaRuntimeStorageManifestTests
     [Fact]
     public async Task Attention_routes_upgrade_existing_sqlite_schema_additively()
     {
-        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-attention-upgrade-{Guid.NewGuid():N}.db");
+        var databasePath = Path.Join(Path.GetTempPath(), $"elsa-groundwork-attention-upgrade-{Guid.NewGuid():N}.db");
         var connectionString = $"Data Source={databasePath}";
 
         try

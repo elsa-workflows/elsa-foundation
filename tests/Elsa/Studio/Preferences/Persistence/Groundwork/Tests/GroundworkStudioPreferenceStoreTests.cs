@@ -169,7 +169,7 @@ public sealed class GroundworkStudioPreferenceStoreTests
 
     private sealed class TemporarySqliteDatabase : IAsyncDisposable
     {
-        private readonly string _path = Path.Combine(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
+        private readonly string _path = Path.Join(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
 
         public string ConnectionString => $"Data Source={_path}";
 

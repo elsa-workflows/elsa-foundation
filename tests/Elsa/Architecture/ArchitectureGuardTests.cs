@@ -284,7 +284,7 @@ public sealed class ArchitectureGuardTests
     {
         var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
 
         Assert.Contains("Elsa.Activities.Http", references);
         Assert.Contains("Elsa.Workflows.Runtime.Http", references);
@@ -298,7 +298,7 @@ public sealed class ArchitectureGuardTests
     {
         var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
         Assert.Contains("Elsa.Workflows.Design.Validations", references);
@@ -314,7 +314,7 @@ public sealed class ArchitectureGuardTests
     {
         var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
 
         Assert.Contains("Elsa.Activities.Graph.Design", references);
         Assert.Contains("Elsa.Activities.Graph.Runtime", references);
