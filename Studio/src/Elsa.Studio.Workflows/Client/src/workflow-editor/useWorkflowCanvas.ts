@@ -38,6 +38,15 @@ import {
   type WorkflowNodeData
 } from "../workflowAdapter";
 import { computeAutoLayout } from "../workflowLayout";
+import {
+  buildBpmnCanvas,
+  createBpmnBoundNode,
+  createBpmnFlowEdge,
+  createBpmnShapeNode,
+  syncBpmnCanvasToScope,
+  type BpmnNodeData
+} from "../bpmn/bpmnAdapter";
+import type { BpmnShapeDescriptor } from "../bpmn/bpmnTypes";
 import { activityDragDataType, pointerDragThreshold } from "./constants";
 import {
   clientPointFromEvent,
@@ -81,6 +90,7 @@ interface WorkflowCanvasParams {
   catalogByVersion: Map<string, ActivityCatalogItem>;
   isUnsupportedDesigner: boolean;
   isFlowchartDesigner: boolean;
+  isBpmnDesigner: boolean;
   canAddActivitiesToCanvas: boolean;
   selectedNodeId: string | null;
   // Document mutations (from useWorkflowDocument). The canvas never touches the reducer directly.
@@ -107,6 +117,7 @@ export function useWorkflowCanvas({
   catalogByVersion,
   isUnsupportedDesigner,
   isFlowchartDesigner,
+  isBpmnDesigner,
   canAddActivitiesToCanvas,
   selectedNodeId,
   editDraft,
@@ -139,9 +150,11 @@ export function useWorkflowCanvas({
   const selectedNodeIdRef = useRef(selectedNodeId);
   selectedNodeIdRef.current = selectedNodeId;
   const scopeViewportKey = useMemo(() => getScopeViewportKey(frames), [frames]);
+  // BPMN shares the free-connection graph editing model with flowcharts; sequence keeps its linear model.
+  const isGraphDesigner = isFlowchartDesigner || isBpmnDesigner;
   const canCreateActivityFromPort = canAddActivitiesToCanvas
     && !isUnsupportedDesigner
-    && (isFlowchartDesigner || scope?.slot.mode === "sequence");
+    && (isGraphDesigner || scope?.slot.mode === "sequence");
 
   useEffect(() => {
     return () => {
@@ -163,7 +176,9 @@ export function useWorkflowCanvas({
     const canvas = isUnsupportedDesigner
       ? buildUnsupportedActivityCanvas(scopeOwner, catalog, draft?.layout ?? [])
       : scope
-        ? buildCanvas(scope, catalog, draft?.layout ?? [])
+        ? scope.slot.mode === "bpmn"
+          ? buildBpmnCanvas(scope, catalog, draft?.layout ?? []) as unknown as { nodes: Node<WorkflowNodeData>[]; edges: Edge[] }
+          : buildCanvas(scope, catalog, draft?.layout ?? [])
         : { nodes: [], edges: [] };
     pendingViewportNodeIdsRef.current = canvas.nodes.map(node => node.id);
     setNodes(canvas.nodes.map(node => ({ ...node, selected: node.id === selectedNodeIdRef.current })));
@@ -236,11 +251,78 @@ export function useWorkflowCanvas({
         ]
       : layout, []);
 
+  const commitCanvas = useCallback((nextNodes: Node<WorkflowNodeData>[], nextEdges: WorkflowEdge[], additionalActivities: ActivityNode[] = []) => {
+    if (isUnsupportedDesigner) return;
+
+    editDraft(({ draft: current, frames: currentFrames }) => {
+      if (!current) return null;
+
+      const nextLayout = updateLayout(current.layout, nextNodes);
+      const rootActivity = current.state.rootActivity;
+      if (!rootActivity) return { ...current, layout: nextLayout };
+
+      const currentScope = resolveScope(rootActivity, currentFrames, catalogByVersion);
+      if (!currentScope) return { ...current, layout: nextLayout };
+
+      let nextOwner: ActivityNode;
+      if (currentScope.slot.mode === "bpmn") {
+        nextOwner = syncBpmnCanvasToScope(currentScope, nextNodes as unknown as Node<BpmnNodeData>[], nextEdges, additionalActivities);
+      } else {
+        const ownerWithActivities = syncCanvasToScope(currentScope, nextNodes, nextEdges, additionalActivities);
+        nextOwner = currentScope.slot.mode === "flowchart"
+          ? withFlowchartConnections(ownerWithActivities, nextEdges)
+          : ownerWithActivities;
+      }
+
+      return {
+        ...current,
+        layout: nextLayout,
+        state: {
+          ...current.state,
+          rootActivity: updateScopeOwner(rootActivity, currentFrames, nextOwner, catalogByVersion)
+        }
+      };
+    });
+  }, [catalogByVersion, isUnsupportedDesigner, editDraft]);
+
+  // In a BPMN scope a catalog drop creates a task/subProcess ELEMENT bound to a fresh ActivityNode:
+  // the element becomes the canvas node (its id is the elementId) and the activity lands in the
+  // Bpmn.Activities slot via the canvas sync. Returns the created ActivityNode.
+  const addCatalogActivityToBpmn = useCallback((activity: ActivityCatalogItem, position?: XYPosition): ActivityNode | null => {
+    const activityNode = createActivityNode(activity, createNodeId(activity));
+    const fallback: XYPosition = { x: 120 + (nodes.length % 5) * 220, y: 120 + Math.floor(nodes.length / 5) * 140 };
+    const placedNode = createBpmnBoundNode(activity, activityNode, position ?? fallback) as unknown as Node<WorkflowNodeData>;
+    const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
+    const nextNodes = [...clearedNodes, placedNode];
+    setNodes(nextNodes);
+    select(placedNode.id);
+    commitCanvas(nextNodes, edges, [activityNode]);
+    queueCanvasNodeFocus(placedNode.id);
+    return activityNode;
+  }, [commitCanvas, edges, nodes, queueCanvasNodeFocus, select]);
+
+  // Stamps a pure BPMN shape (event/gateway/unbound task) from the shape palette onto the canvas.
+  const addBpmnShape = useCallback((shape: BpmnShapeDescriptor, position?: XYPosition) => {
+    if (!isBpmnDesigner) return;
+    const fallback: XYPosition = { x: 120 + (nodes.length % 5) * 220, y: 120 + Math.floor(nodes.length / 5) * 140 };
+    const placedNode = createBpmnShapeNode(shape, position ?? fallback) as unknown as Node<WorkflowNodeData>;
+    const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
+    const nextNodes = [...clearedNodes, placedNode];
+    setNodes(nextNodes);
+    select(placedNode.id);
+    commitCanvas(nextNodes, edges);
+    queueCanvasNodeFocus(placedNode.id);
+  }, [commitCanvas, edges, isBpmnDesigner, nodes, queueCanvasNodeFocus, select]);
+
   // Returns the created ActivityNode when it became the root or landed in the current scope's slot (so
   // callers can restore focus or chain navigation); null for wrapping and rejected/stale outcomes.
   const addActivity = useCallback((activity: ActivityCatalogItem, position?: XYPosition): ActivityNode | null => {
     if (draft?.state.rootActivity && isUnsupportedDesigner) {
       return null;
+    }
+
+    if (draft?.state.rootActivity && isBpmnDesigner) {
+      return addCatalogActivityToBpmn(activity, position);
     }
 
     const next = createActivityNode(activity, createNodeId(activity));
@@ -323,7 +405,7 @@ export function useWorkflowCanvas({
 
     observeReusablePlacement();
     return next;
-  }, [catalogByVersion, draft?.state.rootActivity, frames, isUnsupportedDesigner, editDraftAndSelect, resetToRoot, pinLayout, setError, setStatus]);
+  }, [addCatalogActivityToBpmn, catalogByVersion, draft?.state.rootActivity, frames, isBpmnDesigner, isUnsupportedDesigner, editDraftAndSelect, resetToRoot, pinLayout, setError, setStatus]);
 
   const createCanvasActivity = useCallback((activity: ActivityCatalogItem, position: XYPosition) => {
     const activityNode = createActivityNode(activity, createNodeId(activity));
@@ -355,34 +437,6 @@ export function useWorkflowCanvas({
     return { activityNode, node };
   }, []);
 
-  const commitCanvas = useCallback((nextNodes: Node<WorkflowNodeData>[], nextEdges: WorkflowEdge[], additionalActivities: ActivityNode[] = []) => {
-    if (isUnsupportedDesigner) return;
-
-    editDraft(({ draft: current, frames: currentFrames }) => {
-      if (!current) return null;
-
-      const nextLayout = updateLayout(current.layout, nextNodes);
-      const rootActivity = current.state.rootActivity;
-      if (!rootActivity) return { ...current, layout: nextLayout };
-
-      const currentScope = resolveScope(rootActivity, currentFrames, catalogByVersion);
-      if (!currentScope) return { ...current, layout: nextLayout };
-
-      const ownerWithActivities = syncCanvasToScope(currentScope, nextNodes, nextEdges, additionalActivities);
-      const nextOwner = currentScope.slot.mode === "flowchart"
-        ? withFlowchartConnections(ownerWithActivities, nextEdges)
-        : ownerWithActivities;
-
-      return {
-        ...current,
-        layout: nextLayout,
-        state: {
-          ...current.state,
-          rootActivity: updateScopeOwner(rootActivity, currentFrames, nextOwner, catalogByVersion)
-        }
-      };
-    });
-  }, [catalogByVersion, isUnsupportedDesigner, editDraft]);
 
   const toCanvasPosition = useCallback((clientX: number, clientY: number): XYPosition | null => {
     if (!canvasRef.current) return null;
@@ -412,6 +466,26 @@ export function useWorkflowCanvas({
       : sourceNode
         ? rightOf(sourceNode)
         : fallbackPosition;
+
+    if (isBpmnDesigner) {
+      const activityNode = createActivityNode(activity, createNodeId(activity));
+      const placedNode = createBpmnBoundNode(activity, activityNode, position) as unknown as Node<WorkflowNodeData>;
+      const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
+      const nextNodes = [...clearedNodes, placedNode];
+      const nextEdges = edges
+        .filter(candidate => candidate.id !== edge.id)
+        .concat(
+          createBpmnFlowEdge(edge.source, placedNode.id) as WorkflowEdge,
+          createBpmnFlowEdge(placedNode.id, edge.target) as WorkflowEdge
+        );
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      select(placedNode.id);
+      commitCanvas(nextNodes, nextEdges, [activityNode]);
+      queueCanvasNodeFocus(placedNode.id);
+      return;
+    }
+
     const placed = createCanvasActivity(activity, position);
     const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
     const nextNodes = [...clearedNodes, placed.node];
@@ -422,7 +496,7 @@ export function useWorkflowCanvas({
     select(placed.node.id);
     commitCanvas(nextNodes, nextEdges, [placed.activityNode]);
     queueCanvasNodeFocus(placed.node.id);
-  }, [commitCanvas, createCanvasActivity, edges, nodes, queueCanvasNodeFocus, select]);
+  }, [commitCanvas, createCanvasActivity, edges, isBpmnDesigner, nodes, queueCanvasNodeFocus, select]);
 
   const tryAddActivityAtClientPoint = useCallback((activity: ActivityCatalogItem, clientX: number, clientY: number) => {
     if (!canAddActivitiesToCanvas) return false;
@@ -440,7 +514,7 @@ export function useWorkflowCanvas({
     const position = toCanvasPosition(clientX, clientY);
     if (!position) return false;
 
-    if (isFlowchartDesigner) {
+    if (isGraphDesigner) {
       const edgeId = findEdgeUnderCursor(clientX, clientY);
       const edge = edgeId ? edges.find(candidate => candidate.id === edgeId) : undefined;
       if (edge) {
@@ -451,7 +525,7 @@ export function useWorkflowCanvas({
 
     addActivity(activity, position);
     return true;
-  }, [addActivity, canAddActivitiesToCanvas, edges, findEdgeUnderCursor, isFlowchartDesigner, spliceActivityIntoEdge, toCanvasPosition]);
+  }, [addActivity, canAddActivitiesToCanvas, edges, findEdgeUnderCursor, isGraphDesigner, spliceActivityIntoEdge, toCanvasPosition]);
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
@@ -541,7 +615,7 @@ export function useWorkflowCanvas({
 
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
-    if (!isFlowchartDesigner) return;
+    if (!isGraphDesigner) return;
 
     const edgeId = findEdgeUnderCursor(event.clientX, event.clientY);
     setHighlightedEdgeId(edgeId);
@@ -616,14 +690,16 @@ export function useWorkflowCanvas({
   const isValidConnection = (connection: Connection | Edge) => {
     if (!connection.source || !connection.target) return false;
     if (connection.source === connection.target) return false;
-    if (!isFlowchartDesigner) return false;
+    if (!isGraphDesigner) return false;
     return !connection.targetHandle;
   };
   const onConnect = (connection: Connection) => {
-    if (!draft?.state.rootActivity || !scope || !isFlowchartDesigner) return;
+    if (!draft?.state.rootActivity || !scope || !isGraphDesigner) return;
     if (!isValidConnection(connection)) return;
 
-    const nextEdge = createWorkflowEdge(connection.source, connection.target, connection.sourceHandle ?? "Done", connection.targetHandle ?? undefined);
+    const nextEdge = isBpmnDesigner
+      ? createBpmnFlowEdge(connection.source, connection.target)
+      : createWorkflowEdge(connection.source, connection.target, connection.sourceHandle ?? "Done", connection.targetHandle ?? undefined);
     const nextEdges = addEdge(nextEdge, edges) as WorkflowEdge[];
     setEdges(nextEdges);
     commitCanvas(nodes, nextEdges);
@@ -678,7 +754,7 @@ export function useWorkflowCanvas({
   };
 
   const onReconnect: OnReconnect<WorkflowEdge> = (oldEdge, newConnection) => {
-    if (!isFlowchartDesigner) return;
+    if (!isGraphDesigner) return;
     if (!isValidConnection(newConnection)) return;
     const nextEdges = reconnectEdge(oldEdge, {
       ...newConnection,
@@ -735,9 +811,9 @@ export function useWorkflowCanvas({
   }, [commitCanvas, edges, isUnsupportedDesigner, nodes, queueCanvasNodeFocus, select]);
 
   const requestInsertActivity = useCallback((edgeId: string, clientX: number, clientY: number) => {
-    if (!isFlowchartDesigner) return;
+    if (!isGraphDesigner) return;
     setConnectMenu({ kind: "spliceEdge", edgeId, clientX, clientY });
-  }, [isFlowchartDesigner]);
+  }, [isGraphDesigner]);
 
   const onConnectMenuPick = (activity: ActivityCatalogItem) => {
     const menu = connectMenu;
@@ -746,6 +822,10 @@ export function useWorkflowCanvas({
 
     const fallbackPosition = toCanvasPosition(menu.clientX, menu.clientY) ?? { x: 0, y: 0 };
     if (menu.kind === "fromEmpty") {
+      if (isBpmnDesigner) {
+        addCatalogActivityToBpmn(activity, fallbackPosition);
+        return;
+      }
       const placed = createCanvasActivity(activity, fallbackPosition);
       const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
       const nextNodes = [...clearedNodes, placed.node];
@@ -759,6 +839,21 @@ export function useWorkflowCanvas({
     if (menu.kind === "fromPort") {
       const sourceNode = nodes.find(node => node.id === menu.sourceNodeId);
       const position = sourceNode ? rightOf(sourceNode) : fallbackPosition;
+
+      if (isBpmnDesigner) {
+        const activityNode = createActivityNode(activity, createNodeId(activity));
+        const placedNode = createBpmnBoundNode(activity, activityNode, position) as unknown as Node<WorkflowNodeData>;
+        const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
+        const nextNodes = [...clearedNodes, placedNode];
+        const nextEdges = [...edges, createBpmnFlowEdge(menu.sourceNodeId, placedNode.id) as WorkflowEdge];
+        setNodes(nextNodes);
+        setEdges(nextEdges);
+        select(placedNode.id);
+        commitCanvas(nextNodes, nextEdges, [activityNode]);
+        queueCanvasNodeFocus(placedNode.id);
+        return;
+      }
+
       const placed = createCanvasActivity(activity, position);
       const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
       const nextNodes = scope?.slot.mode === "sequence"
@@ -814,6 +909,7 @@ export function useWorkflowCanvas({
     openEmptyConnectMenu,
     onConnectMenuPick,
     addActivity,
+    addBpmnShape,
     onPaletteClick,
     onPaletteDragStart,
     onPaletteDragEnd,

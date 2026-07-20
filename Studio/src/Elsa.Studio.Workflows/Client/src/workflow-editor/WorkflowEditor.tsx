@@ -48,6 +48,10 @@ import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { InspectorPanel } from "./InspectorPanel";
+import { BpmnElementInspector } from "../bpmn/BpmnElementInspector";
+import { BpmnShapePalette } from "../bpmn/BpmnShapePalette";
+import { updateBpmnElement } from "../bpmn/bpmnAdapter";
+import type { BpmnElement } from "../bpmn/bpmnTypes";
 import { SlotEmptyState } from "./SlotEmptyState";
 import type { PublicationIntent } from "../api/publishing";
 import { publicationChangesFor, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
@@ -173,6 +177,8 @@ export function WorkflowEditor({
     inspectedSupportsScopedVariables,
     scopedVariableAnalysis,
     isFlowchartDesigner,
+    isBpmnDesigner,
+    selectedBpmnElement,
     canAddActivitiesToCanvas
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
   const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : null;
@@ -215,6 +221,7 @@ export function WorkflowEditor({
     catalogByVersion,
     isUnsupportedDesigner,
     isFlowchartDesigner,
+    isBpmnDesigner,
     canAddActivitiesToCanvas,
     selectedNodeId,
     editDraft,
@@ -251,6 +258,7 @@ export function WorkflowEditor({
     openEmptyConnectMenu,
     onConnectMenuPick,
     addActivity,
+    addBpmnShape,
     onPaletteClick,
     onPaletteDragStart,
     onPaletteDragEnd,
@@ -264,6 +272,7 @@ export function WorkflowEditor({
   // empty-canvas "Add activity" button as the root instead of the choose-a-container card.
   const insideEmptySlot = !isUnsupportedDesigner
     && !isFlowchartDesigner
+    && !isBpmnDesigner
     && frames.length > 0
     && !!scope
     && scope.slot.activities.length === 0
@@ -461,6 +470,23 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, editDraft]);
 
+  // Patches one BPMN structure element on the current scope owner (inspector edits for pure elements).
+  const updateSelectedBpmnElement = useCallback((elementId: string, patch: Partial<BpmnElement>) => {
+    const ownerNodeId = scopeOwner?.nodeId;
+    if (!ownerNodeId) return;
+    editDraft(({ draft: current }) => {
+      const rootActivity = current?.state.rootActivity;
+      if (!current || !rootActivity) return null;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          rootActivity: updateActivity(rootActivity, ownerNodeId, owner => updateBpmnElement(owner, elementId, patch), catalogByVersion)
+        }
+      };
+    });
+  }, [catalogByVersion, editDraft, scopeOwner?.nodeId]);
+
   const openVersionChange = useCallback((occurrence: ActivityNode, current: ActivityDefinitionVersionView) => {
     setError("");
     setAutosavePaused(true);
@@ -568,17 +594,20 @@ export function WorkflowEditor({
       order: 0,
       icon: <Boxes size={15} />,
       render: () => (
-        <ActivityPalettePanel
-          paletteSearch={paletteSearch}
-          onSearchChange={setPaletteSearch}
-          groups={filteredPaletteGroups}
-          expandedCategories={expandedPaletteCategories}
-          onToggleCategory={togglePaletteCategory}
-          onActivityClick={onPaletteClick}
-          onActivityDragStart={onPaletteDragStart}
-          onActivityDragEnd={onPaletteDragEnd}
-          onActivityPointerDown={onPalettePointerDown}
-        />
+        <>
+          {isBpmnDesigner ? <BpmnShapePalette onAddShape={addBpmnShape} /> : null}
+          <ActivityPalettePanel
+            paletteSearch={paletteSearch}
+            onSearchChange={setPaletteSearch}
+            groups={filteredPaletteGroups}
+            expandedCategories={expandedPaletteCategories}
+            onToggleCategory={togglePaletteCategory}
+            onActivityClick={onPaletteClick}
+            onActivityDragStart={onPaletteDragStart}
+            onActivityDragEnd={onPaletteDragEnd}
+            onActivityPointerDown={onPalettePointerDown}
+          />
+        </>
       )
     },
     ...contributedPanelTabs.filter(tab => tab.side === "left")
@@ -589,7 +618,9 @@ export function WorkflowEditor({
       title: "Inspector",
       order: 0,
       icon: <ListTree size={15} />,
-      render: () => (
+      render: () => selectedBpmnElement && !selectedNode ? (
+        <BpmnElementInspector element={selectedBpmnElement} onChangeElement={updateSelectedBpmnElement} />
+      ) : (
         <InspectorPanel
           context={context}
           workflowState={draft.state}
@@ -847,7 +878,7 @@ export function WorkflowEditor({
                 onConnect={onConnect}
                 onConnectStart={canCreateActivityFromPort ? onConnectStart : undefined}
                 onConnectEnd={canCreateActivityFromPort ? onConnectEnd : undefined}
-                onReconnect={isFlowchartDesigner ? onReconnect : undefined}
+                onReconnect={isFlowchartDesigner || isBpmnDesigner ? onReconnect : undefined}
                 isValidConnection={isValidConnection}
                 onDragOver={onCanvasDragOver}
                 onDragLeave={onCanvasDragLeave}
@@ -880,7 +911,7 @@ export function WorkflowEditor({
                 onPickActivity={pickActivityForEmptySlot}
                 onBrowseAll={openEmptyConnectMenu}
               />
-            ) : isFlowchartDesigner && nodes.length === 0 ? (
+            ) : (isFlowchartDesigner || isBpmnDesigner) && nodes.length === 0 ? (
               <button type="button" className="wf-empty-canvas-add" onClick={() => openEmptyConnectMenu()}>
                 <Plus size={15} /> Add activity
               </button>

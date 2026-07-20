@@ -1,9 +1,11 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, DesignMetadataRecord, IncidentStateSummary } from "./workflowTypes";
 import { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
+import { bpmnStructureKind } from "./bpmn/bpmnTypes";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
 export { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
+export { bpmnStructureKind } from "./bpmn/bpmnTypes";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
@@ -50,7 +52,7 @@ export interface ChildSlot {
   label: string;
   property: string;
   cardinality: "single" | "many";
-  mode: "sequence" | "flowchart" | "generic";
+  mode: "sequence" | "flowchart" | "bpmn" | "generic";
   activities: ActivityNode[];
   collectionProperty?: string;
   childProperty?: string;
@@ -103,7 +105,7 @@ export interface ScopeFrame {
   label: string;
 }
 
-export type WorkflowDesignerSupport = "flowchart" | "sequence" | "unsupported";
+export type WorkflowDesignerSupport = "flowchart" | "sequence" | "bpmn" | "unsupported";
 
 // Descends through the frame chain to the container the last frame names. Each frame's `ownerNodeId`
 // must be found among ANY slot of the current owner; we descend into it and continue. Returns null the
@@ -394,7 +396,7 @@ export function readStructureDesignFacet(activity: ActivityCatalogItem | null | 
 
 function readStructureDesignFacetPayload(payload: Record<string, unknown>): StructureDesignFacetPayload | null {
   const mode = payload.mode;
-  if (mode !== "sequence" && mode !== "flowchart" && mode !== "generic") return null;
+  if (mode !== "sequence" && mode !== "flowchart" && mode !== "bpmn" && mode !== "generic") return null;
   if (typeof payload.supportsScopedVariables !== "boolean") return null;
   if (!Array.isArray(payload.slots) || !isRecord(payload.initialPayload)) return null;
 
@@ -589,9 +591,13 @@ export function applyRuntimeOverlays(
 export function getActivityDesignerSupport(activity: ActivityNode | null | undefined, catalogItem?: ActivityCatalogItem): WorkflowDesignerSupport {
   if (activity?.structure?.kind === flowchartStructureKind || isFlowchartCatalogItem(catalogItem)) return "flowchart";
   if (activity?.structure?.kind === sequenceStructureKind || isSequenceCatalogItem(catalogItem)) return "sequence";
+  if (activity?.structure?.kind === bpmnStructureKind || isBpmnCatalogItem(catalogItem)) return "bpmn";
   if (activity) {
     const primarySlot = getChildSlots(activity, catalogItem)[0];
-    if (primarySlot) return primarySlot.mode === "flowchart" ? "flowchart" : "sequence";
+    if (primarySlot) {
+      if (primarySlot.mode === "bpmn") return "bpmn";
+      return primarySlot.mode === "flowchart" ? "flowchart" : "sequence";
+    }
   }
   return "unsupported";
 }
@@ -850,6 +856,12 @@ function isSequenceCatalogItem(activity: ActivityCatalogItem | undefined) {
   return !!activity && (getActivityDisplay(activity) === "Sequence" || activity.activityTypeKey.endsWith(".Sequence"));
 }
 
+function isBpmnCatalogItem(activity: ActivityCatalogItem | undefined) {
+  if (!activity) return false;
+  if (activity.activityTypeKey.endsWith(".BpmnProcess")) return true;
+  return readStructureDesignFacet(activity)?.kind === bpmnStructureKind;
+}
+
 function humanizeActivityTypeName(name: string) {
   return name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -885,6 +897,18 @@ function createStructureForActivity(activity: ActivityCatalogItem): ActivityNode
         startNodeId: null,
         nodeMetadata: {},
         connectionMetadata: {}
+      }
+    };
+  }
+
+  if (activity.activityTypeKey.endsWith(".BpmnProcess")) {
+    return {
+      kind: bpmnStructureKind,
+      schemaVersion: "1.0.0",
+      payload: {
+        activities: [],
+        elements: [],
+        sequenceFlows: []
       }
     };
   }
@@ -1103,6 +1127,7 @@ function isActivityNode(value: unknown): value is ActivityNode {
 function getStructureMode(structure: ActivityNodeStructure): ChildSlot["mode"] {
   if (structure.kind === sequenceStructureKind) return "sequence";
   if (structure.kind === flowchartStructureKind) return "flowchart";
+  if (structure.kind === bpmnStructureKind) return "bpmn";
   return "generic";
 }
 
