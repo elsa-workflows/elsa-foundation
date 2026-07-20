@@ -81,15 +81,33 @@ public sealed class RuntimeGroupCommitCoordinator(IDocumentStore store, RuntimeG
         var member = new Member(batchKey, stage, fallback);
         _queue.Enqueue(member);
 
-        await _gate.WaitAsync(cancellationToken);
-        try
+        // A member wakes unhandled when the batch it rode was poisoned by another member's failure: it then leads its
+        // own flush under its OWN cancellation token (and may re-fold with newly arrived commits), so one caller's
+        // failure or cancellation never fails an unrelated member's commit.
+        while (!member.Handled)
         {
-            if (!member.Handled)
-                await LeadFlushAsync(member, scope, cancellationToken);
-        }
-        finally
-        {
-            _gate.Release();
+            try
+            {
+                await _gate.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Best-effort: tell a future leader not to stage this abandoned commit. If a leader already drained it,
+                // the commit may still land durably — the same "may have committed" outcome the store's uncertain-
+                // acknowledgement contract already forces callers to reconcile via the idempotent marker replay.
+                member.Abandoned = true;
+                throw;
+            }
+
+            try
+            {
+                if (!member.Handled)
+                    await LeadFlushAsync(member, scope, cancellationToken);
+            }
+            finally
+            {
+                _gate.Release();
+            }
         }
 
         if (member.Failure is { } failure)
@@ -134,13 +152,16 @@ public sealed class RuntimeGroupCommitCoordinator(IDocumentStore store, RuntimeG
 
         if (poisoned)
         {
+            // Degrade: re-drive ONLY the leader here (its token is this method's token); every other member is left
+            // unhandled so it re-drives itself when it wakes at the gate, under its own token and fallback — one
+            // member's failure or cancellation can therefore never fail another member's commit (FR-4).
             Interlocked.Increment(ref _degradedBatchCount);
             foreach (var member in batch)
             {
                 member.Result = null;
                 member.Failure = null;
-                await CommitViaFallbackAsync(member, cancellationToken);
             }
+            await CommitViaFallbackAsync(leader, cancellationToken);
             return;
         }
 
@@ -175,7 +196,7 @@ public sealed class RuntimeGroupCommitCoordinator(IDocumentStore store, RuntimeG
         List<Member>? deferred = null;
         while (_queue.TryDequeue(out var member))
         {
-            if (ReferenceEquals(member, leader))
+            if (ReferenceEquals(member, leader) || member.Abandoned)
                 continue;
             if (batch.Count < options.MaxBatchSize && string.Equals(member.BatchKey, leader.BatchKey, StringComparison.Ordinal))
                 batch.Add(member);
@@ -201,5 +222,8 @@ public sealed class RuntimeGroupCommitCoordinator(IDocumentStore store, RuntimeG
         public RuntimeCheckpointCommitStoreResult? Result { get; set; }
         public Exception? Failure { get; set; }
         public bool Handled { get; set; }
+
+        /// <summary>Caller cancelled while waiting at the gate; a future leader must not stage this commit.</summary>
+        public volatile bool Abandoned;
     }
 }
