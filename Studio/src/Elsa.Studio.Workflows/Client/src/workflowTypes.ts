@@ -582,6 +582,18 @@ export interface WorkflowExecutableNode {
   inputBindings: WorkflowExecutableInputBinding[];
   childSlots: WorkflowExecutableChildSlot[];
   connections?: WorkflowExecutableConnection[];
+  outputCaptures?: WorkflowExecutableOutputCapture[] | null;
+}
+
+// A compiled output capture on an executable node; `conversionPlan` is the pinned ValueConversionPlan
+// (camelCase properties, PascalCase enum values) resolved from the authored conversion request.
+export interface WorkflowExecutableOutputCapture extends Record<string, unknown> {
+  outputName: string;
+  valueId?: string | null;
+  type?: Record<string, unknown> | null;
+  lifecycle?: string | null;
+  storage?: string | null;
+  conversionPlan?: Record<string, unknown> | null;
 }
 
 export interface WorkflowExecutableChildSlot {
@@ -601,6 +613,9 @@ export interface WorkflowExecutableInputBinding {
   reference?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
   summary?: string | null;
+  // The pinned ValueConversionPlan for this binding (mode/operation/profile/limits/fingerprint);
+  // omitted for sensitive bindings and legacy executables published before conversion plans existed.
+  conversionPlan?: Record<string, unknown> | null;
   [key: string]: unknown;
 }
 

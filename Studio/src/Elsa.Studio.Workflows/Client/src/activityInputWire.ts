@@ -10,11 +10,13 @@ import { normalizeFlowchartStartNode } from "./flowchartStartNode";
  * 1. Activity input values. The editors keep them as top-level properties on the activity node, keyed
  *    by the input's catalog `referenceKey` verbatim (e.g. `activity.text = { typeName, expression:
  *    { type, value } }` for WriteLine's `referenceKey: "text"`). The backend `ActivityNode` model
- *    carries authored values in an `inputs` array of `ArgumentState { referenceKey, value }`; anything
- *    else is dropped on deserialization. {@link canonicalizeStateForWire} folds the top-level wrapped
- *    properties into `inputs`; {@link expandStateFromWire} reverses it on load. Keys ride both
- *    directions untransformed — the referenceKey is an opaque contract identifier, not a naming
- *    convention.
+ *    carries authored values in an `inputs` array of `ArgumentState { referenceKey, value, conversion?,
+ *    … }`; anything else is dropped on deserialization. {@link canonicalizeStateForWire} folds the
+ *    top-level wrapped properties into `inputs`; {@link expandStateFromWire} reverses it on load. Keys
+ *    ride both directions untransformed — the referenceKey is an opaque contract identifier, not a
+ *    naming convention. The authored conversion request and every other ArgumentState field round-trip
+ *    losslessly: expand carries them onto the wrapped value (`conversion`/`argumentExtras`) and
+ *    canonicalize folds them back, so a document authored elsewhere never loses fields on save.
  *
  * 2. Argument collections — the workflow-level `variables`/`inputs`/`outputs` and container-scoped
  *    variables. The typed-argument-model contract carries each argument's type as
@@ -30,6 +32,12 @@ const structuralKeys = new Set(["nodeId", "activityVersionId", "inputs", "output
 interface WrappedInputValue {
   typeName?: string;
   expression: { type: string; value: unknown };
+  // Authored conversion request (the backend's AuthoredValueConversionRequest); absent means the
+  // legacy default (Auto). Carried verbatim — the mode/profile semantics live in conversionSettings.
+  conversion?: unknown;
+  // Every other ArgumentState field (autoEvaluate, evaluatorType, storageDriverType, isSensitive,
+  // and forward-compatible unknowns) rides through the editor untouched in this bag.
+  argumentExtras?: Record<string, unknown>;
 }
 
 interface WireArgumentState {
@@ -37,6 +45,8 @@ interface WireArgumentState {
   // `value` is the backend ArgumentValue.Value (object?). Literals serialize to a string; reference
   // expressions keep their structured identity objects so stable reference keys survive the trip.
   value: { value: unknown; expressionType: string };
+  conversion?: unknown;
+  [key: string]: unknown;
 }
 
 export function canonicalizeStateForWire(state: WorkflowDefinitionState): WorkflowDefinitionState {
@@ -164,10 +174,7 @@ function canonicalizeActivityNode(node: ActivityNode): ActivityNode {
   for (const [key, value] of Object.entries(node)) {
     if (structuralKeys.has(key)) continue;
     if (isWrappedInputValue(value)) {
-      inputs.set(key, {
-        referenceKey: key,
-        value: toWireArgument(value.expression)
-      } satisfies WireArgumentState);
+      inputs.set(key, toWireArgumentState(key, value, inputs.get(key)));
     } else {
       extras[key] = value;
     }
@@ -183,6 +190,27 @@ function canonicalizeActivityNode(node: ActivityNode): ActivityNode {
   };
 }
 
+// The wrapped value is authoritative for the expression and the conversion request (its absence on an
+// expanded value means the author cleared it); the seeded wire record only fills in when the value was
+// never expanded — a template-seeded default written straight by the palette.
+function toWireArgumentState(
+  referenceKey: string,
+  wrapped: WrappedInputValue,
+  seeded: unknown
+): WireArgumentState {
+  const seededRecord = isRecord(seeded) ? seeded : {};
+  const conversion = "conversion" in wrapped ? wrapped.conversion : seededRecord.conversion;
+  return {
+    ...(wrapped.argumentExtras ?? omitKeys(seededRecord, argumentStateOwnKeys)),
+    referenceKey,
+    value: toWireArgument(wrapped.expression),
+    ...(conversion != null ? { conversion } : {})
+  };
+}
+
+// The ArgumentState fields the editor models directly; everything else is a passthrough extra.
+const argumentStateOwnKeys = ["referenceKey", "value", "conversion"];
+
 function expandActivityNode(node: ActivityNode): ActivityNode {
   const inputs = Array.isArray(node.inputs) ? node.inputs : [];
   const expanded: Record<string, unknown> = {};
@@ -190,12 +218,15 @@ function expandActivityNode(node: ActivityNode): ActivityNode {
   for (const argument of inputs) {
     if (!isRecord(argument) || typeof argument.referenceKey !== "string") continue;
     const argumentValue = isRecord(argument.value) ? argument.value : {};
+    const argumentExtras = omitKeys(argument, argumentStateOwnKeys);
     expanded[argument.referenceKey] = {
       typeName: "",
       expression: {
         type: typeof argumentValue.expressionType === "string" ? argumentValue.expressionType : "Literal",
         value: argumentValue.value ?? ""
-      }
+      },
+      ...(argument.conversion != null ? { conversion: argument.conversion } : {}),
+      ...(Object.keys(argumentExtras).length > 0 ? { argumentExtras } : {})
     } satisfies WrappedInputValue;
   }
 

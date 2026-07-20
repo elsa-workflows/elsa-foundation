@@ -13,6 +13,10 @@ export interface WrappedActivityInputValue {
   typeName: string;
   expression: ActivityExpression;
   memoryReference?: unknown;
+  /** Authored conversion request (backend AuthoredValueConversionRequest); absent = default (Auto). */
+  conversion?: unknown;
+  /** Passthrough ArgumentState fields the editor doesn't model; owned by activityInputWire. */
+  argumentExtras?: Record<string, unknown>;
 }
 
 export function camelize(value: string) {
@@ -65,6 +69,16 @@ export function withExpression(previous: WrappedActivityInputValue, syntax: stri
     ...previous,
     expression: { type: syntax, value }
   };
+}
+
+/** Sets or (with null) clears the binding's authored conversion request. */
+export function withConversion(previous: WrappedActivityInputValue, conversion: unknown): WrappedActivityInputValue {
+  if (conversion == null) {
+    const { conversion: _cleared, ...rest } = previous;
+    void _cleared;
+    return rest;
+  }
+  return { ...previous, conversion };
 }
 
 export interface ExpressionModeTransition {
@@ -148,7 +162,9 @@ export function readWrappedInputValue(value: unknown, descriptor: StudioActivity
         type: value.expression.type || descriptor.defaultSyntax || "Literal",
         value: value.expression.value
       },
-      ...(value.memoryReference ? { memoryReference: value.memoryReference } : {})
+      ...(value.memoryReference ? { memoryReference: value.memoryReference } : {}),
+      ...(value.conversion != null ? { conversion: value.conversion } : {}),
+      ...(value.argumentExtras ? { argumentExtras: value.argumentExtras } : {})
     };
   }
 

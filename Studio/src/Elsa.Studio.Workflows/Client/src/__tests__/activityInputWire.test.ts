@@ -166,6 +166,93 @@ describe("activity input wire adapter", () => {
   });
 });
 
+describe("authored conversion request round-trip", () => {
+  it("folds an authored conversion request onto the wire argument state", () => {
+    const state = stateOf(writeLine("write-one", {
+      text: { ...wrapped('{"name":"Grace"}', "Literal"), conversion: { mode: "json" } }
+    }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    expect(node.inputs).toEqual([
+      { referenceKey: "text", value: { value: '{"name":"Grace"}', expressionType: "Literal" }, conversion: { mode: "json" } }
+    ]);
+  });
+
+  it("round-trips a loaded conversion request and forward-compatible ArgumentState fields losslessly", () => {
+    const wireArgument = {
+      referenceKey: "payload",
+      value: { value: '{"name":"Grace"}', expressionType: "Literal" },
+      conversion: { mode: "profile", profile: { id: "partner.customer-json", version: "3" }, limits: { maxDepth: 8 }, futureField: true },
+      autoEvaluate: false,
+      isSensitive: true,
+      someFutureArgumentField: { nested: 1 }
+    };
+    const loaded: WorkflowDefinitionState = {
+      rootActivity: { nodeId: "n1", activityVersionId: "v1", inputs: [wireArgument], outputs: [], structure: null }
+    };
+
+    const expanded = expandStateFromWire(loaded).rootActivity as ActivityNode & { payload: Record<string, unknown> };
+    expect(expanded.payload.conversion).toEqual(wireArgument.conversion);
+    expect(expanded.payload.argumentExtras).toEqual({
+      autoEvaluate: false,
+      isSensitive: true,
+      someFutureArgumentField: { nested: 1 }
+    });
+
+    const saved = canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!;
+    expect(saved.inputs).toEqual([wireArgument]);
+  });
+
+  it("omits the conversion field when the author cleared it in the editor", () => {
+    const state = stateOf(writeLine("write-one", { text: wrapped("plain", "Literal") }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    expect(node.inputs).toEqual([
+      { referenceKey: "text", value: { value: "plain", expressionType: "Literal" } }
+    ]);
+    expect("conversion" in (node.inputs![0] as object)).toBe(false);
+  });
+
+  it("keeps a template-seeded conversion and extras when the palette overlays only the value", () => {
+    const node: ActivityNode = {
+      ...writeLine("write-one", { text: wrapped("edited", "Literal") }),
+      inputs: [{
+        referenceKey: "text",
+        value: { value: "seeded default", expressionType: "Literal" },
+        conversion: { mode: "xml" },
+        evaluatorType: "seeded-evaluator"
+      }]
+    };
+
+    const wire = canonicalizeStateForWire(stateOf(node)).rootActivity!;
+
+    expect(wire.inputs).toEqual([
+      {
+        referenceKey: "text",
+        value: { value: "edited", expressionType: "Literal" },
+        conversion: { mode: "xml" },
+        evaluatorType: "seeded-evaluator"
+      }
+    ]);
+  });
+
+  it("leaves activity-node output argument states untouched on both directions", () => {
+    const outputs = [{
+      referenceKey: "response",
+      value: { value: { referenceKey: "v1" }, expressionType: "Variable" },
+      conversion: { mode: "json" }
+    }];
+    const loaded: WorkflowDefinitionState = {
+      rootActivity: { nodeId: "n1", activityVersionId: "v1", inputs: [], outputs, structure: null }
+    };
+
+    expect(expandStateFromWire(loaded).rootActivity!.outputs).toEqual(outputs);
+    expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.outputs).toEqual(outputs);
+  });
+});
+
 describe("argument collection wire adapter", () => {
   it("emits the canonical type shape for variables/inputs/outputs and drops isArray/assembly", () => {
     const state: WorkflowDefinitionState = {

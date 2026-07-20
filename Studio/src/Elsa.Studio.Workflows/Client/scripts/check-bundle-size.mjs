@@ -12,12 +12,14 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // route so the staged-upgrade workbench has an independent measured budget and cannot increase the
 // authenticated Workflow Definitions landing baseline. Both landing budgets were raised by 6 kB for
 // the BPMN designer mode (shape styles in the shared stylesheet + shared bpmn structure types; the
-// measured paths moved 348.18 → 352.48 kB and 337.23 → 341.54 kB).
+// measured paths moved 348.18 → 352.48 kB and 337.23 → 341.54 kB). Both were raised again by 6/4 kB
+// for the binding conversion controls (issue #449: conversion settings model + control styles in the
+// shared stylesheet; measured paths moved 352.48 → 358.69 kB and 341.54 → 343.31 kB).
 const budgets = {
   entryJavaScript: 125_000,
   stylesheet: 185_000,
-  definitionsLandingTotal: 356_000,
-  upgradeLandingTotal: 344_000,
+  definitionsLandingTotal: 362_000,
+  upgradeLandingTotal: 348_000,
   individualChunk: 500_000
 };
 
