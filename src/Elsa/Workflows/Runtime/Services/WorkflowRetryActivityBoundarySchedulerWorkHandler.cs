@@ -11,7 +11,8 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
     IActivityExecutionStateStore activityExecutionStateStore,
     IDurableValueStateStore durableValueStateStore,
     IWorkflowExecutableStore workflowExecutableStore,
-    RuntimeCheckpointCommitter checkpointCommitter) : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
+    RuntimeCheckpointCommitter checkpointCommitter,
+    IWorkflowExecutableReader? executableReader = null) : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowRetryActivityBoundarySchedulerWorkHandler);
     public string Name => HandlerName;
@@ -50,7 +51,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
             throw new InvalidOperationException($"Activity execution '{command.ActivityExecutionId}' is not an activity execution scope boundary.");
         ValidatePinnedExecutable(prior, command.PinnedExecutable);
 
-        var executable = await workflowExecutableStore.FindAsync(command.PinnedExecutable.ArtifactId, cancellationToken)
+        var executable = await PinnedExecutableRead.FindAsync(executableReader, workflowExecutableStore, command.PinnedExecutable.ArtifactId, cancellationToken)
                          ?? throw new WorkflowExecutableNotFoundException(command.PinnedExecutable.ArtifactId);
         if (!SameIdentity(executable.Identity, command.PinnedExecutable))
             throw new InvalidOperationException("Boundary retry pinned executable does not match the retained workflow artifact.");

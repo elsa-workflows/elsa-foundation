@@ -91,11 +91,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IServiceProvider serviceProvider,
         CancellationToken cancellationToken)
     {
-        var workflowExecutableStore = serviceProvider.GetRequiredService<IWorkflowExecutableStore>();
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var schedulerWorkQueue = serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
 
-        var executable = await workflowExecutableStore.FindAsync(invokePayload.PinnedExecutable.ArtifactId, cancellationToken);
+        // spec 111: burst-cached pinned-executable read (immutable artifact ⇒ one durable read per burst, not per hop).
+        var executable = await PinnedExecutableRead.FindAsync(serviceProvider, invokePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(invokePayload.PinnedExecutable.ArtifactId);
 
