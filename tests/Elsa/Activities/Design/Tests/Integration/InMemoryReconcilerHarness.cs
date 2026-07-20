@@ -12,6 +12,7 @@ using Elsa.Activities.Design.Reconciliation.Options;
 using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.EFCore.Queries;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
@@ -98,20 +99,27 @@ internal static class InMemoryReconcilerHarness
 
     private sealed class InMemoryAddActivityDefinitionCommand(CatalogStore store) : IAddActivityDefinitionCommand
     {
-        public Task Execute(ActivityDefinition definition, ActivityDefinitionVersion version, CancellationToken cancellation)
+        public Task<ActivityDefinitionCreated> Execute(
+            DesignOperationKey operationKey,
+            ActivityDefinition definition,
+            ActivityDefinitionVersion version,
+            CancellationToken cancellation)
         {
             store.Definitions.Add(definition);
             store.Versions.Add(version);
-            return Task.CompletedTask;
+            return Task.FromResult(new ActivityDefinitionCreated(definition.Id, version.Id, version.Version, version.Hash));
         }
     }
 
-    private sealed class InMemoryAddVersionCommand(CatalogStore store) : IAddCommand<ActivityDefinitionVersion>
+    private sealed class InMemoryAddVersionCommand(CatalogStore store) : IAddActivityDefinitionVersionCommand
     {
-        public Task Add(ActivityDefinitionVersion entity, CancellationToken cancellationToken = default)
+        public Task<ActivityDefinitionVersionAdded> Execute(
+            DesignOperationKey operationKey,
+            ActivityDefinitionVersion entity,
+            CancellationToken cancellationToken = default)
         {
             store.Versions.Add(entity);
-            return Task.CompletedTask;
+            return Task.FromResult(new ActivityDefinitionVersionAdded(entity.DefinitionId, entity.Id, entity.Version, entity.Hash));
         }
     }
 

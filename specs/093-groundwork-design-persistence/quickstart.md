@@ -166,6 +166,75 @@ An independent read-only review was clean after verifying terminal rollback obse
 Groundwork preview.77's normative `IDocumentUnitOfWork` contract. T031–T032 still own command
 adoption, so this slice does not advance any of the seven intentional-red atomicity rows.
 
+### T031–T035 design-command adoption evidence (2026-07-20)
+
+Every workflow definition/version/draft/promote/submit/delete command and both activity
+definition/version commands now route through the typed atomic facade. Public contracts require
+an explicit caller-stable `DesignOperationKey`; operation identity remains separate from the
+canonical request fingerprint, and generated definition/version/draft identities come back from
+the durable authoritative result. Source reconciliation uses separate materialization commands so
+API allocation policy does not leak into source-owned projection.
+
+Groundwork reads and writes now surface provider-neutral `DesignPersistenceException` outcomes
+with explicit Workflow/Activity and Provider/Serialization classifications. Only positively
+classified provider, corrupt-payload, marker/result corruption, or explicitly scoped
+serialization operations are mapped. Cancellation, readiness, validation, operation-key
+conflict/rejection, uncertain-commit, and other domain outcomes retain their existing contracts.
+Repeated provider composition resolves every public store/command, the shared atomic helper, and
+each manifest source exactly once per scope.
+
+Lost-acknowledgement reconciliation now detaches post-commit lifecycle-event enqueue from the
+caller token that may have been cancelled after the durable commit. Create, update, and discard
+tests prove one enqueue after reconciliation and none on the subsequent replay, preserving the
+established best-effort/at-most-once deferred-event policy without claiming durable event
+delivery. Promotion performs its marker lookup before source reads and locks, so an exact replay
+returns the authoritative version even after the source draft is discarded. Submit validation
+runs only after a marker miss, so mutable activity-structure projections cannot invalidate an
+already committed exact replay. Clone owns a distinct operation kind whose canonical request is
+the immutable source-version identity. Its marker lookup runs before source expansion, identity
+allocation, locking, staging, or event publication, so exact replay returns the authoritative
+draft even after the source version and layout are removed; reusing the key with a different
+source identity conflicts before reading that source.
+
+The SQLite Target profile now executes all seven provider-transaction atomicity scenarios through
+a real scoped `GroundworkDesignAtomicWrite` over two admitted workflow document kinds plus the
+durable marker. Its fixture-local post-commit observation proves retry/replay control flow only;
+it is not a domain-event publication. Separately, the composed SQLite host invokes the public
+`ICreateDraftCommand`, starts Elsa's real background event dispatcher, captures
+`OnDraftCreated` in its ScopeA pipeline handler only after verifying the draft through
+`IWorkflowDefinitionDraftStore`. Its test-only fault seam injects a throw after one staged write,
+a rejected provider decision, cancellation, and a post-durable lost acknowledgement. Exact replay
+uses the same logical operation identity in two storage scopes, proving that isolation comes from
+the storage boundary rather than from scope
+material embedded in the key. `OnDraftCreated` intentionally does not carry a storage scope and
+the background dispatcher opens a fresh scope, so this lifecycle-event evidence is explicitly
+limited to the ScopeA fixture; it does not prove cross-scope event-context propagation. Evidence
+schema `3` advances the immutable
+catalog from `17/8` to `25` green and `0` intentional-red scenarios while retaining target
+fingerprint `b87b33275b2f9f52a8756eeb039bb8227a93083a6adacb95cd6a16c2445253d3`
+and plan fingerprint `d8717f5ebca1755d8aa24473c37da3a2dc823f70d069ec38fa4de40ff2b012f8`.
+
+The integrated pre-review candidate passed:
+
+- persistence core: `43/43`;
+- Groundwork querying: `126/126`;
+- workflow design Groundwork: `82/82`;
+- activity design Groundwork: `68/68`;
+- focused SQLite atomicity/lifecycle suite: `8/8` — `7/7` provider-transaction scenarios plus
+  `1/1` public `ICreateDraftCommand`/`OnDraftCreated` durability scenario;
+- SQLite 25-scenario Target-profile baseline: `1/1`, with all `25` logical scenarios green;
+- shared design conformance: `96` passed and `1` intentional profile-shape skip;
+- temporary EF oracle: `17` passed and `10` explicitly inapplicable skips;
+- Groundwork unified host: `23/23`;
+- workflow design domain suite: `358/358`;
+- activity design domain suite: `490/490`;
+- workflow design API: `50/50`;
+- activity design API: `5/5`;
+- workflow publishing API: `381/381`;
+- full `Elsa.Server.slnx` Release build: `0` errors.
+
+T036 records the exact committed candidate and independent review after this evidence is committed.
+
 Ordinary CI writes no evidence file. Operators can opt in to the sanitized allowlisted JSON
 artifact without exposing connection strings, database paths, or scope identities:
 
@@ -178,6 +247,70 @@ This closes only T025's Target-profile baseline. T051's broader SQLite fixture, 
 and later full provider conformance remain pending. The green lifecycle rows still traverse the
 existing load-all/client-evaluation read path and are not bounded-query evidence; T026–T029 remain
 the authority for removing that path.
+
+### T036 independent review and final US1 evidence (2026-07-21)
+
+The reviewed production candidate is `b468c03e8087f9b7ce7fc16611f2f509899db060` (the six US1
+commits above base `c1663ad4f`). Three independent read-only reviewers examined the exact range
+`c1663ad4f..b468c03e8` on 2026-07-21 across (1) atomicity, rollback, retry/lost-acknowledgement
+reconciliation, replay ordering, cancellation detachment, canonical fingerprints, and EF-oracle
+purity; (2) lifecycle-event semantics and test-objective preservation against the T003 ledger
+(zero test deletions confirmed); and (3) scope isolation, contract-only DI seams
+(`IDesignAtomicWriter`/`IDraftOriginator`), core purity, exception taxonomy, and extension-point
+catalog accuracy. The scope/DI/docs axis was clean; the marker ledger's scope binding, the
+privileged-session `TenantAgnostic` gate, and the renamed exception taxonomy were each explicitly
+verified.
+
+One blocking finding was remediated: the issue-#404 workflow add-version race-rejection objective
+had lost its only test when `AddVersionCommandHandler` became a delegating shell. Commit
+`587334cec` (test-only, additive; the six reviewed production commits are untouched) restores it
+at the Groundwork command level with a deterministic stale-latest replay through the real command
+and stores, asserting `WorkflowDefinitionVersionConflictException` and zero persistence, and adds
+the post-composition `Replace` registration test for `IDraftOriginator` so the workflows
+extension-point catalog's replacement claim is fully covered. The originating reviewer re-verified
+the remediation and declared the axis clean at `587334cec`, which is therefore the final reviewed
+US1 candidate.
+
+Recorded non-blocking findings, none of which change this candidate:
+
+- Relational Groundwork providers surface a cancellation observed after `CommitAsync` was invoked
+  as a plain `OperationCanceledException` instead of
+  `DocumentCommitAcknowledgementUncertainException` (MongoDB already maps it). Elsa state still
+  converges through marker replay and the deferred-event policy is explicitly best-effort/
+  at-most-once, so this is routed upstream as valence-works/groundwork#118 rather than worked
+  around here.
+- `GroundworkDeleteWorkflowDefinitionPermanentlyCommand` performs its aggregate reads inside the
+  atomic stage callback instead of `beforeAttempt`; scope checks and all-or-nothing semantics
+  hold, but the pattern deviation carries provider-conditional read-during-write risk and a
+  benign concurrent-race `Rejected` surface. Owned by the US2/US3 command-hardening window.
+- Draft layout `AdditionalProperties` enters request material via raw JSON text, so a retry that
+  re-serializes with different whitespace/key order fingerprints as a conflict; byte-stable
+  retries are unaffected.
+- The permanent-delete "must be soft-deleted first" guard now throws `InvalidOperationException`
+  (previously `ArgumentException`) in both providers; accepted as the more correct classification
+  for this pre-release codebase.
+- All github-code-quality PR annotations (generic catch clauses, one empty loop body, one manual
+  disposal) were triaged acceptable-by-design: cancellation and already-classified
+  `DesignPersistenceException` outcomes are re-thrown before every generic wrap and no
+  double-wrapping path exists.
+
+Final counts at the reviewed candidate `587334cec`, verified 2026-07-21T01:29+02:00 (CEST):
+
+- persistence core: `43/43`;
+- Groundwork querying: `126/126`;
+- Groundwork core persistence: `637/637`;
+- workflow design Groundwork: `84/84` (82 plus the two remediation tests);
+- activity design Groundwork: `68/68`;
+- shared design conformance: `96` passed and `1` intentional profile-shape skip;
+- SQLite provider leaf: `9/9`;
+- temporary EF oracle: `17` passed and `10` explicitly inapplicable skips;
+- Groundwork unified host: `23/23`;
+- workflow design domain suite: `358/358`;
+- activity design domain suite: `490/490`;
+- workflow design API: `50/50`; activity design API: `5/5`; workflow publishing API: `381/381`;
+- architecture ratchets: `261/261`;
+- full `Elsa.Server.slnx` Release build: `0` errors, `147` accepted existing warnings;
+- `git diff --check`: clean.
 
 ## 1. Restore and build
 

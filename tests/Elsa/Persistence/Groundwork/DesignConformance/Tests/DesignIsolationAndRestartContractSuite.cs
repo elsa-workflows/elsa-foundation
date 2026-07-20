@@ -2,7 +2,6 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -105,7 +104,9 @@ public abstract class DesignIsolationAndRestartContractSuite
         {
             var services = scopeB.ServiceProvider;
             var saver = services.GetRequiredService<ISaveWorkflowDefinitionCommand>();
-            await AssertNonCancellationFailureAsync(() => saver.Execute(foreign));
+            await AssertNonCancellationFailureAsync(() => saver.Execute(
+                DesignPersistenceFixtureData.OperationKey("isolation-foreign-workflow-save"),
+                foreign));
             Assert.Null(await services.GetRequiredService<IWorkflowDefinitionStore>()
                 .FindByIdAsync(DesignPersistenceFixtureData.WorkflowDefinitionId));
 
@@ -116,6 +117,7 @@ public abstract class DesignIsolationAndRestartContractSuite
                 scope: DesignPersistenceFixtureData.ScopeA,
                 definitionId: foreignActivity.Id);
             await AssertNonCancellationFailureAsync(() => services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("isolation-foreign-activity-create"),
                 foreignActivity,
                 foreignActivityVersion,
                 CancellationToken.None));
@@ -148,6 +150,7 @@ public abstract class DesignIsolationAndRestartContractSuite
             duplicateWorkflow.Name = "duplicate workflow";
             var duplicateDraft = DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState("duplicate-workflow-root"));
             duplicateWorkflowAccepted = await WasDuplicateAcceptedAsync(() => duplicateWorkflowScope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("isolation-duplicate-workflow"),
                 duplicateWorkflow,
                 duplicateDraft,
                 DesignPersistenceFixtureData.WorkflowDraftLayout(),
@@ -163,6 +166,7 @@ public abstract class DesignIsolationAndRestartContractSuite
                 id: "activity-http-request-duplicate-v1",
                 definitionId: duplicateActivityDefinition.Id);
             duplicateActivityAccepted = await WasDuplicateAcceptedAsync(() => duplicateActivityScope.ServiceProvider.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("isolation-duplicate-activity"),
                 duplicateActivityDefinition,
                 duplicateActivityVersion,
                 CancellationToken.None));
@@ -173,9 +177,12 @@ public abstract class DesignIsolationAndRestartContractSuite
         {
             var duplicateSemanticVersion = DesignPersistenceFixtureData.ActivityVersion(
                 id: "activity-http-request-v1-duplicate");
-            duplicateSemanticVersionAccepted = await WasDuplicateAcceptedAsync(() => duplicateSemanticVersionScope.ServiceProvider.GetRequiredService<IAddCommand<ActivityDefinitionVersion>>().Add(
-                duplicateSemanticVersion,
-                CancellationToken.None));
+            duplicateSemanticVersionAccepted = await WasDuplicateAcceptedAsync(() => duplicateSemanticVersionScope.ServiceProvider
+                .GetRequiredService<IAddActivityDefinitionVersionCommand>()
+                .Execute(
+                    DesignPersistenceFixtureData.OperationKey("isolation-duplicate-activity-version"),
+                    duplicateSemanticVersion,
+                    CancellationToken.None));
         }
 
         using var readScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
@@ -266,11 +273,15 @@ public abstract class DesignIsolationAndRestartContractSuite
         using (var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
         {
             var update = scope.ServiceProvider.GetRequiredService<IUpdateDraftCommand>();
-            await update.Execute(new(
+            await update.Execute(
+                DesignPersistenceFixtureData.OperationKey("isolation-workflow-first-writer"),
+                new(
                 DesignPersistenceFixtureData.WorkflowDraftId,
                 DesignPersistenceFixtureData.WorkflowState("first-writer"),
                 [new DesignMetadataRecord("first-writer", 1, 2, 3, 4)]));
-            await update.Execute(new(
+            await update.Execute(
+                DesignPersistenceFixtureData.OperationKey("isolation-workflow-last-writer"),
+                new(
                 DesignPersistenceFixtureData.WorkflowDraftId,
                 DesignPersistenceFixtureData.WorkflowState("last-writer"),
                 [new DesignMetadataRecord("last-writer", 5, 6, 7, 8)]));
@@ -334,16 +345,20 @@ public abstract class DesignIsolationAndRestartContractSuite
         workflowDefinition.Name = $"Order processing {marker}";
 
         await services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+            DesignPersistenceFixtureData.OperationKey($"seed:{storageScope}:activity"),
             activityDefinition,
             DesignPersistenceFixtureData.ActivityVersion(scope: storageScope),
             CancellationToken.None);
         await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+            DesignPersistenceFixtureData.OperationKey($"seed:{storageScope}:workflow"),
             workflowDefinition,
             DesignPersistenceFixtureData.WorkflowDraft(storageScope, DesignPersistenceFixtureData.WorkflowState()),
             DesignPersistenceFixtureData.WorkflowDraftLayout(),
             CancellationToken.None);
         var versionId = await services.GetRequiredService<IPromoteDraftToVersionCommand>()
-            .Execute(DesignPersistenceFixtureData.WorkflowDraftId);
+            .Execute(
+                DesignPersistenceFixtureData.OperationKey($"seed:{storageScope}:workflow-promote"),
+                DesignPersistenceFixtureData.WorkflowDraftId);
         return new(versionId);
     }
 
@@ -355,6 +370,7 @@ public abstract class DesignIsolationAndRestartContractSuite
         using (var writeScope = fixture.CreateScope(storageScope))
         {
             submitted = await writeScope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey($"scope-submission:{storageScope}"),
                 "Scoped submitted workflow",
                 "Proves every submitted aggregate member owns the active storage scope.",
                 DesignPersistenceFixtureData.WorkflowState());

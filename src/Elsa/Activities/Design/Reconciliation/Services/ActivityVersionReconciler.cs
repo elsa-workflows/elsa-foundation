@@ -8,6 +8,7 @@ using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Options;
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Versioning;
@@ -52,7 +53,7 @@ public sealed class ActivityVersionReconciler(
     IActivityDefinitionStore definitionStore,
     IActivityDefinitionVersionStore versionStore,
     IAddActivityDefinitionCommand addNewDefinitionCommand,
-    IAddCommand<ActivityDefinitionVersion> addVersionCommand,
+    IAddActivityDefinitionVersionCommand addVersionCommand,
     IEnumerable<IActivitySourceVersionPublisher>? sourceVersionPublishers = null
 )
     : IActivityVersionReconciler
@@ -126,7 +127,11 @@ public sealed class ActivityVersionReconciler(
             var newVersion = ActivityDefinitionVersion.From(incomingVersion);
             newVersion.Definition = newDefinition;
             if (sourceVersionPublisher is null)
-                await addNewDefinitionCommand.Execute(newDefinition, newVersion, cancellationToken);
+                await addNewDefinitionCommand.Execute(
+                    CreateOperationKey("create", incomingVersion),
+                    newDefinition,
+                    newVersion,
+                    cancellationToken);
             else
                 await sourceVersionPublisher.PublishAsync(newDefinition, newVersion, cancellationToken);
 
@@ -150,7 +155,10 @@ public sealed class ActivityVersionReconciler(
             var appended = ActivityDefinitionVersion.From(incomingVersion, definition.Id);
             appended.Definition = definition;
             if (sourceVersionPublisher is null)
-                await addVersionCommand.Add(appended, cancellationToken);
+                await addVersionCommand.Execute(
+                    CreateOperationKey("append", incomingVersion),
+                    appended,
+                    cancellationToken);
             else
                 await sourceVersionPublisher.PublishAsync(definition, appended, cancellationToken);
             versionIndex.Add(appended);
@@ -195,6 +203,24 @@ public sealed class ActivityVersionReconciler(
             1 => publishers[0],
             _ => throw new InvalidOperationException("Only one source-owned activity publication bridge may be registered.")
         };
+    }
+
+    private static DesignOperationKey CreateOperationKey(string operation, IActivityDefinitionVersion version)
+    {
+        // A reconciliation operation must survive a process restart and must never derive from target
+        // document identifiers. Source provenance, activity type and the source revision (content hash)
+        // are immutable inputs, so the same source contribution reuses this exact operation key.
+        var material = string.Join(
+            '\u001f',
+            "activity-reconciliation:v1",
+            operation,
+            version.SourceKind,
+            version.SourceId,
+            version.Definition.ActivityTypeKey,
+            version.Version,
+            version.Hash ?? string.Empty);
+        var digest = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(material));
+        return new DesignOperationKey($"activity-reconciliation:{operation}:{Convert.ToHexString(digest)}");
     }
 
     private void HandleHashMatchedDuplicate(ActivityDefinition definition, string version)

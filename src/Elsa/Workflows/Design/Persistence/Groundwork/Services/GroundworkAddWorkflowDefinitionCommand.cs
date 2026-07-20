@@ -1,38 +1,67 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 /// <summary>
-/// Groundwork (document) implementation of <see cref="IAddWorkflowDefinitionCommand"/>, the document-store
-/// counterpart of the EF Core <c>AddWorkflowDefinition</c>. It stages the <c>workflowDefinition</c> and its first
-/// embedded <c>workflowDefinitionDraft</c> into one Groundwork <see cref="IDocumentUnitOfWork"/> and commits them
-/// together.
+/// Creates a workflow definition and its first logical draft as one replay-safe Groundwork transition.
 /// </summary>
 public sealed class GroundworkAddWorkflowDefinitionCommand(
     IDocumentStore store,
+    IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     ISystemClock clock,
     IPersistenceAccessContextAccessor accessContextAccessor)
     : IAddWorkflowDefinitionCommand
 {
-    public Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellation) =>
-        Execute(workflowDefinition, draft, [], cancellation);
+    private const string OperationKind = "workflow.definition.create.v1";
 
-    public async Task Execute(
+    public Task<WorkflowDefinitionCreated> Execute(
+        DesignOperationKey operationKey,
+        WorkflowDefinition workflowDefinition,
+        WorkflowDefinitionDraft draft,
+        CancellationToken cancellationToken = default) =>
+        Execute(operationKey, workflowDefinition, draft, [], cancellationToken);
+
+    public async Task<WorkflowDefinitionCreated> Execute(
+        DesignOperationKey operationKey,
         WorkflowDefinition workflowDefinition,
         WorkflowDefinitionDraft draft,
         IReadOnlyCollection<DesignMetadataRecord> layout,
-        CancellationToken cancellation)
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operationKey);
+        ArgumentNullException.ThrowIfNull(workflowDefinition);
+        ArgumentNullException.ThrowIfNull(draft);
+        ArgumentNullException.ThrowIfNull(layout);
         accessContextAccessor.Current.EnsureTenantScope(workflowDefinition.TenantId);
         accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
+        if (!StringComparer.Ordinal.Equals(workflowDefinition.Id, draft.WorkflowDefinitionId))
+        {
+            throw new ArgumentException(
+                "The first workflow draft must belong to the workflow definition being created.",
+                nameof(draft));
+        }
+
+        var requestMaterial = new CreateRequestMaterial(
+            workflowDefinition.Name,
+            workflowDefinition.Description,
+            workflowDefinition.DeletedAt,
+            workflowDefinition.DeletedReason,
+            workflowDefinition.IsSourceOwned,
+            draft.SourceVersionId,
+            GroundworkDesignSerialization.Execute(
+                DesignPersistenceDomain.Workflow,
+                OperationKind,
+                "workflow definition draft",
+                () => payloadSerializer.Serialize(draft.State)),
+            layout.Select(ToMaterial).ToArray());
 
         var now = clock.UtcNow;
         GroundworkEntityTimestamps.StampAdded(workflowDefinition, now);
@@ -44,19 +73,59 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
             WorkflowsDesignStorageManifest.SchemaVersion,
             workflowDefinition,
             GroundworkDesignJson.Options,
-            accessContextAccessor.Current);
+            accessContextAccessor.Current,
+            persistenceDomain: DesignPersistenceDomain.Workflow);
 
         var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
             store,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor);
-        var draftSave = draftDocuments.ToSaveRequest(draft, layout.ToArray());
+        var draftSave = draftDocuments.ToSaveRequest(draft, layout.ToArray()) with { ExpectedVersion = 0 };
+        definitionSave = definitionSave with { ExpectedVersion = 0 };
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        var result = await GroundworkDesignAtomicCommand.ExecuteAsync(
+            atomicWrite,
+            operationKey,
+            OperationKind,
+            requestMaterial,
+            [
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind),
-            [definitionSave, draftSave],
-            cancellation);
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind
+            ],
+            async (context, token) =>
+            {
+                await context.SaveAsync(definitionSave, token);
+                await context.SaveAsync(draftSave, token);
+                return new WorkflowDefinitionCreated(workflowDefinition.Id, draft.Id);
+            },
+            cancellationToken: cancellationToken);
+        return result.Value;
     }
+
+    private static LayoutMaterial ToMaterial(DesignMetadataRecord record) =>
+        new(
+            record.NodeId,
+            record.X,
+            record.Y,
+            record.Width,
+            record.Height,
+            record.AdditionalProperties?.GetRawText());
+
+    private sealed record CreateRequestMaterial(
+        string Name,
+        string? Description,
+        DateTimeOffset? DeletedAt,
+        string? DeletedReason,
+        bool IsSourceOwned,
+        string? SourceVersionId,
+        string StateJson,
+        IReadOnlyCollection<LayoutMaterial> Layout);
+
+    private sealed record LayoutMaterial(
+        string NodeId,
+        double X,
+        double Y,
+        double? Width,
+        double? Height,
+        string? AdditionalPropertiesJson);
 }

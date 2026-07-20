@@ -9,13 +9,21 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 /// which is the contract that matters here; the production serializer's polymorphic <c>ActivityNode</c>
 /// handling is exercised by the serializer's own tests and by composition-level tests.
 /// </summary>
-internal sealed class FakePayloadSerializer : IPayloadSerializer
+internal sealed class FakePayloadSerializer(Exception? serializationFailure = null) : IPayloadSerializer
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 
-    public string Serialize(object payload) => JsonSerializer.Serialize(payload, Options);
+    public string Serialize(object payload)
+    {
+        ThrowIfSerializationFails();
+        return JsonSerializer.Serialize(payload, Options);
+    }
 
-    public JsonElement SerializeToElement(object payload) => JsonSerializer.SerializeToElement(payload, Options);
+    public JsonElement SerializeToElement(object payload)
+    {
+        ThrowIfSerializationFails();
+        return JsonSerializer.SerializeToElement(payload, Options);
+    }
 
     public object Deserialize(string serializedData) => JsonSerializer.Deserialize<object>(serializedData, Options)!;
 
@@ -28,4 +36,10 @@ internal sealed class FakePayloadSerializer : IPayloadSerializer
     public T Deserialize<T>(JsonElement serializedData) => serializedData.Deserialize<T>(Options)!;
 
     public JsonSerializerOptions GetOptions() => Options;
+
+    private void ThrowIfSerializationFails()
+    {
+        if (serializationFailure is not null)
+            throw serializationFailure;
+    }
 }

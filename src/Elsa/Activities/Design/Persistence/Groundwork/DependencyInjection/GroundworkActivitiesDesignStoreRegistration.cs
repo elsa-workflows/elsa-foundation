@@ -34,7 +34,7 @@ public static class GroundworkActivitiesDesignStoreRegistration
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, ActivitiesDesignGroundworkStorageManifestSource>());
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, GroundworkDesignAtomicWriteStorageManifestSource>());
-        services.TryAddScoped<GroundworkDesignAtomicWrite>();
+        services.TryAddScoped<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
 
         services.RemoveAll<IActivityDefinitionStore>();
         services.AddScoped<IActivityDefinitionStore, GroundworkActivityDefinitionStore>();
@@ -45,8 +45,8 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.RemoveAll<IAddActivityDefinitionCommand>();
         services.AddScoped<IAddActivityDefinitionCommand, GroundworkAddActivityDefinitionCommand>();
 
-        services.RemoveAll<IAddCommand<ActivityDefinitionVersion>>();
-        services.AddScoped<IAddCommand<ActivityDefinitionVersion>, GroundworkAddActivityDefinitionVersionCommand>();
+        services.RemoveAll<IAddActivityDefinitionVersionCommand>();
+        services.AddScoped<IAddActivityDefinitionVersionCommand, GroundworkAddActivityDefinitionVersionCommand>();
 
         services.RemoveAll<IActivityDefinitionLookup>();
         services.AddScoped<IActivityDefinitionLookup, ActivityDefinitionLookup>();
@@ -54,9 +54,9 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.RemoveAll<IActivityAvailabilitySettingsStore>();
         services.AddScoped<IActivityAvailabilitySettingsStore, GroundworkActivityAvailabilitySettingsStore>();
 
-        services.AddScoped<GroundworkReusableActivityStores>();
-        services.AddScoped<GroundworkActivityManagementProjectionWriter>();
-        services.AddScoped<GroundworkActivityManagementProjectionRetention>();
+        services.TryAddScoped<GroundworkReusableActivityStores>();
+        services.TryAddScoped<GroundworkActivityManagementProjectionWriter>();
+        services.TryAddScoped<GroundworkActivityManagementProjectionRetention>();
         services.RemoveAll<IActivityDefinitionManagementProjectionStore>();
         services.AddScoped<IActivityDefinitionManagementProjectionStore, GroundworkActivityDefinitionManagementProjectionStore>();
         services.RemoveAll<IActivityDefinitionAuthoringStore>();
@@ -75,13 +75,13 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.AddScoped<IActivityForkStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
         services.RemoveAll<IActivityDirectDependencyStore>();
         services.AddScoped<IActivityDirectDependencyStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.AddScoped<GroundworkActivityDependencyProjection>();
+        services.TryAddScoped<GroundworkActivityDependencyProjection>();
         services.RemoveAll<IActivityDependencyProjectionStore>();
         services.AddScoped<IActivityDependencyProjectionStore>(sp => sp.GetRequiredService<GroundworkActivityDependencyProjection>());
         services.RemoveAll<IActivityDependencyProjectionRebuilder>();
         services.AddScoped<IActivityDependencyProjectionRebuilder>(sp => sp.GetRequiredService<GroundworkActivityDependencyProjection>());
         services.RemoveAll<IActivityUpgradePlanStore>();
-        services.AddScoped<GroundworkActivityUpgradePlanStore>();
+        services.TryAddScoped<GroundworkActivityUpgradePlanStore>();
         services.AddScoped<IActivityUpgradePlanStore>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
         services.RemoveAll<IActivityUpgradeApplyReceiptStore>();
         services.AddScoped<IActivityUpgradeApplyReceiptStore>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());

@@ -45,8 +45,8 @@ public sealed class EventNamingTests
 
     private static readonly string[] ExpectedLifecycleEventNames =
     [
-        // OnDraftClonedFromVersion was dropped: clone delegates to ICreateDraftCommand, so a
-        // cloned Draft's origination is the single OnDraftCreated event (carrying SourceVersionId).
+        // OnDraftClonedFromVersion was dropped: both creation routes share the provider's
+        // origination lifecycle path, so a cloned Draft emits the single OnDraftCreated event.
         nameof(OnDraftDiscarded),
     ];
 
@@ -92,8 +92,8 @@ public sealed class EventNamingTests
         // 3 activity input CRUD + 3 activity output CRUD + 3 variable CRUD +
         // 3 wf-input CRUD + 3 wf-output CRUD = 19) plus 1 FR-018a lifecycle (OnDraftDiscarded) = 20.
         // Graph connection events are Flowchart-module concerns, not Workflows.Design.Core events.
-        // OnDraftClonedFromVersion was dropped — clone delegates to ICreateDraftCommand, so a
-        // cloned Draft's origination is the single OnDraftCreated event (carrying SourceVersionId).
+        // OnDraftClonedFromVersion was dropped — both creation routes share the provider's
+        // origination lifecycle path, so a cloned Draft emits the single OnDraftCreated event.
         // Generic OnActivityPropertyChangedInDraft was removed per Joey iteration 2026-05-28 —
         // all per-activity mutations now go through the specialized CRUD events (Add/Remove
         // the whole activity for placement; CRUD on Inputs/Outputs for binding state).

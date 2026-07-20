@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
@@ -50,12 +51,14 @@ public sealed class CreateDraft(
 ) : ICreateDraftCommand
 {
     public async Task<string> Execute(
+        DesignOperationKey operationKey,
         string workflowDefinitionId,
         WorkflowDefinitionState? initialState = null,
         IReadOnlyCollection<DesignMetadataRecord>? initialLayout = null,
         string? sourceVersionId = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operationKey);
         var draftId = identityGenerator.Generate();
         var state = initialState ?? new WorkflowDefinitionState(
             Variables: [],

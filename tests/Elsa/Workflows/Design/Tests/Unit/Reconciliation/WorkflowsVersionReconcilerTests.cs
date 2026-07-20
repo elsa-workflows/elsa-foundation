@@ -1,8 +1,7 @@
 using System.Text.Json;
 using Elsa.Events.Core.Contracts;
-using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Contracts;
-using Elsa.Primitives.Entities;
 using Elsa.Primitives.Enums;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -36,8 +35,8 @@ public sealed class WorkflowsVersionReconcilerTests
         var sender = new CapturingSender { ToContribute = [incoming] };
         var defs = new StubDefinitionStore();
         var versions = new StubVersionStore();
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
 
         var reconciler = NewReconciler(sender, defs, versions, addDef, addVer, DuplicateHandling.Skip);
         await reconciler.Reconcile(CancellationToken.None);
@@ -60,8 +59,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore(); // No existing versions.
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
@@ -84,8 +83,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
@@ -106,8 +105,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
@@ -134,8 +133,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
@@ -160,8 +159,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
@@ -187,8 +186,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(newerVersion);
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
@@ -212,12 +211,12 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
-            defs, versions, new SpyAddCommand<WorkflowDefinition>(), addVer, DuplicateHandling.Skip, saveDef);
+            defs, versions, new SpyMaterializeDefinitionCommand(), addVer, DuplicateHandling.Skip, saveDef);
         await reconciler.Reconcile(CancellationToken.None);
 
         var saved = Assert.Single(saveDef.Saved);
@@ -239,7 +238,7 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
-            defs, versions, new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(), DuplicateHandling.Skip, saveDef);
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip, saveDef);
         await reconciler.Reconcile(CancellationToken.None);
 
         var saved = Assert.Single(saveDef.Saved);
@@ -262,7 +261,7 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
-            defs, versions, new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(),
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
             DuplicateHandling.Skip, saveDef, logger);
         await reconciler.Reconcile(CancellationToken.None);
 
@@ -287,7 +286,7 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
-            defs, versions, new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(),
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
             DuplicateHandling.Skip, saveDef);
         await reconciler.Reconcile(CancellationToken.None);
 
@@ -309,7 +308,7 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
-            defs, versions, new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(),
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
             DuplicateHandling.Skip, saveDef);
         await reconciler.Reconcile(CancellationToken.None);
 
@@ -336,7 +335,7 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
-            defs, versions, new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(),
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
             DuplicateHandling.Skip, logger: logger, serializer: serializer);
         await reconciler.Reconcile(CancellationToken.None);
 
@@ -356,7 +355,7 @@ public sealed class WorkflowsVersionReconcilerTests
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
             defs, versions,
-            new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(),
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
             DuplicateHandling.Throw);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => reconciler.Reconcile(CancellationToken.None));
@@ -366,8 +365,8 @@ public sealed class WorkflowsVersionReconcilerTests
         IInlineEventPublisher sender,
         IWorkflowDefinitionStore defs,
         IWorkflowDefinitionVersionStore versions,
-        IAddCommand<WorkflowDefinition> addDef,
-        IAddCommand<WorkflowDefinitionVersion> addVer,
+        IMaterializeWorkflowDefinitionCommand addDef,
+        IMaterializeWorkflowDefinitionVersionCommand addVer,
         DuplicateHandling duplicateHandling,
         ISaveWorkflowDefinitionCommand? saveDef = null,
         ILogger<WorkflowsVersionReconciler>? logger = null,
@@ -500,16 +499,49 @@ public sealed class WorkflowsVersionReconcilerTests
         public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
     }
 
-    private sealed class SpyAddCommand<TEntity> : IAddCommand<TEntity> where TEntity : Entity
+    private sealed class SpyMaterializeDefinitionCommand : IMaterializeWorkflowDefinitionCommand
     {
-        public List<TEntity> Added { get; } = new();
-        public Task Add(TEntity entity, CancellationToken cancellationToken = default) { Added.Add(entity); return Task.CompletedTask; }
+        public List<WorkflowDefinition> Added { get; } = new();
+
+        public Task<string> Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinition definition,
+            CancellationToken cancellationToken = default)
+        {
+            Added.Add(definition);
+            return Task.FromResult(definition.Id);
+        }
+    }
+
+    private sealed class SpyMaterializeVersionCommand : IMaterializeWorkflowDefinitionVersionCommand
+    {
+        public List<WorkflowDefinitionVersion> Added { get; } = new();
+
+        public Task<WorkflowDefinitionVersionAdded> Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinitionVersion version,
+            CancellationToken cancellationToken = default)
+        {
+            Added.Add(version);
+            return Task.FromResult(
+                new WorkflowDefinitionVersionAdded(
+                    version.DefinitionId,
+                    version.Id,
+                    version.Version));
+        }
     }
 
     private sealed class SpySaveDefinitionCommand : ISaveWorkflowDefinitionCommand
     {
         public List<WorkflowDefinition> Saved { get; } = new();
-        public Task Execute(WorkflowDefinition definition, CancellationToken cancellationToken = default) { Saved.Add(definition); return Task.CompletedTask; }
+        public Task Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinition definition,
+            CancellationToken cancellationToken = default)
+        {
+            Saved.Add(definition);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class SequentialIdGenerator : IIdentityGenerator

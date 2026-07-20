@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Entities;
 using Groundwork.Documents.Store;
 
@@ -42,12 +43,20 @@ public static class GroundworkDocumentWriter
         string schemaVersion,
         TEntity entity,
         JsonSerializerOptions jsonOptions,
-        PersistenceAccessContext accessContext)
+        PersistenceAccessContext accessContext,
+        DesignPersistenceDomain? persistenceDomain = null,
+        string? failureContext = null)
         where TEntity : TenantEntity
     {
         ArgumentNullException.ThrowIfNull(accessContext);
         accessContext.EnsureTenantScope(entity.TenantId);
-        return ToSaveRequest(documentKind, collection, schemaVersion, entity, jsonOptions);
+        return persistenceDomain is null
+            ? ToSaveRequest(documentKind, collection, schemaVersion, entity, jsonOptions)
+            : GroundworkDesignSerialization.Execute(
+                persistenceDomain.Value,
+                "save",
+                failureContext ?? documentKind,
+                () => ToSaveRequest(documentKind, collection, schemaVersion, entity, jsonOptions));
     }
 
     /// <summary>Produces an unconditional delete request for the given document kind and id.</summary>

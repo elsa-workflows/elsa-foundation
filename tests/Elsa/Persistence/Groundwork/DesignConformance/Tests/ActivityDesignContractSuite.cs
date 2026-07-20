@@ -5,7 +5,6 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Reconciliation.Core;
-using Elsa.Persistence.Core;
 using Elsa.Primitives.Versioning;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -29,6 +28,7 @@ public abstract class ActivityDesignContractSuite
         using (var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
         {
             await scope.ServiceProvider.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("activity-round-trip-create"),
                 DesignPersistenceFixtureData.ActivityDefinition(),
                 DesignPersistenceFixtureData.ActivityVersion(),
                 CancellationToken.None);
@@ -56,12 +56,15 @@ public abstract class ActivityDesignContractSuite
         using var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
         var services = scope.ServiceProvider;
         await services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+            DesignPersistenceFixtureData.OperationKey("activity-versions-create"),
             DesignPersistenceFixtureData.ActivityDefinition(),
             DesignPersistenceFixtureData.ActivityVersion(),
             CancellationToken.None);
 
         var nextVersion = DesignPersistenceFixtureData.ActivityVersion("2.0.0", "activity-http-request-v2");
-        await services.GetRequiredService<IAddCommand<ActivityDefinitionVersion>>().Add(nextVersion);
+        await services.GetRequiredService<IAddActivityDefinitionVersionCommand>().Execute(
+            DesignPersistenceFixtureData.OperationKey("activity-versions-add-2.0.0"),
+            nextVersion);
 
         var definitions = services.GetRequiredService<IActivityDefinitionStore>();
         var versions = services.GetRequiredService<IActivityDefinitionVersionStore>();

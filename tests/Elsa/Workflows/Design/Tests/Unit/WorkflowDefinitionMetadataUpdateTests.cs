@@ -116,7 +116,7 @@ public sealed class WorkflowDefinitionMetadataUpdateTests
     {
         using var scope = host.Services.CreateScope();
         var command = scope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>();
-        var submitted = await command.Execute(name, description, new WorkflowDefinitionState(
+        var submitted = await command.Execute(WorkflowsDesignTestHost.TestOperationKey, name, description, new WorkflowDefinitionState(
             Variables: [],
             RootActivity: new ActivityNode("root", "activity-version-1", [], []),
             Inputs: [],
@@ -139,6 +139,6 @@ public sealed class WorkflowDefinitionMetadataUpdateTests
         if (description is not null)
             definition.Description = description;
 
-        await save.Execute(definition);
+        await save.Execute(WorkflowsDesignTestHost.TestOperationKey, definition);
     }
 }

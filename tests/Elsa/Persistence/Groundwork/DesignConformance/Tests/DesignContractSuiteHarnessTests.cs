@@ -31,7 +31,7 @@ public class DesignContractSuiteHarnessTests
         await suite.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry();
         await suite.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result();
         await suite.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation();
-        await suite.Duplicate_delivery_does_not_duplicate_the_domain_outcome();
+        await suite.Duplicate_delivery_does_not_repeat_the_fixture_post_commit_outcome();
     }
 
     [SkippableFact]
@@ -292,7 +292,7 @@ public class DesignContractSuiteHarnessTests
             scope.CanonicalAggregateStateFingerprint = $"aggregate:{request.StorageScope}:{request.CanonicalRequestFingerprint.Value}";
             scope.AuthoritativeDurableResultFingerprint = resultFingerprint;
             scope.Ledger.Add(request.OperationKey.Value, new(request.CanonicalRequestFingerprint.Value, resultFingerprint));
-            scope.PublishedOutcomeCount++;
+            scope.PostCommitOutcomeCount++;
 
             if (TryTrigger(DesignAtomicityFaultPhase.AfterDurableDecision, out var acknowledgementFault))
                 return ApplyAfterDurableDecisionFault(acknowledgementFault!, resultFingerprint);
@@ -357,7 +357,7 @@ public class DesignContractSuiteHarnessTests
         {
             public Dictionary<string, LedgerEntry> Ledger { get; } = new(StringComparer.Ordinal);
             public int VisibleAggregatePartCount { get; set; }
-            public int PublishedOutcomeCount { get; set; }
+            public int PostCommitOutcomeCount { get; set; }
             public string? CanonicalAggregateStateFingerprint { get; set; }
             public string? AuthoritativeDurableResultFingerprint { get; set; }
 
@@ -365,7 +365,7 @@ public class DesignContractSuiteHarnessTests
                 VisibleAggregatePartCount,
                 AggregatePartCount,
                 Ledger.Count,
-                PublishedOutcomeCount,
+                PostCommitOutcomeCount,
                 CanonicalAggregateStateFingerprint,
                 AuthoritativeDurableResultFingerprint);
         }

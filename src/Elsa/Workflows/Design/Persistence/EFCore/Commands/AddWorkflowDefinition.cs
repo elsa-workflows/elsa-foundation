@@ -1,4 +1,5 @@
-﻿using Elsa.Primitives.Contracts;
+﻿using Elsa.Persistence.Core.Design;
+using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
@@ -9,15 +10,24 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 
 public sealed class AddWorkflowDefinition(IIdentityGenerator identityGenerator, IDbContextFactory<WorkflowsDesignDbContext> factory) : IAddWorkflowDefinitionCommand
 {
-    public Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellationToken) =>
-        Execute(workflowDefinition, draft, [], cancellationToken);
+    public Task<WorkflowDefinitionCreated> Execute(
+        DesignOperationKey operationKey,
+        WorkflowDefinition workflowDefinition,
+        WorkflowDefinitionDraft draft,
+        CancellationToken cancellationToken = default) =>
+        Execute(operationKey, workflowDefinition, draft, [], cancellationToken);
 
-    public async Task Execute(
+    public async Task<WorkflowDefinitionCreated> Execute(
+        DesignOperationKey operationKey,
         WorkflowDefinition workflowDefinition,
         WorkflowDefinitionDraft draft,
         IReadOnlyCollection<DesignMetadataRecord> layout,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operationKey);
+        ArgumentNullException.ThrowIfNull(workflowDefinition);
+        ArgumentNullException.ThrowIfNull(draft);
+
         await using var dbContext = await factory.CreateDbContextAsync(cancellationToken);
 
         // Create the empty layout sibling alongside the draft (mirrors SubmitWorkflowDefinition) so
@@ -30,5 +40,6 @@ public sealed class AddWorkflowDefinition(IIdentityGenerator identityGenerator, 
         await dbContext.WorkflowDefinitionDraftLayouts.AddAsync(draftLayout, cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        return new WorkflowDefinitionCreated(workflowDefinition.Id, draft.Id);
     }
 }

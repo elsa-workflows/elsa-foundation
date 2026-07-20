@@ -1,4 +1,5 @@
 using Elsa.Primitives.Contracts;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -19,11 +20,13 @@ public sealed class SubmitWorkflowDefinition(
     private const string InitialVersion = "1.0.0";
 
     public async Task<SubmittedWorkflowDefinition> Execute(
+        DesignOperationKey operationKey,
         string name,
         string? description,
         WorkflowDefinitionState state,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(state);
         SubmittedActivityTreeValidator.Validate(state.RootActivity, activityStructureService);

@@ -1,4 +1,6 @@
 using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Core.Design;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
@@ -111,13 +113,16 @@ public sealed class PublishedWorkflowDeletionGuardTests
         var documents = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
         var payloads = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
         var access = GroundworkTestAccess.DefaultAccessContextAccessor;
+        var atomicWrite = new GroundworkDesignAtomicWrite(documents);
         var definitions = new GroundworkWorkflowDefinitionStore(documents);
-        await new GroundworkSaveWorkflowDefinitionCommand(documents, new FixedClock(), access).Execute(
+        await new GroundworkMaterializeWorkflowDefinitionCommand(atomicWrite, new FixedClock(), access).Execute(
+            new DesignOperationKey("published-delete-seed"),
             new WorkflowDefinition { Id = DefinitionId, Name = "Published", DeletedAt = Now });
         await ActivateSlot();
         await SaveReference();
         var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
             documents,
+            atomicWrite,
             payloads,
             definitions,
             new GroundworkWorkflowDefinitionDraftStore(documents, payloads, access),
@@ -126,13 +131,14 @@ public sealed class PublishedWorkflowDeletionGuardTests
             access,
             [_guard]);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => delete.Execute(DefinitionId));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            delete.Execute(new DesignOperationKey("published-delete-blocked"), DefinitionId));
         Assert.NotNull(await definitions.FindByIdAsync(DefinitionId));
 
         await _slots.TryUnpublishAsync(DefinitionId, "default", 1, Now);
         await _references.RetireAsync("reference-1", Now, "publication-unpublished");
 
-        await delete.Execute(DefinitionId);
+        await delete.Execute(new DesignOperationKey("published-delete-complete"), DefinitionId);
         Assert.Null(await definitions.FindByIdAsync(DefinitionId));
     }
 

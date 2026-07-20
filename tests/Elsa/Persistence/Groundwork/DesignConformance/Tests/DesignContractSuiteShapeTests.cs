@@ -179,7 +179,7 @@ public class DesignContractSuiteShapeTests
             new[]
             {
                 nameof(DesignAtomicityContractSuite.Cancellation_rolls_back_and_propagates_cancellation),
-                nameof(DesignAtomicityContractSuite.Duplicate_delivery_does_not_duplicate_the_domain_outcome),
+                nameof(DesignAtomicityContractSuite.Duplicate_delivery_does_not_repeat_the_fixture_post_commit_outcome),
                 nameof(DesignAtomicityContractSuite.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry),
                 nameof(DesignAtomicityContractSuite.Non_success_provider_decision_rolls_back_all_staged_parts),
                 nameof(DesignAtomicityContractSuite.Partial_staging_failure_leaves_no_visible_partial_aggregate),

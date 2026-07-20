@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Core.Design;
 using System.Text.Json;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
@@ -23,13 +24,252 @@ public sealed class GroundworkDesignAtomicWriteTests
     private const string ResultJson = "{\"definitionId\":\"definition-1\"}";
 
     [Fact]
+    public async Task Atomic_provider_and_serialization_failures_are_mapped_without_wrapping_cancellation_or_domain_errors()
+    {
+        var providerFailure = new IOException("atomic-provider-write");
+        var providerStore = new ThrowingDocumentStore(
+            CreateStore(),
+            GroundworkDocumentStoreOperation.Begin,
+            providerFailure);
+
+        var providerException = await Assert.ThrowsAsync<DesignPersistenceException>(() =>
+            GroundworkDesignAtomicCommand.ExecuteAsync(
+                new GroundworkDesignAtomicWrite(providerStore),
+                new DesignOperationKey("provider-failure"),
+                "workflow.definition.create.v1",
+                new { Id = "workflow-1" },
+                [AggregateDocumentKind],
+                AcceptedResultAsync,
+                persistenceDomain: DesignPersistenceDomain.Workflow,
+                failureContext: "create workflow definition"));
+        Assert.Equal(DesignPersistenceFailureKind.Provider, providerException.FailureKind);
+        Assert.Same(providerFailure, providerException.InnerException);
+
+        var serializationException = await Assert.ThrowsAsync<DesignPersistenceException>(() =>
+            GroundworkDesignAtomicCommand.ExecuteAsync(
+                new GroundworkDesignAtomicWrite(CreateStore()),
+                new DesignOperationKey("serialization-failure"),
+                "workflow.definition.create.v1",
+                new { Callback = new Action(static () => { }) },
+                [AggregateDocumentKind],
+                AcceptedResultAsync,
+                persistenceDomain: DesignPersistenceDomain.Workflow,
+                failureContext: "create workflow definition"));
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, serializationException.FailureKind);
+
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            GroundworkDesignAtomicCommand.ExecuteAsync(
+                new GroundworkDesignAtomicWrite(CreateStore()),
+                new DesignOperationKey("cancelled"),
+                "workflow.definition.create.v1",
+                new { Id = "workflow-1" },
+                [AggregateDocumentKind],
+                AcceptedResultAsync,
+                persistenceDomain: DesignPersistenceDomain.Workflow,
+                cancellationToken: cancellation.Token));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            GroundworkDesignAtomicCommand.ExecuteAsync(
+                new GroundworkDesignAtomicWrite(CreateStore()),
+                new DesignOperationKey("domain-failure"),
+                "workflow.definition.create.v1",
+                new { Id = "workflow-1" },
+                [AggregateDocumentKind],
+                (_, _) => Task.FromException<object>(new ArgumentException("domain validation failed")),
+                persistenceDomain: DesignPersistenceDomain.Workflow));
+
+        var capabilityFailure = new NotSupportedException("domain capability is unavailable");
+        var capabilityException = await Assert.ThrowsAsync<NotSupportedException>(() =>
+            GroundworkDesignAtomicCommand.ExecuteAsync(
+                new GroundworkDesignAtomicWrite(CreateStore()),
+                new DesignOperationKey("capability-failure"),
+                "workflow.definition.create.v1",
+                new { Id = "workflow-1" },
+                [AggregateDocumentKind],
+                (_, _) => Task.FromException<object>(capabilityFailure),
+                persistenceDomain: DesignPersistenceDomain.Workflow));
+        Assert.Same(capabilityFailure, capabilityException);
+    }
+
+    [Fact]
+    public async Task Atomic_command_deserializes_committed_and_replayed_authoritative_results()
+    {
+        var store = CreateStore();
+        var write = new GroundworkDesignAtomicWrite(store);
+        var operationKey = new DesignOperationKey("command-committed-replayed");
+
+        var committed = await GroundworkDesignAtomicCommand.ExecuteAsync(
+            write,
+            operationKey,
+            "atomic.command.test",
+            new CommandRequest("request-1"),
+            [AggregateDocumentKind],
+            (_, _) => Task.FromResult(new CommandResult("result-1")));
+        var replayed = await GroundworkDesignAtomicCommand.ExecuteAsync<CommandRequest, CommandResult>(
+            write,
+            operationKey,
+            "atomic.command.test",
+            new CommandRequest("request-1"),
+            [AggregateDocumentKind],
+            (_, _) => throw new Xunit.Sdk.XunitException("An exact replay must not re-stage."));
+
+        Assert.Equal(GroundworkDesignAtomicWriteStatus.Committed, committed.Status);
+        Assert.True(committed.ShouldPublishPostCommitOutcome);
+        Assert.Equal(new CommandResult("result-1"), committed.Value);
+        Assert.Equal(GroundworkDesignAtomicWriteStatus.Replayed, replayed.Status);
+        Assert.False(replayed.ShouldPublishPostCommitOutcome);
+        Assert.Equal(committed.Value, replayed.Value);
+    }
+
+    [Fact]
+    public async Task Atomic_command_deserializes_a_reconciled_authoritative_result_after_lost_acknowledgement()
+    {
+        var inner = CreateStore();
+        using var callerCancellation = new CancellationTokenSource();
+        var documents = new UncertainAfterCommitDocumentStore(inner, callerCancellation);
+        var result = await GroundworkDesignAtomicCommand.ExecuteAsync(
+            new GroundworkDesignAtomicWrite(documents, reconciliationTimeout: TimeSpan.FromSeconds(1)),
+            new DesignOperationKey("command-reconciled"),
+            "atomic.command.test",
+            new CommandRequest("request-1"),
+            [AggregateDocumentKind],
+            (_, _) => Task.FromResult(new CommandResult("result-1")),
+            cancellationToken: callerCancellation.Token);
+
+        Assert.True(callerCancellation.IsCancellationRequested);
+        Assert.True(documents.ReconciliationUsedFreshToken);
+        Assert.Equal(GroundworkDesignAtomicWriteStatus.Reconciled, result.Status);
+        Assert.True(result.ShouldPublishPostCommitOutcome);
+        Assert.Equal(new CommandResult("result-1"), result.Value);
+    }
+
+    [Fact]
+    public async Task Atomic_command_maps_conflict_and_rejected_terminal_results_to_operation_exceptions()
+    {
+        var store = CreateStore();
+        var write = new GroundworkDesignAtomicWrite(store);
+        var operationKey = new DesignOperationKey("command-conflict");
+        await GroundworkDesignAtomicCommand.ExecuteAsync(
+            write,
+            operationKey,
+            "atomic.command.test",
+            new CommandRequest("request-1"),
+            [AggregateDocumentKind],
+            (_, _) => Task.FromResult(new CommandResult("result-1")));
+
+        var conflict = await Assert.ThrowsAsync<GroundworkDesignOperationConflictException>(() =>
+            GroundworkDesignAtomicCommand.ExecuteAsync<CommandRequest, CommandResult>(
+                write,
+                operationKey,
+                "atomic.command.test",
+                new CommandRequest("request-2"),
+                [AggregateDocumentKind],
+                (_, _) => Task.FromResult(new CommandResult("ignored"))));
+
+        var rejection = await Assert.ThrowsAsync<GroundworkDesignOperationRejectedException>(() =>
+            GroundworkDesignAtomicCommand.ExecuteAsync(
+                new GroundworkDesignAtomicWrite(new RejectingMarkerSaveDocumentStore(CreateStore())),
+                new DesignOperationKey("command-rejected"),
+                "atomic.command.test",
+                new CommandRequest("request-1"),
+                [AggregateDocumentKind],
+                (_, _) => Task.FromResult(new CommandResult("result-1"))));
+
+        Assert.Equal("atomic.command.test", conflict.OperationKind);
+        Assert.Equal(operationKey.Value, conflict.OperationKey);
+        Assert.Equal("atomic.command.test", rejection.OperationKind);
+        Assert.Equal("command-rejected", rejection.OperationKey);
+    }
+
+    [Fact]
+    public async Task Atomic_command_rejects_a_null_stage_result_without_creating_a_marker()
+    {
+        var store = CreateStore();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            GroundworkDesignAtomicCommand.ExecuteAsync(
+                new GroundworkDesignAtomicWrite(store),
+                new DesignOperationKey("command-null-result"),
+                "atomic.command.test",
+                new CommandRequest("request-1"),
+                [AggregateDocumentKind],
+                (_, _) => Task.FromResult<CommandResult>(null!)));
+
+        Assert.Contains("null authoritative result", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(store.Snapshot(GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind));
+    }
+
+    [Fact]
+    public async Task Atomic_command_rejects_a_corrupt_durable_result_before_returning_a_replay()
+    {
+        var store = CreateStore();
+        var write = new GroundworkDesignAtomicWrite(store);
+        var operationKey = new DesignOperationKey("command-corrupt-result");
+        var value = new CommandResult("result-1");
+        await GroundworkDesignAtomicCommand.ExecuteAsync(
+            write,
+            operationKey,
+            "atomic.command.test",
+            new CommandRequest("request-1"),
+            [AggregateDocumentKind],
+            (_, _) => Task.FromResult(value));
+        var marker = Assert.Single(store.Snapshot(GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind));
+        var material = GroundworkDesignAtomicWriteMaterial.Create("atomic.command.test.result", "1", value);
+        await store.SaveAsync(
+            new SaveDocumentRequest(
+                marker.DocumentKind,
+                marker.Id,
+                marker.SchemaVersion,
+                marker.ContentJson.Replace(material.Fingerprint, "corrupt-result-fingerprint", StringComparison.Ordinal),
+                marker.Version),
+            CancellationToken.None);
+
+        await Assert.ThrowsAsync<CorruptDesignResultException>(() =>
+            GroundworkDesignAtomicCommand.ExecuteAsync<CommandRequest, CommandResult>(
+                write,
+                operationKey,
+                "atomic.command.test",
+                new CommandRequest("request-1"),
+                [AggregateDocumentKind],
+                (_, _) => Task.FromException<CommandResult>(
+                    new Xunit.Sdk.XunitException("A corrupt durable result must not re-stage."))));
+    }
+
+    [Fact]
+    public async Task Atomic_command_propagates_preflight_failure_without_starting_a_transaction()
+    {
+        var store = CreateStore();
+        var stageCalls = 0;
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            GroundworkDesignAtomicCommand.ExecuteAsync(
+                new GroundworkDesignAtomicWrite(store),
+                new DesignOperationKey("command-preflight"),
+                "atomic.command.test",
+                new CommandRequest("request-1"),
+                [AggregateDocumentKind],
+                (_, _) =>
+                {
+                    stageCalls++;
+                    return Task.FromResult(new CommandResult("ignored"));
+                },
+                beforeAttempt: _ => throw new ArgumentException("preflight failed")));
+
+        Assert.Equal("preflight failed", exception.Message);
+        Assert.Equal(0, stageCalls);
+        Assert.Equal(0, store.BeginCount);
+    }
+
+    [Fact]
     public async Task Rejects_a_non_atomic_store_before_any_document_io()
     {
         var inner = CreateStore();
         var documents = new PerOperationDocumentStore(inner);
         var write = new GroundworkDesignAtomicWrite(documents);
 
-        await Assert.ThrowsAsync<GroundworkDesignAtomicWriteReadinessException>(() =>
+        await Assert.ThrowsAsync<DesignWriteReadinessException>(() =>
             write.ExecuteAsync(Request(), AcceptedWithoutDomainWritesAsync, CancellationToken.None));
 
         Assert.Equal(0, inner.LoadCount);
@@ -259,6 +499,51 @@ public sealed class GroundworkDesignAtomicWriteTests
     }
 
     [Fact]
+    public async Task Exact_replay_returns_before_the_operation_preflight()
+    {
+        var store = CreateStore();
+        var write = new GroundworkDesignAtomicWrite(store);
+        await write.ExecuteAsync(Request(), AcceptedWithoutDomainWritesAsync, CancellationToken.None);
+        var preflightCalls = 0;
+
+        var replay = await write.ExecuteAsync(
+            Request(),
+            _ =>
+            {
+                preflightCalls++;
+                return Task.CompletedTask;
+            },
+            (_, _) => throw new Xunit.Sdk.XunitException("An exact replay must not stage."),
+            CancellationToken.None);
+
+        Assert.Equal(GroundworkDesignAtomicWriteStatus.Replayed, replay.Status);
+        Assert.Equal(0, preflightCalls);
+        Assert.Equal(1, store.BeginCount);
+    }
+
+    [Fact]
+    public async Task Operation_preflight_runs_before_the_unit_of_work_and_a_failure_starts_no_transaction()
+    {
+        var store = CreateStore();
+        var write = new GroundworkDesignAtomicWrite(store);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            write.ExecuteAsync(
+                Request(),
+                _ =>
+                {
+                    Assert.Equal(0, store.BeginCount);
+                    throw new InvalidOperationException("natural-key conflict");
+                },
+                (_, _) => throw new Xunit.Sdk.XunitException("A failed preflight must not stage."),
+                CancellationToken.None));
+
+        Assert.Equal("natural-key conflict", exception.Message);
+        Assert.Equal(0, store.BeginCount);
+        Assert.Empty(store.Snapshot(GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind));
+    }
+
+    [Fact]
     public async Task Reusing_an_operation_identity_with_a_changed_fingerprint_conflicts_without_restaging()
     {
         var store = CreateStore();
@@ -323,7 +608,7 @@ public sealed class GroundworkDesignAtomicWriteTests
             CancellationToken.None);
         var stageCalls = 0;
 
-        await Assert.ThrowsAsync<GroundworkDesignAtomicWriteCorruptMarkerException>(() =>
+        await Assert.ThrowsAsync<CorruptDesignMarkerException>(() =>
             write.ExecuteAsync(
                 Request(),
                 (_, _) =>
@@ -355,7 +640,7 @@ public sealed class GroundworkDesignAtomicWriteTests
             CancellationToken.None);
         var stageCalls = 0;
 
-        await Assert.ThrowsAsync<GroundworkDesignAtomicWriteCorruptMarkerException>(() =>
+        await Assert.ThrowsAsync<CorruptDesignMarkerException>(() =>
             write.ExecuteAsync(
                 Request(),
                 (_, _) =>
@@ -410,7 +695,7 @@ public sealed class GroundworkDesignAtomicWriteTests
             reconciliationTimeout: TimeSpan.FromSeconds(1));
         var stageCalls = 0;
 
-        await Assert.ThrowsAsync<GroundworkDesignAtomicWriteUncertainCommitException>(() =>
+        await Assert.ThrowsAsync<UncertainDesignCommitException>(() =>
             write.ExecuteAsync(
                 Request(),
                 (_, _) =>
@@ -453,6 +738,14 @@ public sealed class GroundworkDesignAtomicWriteTests
         GroundworkDesignAtomicWriteContext _,
         CancellationToken __) =>
         Task.FromResult(GroundworkDesignAtomicWriteStageResult.Accepted(ResultFingerprint, ResultJson));
+
+    private static Task<object> AcceptedResultAsync(
+        GroundworkDesignAtomicWriteContext _,
+        CancellationToken __) => Task.FromResult<object>(new { Id = "workflow-1" });
+
+    private sealed record CommandRequest(string Id);
+
+    private sealed record CommandResult(string Id);
 
     private static SaveDocumentRequest SaveAggregate(string id) =>
         new(AggregateDocumentKind, id, SchemaVersion, "{}");

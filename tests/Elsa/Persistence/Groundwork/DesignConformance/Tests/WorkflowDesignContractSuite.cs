@@ -1,5 +1,4 @@
 using Elsa.Activities.Design.Persistence.Core.Contracts;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -34,6 +33,7 @@ public abstract class WorkflowDesignContractSuite
             await AddActivityPrerequisiteAsync(services);
 
             await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("workflow-round-trip-create"),
                 DesignPersistenceFixtureData.WorkflowDefinition(),
                 DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState()),
                 layout,
@@ -67,13 +67,16 @@ public abstract class WorkflowDesignContractSuite
             var services = scope.ServiceProvider;
             await AddActivityPrerequisiteAsync(services);
             await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("workflow-promote-create"),
                 DesignPersistenceFixtureData.WorkflowDefinition(),
                 DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState()),
                 layout,
                 CancellationToken.None);
 
             versionId = await services.GetRequiredService<IPromoteDraftToVersionCommand>()
-                .Execute(DesignPersistenceFixtureData.WorkflowDraftId);
+                .Execute(
+                    DesignPersistenceFixtureData.OperationKey("workflow-promote"),
+                    DesignPersistenceFixtureData.WorkflowDraftId);
         }
 
         var beforeRestart = await ReadVersionSnapshotAsync(fixture, versionId);
@@ -122,6 +125,7 @@ public abstract class WorkflowDesignContractSuite
             var services = scope.ServiceProvider;
             await AddActivityPrerequisiteAsync(services);
             await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("workflow-update-clone-create"),
                 DesignPersistenceFixtureData.WorkflowDefinition(),
                 DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState()),
                 DesignPersistenceFixtureData.WorkflowDraftLayout(),
@@ -129,10 +133,15 @@ public abstract class WorkflowDesignContractSuite
 
             fixture.ClearObservedEvents();
             await services.GetRequiredService<IUpdateDraftCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("workflow-update-original"),
                 new UpdateDraftRequest(DesignPersistenceFixtureData.WorkflowDraftId, updatedState, updatedLayout));
             promotedVersionId = await services.GetRequiredService<IPromoteDraftToVersionCommand>()
-                .Execute(DesignPersistenceFixtureData.WorkflowDraftId);
-            cloneId = await services.GetRequiredService<ICloneDraftFromVersionCommand>().Execute(promotedVersionId);
+                .Execute(
+                    DesignPersistenceFixtureData.OperationKey("workflow-update-clone-promote"),
+                    DesignPersistenceFixtureData.WorkflowDraftId);
+            cloneId = await services.GetRequiredService<ICloneDraftFromVersionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("workflow-update-clone"),
+                promotedVersionId);
         }
 
         using var readScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
@@ -170,6 +179,7 @@ public abstract class WorkflowDesignContractSuite
 
         fixture.ClearObservedEvents();
         await readScope.ServiceProvider.GetRequiredService<IUpdateDraftCommand>().Execute(
+            DesignPersistenceFixtureData.OperationKey("workflow-update-clone-invalid"),
             new UpdateDraftRequest(cloneId, WorkflowDefinitionState.Empty, []));
 
         var invalidValidation = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<OnDraftValidated>());
@@ -205,6 +215,7 @@ public abstract class WorkflowDesignContractSuite
             var writeServices = scope.ServiceProvider;
             await AddActivityPrerequisiteAsync(writeServices);
             var submitted = await writeServices.GetRequiredService<ISubmitWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("workflow-submit"),
                 "Submitted order processing",
                 "Creates a submitted workflow aggregate.",
                 state);
@@ -247,6 +258,7 @@ public abstract class WorkflowDesignContractSuite
         var submit = services.GetRequiredService<ISubmitWorkflowDefinitionCommand>();
 
         await Assert.ThrowsAsync<ArgumentException>(() => submit.Execute(
+            DesignPersistenceFixtureData.OperationKey("workflow-submit-invalid"),
             "invalid workflow",
             null,
             WorkflowDefinitionState.Empty));
@@ -265,13 +277,16 @@ public abstract class WorkflowDesignContractSuite
         {
             var services = scope.ServiceProvider;
             await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("workflow-discard-create"),
                 DesignPersistenceFixtureData.WorkflowDefinition(),
                 DesignPersistenceFixtureData.WorkflowDraft(state: WorkflowDefinitionState.Empty),
                 DesignPersistenceFixtureData.WorkflowDraftLayout(),
                 CancellationToken.None);
 
             fixture.ClearObservedEvents();
-            await services.GetRequiredService<IDiscardDraftCommand>().Execute(DesignPersistenceFixtureData.WorkflowDraftId);
+            await services.GetRequiredService<IDiscardDraftCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("workflow-discard"),
+                DesignPersistenceFixtureData.WorkflowDraftId);
             Assert.Null(await services.GetRequiredService<IWorkflowDefinitionDraftStore>()
                 .FindByIdAsync(DesignPersistenceFixtureData.WorkflowDraftId));
 
@@ -293,20 +308,27 @@ public abstract class WorkflowDesignContractSuite
             var services = scope.ServiceProvider;
             await AddActivityPrerequisiteAsync(services);
             await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("workflow-permanent-delete-create"),
                 DesignPersistenceFixtureData.WorkflowDefinition(),
                 DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState()),
                 DesignPersistenceFixtureData.WorkflowDraftLayout(),
                 CancellationToken.None);
             versionId = await services.GetRequiredService<IPromoteDraftToVersionCommand>()
-                .Execute(DesignPersistenceFixtureData.WorkflowDraftId);
+                .Execute(
+                    DesignPersistenceFixtureData.OperationKey("workflow-permanent-delete-promote"),
+                    DesignPersistenceFixtureData.WorkflowDraftId);
 
             var definition = await services.GetRequiredService<IWorkflowDefinitionStore>()
                 .GetAsync(DesignPersistenceFixtureData.WorkflowDefinitionId);
             definition.DeletedAt = DesignPersistenceFixtureData.Epoch;
             definition.DeletedReason = "fixture deletion";
-            await services.GetRequiredService<ISaveWorkflowDefinitionCommand>().Execute(definition);
+            await services.GetRequiredService<ISaveWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("workflow-permanent-delete-save"),
+                definition);
             await services.GetRequiredService<IDeleteWorkflowDefinitionPermanentlyCommand>()
-                .Execute(DesignPersistenceFixtureData.WorkflowDefinitionId);
+                .Execute(
+                    DesignPersistenceFixtureData.OperationKey("workflow-permanent-delete"),
+                    DesignPersistenceFixtureData.WorkflowDefinitionId);
         }
 
         using var readScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
@@ -326,6 +348,7 @@ public abstract class WorkflowDesignContractSuite
     private static async Task AddActivityPrerequisiteAsync(IServiceProvider services)
     {
         await services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+            DesignPersistenceFixtureData.OperationKey("workflow-prerequisite-activity"),
             DesignPersistenceFixtureData.ActivityDefinition(),
             DesignPersistenceFixtureData.ActivityVersion(),
             CancellationToken.None);

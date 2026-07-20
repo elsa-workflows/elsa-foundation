@@ -14,8 +14,8 @@ namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 /// <summary>
 /// SC-017 + Unit C FR-028. <see cref="ICloneDraftFromVersionCommand"/> produces a new Draft
 /// whose State and Layout are deep-equal to the source Version's, with NodeIds carrying 1:1
-/// per FR-009a's copy semantics. Clone delegates to <see cref="ICreateDraftCommand"/>, so it
-/// publishes the single origination event <c>OnDraftCreated</c> carrying the source version id;
+/// per FR-009a's copy semantics. Clone uses the provider's shared Draft-origination lifecycle
+/// path, so it publishes the single <c>OnDraftCreated</c> event carrying the source version id;
 /// the same id is persisted on the Draft entity's <c>SourceVersionId</c>.
 /// </summary>
 public sealed class CloneDraftFromVersionTests
@@ -127,7 +127,7 @@ public sealed class CloneDraftFromVersionTests
     {
         using var scope = host.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<ICloneDraftFromVersionCommand>()
-            .Execute(sourceVersionId);
+            .Execute(WorkflowsDesignTestHost.TestOperationKey, sourceVersionId);
     }
 
     private static async Task<(string versionId, string definitionId)> SeedVersion(
@@ -192,8 +192,8 @@ public sealed class CloneDraftFromVersionTests
             : [];
 
         foreach (var child in childActivities)
-        foreach (var nested in Flatten(child))
-            yield return nested;
+            foreach (var nested in Flatten(child))
+                yield return nested;
     }
 
     private static string? StartActivityNodeId(ActivityNode? root) =>

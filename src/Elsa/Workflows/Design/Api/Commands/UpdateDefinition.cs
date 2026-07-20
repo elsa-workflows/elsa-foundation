@@ -11,6 +11,7 @@ namespace Elsa.Workflows.Design.Api.Commands;
 /// mutation events. There is no partial/patch mode (full-state-always, FR-001).
 /// </summary>
 public sealed record UpdateDefinition(
+    string OperationKey,
     string Id,
     WorkflowDefinitionStateView State,
     IReadOnlyCollection<WorkflowDefinitionLayoutRecordView>? Layout = null

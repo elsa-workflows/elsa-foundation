@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Versioning;
@@ -21,8 +22,12 @@ public sealed class PromoteDraftToVersion(
     IIdentityGenerator identityGenerator)
     : IPromoteDraftToVersionCommand
 {
-    public async Task<string> Execute(string draftId, CancellationToken cancellationToken = default)
+    public async Task<string> Execute(
+        DesignOperationKey operationKey,
+        string draftId,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(draftId);
 
         var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);

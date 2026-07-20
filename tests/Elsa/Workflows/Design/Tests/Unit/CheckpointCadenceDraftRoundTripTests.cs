@@ -46,7 +46,7 @@ public sealed class CheckpointCadenceDraftRoundTripTests
 
         string versionId;
         using (var scope = host.Services.CreateScope())
-            versionId = await scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>().Execute(draftId);
+            versionId = await scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, draftId);
 
         using var ctx = host.CreateContext();
         var version = await ctx.WorkflowDefinitionVersions.FirstAsync(v => v.Id == versionId);

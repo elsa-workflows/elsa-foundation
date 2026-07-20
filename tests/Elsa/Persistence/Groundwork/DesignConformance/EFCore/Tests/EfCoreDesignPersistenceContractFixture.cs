@@ -123,6 +123,7 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
         using var operationCancellation = _faults.BeginOperation(cancellationToken);
 
         await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+            DesignPersistenceFixtureData.OperationKey($"ef-oracle-atomicity:{request.OperationKey.Value}"),
             definition,
             draft,
             DesignPersistenceFixtureData.WorkflowDraftLayout(),
@@ -153,7 +154,7 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
             VisibleAggregatePartCount: visible,
             ExpectedAggregatePartCount: 3,
             DurableOutcomeCount: 0,
-            PublishedOutcomeCount: 0,
+            PostCommitOutcomeCount: 0,
             CanonicalAggregateStateFingerprint: null,
             AuthoritativeDurableResultFingerprint: null);
     }

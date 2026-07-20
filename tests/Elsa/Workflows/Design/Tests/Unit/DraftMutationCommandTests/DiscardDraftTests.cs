@@ -78,13 +78,13 @@ public sealed class DiscardDraftTests
         await host.EnsureDefinition(WorkflowDefinitionId);
 
         using var scope = host.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute(WorkflowDefinitionId);
+        return await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, WorkflowDefinitionId);
     }
 
     private static async Task Discard(WorkflowsDesignTestHost host, string draftId)
     {
         using var scope = host.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<IDiscardDraftCommand>().Execute(draftId);
+        await scope.ServiceProvider.GetRequiredService<IDiscardDraftCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, draftId);
     }
 
     private static async Task<string> SeedVersion(WorkflowsDesignTestHost host, string definitionId)

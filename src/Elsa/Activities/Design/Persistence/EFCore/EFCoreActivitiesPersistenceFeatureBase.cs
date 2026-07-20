@@ -27,7 +27,10 @@ public abstract class EFCoreActivitiesPersistenceFeatureBase : EFCorePersistence
         services.AddScoped<IActivityDefinitionVersionFactory, ActivityDefinitionVersionFactory>();
 
         if (UseCommands)
+        {
             services.AddScoped<IAddActivityDefinitionCommand, AddActivityDefinitionCommand>();
+            services.AddScoped<IAddActivityDefinitionVersionCommand, AddActivityDefinitionVersionCommand>();
+        }
 
         if (UseQueries)
         {

@@ -2,6 +2,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
@@ -16,6 +17,7 @@ using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -56,7 +58,9 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkWorkflowDefinitionListProjectionStore>(sp.GetRequiredService<IWorkflowDefinitionListProjectionStore>());
         Assert.IsType<GroundworkWorkflowDefinitionVersionLayoutStore>(sp.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>());
         Assert.IsType<GroundworkAddWorkflowDefinitionCommand>(sp.GetRequiredService<IAddWorkflowDefinitionCommand>());
-        Assert.IsType<GroundworkAddWorkflowDefinitionVersionCommand>(sp.GetRequiredService<IAddCommand<WorkflowDefinitionVersion>>());
+        Assert.IsType<GroundworkMaterializeWorkflowDefinitionCommand>(sp.GetRequiredService<IMaterializeWorkflowDefinitionCommand>());
+        Assert.IsType<GroundworkAddWorkflowDefinitionVersionCommand>(sp.GetRequiredService<IAddWorkflowDefinitionVersionCommand>());
+        Assert.IsType<GroundworkMaterializeWorkflowDefinitionVersionCommand>(sp.GetRequiredService<IMaterializeWorkflowDefinitionVersionCommand>());
         Assert.IsType<GroundworkSaveWorkflowDefinitionCommand>(sp.GetRequiredService<ISaveWorkflowDefinitionCommand>());
         Assert.IsType<GroundworkDeleteWorkflowDefinitionPermanentlyCommand>(sp.GetRequiredService<IDeleteWorkflowDefinitionPermanentlyCommand>());
         Assert.IsType<GroundworkCreateDraftCommand>(sp.GetRequiredService<ICreateDraftCommand>());
@@ -66,7 +70,8 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkSubmitWorkflowDefinitionCommand>(sp.GetRequiredService<ISubmitWorkflowDefinitionCommand>());
         Assert.IsType<GroundworkCloneDraftFromVersionCommand>(sp.GetRequiredService<ICloneDraftFromVersionCommand>());
         Assert.IsType<WorkflowDefinitionLookup>(sp.GetRequiredService<IWorkflowDefinitionLookup>());
-        Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<GroundworkDesignAtomicWrite>());
+        Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<IDesignAtomicWriter>());
+        Assert.IsType<DraftOriginator>(sp.GetRequiredService<IDraftOriginator>());
         Assert.Single(
             sp.GetServices<IGroundworkStorageManifestSource>(),
             source => source is GroundworkDesignAtomicWriteStorageManifestSource);
@@ -97,11 +102,144 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.Single(scope.ServiceProvider.GetServices<IWorkflowDefinitionStore>());
     }
 
+    [Fact]
+    public void Groundwork_registration_preserves_a_prior_draft_originator()
+    {
+        using var provider = BuildProvider(services =>
+            services.AddScoped<IDraftOriginator, PriorDraftOriginator>());
+        using var scope = provider.CreateScope();
+
+        var resolved = scope.ServiceProvider.GetRequiredService<IDraftOriginator>();
+
+        Assert.IsType<PriorDraftOriginator>(resolved);
+        Assert.Single(scope.ServiceProvider.GetServices<IDraftOriginator>());
+    }
+
+    [Fact]
+    public void Groundwork_registration_preserves_a_prior_design_atomic_writer()
+    {
+        using var provider = BuildProvider(services =>
+            services.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
+        using var scope = provider.CreateScope();
+
+        var resolved = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
+
+        Assert.IsType<PriorDesignAtomicWriter>(resolved);
+        Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
+    }
+
+    [Fact]
+    public void Groundwork_registration_allows_one_post_composition_design_atomic_writer_replacement()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.Replace(ServiceDescriptor.Scoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var resolved = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
+
+        Assert.IsType<PriorDesignAtomicWriter>(resolved);
+        Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
+    }
+
+    [Fact]
+    public void Groundwork_registration_allows_one_post_composition_draft_originator_replacement()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.Replace(ServiceDescriptor.Scoped<IDraftOriginator, PriorDraftOriginator>());
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var resolved = scope.ServiceProvider.GetRequiredService<IDraftOriginator>();
+
+        Assert.IsType<PriorDraftOriginator>(resolved);
+        Assert.Single(scope.ServiceProvider.GetServices<IDraftOriginator>());
+    }
+
+    [Fact]
+    public void Repeated_registration_keeps_scoped_commands_and_stores_registered_once()
+    {
+        var services = new ServiceCollection();
+
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddGroundworkWorkflowsDesignStores();
+
+        foreach (var serviceType in new[]
+                 {
+                     typeof(IWorkflowDefinitionStore),
+                     typeof(IWorkflowDefinitionVersionStore),
+                     typeof(IWorkflowDefinitionDraftStore),
+                     typeof(IWorkflowDefinitionListProjectionStore),
+                     typeof(IWorkflowDefinitionVersionLayoutStore),
+                     typeof(IAddWorkflowDefinitionCommand),
+                     typeof(IMaterializeWorkflowDefinitionCommand),
+                     typeof(IAddWorkflowDefinitionVersionCommand),
+                     typeof(IMaterializeWorkflowDefinitionVersionCommand),
+                     typeof(ISaveWorkflowDefinitionCommand),
+                     typeof(IDeleteWorkflowDefinitionPermanentlyCommand),
+                     typeof(ICreateDraftCommand),
+                     typeof(IUpdateDraftCommand),
+                     typeof(IDiscardDraftCommand),
+                     typeof(IPromoteDraftToVersionCommand),
+                     typeof(ISubmitWorkflowDefinitionCommand),
+                     typeof(ICloneDraftFromVersionCommand),
+                 })
+        {
+            AssertScopedOnce(services, serviceType);
+        }
+
+        AssertScopedOnce(services, typeof(IDesignAtomicWriter));
+        AssertScopedOnce(services, typeof(IDraftOriginator));
+        Assert.Single(services.Where(x =>
+            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
+            x.ImplementationType == typeof(WorkflowsDesignGroundworkStorageManifestSource)));
+        Assert.Single(services.Where(x =>
+            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
+            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource)));
+    }
+
+    private static void AssertScopedOnce(IServiceCollection services, Type serviceType)
+    {
+        var registration = Assert.Single(services.Where(x => x.ServiceType == serviceType));
+
+        Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
+    }
+
     private sealed class PriorStore : IWorkflowDefinitionStore
     {
         public Task<Core.Entities.WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Core.Entities.WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<Core.Entities.WorkflowDefinition>> ListAsync(Core.Filters.WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class PriorDraftOriginator : IDraftOriginator
+    {
+        public Task<string> ExecuteAsync<TRequest>(
+            DesignOperationKey operationKey,
+            string operationKind,
+            TRequest requestMaterial,
+            Func<CancellationToken, Task<DraftOriginationInput>> resolveInput,
+            CancellationToken cancellationToken)
+            where TRequest : notnull =>
+            Task.FromResult("prior-draft");
+    }
+
+    private sealed class PriorDesignAtomicWriter : IDesignAtomicWriter
+    {
+        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+            GroundworkDesignAtomicWriteRequest request,
+            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+            GroundworkDesignAtomicWriteRequest request,
+            Func<CancellationToken, Task>? beforeAttempt,
+            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class StubEventPublisher : IInlineEventPublisher, IDeferredEventPublisher

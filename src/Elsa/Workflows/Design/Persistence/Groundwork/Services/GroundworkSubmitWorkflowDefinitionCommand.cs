@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -9,13 +10,13 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 public sealed class GroundworkSubmitWorkflowDefinitionCommand(
     IIdentityGenerator identityGenerator,
     IDocumentStore store,
+    IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IActivityStructureService activityStructureService,
     ISystemClock clock,
@@ -23,16 +24,26 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
     : ISubmitWorkflowDefinitionCommand
 {
     private const string InitialVersion = "1.0.0";
+    private const string OperationKind = "workflow.definition.submit.v1";
 
     public async Task<SubmittedWorkflowDefinition> Execute(
+        DesignOperationKey operationKey,
         string name,
         string? description,
         WorkflowDefinitionState state,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(state);
-        SubmittedActivityTreeValidator.Validate(state.RootActivity, activityStructureService);
+        var requestMaterial = new SubmitDefinitionRequestMaterial(
+            name,
+            description,
+            GroundworkDesignSerialization.Execute(
+                DesignPersistenceDomain.Workflow,
+                OperationKind,
+                "workflow definition",
+                () => payloadSerializer.Serialize(state)));
 
         var definitionId = identityGenerator.Generate();
         var draftId = identityGenerator.Generate();
@@ -80,38 +91,66 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
         GroundworkEntityTimestamps.StampAdded(version, now);
         GroundworkEntityTimestamps.StampAdded(versionLayout, now);
 
-        await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+        var definitionSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            definition,
+            GroundworkDesignJson.Options,
+            accessContextAccessor.Current,
+            persistenceDomain: DesignPersistenceDomain.Workflow) with
+        { ExpectedVersion = 0 };
+        var draftSave = draftDocuments.ToSaveRequest(draft, []) with { ExpectedVersion = 0 };
+        var versionSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            version,
+            GroundworkDesignDocumentSerialization.Create(payloadSerializer),
+            accessContextAccessor.Current,
+            persistenceDomain: DesignPersistenceDomain.Workflow) with
+        { ExpectedVersion = 0 };
+        var layoutSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            versionLayout,
+            GroundworkDesignJson.Options,
+            accessContextAccessor.Current,
+            persistenceDomain: DesignPersistenceDomain.Workflow) with
+        { ExpectedVersion = 0 };
+
+        var outcome = await GroundworkDesignAtomicCommand.ExecuteAsync(
+            atomicWrite,
+            operationKey,
+            OperationKind,
+            requestMaterial,
+            [
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
                 WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind),
-            [
-                GroundworkDocumentWriter.ToTenantScopedSaveRequest(
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
-                    WorkflowsDesignStorageManifest.SchemaVersion,
-                    definition,
-                    GroundworkDesignJson.Options,
-                    accessContextAccessor.Current),
-                draftDocuments.ToSaveRequest(draft, []),
-                GroundworkDocumentWriter.ToTenantScopedSaveRequest(
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
-                    WorkflowsDesignStorageManifest.SchemaVersion,
-                    version,
-                    GroundworkDesignDocumentSerialization.Create(payloadSerializer),
-                    accessContextAccessor.Current),
-                GroundworkDocumentWriter.ToTenantScopedSaveRequest(
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
-                    WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection,
-                    WorkflowsDesignStorageManifest.SchemaVersion,
-                    versionLayout,
-                    GroundworkDesignJson.Options,
-                    accessContextAccessor.Current)
+                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind
             ],
-            cancellationToken);
-
-        return new SubmittedWorkflowDefinition(definitionId, draftId, versionId);
+            async (context, token) =>
+            {
+                await context.SaveAsync(definitionSave, token);
+                await context.SaveAsync(draftSave, token);
+                await context.SaveAsync(versionSave, token);
+                await context.SaveAsync(layoutSave, token);
+                return new SubmittedWorkflowDefinition(definitionId, draftId, versionId);
+            },
+            cancellationToken: cancellationToken,
+            beforeAttempt: token =>
+            {
+                token.ThrowIfCancellationRequested();
+                SubmittedActivityTreeValidator.Validate(state.RootActivity, activityStructureService);
+                return Task.CompletedTask;
+            });
+        return outcome.Value;
     }
+
+    private sealed record SubmitDefinitionRequestMaterial(
+        string Name,
+        string? Description,
+        string StateJson);
 }

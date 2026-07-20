@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Persistence.Core.Queries;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -33,7 +34,9 @@ public sealed class GroundworkWorkflowDefinitionVersionLayoutStore : IWorkflowDe
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
             Options,
             boundedStore,
-            sessions);
+            sessions,
+            DesignPersistenceDomain.Workflow,
+            "workflow definition version layout");
     }
 
     public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(

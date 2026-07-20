@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Microsoft.EntityFrameworkCore;
@@ -11,8 +12,12 @@ public sealed class DeleteWorkflowDefinitionPermanently(
     ILogger<DeleteWorkflowDefinitionPermanently>? logger = null)
     : IDeleteWorkflowDefinitionPermanentlyCommand
 {
-    public async Task Execute(string definitionId, CancellationToken cancellationToken = default)
+    public async Task Execute(
+        DesignOperationKey operationKey,
+        string definitionId,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operationKey);
         await using var dbContext = await contextFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var definition = await dbContext.WorkflowDefinitions

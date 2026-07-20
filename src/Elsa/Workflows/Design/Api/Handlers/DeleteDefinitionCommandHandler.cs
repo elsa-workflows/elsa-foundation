@@ -1,5 +1,6 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Models;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 
@@ -14,7 +15,10 @@ public sealed class DeleteDefinitionCommandHandler(IDeleteWorkflowDefinitionPerm
 {
     public async Task<Unit> Handle(DeleteDefinition command, CancellationToken cancellationToken)
     {
-        await deleteCommand.Execute(command.Id, cancellationToken);
+        await deleteCommand.Execute(
+            new DesignOperationKey(command.OperationKey),
+            command.Id,
+            cancellationToken);
         return Unit.Instance;
     }
 }

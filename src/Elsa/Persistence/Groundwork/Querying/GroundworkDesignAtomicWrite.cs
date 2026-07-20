@@ -13,7 +13,7 @@ namespace Elsa.Persistence.Groundwork.Querying;
 /// identity independently from the canonical request fingerprint; this coordinator persists the accepted
 /// result in the same Groundwork unit of work as the mutation.
 /// </summary>
-public sealed class GroundworkDesignAtomicWrite
+public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
 {
     private const string MarkerIdentityVersion = "elsa-design-operation:v1";
     private const string RollbackFailureDataKey = "Elsa.Persistence.Groundwork.DesignAtomicWrite.RollbackFailure";
@@ -47,6 +47,18 @@ public sealed class GroundworkDesignAtomicWrite
     public async Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
         GroundworkDesignAtomicWriteRequest request,
         Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+        CancellationToken cancellationToken = default) =>
+        await ExecuteAsync(request, beforeAttempt: null, stage, cancellationToken);
+
+    /// <summary>
+    /// Executes an operation-owned read preflight after an exact-replay lookup misses and before the
+    /// transactional unit of work starts. Callers can use this to perform provider reads while holding
+    /// their aggregate lock without opening a second store session inside the write transaction.
+    /// </summary>
+    public async Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+        GroundworkDesignAtomicWriteRequest request,
+        Func<CancellationToken, Task>? beforeAttempt,
+        Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -57,7 +69,7 @@ public sealed class GroundworkDesignAtomicWrite
         // This preflight intentionally precedes every provider operation, including the replay lookup.
         if (_store.TransactionBoundary != TransactionBoundary.CrossUnitAtomic)
         {
-            throw new GroundworkDesignAtomicWriteReadinessException(
+            throw new DesignWriteReadinessException(
                 $"Groundwork cannot atomically execute design operation '{request.Operation.OperationKind}' " +
                 $"with key '{request.Operation.OperationKey}' because the active store advertises " +
                 $"transaction boundary '{_store.TransactionBoundary}'.");
@@ -72,6 +84,9 @@ public sealed class GroundworkDesignAtomicWrite
                 GroundworkDesignAtomicWriteStatus.Replayed);
         }
 
+        if (beforeAttempt is not null)
+            await beforeAttempt(cancellationToken);
+
         try
         {
             return await ExecuteAttemptAsync(request, markerId, stage, cancellationToken);
@@ -81,7 +96,7 @@ public sealed class GroundworkDesignAtomicWrite
             try
             {
                 var marker = await LoadMarkerAsync(markerId, request.Operation, cancellationToken)
-                             ?? throw new GroundworkDesignAtomicWriteUncertainCommitException(
+                             ?? throw new UncertainDesignCommitException(
                                  $"Design operation marker '{markerId}' conflicted, but the winning marker could not be reloaded.");
                 return Resolve(
                     marker,
@@ -92,13 +107,13 @@ public sealed class GroundworkDesignAtomicWrite
             {
                 throw;
             }
-            catch (GroundworkDesignAtomicWriteUncertainCommitException)
+            catch (UncertainDesignCommitException)
             {
                 throw;
             }
             catch (Exception exception)
             {
-                throw new GroundworkDesignAtomicWriteUncertainCommitException(
+                throw new UncertainDesignCommitException(
                     $"Design operation marker '{markerId}' conflicted, but the winning marker could not be classified.",
                     exception);
             }
@@ -123,13 +138,13 @@ public sealed class GroundworkDesignAtomicWrite
             }
             catch (Exception reconciliationException)
             {
-                throw new GroundworkDesignAtomicWriteUncertainCommitException(
+                throw new UncertainDesignCommitException(
                     $"Design operation '{request.Operation.OperationKind}' with key " +
                     $"'{request.Operation.OperationKey}' may have committed, but its durable marker could not be classified.",
                     new AggregateException(exception, reconciliationException));
             }
 
-            throw new GroundworkDesignAtomicWriteUncertainCommitException(
+            throw new UncertainDesignCommitException(
                 $"Design operation '{request.Operation.OperationKind}' with key " +
                 $"'{request.Operation.OperationKey}' may have committed, but its durable marker could not be reconciled.",
                 exception);
@@ -142,64 +157,100 @@ public sealed class GroundworkDesignAtomicWrite
         Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
         CancellationToken cancellationToken)
     {
-        await using var unitOfWork = await _store.BeginAsync(CommitScope(request), cancellationToken);
+        IDocumentUnitOfWork unitOfWork;
         try
         {
-            var context = new GroundworkDesignAtomicWriteContext(unitOfWork);
-            var staged = await stage(context, cancellationToken);
-            ArgumentNullException.ThrowIfNull(staged);
-            ValidateStageResult(staged);
-
-            if (!staged.IsAccepted)
-            {
-                await unitOfWork.RollbackAsync(CancellationToken.None);
-                return GroundworkDesignAtomicWriteResult.Rejected();
-            }
-
-            // Groundwork already rolls back and terminally poisons a UoW before returning a non-success
-            // write result. Still attempt rollback for compatible providers and test doubles, while tolerating
-            // the expected terminal-UoW rejection from conforming Groundwork providers.
-            if (context.HasNonSuccessWrite)
-            {
-                await ObserveTerminalRollbackAsync(unitOfWork);
-                return GroundworkDesignAtomicWriteResult.Rejected();
-            }
-
-            var markerResult = await unitOfWork.SaveAsync(
-                CreateMarkerRequest(markerId, request, staged),
-                cancellationToken);
-            if (markerResult.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
-            {
-                await ObserveTerminalRollbackAsync(unitOfWork);
-                throw new DesignOperationMarkerRaceException();
-            }
-            if (markerResult.Status != DocumentStoreWriteStatus.Saved)
-            {
-                await ObserveTerminalRollbackAsync(unitOfWork);
-                return GroundworkDesignAtomicWriteResult.Rejected();
-            }
-
-            await unitOfWork.CommitAsync(cancellationToken);
-            return GroundworkDesignAtomicWriteResult.Committed(
-                staged.AuthoritativeResultFingerprint!,
-                staged.AuthoritativeResultJson!);
+            unitOfWork = await _store.BeginAsync(CommitScope(request), cancellationToken);
         }
-        catch (DocumentCommitAcknowledgementUncertainException)
+        catch (OperationCanceledException)
         {
-            // A rollback is unsafe after an uncertain acknowledgement because the transaction may
-            // already be durable. The outer coordinator performs a fresh marker reconciliation read.
-            throw;
-        }
-        catch (DesignOperationMarkerRaceException)
-        {
-            // The marker-save branch already made a best-effort rollback attempt. The outer coordinator
-            // reloads the winning durable marker without re-running the caller's staging callback.
             throw;
         }
         catch (Exception exception)
         {
-            await RollbackPreservingPrimaryAsync(unitOfWork, exception);
-            throw;
+            throw new DesignWriteProviderException(
+                "Groundwork could not begin the design-operation unit of work.",
+                exception);
+        }
+
+        await using (unitOfWork)
+        {
+            try
+            {
+                var context = new GroundworkDesignAtomicWriteContext(unitOfWork);
+                var staged = await stage(context, cancellationToken);
+                ArgumentNullException.ThrowIfNull(staged);
+                ValidateStageResult(staged);
+
+                if (!staged.IsAccepted)
+                {
+                    await unitOfWork.RollbackAsync(CancellationToken.None);
+                    return GroundworkDesignAtomicWriteResult.Rejected();
+                }
+
+                // Groundwork already rolls back and terminally poisons a UoW before returning a non-success
+                // write result. Still attempt rollback for compatible providers and test doubles, while tolerating
+                // the expected terminal-UoW rejection from conforming Groundwork providers.
+                if (context.HasNonSuccessWrite)
+                {
+                    await ObserveTerminalRollbackAsync(unitOfWork);
+                    return GroundworkDesignAtomicWriteResult.Rejected();
+                }
+
+                var markerResult = await context.SaveAsync(
+                    CreateMarkerRequest(markerId, request, staged),
+                    cancellationToken);
+                if (markerResult.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                {
+                    await ObserveTerminalRollbackAsync(unitOfWork);
+                    throw new DesignOperationMarkerRaceException();
+                }
+                if (markerResult.Status != DocumentStoreWriteStatus.Saved)
+                {
+                    await ObserveTerminalRollbackAsync(unitOfWork);
+                    return GroundworkDesignAtomicWriteResult.Rejected();
+                }
+
+                try
+                {
+                    await unitOfWork.CommitAsync(cancellationToken);
+                }
+                catch (DocumentCommitAcknowledgementUncertainException)
+                {
+                    throw;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    throw new DesignWriteProviderException(
+                        "Groundwork could not commit the design-operation unit of work.",
+                        exception);
+                }
+
+                return GroundworkDesignAtomicWriteResult.Committed(
+                    staged.AuthoritativeResultFingerprint!,
+                    staged.AuthoritativeResultJson!);
+            }
+            catch (DocumentCommitAcknowledgementUncertainException)
+            {
+                // A rollback is unsafe after an uncertain acknowledgement because the transaction may
+                // already be durable. The outer coordinator performs a fresh marker reconciliation read.
+                throw;
+            }
+            catch (DesignOperationMarkerRaceException)
+            {
+                // The marker-save branch already made a best-effort rollback attempt. The outer coordinator
+                // reloads the winning durable marker without re-running the caller's staging callback.
+                throw;
+            }
+            catch (Exception exception)
+            {
+                await RollbackPreservingPrimaryAsync(unitOfWork, exception);
+                throw;
+            }
         }
     }
 
@@ -236,10 +287,24 @@ public sealed class GroundworkDesignAtomicWrite
         GroundworkDesignOperationIdentity operation,
         CancellationToken cancellationToken)
     {
-        var envelope = await _store.LoadAsync(
-            GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind,
-            markerId,
-            cancellationToken);
+        DocumentEnvelope? envelope;
+        try
+        {
+            envelope = await _store.LoadAsync(
+                GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind,
+                markerId,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new DesignWriteProviderException(
+                $"Groundwork could not read design-operation marker '{markerId}'.",
+                exception);
+        }
         if (envelope is null)
             return null;
         if (!StringComparer.Ordinal.Equals(
@@ -414,7 +479,7 @@ public sealed class GroundworkDesignAtomicWrite
         }
     }
 
-    private static GroundworkDesignAtomicWriteCorruptMarkerException CorruptMarker(
+    private static CorruptDesignMarkerException CorruptMarker(
         string markerId,
         Exception exception) =>
         new($"Design operation marker '{markerId}' is corrupt.", markerId, exception);
@@ -483,7 +548,21 @@ public sealed class GroundworkDesignAtomicWriteContext
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var result = await _unitOfWork.SaveAsync(request, cancellationToken);
+        DocumentStoreWriteResult result;
+        try
+        {
+            result = await _unitOfWork.SaveAsync(request, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new DesignWriteProviderException(
+                $"Groundwork could not save document '{request.Id}' of kind '{request.DocumentKind}'.",
+                exception);
+        }
         if (result.Status != DocumentStoreWriteStatus.Saved)
             HasNonSuccessWrite = true;
         return result;
@@ -494,7 +573,21 @@ public sealed class GroundworkDesignAtomicWriteContext
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var result = await _unitOfWork.DeleteAsync(request, cancellationToken);
+        DocumentStoreWriteResult result;
+        try
+        {
+            result = await _unitOfWork.DeleteAsync(request, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new DesignWriteProviderException(
+                $"Groundwork could not delete document '{request.Id}' of kind '{request.DocumentKind}'.",
+                exception);
+        }
         if (result.Status != DocumentStoreWriteStatus.Deleted)
             HasNonSuccessWrite = true;
         return result;
@@ -507,7 +600,25 @@ public sealed class GroundworkDesignAtomicWriteContext
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(documentKind);
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        return _unitOfWork.LoadAsync(documentKind, id, cancellationToken);
+        return LoadCoreAsync(documentKind, id, cancellationToken);
+    }
+
+    private async Task<DocumentEnvelope?> LoadCoreAsync(string documentKind, string id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _unitOfWork.LoadAsync(documentKind, id, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new DesignWriteProviderException(
+                $"Groundwork could not read document '{id}' of kind '{documentKind}'.",
+                exception);
+        }
     }
 }
 
@@ -590,15 +701,19 @@ public sealed record GroundworkDesignAtomicWriteResult
         new(GroundworkDesignAtomicWriteStatus.Conflict, null, null);
 }
 
-public sealed class GroundworkDesignAtomicWriteReadinessException(string message)
+public sealed class DesignWriteReadinessException(string message)
     : InvalidOperationException(message);
 
-public sealed class GroundworkDesignAtomicWriteUncertainCommitException(
+/// <summary>Classifies a raw Groundwork operation failure so a design adapter can map it without a catch-all.</summary>
+public sealed class DesignWriteProviderException(string message, Exception innerException)
+    : InvalidOperationException(message, innerException);
+
+public sealed class UncertainDesignCommitException(
     string message,
     Exception? innerException = null)
     : InvalidOperationException(message, innerException);
 
-public sealed class GroundworkDesignAtomicWriteCorruptMarkerException(
+public sealed class CorruptDesignMarkerException(
     string message,
     string markerId,
     Exception innerException)

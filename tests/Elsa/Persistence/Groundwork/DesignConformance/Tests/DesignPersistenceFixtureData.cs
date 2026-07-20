@@ -4,6 +4,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
@@ -32,6 +33,9 @@ public static class DesignPersistenceFixtureData
     public const string ReusableActivityAuthoringStateId = "activity-reusable-authoring";
     public const string ReusableActivityDraftId = "activity-reusable-draft";
     public const string ReusableActivityDraftLayoutId = "activity-reusable-draft-layout";
+
+    /// <summary>Creates a deterministic caller-owned key for one conformance mutation.</summary>
+    public static DesignOperationKey OperationKey(string operation) => new($"design-conformance:{operation}");
 
     private static readonly JsonSerializerOptions SerializationOptions = new(JsonSerializerDefaults.Web)
     {

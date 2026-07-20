@@ -1,5 +1,5 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
@@ -29,8 +29,8 @@ public sealed class WorkflowsVersionReconciler(
     IOptions<WorkflowVersionReconcilerOptions> options,
     IWorkflowDefinitionStore definitionStore,
     IWorkflowDefinitionVersionStore versionStore,
-    IAddCommand<WorkflowDefinition> addDefinitionCommand,
-    IAddCommand<WorkflowDefinitionVersion> addVersionCommand,
+    IMaterializeWorkflowDefinitionCommand materializeDefinitionCommand,
+    IMaterializeWorkflowDefinitionVersionCommand materializeVersionCommand,
     ISaveWorkflowDefinitionCommand saveDefinitionCommand,
     IPayloadSerializer payloadSerializer
 )
@@ -72,17 +72,27 @@ public sealed class WorkflowsVersionReconciler(
             // metadata, including the DeletedAt soft-delete flag (see UpdateDefinitionMetadata).
             var sourceOwned = WorkflowDefinition.From(version.Definition);
             sourceOwned.IsSourceOwned = true;
-            await addDefinitionCommand.Add(sourceOwned, cancellationToken);
+            await materializeDefinitionCommand.Execute(
+                ReconciliationKey("definition", definitionId),
+                sourceOwned,
+                cancellationToken);
         }
         else
         {
-            await UpdateDefinitionMetadata(definition, version.Definition, cancellationToken);
+            await UpdateDefinitionMetadata(
+                definition,
+                version.Definition,
+                candidateSortKey,
+                cancellationToken);
         }
 
         var versionExists = await VersionExists(definitionId, candidateSortKey, cancellationToken);
         if (!versionExists)
         {
-            await addVersionCommand.Add(WorkflowDefinitionVersion.From(version), cancellationToken);
+            await materializeVersionCommand.Execute(
+                ReconciliationKey("version", definitionId, candidateSortKey),
+                WorkflowDefinitionVersion.From(version),
+                cancellationToken);
             return;
         }
 
@@ -100,7 +110,11 @@ public sealed class WorkflowsVersionReconciler(
     /// Runs for every <see cref="Contracts.IWorkflowReconciliationSource"/>, not only git, and only for the
     /// authoritative (newest) version thanks to the caller's outdated-version gate (FR-008a).
     /// </summary>
-    private async Task UpdateDefinitionMetadata(WorkflowDefinition persisted, IWorkflowDefinition incoming, CancellationToken cancellationToken)
+    private async Task UpdateDefinitionMetadata(
+        WorkflowDefinition persisted,
+        IWorkflowDefinition incoming,
+        string sourceRevision,
+        CancellationToken cancellationToken)
     {
         // Reconcile soft-delete as a latest-wins flag: set when the source marks it deleted and it is
         // currently live; clear (un-delete) when the source reports it live and it is currently deleted.
@@ -125,7 +139,10 @@ public sealed class WorkflowsVersionReconciler(
         if (deletedChanged)
             persisted.DeletedAt = incomingDeleted ? incoming.DeletedAt ?? DateTimeOffset.UtcNow : null;
 
-        await saveDefinitionCommand.Execute(persisted, cancellationToken);
+        await saveDefinitionCommand.Execute(
+            ReconciliationKey("definition-metadata", persisted.Id, sourceRevision),
+            persisted,
+            cancellationToken);
         LogMetadataUpdated(persisted.Id);
     }
 
@@ -204,5 +221,12 @@ public sealed class WorkflowsVersionReconciler(
     private async Task<WorkflowDefinition?> FindDefinition(string definitionId, CancellationToken cancellationToken)
     {
         return await definitionStore.FindByIdAsync(definitionId, cancellationToken);
+    }
+
+    private static DesignOperationKey ReconciliationKey(string kind, params string[] identityParts)
+    {
+        var framedIdentity = string.Concat(
+            identityParts.Select(part => $"{part.Length}:{part}"));
+        return new DesignOperationKey($"workflow-reconciliation:{kind}:{framedIdentity}");
     }
 }

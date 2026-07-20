@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Models;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
@@ -36,6 +37,7 @@ public sealed class ReplaceDraftCommandHandler(
             ? current.Layout
             : command.Layout.Select(ToRecord).ToArray();
         await updateDraftCommand.Execute(
+            new DesignOperationKey(command.OperationKey),
             new UpdateDraftRequest(command.DraftId, command.State.ToState(), layout),
             cancellationToken);
         var updated = await draftStore.FindWithLayoutByIdAsync(command.DraftId, cancellationToken)
@@ -54,7 +56,10 @@ public sealed class PromoteDraftCommandHandler(
 {
     public async Task<WorkflowDefinitionVersionDetailsView> Handle(PromoteDraft command, CancellationToken cancellationToken)
     {
-        var versionId = await promoteCommand.Execute(command.DraftId, cancellationToken);
+        var versionId = await promoteCommand.Execute(
+            new DesignOperationKey(command.OperationKey),
+            command.DraftId,
+            cancellationToken);
         return await requestSender.Send(new GetVersion(versionId), cancellationToken);
     }
 }
@@ -64,7 +69,10 @@ public sealed class DiscardDraftCommandHandler(IDiscardDraftCommand discardComma
 {
     public async Task<Unit> Handle(DiscardDraft command, CancellationToken cancellationToken)
     {
-        await discardCommand.Execute(command.DraftId, cancellationToken);
+        await discardCommand.Execute(
+            new DesignOperationKey(command.OperationKey),
+            command.DraftId,
+            cancellationToken);
         return Unit.Instance;
     }
 }
@@ -94,7 +102,10 @@ public sealed class UpdateDefinitionMetadataCommandHandler(
                 _ => throw new ArgumentException("Workflow definition description must be a string or null.")
             };
         }
-        await saveCommand.Execute(definition, cancellationToken);
+        await saveCommand.Execute(
+            new DesignOperationKey(command.OperationKey),
+            definition,
+            cancellationToken);
         return await requestSender.Send(new GetDefinition(command.DefinitionId), cancellationToken);
     }
 }
@@ -112,7 +123,10 @@ public sealed class SoftDeleteDefinitionCommandHandler(
         {
             definition.DeletedAt = timeProvider.GetUtcNow();
             definition.DeletedReason = command.Reason;
-            await saveCommand.Execute(definition, cancellationToken);
+            await saveCommand.Execute(
+                new DesignOperationKey(command.OperationKey),
+                definition,
+                cancellationToken);
         }
         return Unit.Instance;
     }
@@ -130,23 +144,25 @@ public sealed class RestoreDefinitionCommandHandler(
         {
             definition.DeletedAt = null;
             definition.DeletedReason = null;
-            await saveCommand.Execute(definition, cancellationToken);
+            await saveCommand.Execute(
+                new DesignOperationKey(command.OperationKey),
+                definition,
+                cancellationToken);
         }
         return Unit.Instance;
     }
 }
 
 public sealed class DeleteDefinitionPermanentlyCommandHandler(
-    IWorkflowDefinitionStore definitionStore,
     IDeleteWorkflowDefinitionPermanentlyCommand deleteCommand)
     : ICommandHandler<DeleteDefinitionPermanently>
 {
     public async Task<Unit> Handle(DeleteDefinitionPermanently command, CancellationToken cancellationToken)
     {
-        var definition = await definitionStore.GetAsync(command.DefinitionId, cancellationToken);
-        if (definition.DeletedAt is null)
-            throw new ArgumentException("A workflow definition must be soft-deleted before permanent deletion.");
-        await deleteCommand.Execute(command.DefinitionId, cancellationToken);
+        await deleteCommand.Execute(
+            new DesignOperationKey(command.OperationKey),
+            command.DefinitionId,
+            cancellationToken);
         return Unit.Instance;
     }
 }

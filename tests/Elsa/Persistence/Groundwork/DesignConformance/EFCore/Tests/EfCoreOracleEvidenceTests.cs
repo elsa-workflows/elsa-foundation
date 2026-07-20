@@ -26,16 +26,20 @@ public sealed class EfCoreOracleEvidenceTests(ITestOutputHelper output)
         {
             var services = scope.ServiceProvider;
             await services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("ef-oracle-evidence:add-activity-definition"),
                 DesignPersistenceFixtureData.ActivityDefinition(),
                 DesignPersistenceFixtureData.ActivityVersion(),
                 CancellationToken.None);
             await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("ef-oracle-evidence:add-workflow-definition"),
                 DesignPersistenceFixtureData.WorkflowDefinition(),
                 DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState()),
                 DesignPersistenceFixtureData.WorkflowDraftLayout(),
                 CancellationToken.None);
             versionId = await services.GetRequiredService<IPromoteDraftToVersionCommand>()
-                .Execute(DesignPersistenceFixtureData.WorkflowDraftId);
+                .Execute(
+                    DesignPersistenceFixtureData.OperationKey("ef-oracle-evidence:promote-workflow-draft"),
+                    DesignPersistenceFixtureData.WorkflowDraftId);
         }
 
         await fixture.RestartAsync();

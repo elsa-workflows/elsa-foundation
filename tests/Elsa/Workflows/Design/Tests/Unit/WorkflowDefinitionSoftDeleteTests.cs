@@ -161,7 +161,7 @@ public sealed class WorkflowDefinitionSoftDeleteTests
         using var scope = host.Services.CreateScope();
         var delete = scope.ServiceProvider.GetRequiredService<IDeleteWorkflowDefinitionPermanentlyCommand>();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => delete.Execute(definitionId));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => delete.Execute(WorkflowsDesignTestHost.TestOperationKey, definitionId));
 
         await using var ctx = host.CreateContext();
         Assert.True(await ctx.WorkflowDefinitions.AnyAsync(x => x.Id == definitionId));
@@ -171,7 +171,7 @@ public sealed class WorkflowDefinitionSoftDeleteTests
     {
         using var scope = host.Services.CreateScope();
         var command = scope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>();
-        var submitted = await command.Execute(name, null, new WorkflowDefinitionState(
+        var submitted = await command.Execute(WorkflowsDesignTestHost.TestOperationKey, name, null, new WorkflowDefinitionState(
             Variables: [],
             RootActivity: new ActivityNode("root", "activity-version-1", [], []),
             Inputs: [],

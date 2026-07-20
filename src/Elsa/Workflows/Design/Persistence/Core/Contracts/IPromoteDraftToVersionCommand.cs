@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -32,5 +33,8 @@ public interface IPromoteDraftToVersionCommand
     /// <see cref="DraftHasValidationErrorsException"/> when the Draft has unresolved
     /// validation errors.
     /// </summary>
-    Task<string> Execute(string draftId, CancellationToken cancellationToken = default);
+    Task<string> Execute(
+        DesignOperationKey operationKey,
+        string draftId,
+        CancellationToken cancellationToken = default);
 }

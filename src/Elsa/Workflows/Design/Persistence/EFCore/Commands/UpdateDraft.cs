@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
@@ -54,8 +55,12 @@ public sealed class UpdateDraft(
     IDeferredEventPublisher deferredEventPublisher
 ) : IUpdateDraftCommand
 {
-    public async Task Execute(UpdateDraftRequest request, CancellationToken cancellationToken = default)
+    public async Task Execute(
+        DesignOperationKey operationKey,
+        UpdateDraftRequest request,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operationKey);
         WorkflowDefinitionDraft draft;
         IReadOnlyList<ValidationError> errors;
 

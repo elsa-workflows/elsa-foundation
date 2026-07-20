@@ -1,4 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
@@ -32,6 +33,7 @@ public sealed class UpdateDefinitionCommandHandler(
             : command.Layout.Select(ToRecord).ToArray();
 
         await updateDraftCommand.Execute(
+            new DesignOperationKey(command.OperationKey),
             new UpdateDraftRequest(draft.Id, command.State.ToState(), layout),
             cancellationToken);
 

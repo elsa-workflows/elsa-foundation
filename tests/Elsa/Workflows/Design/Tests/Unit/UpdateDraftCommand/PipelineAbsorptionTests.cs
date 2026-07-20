@@ -48,13 +48,13 @@ public sealed class PipelineAbsorptionTests
 
         string draftId;
         using (var scope = host.Services.CreateScope())
-            draftId = await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute("wf-1");
+            draftId = await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, "wf-1");
 
         using (var ctx = host.CreateContext())
             Assert.True(await ctx.WorkflowDefinitionDrafts.AnyAsync(d => d.Id == draftId));
 
         using (var scope = host.Services.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<IDiscardDraftCommand>().Execute(draftId);
+            await scope.ServiceProvider.GetRequiredService<IDiscardDraftCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, draftId);
 
         using var verifyCtx = host.CreateContext();
         Assert.False(await verifyCtx.WorkflowDefinitionDrafts.AnyAsync(d => d.Id == draftId));

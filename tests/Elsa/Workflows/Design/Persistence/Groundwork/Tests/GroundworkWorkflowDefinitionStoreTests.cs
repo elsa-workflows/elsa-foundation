@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
@@ -58,6 +59,46 @@ public class GroundworkWorkflowDefinitionStoreTests
         new() { Id = "b", Name = "Invoice Generator", Description = null },
         new() { Id = "c", Name = "Shipping", Description = "ORDER fulfilment" },
     ];
+
+    [Fact]
+    public async Task Provider_and_corrupt_payload_reads_surface_domain_scoped_failures()
+    {
+        var providerFailure = new IOException("workflow-provider-read");
+        var raw = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var store = new GroundworkWorkflowDefinitionStore(
+            new ThrowingDocumentStore(raw, GroundworkDocumentStoreOperation.Load, providerFailure));
+
+        var providerException = await Assert.ThrowsAsync<DesignPersistenceException>(() => store.FindByIdAsync("workflow-1"));
+        Assert.Equal(DesignPersistenceDomain.Workflow, providerException.Domain);
+        Assert.Equal(DesignPersistenceFailureKind.Provider, providerException.FailureKind);
+        Assert.Same(providerFailure, providerException.InnerException);
+
+        await raw.SaveAsync(new SaveDocumentRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            "corrupt-workflow",
+            SchemaVersion,
+            "null"));
+        var corruptStore = new GroundworkWorkflowDefinitionStore(raw);
+
+        var corruptException = await Assert.ThrowsAsync<DesignPersistenceException>(() => corruptStore.FindByIdAsync("corrupt-workflow"));
+        Assert.Equal(DesignPersistenceDomain.Workflow, corruptException.Domain);
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, corruptException.FailureKind);
+    }
+
+    [Fact]
+    public async Task Cancellation_and_domain_read_outcomes_are_not_mapped()
+    {
+        var raw = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var cancellation = new OperationCanceledException("workflow-read-cancelled");
+        var cancelled = new GroundworkWorkflowDefinitionStore(
+            new ThrowingDocumentStore(raw, GroundworkDocumentStoreOperation.Load, cancellation));
+
+        var cancellationException = await Assert.ThrowsAsync<OperationCanceledException>(() => cancelled.FindByIdAsync("workflow-1"));
+        Assert.Same(cancellation, cancellationException);
+
+        var domainStore = new GroundworkWorkflowDefinitionStore(raw);
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => domainStore.GetAsync("missing"));
+    }
 
     [Fact]
     public async Task FindById_returns_match_via_point_read()
