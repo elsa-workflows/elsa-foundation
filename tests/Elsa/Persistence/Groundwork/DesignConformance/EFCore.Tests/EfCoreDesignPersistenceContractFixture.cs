@@ -43,6 +43,7 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
     }
 
     public string Provider => "legacy-ef-sqlite";
+    internal EfCancellationProbeEvidence? CancellationProbeEvidence => _faults.CancellationProbeEvidence;
 
     public static async Task<EfCoreDesignPersistenceContractFixture> CreateAsync(CancellationToken cancellationToken = default)
     {
@@ -119,12 +120,13 @@ internal sealed class EfCoreDesignPersistenceContractFixture : IDesignPersistenc
         var services = scope.ServiceProvider;
         var definition = DesignPersistenceFixtureData.WorkflowDefinition();
         var draft = DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState());
+        using var operationCancellation = _faults.BeginOperation(cancellationToken);
 
         await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
             definition,
             draft,
             DesignPersistenceFixtureData.WorkflowDraftLayout(),
-            cancellationToken);
+            operationCancellation.Token);
 
         throw new InvalidOperationException(
             "The legacy EF oracle only executes injected partial-staging and cancellation attempts; it has no operation ledger for a successful canonical operation.");
@@ -280,6 +282,7 @@ internal sealed class EfAtomicityFaultController
     private EfAtomicityFaultLease? _armed;
 
     public SaveChangesInterceptor Interceptor { get; }
+    public EfCancellationProbeEvidence? CancellationProbeEvidence { get; private set; }
 
     public EfAtomicityFaultController() => Interceptor = new FaultInterceptor(this);
 
@@ -296,10 +299,19 @@ internal sealed class EfAtomicityFaultController
             throw new InvalidOperationException("Only one EF atomicity fault may be armed at a time.");
 
         _armed = new EfAtomicityFaultLease(this, plan);
+        CancellationProbeEvidence = null;
         return _armed;
     }
 
-    private void Trigger()
+    public EfAtomicityOperationCancellation BeginOperation(CancellationToken callerToken)
+    {
+        var lease = _armed;
+        return lease is { Plan.Action: DesignAtomicityFaultAction.Cancel }
+            ? lease.BeginCancellationOperation(callerToken)
+            : EfAtomicityOperationCancellation.PassThrough(callerToken);
+    }
+
+    private void Trigger(CancellationToken providerToken)
     {
         var lease = _armed;
         if (lease is null)
@@ -308,8 +320,16 @@ internal sealed class EfAtomicityFaultController
         lease.Trigger();
         if (lease.Plan.Action == DesignAtomicityFaultAction.Cancel)
         {
+            if (providerToken != lease.OperationToken)
+            {
+                throw new InvalidOperationException(
+                    "EF did not receive the linked cancellation token supplied to the public workflow command.");
+            }
+
             lease.Cancel();
-            throw new OperationCanceledException("Injected EF oracle cancellation before provider decision.", null, lease.Token);
+            CancellationProbeEvidence = new(lease.OperationToken, providerToken);
+            providerToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException("The injected EF cancellation token was not observed as cancelled.");
         }
 
         throw new InvalidOperationException("Injected EF oracle failure after staging the aggregate.");
@@ -329,7 +349,7 @@ internal sealed class EfAtomicityFaultController
             CancellationToken cancellationToken = default)
         {
             if (eventData.Context is WorkflowsDesignDbContext)
-                controller.Trigger();
+                controller.Trigger(cancellationToken);
 
             return ValueTask.FromResult(result);
         }
@@ -343,10 +363,20 @@ internal sealed class EfAtomicityFaultController
 
         public DesignAtomicityFaultPlan Plan { get; } = plan;
         public bool WasTriggered { get; private set; }
-        public CancellationToken Token => _cancellation.Token;
+        public CancellationToken OperationToken { get; private set; }
 
         public void Trigger() => WasTriggered = true;
         public void Cancel() => _cancellation.Cancel();
+
+        public EfAtomicityOperationCancellation BeginCancellationOperation(CancellationToken callerToken)
+        {
+            if (OperationToken.CanBeCanceled)
+                throw new InvalidOperationException("The armed EF cancellation fault is already bound to an operation.");
+
+            var source = CancellationTokenSource.CreateLinkedTokenSource(callerToken, _cancellation.Token);
+            OperationToken = source.Token;
+            return new EfAtomicityOperationCancellation(source);
+        }
 
         public ValueTask DisposeAsync()
         {
@@ -361,6 +391,29 @@ internal sealed class EfAtomicityFaultController
         }
     }
 }
+
+internal sealed class EfAtomicityOperationCancellation : IDisposable
+{
+    private readonly CancellationTokenSource? _source;
+
+    public EfAtomicityOperationCancellation(CancellationTokenSource source)
+    {
+        _source = source;
+        Token = source.Token;
+    }
+
+    private EfAtomicityOperationCancellation(CancellationToken token) => Token = token;
+
+    public CancellationToken Token { get; }
+
+    public static EfAtomicityOperationCancellation PassThrough(CancellationToken token) => new(token);
+
+    public void Dispose() => _source?.Dispose();
+}
+
+internal sealed record EfCancellationProbeEvidence(
+    CancellationToken CommandToken,
+    CancellationToken ProviderToken);
 
 internal sealed class OracleEventPublisher : IInlineEventPublisher, IDeferredEventPublisher
 {
