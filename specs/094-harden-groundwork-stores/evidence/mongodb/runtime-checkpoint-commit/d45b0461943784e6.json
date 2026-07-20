@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "failureWindow:during-provider-decision",
+  "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.77",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "e8e254fec85daae748bf3f193691035da2b2334ab96b72e91c09089d6797a07f",
+  "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/d45b0461943784e6",
+  "clients": 2,
+  "resultHash": "9f3dd8b6cd1a0b9b1e4770284f0ba1711cf47c1b34171c09685cd76e3973d030",
+  "outcome": "pass",
+  "failureWindow": "during-provider-decision",
+  "evidence": "evidence/mongodb/runtime-checkpoint-commit/d45b0461943784e6.json"
+}

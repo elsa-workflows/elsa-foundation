@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
+  "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.77",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "1e685e39bc436c92920a98dfac9511d028d8d5d3e40cfb94cfbc2c98893bd6ec",
+  "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/d8be96cddb8ddc60",
+  "clients": 2,
+  "resultHash": "8ea697e0054009834546404f2b6bea1f43678e92c2598e60f35d4d0ca72c6135",
+  "outcome": "pass",
+  "failureWindow": "after-durable-decision-before-caller-acknowledgement",
+  "evidence": "evidence/sqlserver/runtime-checkpoint-commit/d8be96cddb8ddc60.json"
+}

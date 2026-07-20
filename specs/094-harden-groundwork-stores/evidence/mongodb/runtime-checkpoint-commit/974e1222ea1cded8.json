@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:atomic-stale-fence-rejection",
+  "sourceScenarioId": "runtime-execution-ownership-fencing",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.77",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "8d338d3243c14a97dcaef1a8065e796b213d801be73ec22e72aa0bddb8b26726",
+  "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/974e1222ea1cded8",
+  "clients": 2,
+  "resultHash": "5d5cc49f6c1814b3ddb5fc014f4f5c694d8e9eeaa3a4ce90dffed0ab0872e827",
+  "outcome": "pass",
+  "concurrencySemantic": "atomic-stale-fence-rejection",
+  "evidence": "evidence/mongodb/runtime-checkpoint-commit/974e1222ea1cded8.json"
+}
