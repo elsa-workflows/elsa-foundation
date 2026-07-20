@@ -168,6 +168,8 @@ internal sealed class OpenTelemetryEngineTracingBridge
         _listener?.Dispose();
         _listener = null;
         _pending.Clear();
+        // Re-arm Start(): without this a same-instance Stop() → Start() would no-op forever on the _started guard.
+        Interlocked.Exchange(ref _started, 0);
     }
 
     private void OnActivityStarted(Activity activity)
