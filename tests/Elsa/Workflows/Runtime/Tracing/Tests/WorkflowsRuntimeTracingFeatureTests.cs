@@ -78,13 +78,7 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
         using var provider = services.BuildServiceProvider();
 
         var recorded = new List<Activity>();
-        using var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == WorkflowEngineTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = recorded.Add
-        };
-        ActivitySource.AddActivityListener(listener);
+        using var listener = RecordEngineSpans(recorded);
 
         var tracer = provider.GetRequiredService<IWorkflowEngineTracer>();
         tracer.StartDrainCycle(new("wfexec-1"))?.Dispose();
@@ -108,18 +102,26 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
         var committer = provider.GetRequiredService<RuntimeCheckpointCommitter>();
 
         var recorded = new List<Activity>();
-        using var listener = new ActivityListener
+        using var listener = RecordEngineSpans(recorded);
+
+        await committer.CommitAsync(NewMinimalCommit());
+
+        Assert.Contains(recorded, activity => activity.OperationName == WorkflowEngineTelemetry.CheckpointCommitSpanName);
+    }
+
+    /// <summary>Attaches a listener that records every stopped engine-source span into <paramref name="recorded"/>.</summary>
+    private static ActivityListener RecordEngineSpans(List<Activity> recorded)
+    {
+        var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == WorkflowEngineTelemetry.ActivitySourceName,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = recorded.Add
         };
         ActivitySource.AddActivityListener(listener);
-
-        await committer.CommitAsync(NewMinimalCommit());
-
-        Assert.Contains(recorded, activity => activity.OperationName == WorkflowEngineTelemetry.CheckpointCommitSpanName);
+        return listener;
     }
+
     private static RuntimeCheckpointCommit NewMinimalCommit() =>
         new(
             CommitId: "commit-1",
