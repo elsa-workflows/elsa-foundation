@@ -37,10 +37,12 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
         var definitionId = identityGenerator.Generate();
         var draftId = identityGenerator.Generate();
         var versionId = identityGenerator.Generate();
+        var tenantId = accessContextAccessor.Current.Scope?.Value;
 
         var definition = new WorkflowDefinition
         {
             Id = definitionId,
+            TenantId = tenantId,
             Name = name,
             Description = description
         };
@@ -48,6 +50,7 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
         var draft = new WorkflowDefinitionDraft
         {
             Id = draftId,
+            TenantId = tenantId,
             WorkflowDefinitionId = definitionId,
             State = state
         };
@@ -55,12 +58,14 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
         var version = new WorkflowDefinitionVersion(definitionId, InitialVersion)
         {
             Id = versionId,
+            TenantId = tenantId,
             State = state
         };
 
         var versionLayout = new WorkflowDefinitionVersionLayout
         {
             Id = identityGenerator.Generate(),
+            TenantId = tenantId,
             WorkflowDefinitionVersionId = versionId,
             Records = []
         };

@@ -89,6 +89,19 @@ internal static class PersistenceProviderNeutralityBoundary
         value.Contains("/MongoDb/", StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// One test-only EF oracle admitted by Spec 093 T025 while the design EF lane still exists.
+/// Remove this exact-path exclusion with T071-T076; no production or shared Groundwork project is exempt.
+/// </summary>
+internal static class TemporaryDesignEfOracle
+{
+    public const string RelativeProjectPath =
+        "tests/Elsa/Persistence/Groundwork/DesignConformance/EFCore/Tests/Elsa.Persistence.Groundwork.DesignConformance.EFCore.Tests.csproj";
+
+    public static bool IsExcludedProject(string relativePath) =>
+        string.Equals(relativePath, RelativeProjectPath, StringComparison.Ordinal);
+}
+
 internal static class EfCoreSurfaceBaseline
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -216,30 +229,33 @@ internal sealed class EfCoreSurfaceScanner
     public EfCoreSurfaceSnapshot Scan()
     {
         var projects = LoadProjects();
+        var inventoryProjects = projects
+            .Where(project => !TemporaryDesignEfOracle.IsExcludedProject(project.RelativePath))
+            .ToArray();
         var projectsByPath = projects.ToDictionary(x => x.FullPath, PathComparer);
-        var efProjects = projects.Where(IsEfProject).ToArray();
-        var efProjectPaths = efProjects.Select(x => x.FullPath).ToHashSet(PathComparer);
+        var efProjects = inventoryProjects.Where(IsEfProject).ToArray();
+        var efProjectPaths = projects.Where(IsEfProject).Select(x => x.FullPath).ToHashSet(PathComparer);
         var reachable = projects.ToDictionary(
             project => project.FullPath,
             project => ReachableProjects(project, projectsByPath),
             PathComparer);
 
-        var directPackages = projects
+        var directPackages = inventoryProjects
             .SelectMany(project => project.PackageReferences
                 .Where(IsEfPackage)
                 .Select(package => Pair(project.RelativePath, package)))
             .Sorted();
-        var directEfReferences = projects
+        var directEfReferences = inventoryProjects
             .SelectMany(project => project.ProjectReferences
                 .Where(efProjectPaths.Contains)
                 .Select(reference => Pair(project.RelativePath, projectsByPath[reference].RelativePath)))
             .Sorted();
-        var transitiveEfProjects = projects
+        var transitiveEfProjects = inventoryProjects
             .SelectMany(project => reachable[project.FullPath]
                 .Where(efProjectPaths.Contains)
                 .Select(reference => Pair(project.RelativePath, projectsByPath[reference].RelativePath)))
             .Sorted();
-        var transitiveEfPackages = projects
+        var transitiveEfPackages = inventoryProjects
             .SelectMany(project => reachable[project.FullPath]
                 .Append(project.FullPath)
                 .SelectMany(reference => projectsByPath[reference].PackageReferences)
@@ -247,18 +263,18 @@ internal sealed class EfCoreSurfaceScanner
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(package => Pair(project.RelativePath, package)))
             .Sorted();
-        var resolvedEfPackages = projects
+        var resolvedEfPackages = inventoryProjects
             .SelectMany(project => project.ResolvedPackages
                 .Where(IsEfPackage)
                 .Select(package => Pair(project.RelativePath, package)))
             .Sorted();
-        var projectsMissingAssets = projects
+        var projectsMissingAssets = inventoryProjects
             .Where(project => !project.HasAssets)
             .Select(project => project.RelativePath)
             .Sorted();
         var sharedBuildPackages = SharedBuildEfPackageReferences();
 
-        var boundaryProjects = projects.Where(IsEfFreeBoundary).ToArray();
+        var boundaryProjects = inventoryProjects.Where(IsEfFreeBoundary).ToArray();
         var efBoundaryViolations = boundaryProjects.SelectMany(project =>
         {
             var violations = new List<string>();
@@ -299,6 +315,7 @@ internal sealed class EfCoreSurfaceScanner
 
     public IReadOnlyList<string> EfFreeBoundaryProjectNames() =>
         LoadProjects()
+            .Where(project => !TemporaryDesignEfOracle.IsExcludedProject(project.RelativePath))
             .Where(IsEfFreeBoundary)
             .Select(project => project.Name)
             .Distinct(StringComparer.Ordinal)

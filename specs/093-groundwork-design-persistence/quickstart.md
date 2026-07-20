@@ -65,12 +65,8 @@ discard, and reconciliation identities and outcomes, including empty validation 
 restart snapshots contain the authored workflow state and activity descriptor, and assert each
 against the deterministic input before comparing restart hashes.
 
-Concrete EF-oracle and provider fixtures remain T025 and T051–T054 work. Therefore no
-provider-parity or oracle result hashes are claimed at this checkpoint. The focused Release project
-restore/build/test completed with `96` passed tests and one intentional legacy-EF N/A skip (`97` total);
-the skipped probe proves that N/A profile evaluation happens before fixture creation. Executable provider
-scenarios remain pending a
-concrete fixture inheritance target. The T023 harness validates the contract shape only. T025's executable
+The shared-contract scaffold completed with `96` passed tests and one intentional legacy-EF N/A skip
+(`97` total); the skipped probe proves that N/A profile evaluation happens before fixture creation. T025's executable
 `LegacyEfOracle` profile runs exactly five of these rows: partial-staging failure, cancellation, same-scope
 duplicate identities, workflow-draft last-writer-wins, and the single-scope restart snapshot. Its ten explicit
 N/A rows are provider non-success decision; acknowledgement loss, exact replay, key-reuse conflict, and duplicate
@@ -80,11 +76,70 @@ nonempty reason per N/A row. Test-only EF fault injection is permitted for parti
 T025 must not add a production EF operation ledger, scope boundary, or reusable-draft OCC shim. T033/T035's
 exception-taxonomy deferral remains unchanged.
 
-No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads
-that define them are T021–T024. T025 runs the EF SQLite oracle, records the canonical
-behavior hashes, and then records the existing Groundwork red baseline. The test
-inventory hashes in this baseline are not substitutes for result hashes, so T004 remains
-open; it is deliberately not a Phase-2 gate.
+### T004/T025 EF SQLite oracle baseline (2026-07-20)
+
+`Elsa.Persistence.Groundwork.DesignConformance.EFCore.Tests` is a separate provider-leaf test project.
+It applies both existing SQLite migration chains to one temporary file database, recreates the composed
+service provider on restart, uses public design commands/stores plus the real activity reconciler, and
+keeps its partial-staging/cancellation faults in a test-only EF `SaveChangesInterceptor`. Its four
+inherited contract suites completed with `15` passed and `10` intentional LegacyEfOracle N/A skips
+(`25` total). Its two focused evidence tests pass as well, so the complete EF provider leaf reports
+`17` passed, `10` skipped, and `27` total.
+
+The deterministic canonical result hashes captured after restart are:
+
+- workflow draft: `8614e1ffb739e65f08a47c60da7c33891fff5f88c32ef5d88eed7b9fd5800369`
+- workflow version: `3fcb29139ffcac2c0fc3d5450d4e2682d3b504b86f31326b16b17f4712ceb9d4`
+- activity definition/version: `8bdeb707ea537e6357a8327b2d7404deb23af9e370c65a03f2e2883b182bf3f1`
+
+These are workload behavior hashes, not test-inventory hashes; the evidence test pins them.
+
+### T025 Groundwork SQLite Target-profile baseline (2026-07-20)
+
+`Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests` is a separate provider-leaf baseline
+project. For every scenario it creates a fresh file-backed SQLite target, drives production
+`Groundwork.Tool` `validate --offline`, `plan`, and `apply --safe` commands against
+`GroundworkAllFeaturesDeploymentSchema`, then builds the public
+`AddGroundworkSqliteUnifiedPersistence` composition with startup auto-apply disabled. Runtime
+startup only admits the applied target. Restart scenarios dispose and rebuild the service provider
+against the same file without reapplying schema, and every design operation resolves from a fresh
+DI scope bound through `IPersistenceAccessContextBinder`.
+
+The immutable Target-profile catalog executed all `25` T021–T024 rows and proved the ratified
+intentional-red matrix:
+
+- `17` green lifecycle, reconciliation, scope, OCC, last-writer-wins, and restart rows;
+- `7` classified red atomicity rows:
+  `design-atomicity-operation-ledger-absent`;
+- `1` classified red same-scope duplicate row:
+  `same-scope-identity-rejection-absent`.
+
+The runner fails if any expected green becomes red, any expected red becomes green, or a red row
+does not match its narrow classification. It also derives and pins the loaded Groundwork Core,
+Documents, SQLite, and local-tool package versions plus the exact target and plan fingerprints;
+schema-tool processes have a bounded timeout and are killed and reaped on timeout or cancellation.
+The run used the Groundwork library/tool family
+`0.0.1-preview.77`, target fingerprint
+`22e3b8afe1564edc52ae126b5d049b21d1db72f38d1ceac6a1c2b9ddc144fa6d`, and plan fingerprint
+`e2c71279ddd7cc8506f45601bd128347a30c89fcd70a32afeec67928f9b86275`.
+It also exposed and fixed target correctness defects: promotion now copies the validated
+scope-bound draft's `TenantId` to both the immutable workflow version and its layout, and
+submission stamps the active scope onto every newly created aggregate member.
+Both provider fixtures dispatch through Elsa's scoped event pipeline; the EF cancellation probe
+pins the same linked token at the public command, event handler, EF interceptor, and exception.
+
+Ordinary CI writes no evidence file. Operators can opt in to the sanitized allowlisted JSON
+artifact without exposing connection strings, database paths, or scope identities:
+
+```bash
+ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR=/path/to/evidence \
+dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj -c Release
+```
+
+This closes only T025's Target-profile baseline. T051's broader SQLite fixture, schema-drift hooks,
+and later full provider conformance remain pending. The green lifecycle rows still traverse the
+existing load-all/client-evaluation read path and are not bounded-query evidence; T026–T029 remain
+the authority for removing that path.
 
 ## 1. Restore and build
 
@@ -172,7 +227,7 @@ The implementation phase adds each concrete fixture in a separate leaf test proj
 reference the shared contract project and may reference only their own provider SDK:
 
 ```bash
-dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite.Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj -c Release --no-build
+dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj -c Release --no-build
 dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/SqlServer.Tests/Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests.csproj -c Release --no-build
 dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql.Tests/Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests.csproj -c Release --no-build
 dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb.Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj -c Release --no-build
