@@ -76,6 +76,8 @@ public abstract class WorkflowDesignContractSuite
                 .Execute(DesignPersistenceFixtureData.WorkflowDraftId);
         }
 
+        await fixture.RestartAsync();
+
         using (var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
         {
             var services = scope.ServiceProvider;
@@ -143,8 +145,77 @@ public abstract class WorkflowDesignContractSuite
         var validations = events.OfType<OnDraftValidated>().ToArray();
         var updatedValidation = Assert.Single(validations.Where(x => x.Draft.Id == DesignPersistenceFixtureData.WorkflowDraftId));
         var clonedValidation = Assert.Single(validations.Where(x => x.Draft.Id == cloneId));
+        Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, updatedValidation.Draft.WorkflowDefinitionId);
+        Assert.Equal(updatedState, updatedValidation.Draft.State);
+        Assert.False(updatedValidation.HasErrors);
         Assert.Empty(updatedValidation.Errors);
+        Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, clonedValidation.Draft.WorkflowDefinitionId);
+        Assert.Equal(updatedState, clonedValidation.Draft.State);
+        Assert.False(clonedValidation.HasErrors);
         Assert.Empty(clonedValidation.Errors);
+
+        fixture.ClearObservedEvents();
+        await readScope.ServiceProvider.GetRequiredService<IUpdateDraftCommand>().Execute(
+            new UpdateDraftRequest(cloneId, WorkflowDefinitionState.Empty, []));
+
+        var invalidValidation = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<OnDraftValidated>());
+        Assert.Equal(cloneId, invalidValidation.Draft.Id);
+        Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, invalidValidation.Draft.WorkflowDefinitionId);
+        Assert.Equal(WorkflowDefinitionState.Empty, invalidValidation.Draft.State);
+        Assert.True(invalidValidation.HasErrors);
+        Assert.Contains(invalidValidation.Errors, error => error.Type == "RootActivity/Missing");
+
+        var invalidDraft = await readScope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>()
+            .FindWithLayoutByIdAsync(cloneId);
+        Assert.NotNull(invalidDraft);
+        Assert.Equal(WorkflowDefinitionState.Empty, invalidDraft!.Draft.State);
+        Assert.Empty(invalidDraft.Layout);
+    }
+
+    [Fact]
+    public async Task Submission_creates_a_complete_durable_aggregate()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        await fixture.ValidateReadinessAsync();
+
+        var state = DesignPersistenceFixtureData.WorkflowState("submitted-root");
+        string definitionId;
+        string draftId;
+        string versionId;
+        using (var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
+        {
+            var writeServices = scope.ServiceProvider;
+            await AddActivityPrerequisiteAsync(writeServices);
+            var submitted = await writeServices.GetRequiredService<ISubmitWorkflowDefinitionCommand>().Execute(
+                "Submitted order processing",
+                "Creates a submitted workflow aggregate.",
+                state);
+            definitionId = submitted.DefinitionId;
+            draftId = submitted.DraftId;
+            versionId = submitted.VersionId;
+        }
+
+        await fixture.RestartAsync();
+
+        using var readScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
+        var services = readScope.ServiceProvider;
+        var definition = await services.GetRequiredService<IWorkflowDefinitionStore>().FindByIdAsync(definitionId);
+        var draft = await services.GetRequiredService<IWorkflowDefinitionDraftStore>().FindWithLayoutByIdAsync(draftId);
+        var version = await services.GetRequiredService<IWorkflowDefinitionVersionStore>().FindByIdAsync(versionId);
+        var layout = await services.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>().FindByVersionIdAsync(versionId);
+
+        Assert.NotNull(definition);
+        Assert.NotNull(draft);
+        Assert.NotNull(version);
+        Assert.NotNull(layout);
+        Assert.Equal("Submitted order processing", definition!.Name);
+        Assert.Equal(definitionId, draft!.Draft.WorkflowDefinitionId);
+        Assert.Equal(definitionId, version!.DefinitionId);
+        Assert.Equal("1.0.0", version.Version);
+        Assert.Equal(state, draft.Draft.State);
+        Assert.Equal(state, version.State);
+        Assert.Empty(draft.Layout);
+        Assert.Empty(layout!.Records);
     }
 
     [Fact]
@@ -167,7 +238,7 @@ public abstract class WorkflowDesignContractSuite
     }
 
     [Fact]
-    public async Task Discard_and_permanent_delete_leave_their_documented_missing_outcomes()
+    public async Task Discard_removes_the_draft_and_publishes_its_documented_outcome()
     {
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();
@@ -189,6 +260,27 @@ public abstract class WorkflowDesignContractSuite
             var discarded = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<OnDraftDiscarded>());
             Assert.Equal(DesignPersistenceFixtureData.WorkflowDraftId, discarded.DraftId);
             Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, discarded.WorkflowDefinitionId);
+        }
+    }
+
+    [Fact]
+    public async Task Permanent_delete_removes_the_complete_workflow_aggregate()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        await fixture.ValidateReadinessAsync();
+
+        string versionId;
+        using (var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
+        {
+            var services = scope.ServiceProvider;
+            await AddActivityPrerequisiteAsync(services);
+            await services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.WorkflowDefinition(),
+                DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState()),
+                DesignPersistenceFixtureData.WorkflowDraftLayout(),
+                CancellationToken.None);
+            versionId = await services.GetRequiredService<IPromoteDraftToVersionCommand>()
+                .Execute(DesignPersistenceFixtureData.WorkflowDraftId);
 
             var definition = await services.GetRequiredService<IWorkflowDefinitionStore>()
                 .GetAsync(DesignPersistenceFixtureData.WorkflowDefinitionId);
@@ -201,8 +293,16 @@ public abstract class WorkflowDesignContractSuite
 
         using var readScope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
         var definitions = readScope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>();
+        var drafts = readScope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>();
+        var versions = readScope.ServiceProvider.GetRequiredService<IWorkflowDefinitionVersionStore>();
+        var layouts = readScope.ServiceProvider.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>();
         Assert.Null(await definitions.FindByIdAsync(DesignPersistenceFixtureData.WorkflowDefinitionId));
         Assert.Empty(await definitions.ListAsync(new WorkflowDefinitionFilter { Id = DesignPersistenceFixtureData.WorkflowDefinitionId }));
+        Assert.Null(await drafts.FindByIdAsync(DesignPersistenceFixtureData.WorkflowDraftId));
+        Assert.Empty(await drafts.ListByWorkflowDefinitionIdAsync(DesignPersistenceFixtureData.WorkflowDefinitionId));
+        Assert.Null(await versions.FindByIdAsync(versionId));
+        Assert.Empty(await versions.ListByDefinitionAsync(DesignPersistenceFixtureData.WorkflowDefinitionId));
+        Assert.Null(await layouts.FindByVersionIdAsync(versionId));
     }
 
     private static async Task AddActivityPrerequisiteAsync(IServiceProvider services)
