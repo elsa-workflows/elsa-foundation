@@ -74,6 +74,19 @@ public sealed class FeatureManagementService(
             throw new ArgumentException("Revision is required.", nameof(request));
 
         var currentById = current.Features.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
+        var requestIds = new HashSet<string>(request.Features.Select(x => x.Id), StringComparer.OrdinalIgnoreCase);
+        var omittedEnabled = current.Features
+            .Where(x => x.Enabled && !requestIds.Contains(x.Id))
+            .Select(x => x.Id)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (omittedEnabled.Length > 0)
+            throw new ArgumentException(
+                $"Apply requests must describe the full desired feature state, but this request omits {omittedEnabled.Length} currently-enabled feature(s): {string.Join(", ", omittedEnabled)}. " +
+                "Include every currently-enabled feature — with enabled=false to disable it, or its desired configuration to keep it — instead of sending only the changed features.",
+                nameof(request));
+
         foreach (var feature in request.Features)
         {
             if (string.IsNullOrWhiteSpace(feature.Id))
