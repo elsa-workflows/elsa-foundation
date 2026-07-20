@@ -130,24 +130,24 @@ public sealed class EfCoreOpenTelemetryStore : ChannelDrainingStoreBase<OpenTele
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var serviceResourceIds = await ResolveResourceIdsAsync(db, filter.ServiceName, cancellationToken);
-        var query = db.TelemetryTraces.AsNoTracking().AsQueryable();
 
-        if (filter.Status != null)
-            query = query.Where(x => x.Status == (int)filter.Status);
-        if (filter.From != null)
-            query = query.Where(x => x.StartTime >= filter.From);
-        if (filter.To != null)
-            query = query.Where(x => x.StartTime <= filter.To);
-
-        var traces = (await query.OrderBy(x => x.StartTime).ThenBy(x => x.Id).ToListAsync(cancellationToken))
+        // Merge-then-filter: a trace's records may arrive across batches (multi-cycle drains, OTLP re-exports), so the
+        // status/date filters run in memory against the MERGED summary — a SQL-level filter would exclude sibling
+        // records the merge needs and could hide an earlier batch's error status. The table is pruned to the trace
+        // retention capacity, and this store already loads it fully for the other in-memory filters.
+        var traces = (await db.TelemetryTraces.AsNoTracking().OrderBy(x => x.StartTime).ThenBy(x => x.Id).ToListAsync(cancellationToken))
             .Select(OpenTelemetryMapper.ToModel)
+            .GroupBy(x => x.TraceId, StringComparer.OrdinalIgnoreCase)
+            .Select(x => TelemetryTraceMerger.Merge([.. x]))
+            .Where(x => filter.Status == null || x.Status == filter.Status)
+            .Where(x => filter.From == null || x.StartTime >= filter.From)
+            .Where(x => filter.To == null || x.StartTime <= filter.To)
             .Where(x => string.IsNullOrWhiteSpace(filter.TraceId) || Matches(x.TraceId, filter.TraceId))
             .Where(x => string.IsNullOrWhiteSpace(filter.Search) || Matches(x.TraceId, filter.Search) || Matches(x.Name, filter.Search))
             .Where(x => string.IsNullOrWhiteSpace(filter.WorkflowInstanceId) || x.WorkflowInstanceIds.Any(id => Matches(id, filter.WorkflowInstanceId)))
             .Where(x => string.IsNullOrWhiteSpace(filter.ResourceId) || x.ResourceIds.Contains(filter.ResourceId, StringComparer.OrdinalIgnoreCase))
             .Where(x => serviceResourceIds == null || x.ResourceIds.Any(serviceResourceIds.Contains))
-            .GroupBy(x => x.TraceId, StringComparer.OrdinalIgnoreCase)
-            .Select(x => x.Last())
+            .OrderBy(x => x.StartTime)
             .TakeLast(take)
             .ToList();
 
@@ -158,16 +158,18 @@ public sealed class EfCoreOpenTelemetryStore : ChannelDrainingStoreBase<OpenTele
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(traceId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var trace = (await db.TelemetryTraces.AsNoTracking()
-                .OrderByDescending(x => x.StartTime)
-                .ThenByDescending(x => x.Id)
+        var records = (await db.TelemetryTraces.AsNoTracking()
+                .OrderBy(x => x.StartTime)
+                .ThenBy(x => x.Id)
                 .ToListAsync(cancellationToken))
-            .FirstOrDefault(x => string.Equals(x.TraceId, traceId, StringComparison.OrdinalIgnoreCase));
+            .Where(x => string.Equals(x.TraceId, traceId, StringComparison.OrdinalIgnoreCase))
+            .Select(OpenTelemetryMapper.ToModel)
+            .ToList();
 
-        if (trace == null)
+        if (records.Count == 0)
             return null;
 
-        var traceModel = OpenTelemetryMapper.ToModel(trace);
+        var traceModel = TelemetryTraceMerger.Merge(records);
         var resourceIds = traceModel.ResourceIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var spans = (await db.TelemetrySpans.AsNoTracking()
                 .OrderBy(x => x.StartTime)

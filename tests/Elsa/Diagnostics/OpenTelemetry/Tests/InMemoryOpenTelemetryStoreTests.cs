@@ -43,18 +43,35 @@ public class InMemoryOpenTelemetryStoreTests
     }
 
     [Fact]
-    public async Task QueryTracesAsync_WhenTraceIdAppearsInMultipleBatches_ReturnsLatestTrace()
+    public async Task QueryTracesAsync_WhenTraceIdAppearsInMultipleBatches_ReturnsMergedSummary()
     {
+        // Multi-cycle synchronous drains (and OTLP re-exports) publish one trace record per batch under one trace id;
+        // the list row must merge them — an earlier cycle's error status, the full duration, and the summed span count
+        // must all survive instead of the last batch's record shadowing the others.
         var context = new OpenTelemetryStoreTestContext(new OpenTelemetryDiagnosticsOptions { TraceCapacity = 10 });
         var resource = context.Resource("resource-a", "api");
 
-        await context.WriteAsync(new OpenTelemetryBatch([resource], [context.Trace("trace-1", resource.Id, context.Now.AddSeconds(1))], [], [], [], []));
-        await context.WriteAsync(new OpenTelemetryBatch([], [context.Trace("trace-1", resource.Id, context.Now.AddSeconds(2))], [], [], [], []));
+        await context.WriteAsync(new OpenTelemetryBatch([resource], [context.Trace("trace-1", resource.Id, context.Now.AddSeconds(1), SpanStatus.Error)], [], [], [], []));
+        await context.WriteAsync(new OpenTelemetryBatch([], [context.Trace("trace-1", resource.Id, context.Now.AddSeconds(2), SpanStatus.Ok, "workflow-1")], [], [], [], []));
 
         var result = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 10 });
 
         var trace = Assert.Single(result.Items);
-        Assert.Equal(context.Now.AddSeconds(2), trace.StartTime);
+        Assert.Equal(context.Now.AddSeconds(1), trace.StartTime);
+        Assert.Equal(context.Now.AddSeconds(2).AddMilliseconds(25), trace.EndTime);
+        Assert.Equal(trace.EndTime - trace.StartTime, trace.Duration);
+        Assert.Equal(SpanStatus.Error, trace.Status);
+        Assert.Equal(4, trace.SpanCount);
+        Assert.Equal(["workflow-1"], trace.WorkflowInstanceIds);
+
+        // A status filter evaluates the merged summary, so the errored trace is found even though the last record is Ok.
+        var errored = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Status = SpanStatus.Error, Take = 10 });
+        Assert.Equal("trace-1", Assert.Single(errored.Items).TraceId);
+
+        var detail = await context.Store.GetTraceAsync("trace-1");
+        Assert.NotNull(detail);
+        Assert.Equal(SpanStatus.Error, detail!.Trace.Status);
+        Assert.Equal(4, detail.Trace.SpanCount);
     }
 
     [Fact]
