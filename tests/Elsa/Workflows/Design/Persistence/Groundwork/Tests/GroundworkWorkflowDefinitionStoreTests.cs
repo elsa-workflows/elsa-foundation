@@ -7,6 +7,8 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -26,8 +28,14 @@ public class GroundworkWorkflowDefinitionStoreTests
 
     private static async Task<IWorkflowDefinitionStore> SeededStoreAsync(params WorkflowDefinition[] definitions)
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var store = await SeedRawAsync(definitions);
+        return new GroundworkWorkflowDefinitionStore(store);
+    }
 
+    private static async Task<InMemoryDocumentStore> SeedRawAsync(
+        IEnumerable<WorkflowDefinition> definitions)
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
         foreach (var definition in definitions)
         {
             var envelope = new GroundworkDocument<WorkflowDefinition>(
@@ -41,7 +49,7 @@ public class GroundworkWorkflowDefinitionStoreTests
                 content));
         }
 
-        return new GroundworkWorkflowDefinitionStore(store);
+        return store;
     }
 
     private static WorkflowDefinition[] Sample() =>
@@ -65,6 +73,20 @@ public class GroundworkWorkflowDefinitionStoreTests
     {
         var store = await SeededStoreAsync(Sample());
         Assert.Null(await store.FindByIdAsync("missing"));
+    }
+
+    [Fact]
+    public async Task Point_read_does_not_require_a_bounded_surface_but_named_queries_do()
+    {
+        var raw = await SeedRawAsync(Sample());
+        var store = new GroundworkWorkflowDefinitionStore(new DocumentStoreOnlyAdapter(raw));
+
+        Assert.Equal("b", (await store.FindByIdAsync("b"))?.Id);
+
+        var exception = await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListAsync(new WorkflowDefinitionFilter { Id = "b" }));
+        Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, exception.DocumentKind);
+        Assert.Equal(WorkflowsDesignStorageManifest.ListDefinitionsByIdQuery, exception.QueryIdentity);
     }
 
     [Fact]
@@ -113,6 +135,33 @@ public class GroundworkWorkflowDefinitionStoreTests
         // "order" matches name "Order Processing" (a) and description "ORDER fulfilment" (c), case-insensitively.
         var result = await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "order" });
         Assert.Equal(["a", "c"], result.Select(x => x.Id).OrderBy(x => x));
+    }
+
+    [Fact]
+    public async Task List_uses_the_selected_named_route_with_its_complete_declared_order()
+    {
+        var raw = await SeedRawAsync(Sample());
+        var bounded = new RecordingBoundedDocumentStore(raw);
+        var store = new GroundworkWorkflowDefinitionStore(raw, bounded);
+
+        var result = await store.ListAsync(
+            new WorkflowDefinitionFilter
+            {
+                SearchTerm = "order",
+                Description = "Handles orders"
+            });
+
+        Assert.Equal(["a"], result.Select(x => x.Id));
+        Assert.NotEmpty(bounded.Queries);
+        Assert.All(
+            bounded.Queries,
+            query =>
+            {
+                Assert.Equal(WorkflowsDesignStorageManifest.SearchDefinitionsQuery, query.QueryIdentity);
+                Assert.Equal(BoundedQueryResultOperation.Documents, query.ResultOperation);
+                Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionSearchOrder, query.Order);
+                Assert.NotEqual(WorkflowsDesignStorageManifest.ListAllQuery, query.QueryIdentity);
+            });
     }
 
     [Fact]

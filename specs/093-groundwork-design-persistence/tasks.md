@@ -75,10 +75,10 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 
 ### Implementation for User Story 1
 
-- [ ] T026 [P] [US1] Move workflow definition and version stores onto `GroundworkDesignStoreSession` plus named bounded queries in `src/Elsa/Workflows/Design/Persistence/Groundwork/Services/GroundworkWorkflowDefinitionStore.cs` and `GroundworkWorkflowDefinitionVersionStore.cs`
-- [ ] T027 [P] [US1] Move activity definition and version stores onto `GroundworkDesignStoreSession` plus named bounded queries in `src/Elsa/Activities/Design/Persistence/Groundwork/Services/GroundworkActivityDefinitionStore.cs` and `GroundworkActivityDefinitionVersionStore.cs`
-- [ ] T028 [P] [US1] Preserve the logical workflow draft-plus-layout aggregate and remove by-collection filtering in `src/Elsa/Workflows/Design/Persistence/Groundwork/Services/GroundworkWorkflowDefinitionDraftDocument.cs`
-- [ ] T029 [P] [US1] Move version-layout and workflow-list projection reads onto declared bounded routes in `src/Elsa/Workflows/Design/Persistence/Groundwork/Services/GroundworkWorkflowDefinitionVersionLayoutStore.cs` and `GroundworkWorkflowDefinitionListProjectionStore.cs`
+- [x] T026 [P] [US1] Move workflow definition and version stores onto the shared access-bound `GroundworkStoreSession` plus named bounded queries in `src/Elsa/Workflows/Design/Persistence/Groundwork/Services/GroundworkWorkflowDefinitionStore.cs` and `GroundworkWorkflowDefinitionVersionStore.cs`
+- [x] T027 [P] [US1] Move activity definition and version stores onto the shared access-bound `GroundworkStoreSession` plus named bounded queries in `src/Elsa/Activities/Design/Persistence/Groundwork/Services/GroundworkActivityDefinitionStore.cs` and `GroundworkActivityDefinitionVersionStore.cs`
+- [x] T028 [P] [US1] Preserve the logical workflow draft-plus-layout aggregate and remove by-collection filtering in `src/Elsa/Workflows/Design/Persistence/Groundwork/Services/GroundworkWorkflowDefinitionDraftDocument.cs`
+- [x] T029 [P] [US1] Move version-layout and workflow-list projection reads onto declared bounded routes in `src/Elsa/Workflows/Design/Persistence/Groundwork/Services/GroundworkWorkflowDefinitionVersionLayoutStore.cs` and `GroundworkWorkflowDefinitionListProjectionStore.cs`
 - [ ] T030 [US1] Centralize deterministic operation identity, canonical request fingerprint, result inspection, rollback, and acknowledgement-replay behavior for design UoWs in `src/Elsa/Persistence/Groundwork/Querying/GroundworkDesignAtomicWrite.cs`
 - [ ] T031 [US1] Apply the hardened atomic write path to every workflow definition/version/draft/promote/submit/delete command in `src/Elsa/Workflows/Design/Persistence/Groundwork/Services/`
 - [ ] T032 [US1] Apply the hardened atomic write path to activity definition/version commands in `src/Elsa/Activities/Design/Persistence/Groundwork/Services/`

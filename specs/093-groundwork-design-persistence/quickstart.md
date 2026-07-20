@@ -120,8 +120,8 @@ Documents, SQLite, and local-tool package versions plus the exact target and pla
 schema-tool processes have a bounded timeout and are killed and reaped on timeout or cancellation.
 The run used the Groundwork library/tool family
 `0.0.1-preview.77`, target fingerprint
-`22e3b8afe1564edc52ae126b5d049b21d1db72f38d1ceac6a1c2b9ddc144fa6d`, and plan fingerprint
-`e2c71279ddd7cc8506f45601bd128347a30c89fcd70a32afeec67928f9b86275`.
+`0a2a6a806c1b857c6343b3c97180ef9f2ccb7a6b9c9727019551f7dc6101bc8f`, and plan fingerprint
+`66064ba3e4ccb946b8afbf814b46fb84ea00fbce190c8994fab0590f3e8e2808`.
 It also exposed and fixed target correctness defects: promotion now copies the validated
 scope-bound draft's `TenantId` to both the immutable workflow version and its layout, and
 submission stamps the active scope onto every newly created aggregate member.
