@@ -74,10 +74,14 @@ public abstract class DesignIsolationAndRestartContractSuite
         Assert.False(await activityDefinitions.ExistsByActivityTypeKeyAsync(DesignPersistenceFixtureData.ActivityDefinition().ActivityTypeKey));
 
         await AssertSameMissingOutcomeAsync(
+            "missing-workflow-definition",
             () => workflowDefinitions.GetAsync("missing-workflow-definition"),
+            DesignPersistenceFixtureData.WorkflowDefinitionId,
             () => workflowDefinitions.GetAsync(DesignPersistenceFixtureData.WorkflowDefinitionId));
         await AssertSameMissingOutcomeAsync(
+            "missing-activity-version",
             () => activityVersions.GetAsync("missing-activity-version"),
+            DesignPersistenceFixtureData.ActivityVersionId,
             () => activityVersions.GetAsync(DesignPersistenceFixtureData.ActivityVersionId));
     }
 
@@ -95,7 +99,7 @@ public abstract class DesignIsolationAndRestartContractSuite
         {
             var services = scopeB.ServiceProvider;
             var saver = services.GetRequiredService<ISaveWorkflowDefinitionCommand>();
-            await Assert.ThrowsAsync<InvalidOperationException>(() => saver.Execute(foreign));
+            await AssertNonCancellationFailureAsync(() => saver.Execute(foreign));
             Assert.Null(await services.GetRequiredService<IWorkflowDefinitionStore>()
                 .FindByIdAsync(DesignPersistenceFixtureData.WorkflowDefinitionId));
 
@@ -105,7 +109,7 @@ public abstract class DesignIsolationAndRestartContractSuite
                 id: "foreign-activity-write-v1",
                 scope: DesignPersistenceFixtureData.ScopeA,
                 definitionId: foreignActivity.Id);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+            await AssertNonCancellationFailureAsync(() => services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
                 foreignActivity,
                 foreignActivityVersion,
                 CancellationToken.None));
@@ -133,7 +137,7 @@ public abstract class DesignIsolationAndRestartContractSuite
         var duplicateWorkflow = DesignPersistenceFixtureData.WorkflowDefinition();
         duplicateWorkflow.Name = "duplicate workflow";
         var duplicateDraft = DesignPersistenceFixtureData.WorkflowDraft(state: DesignPersistenceFixtureData.WorkflowState("duplicate-workflow-root"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+        await AssertNonCancellationFailureAsync(() => services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
             duplicateWorkflow,
             duplicateDraft,
             DesignPersistenceFixtureData.WorkflowDraftLayout(),
@@ -144,14 +148,14 @@ public abstract class DesignIsolationAndRestartContractSuite
         var duplicateActivityVersion = DesignPersistenceFixtureData.ActivityVersion(
             id: "activity-http-request-duplicate-v1",
             definitionId: duplicateActivityDefinition.Id);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+        await AssertNonCancellationFailureAsync(() => services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
             duplicateActivityDefinition,
             duplicateActivityVersion,
             CancellationToken.None));
 
         var duplicateSemanticVersion = DesignPersistenceFixtureData.ActivityVersion(
             id: "activity-http-request-v1-duplicate");
-        await Assert.ThrowsAsync<InvalidOperationException>(() => services.GetRequiredService<IAddCommand<ActivityDefinitionVersion>>().Add(
+        await AssertNonCancellationFailureAsync(() => services.GetRequiredService<IAddCommand<ActivityDefinitionVersion>>().Add(
             duplicateSemanticVersion,
             CancellationToken.None));
 
@@ -188,7 +192,7 @@ public abstract class DesignIsolationAndRestartContractSuite
                 committedState,
                 committedLayout));
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => replacement.ExecuteAsync(new(
+            await AssertNonCancellationFailureAsync(() => replacement.ExecuteAsync(new(
                 DesignPersistenceFixtureData.ReusableActivityDraftId,
                 ExpectedRevision: 0,
                 DesignPersistenceFixtureData.ReusableActivityDraftState("stale"),
@@ -311,15 +315,56 @@ public abstract class DesignIsolationAndRestartContractSuite
             WorkflowDesignContractSuite.CanonicalSnapshot(workflowVersion, versionLayout!));
     }
 
-    private static async Task AssertSameMissingOutcomeAsync(Func<Task> missing, Func<Task> foreign)
+    private static async Task AssertNonCancellationFailureAsync(Func<Task> operation)
+    {
+        var exception = await Record.ExceptionAsync(operation);
+
+        Assert.NotNull(exception);
+        Assert.False(exception is OperationCanceledException, "A conflict or rejected write must not be reported as cancellation.");
+    }
+
+    private static async Task AssertSameMissingOutcomeAsync(
+        string missingIdentity,
+        Func<Task> missing,
+        string foreignIdentity,
+        Func<Task> foreign)
     {
         var missingException = await Record.ExceptionAsync(missing);
         var foreignException = await Record.ExceptionAsync(foreign);
 
         Assert.NotNull(missingException);
         Assert.NotNull(foreignException);
-        Assert.Equal(missingException.GetType(), foreignException.GetType());
+        Assert.Equal(
+            ExceptionClassification(missingException, missingIdentity),
+            ExceptionClassification(foreignException, foreignIdentity));
     }
+
+    private static string ExceptionClassification(Exception exception, string requestedIdentity)
+    {
+        var values = exception
+            .GetType()
+            .GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
+            .Where(property =>
+                property.DeclaringType != typeof(Exception) &&
+                property.GetMethod is not null &&
+                property.GetIndexParameters().Length == 0)
+            .Select(property => (property.Name, Value: property.GetValue(exception)))
+            .Where(item => item.Value is null || item.Value is string || item.Value.GetType().IsValueType)
+            .Select(item => $"{item.Name}={Normalize(item.Value?.ToString() ?? "<null>", requestedIdentity)}")
+            .Order(StringComparer.Ordinal)
+            .Prepend($"message={Normalize(exception.Message, requestedIdentity)}")
+            .Prepend($"hresult={exception.HResult}")
+            .Prepend($"type={exception.GetType().FullName}")
+            .ToArray();
+        var classification = string.Join("|", values);
+
+        Assert.DoesNotContain(DesignPersistenceFixtureData.ScopeA, classification, StringComparison.Ordinal);
+        Assert.DoesNotContain(DesignPersistenceFixtureData.ScopeB, classification, StringComparison.Ordinal);
+        return classification;
+    }
+
+    private static string Normalize(string value, string requestedIdentity) =>
+        value.Replace(requestedIdentity, "<requested-identity>", StringComparison.Ordinal);
 
     private sealed record SeededScope(string PromotedVersionId);
 
