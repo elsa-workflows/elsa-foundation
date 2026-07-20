@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Primitives.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +22,16 @@ public interface IDesignPersistenceContractFixture : IAsyncDisposable
 
     /// <summary>Validates the selected schema and provider capabilities without applying changes.</summary>
     Task ValidateReadinessAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs the provider fixture's normal activity reconciliation entry point with the supplied
+    /// source candidates. The shared suite deliberately knows no reconciliation implementation,
+    /// event publisher, or provider SDK; fixtures translate this call to their composed host.
+    /// </summary>
+    Task ReconcileActivityVersionsAsync(
+        string storageScope,
+        IReadOnlyCollection<ActivityDefinitionVersion> candidates,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Creates one durable fixture per mandatory provider without exposing provider SDK types to scenarios.</summary>

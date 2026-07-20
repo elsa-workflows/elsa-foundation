@@ -67,8 +67,8 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 
 ### Tests for User Story 1
 
-- [ ] T021 [P] [US1] Extract workflow definition/draft/version/layout black-box scenarios from existing tests into `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/WorkflowDesignContractSuite.cs`
-- [ ] T022 [P] [US1] Extract activity definition/version/reconciliation black-box scenarios from existing tests into `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/ActivityDesignContractSuite.cs`
+- [X] T021 [P] [US1] Extract workflow definition/draft/version/layout black-box scenarios from existing tests into `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/WorkflowDesignContractSuite.cs`
+- [X] T022 [P] [US1] Extract activity definition/version/reconciliation black-box scenarios from existing tests into `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/ActivityDesignContractSuite.cs`
 - [ ] T023 [P] [US1] Add multi-document rollback, partial staging, cancellation, lost acknowledgement, replay fingerprint, and duplicate-event scenarios in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignAtomicityContractSuite.cs`
 - [ ] T024 [P] [US1] Add point-read/write scope isolation, stale OCC, duplicate identity, wrong-scope non-disclosure, and restart scenarios in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignIsolationAndRestartContractSuite.cs`
 - [ ] T025 [US1] Run T021–T024 against the temporary EF SQLite oracle and record canonical result hashes/behavior baseline in `specs/093-groundwork-design-persistence/quickstart.md` (completes T004), then run the same scenarios against existing Groundwork adapters and record the intentional red baseline

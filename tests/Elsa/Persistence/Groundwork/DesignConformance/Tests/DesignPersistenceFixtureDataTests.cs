@@ -84,6 +84,27 @@ public class DesignPersistenceFixtureDataTests
     }
 
     [Fact]
+    public void Workflow_state_uses_the_fixed_activity_version_identity()
+    {
+        var state = DesignPersistenceFixtureData.WorkflowState();
+
+        Assert.NotNull(state.RootActivity);
+        Assert.Equal(DesignPersistenceFixtureData.ActivityVersionId, state.RootActivity!.ActivityVersionId);
+    }
+
+    [Fact]
+    public void Reconciliation_candidate_keeps_its_definition_identity_and_scope()
+    {
+        var candidate = DesignPersistenceFixtureData.ReconciledActivityVersion(DesignPersistenceFixtureData.ScopeB);
+
+        Assert.NotNull(candidate.Definition);
+        Assert.Equal(DesignPersistenceFixtureData.ReconciledActivityDefinitionId, candidate.DefinitionId);
+        Assert.Equal(candidate.DefinitionId, candidate.Definition!.Id);
+        Assert.Equal(DesignPersistenceFixtureData.ScopeB, candidate.TenantId);
+        Assert.Equal(DesignPersistenceFixtureData.ScopeB, candidate.Definition.TenantId);
+    }
+
+    [Fact]
     public void Deterministic_identity_generator_fails_when_a_scenario_exceeds_its_declared_inputs()
     {
         var generator = new DesignPersistenceFixtureData.DeterministicIdentityGenerator(["one"]);

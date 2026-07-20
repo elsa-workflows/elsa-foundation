@@ -34,6 +34,18 @@ full-solution Release discovery found 6,588 tests without executing them. The sh
 fixture scaffold currently has 8 deterministic-fixture tests. See [baseline
 evidence](evidence/baseline.md) for the commands and precise evidence scope.
 
+### T021/T022 shared contract-suite scaffold
+
+The shared project now contains abstract, executable-by-inheritance workflow and activity suites.
+They exercise readiness, scoped lifecycle reads and writes, restart/result-hash parity, draft and
+version layout round-trips, clone provenance, validation rejection, descriptor serialization,
+SemVer identity, missing outcomes, permanent-delete outcomes, and reconciliation idempotency. The
+scenarios reference only Elsa core contracts plus
+`IDesignPersistenceContractFixture`; concrete EF-oracle and provider fixtures remain T025 and
+T051–T054 work. Therefore no provider-parity or oracle result hashes are claimed at this checkpoint.
+The focused Release project restore/build/test completed with `11/11` tests; the executable
+provider scenarios remain pending a concrete fixture inheritance target.
+
 No temporary EF SQLite oracle workload result hashes exist yet: the black-box workloads
 that define them are T021–T024. T025 runs the EF SQLite oracle, records the canonical
 behavior hashes, and then records the existing Groundwork red baseline. The test

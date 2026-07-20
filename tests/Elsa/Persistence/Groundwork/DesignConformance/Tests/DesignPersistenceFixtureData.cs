@@ -4,6 +4,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.Tests;
@@ -23,6 +24,8 @@ public static class DesignPersistenceFixtureData
     public const string WorkflowVersionLayoutId = "workflow-order-processing-v1-layout";
     public const string ActivityDefinitionId = "activity-http-request";
     public const string ActivityVersionId = "activity-http-request-v1";
+    public const string ReconciledActivityDefinitionId = "activity-reconciled";
+    public const string ReconciledActivityVersionId = "activity-reconciled-v1";
 
     private static readonly JsonSerializerOptions SerializationOptions = new(JsonSerializerDefaults.Web)
     {
@@ -48,11 +51,22 @@ public static class DesignPersistenceFixtureData
         SourceCreatedAt = Epoch
     };
 
-    public static WorkflowDefinitionDraft WorkflowDraft(string scope = ScopeA) => new()
+    public static WorkflowDefinitionState WorkflowState() => new(
+        Variables: [],
+        RootActivity: new ActivityNode("root", ActivityVersionId, [], []),
+        Inputs: [],
+        Outputs: [],
+        StrategyOptions: null);
+
+    public static IReadOnlyCollection<DesignMetadataRecord> WorkflowDraftLayout() =>
+    [new("root", 10, 20, 180, 64)];
+
+    public static WorkflowDefinitionDraft WorkflowDraft(string scope = ScopeA, WorkflowDefinitionState? state = null) => new()
     {
         Id = WorkflowDraftId,
         TenantId = scope,
         WorkflowDefinitionId = WorkflowDefinitionId,
+        State = state ?? WorkflowDefinitionState.Empty,
         CreatedAt = Epoch,
         LastModifiedAt = Epoch
     };
@@ -76,20 +90,53 @@ public static class DesignPersistenceFixtureData
         LastModifiedAt = Epoch
     };
 
-    public static ActivityDefinitionVersion ActivityVersion(string scope = ScopeA) => new("1.0.0", ActivityDefinitionId)
+    public static ActivityDefinitionVersion ActivityVersion(string version = "1.0.0", string id = ActivityVersionId, string scope = ScopeA) => new(version, ActivityDefinitionId)
     {
-        Id = ActivityVersionId,
+        Id = id,
         TenantId = scope,
         ProviderKey = "elsa.http",
         ProviderSchemaVersion = "1",
         ConsumerKey = "elsa.workflow",
         ConsumerSchemaVersion = "1",
+        DescriptorPayload = JsonSerializer.SerializeToElement(new { kind = "http-request", method = "GET" }, SerializationOptions),
         SourceKind = "fixture",
         SourceId = "http-request",
         Hash = "fixture-hash",
         CreatedAt = Epoch,
         LastModifiedAt = Epoch
     };
+
+    public static ActivityDefinitionVersion ReconciledActivityVersion(string scope = ScopeA)
+    {
+        var definition = new ActivityDefinition
+        {
+            Id = ReconciledActivityDefinitionId,
+            TenantId = scope,
+            ActivityTypeKey = "Elsa.Http.ReconciledRequest",
+            Category = "HTTP",
+            DisplayName = "Reconciled HTTP request",
+            Description = "A deterministic reconciliation candidate.",
+            CreatedAt = Epoch,
+            LastModifiedAt = Epoch
+        };
+
+        return new ActivityDefinitionVersion("1.0.0", definition.Id)
+        {
+            Id = ReconciledActivityVersionId,
+            TenantId = scope,
+            Definition = definition,
+            ProviderKey = "elsa.http",
+            ProviderSchemaVersion = "1",
+            ConsumerKey = "elsa.workflow",
+            ConsumerSchemaVersion = "1",
+            DescriptorPayload = JsonSerializer.SerializeToElement(new { kind = "reconciled-http-request", method = "GET" }, SerializationOptions),
+            SourceKind = "fixture",
+            SourceId = "reconciled-http-request",
+            Hash = "fixture-reconciled-hash",
+            CreatedAt = Epoch,
+            LastModifiedAt = Epoch
+        };
+    }
 
     /// <summary>Computes an invariant result hash for parity assertions and evidence records.</summary>
     public static string ResultHash<T>(T value)
