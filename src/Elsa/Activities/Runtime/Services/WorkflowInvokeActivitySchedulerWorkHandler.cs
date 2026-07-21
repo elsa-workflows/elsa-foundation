@@ -875,12 +875,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 durableValueChanges: []);
 
             yield return new RuntimeSchedulerWorkItem(
-                workItemId: $"{invokeWorkItem.WorkItemId}:create-bookmark:{request.BookmarkId}",
+                workItemId: RuntimeChainId.Derive(invokeWorkItem.WorkItemId, $"create-bookmark:{request.BookmarkId}"),
                 workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
-                commandId: $"{invokeWorkItem.CommandId}:create-bookmark:{request.BookmarkId}",
+                commandId: RuntimeChainId.Derive(invokeWorkItem.CommandId, $"create-bookmark:{request.BookmarkId}"),
                 commandKind: WorkflowExecutionCommandKind.CreateBookmark,
                 envelopeId: invokeWorkItem.EnvelopeId,
-                idempotencyKey: $"{invokeWorkItem.IdempotencyKey}:create-bookmark:{request.BookmarkId}",
+                idempotencyKey: RuntimeChainId.Derive(invokeWorkItem.IdempotencyKey, $"create-bookmark:{request.BookmarkId}"),
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: invokeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
@@ -1019,12 +1019,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             commandMetadata[RuntimeMetadataKeys.ChildExecutableNodeId] = request.ExecutableNodeId;
 
             var workItem = new RuntimeSchedulerWorkItem(
-                workItemId: $"{invokeWorkItem.WorkItemId}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                workItemId: RuntimeChainId.Derive(invokeWorkItem.WorkItemId, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
                 workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
-                commandId: $"{invokeWorkItem.CommandId}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                commandId: RuntimeChainId.Derive(invokeWorkItem.CommandId, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
                 commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
                 envelopeId: invokeWorkItem.EnvelopeId,
-                idempotencyKey: $"{invokeWorkItem.IdempotencyKey}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                idempotencyKey: RuntimeChainId.Derive(invokeWorkItem.IdempotencyKey, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: invokeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
@@ -1177,12 +1177,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{invokeWorkItem.WorkItemId}:complete:{invokePayload.ActivityExecutionId}",
+            workItemId: RuntimeChainId.Derive(invokeWorkItem.WorkItemId, $"complete:{invokePayload.ActivityExecutionId}"),
             workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
-            commandId: $"{invokeWorkItem.CommandId}:complete:{invokePayload.ActivityExecutionId}",
+            commandId: RuntimeChainId.Derive(invokeWorkItem.CommandId, $"complete:{invokePayload.ActivityExecutionId}"),
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             envelopeId: invokeWorkItem.EnvelopeId,
-            idempotencyKey: $"{invokeWorkItem.IdempotencyKey}:complete:{invokePayload.ActivityExecutionId}",
+            idempotencyKey: RuntimeChainId.Derive(invokeWorkItem.IdempotencyKey, $"complete:{invokePayload.ActivityExecutionId}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: invokeWorkItem.Sequence is { } sequence ? sequence + 1 : null,

@@ -876,12 +876,12 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             commandMetadata[RuntimeMetadataKeys.ChildExecutableNodeId] = request.ExecutableNodeId;
 
             var workItem = new RuntimeSchedulerWorkItem(
-                workItemId: $"{parentCompletionWorkItem.WorkItemId}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                workItemId: RuntimeChainId.Derive(parentCompletionWorkItem.WorkItemId, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
                 workflowExecutionId: parentCompletionWorkItem.WorkflowExecutionId,
-                commandId: $"{parentCompletionWorkItem.CommandId}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                commandId: RuntimeChainId.Derive(parentCompletionWorkItem.CommandId, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
                 commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
                 envelopeId: parentCompletionWorkItem.EnvelopeId,
-                idempotencyKey: $"{parentCompletionWorkItem.IdempotencyKey}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                idempotencyKey: RuntimeChainId.Derive(parentCompletionWorkItem.IdempotencyKey, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: parentCompletionWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
@@ -1150,12 +1150,12 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{parentCompletionWorkItem.WorkItemId}:complete:{parentCompletionPayload.ActivityExecutionId}",
+            workItemId: RuntimeChainId.Derive(parentCompletionWorkItem.WorkItemId, $"complete:{parentCompletionPayload.ActivityExecutionId}"),
             workflowExecutionId: parentCompletionWorkItem.WorkflowExecutionId,
-            commandId: $"{parentCompletionWorkItem.CommandId}:complete:{parentCompletionPayload.ActivityExecutionId}",
+            commandId: RuntimeChainId.Derive(parentCompletionWorkItem.CommandId, $"complete:{parentCompletionPayload.ActivityExecutionId}"),
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             envelopeId: parentCompletionWorkItem.EnvelopeId,
-            idempotencyKey: $"{parentCompletionWorkItem.IdempotencyKey}:complete:{parentCompletionPayload.ActivityExecutionId}",
+            idempotencyKey: RuntimeChainId.Derive(parentCompletionWorkItem.IdempotencyKey, $"complete:{parentCompletionPayload.ActivityExecutionId}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: parentCompletionWorkItem.Sequence is { } sequence ? sequence + 1 : null,
@@ -1181,12 +1181,12 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             SchedulerCompletionKind.ContinuationScheduling);
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{sourceWorkItem.WorkItemId}:continuation:{activityExecutionId}",
+            workItemId: RuntimeChainId.Derive(sourceWorkItem.WorkItemId, $"continuation:{activityExecutionId}"),
             workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
-            commandId: $"{sourceWorkItem.CommandId}:continuation:{activityExecutionId}",
+            commandId: RuntimeChainId.Derive(sourceWorkItem.CommandId, $"continuation:{activityExecutionId}"),
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             envelopeId: sourceWorkItem.EnvelopeId,
-            idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:continuation:{activityExecutionId}",
+            idempotencyKey: RuntimeChainId.Derive(sourceWorkItem.IdempotencyKey, $"continuation:{activityExecutionId}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: sourceWorkItem.Sequence is { } sequence ? sequence + 1 : null,
