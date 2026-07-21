@@ -388,6 +388,58 @@ reader/evaluator tests (querying 126→91, persistence core 43→30) and the add
 suites and gates everywhere else. T050 records the exact reviewed candidate and
 independent review below when this slice freezes.
 
+### T050 independent review and final US2 evidence (2026-07-21)
+
+Three independent read-only reviewers examined the exact range `4d44cd435..a8dcb5d64`
+across (1) load-all migration fidelity and manifest soundness — including the
+missing-value row-loss hazard, verified safe because every traversed route-head field
+is a structurally required property — plus watermark stability and the fingerprint
+re-pin; (2) IN-cardinality/batching correctness and test-objective preservation; and
+(3) the new contract suites, plan gate, architecture ratchet, and documentation
+truthfulness (every checked factual claim, including the T043–T045 predating claim,
+verified against history).
+
+Two majors were found and remediated in `b66c443fa`, each re-verified by its
+originating reviewer:
+
+- deleting the transitional reader's suite had orphaned the live
+  `BoundedDocumentQueryPager` misbehaving-provider guards — restored as
+  `BoundedDocumentQueryPagerTests` (14 facts) with a corrected ledger row;
+- the SQLite plan gate proved only "no full scan" — it now also requires the
+  certified plan index to be positively used (SEARCH/covering pass naming the exact
+  planned identifier), closing the rerouted-index and vacuous-empty-plan holes;
+  19/19 probes remain green under the stronger gate.
+
+The same commit routed the authoring-state `ListAsync` through
+`GroundworkMembershipBatches` (latent cap-rejection gap, no live callers), tightened
+the T049 runtime-manifest exclusion to qualified member references only, renamed the
+draft-resolution scenario to what the fixed-clock fixture proves, and removed dead
+order constants plus a stale extension-doc link.
+
+Recorded dispositions (accepted by the originating reviewers):
+
+- The corrupt-payload inner-type / bounded-read provider-failure / no-double-wrap
+  assertion granularity that was specific to the deleted transitional reader's
+  boundary is a limited accepted reduction; the surviving named-store suites keep the
+  core Provider/Serialization classification, cancellation pass-through, and
+  readiness coverage.
+- The T040 probe matrix covers the contract's Bounded Query Catalog rows; the
+  management-projection and aux `list-by-*`/retention routes receive their
+  provider-plan evidence in the US3 provider matrix (T063) alongside SQL Server,
+  PostgreSQL, and MongoDB capture.
+- Skip/take paging parity beyond page-crossing completeness is exercised
+  structurally by the plan probes today and is a recorded follow-up for the US3
+  conformance matrix.
+
+The final reviewed US2 candidate is `b66c443fa`. Verification at that candidate,
+`2026-07-21T14:23+02:00` (CEST): Groundwork querying `105/105` (includes the restored
+pager guards), workflow design Groundwork `85/85`, activity design Groundwork
+`70/70`, shared design conformance `96` passed + `1` intentional skip, SQLite
+provider leaf `33/33`, temporary EF oracle `38` passed + `12` declared skips,
+Groundwork core persistence `639/639`, architecture ratchets `263/263`, full
+`Elsa.Server.slnx` Release build `0` errors, `git diff --check` clean; the T048
+domain/API counts are unchanged from the evidence section above.
+
 ## 1. Restore and build
 
 ```bash

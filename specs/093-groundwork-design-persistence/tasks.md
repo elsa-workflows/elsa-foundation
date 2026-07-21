@@ -115,7 +115,7 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 - [x] T047 [US2] Remove every design by-collection/list-all fallback and obsolete fallback documentation in `src/Elsa/Persistence/Groundwork/Querying/`, `src/Elsa/Workflows/Design/Persistence/Groundwork/`, and `src/Elsa/Activities/Design/Persistence/Groundwork/`
 - [x] T048 [US2] Complete every T020 coverage-ledger row introduced by T041–T047 with direct translator/read-store/manifest branch tests in the owning Groundwork test directories, then run T037–T040 at representative SQLite scale with allocation/command counters and attach result hashes plus plan index in `specs/093-groundwork-design-persistence/quickstart.md`
 - [x] T049 [US2] Add a negative architecture test that fails on `InMemoryQueryEvaluator`, `DocumentStoreQuery` list-all, or uncertified scale-bearing design paths in `tests/Elsa/Architecture/DesignPersistenceBoundedQueryTests.cs`
-- [ ] T050 [US2] Commit and independently review the US2 exact HEAD for query semantic parity and bounded execution; record the commit/review in `specs/093-groundwork-design-persistence/quickstart.md`
+- [x] T050 [US2] Commit and independently review the US2 exact HEAD for query semantic parity and bounded execution; record the commit/review in `specs/093-groundwork-design-persistence/quickstart.md`. Reviewed candidate `b66c443fa`; review evidence, remediations, and recorded dispositions live in quickstart's "T050 independent review and final US2 evidence" section.
 
 **Checkpoint**: User Story 2 passes on SQLite with complete server-side query evidence and no production fallback path.
 
