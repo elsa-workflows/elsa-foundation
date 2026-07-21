@@ -21,6 +21,8 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 public class GroundworkAddActivityDefinitionCommandTests
 {
     private static readonly FakePayloadSerializer Payloads = new();
+    private static readonly DateTimeOffset FixedNow = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+    private static readonly Elsa.Primitives.Contracts.ISystemClock Clock = new FixedSystemClock(FixedNow);
 
     [Fact]
     public async Task Mismatched_version_tenant_rejects_the_complete_batch_before_staging()
@@ -31,6 +33,7 @@ public class GroundworkAddActivityDefinitionCommandTests
             GroundworkTestAccess.AccessContext("tenant-a"),
             CreateDefinitionStore(store),
             new ImmediateDistributedLockProvider(),
+            Clock,
             new GroundworkDesignAtomicWrite(store));
         var definition = new ActivityDefinition
         {
@@ -58,6 +61,7 @@ public class GroundworkAddActivityDefinitionCommandTests
             GroundworkTestAccess.AccessContext("tenant-a"),
             CreateVersionStore(store),
             new ImmediateDistributedLockProvider(),
+            Clock,
             new GroundworkDesignAtomicWrite(store));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -76,6 +80,7 @@ public class GroundworkAddActivityDefinitionCommandTests
             GroundworkTestAccess.DefaultAccessContextAccessor,
             CreateDefinitionStore(store),
             new ImmediateDistributedLockProvider(),
+            Clock,
             new GroundworkDesignAtomicWrite(store));
 
         var definition = new ActivityDefinition { Id = "def-1", ActivityTypeKey = "Acme.Send", Category = "General", DisplayName = "Send" };
@@ -169,6 +174,7 @@ public class GroundworkAddActivityDefinitionCommandTests
             GroundworkTestAccess.DefaultAccessContextAccessor,
             CreateDefinitionStore(inner),
             new ImmediateDistributedLockProvider(),
+            Clock,
             new GroundworkDesignAtomicWrite(store));
 
         await Assert.ThrowsAsync<GroundworkDesignOperationRejectedException>(() =>
@@ -251,6 +257,7 @@ public class GroundworkAddActivityDefinitionCommandTests
             GroundworkTestAccess.DefaultAccessContextAccessor,
             CreateVersionStore(inner),
             new ImmediateDistributedLockProvider(),
+            Clock,
             new GroundworkDesignAtomicWrite(store));
 
         await Assert.ThrowsAsync<GroundworkDesignOperationRejectedException>(() =>
@@ -353,6 +360,53 @@ public class GroundworkAddActivityDefinitionCommandTests
         Assert.Single(inner.Snapshot(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
     }
 
+    [Fact]
+    public async Task Create_stamps_CreatedAt_and_LastModifiedAt_on_definition_and_first_version()
+    {
+        // Regression for the "Updated 01/01/1" studio bug (elsa-foundation-studio#457): the Groundwork document
+        // writer does not auto-stamp timestamps, so the create command must set them from the clock. Without the
+        // fix both entities persist DateTimeOffset.MinValue.
+        var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        var command = CreateDefinitionCommand(store);
+        var definition = Definition("def-1");
+        var version = Version("def-1", "ver-1");
+
+        Assert.Equal(default, definition.CreatedAt);
+        Assert.Equal(default, version.CreatedAt);
+
+        await command.Execute(new DesignOperationKey("create-timestamps"), definition, version);
+
+        var definitionStore = CreateDefinitionStore(store);
+        var readDefinition = await definitionStore.GetAsync("def-1");
+        var readVersion = await CreateVersionStore(store).GetAsync("ver-1");
+
+        Assert.Equal(FixedNow, readDefinition.CreatedAt);
+        Assert.Equal(FixedNow, readDefinition.LastModifiedAt);
+        Assert.Equal(FixedNow, readVersion.CreatedAt);
+        Assert.Equal(FixedNow, readVersion.LastModifiedAt);
+    }
+
+    [Fact]
+    public async Task Add_version_stamps_CreatedAt_and_LastModifiedAt()
+    {
+        var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        var command = CreateVersionCommand(store);
+        var version = Version("def-1", "ver-1");
+
+        Assert.Equal(default, version.CreatedAt);
+
+        await command.Execute(new DesignOperationKey("version-timestamps"), version);
+
+        var readVersion = await CreateVersionStore(store).GetAsync("ver-1");
+        Assert.Equal(FixedNow, readVersion.CreatedAt);
+        Assert.Equal(FixedNow, readVersion.LastModifiedAt);
+    }
+
+    private sealed class FixedSystemClock(DateTimeOffset now) : Elsa.Primitives.Contracts.ISystemClock
+    {
+        public DateTimeOffset UtcNow { get; } = now;
+    }
+
     private static GroundworkAddActivityDefinitionCommand CreateDefinitionCommand(
         IDocumentStore store,
         IActivityDefinitionStore? definitionStore = null) =>
@@ -361,6 +415,7 @@ public class GroundworkAddActivityDefinitionCommandTests
             GroundworkTestAccess.DefaultAccessContextAccessor,
             definitionStore ?? CreateDefinitionStore(store),
             new ImmediateDistributedLockProvider(),
+            Clock,
             new GroundworkDesignAtomicWrite(store));
 
     private static GroundworkAddActivityDefinitionVersionCommand CreateVersionCommand(
@@ -371,6 +426,7 @@ public class GroundworkAddActivityDefinitionCommandTests
             GroundworkTestAccess.DefaultAccessContextAccessor,
             versionStore ?? CreateVersionStore(store),
             new ImmediateDistributedLockProvider(),
+            Clock,
             new GroundworkDesignAtomicWrite(store));
 
     private static GroundworkActivityDefinitionVersionStore CreateVersionStore(IDocumentStore store) =>

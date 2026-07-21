@@ -9,6 +9,7 @@ using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
@@ -19,6 +20,7 @@ public sealed class GroundworkAddActivityDefinitionVersionCommand(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IActivityDefinitionVersionStore versionStore,
     IDistributedLockProvider lockProvider,
+    ISystemClock clock,
     IDesignAtomicWriter atomicWrite)
     : IAddActivityDefinitionVersionCommand
 {
@@ -31,6 +33,11 @@ public sealed class GroundworkAddActivityDefinitionVersionCommand(
     {
         ArgumentNullException.ThrowIfNull(version);
         ArgumentNullException.ThrowIfNull(operationKey);
+
+        // The Groundwork document writer does not auto-stamp entity timestamps (the EF Core store does),
+        // so stamp the new version here to avoid persisting DateTimeOffset.MinValue.
+        var now = clock.UtcNow;
+        version.CreatedAt = version.LastModifiedAt = now;
 
         var accessContext = accessContextAccessor.Current;
         accessContext.EnsureTenantScope(version.TenantId);
