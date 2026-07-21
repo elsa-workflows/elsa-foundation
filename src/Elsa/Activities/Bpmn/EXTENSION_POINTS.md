@@ -33,6 +33,8 @@ Known implementations:
 - `NoneStartEventBehavior` *(intra-domain — default)*
 - `NoneEndEventBehavior` *(intra-domain — default)*
 - `TerminateEndEventBehavior` *(intra-domain — default)*
+- `CatchEventBehavior` *(intra-domain — default; timer/message/signal intermediate catch events,
+  spec 116 — schedules the element's bound suspending child and routes on its resumed completion)*
 - `TaskBehavior` *(intra-domain — default)*
 - `SubProcessBehavior` *(intra-domain — default)*
 - `ExclusiveGatewayBehavior` *(intra-domain — default)*

@@ -30,6 +30,33 @@ public sealed class NoneEndEventBehavior : IBpmnElementBehavior
         throw new BpmnExecutionException($"BPMN end event '{context.Element.ElementId}' cannot own a child activity.");
 }
 
+/// <summary>
+/// Intermediate catch event (timer/message/signal, spec 116): parks the arriving token and schedules
+/// the element's bound suspending child (e.g. <c>Delay</c> for timer, a waiting <c>Event</c> for
+/// message/signal). The child holds the durable timer/bookmark through the runtime's existing
+/// suspension surface; its completion is an ordinary child completion that routes outbound flows by
+/// the shared task selection rules. Graph validation guarantees the child binding exists.
+/// </summary>
+public sealed class CatchEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.IntermediateCatchEvent;
+    public string DisplayName => "Intermediate Catch Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.ScheduleChild());
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context)
+    {
+        var flows = BpmnFlowSelector.SelectTaskFlows(context);
+        if (flows.Count == 0 && context.OutboundFlows.Count > 0)
+            return BpmnBehaviorDecision.Of(BpmnBehaviorCommand.Fault(
+                "bpmn.flow.none-taken",
+                $"BPMN intermediate catch event '{context.Element.ElementId}' completed with outcomes [{string.Join(", ", context.OutcomeNames)}] but no outbound sequence flow matched and no default flow is declared."));
+
+        return BpmnBehaviorDecision.Of(BpmnBehaviorCommand.EmitTokens(BpmnFlowSelector.FlowIds(flows)));
+    }
+}
+
 /// <summary>Terminate end event: consume every live token and complete the process immediately.</summary>
 public sealed class TerminateEndEventBehavior : IBpmnElementBehavior
 {

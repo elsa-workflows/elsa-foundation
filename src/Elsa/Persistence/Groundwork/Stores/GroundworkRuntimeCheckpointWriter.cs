@@ -35,6 +35,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
     private readonly IPersistenceAccessContextAccessor _accessContextAccessor;
     private readonly IWorkflowExecutableRootWriteLeaseManager _rootWriteLeaseManager;
     private readonly TimeProvider _timeProvider;
+    private readonly RuntimeGroupCommitCoordinator? _groupCommitCoordinator;
 
     public GroundworkRuntimeCheckpointWriter(
         IDocumentStore commitLedger,
@@ -48,7 +49,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IIncidentStateStore incidentStateStore,
         IExecutionLivenessStateStore operationalStateStore,
         IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        RuntimeGroupCommitCoordinator? groupCommitCoordinator = null)
         : this(
             commitLedger,
             serializer,
@@ -62,7 +64,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             incidentStateStore,
             operationalStateStore,
             rootWriteLeaseManager,
-            timeProvider)
+            timeProvider,
+            groupCommitCoordinator)
     {
     }
 
@@ -79,7 +82,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IIncidentStateStore incidentStateStore,
         IExecutionLivenessStateStore operationalStateStore,
         IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        RuntimeGroupCommitCoordinator? groupCommitCoordinator = null)
     {
         ArgumentNullException.ThrowIfNull(commitLedger);
         ArgumentNullException.ThrowIfNull(serializer);
@@ -98,6 +102,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         _accessContextAccessor = accessContextAccessor;
         _rootWriteLeaseManager = rootWriteLeaseManager;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _groupCommitCoordinator = groupCommitCoordinator;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -130,9 +135,35 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
 
         return await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
             commit,
-            (candidate, token) => ApplyAtomicallyAsync(candidate, fingerprint, token),
+            (candidate, token) => WriteAsync(candidate, fingerprint, token),
             cancellationToken);
     }
+
+    // The durable write, taken under the execution root-write lease. When a group-commit coordinator is registered
+    // (spec 115), concurrent commits waiting on the single durable writer are folded into one shared unit-of-work / one
+    // fsync; a lone committer degrades to the same single-commit path used when group commit is off. Either way this
+    // one commit is applied atomically and acknowledged only after its bytes are durable.
+    private ValueTask<RuntimeCheckpointCommitStoreResult> WriteAsync(
+        RuntimeCheckpointCommit commit,
+        string fingerprint,
+        CancellationToken cancellationToken)
+    {
+        if (_groupCommitCoordinator is null)
+            return ApplyAtomicallyAsync(commit, fingerprint, cancellationToken);
+
+        return _groupCommitCoordinator.SubmitAsync(
+            BatchTenantKey(commit),
+            RuntimeCheckpointCommitScope(),
+            (transactionalStore, token) => ApplyStagedAsync(transactionalStore, commit, fingerprint, token),
+            token => ApplyAtomicallyAsync(commit, fingerprint, token),
+            cancellationToken);
+    }
+
+    // Batches may only fold same-tenant commits: the Groundwork unit-of-work scope resolver rejects a mixed-tenant
+    // transaction. The checkpoint's tenant is carried on its workflow-execution state (validated in CommitAsync);
+    // commits without a workflow-execution change key on the empty tenant.
+    private static string BatchTenantKey(RuntimeCheckpointCommit commit) =>
+        commit.StateChanges.WorkflowExecution?.State.TenantId ?? string.Empty;
 
     private async ValueTask<RuntimeCheckpointCommitStoreResult> ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
         RuntimeCheckpointCommit commit,
@@ -200,29 +231,9 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             {
                 await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
                 var transactionalStore = new GroundworkDocumentUnitOfWorkStore(_commitLedger, unitOfWork);
-                await ValidateAndTouchExpectedFenceAsync(transactionalStore, commit, cancellationToken);
-                var stores = GroundworkApplyStores.Create(transactionalStore, _serializer, _accessContextAccessor);
-                await ValidateAndTouchTestScopesAsync(stores, commit, cancellationToken);
-                await ApplyWorkflowExecutionStateChangeAsync(stores.WorkflowExecutionStateStore, commit.StateChanges.WorkflowExecution, cancellationToken);
-                await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
-                await ApplyActivityExecutionStateChangesAsync(stores.ActivityExecutionStateStore, commit.StateChanges.ActivityExecutions, cancellationToken);
-                await ApplyActivityExecutionInspectionChangesAsync(stores.ActivityExecutionInspectionWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
-                await ApplyActivityExecutionHierarchyChangesAsync(stores.ActivityExecutionHierarchyWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
-                await ApplyBookmarkStateChangesAsync(stores.BookmarkStateStore, commit.StateChanges.Bookmarks, cancellationToken);
-                await ApplyDurableValueStateChangesAsync(stores.DurableValueStateStore, commit.StateChanges.DurableValues, cancellationToken);
-                await ApplyIncidentStateChangesAsync(stores.IncidentStateStore, commit.StateChanges.Incidents, cancellationToken);
-                await ApplyOperationalStateChangesAsync(stores.ExecutionLivenessStateStore, commit.StateChanges.Operational, cancellationToken);
-                await ApplyActivityScopeCleanupsAsync(stores, commit.StateChanges.ActivityScopeCleanups, cancellationToken);
-                await ApplyConsumedSchedulerWorkItemsAsync(stores.SchedulerWorkQueue, commit.StateChanges.ConsumedSchedulerWorkItems, cancellationToken);
-                await ApplyWorkflowDispatchChangesAsync(stores.WorkflowDispatchStore, commit.StateChanges.WorkflowDispatches, cancellationToken);
-                await ApplyWorkflowDispatchCancellationsAsync(stores.WorkflowDispatchStore, commit.StateChanges.WorkflowDispatchCancellations, cancellationToken);
-                await ApplyPostCommitOutboxAsync(stores.PostCommitOutboxStore, commit.StateChanges.PostCommitOutbox, cancellationToken);
-                await MarkCommittedAsync(transactionalStore, commit, fingerprint, cancellationToken);
+                var result = await ApplyStagedAsync(transactionalStore, commit, fingerprint, cancellationToken);
                 await unitOfWork.CommitAsync(cancellationToken);
-                return new RuntimeCheckpointCommitStoreResult(OutboxIds(commit))
-                {
-                    ConsumedSchedulerWorkItemIds = ConsumedIds(commit)
-                };
+                return result;
             }
             catch (FenceConcurrencyException)
             {
@@ -268,6 +279,42 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 throw new GroundworkRuntimeCheckpointWriterException($"Failed to atomically commit runtime checkpoint '{commit.CommitId}' for workflow execution '{commit.WorkflowExecutionId}'.", e);
             }
         }
+    }
+
+    // Stages every state change and the create-only commit marker for one checkpoint into an already-open unit-of-work
+    // WITHOUT committing it. Shared by the single-commit path (which then commits this one checkpoint) and by the
+    // group-commit coordinator (which folds many checkpoints into one unit-of-work before a single commit). Throws on
+    // fence / create-only-marker concurrency (which poisons the unit-of-work) so the caller decides how to recover:
+    // the single path retries or reconciles the marker; the group path rolls the shared transaction back and re-drives
+    // each member individually. Persists byte-identical documents regardless of which path drives it.
+    private async ValueTask<RuntimeCheckpointCommitStoreResult> ApplyStagedAsync(
+        IDocumentStore transactionalStore,
+        RuntimeCheckpointCommit commit,
+        string fingerprint,
+        CancellationToken cancellationToken)
+    {
+        await ValidateAndTouchExpectedFenceAsync(transactionalStore, commit, cancellationToken);
+        var stores = GroundworkApplyStores.Create(transactionalStore, _serializer, _accessContextAccessor);
+        await ValidateAndTouchTestScopesAsync(stores, commit, cancellationToken);
+        await ApplyWorkflowExecutionStateChangeAsync(stores.WorkflowExecutionStateStore, commit.StateChanges.WorkflowExecution, cancellationToken);
+        await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
+        await ApplyActivityExecutionStateChangesAsync(stores.ActivityExecutionStateStore, commit.StateChanges.ActivityExecutions, cancellationToken);
+        await ApplyActivityExecutionInspectionChangesAsync(stores.ActivityExecutionInspectionWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
+        await ApplyActivityExecutionHierarchyChangesAsync(stores.ActivityExecutionHierarchyWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
+        await ApplyBookmarkStateChangesAsync(stores.BookmarkStateStore, commit.StateChanges.Bookmarks, cancellationToken);
+        await ApplyDurableValueStateChangesAsync(stores.DurableValueStateStore, commit.StateChanges.DurableValues, cancellationToken);
+        await ApplyIncidentStateChangesAsync(stores.IncidentStateStore, commit.StateChanges.Incidents, cancellationToken);
+        await ApplyOperationalStateChangesAsync(stores.ExecutionLivenessStateStore, commit.StateChanges.Operational, cancellationToken);
+        await ApplyActivityScopeCleanupsAsync(stores, commit.StateChanges.ActivityScopeCleanups, cancellationToken);
+        await ApplyConsumedSchedulerWorkItemsAsync(stores.SchedulerWorkQueue, commit.StateChanges.ConsumedSchedulerWorkItems, cancellationToken);
+        await ApplyWorkflowDispatchChangesAsync(stores.WorkflowDispatchStore, commit.StateChanges.WorkflowDispatches, cancellationToken);
+        await ApplyWorkflowDispatchCancellationsAsync(stores.WorkflowDispatchStore, commit.StateChanges.WorkflowDispatchCancellations, cancellationToken);
+        await ApplyPostCommitOutboxAsync(stores.PostCommitOutboxStore, commit.StateChanges.PostCommitOutbox, cancellationToken);
+        await MarkCommittedAsync(transactionalStore, commit, fingerprint, cancellationToken);
+        return new RuntimeCheckpointCommitStoreResult(OutboxIds(commit))
+        {
+            ConsumedSchedulerWorkItemIds = ConsumedIds(commit)
+        };
     }
 
     private static DocumentCommitScope RuntimeCheckpointCommitScope() =>

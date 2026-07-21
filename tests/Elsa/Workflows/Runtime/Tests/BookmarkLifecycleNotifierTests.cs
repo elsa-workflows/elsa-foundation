@@ -75,6 +75,11 @@ public sealed class BookmarkLifecycleNotifierTests
 
         await notifier.NotifyCreatedAsync(Bookmark);
 
+        // The notifier abandons a timed-out observer instead of awaiting it, so its cancellation handling races
+        // the assertions below. NotifyCreatedAsync returning proves the timeout fired, which guarantees this
+        // signal completes; awaiting it is what makes the assertion deterministic under load.
+        await cooperative.CancellationHandled;
+
         Assert.True(cooperative.CancellationObserved);
         Assert.Equal("bk-1", Assert.Single(recording.Created).BookmarkId);
     }
@@ -101,7 +106,12 @@ public sealed class BookmarkLifecycleNotifierTests
 
     private sealed class CooperativeTimeoutBookmarkLifecycleObserver : IBookmarkLifecycleObserver
     {
+        private readonly TaskCompletionSource _cancellationHandled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public bool CancellationObserved { get; private set; }
+
+        /// <summary>Completes once the observer has reacted to cancellation and recorded <see cref="CancellationObserved"/>.</summary>
+        public Task CancellationHandled => _cancellationHandled.Task;
 
         public ValueTask OnBookmarkCreatedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
             WaitForCancellationAsync(cancellationToken);
@@ -118,6 +128,7 @@ public sealed class BookmarkLifecycleNotifierTests
             finally
             {
                 CancellationObserved = cancellationToken.IsCancellationRequested;
+                _cancellationHandled.TrySetResult();
             }
         }
     }

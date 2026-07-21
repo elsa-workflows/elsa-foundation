@@ -9,10 +9,18 @@ children, and diagnostics.
 
 - Start events emit tokens; sequence flows carry them; end events absorb them. The process completes
   when no live tokens remain and no children are running.
-- Gateways and events are **engine-interpreted**: they never schedule an Elsa activity. Only
-  task-family elements (`task`, `userTask`, `serviceTask`, …) and `subProcess` elements bind a child
-  activity from the `Bpmn.Activities` slot (`childNodeId`). A BPMN task is a visual/semantic wrapper
-  around any Elsa activity; an embedded subprocess typically binds a nested `BpmnProcess`.
+- Gateways and start/end events are **engine-interpreted**: they never schedule an Elsa activity.
+  Task-family elements (`task`, `userTask`, `serviceTask`, …), `subProcess` elements, and
+  `intermediateCatchEvent` elements bind a child activity from the `Bpmn.Activities` slot
+  (`childNodeId`). A BPMN task is a visual/semantic wrapper around any Elsa activity; an embedded
+  subprocess typically binds a nested `BpmnProcess`.
+- **Intermediate catch events** (spec 116) declare exactly one `timer`, `message`, or `signal`
+  event definition and bind a **suspending** child: `Delay` for timer catches, a mid-flow `Event`
+  (`CanStartWorkflow = false`) for message/signal catches. The token parks as awaiting-child while
+  the child holds its durable timer/bookmark through the runtime's ordinary suspension surface;
+  the resumed child's completion routes outbound flows by the shared task selection rules. No BPMN
+  wait machinery exists — raising the named event through the existing stimulus dispatch surface
+  is what resumes a message/signal catch.
 - Flow selection matches the completing child's outcome names: unconditional flows are always taken
   (BPMN's implicit AND-split), a conditional flow (`conditionOutcome`) is taken when the child
   reported that outcome, and the default flow is taken only when nothing else was. Exclusive and
@@ -32,12 +40,14 @@ children, and diagnostics.
 
 ## Slice scope and phasing
 
-This module currently ships the Phase 1 core subset (see `specs/108-bpmn-container-activity/`):
-none start/end events, terminate end events, task family, embedded subprocess, and
-exclusive/parallel/inclusive gateways over **acyclic** graphs. Cyclic graphs are rejected at
-validation. Later phases add timer/message/signal events, boundary events, event-based gateways,
-multi-instance, compensation, transactions, call activities, expression-based flow conditions, and
-BPMN 2.0 XML interchange.
+This module currently ships the Phase 1 core subset (see `specs/108-bpmn-container-activity/`) plus
+the Phase 2 catch-events slice (see `specs/116-bpmn-catch-events/`): none start/end events,
+terminate end events, timer/message/signal intermediate catch events, task family, embedded
+subprocess, and exclusive/parallel/inclusive gateways over **acyclic** graphs. Cyclic graphs are
+rejected at validation. Later units add event-defined start events (including the interchange
+importer's catch-event/eventDefinition support — imports currently drop them with an analyze-time
+issue), boundary events, event-based gateways, multi-instance, compensation, transactions, and call
+activities.
 
 ## Expression-driven gateway conditions
 

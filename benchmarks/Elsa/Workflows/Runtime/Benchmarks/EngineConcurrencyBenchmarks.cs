@@ -3,6 +3,7 @@ using Elsa.Activities.Flowchart;
 using Elsa.Activities.Testing;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -165,6 +166,107 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// A/B for spec 115 group commit on the shared-SQLite single writer — the bottleneck spec 114 isolated (N=128
+    /// shared = 1.5 runs/s vs isolated = 4.5 runs/s, pure write serialization at 1 commit/run). Each level is measured
+    /// twice, back-to-back: group commit OFF (today's one-transaction-per-run path) then ON (concurrent commits fold
+    /// onto one shared unit-of-work / one fsync). Run order is swapped between adjacent levels so a monotonic load
+    /// drift does not systematically favor one variant. Per-run durable checkpoint-commit markers stay 1/run in both
+    /// (the deterministic correctness evidence); the coordinator's batch counters are the deterministic evidence that
+    /// folding actually happened. Walls carry the usual load caveat; read the OFF/ON ratio within a level, not absolutes.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrencyScalingCurve_GroupCommit()
+    {
+        output.WriteLine($"machine uptime/load at start: {ReadUptime()}");
+        output.WriteLine($"processor count: {Environment.ProcessorCount}");
+
+        await MeasureSharedSqliteAsync(concurrency: 8, groupCommit: false, warmup: true);
+        await MeasureSharedSqliteAsync(concurrency: 8, groupCommit: true, warmup: true);
+
+        output.WriteLine($"=== shared-sqlite · hot-loop×{HotLoopLength} · Coalesced+ReplaySafe · group-commit A/B ===");
+        output.WriteLine("Each level: paired OFF/ON measured back-to-back, order alternated across repeats so load drift cancels.");
+        output.WriteLine("N | rep | order | OFF wall(ms) | ON wall(ms) | ON/OFF | OFF thr | ON thr | batchFlushes | batchedMembers | soloFlushes | degraded | aggCommits");
+        const int repeats = 3;
+        // Focus on the saturated regime where a single writer is contended (N=1 no-regression is a one-shot check
+        // below); each level is repeated with alternating order to average out the heavy ambient machine load.
+        int[] levels = [8, 32, 128];
+        var soloProbe = await MeasureSharedSqliteAsync(concurrency: 1, groupCommit: true, warmup: false);
+        var soloBaseline = await MeasureSharedSqliteAsync(concurrency: 1, groupCommit: false, warmup: false);
+        output.WriteLine($"N=1 solo no-regression check: OFF {soloBaseline.TotalWallMs:F1} ms vs ON {soloProbe.TotalWallMs:F1} ms (ON soloFlushes={soloProbe.SoloFlushes}, batchFlushes={soloProbe.BatchFlushes})");
+        foreach (var concurrency in levels)
+        {
+            for (var rep = 0; rep < repeats; rep++)
+            {
+                // Alternate which variant runs first each repeat so a monotonic load drift within a pair does not
+                // systematically favor one variant; the paired ratio is the load-robust signal.
+                var onFirst = rep % 2 == 1;
+                GroupCommitResult off, on;
+                if (onFirst)
+                {
+                    on = await MeasureSharedSqliteAsync(concurrency, groupCommit: true, warmup: false);
+                    off = await MeasureSharedSqliteAsync(concurrency, groupCommit: false, warmup: false);
+                }
+                else
+                {
+                    off = await MeasureSharedSqliteAsync(concurrency, groupCommit: false, warmup: false);
+                    on = await MeasureSharedSqliteAsync(concurrency, groupCommit: true, warmup: false);
+                }
+
+                var ratio = off.TotalWallMs > 0 ? on.TotalWallMs / off.TotalWallMs : double.NaN;
+                var offThr = off.TotalWallMs > 0 ? concurrency / (off.TotalWallMs / 1000.0) : double.NaN;
+                var onThr = on.TotalWallMs > 0 ? concurrency / (on.TotalWallMs / 1000.0) : double.NaN;
+                output.WriteLine(
+                    $"{concurrency,4} | {rep,3} | {(onFirst ? "ON,OFF" : "OFF,ON"),6} | {off.TotalWallMs,11:F1} | {on.TotalWallMs,10:F1} | {ratio,6:F2} | " +
+                    $"{offThr,7:F1} | {onThr,6:F1} | {on.BatchFlushes,12} | {on.BatchedMembers,14} | {on.SoloFlushes,11} | {on.DegradedBatches,8} | {on.AggregateCommits,10}");
+            }
+        }
+    }
+
+    private async Task<GroupCommitResult> MeasureSharedSqliteAsync(int concurrency, bool groupCommit, bool warmup)
+    {
+        var shared = await NewSqliteStoreAsync();
+        var coordinator = groupCommit ? new RuntimeGroupCommitCoordinator(shared.Store, new RuntimeGroupCommitOptions()) : null;
+
+        var harnesses = new List<WorkflowExecutionHarness>(concurrency);
+        var executables = new List<WorkflowExecutable>(concurrency);
+        for (var index = 0; index < concurrency; index++)
+        {
+            var identity = IdentityFor(index);
+            var harness = NewDurableHarness(shared.Store, identity, $"wfexec-{index}", NewActivityIdPool(index), coordinator);
+            harness.InitializeActivityTypes();
+            harnesses.Add(harness);
+            executables.Add(BenchmarkWorkflows.HotLoop(HotLoopLength, BenchmarkWorkflows.NoOpLeaf, identity));
+        }
+
+        var (totalWallMs, latencies) = await TimeConcurrentRunsAsync(harnesses, executables);
+        var aggregateCommits = await CountCheckpointCommitsAsync(shared.Store);
+
+        foreach (var harness in harnesses)
+            await harness.DisposeAsync();
+        await DisposeStoreAsync(shared.Store, shared.Path);
+
+        return new GroupCommitResult(
+            totalWallMs,
+            Percentile(latencies, 50),
+            Percentile(latencies, 95),
+            aggregateCommits,
+            coordinator?.BatchFlushCount ?? 0,
+            coordinator?.BatchedMemberCount ?? 0,
+            coordinator?.SoloFlushCount ?? 0,
+            coordinator?.DegradedBatchCount ?? 0);
+    }
+
+    private readonly record struct GroupCommitResult(
+        double TotalWallMs,
+        double P50,
+        double P95,
+        long AggregateCommits,
+        long BatchFlushes,
+        long BatchedMembers,
+        long SoloFlushes,
+        long DegradedBatches);
+
     private async Task<(double TotalWallMs, double[] SortedLatencies)> RunPostgresLevelAsync(IDocumentStore store, int concurrency, bool warmup)
     {
         var harnesses = new List<WorkflowExecutionHarness>(concurrency);
@@ -287,6 +389,14 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
             .Build(identity, executionId, activityIds);
 
     private static WorkflowExecutionHarness NewDurableHarness(IDocumentStore store, WorkflowExecutableIdentity identity, string executionId, IEnumerable<string> activityIds) =>
+        NewDurableHarness(store, identity, executionId, activityIds, groupCommit: null);
+
+    private static WorkflowExecutionHarness NewDurableHarness(
+        IDocumentStore store,
+        WorkflowExecutableIdentity identity,
+        string executionId,
+        IEnumerable<string> activityIds,
+        RuntimeGroupCommitCoordinator? groupCommit) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .ConfigureServices(services =>
@@ -300,6 +410,13 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
                 services.AddCoalescingRuntimeCheckpointPersistence(options => options.MaxSegmentCheckpoints = HotLoopSegmentCap);
                 services.RemoveAll<RuntimeBurstCacheOptions>();
                 services.AddSingleton(new RuntimeBurstCacheOptions { Enabled = true });
+
+                // Group commit (spec 115): each concurrent harness owns its own DI container but shares ONE store, so a
+                // per-container coordinator would only ever see its single execution and always flush solo. Injecting one
+                // shared coordinator instance across every harness models production's single host-wide coordinator that
+                // all concurrent drains resolve, which is what lets cross-drain commits fold onto one fsync.
+                if (groupCommit is not null)
+                    services.AddSingleton(groupCommit);
             })
             .Build(identity, executionId, activityIds);
 
