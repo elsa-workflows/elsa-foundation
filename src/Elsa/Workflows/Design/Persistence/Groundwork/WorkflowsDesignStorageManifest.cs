@@ -27,8 +27,6 @@ public static class WorkflowsDesignStorageManifest
     public const string DefinitionDescriptionField = "entity.description";
     public const string DefinitionTenantIdField = "entity.tenantId";
     public const string DocumentIdField = PhysicalDocumentFieldPaths.Id;
-    public static IReadOnlyList<DocumentQueryOrder> DeterministicDocumentOrder { get; } =
-        [new(DocumentIdField, PhysicalSortDirection.Ascending)];
     public const string VersionIdField = "entity.id";
     public const string VersionDefinitionIdField = "entity.definitionId";
     public const string VersionSemVerSortKeyField = "entity.semVerSortKey";

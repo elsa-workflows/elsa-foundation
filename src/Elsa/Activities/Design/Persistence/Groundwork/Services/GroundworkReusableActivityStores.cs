@@ -78,23 +78,25 @@ public sealed class GroundworkReusableActivityStores(
         IEnumerable<string> definitionIds,
         CancellationToken cancellationToken = default)
     {
-        // Selective shaped read: deduplicate and ordinal-sort the requested ids for a deterministic IN
-        // batch on the by-definition route. A global IN-cardinality cap arrives in a separate task.
-        var ids = definitionIds.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        if (ids.Length == 0)
-            return [];
-        var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
-            boundedStore,
-            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-            ListByDefinitionQuery,
-            [DocumentQueryClause.Of(DocumentQueryComparison.In(ActivitiesDesignStorageManifest.DefinitionIdField, ids))],
-            ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
-            cancellationToken);
-        return documents
-            .Select(x => Deserialize<ActivityDefinitionAuthoringState>(
+        // Selective shaped reads on the by-definition route: the requested ids are canonicalized into
+        // deterministic bounded batches so an oversized caller set never exceeds the declared IN
+        // cardinality a single membership comparison may carry.
+        var states = new List<ActivityDefinitionAuthoringState>();
+        foreach (var batch in GroundworkMembershipBatches.Create(definitionIds))
+        {
+            var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+                boundedStore,
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                ListByDefinitionQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.In(ActivitiesDesignStorageManifest.DefinitionIdField, batch))],
+                ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
+                cancellationToken);
+            states.AddRange(documents.Select(x => Deserialize<ActivityDefinitionAuthoringState>(
                 x,
-                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind).Entity)
-            .ToArray();
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind).Entity));
+        }
+
+        return states;
     }
 
     async Task<ActivityDefinitionDraft?> IActivityDefinitionDraftStore.FindAsync(

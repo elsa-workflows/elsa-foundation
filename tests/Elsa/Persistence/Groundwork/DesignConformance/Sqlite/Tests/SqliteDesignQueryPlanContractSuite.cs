@@ -61,19 +61,30 @@ public sealed class SqliteDesignQueryPlanContractSuite : DesignQueryPlanContract
             var explainer = (IPhysicalDocumentQueryExplainer)boundedStore;
             var explanation = await explainer.ExplainAsync(probe.Query, cancellationToken);
 
-            // A selective probe is indexed when no explained command contains a bare table scan.
-            // SQLite reports indexed access as "SEARCH ... USING [COVERING] INDEX ..." (or the
-            // integer primary key); "SCAN ... USING COVERING INDEX" also never touches the heap.
-            var details = explanation.Commands
-                .Select(command => $"{command.Identity}: {command.NativePlan.ReplaceLineEndings(" / ")}")
-                .ToList();
-            var usesIndexedAccess = explanation.Commands.Count > 0 && explanation.Commands.All(command =>
-                command.NativePlan
+            // A selective probe is indexed only when (a) the compiled plan certified an index for
+            // the route, (b) some explained command positively SEARCHes using that exact index (or
+            // performs a covering-index-only pass over it), and (c) no command contains a bare
+            // table scan. SQLite reports indexed access as "SEARCH ... USING [COVERING] INDEX ..."
+            // and heap-free passes as "SCAN ... USING COVERING INDEX ...".
+            var plannedIndex = explanation.Plan.IndexName?.Identifier;
+            var commandLines = explanation.Commands
+                .Select(command => (command.Identity, Lines: command.NativePlan
                     .ReplaceLineEndings("\n")
-                    .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .All(line =>
-                        !line.StartsWith("SCAN ", StringComparison.Ordinal) ||
-                        line.Contains("USING", StringComparison.Ordinal)));
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)))
+                .ToList();
+            var details = commandLines
+                .Select(command => $"{command.Identity} (plan index: {plannedIndex ?? "<none>"}): {string.Join(" / ", command.Lines)}")
+                .ToList();
+            var noBareScan = commandLines.Count > 0 && commandLines.All(command =>
+                command.Lines.All(line =>
+                    !line.StartsWith("SCAN ", StringComparison.OrdinalIgnoreCase) ||
+                    line.Contains("USING", StringComparison.OrdinalIgnoreCase)));
+            var usesPlannedIndex = plannedIndex is not null && commandLines.Any(command =>
+                command.Lines.Any(line =>
+                    (line.StartsWith("SEARCH ", StringComparison.OrdinalIgnoreCase) ||
+                     line.Contains("USING COVERING INDEX", StringComparison.OrdinalIgnoreCase)) &&
+                    line.Contains(plannedIndex, StringComparison.OrdinalIgnoreCase)));
+            var usesIndexedAccess = noBareScan && usesPlannedIndex;
 
             evidence.Add(new DesignQueryPlanEvidence(
                 probe.Query.DocumentKind,

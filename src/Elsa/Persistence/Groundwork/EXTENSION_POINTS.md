@@ -60,7 +60,7 @@ Elsa already relies on for SQLite: `PostgreSqlDocumentStore` derives from the sh
 `RelationalDocumentStore` base, `PostgreSqlGroundworkCapabilities.Runtime()` advertises the full
 `PortableQueryOperation` set and `IndexCapabilities.All`, and the dialect implements `Contains` (`ILIKE …
 ESCAPE`) plus `LIMIT/OFFSET` pagination. The neutral querying layer
-([`Querying/`](Querying/GroundworkReadStore.cs)) and the store bridges therefore need no PostgreSQL-specific
+([`Querying/`](Querying/GroundworkNamedQueryExecutor.cs)) and the store bridges therefore need no PostgreSQL-specific
 workarounds — no equality-only restriction applies to this provider's published surface.
 
 ## Persisted kinds, scope, and bounded routes

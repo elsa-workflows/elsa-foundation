@@ -186,7 +186,7 @@ public abstract class WorkflowDesignQueryContractSuite
     }
 
     [Fact]
-    public async Task Current_draft_resolution_prefers_the_most_recently_modified_draft()
+    public async Task Current_draft_resolution_is_stable_and_complete_under_recency_ties()
     {
         await using var fixture = await CreateFixtureAsync();
         await fixture.ValidateReadinessAsync();

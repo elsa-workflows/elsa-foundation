@@ -21,8 +21,6 @@ public static class ActivitiesDesignStorageManifest
     public const string ByOwnerVersionIndex = "by-owner-version";
     public const string ByDependencyVersionIndex = "by-dependency-version";
     public const string DocumentIdField = PhysicalDocumentFieldPaths.Id;
-    public static IReadOnlyList<DocumentQueryOrder> DeterministicDocumentOrder { get; } =
-        [new(DocumentIdField, PhysicalSortDirection.Ascending)];
     public const string DefinitionIdField = "entity.definitionId";
     public static IReadOnlyList<DocumentQueryOrder> ByDefinitionDocumentOrder { get; } =
     [

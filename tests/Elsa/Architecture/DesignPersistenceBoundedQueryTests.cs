@@ -3,10 +3,11 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// T049: fails when a transitional load-all/client-evaluated query path returns to the design
-/// persistence lane. Every scale-bearing design read must execute through a declared shaped
-/// bounded route; the by-collection enumeration route, the in-memory query evaluator, and the
-/// transitional generic read store were removed by Spec 093 US2 and must not reappear.
+/// T049: a regression ratchet that fails when any of the removed transitional load-all artifacts
+/// — the by-collection enumeration route, the in-memory query evaluator, or the transitional
+/// generic read store — reappears in the design persistence lane. It pins the removed surface by
+/// exact token; certification of newly written scale-bearing paths is owned by the provider
+/// admission layer (undeclared shapes fail before I/O) and the provider plan contract suite.
 /// </summary>
 public sealed class DesignPersistenceBoundedQueryTests
 {
@@ -53,11 +54,12 @@ public sealed class DesignPersistenceBoundedQueryTests
                 }
 
                 // The list-all/by-collection identities remain legal in runtime-owned manifests. The shared
-                // Querying registry wires the runtime routes alongside the design writer, so a line that
-                // qualifies the identity with the runtime manifest is not a design-lane fallback.
-                var designLines = File.ReadLines(file)
-                    .Where(line => !line.Contains("ElsaRuntimeStorageManifest", StringComparison.Ordinal));
-                var content = string.Join('\n', designLines);
+                // Querying registry wires the runtime routes alongside the design writer, so only the
+                // exact runtime-manifest-qualified member references are stripped before scanning; any
+                // other forbidden token on the same line still fails the gate.
+                var content = File.ReadAllText(file)
+                    .Replace("ElsaRuntimeStorageManifest.ListAllQuery", "<runtime-qualified>", StringComparison.Ordinal)
+                    .Replace("ElsaRuntimeStorageManifest.ByCollectionIndex", "<runtime-qualified>", StringComparison.Ordinal);
                 violations.AddRange(ForbiddenTokens
                     .Where(token => content.Contains(token, StringComparison.Ordinal))
                     .Select(token => $"{Path.GetRelativePath(RepoRoot, file)}: {token}"));
