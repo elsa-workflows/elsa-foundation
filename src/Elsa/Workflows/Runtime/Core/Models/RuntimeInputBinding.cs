@@ -213,6 +213,24 @@ public sealed class RuntimeExpressionBinding
             : capabilityProfile;
     }
 
+    // System.Text.Json binds a constructor parameter to a property only when their declared types match
+    // exactly, and Nullable<JsonElement> is not JsonElement. The public ctor's nullable 'options' therefore
+    // cannot serve as the deserialization constructor. This private ctor's 'options' is exactly JsonElement
+    // so every parameter binds; it chains through the public ctor to keep all invariants in one place.
+    [JsonConstructor]
+    private RuntimeExpressionBinding(
+        string language,
+        string expression,
+        RuntimeValueTypeDescriptor? resultType,
+        IReadOnlyDictionary<string, string>? metadata,
+        IReadOnlyDictionary<string, ExpressionParameterBinding>? parameters,
+        JsonElement options,
+        string? capabilityProfile,
+        IReadOnlyDictionary<string, ValueConversionPlan>? parameterConversionPlans)
+        : this(language, expression, resultType, metadata, parameters, (JsonElement?)options, capabilityProfile, parameterConversionPlans)
+    {
+    }
+
     public string Language { get; }
     public string Expression { get; }
     public RuntimeValueTypeDescriptor? ResultType { get; }

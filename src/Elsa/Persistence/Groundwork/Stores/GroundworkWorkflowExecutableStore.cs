@@ -3,6 +3,8 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -14,9 +16,11 @@ namespace Elsa.Persistence.Groundwork.Stores;
 public sealed class GroundworkWorkflowExecutableStore(
     IDocumentStore store,
     IGroundworkRuntimeDocumentSerializer serializer,
-    IBoundedDocumentStore? boundedStore = null)
+    IBoundedDocumentStore? boundedStore = null,
+    ILogger<GroundworkWorkflowExecutableStore>? logger = null)
     : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, boundedStore), IWorkflowExecutableStore
 {
+    private readonly ILogger<GroundworkWorkflowExecutableStore> _logger = logger ?? NullLogger<GroundworkWorkflowExecutableStore>.Instance;
 
     public async ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
     {
@@ -260,22 +264,51 @@ public sealed class GroundworkWorkflowExecutableStore(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var result = await BoundedStore.QueryAsync(
-            new DocumentQuery(
-                DocumentKind,
-                ElsaRuntimeStorageManifest.PageWorkflowExecutablesQuery,
-                [Equal(ElsaRuntimeStorageManifest.CollectionField, ElsaRuntimeStorageManifest.WorkflowExecutableCollection)],
-                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutableArtifactIdField)],
-                take: request.Limit,
-                continuation: request.ContinuationToken),
-            cancellationToken);
-        return new RuntimeStorePage<WorkflowExecutable>(
-            request,
-            result.Documents
-                .Select(Serializer.Deserialize<ExecutableDocument>)
-                .Select(document => document.Executable)
-                .ToArray(),
-            result.NextContinuation);
+
+        // A single undeserializable document must not fault the entire listing: LoadClosureAsync deserializes
+        // every executable per publish/test-run, so one poisoned row would otherwise take down the whole
+        // runtime surface. Skip and log the offender instead, letting healthy artifacts through. When a whole
+        // page deserializes to nothing but more pages remain, advance rather than surface an empty page with a
+        // continuation (which RuntimeStorePage forbids), so callers still make forward progress.
+        var continuation = request.ContinuationToken;
+        while (true)
+        {
+            var result = await BoundedStore.QueryAsync(
+                new DocumentQuery(
+                    DocumentKind,
+                    ElsaRuntimeStorageManifest.PageWorkflowExecutablesQuery,
+                    [Equal(ElsaRuntimeStorageManifest.CollectionField, ElsaRuntimeStorageManifest.WorkflowExecutableCollection)],
+                    [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutableArtifactIdField)],
+                    take: request.Limit,
+                    continuation: continuation),
+                cancellationToken);
+
+            var executables = new List<WorkflowExecutable>(result.Documents.Count);
+            foreach (var envelope in result.Documents)
+            {
+                WorkflowExecutable executable;
+                try
+                {
+                    executable = Serializer.Deserialize<ExecutableDocument>(envelope).Executable;
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(
+                        exception,
+                        "Skipping undeserializable workflow executable document '{DocumentId}' of kind '{DocumentKind}' while listing executables.",
+                        envelope.Id,
+                        envelope.DocumentKind);
+                    continue;
+                }
+
+                executables.Add(executable);
+            }
+
+            if (executables.Count > 0 || result.NextContinuation is null)
+                return new RuntimeStorePage<WorkflowExecutable>(request, executables, result.NextContinuation);
+
+            continuation = result.NextContinuation;
+        }
     }
 
     private static DocumentQueryClause Equal(string fieldPath, string value) =>
