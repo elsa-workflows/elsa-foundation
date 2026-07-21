@@ -201,7 +201,6 @@ public class GroundworkWorkflowDefinitionStoreTests
                 Assert.Equal(WorkflowsDesignStorageManifest.SearchDefinitionsQuery, query.QueryIdentity);
                 Assert.Equal(BoundedQueryResultOperation.Documents, query.ResultOperation);
                 Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionSearchOrder, query.Order);
-                Assert.NotEqual(WorkflowsDesignStorageManifest.ListAllQuery, query.QueryIdentity);
             });
     }
 

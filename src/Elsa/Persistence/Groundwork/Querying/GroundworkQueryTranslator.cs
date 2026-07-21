@@ -144,6 +144,17 @@ public sealed class GroundworkQueryTranslator<TEntity> where TEntity : Entity
         var serialized = values.Cast<object?>()
             .Select(value => SerializeScalar(value, comparison, documentKind, queryIdentity))
             .ToArray();
+        if (serialized.Length > ElsaGroundworkQueryRoutes.MaximumMembershipCount)
+        {
+            throw Failure(
+                comparison,
+                $"Query operator '{QueryOp.In}' exceeds the declared maximum membership cardinality of " +
+                $"{ElsaGroundworkQueryRoutes.MaximumMembershipCount} values ({serialized.Length} requested); " +
+                "partition the request into deterministic bounded batches.",
+                documentKind,
+                queryIdentity);
+        }
+
         return serialized.Length == 0
             ? null
             : DocumentQueryComparison.In(path, serialized);

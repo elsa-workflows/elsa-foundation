@@ -15,6 +15,14 @@ public static class ElsaGroundworkQueryRoutes
     /// <summary>The hard upper bound selected for ordinary runtime collection reads.</summary>
     public const int MaximumResultCount = 500;
 
+    /// <summary>
+    /// The declared maximum membership (<c>IN</c>) cardinality for one bounded query. Callers with
+    /// larger logical id sets must partition them into deterministic bounded batches (see
+    /// <see cref="Querying.GroundworkMembershipBatches"/>); the design query translator rejects a
+    /// single request above this bound before any provider I/O.
+    /// </summary>
+    public const int MaximumMembershipCount = 200;
+
     /// <summary>Every B7 query shape from the frozen coverage-ledger denominator.</summary>
     public static IReadOnlyList<ElsaGroundworkQueryRoute> All { get; } =
     [

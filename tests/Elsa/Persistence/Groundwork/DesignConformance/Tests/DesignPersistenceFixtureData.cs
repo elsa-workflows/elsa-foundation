@@ -202,6 +202,68 @@ public static class DesignPersistenceFixtureData
     public static IReadOnlyList<ActivityLayoutRecord> ReusableActivityDraftLayout(string nodeId) =>
         [new(nodeId, JsonSerializer.SerializeToElement(new { nodeId }, SerializationOptions))];
 
+    /// <summary>Creates a workflow definition with caller-controlled identity and search fields.</summary>
+    public static WorkflowDefinition WorkflowDefinitionAt(
+        string id,
+        string name,
+        string? description,
+        string scope = ScopeA) => new()
+    {
+        Id = id,
+        TenantId = scope,
+        Name = name,
+        Description = description,
+        CreatedAt = Epoch,
+        LastModifiedAt = Epoch
+    };
+
+    /// <summary>Creates the mandatory initial draft for <see cref="WorkflowDefinitionAt"/> seeds.</summary>
+    public static WorkflowDefinitionDraft WorkflowDraftFor(
+        string definitionId,
+        string draftId,
+        string scope = ScopeA) => new()
+    {
+        Id = draftId,
+        TenantId = scope,
+        WorkflowDefinitionId = definitionId,
+        State = WorkflowDefinitionState.Empty,
+        CreatedAt = Epoch,
+        LastModifiedAt = Epoch
+    };
+
+    /// <summary>Creates an immutable workflow version snapshot with a caller-controlled semantic version.</summary>
+    public static WorkflowDefinitionVersion WorkflowVersionAt(
+        string definitionId,
+        string version,
+        string versionId,
+        string scope = ScopeA) => new(definitionId, version)
+    {
+        Id = versionId,
+        TenantId = scope,
+        CreatedAt = Epoch,
+        LastModifiedAt = Epoch,
+        SourceCreatedAt = Epoch
+    };
+
+    /// <summary>Creates an activity definition with caller-controlled catalog and search fields.</summary>
+    public static ActivityDefinition ActivityDefinitionAt(
+        string id,
+        string activityTypeKey,
+        string category,
+        string displayName,
+        string? description,
+        string scope = ScopeA) => new()
+    {
+        Id = id,
+        TenantId = scope,
+        ActivityTypeKey = activityTypeKey,
+        Category = category,
+        DisplayName = displayName,
+        Description = description,
+        CreatedAt = Epoch,
+        LastModifiedAt = Epoch
+    };
+
     /// <summary>Computes an invariant result hash for parity assertions and evidence records.</summary>
     public static string ResultHash<T>(T value)
     {

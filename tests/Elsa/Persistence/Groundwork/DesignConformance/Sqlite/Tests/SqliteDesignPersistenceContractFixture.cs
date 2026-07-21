@@ -62,6 +62,9 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
     private string DatabasePath => Path.Join(_directory, "design.db");
     private string ConnectionString => $"Data Source={DatabasePath}";
 
+    /// <summary>The applied target database's connection string, for leaf-local plan capture.</summary>
+    internal string SqliteConnectionString => ConnectionString;
+
     public static async Task<SqliteDesignPersistenceContractFixture> CreateAsync(
         GroundworkBaselineTelemetry telemetry,
         CancellationToken cancellationToken = default)

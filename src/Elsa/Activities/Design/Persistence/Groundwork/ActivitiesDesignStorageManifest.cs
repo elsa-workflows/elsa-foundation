@@ -14,18 +14,29 @@ public static class ActivitiesDesignStorageManifest
     // changing this value is not a migration mechanism and would make existing envelopes unreadable.
     public const string SchemaVersion = "1.0.0";
 
-    public const string ByCollectionIndex = "by-collection";
     public const string ByDefinitionIndex = "by-definition";
     public const string ByHeadVersionIndex = "by-head-version";
     public const string ByDraftIndex = "by-draft";
     public const string ByDefinitionVersionIndex = "by-definition-version";
     public const string ByOwnerVersionIndex = "by-owner-version";
     public const string ByDependencyVersionIndex = "by-dependency-version";
-    public const string CollectionField = "collection";
     public const string DocumentIdField = PhysicalDocumentFieldPaths.Id;
-    public static IReadOnlyList<DocumentQueryOrder> DeterministicDocumentOrder { get; } =
-        [new(DocumentIdField, PhysicalSortDirection.Ascending)];
     public const string DefinitionIdField = "entity.definitionId";
+    public static IReadOnlyList<DocumentQueryOrder> ByDefinitionDocumentOrder { get; } =
+    [
+        new(DefinitionIdField, PhysicalSortDirection.Ascending),
+        new(DocumentIdField, PhysicalSortDirection.Ascending)
+    ];
+    public static IReadOnlyList<DocumentQueryOrder> ByDefinitionVersionDocumentOrder { get; } =
+    [
+        new(DefinitionVersionIdField, PhysicalSortDirection.Ascending),
+        new(DocumentIdField, PhysicalSortDirection.Ascending)
+    ];
+    public static IReadOnlyList<DocumentQueryOrder> ByOwnerVersionDocumentOrder { get; } =
+    [
+        new(OwnerVersionIdField, PhysicalSortDirection.Ascending),
+        new(DocumentIdField, PhysicalSortDirection.Ascending)
+    ];
     public const string HeadVersionIdField = "entity.headVersionId";
     public const string DraftIdField = "entity.draftId";
     public const string DefinitionVersionIdField = "entity.definitionVersionId";
@@ -45,7 +56,6 @@ public static class ActivitiesDesignStorageManifest
     public const string ManagementRecommendationProviderField = "entity.recommendationProviderKey";
     public const string ManagementDraftStatusField = "entity.status";
     public const string ManagementVersionLifecycleField = "entity.lifecycle";
-    public const string ListAllQuery = "list-all";
     public const string ActivityDefinitionIdField = "entity.id";
     public const string ActivityDefinitionTypeKeyField = "entity.activityTypeKey";
     public const string ActivityDefinitionCategoryField = "entity.category";
@@ -67,17 +77,17 @@ public static class ActivitiesDesignStorageManifest
 
     public const string ActivityDefinitionDocumentKind = "activityDefinition";
 
-    /// <summary>Constant partition value stamped on every activity-definition document (see <see cref="ByCollectionIndex"/>).</summary>
+    /// <summary>Constant partition value stamped into the canonical JSON of every activity-definition document.</summary>
     public const string ActivityDefinitionCollection = "activityDefinition";
 
     public const string ActivityDefinitionVersionDocumentKind = "activityDefinitionVersion";
 
-    /// <summary>Constant partition value stamped on every activity-definition-version document (see <see cref="ByCollectionIndex"/>).</summary>
+    /// <summary>Constant partition value stamped into the canonical JSON of every activity-definition-version document.</summary>
     public const string ActivityDefinitionVersionCollection = "activityDefinitionVersion";
 
     public const string ActivityAvailabilitySettingsDocumentKind = "activityAvailabilitySettings";
 
-    /// <summary>Constant partition value stamped on every activity-availability-settings document (see <see cref="ByCollectionIndex"/>).</summary>
+    /// <summary>Constant partition value stamped into the canonical JSON of every activity-availability-settings document.</summary>
     public const string ActivityAvailabilitySettingsCollection = "activityAvailabilitySettings";
 
     public const string ActivityDefinitionAuthoringStateDocumentKind = "activityDefinitionAuthoringState";
@@ -145,89 +155,90 @@ public static class ActivitiesDesignStorageManifest
             Unit(
                 ActivityAvailabilitySettingsDocumentKind,
                 "Activity availability settings",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query(ListAllQuery, ByCollectionIndex)]),
+                [],
+                []),
             Unit(
                 ActivityDefinitionAuthoringStateDocumentKind,
                 "Activity definition authoring state",
                 [
-                    Keyword(ByCollectionIndex, CollectionField),
                     Keyword(ByDefinitionIndex, DefinitionIdField),
                     Keyword(ByHeadVersionIndex, HeadVersionIdField)
                 ],
                 [
-                    Query(ListAllQuery, ByCollectionIndex),
-                    Query("list-by-definition", ByDefinitionIndex),
-                    Query("list-by-head-version", ByHeadVersionIndex)
+                    new ActivityQuery(
+                        "list-by-definition",
+                        ByDefinitionIndex,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In },
+                        QuerySortSupport.Ascending,
+                        QueryPagingSupport.Offset,
+                        [
+                            new BoundedQuerySortField(DefinitionIdField, PhysicalSortDirection.Ascending),
+                            new BoundedQuerySortField(DocumentIdField, PhysicalSortDirection.Ascending)
+                        ]),
+                    Query("list-by-head-version", ByHeadVersionIndex, HeadVersionIdField)
                 ]),
             Unit(
                 ActivityDefinitionDraftDocumentKind,
                 "Activity definition draft",
-                [Keyword(ByCollectionIndex, CollectionField), Keyword(ByDefinitionIndex, DefinitionIdField)],
-                [Query(ListAllQuery, ByCollectionIndex), Query("list-by-definition", ByDefinitionIndex)]),
+                [Keyword(ByDefinitionIndex, DefinitionIdField)],
+                [Query("list-by-definition", ByDefinitionIndex, DefinitionIdField)]),
             Unit(
                 ActivityDefinitionDraftLayoutDocumentKind,
                 "Activity definition draft layout",
-                [Keyword(ByCollectionIndex, CollectionField), Keyword(ByDraftIndex, DraftIdField)],
-                [Query(ListAllQuery, ByCollectionIndex), Query("list-by-draft", ByDraftIndex)]),
+                [Keyword(ByDraftIndex, DraftIdField)],
+                [Query("list-by-draft", ByDraftIndex, DraftIdField)]),
             Unit(
                 ActivityDraftValidationDocumentKind,
                 "Activity draft validation",
-                [Keyword(ByCollectionIndex, CollectionField), Keyword(ByDraftIndex, DraftIdField)],
-                [Query(ListAllQuery, ByCollectionIndex), Query("list-by-draft", ByDraftIndex)]),
+                [Keyword(ByDraftIndex, DraftIdField)],
+                [Query("list-by-draft", ByDraftIndex, DraftIdField)]),
             Unit(
                 ActivityDefinitionVersionPublicationDocumentKind,
                 "Activity definition version publication",
                 [
-                    Keyword(ByCollectionIndex, CollectionField),
                     Keyword(ByDefinitionIndex, DefinitionIdField),
                     Keyword(ByDefinitionVersionIndex, DefinitionVersionIdField)
                 ],
                 [
-                    Query(ListAllQuery, ByCollectionIndex),
-                    Query("list-by-definition", ByDefinitionIndex),
-                    Query("list-by-definition-version", ByDefinitionVersionIndex)
+                    Query("list-by-definition", ByDefinitionIndex, DefinitionIdField),
+                    Query("list-by-definition-version", ByDefinitionVersionIndex, DefinitionVersionIdField)
                 ]),
             Unit(
                 ActivityDefinitionVersionLayoutDocumentKind,
                 "Activity definition version layout",
-                [Keyword(ByCollectionIndex, CollectionField), Keyword(ByDefinitionVersionIndex, DefinitionVersionIdField)],
-                [Query(ListAllQuery, ByCollectionIndex), Query("list-by-definition-version", ByDefinitionVersionIndex)]),
+                [Keyword(ByDefinitionVersionIndex, DefinitionVersionIdField)],
+                [Query("list-by-definition-version", ByDefinitionVersionIndex, DefinitionVersionIdField)]),
             Unit(
                 ActivityDependencyEdgeDocumentKind,
                 "Activity dependency edge",
                 [
-                    Keyword(ByCollectionIndex, CollectionField),
                     Keyword(ByOwnerVersionIndex, OwnerVersionIdField),
                     Keyword(ByDependencyVersionIndex, DependencyVersionIdField)
                 ],
                 [
-                    Query(ListAllQuery, ByCollectionIndex),
-                    Query("list-by-owner-version", ByOwnerVersionIndex),
-                    Query("list-by-dependency-version", ByDependencyVersionIndex)
+                    Query("list-by-owner-version", ByOwnerVersionIndex, OwnerVersionIdField),
+                    Query("list-by-dependency-version", ByDependencyVersionIndex, DependencyVersionIdField)
                 ]),
             Unit(
                 ActivityDependencyProjectionDocumentKind,
                 "Activity dependency projection",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query(ListAllQuery, ByCollectionIndex)]),
+                [],
+                []),
             Unit(
                 ActivityUpgradePlanDocumentKind,
                 "Activity upgrade plan",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query(ListAllQuery, ByCollectionIndex)]),
+                [],
+                []),
             Unit(
                 ActivityForkCandidateDocumentKind,
                 "Activity fork candidate",
                 [
-                    Keyword(ByCollectionIndex, CollectionField),
                     Keyword(
                         ActivityForkCandidateRetentionIndex,
                         ActivityForkCandidateRetentionField,
                         PortableQueryOperation.LessThanOrEqual)
                 ],
                 [
-                    Query(ListAllQuery, ByCollectionIndex),
                     new ActivityQuery(
                         ActivityForkCandidateExpiredQuery,
                         ActivityForkCandidateRetentionIndex,
@@ -238,14 +249,14 @@ public static class ActivitiesDesignStorageManifest
             Unit(
                 ActivityForkReceiptDocumentKind,
                 "Activity fork receipt",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query(ListAllQuery, ByCollectionIndex)],
+                [],
+                [],
                 LifecyclePolicy.AppendOnly),
             Unit(
                 ActivityUpgradeApplyReceiptDocumentKind,
                 "Activity upgrade apply receipt",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query(ListAllQuery, ByCollectionIndex)]),
+                [],
+                []),
             ManagementUnit(
                 ActivityDefinitionManagementProjectionDocumentKind,
                 "Activity definition management projection",
@@ -282,7 +293,6 @@ public static class ActivitiesDesignStorageManifest
     {
         var logicalIndexes = new[]
         {
-            LogicalIndex(ByCollectionIndex, [CollectionField, DocumentIdField]),
             LogicalIndex("activity-definition-by-id-point", [DocumentIdField], unique: true),
             LogicalIndex("activity-definition-by-id", [ActivityDefinitionIdField]),
             LogicalIndex("activity-definition-by-type-key", [ActivityDefinitionTypeKeyField, ActivityDefinitionIdField]),
@@ -293,7 +303,6 @@ public static class ActivitiesDesignStorageManifest
         };
         var physicalIndexes = new[]
         {
-            PhysicalIndex(ByCollectionIndex, "collection", "id_comparison_key"),
             PointLookupIndex("activity-definition-by-id-point"),
             PhysicalIndex("activity-definition-by-id", "activity_definition_id"),
             PhysicalIndex("activity-definition-by-type-key", "activity_type_key", "activity_definition_id"),
@@ -311,14 +320,6 @@ public static class ActivitiesDesignStorageManifest
         };
         var queries = new[]
         {
-            BoundedQuery(
-                ListAllQuery,
-                ByCollectionIndex,
-                [Predicate(CollectionField, PortableQueryOperation.Equal)],
-                QueryPagingSupport.Offset,
-                QuerySortSupport.Ascending,
-                [BoundedQueryResultOperation.Documents],
-                sortFields: [new BoundedQuerySortField(DocumentIdField, PhysicalSortDirection.Ascending)]),
             BoundedQuery(
                 FindActivityDefinitionByIdQuery,
                 "activity-definition-by-id-point",
@@ -424,7 +425,6 @@ public static class ActivitiesDesignStorageManifest
             ActivityDefinitionDocumentKind,
             "Activity definition",
             [
-                Column("collection", CollectionField, false),
                 Column("activity_definition_id", ActivityDefinitionIdField, false),
                 Column("activity_type_key", ActivityDefinitionTypeKeyField, false),
                 Column("category", ActivityDefinitionCategoryField, false),
@@ -440,7 +440,6 @@ public static class ActivitiesDesignStorageManifest
     {
         var logicalIndexes = new[]
         {
-            LogicalIndex(ByCollectionIndex, [CollectionField, DocumentIdField]),
             LogicalIndex("activity-definition-version-by-id-point", [DocumentIdField], unique: true),
             LogicalIndex(
                 "activity-definition-versions-by-definition",
@@ -455,7 +454,6 @@ public static class ActivitiesDesignStorageManifest
         };
         var physicalIndexes = new[]
         {
-            PhysicalIndex(ByCollectionIndex, "collection", "id_comparison_key"),
             PointLookupIndex("activity-definition-version-by-id-point"),
             PhysicalIndex(
                 "activity-definition-versions-by-definition",
@@ -469,14 +467,6 @@ public static class ActivitiesDesignStorageManifest
         };
         var queries = new[]
         {
-            BoundedQuery(
-                ListAllQuery,
-                ByCollectionIndex,
-                [Predicate(CollectionField, PortableQueryOperation.Equal)],
-                QueryPagingSupport.Offset,
-                QuerySortSupport.Ascending,
-                [BoundedQueryResultOperation.Documents],
-                sortFields: [new BoundedQuerySortField(DocumentIdField, PhysicalSortDirection.Ascending)]),
             BoundedQuery(
                 FindActivityDefinitionVersionByIdQuery,
                 "activity-definition-version-by-id-point",
@@ -513,7 +503,6 @@ public static class ActivitiesDesignStorageManifest
             ActivityDefinitionVersionDocumentKind,
             "Activity definition version",
             [
-                Column("collection", CollectionField, false),
                 Column("version_id", ActivityDefinitionVersionIdField, false),
                 Column("definition_id", ActivityDefinitionVersionDefinitionIdField, false),
                 Column("sem_ver_sort_key", ActivityDefinitionVersionSemVerSortKeyField, false)
@@ -538,13 +527,19 @@ public static class ActivitiesDesignStorageManifest
         LifecyclePolicy lifecycle) =>
         PhysicalUnit(documentKind, label, lifecycle, indexes, queries);
 
-    private static ActivityQuery Query(string name, string indexName) => new(
+    // The declared order leads with the index key field, then the document id. Leading at the index head
+    // (rather than the document id alone) is what lets the route admit both a single-value equality read and
+    // a deterministic zero-clause full-kind traversal without a mandatory equality prefix.
+    private static ActivityQuery Query(string name, string indexName, string keyField) => new(
         name,
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         QuerySortSupport.Ascending,
         QueryPagingSupport.Offset,
-        [new BoundedQuerySortField(DocumentIdField, PhysicalSortDirection.Ascending)]);
+        [
+            new BoundedQuerySortField(keyField, PhysicalSortDirection.Ascending),
+            new BoundedQuerySortField(DocumentIdField, PhysicalSortDirection.Ascending)
+        ]);
 
     private static StorageUnit ManagementUnit(
         string documentKind,
@@ -980,7 +975,6 @@ public static class ActivitiesDesignStorageManifest
         HeadVersionIdField => "head_version_id",
         OwnerVersionIdField => "owner_version_id",
         DependencyVersionIdField => "dependency_version_id",
-        CollectionField => "collection",
         ActivityForkCandidateRetentionField => "retention_key",
         ManagementVisibilityField => "visibility",
         ManagementValidFromField => "valid_from",

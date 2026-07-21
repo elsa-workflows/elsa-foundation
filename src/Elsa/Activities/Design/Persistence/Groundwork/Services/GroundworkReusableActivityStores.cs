@@ -12,6 +12,8 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -60,6 +62,9 @@ public sealed class GroundworkReusableActivityStores(
     // version projection sources without changing the public dependency read model.
     private static readonly JsonSerializerOptions JsonOptions = GroundworkActivitiesDesignJson.Options;
 
+    private const string ListByDefinitionQuery = "list-by-definition";
+    private const string ListByOwnerVersionQuery = "list-by-owner-version";
+
     public async Task<ActivityDefinitionAuthoringState?> FindAsync(
         string definitionId,
         CancellationToken cancellationToken = default) =>
@@ -73,12 +78,25 @@ public sealed class GroundworkReusableActivityStores(
         IEnumerable<string> definitionIds,
         CancellationToken cancellationToken = default)
     {
-        var ids = definitionIds.ToHashSet(StringComparer.Ordinal);
-        var documents = await ListAllAsync<ActivityDefinitionAuthoringState>(
-            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection,
-            cancellationToken);
-        return documents.Select(x => x.Entity).Where(x => ids.Contains(x.DefinitionId)).ToArray();
+        // Selective shaped reads on the by-definition route: the requested ids are canonicalized into
+        // deterministic bounded batches so an oversized caller set never exceeds the declared IN
+        // cardinality a single membership comparison may carry.
+        var states = new List<ActivityDefinitionAuthoringState>();
+        foreach (var batch in GroundworkMembershipBatches.Create(definitionIds))
+        {
+            var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+                boundedStore,
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                ListByDefinitionQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.In(ActivitiesDesignStorageManifest.DefinitionIdField, batch))],
+                ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
+                cancellationToken);
+            states.AddRange(documents.Select(x => Deserialize<ActivityDefinitionAuthoringState>(
+                x,
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind).Entity));
+        }
+
+        return states;
     }
 
     async Task<ActivityDefinitionDraft?> IActivityDefinitionDraftStore.FindAsync(
@@ -141,11 +159,9 @@ public sealed class GroundworkReusableActivityStores(
             var result = await boundedStore.QueryAsync(
                 new DocumentQuery(
                     ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-                    ActivitiesDesignStorageManifest.ListAllQuery,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                        ActivitiesDesignStorageManifest.CollectionField,
-                        ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection))],
-                    null,
+                    ListByDefinitionQuery,
+                    [],
+                    ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
                     sourceOffset,
                     Math.Min(100, Math.Max(limit * 2, 20))),
                 cancellationToken);
@@ -252,9 +268,10 @@ public sealed class GroundworkReusableActivityStores(
         if (request.Offset < 0)
             throw new ArgumentOutOfRangeException(nameof(request.Offset));
 
-        var publicationDocuments = await ListAllAsync<ActivityDefinitionVersionPublication>(
+        var publicationDocuments = await TraverseAsync<ActivityDefinitionVersionPublication>(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
-            ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection,
+            ListByDefinitionQuery,
+            ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
             cancellationToken);
         var publications = publicationDocuments
             .Select(x => x.Entity)
@@ -262,9 +279,10 @@ public sealed class GroundworkReusableActivityStores(
         if (!publications.TryGetValue(request.RootVersionId, out var root))
             throw Missing($"Activity version publication '{request.RootVersionId}' was not found.");
 
-        var edgeDocuments = await ListAllAsync<ActivityDependencyEdge>(
+        var edgeDocuments = await TraverseAsync<ActivityDependencyEdge>(
             ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
-            ActivitiesDesignStorageManifest.ActivityDependencyEdgeCollection,
+            ListByOwnerVersionQuery,
+            ActivitiesDesignStorageManifest.ByOwnerVersionDocumentOrder,
             cancellationToken);
         var fingerprint = Fingerprint(edgeDocuments, publicationDocuments);
         if (request.Watermark is not null && !StringComparer.Ordinal.Equals(request.Watermark, fingerprint))
@@ -303,13 +321,9 @@ public sealed class GroundworkReusableActivityStores(
             null,
             cancellationToken);
 
-        var existingDefinitions = await ListAllAsync<ActivityDefinition>(
-            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-            ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
-            cancellationToken);
+        var existingDefinitions = await ListDefinitionsByTypeKeyAsync(request.Definition.ActivityTypeKey, cancellationToken);
         if (existingDefinitions.Any(x =>
-                StringComparer.Ordinal.Equals(x.Entity.TenantId, request.Definition.TenantId) &&
-                StringComparer.Ordinal.Equals(x.Entity.ActivityTypeKey, request.Definition.ActivityTypeKey)))
+                StringComparer.Ordinal.Equals(x.Entity.TenantId, request.Definition.TenantId)))
             throw Conflict($"Activity definition key '{request.Definition.ActivityTypeKey}' already exists.");
 
         await EnsureAbsentAsync<ActivityDefinition>(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, request.Definition.Id, cancellationToken);
@@ -442,13 +456,11 @@ public sealed class GroundworkReusableActivityStores(
             cancellationToken);
 
         await RecheckForkSourceAsync(candidate.Entity, cancellationToken);
-        var existingDefinitions = await ListAllAsync<ActivityDefinition>(
-            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-            ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+        var existingDefinitions = await ListDefinitionsByTypeKeyAsync(
+            candidate.Entity.ReservedDefinition.ActivityTypeKey,
             cancellationToken);
         if (existingDefinitions.Any(x =>
-                StringComparer.Ordinal.Equals(x.Entity.TenantId, candidate.Entity.ReservedDefinition.TenantId) &&
-                StringComparer.Ordinal.Equals(x.Entity.ActivityTypeKey, candidate.Entity.ReservedDefinition.ActivityTypeKey)))
+                StringComparer.Ordinal.Equals(x.Entity.TenantId, candidate.Entity.ReservedDefinition.TenantId)))
             throw new ActivityForkCollisionException("The reserved activity type key is no longer available.");
 
         try
@@ -1065,12 +1077,44 @@ public sealed class GroundworkReusableActivityStores(
         };
     }
 
-    private async Task<IReadOnlyList<Stored<TEntity>>> ListAllAsync<TEntity>(
+    // Deterministic full-kind traversal on a declared shaped route: a zero-clause bounded request the
+    // route admits, ordered by the route's declared document-id ascending sort.
+    private async Task<IReadOnlyList<Stored<TEntity>>> TraverseAsync<TEntity>(
         string kind,
-        string collection,
+        string queryIdentity,
+        IReadOnlyList<DocumentQueryOrder> order,
         CancellationToken cancellationToken)
-        where TEntity : Entity =>
-        await QueryAsync<TEntity>(kind, ActivitiesDesignStorageManifest.ByCollectionIndex, collection, cancellationToken);
+        where TEntity : Entity
+    {
+        var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+            boundedStore,
+            kind,
+            queryIdentity,
+            [],
+            order,
+            cancellationToken);
+        return documents.Select(x => Deserialize<TEntity>(x, kind)).ToArray();
+    }
+
+    // Selective bounded read of the activity-definition main kind constrained to a single type key on the
+    // by-type-key route; callers keep their in-memory tenant comparison over the small result set.
+    private async Task<IReadOnlyList<Stored<ActivityDefinition>>> ListDefinitionsByTypeKeyAsync(
+        string activityTypeKey,
+        CancellationToken cancellationToken)
+    {
+        var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+            boundedStore,
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField,
+                activityTypeKey))],
+            ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder,
+            cancellationToken);
+        return documents
+            .Select(x => Deserialize<ActivityDefinition>(x, ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind))
+            .ToArray();
+    }
 
     private async Task<IReadOnlyList<Stored<TEntity>>> QueryAsync<TEntity>(
         string kind,
@@ -1081,12 +1125,11 @@ public sealed class GroundworkReusableActivityStores(
     {
         var (queryIdentity, fieldPath) = index switch
         {
-            ActivitiesDesignStorageManifest.ByCollectionIndex => (ActivitiesDesignStorageManifest.ListAllQuery, ActivitiesDesignStorageManifest.CollectionField),
-            ActivitiesDesignStorageManifest.ByDefinitionIndex => ("list-by-definition", ActivitiesDesignStorageManifest.DefinitionIdField),
+            ActivitiesDesignStorageManifest.ByDefinitionIndex => (ListByDefinitionQuery, ActivitiesDesignStorageManifest.DefinitionIdField),
             ActivitiesDesignStorageManifest.ByHeadVersionIndex => ("list-by-head-version", ActivitiesDesignStorageManifest.HeadVersionIdField),
             ActivitiesDesignStorageManifest.ByDraftIndex => ("list-by-draft", ActivitiesDesignStorageManifest.DraftIdField),
             ActivitiesDesignStorageManifest.ByDefinitionVersionIndex => ("list-by-definition-version", ActivitiesDesignStorageManifest.DefinitionVersionIdField),
-            ActivitiesDesignStorageManifest.ByOwnerVersionIndex => ("list-by-owner-version", ActivitiesDesignStorageManifest.OwnerVersionIdField),
+            ActivitiesDesignStorageManifest.ByOwnerVersionIndex => (ListByOwnerVersionQuery, ActivitiesDesignStorageManifest.OwnerVersionIdField),
             ActivitiesDesignStorageManifest.ByDependencyVersionIndex => ("list-by-dependency-version", ActivitiesDesignStorageManifest.DependencyVersionIdField),
             _ => throw new ArgumentOutOfRangeException(nameof(index), index, "The activity-design query index is not declared.")
         };
@@ -1095,10 +1138,18 @@ public sealed class GroundworkReusableActivityStores(
             kind,
             queryIdentity,
             [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))],
-            ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
+            IndexHeadOrder(fieldPath),
             cancellationToken);
         return documents.Select(x => Deserialize<TEntity>(x, kind)).ToArray();
     }
+
+    // A by-key route leads its declared order with the index key field, then the document id; every scoped
+    // read and every zero-clause traversal on that route must present that same deterministic order.
+    private static IReadOnlyList<DocumentQueryOrder> IndexHeadOrder(string keyField) =>
+    [
+        new(keyField, PhysicalSortDirection.Ascending),
+        new(ActivitiesDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)
+    ];
 
     private static Stored<TEntity> Deserialize<TEntity>(DocumentEnvelope envelope, string kind)
         where TEntity : Entity

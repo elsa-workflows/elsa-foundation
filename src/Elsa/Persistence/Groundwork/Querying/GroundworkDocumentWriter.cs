@@ -7,12 +7,11 @@ using Groundwork.Documents.Store;
 namespace Elsa.Persistence.Groundwork.Querying;
 
 /// <summary>
-/// Builds Groundwork document write requests from domain entities, the write-side counterpart of
-/// <see cref="GroundworkReadStore{TEntity}"/>. It wraps an entity in the same <see cref="GroundworkDocument{TEntity}"/>
-/// envelope the read store expects — constant <c>Collection</c> partition value plus the entity payload — and
-/// serializes it with the lane's JSON options, so a document written here reads back through the matching read
-/// store unchanged. Keeping read and write on one envelope shape is what lets a Groundwork-backed write command
-/// and its read port stay in sync.
+/// Builds Groundwork document write requests from domain entities. It wraps an entity in a
+/// <see cref="GroundworkDocument{TEntity}"/> envelope — constant <c>Collection</c> value stamped into the
+/// canonical JSON plus the entity payload — and serializes it with the lane's JSON options, so a document
+/// written here reads back through the matching bounded design routes unchanged. Keeping read and write on one
+/// envelope shape is what lets a Groundwork-backed write command and its read port stay in sync.
 /// </summary>
 public static class GroundworkDocumentWriter
 {

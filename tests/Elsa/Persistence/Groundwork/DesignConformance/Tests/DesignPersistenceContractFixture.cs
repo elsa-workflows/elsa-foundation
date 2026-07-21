@@ -213,7 +213,12 @@ public enum DesignPersistenceContractScenario
     IsolationReusableActivityDraftOcc,
     IsolationWorkflowDraftLastWriterWins,
     IsolationSingleScopeRestart,
-    IsolationCrossScopeSameIdentityRestart
+    IsolationCrossScopeSameIdentityRestart,
+    QueryScalePagedListing,
+    QueryScaleBatchProjection,
+    QueryScaleOversizedMembership,
+    QueryScaleKnownBatchParity,
+    QueryScaleExistenceConsistency
 }
 
 /// <summary>Whether a profile can execute a scenario, with an explicit reason when it cannot.</summary>
@@ -302,6 +307,11 @@ public static class DesignPersistenceContractProfiles
             [DesignPersistenceContractScenario.IsolationReusableActivityDraftOcc] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF reusable activity drafts do not expose the target expected-revision replace contract."),
             [DesignPersistenceContractScenario.IsolationWorkflowDraftLastWriterWins] = DesignPersistenceScenarioApplicability.Applicable(),
             [DesignPersistenceContractScenario.IsolationSingleScopeRestart] = DesignPersistenceScenarioApplicability.Applicable(),
-            [DesignPersistenceContractScenario.IsolationCrossScopeSameIdentityRestart] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF identity keys are global and cannot represent cross-scope same-identity restart isolation.")
+            [DesignPersistenceContractScenario.IsolationCrossScopeSameIdentityRestart] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF identity keys are global and cannot represent cross-scope same-identity restart isolation."),
+            [DesignPersistenceContractScenario.QueryScalePagedListing] = DesignPersistenceScenarioApplicability.Applicable(),
+            [DesignPersistenceContractScenario.QueryScaleBatchProjection] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF projection reads resolve only persisted definitions and cannot emit the target's empty-facts rows for unknown definition ids."),
+            [DesignPersistenceContractScenario.QueryScaleOversizedMembership] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF projection reads resolve only persisted definitions and cannot emit the target's empty-facts rows for unknown definition ids."),
+            [DesignPersistenceContractScenario.QueryScaleKnownBatchParity] = DesignPersistenceScenarioApplicability.Applicable(),
+            [DesignPersistenceContractScenario.QueryScaleExistenceConsistency] = DesignPersistenceScenarioApplicability.Applicable()
         });
 }

@@ -101,18 +101,26 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore : IWorkflowD
             .ToArray();
     }
 
-    private Task<IReadOnlyList<WorkflowDefinitionVersion>> ListVersionsByDefinitionIdsAsync(
+    private async Task<IReadOnlyList<WorkflowDefinitionVersion>> ListVersionsByDefinitionIdsAsync(
         IReadOnlyCollection<string> definitionIds,
-        CancellationToken cancellationToken) =>
-        _versions.ExecuteAsync(
-            acrossScopes: false,
-            (executor, token) => executor.QueryAsync(
-                WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery,
-                Query<WorkflowDefinitionVersion>.Where(
-                    x => x.DefinitionId,
-                    QueryOp.In,
-                    definitionIds),
-                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionOrder,
-                token),
-            cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        var versions = new List<WorkflowDefinitionVersion>();
+        foreach (var batch in GroundworkMembershipBatches.Create(definitionIds))
+        {
+            versions.AddRange(await _versions.ExecuteAsync(
+                acrossScopes: false,
+                (executor, token) => executor.QueryAsync(
+                    WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery,
+                    Query<WorkflowDefinitionVersion>.Where(
+                        x => x.DefinitionId,
+                        QueryOp.In,
+                        batch),
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionVersionOrder,
+                    token),
+                cancellationToken));
+        }
+
+        return versions;
+    }
 }

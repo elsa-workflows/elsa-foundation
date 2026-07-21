@@ -40,6 +40,22 @@ public sealed class GroundworkQueryTranslatorTests
     }
 
     [Fact]
+    public void Membership_at_the_declared_cardinality_translates_and_one_more_is_rejected()
+    {
+        var atCap = Enumerable.Range(0, ElsaGroundworkQueryRoutes.MaximumMembershipCount)
+            .Select(index => $"value-{index:D3}")
+            .ToArray();
+        var translated = TranslateDocuments(Query<DesignDocument>.Where(x => x.Category, QueryOp.In, atCap));
+        var comparison = Assert.Single(Assert.Single(translated.Clauses).Comparisons);
+        Assert.Equal(ElsaGroundworkQueryRoutes.MaximumMembershipCount, comparison.Values.Count);
+
+        var overCap = atCap.Append("value-overflow").ToArray();
+        var exception = Assert.Throws<GroundworkQueryTranslationException>(() =>
+            TranslateDocuments(Query<DesignDocument>.Where(x => x.Category, QueryOp.In, overCap)));
+        Assert.Contains("maximum membership cardinality", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Preserves_and_of_or_clause_structure()
     {
         var source = Query<DesignDocument>

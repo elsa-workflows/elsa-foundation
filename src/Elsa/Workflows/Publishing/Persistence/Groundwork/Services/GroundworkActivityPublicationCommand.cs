@@ -269,14 +269,15 @@ public sealed class GroundworkActivityPublicationCommand(
     private async Task EnsureNewVersionAsync(ActivityDefinitionVersion candidate, CancellationToken cancellationToken)
     {
         await EnsureAbsentAsync(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, candidate.Id, cancellationToken);
+        // The version kind keeps no doc-id-sorted route after the by-collection removal; a zero-clause
+        // traversal on the by-definition route (declared version order) visits every version, and this
+        // duplicate check only needs completeness, not a specific visit order.
         var envelopes = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
             boundedStore,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
-            ActivitiesDesignStorageManifest.ListAllQuery,
-            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                ActivitiesDesignStorageManifest.CollectionField,
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection))],
-            ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery,
+            [],
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder,
             cancellationToken);
         var richOptions = GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer);
         foreach (var envelope in envelopes)
@@ -407,7 +408,7 @@ public sealed class GroundworkActivityPublicationCommand(
                 [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                     ActivitiesDesignStorageManifest.DefinitionIdField,
                     definitionId))],
-                ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
+                ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
                 take: 2),
             cancellationToken);
         return matches.Documents.Count switch

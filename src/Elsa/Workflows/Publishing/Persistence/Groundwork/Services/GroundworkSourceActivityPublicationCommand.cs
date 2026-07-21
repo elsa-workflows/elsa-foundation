@@ -163,7 +163,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
                 [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                     ActivitiesDesignStorageManifest.DefinitionIdField,
                     definitionId))],
-                ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
+                ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
                 take: 2),
             cancellationToken);
         return matches.Documents.Count switch

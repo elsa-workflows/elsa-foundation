@@ -73,17 +73,20 @@ public sealed class GroundworkActivityDefinitionVersionStore : IActivityDefiniti
             Query<ActivityDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId),
             cancellationToken);
 
-    public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(
+    public async Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(
         IEnumerable<string> definitionIds,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definitionIds);
-        var ids = definitionIds.Distinct(StringComparer.Ordinal).ToArray();
-        return ids.Length == 0
-            ? Task.FromResult<IReadOnlyList<ActivityDefinitionVersion>>([])
-            : QueryByDefinitionAsync(
-                Query<ActivityDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.In, ids),
-                cancellationToken);
+        var versions = new List<ActivityDefinitionVersion>();
+        foreach (var batch in GroundworkMembershipBatches.Create(definitionIds))
+        {
+            versions.AddRange(await QueryByDefinitionAsync(
+                Query<ActivityDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.In, batch),
+                cancellationToken));
+        }
+
+        return versions;
     }
 
     public Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default)
