@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
+import { describeCollectionForInput, describeDictionaryForInput } from "../collectionInputDescriptor";
 import {
   camelize,
   defaultCollectionItem,
@@ -321,6 +323,43 @@ describe("dictionary literal authoring", () => {
       name: "Headers",
       typeName: "System.Collections.Generic.IDictionary`2[System.String,System.String]"
     })).toEqual({});
+  });
+});
+
+describe("descriptor-aware collection/dictionary detection (collectionKind, #945)", () => {
+  const input = (overrides: Partial<StudioActivityInputDescriptor>): StudioActivityInputDescriptor =>
+    ({ name: "X", typeName: "System.Int32", ...overrides });
+
+  it("treats a collectionKind of List/Array/HashSet as a collection with the element-alias typeName", () => {
+    for (const kind of ["List", "Array", "HashSet"] as const) {
+      expect(describeCollectionForInput(input({ typeName: "System.Int32", collectionKind: kind })))
+        .toEqual({ elementTypeName: "System.Int32" });
+      expect(describeDictionaryForInput(input({ typeName: "System.Int32", collectionKind: kind }))).toBeNull();
+    }
+  });
+
+  it("still parses a full collection type name when the backend sends one alongside the kind", () => {
+    expect(describeCollectionForInput(input({ typeName: "System.String[]", collectionKind: "Array" })))
+      .toEqual({ elementTypeName: "System.String" });
+  });
+
+  it("treats a collectionKind of Dictionary as a dictionary, defaulting the value type to the alias", () => {
+    expect(describeDictionaryForInput(input({ typeName: "System.Int32", collectionKind: "Dictionary" })))
+      .toEqual({ valueTypeName: "System.Int32" });
+    expect(describeCollectionForInput(input({ typeName: "System.Int32", collectionKind: "Dictionary" }))).toBeNull();
+  });
+
+  it("does not treat a Single collectionKind as a collection or dictionary", () => {
+    expect(describeCollectionForInput(input({ typeName: "System.Int32", collectionKind: "Single" }))).toBeNull();
+    expect(describeDictionaryForInput(input({ typeName: "System.Int32", collectionKind: "Single" }))).toBeNull();
+  });
+
+  it("falls back to typeName parsing when collectionKind is absent (older backends)", () => {
+    expect(describeCollectionForInput(input({ typeName: "System.Collections.Generic.List`1[System.String]" })))
+      .toEqual({ elementTypeName: "System.String" });
+    expect(describeDictionaryForInput(input({ typeName: "System.Collections.Generic.IDictionary`2[System.String,System.Int32]" })))
+      .toEqual({ valueTypeName: "System.Int32" });
+    expect(describeCollectionForInput(input({ typeName: "System.Int32" }))).toBeNull();
   });
 });
 

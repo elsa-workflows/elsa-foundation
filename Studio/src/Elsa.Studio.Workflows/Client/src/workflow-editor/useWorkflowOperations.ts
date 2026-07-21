@@ -24,6 +24,7 @@ interface WorkflowOperationsParams {
   catalog: ActivityCatalogItem[];
   busy: boolean;
   saveDraft(draft: WorkflowDraft, savedStatus: string): Promise<WorkflowDraft>;
+  flushPendingSave(): Promise<void>;
   reload(): Promise<void>;
   startTestRun(testRun: WorkflowTestRunState): void;
   clearTestRun(): void;
@@ -45,6 +46,7 @@ export function useWorkflowOperations({
   catalog,
   busy,
   saveDraft,
+  flushPendingSave,
   reload,
   startTestRun,
   clearTestRun,
@@ -83,10 +85,14 @@ export function useWorkflowOperations({
 
   const preparePublication = useCallback(async () => {
     if (!draft || busy) return;
-    const draftSnapshot = structuredClone(draft);
     setAutosavePaused(true);
     setOperation("publicationPreflight");
     setError("");
+    // Settle any in-flight or pending autosave before capturing the review snapshot. Previously a save
+    // racing the review left "Review & publish" appearing to do nothing; now it awaits (with feedback).
+    setStatus("Saving before review...");
+    await flushPendingSave();
+    const draftSnapshot = structuredClone(draft);
     setStatus("Preparing publication review...");
     try {
       // Review preparation is deliberately read-only. The captured draft is not saved or promoted
@@ -128,7 +134,7 @@ export function useWorkflowOperations({
     } finally {
       setOperation("idle");
     }
-  }, [draft, details, catalog, busy, context, setAutosavePaused, setError, setOperation, setStatus]);
+  }, [draft, details, catalog, busy, context, flushPendingSave, setAutosavePaused, setError, setOperation, setStatus]);
 
   const confirmPublication = useCallback(async (intent: PublicationIntent) => {
     if (!publicationReview || publicationReview.phase === "success") return;
@@ -275,14 +281,22 @@ export function useWorkflowOperations({
         } : current);
       } else if (savedDraft) {
         const failedSavedDraft = savedDraft;
+        // A validation-only 409 from promotion carries the enriched error list (foundation #937); surface
+        // it so the dialog shows what to fix instead of only a count. Falls back to the retry copy otherwise.
+        const promotionValidationErrors = parsePromotionValidationErrors(e);
         setPublicationReview(current => current ? {
           ...current,
           phase: "savedFailure",
           progressStep: undefined,
           savedDraft: failedSavedDraft,
           draftSnapshot: failedSavedDraft,
+          ...(promotionValidationErrors.length
+            ? { validationErrors: promotionValidationErrors, executableStatus: "blocked" as const }
+            : {}),
           intent,
-          failureMessage: `The reviewed draft was saved, but promotion failed: ${failureMessage}. No version or publication was created. Retry Publish to promote the already-saved snapshot.`
+          failureMessage: promotionValidationErrors.length
+            ? `The reviewed draft was saved, but promotion was refused by ${promotionValidationErrors.length} validation error${promotionValidationErrors.length === 1 ? "" : "s"} (listed above). Correct them, then review and publish again. No version or publication was created.`
+            : `The reviewed draft was saved, but promotion failed: ${failureMessage}. No version or publication was created. Retry Publish to promote the already-saved snapshot.`
         } : current);
       } else {
         setPublicationReview(current => current ? { ...current, phase: "review", progressStep: undefined, intent } : current);
@@ -382,4 +396,50 @@ function isStalePreflightError(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const candidate = error as { status?: unknown; statusCode?: unknown; response?: { status?: unknown } };
   return candidate.status === 409 || candidate.statusCode === 409 || candidate.response?.status === 409;
+}
+
+/**
+ * Extracts the per-error validation messages from a promotion 409 ProblemDetails (foundation #937).
+ * Tolerates both FastEndpoints shapes: `errors` as an array of `{ reason | message }` and as a
+ * dictionary of `path -> string[]`. Returns an empty list when the payload carries no structured errors.
+ */
+export function parsePromotionValidationErrors(error: unknown): string[] {
+  const payload = readErrorPayload(error);
+  if (!payload || typeof payload !== "object") return [];
+  const errors = (payload as { errors?: unknown }).errors;
+  const messages: string[] = [];
+
+  if (Array.isArray(errors)) {
+    for (const entry of errors) {
+      if (typeof entry === "string") { messages.push(entry); continue; }
+      if (entry && typeof entry === "object") {
+        const record = entry as Record<string, unknown>;
+        const message = record.reason ?? record.message ?? record.detail ?? record.errorMessage;
+        if (typeof message === "string" && message.trim()) messages.push(message.trim());
+      }
+    }
+  } else if (errors && typeof errors === "object") {
+    for (const value of Object.values(errors as Record<string, unknown>)) {
+      if (typeof value === "string" && value.trim()) messages.push(value.trim());
+      else if (Array.isArray(value)) {
+        for (const item of value) if (typeof item === "string" && item.trim()) messages.push(item.trim());
+      }
+    }
+  }
+
+  // Drop the summary "N validation error(s) present." line the backend keeps for backward compatibility
+  // when we have the itemized entries; keep it only if it's the only thing available.
+  const itemized = messages.filter(message => !/^Cannot promote draft .* validation error\(s\) present\.?$/i.test(message));
+  return itemized.length ? Array.from(new Set(itemized)) : Array.from(new Set(messages));
+}
+
+function readErrorPayload(error: unknown): unknown {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as { payload?: unknown; response?: { data?: unknown }; message?: unknown };
+  if (candidate.payload != null) return candidate.payload;
+  if (candidate.response?.data != null) return candidate.response.data;
+  if (typeof candidate.message === "string") {
+    try { return JSON.parse(candidate.message); } catch { return null; }
+  }
+  return null;
 }

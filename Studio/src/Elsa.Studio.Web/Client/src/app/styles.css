@@ -169,6 +169,22 @@ button {
   cursor: not-allowed;
 }
 
+.studio-property-error {
+  margin: var(--spacing-xs) 0 0;
+  color: var(--studio-danger-fg);
+  font-size: 0.75rem;
+}
+
+.studio-property-hint {
+  margin: var(--spacing-xs) 0 0;
+  color: var(--studio-text-muted);
+  font-size: 0.75rem;
+}
+
+input[aria-invalid="true"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 60%, transparent);
+}
+
 a {
   color: inherit;
   text-decoration: none;

@@ -5980,6 +5980,11 @@ button.wf-reference-select {
   color: var(--wf-muted-fg, #6b7280);
 }
 
+.wf-validation-note {
+  font-weight: 400;
+  color: var(--wf-muted-text);
+}
+
 .wf-validation-list {
   list-style: none;
   margin: 0;
