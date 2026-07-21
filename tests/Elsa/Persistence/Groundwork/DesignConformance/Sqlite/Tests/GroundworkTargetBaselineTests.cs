@@ -14,9 +14,9 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
-    private const string ExpectedGroundworkVersion = "0.0.1-preview.77";
-    private const string ExpectedTargetFingerprint = "eaaf809f763873c2b9b5a750c3b5103b133716020675aca38773dadb0739ef56";
-    private const string ExpectedPlanFingerprint = "7cded8b9102fe778b7746fd4f1d3e94c2fe548b9d52669e742fb69e433b85bdd";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.78";
+    private const string ExpectedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
+    private const string ExpectedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()

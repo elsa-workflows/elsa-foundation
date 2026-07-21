@@ -188,7 +188,7 @@ T020 creates and maintains this ledger at class granularity. Every feature class
 | `GroundworkAddActivityDefinitionCommand` | Activity command | T032/T035 | `Repeated_registration_keeps_shared_scoped_adapters_registered_once` | `GroundworkAddActivityDefinitionCommandTests`: default, scope, duplicate, provider rejection, cancellation, replay/conflict and lost-ack reconciliation | Covered |
 | `GroundworkAddActivityDefinitionVersionCommand` | Activity command | T032/T035 | `Repeated_registration_keeps_shared_scoped_adapters_registered_once` | `GroundworkAddActivityDefinitionCommandTests`: immutable version, collision, provider rejection, cancellation, replay/conflict and lost-ack reconciliation | Covered |
 | `GroundworkSchemaReadinessTask` and schema-tool adapters | Readiness implementations | T061 | T061 feature/host composition | T061: ready/pending/drift, no apply/fallback, failure, cancellation | Assigned to T061 |
-| SQLite/PostgreSQL/SQL Server/MongoDB provider registrations, initializers, target compilers, and shell features | Provider materialization | T062 | T062 one §2.23.1 resolution test per concrete feature/provider | T062 direct provider branches and exact target evidence | Assigned to T062 |
+| SQLite/PostgreSQL/SQL Server/MongoDB provider registrations, initializers, target compilers, and shell features | Provider materialization | T062 | One §2.23.1 resolution/composition test per provider leaf: SQLite `GroundworkRuntimePersistenceRegistrationTests` (`Sqlite_Feature_Wires_DocumentStore_And_Bridge`, `Sqlite_Provider_Registration_Is_Idempotent`, `Sqlite_Provider_Prepare_Metadata_Matches_By_Type_After_Earlier_Initializers`) + `UnifiedGroundworkHostTests`; SQL Server `SqlServerGroundworkPersistenceRegistrationTests` (`Runtime_feature_registers_builds_and_resolves_the_SQL_Server_startup_leaf`, `Unified_feature_registers_the_seven_provider_families_without_selecting_identity`, `Identity_only_provider_leaf_resolves_without_runtime_history_services`); PostgreSQL `PostgreSqlGroundworkRuntimePersistenceRegistrationTests` (`Feature_registers_a_single_document_store_and_its_startup_initializer`, `Feature_swaps_the_runtime_store_seams_over_to_the_groundwork_bridges`, `Provider_registration_is_idempotent`); MongoDB `MongoDbGroundworkPersistenceRegistrationTests` | Initializer admission-only + exact target/route evidence: SQLite `GroundworkTargetBaselineTests` pins the applied target and plan fingerprints (0.0.1-preview.78); SQL Server `Production_initializer_is_admission_only_and_constructs_the_exact_physical_store`, `Dispatch_physical_routes_fit_SQL_Server_index_limits_without_connecting`, `Stimulus_lookup_routes_fit_SQL_Server_index_limits_without_connecting`, `SQL_Server_history_query_uses_the_transformed_common_physical_route`; per-provider admission connection-detail suppression (`*_Initialization_Suppresses_Connection_Details`). One-provider-per-host conflict proof over the reference-host runtime-only/design-only/combined shapes in both composition orders: `ProviderLeafConflictContractSuite` subclassed as `{Sqlite,SqlServer,PostgreSql,MongoDb}ProviderLeafConflictContractSuite` (6 branches each) plus `SqlServerGroundworkPersistenceRegistrationTests.Conflicting_relational_provider_leaves_are_rejected_deterministically_in_both_orders` | Covered |
 
 The session and unit-of-work direct suites live in the base `Elsa.Persistence.Groundwork.Tests` project because
 their public APIs belong to the base Groundwork assembly rather than the Querying assembly. Querying remains a
@@ -220,3 +220,37 @@ access context for every acquisition and rejects tenant-agnostic work before pro
 context is explicitly privileged across scopes. Its privileged execution helper also records acquisition
 and terminal outcome. The generic foundation is therefore reused by design adapters rather than wrapped in
 a second design-only lifetime abstraction.
+
+## Phase 5 (US3) implementation reconciliation
+
+Four placement and physical-form decisions made during US3 diverge from the literal task
+targets and are recorded here as the canonical rationale:
+
+- **Schema readiness guard (T060)** lives in the base `Elsa.Persistence.Groundwork` project
+  (`GroundworkSchemaReadinessTask` + its registration helper), not in `Unified/`. The
+  `Unified` folder backs the slim composition project consumed by the schema CLI tooling
+  and must stay free of CShells/host-lifecycle dependencies; the readiness guard is a
+  Start-phase `IShellInitializer` and therefore belongs with the host-side registrations.
+  Every provider registration appends it idempotently after its own initializer.
+- **Schema CLI contract tests (T061)** execute inside the SQLite design-conformance leaf
+  (`UnifiedSchemaToolContractTests`) rather than a dedicated CLI test project: the pinned
+  CLI contract (offline validate exit 0, plan/status exit 2 pending → 0 ready, `apply
+  --safe` idempotence via `targetMutated=false`) needs a real materialized target, and the
+  leaf already owns the cheapest one. The provider-neutral half (readiness semantics)
+  lives in `UnifiedSchemaReadinessTests` in the unified-host test project.
+- **Auxiliary exhaustive routes** take their deterministic tie-break from a bounded
+  projected `entity_id` column instead of the envelope comparison key, matching the main
+  units' pattern; the envelope key's unbounded width broke SQL Server's 1700-byte
+  nonclustered index key limit once compound index keys were bounded (see quickstart
+  fingerprint history).
+- **Enum-kind management columns are numeric.** Three projected members are canonical
+  JSON numbers (enum kinds): `entity.contentAuthority.kind` (`authority`),
+  `entity.status` (`draft_status`), and `entity.lifecycle` (`version_lifecycle`).
+  MongoDB's strict save-time projection resolution rejects a String column over a
+  number member, and the manifest's semantic validator requires the residual predicate
+  value kind to match the projected physical type, so all three columns are `Int32`
+  and their residual predicates are `IndexValueKind.Number` (the
+  `NumericMemberPaths` set in the activities manifest is the single authority for the
+  pairing). Relational providers were lenient about the mismatch; MongoDB made it
+  visible (the same strictness that drove the unified-host contract to persist
+  canonical entity members in its synthetic documents).

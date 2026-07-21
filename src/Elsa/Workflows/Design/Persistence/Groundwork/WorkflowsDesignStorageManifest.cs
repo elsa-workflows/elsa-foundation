@@ -132,10 +132,10 @@ public static class WorkflowsDesignStorageManifest
             WorkflowDefinitionDocumentKind,
             "Workflow definition",
             [
-                Column("definition_id", DefinitionIdField, false),
+                Column("definition_id", DefinitionIdField, false, IdentityColumnLength),
                 Column("name", DefinitionNameField),
                 Column("description", DefinitionDescriptionField),
-                Column("tenant_id", DefinitionTenantIdField)
+                Column("tenant_id", DefinitionTenantIdField, length: IdentityColumnLength)
             ],
             indexes,
             physicalIndexes,
@@ -173,9 +173,9 @@ public static class WorkflowsDesignStorageManifest
             WorkflowDefinitionVersionDocumentKind,
             "Workflow definition version",
             [
-                Column("version_id", VersionIdField, false),
-                Column("definition_id", VersionDefinitionIdField, false),
-                Column("sem_ver_sort_key", VersionSemVerSortKeyField, false)
+                Column("version_id", VersionIdField, false, IdentityColumnLength),
+                Column("definition_id", VersionDefinitionIdField, false, IdentityColumnLength),
+                Column("sem_ver_sort_key", VersionSemVerSortKeyField, false, IdentityColumnLength)
             ],
             indexes,
             physicalIndexes,
@@ -187,8 +187,7 @@ public static class WorkflowsDesignStorageManifest
         var indexes = new[]
         {
             LogicalIndex("draft-by-id", [DocumentIdField], unique: true),
-            LogicalIndex("drafts-by-definition", [DraftDefinitionIdField, DraftLastModifiedAtField, DraftCreatedAtField, DraftIdField]),
-            LogicalIndex("current-draft-by-definition", [DraftDefinitionIdField, DraftLastModifiedAtField, DraftCreatedAtField, DraftIdField])
+            LogicalIndex("drafts-by-definition", [DraftDefinitionIdField, DraftLastModifiedAtField, DraftCreatedAtField, DraftIdField])
         };
         var physicalIndexes = new[]
         {
@@ -198,26 +197,23 @@ public static class WorkflowsDesignStorageManifest
                 ("definition_id", PhysicalSortDirection.Ascending),
                 ("last_modified_at", PhysicalSortDirection.Descending),
                 ("created_at", PhysicalSortDirection.Descending),
-                ("draft_id", PhysicalSortDirection.Descending)),
-            OrderedPhysicalIndex(
-                "current-draft-by-definition",
-                ("definition_id", PhysicalSortDirection.Ascending),
-                ("last_modified_at", PhysicalSortDirection.Descending),
-                ("created_at", PhysicalSortDirection.Descending),
                 ("draft_id", PhysicalSortDirection.Descending))
         };
         var queries = new[]
         {
             Query(FindDraftByIdQuery, "draft-by-id", [Predicate(DocumentIdField, PortableQueryOperation.Equal)], QueryPagingSupport.None, QuerySortSupport.None, [BoundedQueryResultOperation.First, BoundedQueryResultOperation.Any]),
             Query(ListDraftsByDefinitionQuery, "drafts-by-definition", [Predicate(DraftDefinitionIdField, PortableQueryOperation.Equal, PortableQueryOperation.In)], QueryPagingSupport.Offset, QuerySortSupport.Descending, [BoundedQueryResultOperation.Documents, BoundedQueryResultOperation.Count], sortFields: CurrentDraftSort()),
-            Query(FindCurrentDraftByDefinitionQuery, "current-draft-by-definition", [Predicate(DraftDefinitionIdField, PortableQueryOperation.Equal)], QueryPagingSupport.None, QuerySortSupport.Descending, [BoundedQueryResultOperation.First], sortFields: CurrentDraftSort())
+            // The current-draft route rides the drafts-by-definition index: a dedicated
+            // current-draft index would repeat the identical ordered key pattern, which MongoDB
+            // rejects as a duplicate and every provider would pay twice for on writes.
+            Query(FindCurrentDraftByDefinitionQuery, "drafts-by-definition", [Predicate(DraftDefinitionIdField, PortableQueryOperation.Equal)], QueryPagingSupport.None, QuerySortSupport.Descending, [BoundedQueryResultOperation.First], sortFields: CurrentDraftSort())
         };
         return PhysicalUnit(
             WorkflowDefinitionDraftDocumentKind,
             "Workflow definition draft",
             [
-                Column("draft_id", DraftIdField, false),
-                Column("definition_id", DraftDefinitionIdField, false),
+                Column("draft_id", DraftIdField, false, IdentityColumnLength),
+                Column("definition_id", DraftDefinitionIdField, false, IdentityColumnLength),
                 DateTimeColumn("last_modified_at", DraftLastModifiedAtField, false),
                 DateTimeColumn("created_at", DraftCreatedAtField, false)
             ],
@@ -237,7 +233,7 @@ public static class WorkflowsDesignStorageManifest
         return PhysicalUnit(
             WorkflowDefinitionVersionLayoutDocumentKind,
             "Workflow definition version layout",
-            [Column("version_id", LayoutVersionIdField, false)],
+            [Column("version_id", LayoutVersionIdField, false, IdentityColumnLength)],
             indexes,
             physicalIndexes,
             queries);
@@ -381,8 +377,15 @@ public static class WorkflowsDesignStorageManifest
             .Select(order => Sort(order.Path, order.Direction))
             .ToArray();
 
-    private static ProjectedColumnDefinition Column(string name, string path, bool nullable = true) =>
-        new(name, path, PortablePhysicalType.String, Length: 450, IsNullable: nullable);
+    // Searchable text columns are bounded to 256 characters and identity/sort-key columns to 128 so
+    // every declared compound index key stays under SQL Server's 1700-byte nonclustered limit
+    // (worst case: search = scope 256B + name 512B + definition_id 256B + description 512B = 1536B).
+    // Over-limit values fail projection validation rather than truncate, per the ratified data model.
+    private const int TextColumnLength = 256;
+    private const int IdentityColumnLength = 128;
+
+    private static ProjectedColumnDefinition Column(string name, string path, bool nullable = true, int length = TextColumnLength) =>
+        new(name, path, PortablePhysicalType.String, Length: length, IsNullable: nullable);
 
     private static ProjectedColumnDefinition DateTimeColumn(string name, string path, bool nullable = true) =>
         new(name, path, PortablePhysicalType.DateTime, IsNullable: nullable);

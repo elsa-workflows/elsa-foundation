@@ -111,6 +111,7 @@ public class DesignContractSuiteShapeTests
         Assert.True(typeof(ActivityDesignQueryContractSuite).IsAbstract);
         Assert.True(typeof(DesignQueryScaleContractSuite).IsAbstract);
         Assert.True(typeof(DesignQueryPlanContractSuite).IsAbstract);
+        Assert.True(typeof(UnifiedSchemaEvolutionContractSuite).IsAbstract);
         Assert.True(typeof(DesignAtomicityContractSuite).IsAbstract);
         Assert.True(typeof(DesignIsolationAndRestartContractSuite).IsAbstract);
 
@@ -186,6 +187,7 @@ public class DesignContractSuiteShapeTests
                 nameof(DesignAtomicityContractSuite.Duplicate_delivery_does_not_repeat_the_fixture_post_commit_outcome),
                 nameof(DesignAtomicityContractSuite.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry),
                 nameof(DesignAtomicityContractSuite.Non_success_provider_decision_rolls_back_all_staged_parts),
+                nameof(DesignAtomicityContractSuite.Over_limit_projected_text_fails_validation_without_persisting),
                 nameof(DesignAtomicityContractSuite.Partial_staging_failure_leaves_no_visible_partial_aggregate),
                 nameof(DesignAtomicityContractSuite.Same_stable_operation_key_and_canonical_fingerprint_replay_the_prior_result),
                 nameof(DesignAtomicityContractSuite.Stable_operation_key_reuse_with_a_different_fingerprint_conflicts_without_mutation)
@@ -218,6 +220,7 @@ public class DesignContractSuiteShapeTests
             [DesignPersistenceContractScenario.AtomicityExactReplay] = "Legacy EF mutation contracts do not accept a caller-stable operation key or persist replay outcomes.",
             [DesignPersistenceContractScenario.AtomicityKeyReuseConflict] = "Legacy EF mutation contracts do not accept a caller-stable operation key or compare canonical request fingerprints.",
             [DesignPersistenceContractScenario.AtomicityDuplicateDelivery] = "Legacy EF mutation contracts have no durable operation ledger to suppress duplicate delivery outcomes.",
+            [DesignPersistenceContractScenario.AtomicityProjectionOverLimitRejection] = "Legacy EF design tables declare unbounded text and have no projected-column contract to enforce a declared maximum length.",
             [DesignPersistenceContractScenario.IsolationSamePointIdentities] = "Legacy EF identity keys are global and cannot represent the target scope-local same-identity semantics.",
             [DesignPersistenceContractScenario.IsolationForeignPointReads] = "Legacy EF fixtures do not bind point reads to a storage scope and therefore cannot prove target non-disclosure.",
             [DesignPersistenceContractScenario.IsolationForeignScopeWrites] = "Legacy EF fixtures do not bind writes to a storage scope and therefore cannot prove target cross-scope rejection.",
@@ -243,7 +246,7 @@ public class DesignContractSuiteShapeTests
         }
 
         Assert.Equal(8, legacyEfOracle.Applicability.Values.Count(applicability => applicability.IsApplicable));
-        Assert.Equal(12, legacyEfOracle.Applicability.Values.Count(applicability => !applicability.IsApplicable));
+        Assert.Equal(13, legacyEfOracle.Applicability.Values.Count(applicability => !applicability.IsApplicable));
     }
 
     [Fact]

@@ -348,7 +348,28 @@ checkpoints on top of the merged US1 result `4d44cd435`:
   admissible. The SQLite schema fingerprints advanced accordingly: target
   `eaaf809f763873c2b9b5a750c3b5103b133716020675aca38773dadb0739ef56`, plan
   `7cded8b9102fe778b7746fd4f1d3e94c2fe548b9d52669e742fb69e433b85bdd`
-  (Groundwork family unchanged at `0.0.1-preview.77`).
+  (Groundwork family unchanged at `0.0.1-preview.77`). US3 later removed the
+  duplicate `activity-definition-by-search` physical index (identical
+  (display_name, activity_definition_id) key pattern to the display-name index —
+  rejected by MongoDB and double-paid on writes by every provider), rebinding the
+  activity search route to the display-name index, removed the duplicate ordered
+  current-draft index the same way (identical key pattern to drafts-by-definition),
+  and bounded the projected searchable column widths (text 256, identity/sort keys
+  128) so every compound index key fits SQL Server's 1700-byte limit; the auxiliary
+  exhaustive routes additionally moved their deterministic tie-break from the wide
+  envelope comparison key onto a bounded projected `entity_id` column (the main
+  units' established pattern), and the fingerprints advanced to target
+  `cb225b048807efca76cf870674373782b631682a2278bf7fdfebf7c1245cb217`, plan
+  `5b90a248cfc36967c5aa2deaf38427398ebf3212d59b9ffd31b22bd30a712fdc`.
+  MongoDB's strict save-time projection resolution then exposed that three activity
+  management columns project canonical JSON numbers (enum kinds) but were declared
+  String: `authority` (`entity.contentAuthority.kind`), `draft_status`
+  (`entity.status`), and `version_lifecycle` (`entity.lifecycle`). All three are now
+  `Int32` columns with matching `IndexValueKind.Number` residual predicates (the
+  manifest's own semantic validator enforces the pairing), advancing the fingerprints
+  to target `ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c`, plan
+  `73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4`
+  (Groundwork family `0.0.1-preview.78`).
 - **T042/T046** — `ElsaGroundworkQueryRoutes.MaximumMembershipCount` (`200`) is the
   declared IN cardinality; the translator rejects a larger single membership before
   provider I/O, and `GroundworkMembershipBatches` canonicalizes oversized caller sets
@@ -440,6 +461,43 @@ Groundwork core persistence `639/639`, architecture ratchets `263/263`, full
 `Elsa.Server.slnx` Release build `0` errors, `git diff --check` clean; the T048
 domain/API counts are unchanged from the evidence section above.
 
+### T062 provider-materialization ledger closure and one-provider-per-host evidence (2026-07-21)
+
+The single open §2.23 ledger row — SQLite/PostgreSQL/SQL Server/MongoDB provider
+registrations, initializers, target compilers, and shell features — is closed against
+suites that already exist on the branch rather than by duplicating them: per-provider
+registration/composition resolution (`GroundworkRuntimePersistenceRegistrationTests`
+Sqlite facts, `SqlServerGroundworkPersistenceRegistrationTests`,
+`PostgreSqlGroundworkRuntimePersistenceRegistrationTests`,
+`MongoDbGroundworkPersistenceRegistrationTests`, `UnifiedGroundworkHostTests`),
+admission-only initializers, and exact target/route evidence (SQLite
+`GroundworkTargetBaselineTests` pins the applied target and plan fingerprints at
+Groundwork `0.0.1-preview.78`; SQL Server dispatch/stimulus/history route-fit and
+`Production_initializer_is_admission_only_and_constructs_the_exact_physical_store`).
+
+The one-provider-per-host guard is proven directly against the reference-host
+composition surfaces. A provider-neutral abstract suite
+`ProviderLeafConflictContractSuite` lives in the shared `DesignConformance/Tests`
+assembly (no provider SDK reference — the `DesignContractSuiteShapeTests` purity audit
+stays green) and is subclassed per leaf as
+`{Sqlite,SqlServer,PostgreSql,MongoDb}ProviderLeafConflictContractSuite`. Each subclass
+composes its provider in the runtime-only, design-only, and combined reference-host
+shapes through the production registration methods (`AddGroundwork{Provider}UnifiedPersistence`,
+`Add{Provider}GroundworkDocumentStore` + `AddGroundworkRuntimeStores` /
+`AddGroundworkWorkflowsDesignStores` + `AddGroundworkActivitiesDesignStores`) and then
+composes a second, different Groundwork provider leaf. The guard rejects the second leaf
+at registration time (no connection opened, Docker-free) with the established
+`SelectGroundworkProviderLeaf` diagnostic — `Conflicting Groundwork provider leaves were
+selected: … Select exactly one concrete Groundwork provider leaf per host.` — asserted in
+both composition orders (6 branches per provider).
+
+Verification (Release, `2026-07-21`): shared design conformance `96` passed + `1`
+intentional skip (purity audit included); SQLite design-conformance leaf full run
+`51/51` (45 prior + 6 new conflict branches); the SQL Server, PostgreSQL, and MongoDB
+leaves each pass their `ProviderLeafConflict` branches `6/6` without Docker (their
+Testcontainers integration suites are unaffected). Production manifests and the SQLite
+`GroundworkTargetBaselineTests` fingerprints are unchanged.
+
 ## 1. Restore and build
 
 ```bash
@@ -458,6 +516,83 @@ dotnet test tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence
 ```
 
 Expected: registration, serialization, command, atomic rollback, and unified-host scenarios all pass.
+
+### T063 four-provider matrix through the reference-host compositions (2026-07-21)
+
+The complete conformance suite ran in full on all four real providers at candidate
+`94d57a3bf` plus the deployment-shape lane tests, every project green:
+
+| Project | Result |
+| --- | --- |
+| `DesignConformance.Sqlite.Tests` (contracts + baseline + CLI + evolution + conflict) | 51/51 |
+| `DesignConformance.PostgreSql.Tests` (50 contracts + 5 evolution + 6 conflict) | 61/61 |
+| `DesignConformance.SqlServer.Tests` (50 contracts + 5 evolution + 6 conflict) | 61/61 |
+| `DesignConformance.MongoDb.Tests` (52 contracts/topology + 6 conflict) | 58/58 |
+| Shared `DesignConformance.Tests` (neutral suites + shape/purity audits) | 96 passed, 1 intentional skip |
+| `UnifiedHost.Tests` (SQLite host, incl. lane-exclusion shapes) | 45/45 |
+| `PostgreSql.UnifiedHost.Tests` / `SqlServer.UnifiedHost.Tests` / `MongoDb.UnifiedHost.Tests` | 6/6 each |
+
+Deployment shapes are proven at the reference-host composition surfaces (the
+production registration methods the `Elsa.Server` shell features invoke —
+registration-time proofs, not a live boot of the app process): the
+combined shape runs the full contract matrix through every leaf fixture
+(production `AddGroundwork{Provider}UnifiedPersistence` compositions with startup
+auto-apply disabled and admission-gated startup); the design-only and runtime-only
+shapes are exercised by `ProviderLeafConflictContractSuite` in all four leaves, and
+`DeploymentShapeLaneExclusionTests` proves the lane contract directly — a
+runtime-only composition registers the Groundwork runtime bridges and the runtime
+manifest source but no design store, design command, atomic writer, or design
+manifest source; the design-only composition is the mirror image; the combined
+composition registers both lanes. No provider-specific semantic, plan, or
+composition remediation remained after the strict-projection parity fix — the
+provider differences US3 surfaced (MongoDB duplicate index key patterns, SQL Server
+index key width, MongoDB numeric enum projections, MongoDB topology gate) were each
+remediated in the manifests or proven as intentional topology semantics earlier in
+this story and are recorded in the fingerprint history and research reconciliation.
+
+### T066 US3 independent review and final evidence (2026-07-21)
+
+**Reviewed range:** `2faae0d1590d0927f3893f9a0461a0ff85e8e097..60598f7a551e158092ec3c0bd66f219a36a4e77b`
+(the 14 US3 commits), by three independent read-only reviewers on distinct axes.
+**Final candidate:** `820fe042e` (the reviewed range plus four dispositioned follow-ups below).
+
+Verdicts:
+
+- **Provider parity / physical manifests — PASS** (after disposition). The one blocker —
+  "SQLite silently stores over-length projected text where the other providers reject" —
+  was founded on a stale Groundwork source checkout and was formally withdrawn: Groundwork
+  PR #105 (shipped since `preview.69`, present in the pinned `preview.78`) validates string
+  length at the shared pre-I/O projection boundary on every provider
+  (`PhysicalProjectionValueValidationException`, diagnostic `GW-PHYSICAL-037`, UTF-16
+  code-unit measure). The reviewer's valid sub-finding (no conformance proof existed) is
+  remediated by the `AtomicityProjectionOverLimitRejection` scenario (`820fe042e`), green
+  9/9 in each provider leaf's atomicity run and explicitly N/A for the legacy EF oracle.
+  Numeric enum re-typing, index rebinds, `entity_id` ordinal-collation determinism
+  (binary collation on all four providers), index-key byte budgets (≤1536 B < 1700 B),
+  and fingerprint pins were all judged sound.
+- **Schema operations — PASS.** Readiness guard genuinely inspect-only with no bypass path;
+  CLI contract keeps secrets out of argv; evolution seams honest (interruption structurally
+  proven pre-completion; collision offline with fingerprint-verified non-mutation; drift
+  drops real applied indexes). Advisories remediated in `086e084ae`: the evolved-route
+  servable probe now writes-then-reads per its contract, the vacuous destructive-double-apply
+  flag was dropped, and the CLI provenance comment reflects preview.78.
+- **Test & spec integrity — PASS.** All modified tests judged legitimate contract evolution
+  (several strengthened); purity audit and PR-gate CI routing verified to have teeth; tick
+  notes and evidence counts verified against code; scope hygiene clean. Advisory remediated:
+  quickstart now states the host-shape proofs are registration-time.
+
+Post-range commits, each dispositioned above: `086e084ae` (R2/R3 advisory remediations),
+`cc20574a1` (mechanical spec-094 checkpoint/fence evidence rotation to preview.78 required
+by the coverage-ledger version ratchet — publisher re-run + tuple-keyed import, no row
+status changed), `820fe042e` (over-limit rejection scenario; re-verified by the originating
+reviewer, who returned the final PASS).
+
+Final gate matrix at `820fe042e`, all green: full `Elsa.Server.slnx` Release build 0 errors;
+architecture 263/263; Groundwork querying 105; workflows-design GW 85; activities-design GW
+70; publishing API 394; conformance leaves SQLite 52/52, PostgreSQL 62/62, SQL Server 62/62,
+MongoDB 59/59, legacy EF oracle 38 passed + 13 intentional N/A skips, shared suites 96 + 1
+intentional skip; unified hosts 45/45 (SQLite base incl. deployment-shape lane exclusion)
+and 6/6 on PostgreSQL, SQL Server, and MongoDB.
 
 ### Phase 2 bounded-query substrate evidence (T019)
 

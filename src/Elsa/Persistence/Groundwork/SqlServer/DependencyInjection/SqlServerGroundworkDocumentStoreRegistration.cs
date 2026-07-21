@@ -1,9 +1,9 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Serialization;
-using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -57,6 +57,7 @@ public static class SqlServerGroundworkDocumentStoreRegistration
             RegistrationIndex: -1,
             IsExplicit: true,
             Source: $"{nameof(SqlServerGroundworkDocumentStoreRegistration)}.{nameof(AddSqlServerGroundworkDocumentStore)}"));
+        services.AddGroundworkSchemaReadinessGuard();
         return services;
     }
 }

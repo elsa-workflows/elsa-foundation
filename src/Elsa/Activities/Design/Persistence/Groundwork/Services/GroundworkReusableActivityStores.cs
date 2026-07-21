@@ -1148,7 +1148,7 @@ public sealed class GroundworkReusableActivityStores(
     private static IReadOnlyList<DocumentQueryOrder> IndexHeadOrder(string keyField) =>
     [
         new(keyField, PhysicalSortDirection.Ascending),
-        new(ActivitiesDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)
+        new(ActivitiesDesignStorageManifest.EntityIdField, PhysicalSortDirection.Ascending)
     ];
 
     private static Stored<TEntity> Deserialize<TEntity>(DocumentEnvelope envelope, string kind)

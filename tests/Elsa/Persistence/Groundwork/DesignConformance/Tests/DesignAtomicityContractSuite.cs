@@ -1,3 +1,9 @@
+using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Filters;
+using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.Tests;
@@ -190,6 +196,60 @@ public abstract class DesignAtomicityContractSuite
         Assert.False(string.IsNullOrWhiteSpace(snapshot.CanonicalAggregateStateFingerprint));
         Assert.False(string.IsNullOrWhiteSpace(snapshot.AuthoritativeDurableResultFingerprint));
         return snapshot;
+    }
+
+    /// <summary>
+    /// An over-limit value for a bounded projected text column fails validation before provider
+    /// I/O — uniformly on every provider, never truncating and never partially persisting. The
+    /// shared Groundwork guard surfaces diagnostic GW-PHYSICAL-037 for all four providers.
+    /// </summary>
+    [SkippableFact]
+    public async Task Over_limit_projected_text_fails_validation_without_persisting()
+    {
+        SkipIfNotApplicable(DesignPersistenceContractScenario.AtomicityProjectionOverLimitRejection);
+        await using var fixture = await CreateFixtureAsync();
+        await fixture.ValidateReadinessAsync();
+        var overLimitDescription = new string('d', 257);
+
+        using var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
+        var services = scope.ServiceProvider;
+
+        var workflow = DesignPersistenceFixtureData.WorkflowDefinition();
+        workflow.Description = overLimitDescription;
+        var workflowException = await Record.ExceptionAsync(() =>
+            services.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("over-limit-workflow-create"),
+                workflow,
+                DesignPersistenceFixtureData.WorkflowDraft(),
+                DesignPersistenceFixtureData.WorkflowDraftLayout(),
+                CancellationToken.None));
+        AssertOverLimitRejection(workflowException);
+        Assert.Null(await services.GetRequiredService<IWorkflowDefinitionStore>()
+            .FindByIdAsync(DesignPersistenceFixtureData.WorkflowDefinitionId));
+
+        var activity = DesignPersistenceFixtureData.ActivityDefinition();
+        activity.Description = overLimitDescription;
+        var activityException = await Record.ExceptionAsync(() =>
+            services.GetRequiredService<IAddActivityDefinitionCommand>().Execute(
+                DesignPersistenceFixtureData.OperationKey("over-limit-activity-create"),
+                activity,
+                DesignPersistenceFixtureData.ActivityVersion(),
+                CancellationToken.None));
+        AssertOverLimitRejection(activityException);
+        Assert.Null(await services.GetRequiredService<IActivityDefinitionStore>()
+            .FindAsync(new ActivityDefinitionFilter { Id = DesignPersistenceFixtureData.ActivityDefinitionId }));
+    }
+
+    private static void AssertOverLimitRejection(Exception? exception)
+    {
+        Assert.NotNull(exception);
+        Assert.False(exception is OperationCanceledException, "An over-limit rejection must not be reported as cancellation.");
+        var messages = new List<string>();
+        for (var current = exception; current is not null; current = current.InnerException)
+            messages.Add(current.Message);
+        Assert.Contains(messages, message =>
+            message.Contains("exceeds its declared maximum length", StringComparison.Ordinal) ||
+            message.Contains("GW-PHYSICAL-037", StringComparison.Ordinal));
     }
 
     private void SkipIfNotApplicable(DesignPersistenceContractScenario scenario)

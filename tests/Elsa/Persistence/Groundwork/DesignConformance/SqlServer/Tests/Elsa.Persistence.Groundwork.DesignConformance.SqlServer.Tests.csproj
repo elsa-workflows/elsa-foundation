@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="coverlet.collector" />
+    <!-- Referencing Testcontainers routes this leaf out of the fast PR gate into integration CI. -->
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Events/Core/Elsa.Events.Core.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Locking/Core/Elsa.Locking.Core.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/SqlServer/Unified/Elsa.Persistence.Groundwork.SqlServer.Unified.csproj" />
+    <!-- A second real provider leaf, composed only to prove the one-provider-per-host guard (registration-time; no connection). -->
+    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/Sqlite/Elsa.Persistence.Groundwork.Sqlite.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj" />
+  </ItemGroup>
+
+</Project>

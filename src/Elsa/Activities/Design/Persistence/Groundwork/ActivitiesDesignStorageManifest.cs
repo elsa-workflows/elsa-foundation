@@ -21,21 +21,28 @@ public static class ActivitiesDesignStorageManifest
     public const string ByOwnerVersionIndex = "by-owner-version";
     public const string ByDependencyVersionIndex = "by-dependency-version";
     public const string DocumentIdField = PhysicalDocumentFieldPaths.Id;
+
+    /// <summary>
+    /// The projected entity-id path used as the deterministic tie-break for the auxiliary
+    /// exhaustive routes. Ordering rides the bounded projected column instead of the envelope
+    /// comparison key so the composed index keys stay inside SQL Server's 1700-byte limit.
+    /// </summary>
+    public const string EntityIdField = "entity.id";
     public const string DefinitionIdField = "entity.definitionId";
     public static IReadOnlyList<DocumentQueryOrder> ByDefinitionDocumentOrder { get; } =
     [
         new(DefinitionIdField, PhysicalSortDirection.Ascending),
-        new(DocumentIdField, PhysicalSortDirection.Ascending)
+        new(EntityIdField, PhysicalSortDirection.Ascending)
     ];
     public static IReadOnlyList<DocumentQueryOrder> ByDefinitionVersionDocumentOrder { get; } =
     [
         new(DefinitionVersionIdField, PhysicalSortDirection.Ascending),
-        new(DocumentIdField, PhysicalSortDirection.Ascending)
+        new(EntityIdField, PhysicalSortDirection.Ascending)
     ];
     public static IReadOnlyList<DocumentQueryOrder> ByOwnerVersionDocumentOrder { get; } =
     [
         new(OwnerVersionIdField, PhysicalSortDirection.Ascending),
-        new(DocumentIdField, PhysicalSortDirection.Ascending)
+        new(EntityIdField, PhysicalSortDirection.Ascending)
     ];
     public const string HeadVersionIdField = "entity.headVersionId";
     public const string DraftIdField = "entity.draftId";
@@ -173,7 +180,7 @@ public static class ActivitiesDesignStorageManifest
                         QueryPagingSupport.Offset,
                         [
                             new BoundedQuerySortField(DefinitionIdField, PhysicalSortDirection.Ascending),
-                            new BoundedQuerySortField(DocumentIdField, PhysicalSortDirection.Ascending)
+                            new BoundedQuerySortField(EntityIdField, PhysicalSortDirection.Ascending)
                         ]),
                     Query("list-by-head-version", ByHeadVersionIndex, HeadVersionIdField)
                 ]),
@@ -298,8 +305,7 @@ public static class ActivitiesDesignStorageManifest
             LogicalIndex("activity-definition-by-type-key", [ActivityDefinitionTypeKeyField, ActivityDefinitionIdField]),
             LogicalIndex("activity-definition-by-category", [ActivityDefinitionCategoryField, ActivityDefinitionIdField]),
             LogicalIndex("activity-definition-by-display-name", [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField]),
-            LogicalIndex("activity-definition-by-description", [ActivityDefinitionDescriptionField, ActivityDefinitionIdField]),
-            LogicalIndex("activity-definition-by-search", [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField])
+            LogicalIndex("activity-definition-by-description", [ActivityDefinitionDescriptionField, ActivityDefinitionIdField])
         };
         var physicalIndexes = new[]
         {
@@ -308,8 +314,7 @@ public static class ActivitiesDesignStorageManifest
             PhysicalIndex("activity-definition-by-type-key", "activity_type_key", "activity_definition_id"),
             PhysicalIndex("activity-definition-by-category", "category", "activity_definition_id"),
             PhysicalIndex("activity-definition-by-display-name", "display_name", "activity_definition_id"),
-            PhysicalIndex("activity-definition-by-description", "description", "activity_definition_id"),
-            PhysicalIndex("activity-definition-by-search", "display_name", "activity_definition_id")
+            PhysicalIndex("activity-definition-by-description", "description", "activity_definition_id")
         };
         var documentResults = new[]
         {
@@ -404,9 +409,12 @@ public static class ActivitiesDesignStorageManifest
                 supportsDisjunction: true,
                 sortFields: DefinitionSort(ActivityDefinitionDescriptionField),
                 residualPredicateFields: DefinitionResiduals(ActivityDefinitionDescriptionField)),
+            // The search route rides the display-name index: a separate search index would repeat
+            // the identical (display_name, activity_definition_id) key pattern, which MongoDB
+            // rejects as a duplicate and every provider would pay twice for on writes.
             BoundedQuery(
                 SearchActivityDefinitionsQuery,
-                "activity-definition-by-search",
+                "activity-definition-by-display-name",
                 [
                     Predicate(
                         ActivityDefinitionDisplayNameField,
@@ -425,7 +433,7 @@ public static class ActivitiesDesignStorageManifest
             ActivityDefinitionDocumentKind,
             "Activity definition",
             [
-                Column("activity_definition_id", ActivityDefinitionIdField, false),
+                Column("activity_definition_id", ActivityDefinitionIdField, false, IdentityColumnLength),
                 Column("activity_type_key", ActivityDefinitionTypeKeyField, false),
                 Column("category", ActivityDefinitionCategoryField, false),
                 Column("display_name", ActivityDefinitionDisplayNameField),
@@ -503,9 +511,9 @@ public static class ActivitiesDesignStorageManifest
             ActivityDefinitionVersionDocumentKind,
             "Activity definition version",
             [
-                Column("version_id", ActivityDefinitionVersionIdField, false),
-                Column("definition_id", ActivityDefinitionVersionDefinitionIdField, false),
-                Column("sem_ver_sort_key", ActivityDefinitionVersionSemVerSortKeyField, false)
+                Column("version_id", ActivityDefinitionVersionIdField, false, IdentityColumnLength),
+                Column("definition_id", ActivityDefinitionVersionDefinitionIdField, false, IdentityColumnLength),
+                Column("sem_ver_sort_key", ActivityDefinitionVersionSemVerSortKeyField, false, IdentityColumnLength)
             ],
             logicalIndexes,
             physicalIndexes,
@@ -538,7 +546,7 @@ public static class ActivitiesDesignStorageManifest
         QueryPagingSupport.Offset,
         [
             new BoundedQuerySortField(keyField, PhysicalSortDirection.Ascending),
-            new BoundedQuerySortField(DocumentIdField, PhysicalSortDirection.Ascending)
+            new BoundedQuerySortField(EntityIdField, PhysicalSortDirection.Ascending)
         ]);
 
     private static StorageUnit ManagementUnit(
@@ -551,21 +559,21 @@ public static class ActivitiesDesignStorageManifest
         var unit = BaseUnit(documentKind, label, LifecyclePolicy.Mutable);
         var columns = new[]
         {
-            Column("resource_id", ManagementResourceIdField, false),
-            Column("definition_id", DefinitionIdField, false),
-            Column("draft_id", DraftIdField),
-            Column("definition_version_id", DefinitionVersionIdField),
+            Column("resource_id", ManagementResourceIdField, false, IdentityColumnLength),
+            Column("definition_id", DefinitionIdField, false, IdentityColumnLength),
+            Column("draft_id", DraftIdField, length: IdentityColumnLength),
+            Column("definition_version_id", DefinitionVersionIdField, length: IdentityColumnLength),
             Column("valid_from", ManagementValidFromField, false, ManagementSequenceKeyLength),
             Column("valid_to", ManagementValidToField, false, ManagementSequenceKeyLength),
             Column("visibility", ManagementVisibilityField, false),
             Column("sort_key", ManagementSortField, false),
             Column("search_text", ManagementSearchField, false, ManagementSearchMaximumLength),
-            Column("authority", ManagementAuthorityField),
+            NumberColumn("authority", ManagementAuthorityField),
             Column("provider", ManagementProviderField),
             Column("head_provider", ManagementHeadProviderField),
             Column("recommendation_provider", ManagementRecommendationProviderField),
-            Column("draft_status", ManagementDraftStatusField),
-            Column("version_lifecycle", ManagementVersionLifecycleField)
+            NumberColumn("draft_status", ManagementDraftStatusField),
+            NumberColumn("version_lifecycle", ManagementVersionLifecycleField)
         };
         var equality = new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal };
         var pageOperations = new HashSet<PortableQueryOperation>
@@ -596,7 +604,7 @@ public static class ActivitiesDesignStorageManifest
         var pageResidualPredicates = pagePredicates
             .Select(predicate => new BoundedQueryResidualPredicateField(
                 predicate.Path,
-                IndexValueKind.Keyword,
+                NumericMemberPaths.Contains(predicate.Path) ? IndexValueKind.Number : IndexValueKind.Keyword,
                 predicate.Operations))
             .ToArray();
         var logicalIndexes = new[]
@@ -856,19 +864,44 @@ public static class ActivitiesDesignStorageManifest
         new(ActivityDefinitionVersionIdField, PhysicalSortDirection.Ascending)
     ];
 
+    // Searchable text columns are bounded to 256 characters and identity/sort-key columns to 128 so
+    // every declared compound index key stays under SQL Server's 1700-byte nonclustered limit.
+    // Over-limit values fail projection validation rather than truncate, per the ratified data model.
+    private const int TextColumnLength = 256;
+    private const int IdentityColumnLength = 128;
+
     private static ProjectedColumnDefinition Column(
         string name,
         string path,
         bool nullable = true,
-        int length = 450) => new(name, path, PortablePhysicalType.String, length, IsNullable: nullable);
+        int length = TextColumnLength) => new(name, path, PortablePhysicalType.String, length, IsNullable: nullable);
+
+    /// <summary>
+    /// A numeric projection for canonical JSON number members (for example enum kinds). MongoDB
+    /// resolves projections strictly by JSON type, so a number member must not be declared String.
+    /// </summary>
+    private static ProjectedColumnDefinition NumberColumn(string name, string path, bool nullable = true) =>
+        new(name, path, PortablePhysicalType.Int32, IsNullable: nullable);
 
     private static BoundedQueryPredicateField Predicate(string path, params PortableQueryOperation[] operations) =>
         new(path, operations.ToHashSet());
 
+    // These members are canonical JSON numbers (enum kinds), so their residual predicates and
+    // projected columns must both be numeric; every other residual member is a keyword string.
+    private static readonly HashSet<string> NumericMemberPaths =
+    [
+        ManagementAuthorityField,
+        ManagementDraftStatusField,
+        ManagementVersionLifecycleField
+    ];
+
     private static BoundedQueryResidualPredicateField ResidualPredicate(
         string path,
         params PortableQueryOperation[] operations) =>
-        new(path, IndexValueKind.Keyword, operations.ToHashSet());
+        new(
+            path,
+            NumericMemberPaths.Contains(path) ? IndexValueKind.Number : IndexValueKind.Keyword,
+            operations.ToHashSet());
 
     private static StorageUnit PhysicalUnit(
         string documentKind,
@@ -879,7 +912,7 @@ public static class ActivitiesDesignStorageManifest
     {
         var documentIdOrderedIndexes = queries
             .Where(query => query.SortFields?.Any(field =>
-                field.Path == DocumentIdField && field.Direction == PhysicalSortDirection.Ascending) == true)
+                field.Path == EntityIdField && field.Direction == PhysicalSortDirection.Ascending) == true)
             .Select(query => query.IndexIdentity)
             .ToHashSet(StringComparer.Ordinal);
         if (indexes.Any(index => index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)))
@@ -893,7 +926,7 @@ public static class ActivitiesDesignStorageManifest
                 [
                     .. index.Fields.Select(field => new IndexField(field, IndexValueKind.Keyword)),
                     .. (!index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)
-                        ? new[] { new IndexField(DocumentIdField, IndexValueKind.Keyword) }
+                        ? new[] { new IndexField(EntityIdField, IndexValueKind.Keyword) }
                         : Array.Empty<IndexField>())
                 ],
                 IndexValueKind.Keyword,
@@ -903,10 +936,15 @@ public static class ActivitiesDesignStorageManifest
         var indexedColumns = indexes
             .SelectMany(index => index.Fields)
             .Distinct(StringComparer.Ordinal)
-            .Select(field => Column(ColumnName(field), field))
+            .Select(field => Column(
+                ColumnName(field),
+                field,
+                length: ColumnName(field).EndsWith("_id", StringComparison.Ordinal)
+                    ? IdentityColumnLength
+                    : TextColumnLength))
             .ToArray();
-        var columns = indexedColumns.Length == 0
-            ? [Column("entity_id", "entity.id", false)]
+        ProjectedColumnDefinition[] columns = indexedColumns.Length == 0 || documentIdOrderedIndexes.Count > 0
+            ? [.. indexedColumns, Column("entity_id", EntityIdField, false, IdentityColumnLength)]
             : indexedColumns;
         var physicalIndexes = indexes
             .Select(index => new PhysicalIndexDefinition(
@@ -915,7 +953,7 @@ public static class ActivitiesDesignStorageManifest
                     new PhysicalIndexColumnDefinition("storage_scope", 0),
                     .. index.Fields.Select((field, order) => new PhysicalIndexColumnDefinition(ColumnName(field), order + 1)),
                     .. (!index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)
-                        ? new[] { new PhysicalIndexColumnDefinition("id_comparison_key", index.Fields.Length + 1, PhysicalSortDirection.Ascending) }
+                        ? new[] { new PhysicalIndexColumnDefinition("entity_id", index.Fields.Length + 1, PhysicalSortDirection.Ascending) }
                         : Array.Empty<PhysicalIndexColumnDefinition>())
                 ],
                 isUnique: index.IsUnique,

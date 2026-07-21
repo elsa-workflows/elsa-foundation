@@ -1,7 +1,7 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
+using Elsa.Persistence.Groundwork.Scoping;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -60,6 +60,7 @@ public static class MongoDbGroundworkDocumentStoreRegistration
             RegistrationIndex: -1,
             IsExplicit: true,
             Source: $"{nameof(MongoDbGroundworkDocumentStoreRegistration)}.{nameof(AddMongoDbGroundworkDocumentStore)}"));
+        services.AddGroundworkSchemaReadinessGuard();
         return services;
     }
 }
