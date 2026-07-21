@@ -153,7 +153,7 @@ public sealed class ExecutableNodeCompiler(
         var structure = CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity));
         var activityContract = clrActivityType is null
             ? null
-            : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure);
+            : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure, inputBindings: inputBindings);
 
         return new ExecutableNode(
             executableNodeId: activity.NodeId,
@@ -284,7 +284,8 @@ public sealed class ExecutableNodeCompiler(
         Type activityType,
         string activityTypeKey,
         ExecutableActivityStructure? structure,
-        string? contractVersion = null)
+        string? contractVersion = null,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null)
     {
         var resultType = FindTypedActivityResult(activityType);
         if (resultType is null)
@@ -327,7 +328,7 @@ public sealed class ExecutableNodeCompiler(
             })
             .ToArray();
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
-        var outcomes = ResolveOutcomes(activityType, structure);
+        var outcomes = ResolveOutcomes(activityType, structure, inputBindings);
         var resultPolicy = projections.Aggregate(
             ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
             (policy, projection) => ValuePolicyCombiner.Combine(
@@ -403,7 +404,10 @@ public sealed class ExecutableNodeCompiler(
         return ValuePolicyCombiner.Combine(owner, authoredMinimum, valueRole);
     }
 
-    private static IReadOnlyCollection<string> ResolveOutcomes(Type activityType, ExecutableActivityStructure? structure)
+    private static IReadOnlyCollection<string> ResolveOutcomes(
+        Type activityType,
+        ExecutableActivityStructure? structure,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings)
     {
         var outcomes = activityType.GetCustomAttributes<ActivityOutcomeAttribute>(inherit: true)
             .Select(attribute => attribute.Key)
@@ -419,9 +423,46 @@ public sealed class ExecutableNodeCompiler(
                     outcomes.Add(value);
         }
 
+        AddValueDerivedOutcomes(activityType, inputBindings, outcomes);
+
         if (outcomes.Count == 0)
             outcomes.Add(ActivityOutcomes.Done);
         return outcomes.ToArray();
+    }
+
+    /// <summary>
+    /// Pins the per-node outcome ports an activity derives from an authored collection input (see
+    /// <see cref="ActivityValueOutcomesAttribute"/>): one outcome named after each configured item plus the
+    /// unmatched catch-all. Reads the compiled literal binding so the pinned names match exactly what the runtime
+    /// emits. When the source input has no authored items the activity keeps only its statically declared outcomes,
+    /// preserving back-compat for an unconfigured node (#926).
+    /// </summary>
+    private static void AddValueDerivedOutcomes(
+        Type activityType,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings,
+        HashSet<string> outcomes)
+    {
+        var declaration = activityType.GetCustomAttribute<ActivityValueOutcomesAttribute>(inherit: true);
+        if (declaration is null || inputBindings is null ||
+            !inputBindings.TryGetValue(declaration.InputKey, out var binding) ||
+            binding.LiteralValue is not { ValueKind: JsonValueKind.Array } array)
+            return;
+
+        var added = false;
+        foreach (var item in array.EnumerateArray())
+        {
+            var name = item.ValueKind switch
+            {
+                JsonValueKind.String => item.GetString(),
+                JsonValueKind.Number => item.GetRawText(),
+                _ => null
+            };
+            if (!string.IsNullOrWhiteSpace(name) && outcomes.Add(name))
+                added = true;
+        }
+
+        if (added)
+            outcomes.Add(declaration.UnmatchedOutcome);
     }
 
     private static Type? FindTypedActivityResult(Type activityType)

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Api.Models;
 
@@ -25,6 +26,10 @@ public sealed record ActivityInputDescriptorView(
     string ReferenceKey,
     string Name,
     string Type,
+    // The collection shape of the input's CLR type (Single/Array/List/HashSet/Dictionary). Together with
+    // <see cref="Type"/> (the element-type alias) this lets the editor render a list/dictionary item editor
+    // for a collection-typed input instead of a scalar text box (#924).
+    CollectionKind CollectionKind,
     string? DisplayName,
     string? Description,
     float Order,
@@ -40,6 +45,7 @@ public sealed record ActivityInputDescriptorView(
 public sealed record ActivityOutputDescriptorView(
     string Name,
     string Type,
+    CollectionKind CollectionKind,
     string? DisplayName,
     string? Description,
     string? Category,
