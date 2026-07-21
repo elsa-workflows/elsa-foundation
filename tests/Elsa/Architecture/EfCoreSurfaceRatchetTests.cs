@@ -29,6 +29,28 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
+    public void Temporary_design_benchmark_exclusion_is_exact_non_packable_and_frozen()
+    {
+        var projectPath = Path.Combine(
+            RepoRoot,
+            TemporaryDesignEfOracle.RelativeBenchmarkProjectPath.Replace('/', Path.DirectorySeparatorChar));
+        Assert.True(File.Exists(projectPath), $"Temporary benchmark harness is missing: {projectPath}");
+        Assert.False(TemporaryDesignEfOracle.IsExcludedProject(
+            TemporaryDesignEfOracle.RelativeBenchmarkProjectPath.Replace(
+                "/Elsa.DesignPersistence.Benchmarks/", "/Elsa.DesignPersistence.Other/")));
+
+        var project = System.Xml.Linq.XDocument.Load(projectPath);
+        Assert.Equal(
+            "false",
+            project.Descendants("IsTestProject").Single().Value,
+            ignoreCase: true);
+        Assert.Equal(
+            "false",
+            project.Descendants("IsPackable").Single().Value,
+            ignoreCase: true);
+    }
+
+    [Fact]
     public void Temporary_design_ef_oracle_exclusion_is_exact_test_only_and_frozen()
     {
         var projectPath = Path.Combine(

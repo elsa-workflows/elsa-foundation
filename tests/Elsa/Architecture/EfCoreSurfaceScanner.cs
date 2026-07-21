@@ -98,8 +98,17 @@ internal static class TemporaryDesignEfOracle
     public const string RelativeProjectPath =
         "tests/Elsa/Persistence/Groundwork/DesignConformance/EFCore/Tests/Elsa.Persistence.Groundwork.DesignConformance.EFCore.Tests.csproj";
 
+    /// <summary>
+    /// The spec 093 T067 benchmark harness measures the same-provider EF oracle and is deleted
+    /// together with the oracle by T072-T074; like the oracle test project it is an exact,
+    /// frozen exclusion rather than a baseline expansion.
+    /// </summary>
+    public const string RelativeBenchmarkProjectPath =
+        "benchmarks/Elsa.DesignPersistence.Benchmarks/Elsa.DesignPersistence.Benchmarks.csproj";
+
     public static bool IsExcludedProject(string relativePath) =>
-        string.Equals(relativePath, RelativeProjectPath, StringComparison.Ordinal);
+        string.Equals(relativePath, RelativeProjectPath, StringComparison.Ordinal) ||
+        string.Equals(relativePath, RelativeBenchmarkProjectPath, StringComparison.Ordinal);
 }
 
 internal static class EfCoreSurfaceBaseline
