@@ -361,6 +361,15 @@ checkpoints on top of the merged US1 result `4d44cd435`:
   units' established pattern), and the fingerprints advanced to target
   `cb225b048807efca76cf870674373782b631682a2278bf7fdfebf7c1245cb217`, plan
   `5b90a248cfc36967c5aa2deaf38427398ebf3212d59b9ffd31b22bd30a712fdc`.
+  MongoDB's strict save-time projection resolution then exposed that three activity
+  management columns project canonical JSON numbers (enum kinds) but were declared
+  String: `authority` (`entity.contentAuthority.kind`), `draft_status`
+  (`entity.status`), and `version_lifecycle` (`entity.lifecycle`). All three are now
+  `Int32` columns with matching `IndexValueKind.Number` residual predicates (the
+  manifest's own semantic validator enforces the pairing), advancing the fingerprints
+  to target `ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c`, plan
+  `73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4`
+  (Groundwork family `0.0.1-preview.78`).
 - **T042/T046** — `ElsaGroundworkQueryRoutes.MaximumMembershipCount` (`200`) is the
   declared IN cardinality; the translator rejects a larger single membership before
   provider I/O, and `GroundworkMembershipBatches` canonicalizes oversized caller sets

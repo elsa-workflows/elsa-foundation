@@ -220,3 +220,37 @@ access context for every acquisition and rejects tenant-agnostic work before pro
 context is explicitly privileged across scopes. Its privileged execution helper also records acquisition
 and terminal outcome. The generic foundation is therefore reused by design adapters rather than wrapped in
 a second design-only lifetime abstraction.
+
+## Phase 5 (US3) implementation reconciliation
+
+Four placement and physical-form decisions made during US3 diverge from the literal task
+targets and are recorded here as the canonical rationale:
+
+- **Schema readiness guard (T060)** lives in the base `Elsa.Persistence.Groundwork` project
+  (`GroundworkSchemaReadinessTask` + its registration helper), not in `Unified/`. The
+  `Unified` folder backs the slim composition project consumed by the schema CLI tooling
+  and must stay free of CShells/host-lifecycle dependencies; the readiness guard is a
+  Start-phase `IShellInitializer` and therefore belongs with the host-side registrations.
+  Every provider registration appends it idempotently after its own initializer.
+- **Schema CLI contract tests (T061)** execute inside the SQLite design-conformance leaf
+  (`UnifiedSchemaToolContractTests`) rather than a dedicated CLI test project: the pinned
+  CLI contract (offline validate exit 0, plan/status exit 2 pending → 0 ready, `apply
+  --safe` idempotence via `targetMutated=false`) needs a real materialized target, and the
+  leaf already owns the cheapest one. The provider-neutral half (readiness semantics)
+  lives in `UnifiedSchemaReadinessTests` in the unified-host test project.
+- **Auxiliary exhaustive routes** take their deterministic tie-break from a bounded
+  projected `entity_id` column instead of the envelope comparison key, matching the main
+  units' pattern; the envelope key's unbounded width broke SQL Server's 1700-byte
+  nonclustered index key limit once compound index keys were bounded (see quickstart
+  fingerprint history).
+- **Enum-kind management columns are numeric.** Three projected members are canonical
+  JSON numbers (enum kinds): `entity.contentAuthority.kind` (`authority`),
+  `entity.status` (`draft_status`), and `entity.lifecycle` (`version_lifecycle`).
+  MongoDB's strict save-time projection resolution rejects a String column over a
+  number member, and the manifest's semantic validator requires the residual predicate
+  value kind to match the projected physical type, so all three columns are `Int32`
+  and their residual predicates are `IndexValueKind.Number` (the
+  `NumericMemberPaths` set in the activities manifest is the single authority for the
+  pairing). Relational providers were lenient about the mismatch; MongoDB made it
+  visible (the same strictness that drove the unified-host contract to persist
+  canonical entity members in its synthetic documents).
