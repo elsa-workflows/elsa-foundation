@@ -35,13 +35,4 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- The replica-set contract and plan suites are compile-gated until Groundwork certifies
-         Contains on indexed keyword members for MongoDB (valence-works/groundwork#120); the
-         composed store currently refuses construction for every design route declaring Contains.
-         The standalone negative-topology proof below runs unconditionally. -->
-    <Compile Remove="MongoDbDesignContractSuites.cs" />
-    <Compile Remove="MongoDbDesignQueryPlanContractSuite.cs" />
-  </ItemGroup>
-
 </Project>
