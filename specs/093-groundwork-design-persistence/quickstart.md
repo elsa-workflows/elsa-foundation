@@ -312,6 +312,82 @@ Final counts at the reviewed candidate `587334cec`, verified 2026-07-21T01:29+02
 - full `Elsa.Server.slnx` Release build: `0` errors, `147` accepted existing warnings;
 - `git diff --check`: clean.
 
+### T037–T049 bounded design query evidence (2026-07-21)
+
+US2 landed on branch `codex/093-bounded-design-queries` (draft PR #919) as reviewable
+checkpoints on top of the merged US1 result `4d44cd435`:
+
+- **T037/T038** — provider-neutral workflow and activity query-shape parity suites
+  (`WorkflowDesignQueryContractSuite`, `ActivityDesignQueryContractSuite`): equality,
+  membership, empty-membership match-nothing, null/empty/present optional values, the
+  activity filter's substring description semantics, disjunctive search with ASCII
+  case-insensitivity, semantic-version precedence and build-metadata-insensitive
+  existence, batching, repeat-read stability, and restart hash parity. `18` scenarios
+  green on the SQLite target and `18` on the temporary EF oracle.
+- **T039** — `DesignQueryScaleContractSuite`: listing across the 500-row provider page
+  stays complete and duplicate-free (501-definition seed), the definition-id batch
+  projection is deterministic for duplicated/unknown/oversized inputs with one
+  empty-facts row per unknown id, and existence/latest stay consistent with full
+  listings. Five new profile scenarios were added to the contract-scenario enum and
+  both applicability profiles; the legacy EF oracle declares the two target-only
+  scenarios not applicable (it resolves only persisted definitions). SQLite `5/5`;
+  oracle `3` passed plus the `2` declared skips.
+- **T040** — `DesignQueryPlanContractSuite` pins a nineteen-probe (kind, route,
+  operation) matrix over every selected physical entity table; the SQLite leaf
+  captures native `EXPLAIN QUERY PLAN` evidence through Groundwork's public
+  `IPhysicalDocumentQueryExplainer` and all `19` probes resolve through indexed
+  access with no bare table scan. The EF oracle has no Groundwork routes and does
+  not subscribe.
+- **T041/T047** — the transitional `GroundworkReadStore` and `InMemoryQueryEvaluator`
+  were deleted with their tests; both design manifests dropped every `list-all`
+  bounded query, by-collection index, collection projected column, and the
+  transitional route constants (writers keep stamping the collection payload
+  property); the reusable-activity stores and the four Publishing design-kind
+  consumers migrated to shaped `In`/equality reads and zero-clause declared
+  traversals. Aux activity routes are now index-head sorted so those shapes are
+  admissible. The SQLite schema fingerprints advanced accordingly: target
+  `eaaf809f763873c2b9b5a750c3b5103b133716020675aca38773dadb0739ef56`, plan
+  `7cded8b9102fe778b7746fd4f1d3e94c2fe548b9d52669e742fb69e433b85bdd`
+  (Groundwork family unchanged at `0.0.1-preview.77`).
+- **T042/T046** — `ElsaGroundworkQueryRoutes.MaximumMembershipCount` (`200`) is the
+  declared IN cardinality; the translator rejects a larger single membership before
+  provider I/O, and `GroundworkMembershipBatches` canonicalizes oversized caller sets
+  into deterministic ordinal batches used by the workflow list projection, draft
+  document store, and activity version store. Recorded-store evidence proves a
+  450-id read issues exactly three 200/200/50 batches per document kind while
+  preserving first-seen output order.
+- **T043–T045** — the native searchable fields, compound existence/latest routes, and
+  index declarations for both design families were already declared by the Phase-2/US1
+  physicalization; this slice verified them end-to-end via the T037–T040 suites and
+  native plan evidence and added the aux-route index-head ordering plus the
+  authoring-state `In` declaration.
+- **T048** — the §2.23 coverage ledger rows introduced by this slice are closed in
+  `research.md` (transitional reader resolved as deleted; membership cap, canonical
+  batching, and load-all replacements covered by direct tests).
+- **T049** — `tests/Elsa/Architecture/DesignPersistenceBoundedQueryTests.cs` fails on
+  any reintroduction of `InMemoryQueryEvaluator`, `GroundworkReadStore`,
+  `list-all`/`by-collection` identities, or `ListAllAsync` in the design and
+  Publishing design-consumer sources, and pins the deleted files as absent.
+
+Focused verification at the T048 evidence point, `2026-07-21T13:36+02:00` (CEST):
+
+- persistence core: `30/30`; Groundwork querying: `91/91`; Groundwork core
+  persistence: `639/639`;
+- workflow design Groundwork: `85/85`; activity design Groundwork: `70/70`;
+- shared design conformance: `96` passed, `1` intentional skip; SQLite provider leaf:
+  `33/33`; temporary EF oracle: `38` passed, `12` intentionally inapplicable skips;
+- Groundwork unified host: `23/23`; workflow design domain: `358/358`; activity
+  design domain: `490/490`; workflow design API: `50/50`; activity design API:
+  `5/5`; workflow publishing API: `394/394`; architecture ratchets: `263/263`
+  (including the new bounded-query gate);
+- full `Elsa.Server.slnx` Release build: `0` errors; changed-file format
+  verification (`git diff --check`): clean.
+
+The suite-count deltas against the US1 baseline reflect the deleted transitional
+reader/evaluator tests (querying 126→91, persistence core 43→30) and the added US2
+suites and gates everywhere else. T050 records the exact reviewed candidate and
+independent review below when this slice freezes.
+
 ## 1. Restore and build
 
 ```bash

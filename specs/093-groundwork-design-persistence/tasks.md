@@ -99,22 +99,22 @@ description: "Dependency-ordered implementation tasks for Groundwork design pers
 
 ### Tests for User Story 2
 
-- [ ] T037 [P] [US2] Add complete workflow query-shape parity cases, null/missing values, semantic-version ordering, and deterministic ties in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/WorkflowDesignQueryContractSuite.cs`
-- [ ] T038 [P] [US2] Add complete activity query-shape parity cases, OR/IN/contains behavior, and deterministic result ordering in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/ActivityDesignQueryContractSuite.cs`
-- [ ] T039 [P] [US2] Add bounded cardinality, deterministic batching, count/any/first, and zero-load-all command evidence in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignQueryScaleContractSuite.cs`
-- [ ] T040 [P] [US2] Add provider-plan assertions for all selected physical entity tables and indexes in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignQueryPlanContractSuite.cs`
+- [x] T037 [P] [US2] Add complete workflow query-shape parity cases, null/missing values, semantic-version ordering, and deterministic ties in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/WorkflowDesignQueryContractSuite.cs`
+- [x] T038 [P] [US2] Add complete activity query-shape parity cases, OR/IN/contains behavior, and deterministic result ordering in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/ActivityDesignQueryContractSuite.cs`
+- [x] T039 [P] [US2] Add bounded cardinality, deterministic batching, count/any/first, and zero-load-all command evidence in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignQueryScaleContractSuite.cs`
+- [x] T040 [P] [US2] Add provider-plan assertions for all selected physical entity tables and indexes in `tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/DesignQueryPlanContractSuite.cs`
 
 ### Implementation for User Story 2
 
-- [ ] T041 [US2] Replace `GroundworkReadStore<TEntity>` candidate enumeration and `InMemoryQueryEvaluator` with bound `IBoundedDocumentStore` execution in `src/Elsa/Persistence/Groundwork/Querying/GroundworkReadStore.cs`
-- [ ] T042 [US2] Make result operation, stable tie-break ordering, skip/take, and total count explicit in `src/Elsa/Persistence/Groundwork/Querying/GroundworkQueryTranslator.cs`
-- [ ] T043 [P] [US2] Declare native workflow definition search/equality/membership fields and indexes in `src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignStorageManifest.cs`
-- [ ] T044 [P] [US2] Declare workflow version compound existence/latest routes, draft current-order routes, and layout lookup routes in `src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignStorageManifest.cs`
-- [ ] T045 [P] [US2] Declare native activity definition search/equality/membership fields and version compound routes in `src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignStorageManifest.cs`
-- [ ] T046 [US2] Enforce declared maximum `IN` cardinality and deterministic bounded batches in `src/Elsa/Persistence/Groundwork/Querying/GroundworkQueryTranslator.cs` and `GroundworkWorkflowDefinitionListProjectionStore.cs`
-- [ ] T047 [US2] Remove every design by-collection/list-all fallback and obsolete fallback documentation in `src/Elsa/Persistence/Groundwork/Querying/`, `src/Elsa/Workflows/Design/Persistence/Groundwork/`, and `src/Elsa/Activities/Design/Persistence/Groundwork/`
-- [ ] T048 [US2] Complete every T020 coverage-ledger row introduced by T041–T047 with direct translator/read-store/manifest branch tests in the owning Groundwork test directories, then run T037–T040 at representative SQLite scale with allocation/command counters and attach result hashes plus plan index in `specs/093-groundwork-design-persistence/quickstart.md`
-- [ ] T049 [US2] Add a negative architecture test that fails on `InMemoryQueryEvaluator`, `DocumentStoreQuery` list-all, or uncertified scale-bearing design paths in `tests/Elsa/Architecture/DesignPersistenceBoundedQueryTests.cs`
+- [x] T041 [US2] Replace `GroundworkReadStore<TEntity>` candidate enumeration and `InMemoryQueryEvaluator` with bound `IBoundedDocumentStore` execution in `src/Elsa/Persistence/Groundwork/Querying/GroundworkReadStore.cs`
+- [x] T042 [US2] Make result operation, stable tie-break ordering, skip/take, and total count explicit in `src/Elsa/Persistence/Groundwork/Querying/GroundworkQueryTranslator.cs`
+- [x] T043 [P] [US2] Declare native workflow definition search/equality/membership fields and indexes in `src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignStorageManifest.cs`
+- [x] T044 [P] [US2] Declare workflow version compound existence/latest routes, draft current-order routes, and layout lookup routes in `src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignStorageManifest.cs`
+- [x] T045 [P] [US2] Declare native activity definition search/equality/membership fields and version compound routes in `src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignStorageManifest.cs`
+- [x] T046 [US2] Enforce declared maximum `IN` cardinality and deterministic bounded batches in `src/Elsa/Persistence/Groundwork/Querying/GroundworkQueryTranslator.cs` and `GroundworkWorkflowDefinitionListProjectionStore.cs`
+- [x] T047 [US2] Remove every design by-collection/list-all fallback and obsolete fallback documentation in `src/Elsa/Persistence/Groundwork/Querying/`, `src/Elsa/Workflows/Design/Persistence/Groundwork/`, and `src/Elsa/Activities/Design/Persistence/Groundwork/`
+- [x] T048 [US2] Complete every T020 coverage-ledger row introduced by T041–T047 with direct translator/read-store/manifest branch tests in the owning Groundwork test directories, then run T037–T040 at representative SQLite scale with allocation/command counters and attach result hashes plus plan index in `specs/093-groundwork-design-persistence/quickstart.md`
+- [x] T049 [US2] Add a negative architecture test that fails on `InMemoryQueryEvaluator`, `DocumentStoreQuery` list-all, or uncertified scale-bearing design paths in `tests/Elsa/Architecture/DesignPersistenceBoundedQueryTests.cs`
 - [ ] T050 [US2] Commit and independently review the US2 exact HEAD for query semantic parity and bounded execution; record the commit/review in `specs/093-groundwork-design-persistence/quickstart.md`
 
 **Checkpoint**: User Story 2 passes on SQLite with complete server-side query evidence and no production fallback path.
