@@ -191,6 +191,59 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Single(await store.ListAllAsync());
     }
 
+    // Regression for the N=128 EngineConcurrencyBenchmarks failure: the test bounded stores paged with an
+    // offset continuation, so artifacts inserted between pages (sorting before the boundary) shifted
+    // already-returned rows past the offset and the next page re-served them. The dependency-graph loader
+    // then correctly failed closed on the duplicate artifact id. Cursor pages must resume strictly after
+    // the last returned row (keyset), like the real providers, so concurrent inserts can never duplicate.
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ListPage_Continuation_DoesNotDuplicate_WhenInsertsLandBetweenPages(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        await AssertContinuationSurvivesConcurrentInsertsAsync(
+            new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer));
+    }
+
+    [Fact]
+    public async Task ListPage_Continuation_DoesNotDuplicate_OnInMemoryBoundedStore()
+    {
+        // The in-memory document store is its own bounded-query runtime (the fixture providers route
+        // ordered pages through RuntimeTestBoundedDocumentStore instead), so it needs its own coverage.
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        await AssertContinuationSurvivesConcurrentInsertsAsync(
+            new GroundworkWorkflowExecutableStore(documentStore, GroundworkTestSerialization.Serializer));
+    }
+
+    private static async Task AssertContinuationSurvivesConcurrentInsertsAsync(IWorkflowExecutableStore store)
+    {
+        foreach (var artifactId in new[] { "artifact-1", "artifact-3", "artifact-5", "artifact-7" })
+            await store.SaveAsync(Executable(artifactId));
+
+        var firstPage = await store.ListPageAsync(new RuntimeStorePageRequest(limit: 2));
+        Assert.Equal(new[] { "artifact-1", "artifact-3" }, firstPage.Items.Select(x => x.Identity.ArtifactId));
+        Assert.NotNull(firstPage.NextContinuationToken);
+
+        // A concurrent writer lands artifacts that sort before the page boundary.
+        await store.SaveAsync(Executable("artifact-0"));
+        await store.SaveAsync(Executable("artifact-2"));
+
+        var seen = firstPage.Items.Select(x => x.Identity.ArtifactId).ToList();
+        var continuationToken = firstPage.NextContinuationToken;
+        while (continuationToken is not null)
+        {
+            var page = await store.ListPageAsync(new RuntimeStorePageRequest(limit: 2, continuationToken: continuationToken));
+            seen.AddRange(page.Items.Select(x => x.Identity.ArtifactId));
+            continuationToken = page.NextContinuationToken;
+        }
+
+        // Rows already returned before the inserts must never be re-served; the traversal resumes
+        // strictly after the boundary and finishes with the untouched tail.
+        Assert.Equal(seen, seen.Distinct(StringComparer.Ordinal));
+        Assert.Equal(new[] { "artifact-1", "artifact-3", "artifact-5", "artifact-7" }, seen);
+    }
+
     [Fact]
     public async Task SaveAsync_UsesCreateOnlyWrite_And_DoesNotOverwriteConcurrentWinner()
     {

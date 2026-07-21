@@ -85,16 +85,12 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
                 .Select(group => group.First())
                 .ToArray();
         }
-        var offset = DecodeContinuation(query);
-        IEnumerable<DocumentEnvelope> page = matches.Skip(offset + (query.Skip ?? 0));
-        if (query.Take is { } take)
-            page = page.Take(take);
-        var pageDocuments = page.ToArray();
-        var nextOffset = offset + (query.Skip ?? 0) + pageDocuments.Length;
-        var nextContinuation = query.Take is not null && nextOffset < matches.Length
-            ? EncodeContinuation(query, nextOffset)
-            : null;
-        return new DocumentQueryResult(pageDocuments, matches.Length, nextContinuation);
+        return TestKeysetContinuations.Page(
+            query,
+            "runtime-test",
+            matches,
+            static (document, path) => ReadComparable(document, path),
+            "The Runtime test continuation is invalid or belongs to another query.");
     }
 
     private static bool Matches(DocumentEnvelope document, DocumentQueryComparison comparison)
@@ -229,30 +225,6 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
                     ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusTypeQuery,
             _ => false
         };
-
-    private static string EncodeContinuation(DocumentQuery query, int offset) =>
-        $"runtime-test:{query.DocumentKind}:{query.QueryIdentity}:{offset}";
-
-    private static int DecodeContinuation(DocumentQuery query)
-    {
-        if (query.Continuation is null)
-            return 0;
-
-        var prefix = $"runtime-test:{query.DocumentKind}:{query.QueryIdentity}:";
-        if (!query.Continuation.StartsWith(prefix, StringComparison.Ordinal) ||
-            !int.TryParse(
-                query.Continuation[prefix.Length..],
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out var offset) ||
-            offset < 0)
-        {
-            throw new InvalidDocumentQueryContinuationException(
-                "The Runtime test continuation is invalid or belongs to another query.");
-        }
-
-        return offset;
-    }
 
     private static readonly HashSet<string> PostCommitOutboxOrderedRangeQueries =
     [
