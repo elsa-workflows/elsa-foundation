@@ -30,7 +30,9 @@ applies behavior commands.
 
 Known implementations:
 
-- `NoneStartEventBehavior` *(intra-domain — default)*
+- `StartEventBehavior` *(intra-domain — default; registered once per start family —
+  `startEvent.none`/`startEvent.timer`/`startEvent.message`/`startEvent.signal`, spec 117 — all emit the
+  arriving token onto every outbound flow; event-defined starts differ only in how the instance is started)*
 - `NoneEndEventBehavior` *(intra-domain — default)*
 - `TerminateEndEventBehavior` *(intra-domain — default)*
 - `CatchEventBehavior` *(intra-domain — default; timer/message/signal intermediate catch events,
@@ -66,6 +68,32 @@ This module also exposes these activity-owned contracts:
 - `IRuntimeActivityChildFaultHandler` — invoked when a child faults; the returned decision faults
   the process deterministically (`bpmn.child.faulted`) instead of hanging a join. Error boundary
   events replace this rule in the events tier.
+
+## Publish-time start-trigger surface (spec 117)
+
+`BpmnProcess` is a `[TriggerActivity]`, so the publish compiler marks its node `executionType=Trigger` and
+the runtime trigger seams index its event-defined start events at publish time. Two providers, both
+registered in `ActivitiesBpmnFeature`, read only the pinned published node's BPMN structure:
+
+- `BpmnProcessTriggerStimulusProvider` implements `IActivityTriggerStimulusProvider`
+  (`Elsa.Workflows.Runtime.Core`) — one `TriggerStimulusDescriptor` per event-defined start element
+  (message/signal via `BpmnMessageStartStimulus`, timer via `BpmnTimerStartStimulus`), each carrying the
+  start element id in `Metadata` under `BpmnStartTrigger.StartElementIdMetadataKey` (`"bpmn.startElementId"`).
+  No event-defined starts → `Recognized([])`. A nested process authored `CanStartWorkflow = false` →
+  `Recognized([])`.
+- `BpmnProcessRecurringScheduleProvider` implements `IRecurringTriggerScheduleProvider` — one
+  `RecurringScheduleDescriptor` per **timer** start element, with the same `(StimulusType, StimulusHash)`
+  pair the stimulus provider emits for that element, so the recurring-trigger pump's `StartOnly` dispatch
+  matches the element's start binding.
+
+Message/signal starts collapse onto the named-event routing pair (identical `(type, hash)` to `Event`'s
+`EventStimulus`, replicated in-module to keep the dependency envelope free of the Primitives package;
+`BpmnEventStartTriggerTests` pins the equivalence). Timer starts use a BPMN-owned `Bpmn.TimerStart` stimulus
+type that folds the element id into the hash for per-element uniqueness, isolated from the `Timer`/`Cron`
+activities. Event-definition property keys the surface reads live in `BpmnEventDefinitionProperties`
+(`name` / `interval` / `cron`). At runtime a trigger delivery seeds a single token at the element named by
+the forwarded binding metadata (`IRuntimeActivityExecutionContext.TriggerNodeId`/`TriggerMetadata`); direct
+invocation seeds every none start. Fault codes: `bpmn.start.unresolved-trigger`, `bpmn.start.none-available`.
 
 ## Cross-domain contributions
 

@@ -14,6 +14,15 @@ children, and diagnostics.
   `intermediateCatchEvent` elements bind a child activity from the `Bpmn.Activities` slot
   (`childNodeId`). A BPMN task is a visual/semantic wrapper around any Elsa activity; an embedded
   subprocess typically binds a nested `BpmnProcess`.
+- **Event-defined start events** (spec 117) declare exactly one `timer`, `message`, or `signal`
+  event definition and let an external stimulus *start* a process. They are pure elements (no bound
+  child): the trigger surface lives entirely at publish/dispatch time. `BpmnProcess` is a
+  `[TriggerActivity]`; at publish time its message/signal starts register a named-event trigger
+  binding (same `(type, hash)` as `Event`, so one delivery both starts processes and resumes catch
+  events) and its timer starts register a recurring schedule the trigger pump fires. A trigger
+  delivery seeds a single token at the start element the matched binding names (forwarded through
+  `IRuntimeActivityExecutionContext.TriggerMetadata`); direct invocation seeds every none start and
+  leaves event-defined starts dormant. Nested processes opt out with `CanStartWorkflow = false`.
 - **Intermediate catch events** (spec 116) declare exactly one `timer`, `message`, or `signal`
   event definition and bind a **suspending** child: `Delay` for timer catches, a mid-flow `Event`
   (`CanStartWorkflow = false`) for message/signal catches. The token parks as awaiting-child while
@@ -41,13 +50,13 @@ children, and diagnostics.
 ## Slice scope and phasing
 
 This module currently ships the Phase 1 core subset (see `specs/108-bpmn-container-activity/`) plus
-the Phase 2 catch-events slice (see `specs/116-bpmn-catch-events/`): none start/end events,
-terminate end events, timer/message/signal intermediate catch events, task family, embedded
-subprocess, and exclusive/parallel/inclusive gateways over **acyclic** graphs. Cyclic graphs are
-rejected at validation. Later units add event-defined start events (including the interchange
-importer's catch-event/eventDefinition support — imports currently drop them with an analyze-time
-issue), boundary events, event-based gateways, multi-instance, compensation, transactions, and call
-activities.
+the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`) and event-start (see
+`specs/117-bpmn-event-start-events/`) slices: none/timer/message/signal start events, none/terminate
+end events, timer/message/signal intermediate catch events, task family, embedded subprocess, and
+exclusive/parallel/inclusive gateways over **acyclic** graphs. Cyclic graphs are rejected at
+validation. The interchange importer still drops event definitions with an analyze-time issue, so
+authoring event-defined starts/catches from XML is a later unit. Later units add boundary events,
+event-based gateways, multi-instance, compensation, transactions, and call activities.
 
 ## Expression-driven gateway conditions
 
