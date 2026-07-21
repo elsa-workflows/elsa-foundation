@@ -60,10 +60,27 @@ public sealed class RuntimeInputBindingCompiler(
         var policy = ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType));
         if (!AcceptsNull(inputDefinition))
         {
-            throw new ArgumentException(
-                $"VF-ACT-003: Optional input '{inputDefinition.ReferenceKey}' with non-nullable type alias '{inputDefinition.Type.Alias}' " +
-                "requires an authored binding or pinned default.",
-                nameof(inputDefinition));
+            // An optional input the author didn't bind, whose target cannot represent omission via null, is pinned to
+            // its CLR default when the type has a well-defined one (value types: bool → false, enum → its zero member,
+            // TimeSpan → 00:00:00). This resolves the VF-ACT-003 contradiction where the design contract marks an input
+            // optional but the non-nullable CLR type refuses omission, so a UI that pins no default can still publish (#925).
+            // A non-nullable reference type has no fabricable non-null default, so it remains a hard contract error.
+            if (!TryCreateClrDefault(inputType, out var defaultValue))
+            {
+                throw new ArgumentException(
+                    $"VF-ACT-003: Optional input '{inputDefinition.ReferenceKey}' with non-nullable type alias '{inputDefinition.Type.Alias}' " +
+                    "requires an authored binding or pinned default.",
+                    nameof(inputDefinition));
+            }
+
+            var pinnedLiteral = JsonSerializer.SerializeToElement(defaultValue, inputType);
+            return new RuntimeInputBinding(
+                inputKey: inputDefinition.ReferenceKey,
+                targetType: targetType,
+                effectivePolicy: policy,
+                source: RuntimeInputBindingSource.Literal,
+                literal: ValueEnvelope.Inline(targetType, pinnedLiteral, policy),
+                metadata: BuildInputMetadata(inputDefinition));
         }
 
         return new RuntimeInputBinding(
@@ -73,6 +90,23 @@ public sealed class RuntimeInputBindingCompiler(
             source: RuntimeInputBindingSource.Literal,
             literal: ValueEnvelope.Absent(targetType, policy),
             metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    /// <summary>
+    /// Produces the CLR default for a non-nullable value type (the natural pinned default for an omitted optional
+    /// input). Returns false for reference types and for the unresolved <see cref="object"/> fallback, where no
+    /// non-null default can be fabricated.
+    /// </summary>
+    private static bool TryCreateClrDefault(Type inputType, out object? defaultValue)
+    {
+        if (inputType.IsValueType && inputType != typeof(void))
+        {
+            defaultValue = Activator.CreateInstance(inputType);
+            return true;
+        }
+
+        defaultValue = null;
+        return false;
     }
 
     private RuntimeInputBinding Compile(
@@ -208,9 +242,16 @@ public sealed class RuntimeInputBindingCompiler(
         {
             converted = ConvertLiteral(value.Value, inputType);
         }
-        catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidCastException or OverflowException)
+        catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidCastException or OverflowException or JsonException or NotSupportedException)
         {
-            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{value.Value}' cannot be converted to alias '{inputDefinition.Type.Alias}'.", exception);
+            // A literal that cannot be coerced to the pinned target contract is an authoring problem, not a server
+            // fault: surface it as the structured VF-COER-001 diagnostic (with node id + reference key) so preflight
+            // returns a validation result instead of letting the raw JsonException/FormatException escape as a 500 (#924).
+            throw ValueConversionPublicationException.LiteralCoercionFailed(
+                $"VF-COER-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{DescribeAuthoredValue(value.Value)}' cannot be converted to alias '{inputDefinition.Type.Alias}'.",
+                ToValueTypeDescriptor(inputDefinition),
+                InputBindingContext(nodeId, inputDefinition),
+                exception);
         }
 
         ValidateNull(inputDefinition, inputType, converted, nodeId);
@@ -525,11 +566,92 @@ public sealed class RuntimeInputBindingCompiler(
         if (nullableTargetType.IsEnum)
             return Enum.Parse(nullableTargetType, $"{value}", ignoreCase: true);
 
+        // A scalar authored into a collection-typed input is coerced into a single-element collection, and a
+        // comma-separated scalar into one element per trimmed item ("GET" → ["GET"], "200, 404" → [200, 404]).
+        // The Studio surfaces collection inputs with a list editor now (#924), but users still type a bare value or
+        // a comma list into the scalar box — accepting both keeps that authoring gesture publishable.
+        if (value is string scalarText && TryGetCollectionElementType(nullableTargetType, out var elementType) &&
+            TryCoerceScalarToCollection(scalarText, nullableTargetType, elementType, out var coercedCollection))
+            return coercedCollection;
+
         if (!typeof(IConvertible).IsAssignableFrom(nullableTargetType) || value is not IConvertible)
             return JsonSerializer.SerializeToElement(value).Deserialize(nullableTargetType);
 
         return Convert.ChangeType(value, nullableTargetType, CultureInfo.InvariantCulture);
     }
+
+    /// <summary>
+    /// Resolves the element type of a supported collection target (array, or a single-argument generic collection:
+    /// <c>List&lt;T&gt;</c>, <c>HashSet&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c> and friends). Dictionaries are not
+    /// scalar-coercible (no key), so they are excluded.
+    /// </summary>
+    private static bool TryGetCollectionElementType(Type collectionType, out Type elementType)
+    {
+        if (collectionType.IsArray && collectionType.GetElementType() is { } arrayElement)
+        {
+            elementType = arrayElement;
+            return true;
+        }
+
+        if (collectionType is { IsGenericType: true } && collectionType.GetGenericArguments() is [var single])
+        {
+            var definition = collectionType.GetGenericTypeDefinition();
+            if (definition == typeof(List<>) || definition == typeof(IList<>) || definition == typeof(ICollection<>) ||
+                definition == typeof(IEnumerable<>) || definition == typeof(IReadOnlyList<>) ||
+                definition == typeof(IReadOnlyCollection<>) || definition == typeof(HashSet<>) || definition == typeof(ISet<>))
+            {
+                elementType = single;
+                return true;
+            }
+        }
+
+        elementType = null!;
+        return false;
+    }
+
+    /// <summary>
+    /// Coerces a scalar (single value or comma-separated list) into the target collection, converting each trimmed,
+    /// non-empty item to the element type. Returns false when the element conversion is unsupported so the caller can
+    /// fall through to the ordinary JSON path (and, ultimately, a structured coercion diagnostic).
+    /// </summary>
+    private static bool TryCoerceScalarToCollection(string scalarText, Type collectionType, Type elementType, out object? result)
+    {
+        var items = scalarText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var elements = Array.CreateInstance(elementType, items.Length);
+        for (var i = 0; i < items.Length; i++)
+        {
+            var element = ConvertLiteral(items[i], elementType);
+            if (element is null && elementType.IsValueType && Nullable.GetUnderlyingType(elementType) is null)
+            {
+                result = null;
+                return false;
+            }
+
+            elements.SetValue(element, i);
+        }
+
+        if (collectionType.IsArray)
+        {
+            result = elements;
+            return true;
+        }
+
+        // The generic collection targets published here are always closed to List<T>/HashSet<T> by
+        // TypeReferenceFactory.Close, both of which expose an IEnumerable<T> constructor.
+        var concreteType = collectionType.GetGenericTypeDefinition() == typeof(HashSet<>)
+            ? typeof(HashSet<>).MakeGenericType(elementType)
+            : typeof(List<>).MakeGenericType(elementType);
+        result = Activator.CreateInstance(concreteType, elements)!;
+        return true;
+    }
+
+    private static string DescribeAuthoredValue(object? value) =>
+        value switch
+        {
+            null => "null",
+            JsonElement element => element.ValueKind == JsonValueKind.String ? element.GetString() ?? "null" : element.GetRawText(),
+            _ => value.ToString() ?? "null"
+        };
 
     private static string? ExtractLiteralContent(object? value)
     {

@@ -410,6 +410,41 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
         Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
     }
 
+    [Fact]
+    public void Describe_AbsentOptionalOptions_ApplyDeclaredDefaults_AndDoNotThrow()
+    {
+        // Issue #925: with only the required Path authored, every optional option falls back to its declared default
+        // (methods → GET, response mode → Async, the rest omitted) instead of demanding an authored literal each.
+        var node = EndpointNode(path: "orders/webhook");
+
+        var descriptor = Assert.Single(_provider.Describe(node).Descriptors);
+
+        Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook", "GET"), descriptor.StimulusHash);
+        Assert.Equal("get", descriptor.Metadata[HttpEndpointRouting.MethodMetadataKey]);
+        Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, descriptor.Metadata.Keys);
+        Assert.DoesNotContain(HttpEndpointRouting.AuthorizeMetadataKey, descriptor.Metadata.Keys);
+    }
+
+    [Fact]
+    public void Describe_AggregatesEveryOptionProblem_InOnePass()
+    {
+        // Issue #925: a missing required path plus several non-literal options are reported together in one preflight
+        // pass, not surfaced one at a time across repeated publish attempts.
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Policy)] = ExpressionBinding(nameof(HttpEndpoint.Policy)),
+            [nameof(HttpEndpoint.RequestTimeout)] = ExpressionBinding(nameof(HttpEndpoint.RequestTimeout)),
+            [nameof(HttpEndpoint.RequestSizeLimit)] = ExpressionBinding(nameof(HttpEndpoint.RequestSizeLimit))
+        };
+
+        var exception = Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
+
+        Assert.Contains(nameof(HttpEndpoint.Path), exception.Message);
+        Assert.Contains(nameof(HttpEndpoint.Policy), exception.Message);
+        Assert.Contains(nameof(HttpEndpoint.RequestTimeout), exception.Message);
+        Assert.Contains(nameof(HttpEndpoint.RequestSizeLimit), exception.Message);
+    }
+
     private static ExecutableNode EndpointNode(
         string? path,
         IReadOnlyCollection<string>? methods = null,

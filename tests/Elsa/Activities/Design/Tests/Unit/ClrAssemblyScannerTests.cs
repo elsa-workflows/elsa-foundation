@@ -74,6 +74,24 @@ public sealed class ClrAssemblyScannerTests
             ("DELETE", "\"DELETE\""));
     }
 
+    [Fact]
+    public void CollectionTypedInputs_CarryElementAliasAndCollectionKind()
+    {
+        // Issue #924: a collection-typed input must report its element type alias plus collection kind so the
+        // authoring catalog can render a list editor instead of a scalar box. ExpectedStatusCodes (ICollection<int>)
+        // and SupportedMethods (ICollection<string>) both decompose to a List of their element alias.
+        using var httpFolder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+        var models = CreateScanner().Scan(httpFolder.Path);
+
+        var expectedStatusCodes = InputFor<SendHttpRequest>(models, nameof(SendHttpRequest.ExpectedStatusCodes));
+        Assert.Equal("Int32", expectedStatusCodes.Type.Alias);
+        Assert.Equal(CollectionKind.List, expectedStatusCodes.Type.CollectionKind);
+
+        var supportedMethods = InputFor<HttpEndpoint>(models, nameof(HttpEndpoint.SupportedMethods));
+        Assert.Equal("String", supportedMethods.Type.Alias);
+        Assert.Equal(CollectionKind.List, supportedMethods.Type.CollectionKind);
+    }
+
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
@@ -584,7 +602,7 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
-    public void SendHttpRequest_OutcomeFacet_ContainsAllDeclaredOutcomes()
+    public void SendHttpRequest_OutcomeFacet_ContainsStaticOutcomesAndDynamicStatusCodeDescriptor()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
 
@@ -594,12 +612,17 @@ public sealed class ClrAssemblyScannerTests
             .Select(p => p.GetProperty("name").GetString())
             .ToHashSet(StringComparer.Ordinal);
 
+        // Static base ports (issue #926 replaced Matched/Unmatched with per-status dynamic outcomes).
         Assert.Contains("Done", portNames);
-        Assert.Contains("Matched", portNames);
-        Assert.Contains("Unmatched", portNames);
         Assert.Contains("Failed", portNames);
         Assert.Contains("Timeout", portNames);
-        Assert.Equal(5, portNames.Count);
+        Assert.Equal(3, portNames.Count);
+
+        // The dynamic-outcomes descriptor tells the designer to render one port per authored ExpectedStatusCodes item.
+        var dynamicOutcomes = facet.Payload.GetProperty("dynamicOutcomes");
+        Assert.Equal("valuePerItem", dynamicOutcomes.GetProperty("kind").GetString());
+        Assert.Equal(nameof(SendHttpRequest.ExpectedStatusCodes), dynamicOutcomes.GetProperty("source").GetString());
+        Assert.Equal("Unmatched status code", dynamicOutcomes.GetProperty("unmatched").GetString());
     }
 
     [Fact]

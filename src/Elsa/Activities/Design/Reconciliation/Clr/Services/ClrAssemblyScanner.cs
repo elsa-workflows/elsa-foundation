@@ -46,6 +46,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityStructureAttributeFullName = typeof(ActivityStructureAttribute).FullName!;
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
+    private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     public IReadOnlyList<ActivityVersionReconciliationModel> Scan(string folderPath)
@@ -250,11 +251,18 @@ public sealed class ClrAssemblyScanner(
     {
         var outcomes = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        CustomAttributeData? valueOutcomes = null;
 
         for (var current = (Type?)type; current is not null; current = current.BaseType)
         {
             foreach (var attribute in current.GetCustomAttributesData())
             {
+                if (attribute.AttributeType.FullName == ActivityValueOutcomesAttributeFullName)
+                {
+                    valueOutcomes ??= attribute;
+                    continue;
+                }
+
                 if (attribute.AttributeType.FullName != ActivityOutcomeAttributeFullName)
                     continue;
 
@@ -263,12 +271,36 @@ public sealed class ClrAssemblyScanner(
             }
         }
 
-        if (outcomes.Count == 0)
+        var dynamicOutcomes = BuildDynamicOutcomesDescriptor(valueOutcomes);
+        if (outcomes.Count == 0 && dynamicOutcomes is null)
             return null;
 
         var ports = outcomes.Select(name => new { name, type = "outcome" }).ToArray();
-        var payload = JsonSerializer.SerializeToElement(new { ports }, SerializerOptions);
+        var payload = dynamicOutcomes is null
+            ? JsonSerializer.SerializeToElement(new { ports }, SerializerOptions)
+            : JsonSerializer.SerializeToElement(new { ports, dynamicOutcomes }, SerializerOptions);
         return new ActivityDesignFacet("elsa.outcomes", "1", payload);
+    }
+
+    /// <summary>
+    /// Projects an <see cref="ActivityValueOutcomesAttribute"/> declaration into a portable descriptor the designer
+    /// consumes to render one outcome port per authored item of the source input, plus the unmatched catch-all port —
+    /// the design-time counterpart of the per-node outcomes the executable compiler pins from the same input (#926).
+    /// </summary>
+    private static object? BuildDynamicOutcomesDescriptor(CustomAttributeData? attribute)
+    {
+        if (attribute is null ||
+            attribute.ConstructorArguments is not [{ Value: string sourceInput }] ||
+            string.IsNullOrWhiteSpace(sourceInput))
+            return null;
+
+        var unmatched = ReadNamedStringArgument(attribute, nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome));
+        return new
+        {
+            kind = "valuePerItem",
+            source = sourceInput,
+            unmatched = string.IsNullOrWhiteSpace(unmatched) ? "Unmatched" : unmatched
+        };
     }
 
     private static ActivityChildSlotDesignDescriptor ToSlotDescriptor(CustomAttributeData attribute) =>

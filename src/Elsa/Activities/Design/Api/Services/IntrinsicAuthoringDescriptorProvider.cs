@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Api.Services;
 
@@ -100,6 +101,8 @@ public sealed class IntrinsicAuthoringDescriptorProvider : IBuiltInAuthoringDesc
             referenceKey,
             name,
             type,
+            // The Set Variable / Set Output intrinsic inputs are scalar (single value / any).
+            CollectionKind: CollectionKind.Single,
             DisplayName: name,
             Description: description,
             Order: order,

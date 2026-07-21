@@ -85,6 +85,7 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
             input.ReferenceKey,
             input.Name,
             input.Type.Alias,
+            input.Type.CollectionKind,
             input.DisplayName,
             input.Description,
             input.Order,
@@ -101,6 +102,7 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
         new(
             output.Name,
             output.Type.Alias,
+            output.Type.CollectionKind,
             output.DisplayName,
             output.Description,
             output.Category,

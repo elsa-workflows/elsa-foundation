@@ -47,22 +47,59 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         if (ReadLiteralBool(node, CanStartWorkflowInput) is not true)
             return ActivityTriggerStimulusResult.Recognized([]);
 
-        var path = ReadLiteralString(node, PathInput)
-            ?? throw new ArgumentException(
+        // Read every routing literal and endpoint option in a single pass, collecting all problems rather than
+        // throwing on the first. Absent optional inputs fall back to the activity's declared defaults
+        // (SupportedMethods → ["GET"], Authorize → false, ResponseMode → Async, Policy → null,
+        // RequestTimeout/RequestSizeLimit → null), so a UI that authors none of them still publishes; only genuinely
+        // required-but-missing or invalid values are reported — and all of them together, in one preflight pass (#925).
+        var problems = new List<string>();
+
+        var path = TryReadOption(problems, () => ReadLiteralString(node, PathInput));
+        if (path is null)
+            problems.Add(
                 $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has no literal '{PathInput}'. A start " +
                 "trigger's path must be an authored literal so its stimulus is fixed at publish time.");
 
-        var methods = ReadLiteralStringCollection(node, MethodsInput);
+        var methods = TryReadOption(problems, () => ReadLiteralStringCollection(node, MethodsInput));
         var effectiveMethods = methods is { Count: > 0 } ? methods : DefaultMethods;
 
-        var options = new HttpEndpointStimulusOptions(
-            Authorize: ReadLiteralBool(node, AuthorizeInput) ?? false,
-            Policy: ReadLiteralStringOption(node, PolicyInput),
-            RequestTimeout: ReadLiteralTimeSpan(node, RequestTimeoutInput),
-            RequestSizeLimit: ReadLiteralLong(node, RequestSizeLimitInput),
-            ResponseMode: ReadLiteralEnum<ResponseMode>(node, ResponseModeInput) ?? ResponseMode.Async);
+        var authorize = TryReadOption(problems, () => (bool?)(ReadLiteralBool(node, AuthorizeInput) ?? false));
+        var policy = TryReadOption(problems, () => ReadLiteralStringOption(node, PolicyInput));
+        var requestTimeout = TryReadOption(problems, () => ReadLiteralTimeSpan(node, RequestTimeoutInput));
+        var requestSizeLimit = TryReadOption(problems, () => ReadLiteralLong(node, RequestSizeLimitInput));
+        var responseMode = TryReadOption(problems, () => (ResponseMode?)(ReadLiteralEnum<ResponseMode>(node, ResponseModeInput) ?? ResponseMode.Async));
 
-        return ActivityTriggerStimulusResult.Recognized(HttpEndpointStimulus.Describe(path, effectiveMethods, options));
+        if (problems.Count > 0)
+            throw new ArgumentException(
+                $"HTTP endpoint trigger node '{node.ExecutableNodeId}' cannot be published:{Environment.NewLine}" +
+                string.Join(Environment.NewLine, problems.Select(problem => $" - {problem}")));
+
+        var options = new HttpEndpointStimulusOptions(
+            Authorize: authorize ?? false,
+            Policy: policy,
+            RequestTimeout: requestTimeout,
+            RequestSizeLimit: requestSizeLimit,
+            ResponseMode: responseMode ?? ResponseMode.Async);
+
+        return ActivityTriggerStimulusResult.Recognized(HttpEndpointStimulus.Describe(path!, effectiveMethods, options));
+    }
+
+    /// <summary>
+    /// Runs a single option reader, recording any publish-time <see cref="ArgumentException"/>/<see cref="FormatException"/>
+    /// into <paramref name="problems"/> and returning the type default so the remaining options are still evaluated. This
+    /// turns the per-option throws into one aggregated diagnostic so preflight reports every problem in one pass (#925).
+    /// </summary>
+    private static T? TryReadOption<T>(List<string> problems, Func<T> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException)
+        {
+            problems.Add(exception.Message);
+            return default;
+        }
     }
 
     /// <summary>

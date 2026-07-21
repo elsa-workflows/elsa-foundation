@@ -253,6 +253,110 @@ public sealed class RoleOwnedInputBindingContractTests
         Assert.Equal("elsa3-import", expression.Metadata["origin"]);
     }
 
+    [Fact]
+    public void Compiler_CoercesScalarLiteral_IntoSingleElementStringCollection()
+    {
+        // Issue #924: a bare scalar typed into a collection input compiles to a one-element collection ("GET" → ["GET"]).
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = CollectionInput("SupportedMethods", "String");
+
+        var binding = compiler.Compile("node-endpoint", input, new ArgumentValue("GET", "Literal"));
+
+        var array = binding.Literal!.InlineValue!.Value;
+        Assert.Equal(JsonValueKind.Array, array.ValueKind);
+        Assert.Equal(["GET"], array.EnumerateArray().Select(item => item.GetString()));
+    }
+
+    [Fact]
+    public void Compiler_CoercesCommaSeparatedScalar_IntoPrimitiveCollection()
+    {
+        // Issue #924: a comma-separated scalar into a primitive collection splits per item ("200, 404" → [200, 404]).
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = CollectionInput("ExpectedStatusCodes", "Int32");
+
+        var binding = compiler.Compile("node-send", input, new ArgumentValue("200, 404", "Literal"));
+
+        var array = binding.Literal!.InlineValue!.Value;
+        Assert.Equal(JsonValueKind.Array, array.ValueKind);
+        Assert.Equal([200, 404], array.EnumerateArray().Select(item => item.GetInt32()));
+    }
+
+    [Fact]
+    public void Compiler_UnconvertibleLiteral_RaisesStructuredCoercionDiagnostic_NotRawException()
+    {
+        // Issue #924: a literal that cannot be coerced surfaces as the structured VF-COER-001 diagnostic (with node id
+        // and reference key) rather than letting a raw FormatException/JsonException escape as an unstructured 500.
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = new InputDefinition(
+            ReferenceKey: "count",
+            Name: "Count",
+            Type: new TypeReference("Int32"),
+            StorageDriverType: null,
+            DisplayName: "Count",
+            Category: null,
+            IsNullable: false);
+
+        var exception = Assert.Throws<ValueConversionPublicationException>(() =>
+            compiler.Compile("node-send", input, new ArgumentValue("not-a-number", "Literal")));
+
+        Assert.Equal(ValueConversionRejectionReason.LiteralCoercionFailed, exception.ReasonCode);
+        Assert.StartsWith("VF-COER-001", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("node-send", exception.Binding!.NodeId);
+        Assert.Equal("count", exception.Binding.ReferenceKey);
+    }
+
+    [Fact]
+    public void CompileOmitted_NonNullableValueType_PinsClrDefault()
+    {
+        // Issue #925: an omitted optional input whose non-nullable CLR type has a natural default is pinned to it
+        // (bool → false) instead of raising VF-ACT-003, so a UI that authors no value can still publish.
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = new InputDefinition(
+            ReferenceKey: "Authorize",
+            Name: "Authorize",
+            Type: new TypeReference("Boolean"),
+            StorageDriverType: null,
+            DisplayName: "Authorize",
+            Category: null,
+            IsNullable: false,
+            IsRequired: false);
+
+        var binding = compiler.CompileOmitted(input);
+
+        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
+        Assert.Equal(ValuePresence.Present, binding.Literal!.Presence);
+        Assert.False(binding.Literal.InlineValue!.Value.GetBoolean());
+    }
+
+    [Fact]
+    public void CompileOmitted_NonNullableReferenceType_StillRaisesVfAct003()
+    {
+        // A non-nullable reference type has no fabricable non-null default, so omission remains a hard contract error.
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = new InputDefinition(
+            ReferenceKey: "message",
+            Name: "Text",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            DisplayName: "Text",
+            Category: null,
+            IsNullable: false,
+            IsRequired: false);
+
+        var exception = Assert.Throws<ArgumentException>(() => compiler.CompileOmitted(input));
+        Assert.Contains("VF-ACT-003", exception.Message);
+    }
+
+    private static InputDefinition CollectionInput(string key, string elementAlias) =>
+        new(
+            ReferenceKey: key,
+            Name: key,
+            Type: new TypeReference(elementAlias, CollectionKind.List),
+            StorageDriverType: null,
+            DisplayName: key,
+            Category: null,
+            IsNullable: true);
+
     private static RuntimeInputBinding ResultBinding(
         string projectionKey,
         IReadOnlyDictionary<string, string> metadata) =>

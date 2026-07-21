@@ -48,19 +48,20 @@ public sealed class SendHttpRequestExecutionTests
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
             NewSendNode(expectedStatusCodes: new[] { 201, 202 })));
 
-        run.AssertOutcomes(NodeId, HttpActivityOutcomes.Matched);
+        // Issue #926: a matching status branches on the outcome port named after its numeric code.
+        run.AssertOutcomes(NodeId, "201");
         run.AssertWorkflowCompleted();
     }
 
     [Fact]
-    public async Task Response_NotMatchingExpectedCode_BranchesOnUnmatchedOutcome()
+    public async Task Response_NotMatchingExpectedCode_BranchesOnUnmatchedStatusCodeOutcome()
     {
         await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "ok"));
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
             NewSendNode(expectedStatusCodes: new[] { 201 })));
 
-        run.AssertOutcomes(NodeId, HttpActivityOutcomes.Unmatched);
+        run.AssertOutcomes(NodeId, HttpActivityOutcomes.UnmatchedStatusCode);
         run.AssertWorkflowCompleted();
     }
 
@@ -145,13 +146,7 @@ public sealed class SendHttpRequestExecutionTests
                 isRequired: true,
                 ActivityValuePolicy.Default,
                 []),
-            [
-                ActivityOutcomes.Done,
-                HttpActivityOutcomes.Matched,
-                HttpActivityOutcomes.Unmatched,
-                HttpActivityOutcomes.Failed,
-                HttpActivityOutcomes.Timeout
-            ],
+            OutcomesFor(expectedStatusCodes),
             new ActivityActivationRequirement(ClrConstruction.DescriptorType, activityType));
 
         return new ExecutableNode(
@@ -164,6 +159,20 @@ public sealed class SendHttpRequestExecutionTests
             inputBindings: inputBindings,
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
+    }
+
+    // Mirrors ExecutableNodeCompiler.ResolveOutcomes: the static base outcomes plus, when expected codes are
+    // authored, one outcome per code and the unmatched-status-code catch-all (issue #926).
+    private static string[] OutcomesFor(int[]? expectedStatusCodes)
+    {
+        var outcomes = new List<string> { ActivityOutcomes.Done, HttpActivityOutcomes.Failed, HttpActivityOutcomes.Timeout };
+        if (expectedStatusCodes is { Length: > 0 })
+        {
+            outcomes.AddRange(expectedStatusCodes.Select(code => code.ToString()));
+            outcomes.Add(HttpActivityOutcomes.UnmatchedStatusCode);
+        }
+
+        return outcomes.ToArray();
     }
 
     private static RuntimeInputBinding LiteralBinding(string inputName, object value, Type type)

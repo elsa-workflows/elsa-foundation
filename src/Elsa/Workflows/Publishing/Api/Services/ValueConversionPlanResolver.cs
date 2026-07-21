@@ -289,7 +289,10 @@ public enum ValueConversionRejectionReason
     AutomaticUnsupported,
     ProducerNodeMissing,
     ProducerResultContractMissing,
-    UnknownResultProjection
+    UnknownResultProjection,
+
+    /// <summary>An authored literal value could not be coerced to the input's pinned target contract.</summary>
+    LiteralCoercionFailed
 }
 
 /// <summary>Publication failure with the complete pinned-contract context needed to fix a binding.</summary>
@@ -304,8 +307,9 @@ public sealed class ValueConversionPublicationException : ArgumentException
         ValueTypeDescriptor targetType,
         ValueConversionMode mode,
         ValueConversionProfileReference? profile,
-        ValueConversionBindingContext? binding)
-        : base(message)
+        ValueConversionBindingContext? binding,
+        Exception? innerException = null)
+        : base(message, innerException)
     {
         ReasonCode = reasonCode;
         Reason = reason;
@@ -358,6 +362,20 @@ public sealed class ValueConversionPublicationException : ArgumentException
             mode,
             profile,
             binding);
+
+    /// <summary>
+    /// Rejects an authored literal whose value could not be coerced into the input's pinned target contract
+    /// (e.g. a scalar text that is neither valid JSON for the target nor a coercible single value). Surfaces as the
+    /// same structured <c>VF-COER-001</c> diagnostic instead of letting a raw <see cref="System.Text.Json.JsonException"/>
+    /// or <see cref="FormatException"/> escape publication as an unstructured 500 (#924).
+    /// </summary>
+    public static ValueConversionPublicationException LiteralCoercionFailed(
+        string message,
+        ValueTypeDescriptor targetType,
+        ValueConversionBindingContext binding,
+        Exception? inner = null) =>
+        new(message, ValueConversionRejectionReason.LiteralCoercionFailed, message, null, null, targetType,
+            ValueConversionMode.Auto, null, binding, inner);
 
     /// <summary>
     /// Rejects a direct activity-result binding whose producer source contract could not be resolved.
