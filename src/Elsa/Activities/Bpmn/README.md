@@ -54,8 +54,9 @@ the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`) and event-start (s
 `specs/117-bpmn-event-start-events/`) slices: none/timer/message/signal start events, none/terminate
 end events, timer/message/signal intermediate catch events, task family, embedded subprocess, and
 exclusive/parallel/inclusive gateways over **acyclic** graphs. Cyclic graphs are rejected at
-validation. The interchange importer still drops event definitions with an analyze-time issue, so
-authoring event-defined starts/catches from XML is a later unit. Later units add boundary events,
+validation. The interchange importer/exporter round-trips timer/message/signal event definitions on
+event-defined start and intermediate catch events (see `specs/118-bpmn-interchange-event-definitions/`),
+so these constructs can now be authored from XML. Later units add boundary events,
 event-based gateways, multi-instance, compensation, transactions, and call activities.
 
 ## Expression-driven gateway conditions
