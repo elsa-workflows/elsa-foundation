@@ -13,7 +13,15 @@ engine-perf program. Shipped so far:
 |---|---|---|---|
 | Core seam A — child-subtree cancellation | `specs/112-runtime-child-subtree-cancellation` | #903 | merged |
 | Core seam B — handled child fault (absorption) | `specs/115-runtime-handled-child-fault` | #904 | merged |
-| Catch-events prerequisite — node-scoped resume targets (lifts the W8 one-instance limit) | — (documented W8 follow-up) | #911 | this PR |
+| Catch-events prerequisite — node-scoped resume targets (lifts the W8 one-instance limit) | — (documented W8 follow-up) | #911 | merged |
+| Timer/message/signal intermediate catch events (`CatchEventBehavior`; `Event` gains its mid-flow wait form + `CanStartWorkflow`) | `specs/116-bpmn-catch-events` | #917 | merged |
+
+Spec 116's stated cuts, now the head of the remaining queue alongside the original later units:
+**event-defined start events** (message/signal via a BpmnProcess `IActivityTriggerStimulusProvider`,
+timer via the recurring-schedule template; `BpmnElementFamilies.ResolveStartEvent` still throws for
+event-defined starts by design) and **interchange eventDefinition wiring** (importer still drops
+`intermediateCatchEvent`; pairs with Studio authoring UX). Then: event-based gateway (seam A),
+boundary events (seams A+B), multi-instance.
 
 Seam facts for the remaining units: `RequestChildSubtreeCancellation` / `RequestChildFaultAbsorption`
 are staged on `IRuntimeActivityExecutionContext` during child-completion/child-fault evaluations and
