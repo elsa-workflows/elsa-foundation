@@ -7,7 +7,7 @@ import {
   type ActivityDefinitionCollectionRequest,
   type ActivityDefinitionManagementView
 } from "./activityDefinitionTypes";
-import { formatActivityVersion } from "./workflowFormatting";
+import { formatActivityDefinitionDate, formatActivityVersion, resolveActivityDefinitionTitle } from "./workflowFormatting";
 import { classifyActivityDefinitionReadFailure, redactActivityDefinitionManagementCache, useActivityDefinitions } from "./api/activityDesign";
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
@@ -213,13 +213,17 @@ function ActivityDefinitionCollection({ context, activityEditors, onImport, onPl
       {data && data.items.length > 0 ? <>
         <div className="ad-collection" role="table" aria-label="Activity Definitions" aria-rowcount={data.totalCount}>
           <div className="ad-collection-head" role="row"><span role="columnheader">Definition</span><span role="columnheader">Authority</span><span role="columnheader">Provider</span><span role="columnheader">Recommendation</span><span role="columnheader">Updated</span></div>
-          {data.items.map(definition => <div key={definition.definition.definitionId} className="ad-collection-row" role="row" tabIndex={0} aria-label={`Open Activity Definition ${definition.definition.displayName}`} onClick={() => openDefinition(definition)} onKeyDown={event => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); openDefinition(definition); }}>
-            <span role="cell" data-label="Definition"><strong>{definition.definition.displayName}</strong><small>{definition.definition.activityTypeKey}</small></span>
+          {data.items.map(definition => {
+            const title = resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey);
+            const typeKey = definition.definition.activityTypeKey;
+            return <div key={definition.definition.definitionId} className="ad-collection-row" role="row" tabIndex={0} aria-label={`Open Activity Definition ${title}`} onClick={() => openDefinition(definition)} onKeyDown={event => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); openDefinition(definition); }}>
+            <span role="cell" data-label="Definition"><strong>{title}</strong>{typeKey && typeKey !== title ? <small>{typeKey}</small> : null}</span>
             <span role="cell" data-label="Authority"><AuthorityBadge kind={definition.definition.contentAuthority.kind} /></span>
             <span role="cell" data-label="Provider">{definition.lifecycle.recommendation?.providerKey ?? definition.lifecycle.head?.providerKey ?? "Not established"}</span>
             <span role="cell" data-label="Recommendation">{definition.lifecycle.recommendation ? (() => { const version = formatActivityVersion(definition.lifecycle.recommendation.version); return <span title={`Exact version ${version.full}`}>{version.short} · {definition.lifecycle.recommendation.lifecycle}</span>; })() : "Not recommended"}</span>
-            <span role="cell" data-label="Updated">{formatDate(definition.updatedAt)}</span>
-          </div>)}
+            <span role="cell" data-label="Updated">{formatActivityDefinitionDate(definition.updatedAt)}</span>
+          </div>;
+          })}
         </div>
         <footer className="ad-pager" aria-label="Activity Definition pagination"><span>Page {cursorIndex + 1} · {data.count} of {data.totalCount} authorized definitions</span><div><button type="button" onClick={() => setCursorIndex(current => Math.max(0, current - 1))} disabled={cursorIndex === 0}><ChevronLeft size={15} aria-hidden /> Previous</button><button type="button" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={15} aria-hidden /></button></div></footer>
       </> : null}
@@ -264,12 +268,6 @@ function readRouteState(): RouteState {
     draftActionVersionId: parameters.get("createDraftFrom"),
     returnPlanId: parameters.get("returnPlan")
   };
-}
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
 }
 
 function formatTimestamp(value: number | null) {

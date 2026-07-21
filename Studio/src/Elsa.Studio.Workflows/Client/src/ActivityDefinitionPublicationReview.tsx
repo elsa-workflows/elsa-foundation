@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioActivityDiagnostic, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getActivityDefinition } from "./api/activityDesign";
+import { activityDesignKeys, getActivityDefinition } from "./api/activityDesign";
 import {
   getActivityPublicationReceipt,
   preflightActivityDraftPublication,
@@ -39,6 +40,7 @@ export function ActivityDefinitionPublicationReview({
   onFocusDiagnostic(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
   onOpenVersion(versionId: string): void;
 }) {
+  const queryClient = useQueryClient();
   const [phase, setPhase] = useState<ReviewPhase>("idle");
   const [preflight, setPreflight] = useState<ActivityPublicationPreflight | null>(null);
   const [binding, setBinding] = useState<ExactDraftBinding | null>(null);
@@ -110,6 +112,9 @@ export function ActivityDefinitionPublicationReview({
       }
       setPhase("success");
       setFailure(null);
+      // Refresh the definition, drafts, and versions caches so the workbench's published-head and
+      // recommendation panels reflect the new immutable version without a manual page reload.
+      void queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionResources });
       void verifyRecommendation(next.outcome.definitionVersionId);
       return;
     }
@@ -209,7 +214,7 @@ export function ActivityDefinitionPublicationReview({
       <button type="button" onClick={() => onOpenVersion(receipt.outcome!.definitionVersionId)}>Open immutable version <ExternalLink size={15} aria-hidden /></button>
     </div> : null}
     {preflight ? <>
-      <PublicationSummary preflight={preflight} />
+      <PublicationSummary preflight={preflight} publishedOutcome={phase === "success" ? receipt?.outcome ?? null : null} />
       <ImpactReview changes={preflight.impactFirstChanges} diagnostics={preflight.diagnostics} />
       <ReadinessReview preflight={preflight} />
       {diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={onFocusDiagnostic} /> : null}
@@ -221,18 +226,18 @@ export function ActivityDefinitionPublicationReview({
       <footer className="ad-publication-actions">
         <span><ShieldCheck size={16} aria-hidden /> Publication is atomic and idempotent for this reviewed revision and head.</span>
         <button type="button" className="ad-primary-action" onClick={() => void publish()} disabled={phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
-          {phase === "publishing" ? "Publishing atomically…" : `Publish ${version || "exact version"}`}
+          {phase === "publishing" ? "Publishing atomically…" : phase === "success" ? `Published ${receipt?.outcome?.version ?? version}` : `Publish ${version || "exact version"}`}
         </button>
       </footer>
     </> : null}
   </section>;
 }
 
-function PublicationSummary({ preflight }: { preflight: ActivityPublicationPreflight }) {
+function PublicationSummary({ preflight, publishedOutcome }: { preflight: ActivityPublicationPreflight; publishedOutcome: ActivityPublicationReceipt["outcome"] }) {
   return <dl className="ad-publication-summary">
     <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
-    <div><dt>Published head</dt><dd>{preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
-    <div><dt>Baseline</dt><dd>{preflight.hasBaseline ? "Compared with published head" : "First publication · no published baseline exists"}</dd></div>
+    <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
+    <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "First publication · no published baseline exists"}</dd></div>
     <div><dt>Required bump</dt><dd>{preflight.diff?.requiredBump ?? "None"}</dd></div>
   </dl>;
 }

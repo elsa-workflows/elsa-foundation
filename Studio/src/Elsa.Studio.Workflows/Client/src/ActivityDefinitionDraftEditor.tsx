@@ -37,12 +37,13 @@ export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, 
   if (query.isPending || query.isFetching && !query.isFetchedAfterMount) return <main className="ad-page ad-draft-editor" aria-busy="true"><div className="ad-skeleton" role="status">Loading the exact Activity Definition draft…</div></main>;
   if (query.isError || !query.data || query.data.definitionId !== definitionId) return <main className="ad-page ad-draft-editor"><button type="button" className="ad-back" onClick={() => onBack()}><ArrowLeft size={16} /> Activity Definition</button><section className="ad-failure" role="alert"><AlertTriangle size={22} /><h1>Activity draft unavailable</h1><p>Studio could not confirm the exact authorized draft. No provider state is shown.</p><button type="button" onClick={() => void query.refetch()}>Try again</button></section></main>;
 
-  return <LoadedActivityDefinitionDraftEditor context={context} initialDraft={query.data} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || query.data.presentationLabel?.trim() || generatedDraftLabel(query.data)} activityEditors={activityEditors} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
+  return <LoadedActivityDefinitionDraftEditor context={context} initialDraft={query.data} definitionDisplayName={definitionQuery.data?.definition.displayName?.trim() || undefined} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || query.data.presentationLabel?.trim() || generatedDraftLabel(query.data)} activityEditors={activityEditors} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
 }
 
-function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definitionLabel, activityEditors, inputEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
+function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definitionDisplayName, definitionLabel, activityEditors, inputEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
   context: StudioEndpointContext;
   initialDraft: ActivityDefinitionDraftView;
+  definitionDisplayName?: string;
   definitionLabel: string;
   activityEditors: StudioActivityDefinitionImplementationEditorContribution[];
   inputEditors: StudioWorkflowRunInputEditorContribution[];
@@ -434,7 +435,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
 
   return <main className="ad-page ad-draft-editor" aria-labelledby="activity-draft-title">
     <button type="button" className="ad-back" onClick={() => onBack()} disabled={revisionSensitiveActionsBlocked}><ArrowLeft size={16} /> Activity Definition</button>
-    <header className="ad-workbench-header"><div><span className="ad-kicker">Exact mutable draft</span><h1 id="activity-draft-title">{draft.presentationLabel?.trim() || generatedDraftLabel(draft)}</h1><p><code>{draft.draftId}</code> · {draft.provider.providerKey} · schema {draft.provider.schemaVersion}</p></div><div className="ad-header-actions"><button type="button" onClick={() => setMigrationOpen(true)} disabled={revisionSensitiveActionsBlocked}>Migrate provider</button><button type="button" onClick={() => setTestRunOpen(true)} disabled={!contractLocallyValid || status === "conflict" || validating || proposalApplying}><Play size={16} /> Test Run</button><button type="button" onClick={() => void validateSavedRevision()} disabled={!contractLocallyValid || status === "conflict" || validating || proposalApplying}><CheckCircle2 size={16} /> {validating ? "Saving & validating…" : "Validate saved revision"}</button><button type="button" className="ad-primary-action" onClick={saveNow} disabled={!contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying}><RefreshCw size={16} /> Save now</button></div></header>
+    <header className="ad-workbench-header"><div><span className="ad-kicker">Exact mutable draft</span><h1 id="activity-draft-title">{draftHeaderTitle(definitionDisplayName, draft)}</h1><p><code>{draft.draftId}</code> · {draft.provider.providerKey} · schema {draft.provider.schemaVersion}</p></div><div className="ad-header-actions"><button type="button" onClick={() => setMigrationOpen(true)} disabled={revisionSensitiveActionsBlocked}>Migrate provider</button><button type="button" onClick={() => setTestRunOpen(true)} disabled={!contractLocallyValid || status === "conflict" || validating || proposalApplying}><Play size={16} /> Test Run</button><button type="button" onClick={() => void validateSavedRevision()} disabled={!contractLocallyValid || status === "conflict" || validating || proposalApplying}><CheckCircle2 size={16} /> {validating ? "Saving & validating…" : "Validate saved revision"}</button><button type="button" className="ad-primary-action" onClick={saveNow} disabled={!contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying}><RefreshCw size={16} /> Save now</button></div></header>
     <label className="ad-draft-label"><span>Draft label <small>Optional · need not be unique</small></span><input value={draft.presentationLabel ?? ""} maxLength={200} disabled={status === "conflict"} placeholder={generatedDraftLabel(draft)} onChange={event => scheduleSave({ ...currentRef.current, presentationLabel: event.target.value || null })} /><small>The generated fallback is derived from the stable draft identity.</small></label>
     <div className={`ad-save-state is-${contractLocallyValid ? status : "failed"}`} role={status === "failed" || status === "conflict" || !contractLocallyValid ? "alert" : "status"} aria-live="polite"><strong>{contractLocallyValid ? saveStatusLabel(status, draft.revision) : "Contract correction required"}</strong><span>{contractLocallyValid ? saveStatusDescription(status, revisionSensitiveActionsBlocked) : `Server revision ${draft.revision} is saved, but a visible literal is not valid contract data and has not been added to the autosave queue. Correct it or explicitly discard local changes.`}</span></div>
     <ActivityDefinitionDiagnosticsPanel
@@ -521,6 +522,17 @@ function editableSignature(draft: ActivityDefinitionDraftView) {
 
 function generatedDraftLabel(draft: Pick<ActivityDefinitionDraftView, "draftId">) {
   return `Draft ${draft.draftId}`;
+}
+
+/**
+ * Composes the draft editor header. When the parent definition's display name is known, it is shown
+ * ahead of the draft label (e.g. "Greet Person — Draft activity-draft-…") so the header is not just the
+ * generated draft id. Falls back to the draft's own presentation label or generated id otherwise.
+ */
+function draftHeaderTitle(definitionDisplayName: string | undefined, draft: ActivityDefinitionDraftView) {
+  const draftLabel = draft.presentationLabel?.trim() || generatedDraftLabel(draft);
+  const name = definitionDisplayName?.trim();
+  return name && name !== draftLabel ? `${name} — ${draftLabel}` : draftLabel;
 }
 
 function isStaleRevision(error: unknown) {

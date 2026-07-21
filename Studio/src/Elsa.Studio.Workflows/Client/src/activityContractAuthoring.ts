@@ -160,12 +160,17 @@ export function selectTypeForMember<T extends ActivityInputContract | ActivityOu
 }
 
 function initialTypeSelection(capabilities: ActivityAuthoringCapabilities) {
-  const type = authorableContractTypes(capabilities)[0];
+  const authorable = authorableContractTypes(capabilities);
+  // Prefer a String capability type over the alphabetically-first authorable type (which would otherwise
+  // default new members to Boolean); fall back to the first authorable type when String is unavailable.
+  const type = authorable.find(candidate => candidate.alias.toLowerCase() === "string") ?? authorable[0];
   if (!type) return null;
   const drivers = activatedStorageDrivers(type, capabilities);
   return {
     type,
-    collectionKind: type.supportedCollectionKinds[0],
+    // Prefer a Single (scalar) collection kind over the first advertised kind (which would otherwise
+    // default new members to Array).
+    collectionKind: type.supportedCollectionKinds.includes("Single") ? "Single" : type.supportedCollectionKinds[0],
     storageDriverKey: drivers[0]
   };
 }
