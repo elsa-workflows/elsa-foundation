@@ -1,5 +1,7 @@
 <Solution>
-  <Folder Name="/benchmarks/" />
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Elsa.DesignPersistence.Benchmarks/Elsa.DesignPersistence.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/benchmarks/Elsa/Activities/Runtime/">
     <Project Path="benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj" />
   </Folder>
