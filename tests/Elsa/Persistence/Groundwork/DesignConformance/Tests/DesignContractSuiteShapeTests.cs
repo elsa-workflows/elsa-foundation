@@ -109,6 +109,7 @@ public class DesignContractSuiteShapeTests
         Assert.True(typeof(ActivityDesignContractSuite).IsAbstract);
         Assert.True(typeof(WorkflowDesignQueryContractSuite).IsAbstract);
         Assert.True(typeof(ActivityDesignQueryContractSuite).IsAbstract);
+        Assert.True(typeof(DesignQueryScaleContractSuite).IsAbstract);
         Assert.True(typeof(DesignAtomicityContractSuite).IsAbstract);
         Assert.True(typeof(DesignIsolationAndRestartContractSuite).IsAbstract);
 
@@ -223,7 +224,12 @@ public class DesignContractSuiteShapeTests
             [DesignPersistenceContractScenario.IsolationReusableActivityDraftOcc] = "Legacy EF reusable activity drafts do not expose the target expected-revision replace contract.",
             [DesignPersistenceContractScenario.IsolationWorkflowDraftLastWriterWins] = null,
             [DesignPersistenceContractScenario.IsolationSingleScopeRestart] = null,
-            [DesignPersistenceContractScenario.IsolationCrossScopeSameIdentityRestart] = "Legacy EF identity keys are global and cannot represent cross-scope same-identity restart isolation."
+            [DesignPersistenceContractScenario.IsolationCrossScopeSameIdentityRestart] = "Legacy EF identity keys are global and cannot represent cross-scope same-identity restart isolation.",
+            [DesignPersistenceContractScenario.QueryScalePagedListing] = null,
+            [DesignPersistenceContractScenario.QueryScaleBatchProjection] = "Legacy EF projection reads resolve only persisted definitions and cannot emit the target's empty-facts rows for unknown definition ids.",
+            [DesignPersistenceContractScenario.QueryScaleOversizedMembership] = "Legacy EF projection reads resolve only persisted definitions and cannot emit the target's empty-facts rows for unknown definition ids.",
+            [DesignPersistenceContractScenario.QueryScaleKnownBatchParity] = null,
+            [DesignPersistenceContractScenario.QueryScaleExistenceConsistency] = null
         };
 
         Assert.Equal(expected.Keys.Order(), legacyEfOracle.Applicability.Keys.Order());
@@ -235,8 +241,8 @@ public class DesignContractSuiteShapeTests
             Assert.Equal(reason, applicability.NotApplicableReason);
         }
 
-        Assert.Equal(5, legacyEfOracle.Applicability.Values.Count(applicability => applicability.IsApplicable));
-        Assert.Equal(10, legacyEfOracle.Applicability.Values.Count(applicability => !applicability.IsApplicable));
+        Assert.Equal(8, legacyEfOracle.Applicability.Values.Count(applicability => applicability.IsApplicable));
+        Assert.Equal(12, legacyEfOracle.Applicability.Values.Count(applicability => !applicability.IsApplicable));
     }
 
     [Fact]
