@@ -295,12 +295,12 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             RuntimeStartActivityCommandPayload.ScheduledActivityReason);
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{scheduleWorkItem.WorkItemId}:start:{schedulePayload.ActivityExecutionId}",
+            workItemId: RuntimeChainId.Derive(scheduleWorkItem.WorkItemId, $"start:{schedulePayload.ActivityExecutionId}"),
             workflowExecutionId: scheduleWorkItem.WorkflowExecutionId,
-            commandId: $"{scheduleWorkItem.CommandId}:start:{schedulePayload.ActivityExecutionId}",
+            commandId: RuntimeChainId.Derive(scheduleWorkItem.CommandId, $"start:{schedulePayload.ActivityExecutionId}"),
             commandKind: WorkflowExecutionCommandKind.StartActivity,
             envelopeId: scheduleWorkItem.EnvelopeId,
-            idempotencyKey: $"{scheduleWorkItem.IdempotencyKey}:start:{schedulePayload.ActivityExecutionId}",
+            idempotencyKey: RuntimeChainId.Derive(scheduleWorkItem.IdempotencyKey, $"start:{schedulePayload.ActivityExecutionId}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: scheduleWorkItem.Sequence is { } sequence ? sequence + 1 : null,

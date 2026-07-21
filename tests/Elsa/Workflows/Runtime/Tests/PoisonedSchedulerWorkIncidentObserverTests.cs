@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -103,6 +104,43 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
     }
 
     [Fact]
+    public void IncidentId_StaysWithinProjectionColumnBudget_RegardlessOfWorkItemIdLength()
+    {
+        // A pre-fix chain-style work item id: multi-KB after only a few activities (the #923 growth). The projected
+        // 'by-incident-id' column is capped at 128 (RuntimeExecutionIdProjectionLength); the derived incident id must
+        // fit with margin no matter how long the source work item id is.
+        var hugeWorkItemId = string.Join(":", Enumerable.Range(0, 200).Select(i => $"schedule-child:node-{i}:activity-{Guid.NewGuid()}"));
+
+        var incidentId = PoisonedSchedulerWorkIncidentObserver.IncidentId(hugeWorkItemId);
+
+        Assert.True(incidentId.Length <= 128, $"Incident id length {incidentId.Length} exceeds the 128-char column budget.");
+        // Deterministic: same work item id always projects the same incident id (so dedupe / resolve stays stable).
+        Assert.Equal(incidentId, PoisonedSchedulerWorkIncidentObserver.IncidentId(hugeWorkItemId));
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WhenIncidentPersistenceThrows_DoesNotPropagateAndContinues()
+    {
+        // Reproduces GW-PHYSICAL-037 (#922): recording the incident fails during persistence. The observer must swallow
+        // the failure (logging it with the original poison record), leave the durable poison record intact, and keep
+        // draining the remaining records — so the test-run / dispatch API call is not sunk by incident-recording.
+        var throwingCommitIncidentStore = new ThrowingIncidentStateStore();
+        var harness = new Harness(_now, commitIncidentStore: throwingCommitIncidentStore);
+        await harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned, workItemId: "workitem-1");
+        await harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned, workItemId: "workitem-2");
+
+        var exception = await Record.ExceptionAsync(() =>
+            harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult).AsTask());
+
+        Assert.Null(exception);
+        // Both records were attempted (the first failure did not abort the loop).
+        Assert.Equal(2, throwingCommitIncidentStore.SaveAttempts);
+        // Nothing was persisted, but the poison records remain durable and inspectable.
+        Assert.Empty(await harness.IncidentStore.ListAsync("wfexec-1"));
+        Assert.Equal(2, (await harness.PoisonStore.ListAsync("wfexec-1")).Count);
+    }
+
+    [Fact]
     public async Task ObserverChain_PoisonedRecord_TransitionsWorkflowToFaulted()
     {
         await _harness.SaveWorkflow(WorkflowExecutionStatus.Running);
@@ -129,7 +167,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         public RuntimeSchedulerDrainResult FaultedDrainResult { get; }
         public RuntimeSchedulerDrainResult FaultFreeDrainResult { get; }
 
-        public Harness(DateTimeOffset now)
+        public Harness(DateTimeOffset now, IIncidentStateStore? commitIncidentStore = null)
         {
             _now = now;
             var activityStore = new InMemoryActivityExecutionStateStore();
@@ -137,7 +175,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             CommitStore = new InMemoryRuntimeCheckpointCommitStore(
                 WorkflowStore,
                 activityExecutionStateStore: activityStore,
-                incidentStateStore: IncidentStore,
+                // Separate store for the commit-time incident write so a test can make persistence throw while the
+                // observer's own dedupe lookup (against IncidentStore) still succeeds.
+                incidentStateStore: commitIncidentStore ?? IncidentStore,
                 activityExecutionInspectionWriter: inspectionStore,
                 rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
             var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore);
@@ -168,10 +208,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
 
         public ValueTask<RuntimeSchedulerPoisonRecord> RecordPoison(
             RuntimeSchedulerPoisonDisposition disposition,
-            DateTimeOffset? nextRetryAt = null) =>
+            DateTimeOffset? nextRetryAt = null,
+            string workItemId = "workitem-1") =>
             PoisonStore.RecordAsync(new RuntimeSchedulerPoisonRecord(
                 workflowExecutionId: "wfexec-1",
-                workItemId: "workitem-1",
+                workItemId: workItemId,
                 commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
                 handlerName: nameof(WorkflowSchedulerDrainer),
                 fault: new RuntimeFaultInfo("System.InvalidOperationException", "dispatch exploded"),
@@ -221,5 +262,31 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    /// <summary>Simulates a projection-column overflow (GW-PHYSICAL-037): every incident write throws.</summary>
+    private sealed class ThrowingIncidentStateStore : IIncidentStateStore
+    {
+        public int SaveAttempts { get; private set; }
+
+        public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default) => throw Boom();
+
+        public ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default)
+        {
+            SaveAttempts++;
+            throw Boom();
+        }
+
+        public ValueTask<IncidentState?> FindAsync(string workflowExecutionId, string incidentId, CancellationToken cancellationToken = default) =>
+            new((IncidentState?)null);
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            new((IReadOnlyCollection<IncidentState>)[]);
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            new((IReadOnlyCollection<IncidentState>)[]);
+
+        private static InvalidOperationException Boom() => new(
+            "GW-PHYSICAL-037: Projected string column 'by-incident-id' exceeds its declared maximum length of 128.");
     }
 }

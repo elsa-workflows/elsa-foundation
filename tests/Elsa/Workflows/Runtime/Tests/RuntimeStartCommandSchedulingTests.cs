@@ -29,7 +29,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
         Assert.Equal("wfexec-1", checkpointWork.WorkflowExecutionId);
-        Assert.Equal("start-work:checkpoint:WorkflowStarted", checkpointWork.WorkItemId);
+        Assert.Equal(RuntimeChainId.Derive("start-work", "checkpoint:WorkflowStarted"), checkpointWork.WorkItemId);
         Assert.Equal(_now, checkpointWork.EnqueuedAt);
         Assert.Equal(_now, checkpointWork.RecordedAt);
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
@@ -42,7 +42,7 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
-        Assert.Equal("start-work:schedule:node-start", scheduled.WorkItemId);
+        Assert.Equal(RuntimeChainId.Derive("start-work", "schedule:node-start"), scheduled.WorkItemId);
         Assert.Equal(12, scheduled.Sequence);
         Assert.Equal(_now.ToString("O"), scheduled.CommandMetadata[RuntimeMetadataKeys.WorkflowStartedAt]);
         var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
@@ -150,7 +150,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Collection(
             result.Items,
             first => Assert.Equal("start-work", first.WorkItemId),
-            second => Assert.Equal("start-work:checkpoint:WorkflowStarted", second.WorkItemId));
+            second => Assert.Equal(RuntimeChainId.Derive("start-work", "checkpoint:WorkflowStarted"), second.WorkItemId));
         var write = Assert.Single(checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, write.Commit.Checkpoint.Name);
         var workflowChange = write.Commit.StateChanges.WorkflowExecution;

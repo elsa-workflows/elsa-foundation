@@ -124,12 +124,12 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             completedChildActivityExecutionId);
 
         var workItem = new RuntimeSchedulerWorkItem(
-            workItemId: $"{activityCompletedWorkItem.WorkItemId}:parent:{parentActivityExecutionId}:child:{completedChildActivityExecutionId}",
+            workItemId: RuntimeChainId.Derive(activityCompletedWorkItem.WorkItemId, $"parent:{parentActivityExecutionId}:child:{completedChildActivityExecutionId}"),
             workflowExecutionId: activityCompletedWorkItem.WorkflowExecutionId,
-            commandId: $"{activityCompletedWorkItem.CommandId}:parent:{parentActivityExecutionId}:child:{completedChildActivityExecutionId}",
+            commandId: RuntimeChainId.Derive(activityCompletedWorkItem.CommandId, $"parent:{parentActivityExecutionId}:child:{completedChildActivityExecutionId}"),
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             envelopeId: activityCompletedWorkItem.EnvelopeId,
-            idempotencyKey: $"{activityCompletedWorkItem.IdempotencyKey}:parent:{parentActivityExecutionId}:child:{completedChildActivityExecutionId}",
+            idempotencyKey: RuntimeChainId.Derive(activityCompletedWorkItem.IdempotencyKey, $"parent:{parentActivityExecutionId}:child:{completedChildActivityExecutionId}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: activityCompletedWorkItem.Sequence is { } sequence ? sequence + 1 : null,
@@ -159,12 +159,12 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             downstreamScheduling.PostCommitIntents);
 
         var workItem = new RuntimeSchedulerWorkItem(
-            workItemId: $"{continuationSchedulingWorkItem.WorkItemId}:checkpoint:{checkpointName}:{activityExecutionId}",
+            workItemId: RuntimeChainId.Derive(continuationSchedulingWorkItem.WorkItemId, $"checkpoint:{checkpointName}:{activityExecutionId}"),
             workflowExecutionId: continuationSchedulingWorkItem.WorkflowExecutionId,
-            commandId: $"{continuationSchedulingWorkItem.CommandId}:checkpoint:{checkpointName}:{activityExecutionId}",
+            commandId: RuntimeChainId.Derive(continuationSchedulingWorkItem.CommandId, $"checkpoint:{checkpointName}:{activityExecutionId}"),
             commandKind: WorkflowExecutionCommandKind.Checkpoint,
             envelopeId: continuationSchedulingWorkItem.EnvelopeId,
-            idempotencyKey: $"{continuationSchedulingWorkItem.IdempotencyKey}:checkpoint:{checkpointName}:{activityExecutionId}",
+            idempotencyKey: RuntimeChainId.Derive(continuationSchedulingWorkItem.IdempotencyKey, $"checkpoint:{checkpointName}:{activityExecutionId}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: continuationSchedulingWorkItem.Sequence is { } sequence ? sequence + 1 : null,
@@ -219,12 +219,12 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             SchedulerCompletionKind.ContinuationScheduling);
 
         var workItem = new RuntimeSchedulerWorkItem(
-            workItemId: $"{sourceWorkItem.WorkItemId}:continuation:{activityExecutionId}",
+            workItemId: RuntimeChainId.Derive(sourceWorkItem.WorkItemId, $"continuation:{activityExecutionId}"),
             workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
-            commandId: $"{sourceWorkItem.CommandId}:continuation:{activityExecutionId}",
+            commandId: RuntimeChainId.Derive(sourceWorkItem.CommandId, $"continuation:{activityExecutionId}"),
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             envelopeId: sourceWorkItem.EnvelopeId,
-            idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:continuation:{activityExecutionId}",
+            idempotencyKey: RuntimeChainId.Derive(sourceWorkItem.IdempotencyKey, $"continuation:{activityExecutionId}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: sourceWorkItem.Sequence is { } sequence ? sequence + 1 : null,

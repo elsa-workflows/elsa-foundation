@@ -142,12 +142,12 @@ internal static class ActivityCancellationCheckpointService
         string reason,
         DateTimeOffset occurredAt) =>
         new(
-            workItemId: $"{source.WorkItemId}:cancel-workflow",
+            workItemId: RuntimeChainId.Derive(source.WorkItemId, $"cancel-workflow"),
             workflowExecutionId: source.WorkflowExecutionId,
-            commandId: $"{source.CommandId}:cancel-workflow",
+            commandId: RuntimeChainId.Derive(source.CommandId, $"cancel-workflow"),
             commandKind: WorkflowExecutionCommandKind.Cancel,
             envelopeId: source.EnvelopeId,
-            idempotencyKey: $"{source.IdempotencyKey}:cancel-workflow",
+            idempotencyKey: RuntimeChainId.Derive(source.IdempotencyKey, $"cancel-workflow"),
             enqueuedAt: occurredAt,
             recordedAt: occurredAt,
             sequence: source.Sequence is { } sequence ? sequence + 1 : null,

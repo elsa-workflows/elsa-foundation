@@ -242,7 +242,7 @@ public sealed class RuntimeSchedulerDrainTests
         var queuedAfterRedrive = await innerQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
         var followUp = Assert.Single(queuedAfterRedrive);
         Assert.Equal(WorkflowExecutionCommandKind.StartActivity, followUp.CommandKind);
-        Assert.Equal($"{scheduleItem.WorkItemId}:start:actexec-1", followUp.WorkItemId);
+        Assert.Equal(RuntimeChainId.Derive(scheduleItem.WorkItemId, "start:actexec-1"), followUp.WorkItemId);
     }
 
     [Fact]
@@ -692,7 +692,7 @@ public sealed class RuntimeSchedulerDrainTests
 
         var parentWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, parentWork.CommandKind);
-        Assert.Equal("work-1:parent:actexec-parent:child:actexec-1", parentWork.WorkItemId);
+        Assert.Equal(RuntimeChainId.Derive("work-1", "parent:actexec-parent:child:actexec-1"), parentWork.WorkItemId);
         Assert.Equal(2, parentWork.Sequence);
         var parentPayload = parentWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
         Assert.Equal(SchedulerCompletionKind.ParentCompletionEvaluation, parentPayload.CompletionKind);
@@ -719,7 +719,7 @@ public sealed class RuntimeSchedulerDrainTests
 
         var continuationWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, continuationWork.CommandKind);
-        Assert.Equal("work-1:continuation:actexec-1", continuationWork.WorkItemId);
+        Assert.Equal(RuntimeChainId.Derive("work-1", "continuation:actexec-1"), continuationWork.WorkItemId);
         Assert.Equal(2, continuationWork.Sequence);
         var continuationPayload = continuationWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
         Assert.Equal(SchedulerCompletionKind.ContinuationScheduling, continuationPayload.CompletionKind);
@@ -752,7 +752,7 @@ public sealed class RuntimeSchedulerDrainTests
 
         var continuationWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, continuationWork.CommandKind);
-        Assert.Equal("work-1:continuation:actexec-parent", continuationWork.WorkItemId);
+        Assert.Equal(RuntimeChainId.Derive("work-1", "continuation:actexec-parent"), continuationWork.WorkItemId);
         Assert.Equal(2, continuationWork.Sequence);
         var continuationPayload = continuationWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
         Assert.Equal(SchedulerCompletionKind.ContinuationScheduling, continuationPayload.CompletionKind);
@@ -825,7 +825,7 @@ public sealed class RuntimeSchedulerDrainTests
 
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
-        Assert.Equal("work-1:checkpoint:WorkflowCompleted:actexec-parent", checkpointWork.WorkItemId);
+        Assert.Equal(RuntimeChainId.Derive("work-1", "checkpoint:WorkflowCompleted:actexec-parent"), checkpointWork.WorkItemId);
         Assert.Equal(2, checkpointWork.Sequence);
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
