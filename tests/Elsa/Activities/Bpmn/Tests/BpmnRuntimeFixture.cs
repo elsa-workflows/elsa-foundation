@@ -40,6 +40,17 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
 
     public Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable) => _harness.RunAsync(executable);
 
+    /// <summary>
+    /// Runs the process as a trigger-started run (spec 117): the matched binding's node id is the process node and
+    /// its metadata names the event-defined start element to seed, mirroring how the stimulus router forwards
+    /// <c>binding.Metadata</c> onto the start dispatch. Only the targeted event-defined start seeds a token.
+    /// </summary>
+    public Task<WorkflowExecutionRun> RunAsTriggerAsync(WorkflowExecutable executable, string startElementId) =>
+        _harness.RunAsTriggerDeliveryAsync(
+            executable,
+            triggerNodeId: ProcessNodeId,
+            triggerMetadata: new Dictionary<string, string> { [BpmnStartTrigger.StartElementIdMetadataKey] = startElementId });
+
     /// <summary>Lists the run's live bookmark resume handles (spec 116 catch-event scenarios).</summary>
     public async Task<IReadOnlyCollection<BookmarkState>> BookmarksAsync() =>
         await Provider.GetRequiredService<IBookmarkStateStore>()
@@ -155,6 +166,10 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
 
     public static BpmnElement TerminateEndEvent(string elementId = "terminate") =>
         new(elementId, BpmnElementTypes.EndEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Terminate)]);
+
+    /// <summary>An event-defined start event (spec 117). Only the definition type matters at runtime; the token behaves like a none start.</summary>
+    public static BpmnElement EventStart(string elementId, string definitionType) =>
+        new(elementId, BpmnElementTypes.StartEvent, eventDefinitions: [new BpmnEventDefinition(definitionType)]);
 
     public static BpmnElement IntermediateCatchEvent(string elementId, string definitionType, string? childNodeId = null) =>
         new(elementId, BpmnElementTypes.IntermediateCatchEvent, childNodeId: childNodeId, eventDefinitions: [new BpmnEventDefinition(definitionType)]);
