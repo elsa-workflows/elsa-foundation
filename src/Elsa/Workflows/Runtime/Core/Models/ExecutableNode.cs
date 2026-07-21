@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -196,6 +198,45 @@ public sealed class ExecutableNode
     public ActivityContract? ActivityContract { get; }
     public WorkflowIntrinsicKind? IntrinsicKind { get; }
     public RuntimeVariableReference? IntrinsicVariable { get; }
+
+    // ADR 0047 D3: in-memory-only routing-structure memo. Private, so it is invisible to System.Text.Json —
+    // it never touches the persisted executable schema or the ADR 0038 content hash (resolution #2:
+    // "recomputed on materialization"). Keyed by structure type because a node reconstructs exactly one
+    // routing structure kind (FlowchartGraph / BpmnGraph / SequenceNavigator).
+    private ConcurrentDictionary<Type, object>? _routingStructures;
+
+    /// <summary>
+    /// ADR 0047 D3: returns a routing structure derived once from this node's immutable graph content
+    /// (the connections / sequence flows / ordered children carried in <see cref="Structure"/>), computed on
+    /// first access by <paramref name="factory"/> and cached on this materialized instance only.
+    /// </summary>
+    /// <remarks>
+    /// The routing relation the runtime walks per child-completion (which successor(s) an outcome routes to) is
+    /// fully determined at publish time, but the composite engines used to rebuild it — deserializing
+    /// <see cref="Structure"/> and re-indexing — on every completion hop. This memo makes the reconstruction a
+    /// once-per-materialized-executable cost: because the spec-111 burst cache serves the same
+    /// <see cref="ExecutableNode"/> instance for every hop in a drain, the structure builds once per composite per
+    /// burst and every later hop is a dictionary lookup. It is derived by the exact same code path the walk uses
+    /// (<paramref name="factory"/> is the composite's own <c>From</c>), so the table cannot diverge from the walk.
+    ///
+    /// The memo carries no runtime state — it is a pure function of this immutable node — so it is not serialized,
+    /// not part of the content hash, and correct to recompute whenever a fresh executable instance is materialized
+    /// (the burst-absent path simply recomputes per hop, byte-identical, only without the reuse).
+    /// </remarks>
+    public T GetOrAddRoutingStructure<T>(Func<ExecutableNode, T> factory) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+
+        var structures = LazyInitializer.EnsureInitialized(
+            ref _routingStructures,
+            static () => new ConcurrentDictionary<Type, object>());
+
+        return (T)structures.GetOrAdd(typeof(T), _ =>
+        {
+            RoutingStructureMaterializationDiagnostics.OnMaterialized();
+            return factory(this);
+        });
+    }
 }
 
 public enum WorkflowIntrinsicKind

@@ -42,7 +42,7 @@ public sealed class FlowchartExecutionEngine(
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var graph = FlowchartGraph.From(context.ExecutableNode);
+        var graph = context.ExecutableNode.GetOrAddRoutingStructure(FlowchartGraph.From);
         reachabilityAnalyzer.ValidateNoAmbiguousLoopbacks(graph);
         var startNode = graph.SelectStartNode();
 
@@ -63,7 +63,7 @@ public sealed class FlowchartExecutionEngine(
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(completionContext);
 
-        var graph = FlowchartGraph.From(context.ExecutableNode);
+        var graph = context.ExecutableNode.GetOrAddRoutingStructure(FlowchartGraph.From);
         var state = FlowchartStatePersister.LoadState(context.ActivityExecutionState) ?? FlowchartStatePersister.CreateInitialState(graph.SelectStartNode()?.ExecutableNodeId);
         var pathId = ResolveExecutionPathId(context, state, completionContext.CompletedChildExecutableNodeId);
         var path = state.ExecutionPaths.FirstOrDefault(item => StringComparer.Ordinal.Equals(item.ExecutionPathId, pathId))
@@ -215,7 +215,7 @@ public sealed class FlowchartExecutionEngine(
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(faultContext);
 
-        var graph = FlowchartGraph.From(context.ExecutableNode);
+        var graph = context.ExecutableNode.GetOrAddRoutingStructure(FlowchartGraph.From);
         var state = FlowchartStatePersister.LoadState(context.ActivityExecutionState) ?? FlowchartStatePersister.CreateInitialState(graph.SelectStartNode()?.ExecutableNodeId);
 
         var faultedNodeId = faultContext.FaultedChildExecutableNodeId;

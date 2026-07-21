@@ -24,7 +24,7 @@ public sealed class Sequence : StructuralActivity, IRuntimeStructuralActivity, I
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var navigator = SequenceNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(SequenceNavigator.From);
         var firstChild = navigator.SelectFirst();
 
         if (firstChild is null)
@@ -49,7 +49,7 @@ public sealed class Sequence : StructuralActivity, IRuntimeStructuralActivity, I
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = SequenceNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(SequenceNavigator.From);
 
         // Break propagation (#299): a child that completes with a Break outcome stops the sequence — later
         // steps do not run — and the sequence itself completes with Break, so the outcome bubbles up to the
