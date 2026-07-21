@@ -73,6 +73,50 @@ export const forEachActivity: ActivityCatalogItem = {
   }]
 };
 
+// Built-in engine-intrinsic catalog descriptors (foundation #942). Shapes mirror
+// IntrinsicAuthoringDescriptorProvider: stable version ids, Primitives category, additive `intrinsic`
+// block, and a value/variable (or name) input. `type` is the raw backend field; the catalog fetch
+// backfills `typeName` from it, so tests that bypass the fetch include both where the inspector needs it.
+export const setVariableActivity: ActivityCatalogItem = {
+  activityVersionId: "elsa.intrinsic.set@1",
+  activityTypeKey: "Elsa.SetVariable",
+  version: "1",
+  category: "Primitives",
+  displayName: "Set Variable",
+  description: "Assigns a value to a declared workflow variable, resolved to its nearest visible scope.",
+  executionType: "Action",
+  inputs: [
+    { referenceKey: "variable", name: "Variable", type: "String", typeName: "String", displayName: "Variable", order: 0, isBrowsable: true, isRequired: true, isNullable: false, uiHint: "variable-picker" },
+    { referenceKey: "value", name: "Value", type: "Elsa.Any", typeName: "Elsa.Any", displayName: "Value", order: 1, isBrowsable: true, isRequired: true, isNullable: true, uiHint: "single-line" }
+  ],
+  outputs: [],
+  ports: [{ name: "Done", displayName: "Done", isBrowsable: true }],
+  designFacets: [],
+  available: true,
+  authoringTemplate: { nodeId: "intrinsic", activityVersionId: "elsa.intrinsic.set@1", inputs: [], outputs: [] },
+  intrinsic: { kind: "Set", valueInputKey: "value", variableInputKey: "variable", outputNameInputKey: null }
+};
+
+export const setOutputActivity: ActivityCatalogItem = {
+  activityVersionId: "elsa.intrinsic.set-output@1",
+  activityTypeKey: "Elsa.SetOutput",
+  version: "1",
+  category: "Primitives",
+  displayName: "Set Output",
+  description: "Assigns a value to a named workflow output.",
+  executionType: "Action",
+  inputs: [
+    { referenceKey: "name", name: "Output Name", type: "String", typeName: "String", displayName: "Output Name", order: 0, isBrowsable: true, isRequired: true, isNullable: false, uiHint: "single-line" },
+    { referenceKey: "value", name: "Value", type: "Elsa.Any", typeName: "Elsa.Any", displayName: "Value", order: 1, isBrowsable: true, isRequired: true, isNullable: true, uiHint: "single-line" }
+  ],
+  outputs: [],
+  ports: [{ name: "Done", displayName: "Done", isBrowsable: true }],
+  designFacets: [],
+  available: true,
+  authoringTemplate: { nodeId: "intrinsic", activityVersionId: "elsa.intrinsic.set-output@1", inputs: [], outputs: [] },
+  intrinsic: { kind: "SetOutput", valueInputKey: "value", variableInputKey: null, outputNameInputKey: "name" }
+};
+
 export function leafNode(nodeId: string): ActivityNode {
   return { nodeId, activityVersionId: writeLine.activityVersionId, inputs: [], outputs: [] };
 }
