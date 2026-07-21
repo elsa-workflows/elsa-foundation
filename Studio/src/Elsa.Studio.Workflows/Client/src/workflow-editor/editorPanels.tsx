@@ -1,14 +1,37 @@
-import { AlertCircle, Check, Wrench } from "lucide-react";
-import type { WorkflowDraft, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
-import { collectVariableRepairItems } from "../validationDiagnostics";
+import { AlertCircle, Check, MapPin, Wrench } from "lucide-react";
+import type { ValidationError, WorkflowDraft, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import { collectVariableRepairItems, parseValidationErrorPath } from "../validationDiagnostics";
 import { formatDate } from "../workflowFormatting";
 import { isRejectedTestRun } from "./editorHelpers";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 
-export function ValidationPanel({ draft, onRepair }: { draft: WorkflowDraft; onRepair(nodeId: string | null): void }) {
-  const errors = Array.isArray(draft.validationErrors) ? draft.validationErrors : [];
+/**
+ * Renders the unified draft-validation surface (issue #453). `errors` (server-derived + reconciled +
+ * structural, merged by the caller) overrides the draft's own list when provided, so the footer never
+ * says "No validation errors" while the promotion gate would refuse. Each error offers a "Repair" jump
+ * for unresolved-variable references and a "Go to" jump for any error that resolves to a node.
+ */
+export function ValidationPanel({
+  draft,
+  errors: providedErrors,
+  onRepair,
+  onSelectNode,
+  unavailable
+}: {
+  draft: WorkflowDraft;
+  errors?: ValidationError[];
+  onRepair(nodeId: string | null): void;
+  onSelectNode?(nodeId: string): void;
+  unavailable?: boolean;
+}) {
+  const errors = providedErrors ?? (Array.isArray(draft.validationErrors) ? draft.validationErrors : []);
   if (!errors.length) {
-    return <div className="wf-validation ok"><Check size={14} /> No validation errors</div>;
+    return (
+      <div className="wf-validation ok">
+        <Check size={14} /> No validation errors
+        {unavailable ? <span className="wf-validation-note"> (server validation unavailable on this backend)</span> : null}
+      </div>
+    );
   }
 
   const repairItems = collectVariableRepairItems(errors);
@@ -26,12 +49,17 @@ export function ValidationPanel({ draft, onRepair }: { draft: WorkflowDraft; onR
       <ul className="wf-validation-list">
         {errors.map((error, index) => {
           const repair = repairByError.get(error);
+          const nodeId = repair?.path.nodeId ?? parseValidationErrorPath(error.path).nodeId;
           return (
             <li key={index} className={repair ? "wf-validation-item repairable" : "wf-validation-item"}>
               <span className="wf-validation-message">{error.message ?? "Validation issue."}</span>
               {repair?.path.nodeId ? (
                 <button type="button" className="wf-validation-repair" onClick={() => onRepair(repair.path.nodeId)}>
                   <Wrench size={12} /> Repair
+                </button>
+              ) : nodeId && onSelectNode ? (
+                <button type="button" className="wf-validation-repair" onClick={() => onSelectNode(nodeId)}>
+                  <MapPin size={12} /> Go to
                 </button>
               ) : null}
             </li>

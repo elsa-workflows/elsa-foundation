@@ -380,6 +380,7 @@ function renderOperations(options: {
     saved.validationErrors = (options.savedValidationErrors ?? []).map(message => ({ message }));
     return saved;
   });
+  const flushPendingSave = vi.fn(async () => undefined);
   const callbacks = {
     reload: vi.fn(async () => undefined),
     startTestRun: vi.fn(),
@@ -404,11 +405,13 @@ function renderOperations(options: {
     catalog: [],
     busy: false,
     saveDraft,
+    flushPendingSave,
     ...callbacks
   }} />));
   return {
     current: () => current!,
     saveDraft,
+    flushPendingSave,
     getJson,
     postJson,
     mutationOrder,

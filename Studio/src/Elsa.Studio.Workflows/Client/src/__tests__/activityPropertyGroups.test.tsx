@@ -141,14 +141,26 @@ describe("activity property organization", () => {
     expect(retry).toHaveBeenCalledOnce();
   });
 
-  it("orders properties by input order, then name", () => {
+  it("orders properties by input order, keeping delivery order for ties (never alphabetical)", () => {
     const container = renderPanel([
       input("Last", { order: 20 }),
       input("Beta", { order: 10 }),
       input("Alpha", { order: 10 })
     ]);
 
-    expect(propertyLabels(container)).toEqual(["Alpha", "Beta", "Last"]);
+    // Ties keep catalog delivery order (Beta before Alpha), not an alphabetical re-sort (issue #452).
+    expect(propertyLabels(container)).toEqual(["Beta", "Alpha", "Last"]);
+  });
+
+  it("preserves catalog delivery order when the backend supplies no explicit order (issue #452)", () => {
+    const container = renderPanel([
+      input("Url"),
+      input("Content"),
+      input("Method")
+    ]);
+
+    // The primary field (Url) is delivered first and must stay first — alphabetical sorting pushed it last.
+    expect(propertyLabels(container)).toEqual(["Url", "Content", "Method"]);
   });
 
   it("uses descriptor metadata to order and label category groups", () => {

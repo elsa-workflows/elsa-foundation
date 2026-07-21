@@ -1037,6 +1037,7 @@ export function SyntaxPicker({
                 ref={element => { optionRefs.current[index] = element; }}
                 type="button"
                 role="option"
+                aria-label={unavailableReason ? `${optionLabel} — ${unavailableReason}` : optionLabel}
                 aria-selected={selectedOption}
                 aria-disabled={unavailableReason ? true : undefined}
                 disabled={!!unavailableReason}
@@ -1193,8 +1194,15 @@ function readFirstNonEmptyString(...values: unknown[]): string | null {
 function groupInputs(inputs: StudioActivityInputDescriptor[], metadata: ResolvedPropertyGroupMetadata[]) {
   const metadataByCategory = new Map(metadata.map(group => [group.category, group]));
   const groups = new Map<string, StudioActivityInputDescriptor[]>();
-  const orderedInputs = [...inputs]
-    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0) || left.name.localeCompare(right.name));
+  // Preserve the catalog delivery order (author-intended: the primary field stays first) and only let an
+  // explicit `order` override it. Ties keep the original index, never alphabetical — sorting by name is
+  // what pushed the primary input (e.g. Url) to the bottom.
+  const orderedInputs = inputs
+    .map((input, index) => ({ input, index }))
+    .sort((left, right) =>
+      (left.input.order ?? left.index) - (right.input.order ?? right.index) ||
+      left.index - right.index)
+    .map(entry => entry.input);
 
   for (const input of orderedInputs) {
     const category = input.category?.trim() || "General";
