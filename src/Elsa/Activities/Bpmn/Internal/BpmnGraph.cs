@@ -22,6 +22,7 @@ public sealed class BpmnGraph
     private readonly IReadOnlyDictionary<string, BpmnElement> _elementsByChildNodeId;
     private readonly ILookup<string, BpmnSequenceFlow> _outboundBySource;
     private readonly ILookup<string, BpmnSequenceFlow> _inboundByTarget;
+    private readonly ILookup<string, BpmnElement> _boundariesByHost;
 
     private BpmnGraph(
         IReadOnlyCollection<BpmnElement> elements,
@@ -38,6 +39,9 @@ public sealed class BpmnGraph
             .ToDictionary(element => element.ChildNodeId!, StringComparer.Ordinal);
         _outboundBySource = sequenceFlows.ToLookup(flow => flow.SourceRef, StringComparer.Ordinal);
         _inboundByTarget = sequenceFlows.ToLookup(flow => flow.TargetRef, StringComparer.Ordinal);
+        _boundariesByHost = elements
+            .Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) && element.AttachedToRef is not null)
+            .ToLookup(element => element.AttachedToRef!, StringComparer.Ordinal);
         StartEvents = elements
             .Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.StartEvent))
             .ToArray();
@@ -99,6 +103,14 @@ public sealed class BpmnGraph
 
     public IReadOnlyCollection<BpmnSequenceFlow> InboundFlows(string elementId) =>
         _inboundByTarget[elementId].ToArray();
+
+    /// <summary>The timer/message/signal catch boundary events attached to <paramref name="hostElementId"/> (spec 120); these arm a suspending listener child when the host is scheduled.</summary>
+    public IReadOnlyCollection<BpmnElement> AttachedCatchBoundaries(string hostElementId) =>
+        _boundariesByHost[hostElementId].Where(boundary => !BpmnElementFamilies.IsErrorBoundary(boundary)).ToArray();
+
+    /// <summary>The single error boundary attached to <paramref name="hostElementId"/> (spec 120), or <c>null</c> when the host has none; validation caps a host at one error boundary.</summary>
+    public BpmnElement? AttachedErrorBoundary(string hostElementId) =>
+        _boundariesByHost[hostElementId].FirstOrDefault(BpmnElementFamilies.IsErrorBoundary);
 
     public BpmnSequenceFlow? GetDefaultFlow(BpmnElement element)
     {
@@ -259,7 +271,65 @@ public sealed class BpmnGraph
 
         ValidateEventBasedGateways(elements, outboundBySource, inboundByTarget);
 
+        ValidateBoundaryEvents(elements, outboundBySource, inboundByTarget);
+
         ValidateAcyclic(elements, outboundBySource);
+    }
+
+    /// <summary>
+    /// Boundary event rules (spec 120 D2): the <c>attachedToRef</c> host must exist, be a task-family or
+    /// subprocess element, and have a bound child; a boundary takes no inbound flows and at least one
+    /// outbound flow; a catch boundary (timer/message/signal) binds a listener child while an error
+    /// boundary binds none and must be interrupting; a host carries at most one error boundary; a boundary
+    /// declares no default flow (its outbound is taken unconditionally when it fires).
+    /// </summary>
+    private static void ValidateBoundaryEvents(
+        IReadOnlyCollection<BpmnElement> elements,
+        ILookup<string, BpmnSequenceFlow> outboundBySource,
+        ILookup<string, BpmnSequenceFlow> inboundByTarget)
+    {
+        var elementsById = elements.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
+        var errorBoundaryCountByHost = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var boundary in elements.Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent)))
+        {
+            if (boundary.AttachedToRef is not { } hostId)
+                throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' must declare an attachedToRef host element.");
+
+            if (!elementsById.TryGetValue(hostId, out var host))
+                throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' is attached to '{hostId}', which does not exist.");
+
+            if (!BpmnElementFamilies.IsBoundaryHostFamily(host))
+                throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' is attached to '{hostId}' ({host.ElementType}), which is not a task-family or subprocess host.");
+
+            if (host.ChildNodeId is null)
+                throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' is attached to host '{hostId}', which has no bound child activity; a boundary event can only attach to a host that runs a child.");
+
+            if (inboundByTarget[boundary.ElementId].Any())
+                throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' cannot have inbound sequence flows; it is entered by its host's activation.");
+
+            if (!outboundBySource[boundary.ElementId].Any())
+                throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' must have at least one outbound sequence flow.");
+
+            if (boundary.DefaultFlowId is not null || outboundBySource[boundary.ElementId].Any(flow => flow.IsDefault))
+                throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' cannot declare a default sequence flow; its outbound is taken unconditionally when it fires.");
+
+            if (BpmnElementFamilies.IsErrorBoundary(boundary))
+            {
+                if (boundary.ChildNodeId is not null)
+                    throw new BpmnExecutionException($"BPMN error boundary event '{boundary.ElementId}' cannot bind a child activity; it absorbs the host's child fault and has no listener.");
+                if (!boundary.CancelActivity)
+                    throw new BpmnExecutionException($"BPMN error boundary event '{boundary.ElementId}' must be interrupting (cancelActivity=true); a non-interrupting error boundary is not meaningful.");
+
+                errorBoundaryCountByHost[hostId] = (errorBoundaryCountByHost.TryGetValue(hostId, out var count) ? count : 0) + 1;
+                if (errorBoundaryCountByHost[hostId] > 1)
+                    throw new BpmnExecutionException($"BPMN host '{hostId}' declares more than one error boundary event; without error-code matching a host may carry at most one.");
+            }
+            else if (boundary.ChildNodeId is null)
+            {
+                throw new BpmnExecutionException($"BPMN catch boundary event '{boundary.ElementId}' requires a bound suspending listener child (a Delay for timer, an Event for message/signal).");
+            }
+        }
     }
 
     /// <summary>

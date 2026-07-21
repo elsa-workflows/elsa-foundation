@@ -38,6 +38,7 @@ public class ActivitiesBpmnFeature : IShellFeature
         services.AddSingleton<IBpmnElementBehavior, ParallelGatewayBehavior>();
         services.AddSingleton<IBpmnElementBehavior, InclusiveGatewayBehavior>();
         services.AddSingleton<IBpmnElementBehavior, EventBasedGatewayBehavior>();
+        services.AddSingleton<IBpmnElementBehavior, BoundaryEventBehavior>();
         services.AddSingleton<IBpmnBehaviorRegistry, BpmnBehaviorRegistry>();
 
         // Publish-time start-trigger surface (spec 117): the process node registers one trigger binding per

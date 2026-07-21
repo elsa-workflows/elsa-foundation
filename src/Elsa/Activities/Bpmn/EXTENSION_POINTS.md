@@ -45,6 +45,10 @@ Known implementations:
 - `EventBasedGatewayBehavior` *(intra-domain — default; event-based gateway, spec 119 — emits one token
   per outbound flow to arm the racing catch events; the first-catch-wins race resolution and losing-sibling
   cancellation are owned by `BpmnExecutionEngine`, not this behavior)*
+- `BoundaryEventBehavior` *(intra-domain — default; boundary events, spec 120 — routes the boundary's
+  outbound flows when it fires (a catch listener's completion or an error boundary's engine-minted token);
+  the interrupt/absorption semantics — host/listener teardown via seam A and error-fault absorption via
+  seam B — are owned by `BpmnExecutionEngine`, not this behavior)*
 
 ## Activity-owned structure contracts
 
@@ -68,15 +72,21 @@ This module also exposes these activity-owned contracts:
   propagates them, and returns a `RuntimeStructuralContinuation`.
 - `IRuntimeActivityChildCompletionHandler` — invoked when a bound child completes; routes through
   `BpmnExecutionEngine.OnChildCompletedAsync` to select outbound flows and continue propagation.
-- `IRuntimeActivityChildFaultHandler` — invoked when a child faults; the returned decision faults
-  the process deterministically (`bpmn.child.faulted`) instead of hanging a join. Error boundary
-  events replace this rule in the events tier.
+- `IRuntimeActivityChildFaultHandler` — invoked when a child faults. When the faulted child's host has an
+  attached **error boundary** (spec 120), the process absorbs the fault through the spec 115 seam-B
+  `RequestChildFaultAbsorption` (the named incident resolves, the faulted child's subtree is reclaimed) and
+  routes the error boundary's outbound flows instead of faulting; otherwise the composite faults
+  deterministically (`bpmn.child.faulted`) instead of hanging a join.
 - `IRuntimeLiveChildActivityConsumer` (spec 119) — opt-in marker that makes the runtime populate
   `IRuntimeActivityExecutionContext.GetLiveChildActivities()` for the child-completion/child-fault
-  callback. `BpmnExecutionEngine` uses it to resolve a losing event-based-gateway catch's node id to its
-  live child activity-execution id before staging that subtree's seam-A cancellation
-  (`RequestChildSubtreeCancellation`, spec 112). Cancellation reason:
-  `bpmn.event-based-gateway.superseded-by-first-catch`.
+  callback. `BpmnExecutionEngine` uses it to resolve a subtree's node id to its live child
+  activity-execution id before staging that subtree's seam-A cancellation
+  (`RequestChildSubtreeCancellation`, spec 112) — for a losing event-based-gateway catch (spec 119) and for
+  a boundary event's torn-down host/listener subtrees (spec 120). Cancellation reasons:
+  `bpmn.event-based-gateway.superseded-by-first-catch`, `bpmn.boundary.superseded-by-host-completion`,
+  `bpmn.boundary.host-interrupted`; the seam-B error-boundary absorption reason is
+  `bpmn.boundary.error-absorbed`. Seam-A cancellations and the seam-B absorption are staged only on a clean
+  (`Defer`/`Complete`) continuation.
 
 ## Publish-time start-trigger surface (spec 117)
 

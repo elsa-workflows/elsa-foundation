@@ -299,6 +299,157 @@ public sealed class BpmnGraphValidationTests
         Assert.Contains("cannot bind a child activity", exception.Message);
     }
 
+    [Fact]
+    public void BoundaryEvent_AttachedToMissingHost_IsRejected()
+    {
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+            BpmnRuntimeFixture.BoundaryEvent("boundary", "ghost", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
+            hostChildNodeId: "node-host")));
+        Assert.Contains("does not exist", exception.Message);
+    }
+
+    [Fact]
+    public void BoundaryEvent_AttachedToNonHostFamily_IsRejected()
+    {
+        // Attach to the start event, which is not a task-family/subprocess host.
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+            BpmnRuntimeFixture.BoundaryEvent("boundary", "start", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
+            hostChildNodeId: "node-host")));
+        Assert.Contains("not a task-family or subprocess host", exception.Message);
+    }
+
+    [Fact]
+    public void BoundaryEvent_AttachedToChildlessHost_IsRejected()
+    {
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+            BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
+            hostChildNodeId: null)));
+        Assert.Contains("no bound child activity", exception.Message);
+    }
+
+    [Fact]
+    public void BoundaryEvent_WithInboundFlow_IsRejected()
+    {
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+            BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
+            hostChildNodeId: "node-host",
+            extraFlows: [BpmnRuntimeFixture.Flow("flow-bad", "host", "boundary")])));
+        Assert.Contains("cannot have inbound sequence flows", exception.Message);
+    }
+
+    [Fact]
+    public void BoundaryEvent_WithoutOutboundFlow_IsRejected()
+    {
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+            BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
+            hostChildNodeId: "node-host",
+            boundaryOutbound: false)));
+        Assert.Contains("at least one outbound sequence flow", exception.Message);
+    }
+
+    [Fact]
+    public void CatchBoundaryEvent_WithoutChild_IsRejected()
+    {
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+            BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Message),
+            hostChildNodeId: "node-host")));
+        Assert.Contains("requires a bound suspending listener child", exception.Message);
+    }
+
+    [Fact]
+    public void ErrorBoundaryEvent_WithChild_IsRejected()
+    {
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+            BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Error, childNodeId: "node-listener"),
+            hostChildNodeId: "node-host")));
+        Assert.Contains("cannot bind a child activity", exception.Message);
+    }
+
+    [Fact]
+    public void NonInterruptingErrorBoundaryEvent_IsRejected()
+    {
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+            BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Error, cancelActivity: false),
+            hostChildNodeId: "node-host")));
+        Assert.Contains("must be interrupting", exception.Message);
+    }
+
+    [Fact]
+    public void MultipleErrorBoundaryEvents_OnOneHost_AreRejected()
+    {
+        var node = NewExecutableNode(
+            children: [WorkflowChild("node-host")],
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                new BpmnElement("host", BpmnElementTypes.Task, childNodeId: "node-host"),
+                BpmnRuntimeFixture.BoundaryEvent("err-1", "host", BpmnEventDefinitionTypes.Error),
+                BpmnRuntimeFixture.BoundaryEvent("err-2", "host", BpmnEventDefinitionTypes.Error),
+                BpmnRuntimeFixture.EndEvent()
+            ],
+            flows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "host"),
+                BpmnRuntimeFixture.Flow("flow-2", "host", "end"),
+                BpmnRuntimeFixture.Flow("flow-3", "err-1", "end"),
+                BpmnRuntimeFixture.Flow("flow-4", "err-2", "end")
+            ]);
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("more than one error boundary", exception.Message);
+    }
+
+    [Fact]
+    public void BoundaryEvent_WithDefaultFlow_IsRejected()
+    {
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+            new BpmnElement("boundary", BpmnElementTypes.BoundaryEvent, childNodeId: "node-listener", defaultFlowId: "flow-boundary",
+                eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer)], attachedToRef: "host"),
+            hostChildNodeId: "node-host")));
+        Assert.Contains("cannot declare a default sequence flow", exception.Message);
+    }
+
+    [Fact]
+    public void ValidTimerBoundaryEvent_IsAccepted()
+    {
+        var graph = BpmnGraph.From(NewBoundaryNode(
+            BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
+            hostChildNodeId: "node-host"));
+        Assert.Single(graph.AttachedCatchBoundaries("host"));
+        Assert.Null(graph.AttachedErrorBoundary("host"));
+    }
+
+    /// <summary>Builds a start → host(task) → end graph with one attached boundary and its outbound flow, for boundary validation tests.</summary>
+    private static ExecutableNode NewBoundaryNode(
+        BpmnElement boundary,
+        string? hostChildNodeId,
+        bool boundaryOutbound = true,
+        IReadOnlyCollection<BpmnSequenceFlow>? extraFlows = null)
+    {
+        var children = new List<ExecutableNode>();
+        if (hostChildNodeId is not null) children.Add(WorkflowChild(hostChildNodeId));
+        if (boundary.ChildNodeId is not null) children.Add(WorkflowChild(boundary.ChildNodeId));
+
+        var flows = new List<BpmnSequenceFlow>
+        {
+            BpmnRuntimeFixture.Flow("flow-1", "start", "host"),
+            BpmnRuntimeFixture.Flow("flow-2", "host", "end")
+        };
+        if (boundaryOutbound) flows.Add(BpmnRuntimeFixture.Flow("flow-boundary", "boundary", "end"));
+        if (extraFlows is not null) flows.AddRange(extraFlows);
+
+        return NewExecutableNode(
+            children: children,
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                new BpmnElement("host", BpmnElementTypes.Task, childNodeId: hostChildNodeId),
+                boundary,
+                BpmnRuntimeFixture.EndEvent()
+            ],
+            flows: flows);
+    }
+
     private static ExecutableNode NewCatchEventNode(BpmnElement catchElement) =>
         NewExecutableNode(
             elements: [BpmnRuntimeFixture.StartEvent(), catchElement, BpmnRuntimeFixture.EndEvent()],
