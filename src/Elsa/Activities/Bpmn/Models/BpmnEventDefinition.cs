@@ -3,8 +3,11 @@ using System.Text.Json.Serialization;
 namespace Elsa.Activities.Bpmn.Models;
 
 /// <summary>
-/// An event definition attached to a BPMN event element. Phase 1 interprets only
-/// <see cref="BpmnEventDefinitionTypes.Terminate"/>; other types are carried for later phases.
+/// An event definition attached to a BPMN event element. The engine interprets
+/// <see cref="BpmnEventDefinitionTypes.Terminate"/> on end events and
+/// <see cref="BpmnEventDefinitionTypes.Timer"/>/<see cref="BpmnEventDefinitionTypes.Message"/>/
+/// <see cref="BpmnEventDefinitionTypes.Signal"/> on intermediate catch events (spec 116); other
+/// types are carried for later phases.
 /// </summary>
 public sealed class BpmnEventDefinition
 {
