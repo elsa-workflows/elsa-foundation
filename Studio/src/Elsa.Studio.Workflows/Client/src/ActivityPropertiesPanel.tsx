@@ -19,8 +19,8 @@ import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from 
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
 import {
-  describeCollectionType,
-  describeDictionaryType,
+  describeCollectionForInput,
+  describeDictionaryForInput,
   formatTypeName,
   getLiteralEditorValue,
   getLiteralDefaultValue,
@@ -231,10 +231,10 @@ function PropertyRow({
   const editingMode = expressionDescriptor?.editingMode;
   const value = getLiteralEditorValue(activity, input);
   const dictionaryType = wrapped && !isRepeaterOptOut(effectiveInput) && (editingMode === "literal" || syntax === "Object")
-    ? describeDictionaryType(effectiveInput.typeName)
+    ? describeDictionaryForInput(effectiveInput)
     : null;
   const collectionType = wrapped && editingMode === "literal" && !isRepeaterOptOut(effectiveInput)
-    ? describeCollectionType(effectiveInput.typeName)
+    ? describeCollectionForInput(effectiveInput)
     : null;
   const makeExpressionContext = (targetSyntax: string): StudioExpressionEditorContext => ({
     activity,
@@ -265,7 +265,7 @@ function PropertyRow({
   // syntax picker, but the block one above the list. `uiHint: "singleline"` is common on list inputs, so
   // gating on the collection itself (not the hint) is what keeps the two features from colliding.
   const structuredCollectionType = editingMode === "structured" && admittedExpressionEditor && !isRepeaterOptOut(effectiveInput)
-    ? describeCollectionType(effectiveInput.typeName)
+    ? describeCollectionForInput(effectiveInput)
     : null;
   const isCollectionEditor = dictionaryType != null || collectionType != null || structuredCollectionType != null;
   const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && (
@@ -613,7 +613,7 @@ function ExpandedPropertyEditor({
   const diagnostics = diagnosticProvider ? getExpressionEditorDiagnostics(diagnosticProvider, expressionContext, value) : [];
   const useTextFallback = editingMode === "text";
   const dictionaryType = (editingMode === "literal" || syntax === "Object") && !isRepeaterOptOut(input)
-    ? describeDictionaryType(input.typeName)
+    ? describeDictionaryForInput(input)
     : null;
   const fallbackHint = useTextFallback && !ExpressionEditorComponent
     ? getExpressionEditorFallbackHint(expressionEditors, expressionContext)

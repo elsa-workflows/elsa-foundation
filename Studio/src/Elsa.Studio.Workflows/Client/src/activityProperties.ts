@@ -127,8 +127,8 @@ export function isEmptyExpressionValue(value: unknown): boolean {
 
 export function getLiteralDefaultValue(descriptor: StudioActivityInputDescriptor): unknown {
   if (descriptor.defaultValue != null) return descriptor.defaultValue;
-  if (describeDictionaryType(descriptor.typeName)) return {};
-  if (describeCollectionType(descriptor.typeName)) return [];
+  if (describeDictionaryForInput(descriptor)) return {};
+  if (describeCollectionForInput(descriptor)) return [];
   const typeName = descriptor.typeName.trim().toLowerCase();
   return typeName === "system.boolean" || typeName === "boolean" || typeName === "bool" ? false : "";
 }
@@ -238,6 +238,44 @@ export function describeCollectionType(typeName: string): CollectionTypeInfo | n
   if (!collectionTypeNames.has(kind)) return null;
 
   return { elementTypeName: extractFirstGenericArgument(trimmed.slice(backtick)) };
+}
+
+// --- descriptor-aware collection/dictionary detection (elsa-foundation#945) ----------------------
+//
+// The authoring catalog now reports a truthful `collectionKind` (Single/Array/List/HashSet/Dictionary)
+// alongside `typeName` — for a collection input `typeName` is the ELEMENT-type alias (#924's scalar-lie
+// fix). When present it authoritatively selects the list/dictionary editor; when absent (older backend)
+// we fall back to parsing the CLR `typeName`, preserving the pre-#945 behavior exactly.
+
+const listCollectionKinds = new Set(["array", "list", "hashset"]);
+
+function readCollectionKind(input: StudioActivityInputDescriptor): string | null {
+  const kind = input.collectionKind;
+  return typeof kind === "string" && kind.trim() ? kind.trim().toLowerCase() : null;
+}
+
+/** Collection detection preferring the descriptor's `collectionKind`, else the `typeName` parse. */
+export function describeCollectionForInput(input: StudioActivityInputDescriptor): CollectionTypeInfo | null {
+  const kind = readCollectionKind(input);
+  if (kind === "dictionary" || kind === "single") return null;
+  if (kind && listCollectionKinds.has(kind)) {
+    // Prefer a full collection type name when the backend still sends one; otherwise `typeName` is the
+    // element alias itself (the #945 contract).
+    return describeCollectionType(input.typeName) ?? { elementTypeName: input.typeName?.trim() || null };
+  }
+  return describeCollectionType(input.typeName);
+}
+
+/** Dictionary detection preferring the descriptor's `collectionKind`, else the `typeName` parse. */
+export function describeDictionaryForInput(input: StudioActivityInputDescriptor): DictionaryTypeInfo | null {
+  const kind = readCollectionKind(input);
+  if (kind === "dictionary") {
+    // A full dictionary type name yields the value type directly; otherwise treat `typeName` as the value
+    // alias (dictionary keys are string-typed in every supported family).
+    return describeDictionaryType(input.typeName) ?? { valueTypeName: input.typeName?.trim() || "System.String" };
+  }
+  if (kind && (kind === "single" || listCollectionKinds.has(kind))) return null;
+  return describeDictionaryType(input.typeName);
 }
 
 // Pull the first generic argument's type name from either the assembly-qualified "[[Type, Asm], …]"

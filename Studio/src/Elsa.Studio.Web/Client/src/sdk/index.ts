@@ -472,9 +472,18 @@ export interface StudioActivityInputUISpecifications extends Record<string, unkn
   optionsProvider?: StudioActivityInputOptionsProviderDescriptor;
 }
 
+/**
+ * Collection shape of an input's CLR type, reported by the authoring catalog (elsa-foundation#945).
+ * When present with a collection value, `typeName` is the element-type alias and this field selects the
+ * list/dictionary editor; when absent (older backends) the editor falls back to parsing `typeName`.
+ */
+export type StudioActivityCollectionKind = "Single" | "Array" | "List" | "HashSet" | "Dictionary" | (string & {});
+
 export interface StudioActivityInputDescriptor extends StudioActivityPropertyDescriptor {
   /** Stable identity used to correlate authored bindings and runtime input evidence. */
   referenceKey?: string | null;
+  /** Collection shape of the CLR type (elsa-foundation#945); absent on older backends. */
+  collectionKind?: StudioActivityCollectionKind | null;
   isWrapped?: boolean;
   uiHint?: string | null;
   defaultValue?: unknown;
