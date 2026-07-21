@@ -32,6 +32,60 @@ export function shortTypeName(key: string | null | undefined) {
   return key?.split(".").filter(Boolean).at(-1);
 }
 
+/**
+ * Splits an activity-definition version string into a compact label and its full exact form.
+ * CLR activities carry a behavioral-hash build suffix (e.g. `1.0.0+892535311ec5…`); the short form
+ * drops that suffix so version chips stay compact and never crowd out the activity name, while the
+ * full string is preserved for tooltips / aria labels so the exact version is still discoverable.
+ */
+export function formatActivityVersion(version: string): { short: string; full: string; hasHash: boolean } {
+  const full = version.trim();
+  const plusIndex = full.indexOf("+");
+  const short = plusIndex >= 0 ? full.slice(0, plusIndex) : full;
+  return { short, full, hasHash: plusIndex >= 0 && short.length < full.length };
+}
+
+/**
+ * Humanizes the last CLR/type-key segment for presentation, e.g.
+ * `Elsa.Activities.Http.Activities.SendHttpRequest` → "Send Http Request".
+ * Splits PascalCase/camelCase runs (preserving acronym boundaries) and normalizes separators.
+ */
+export function humanizeTypeName(key: string | null | undefined) {
+  const short = shortTypeName(key);
+  if (!short) return "";
+  return short
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Resolves the title shown for an Activity Definition row/header. When the backend supplies a distinct
+ * display name (e.g. server-side humanized), it is preferred verbatim. When the display name is missing
+ * or identical to the type key (source-owned activities whose display name is the raw CLR type), a
+ * client-side humanized short name is used so the row never shows the full CLR type twice.
+ */
+export function resolveActivityDefinitionTitle(displayName: string | null | undefined, typeKey: string | null | undefined) {
+  const name = displayName?.trim();
+  const key = typeKey?.trim();
+  if (name && name !== key) return name;
+  return humanizeTypeName(key) || name || key || "Unnamed activity";
+}
+
+/**
+ * Formats an Activity Definition timestamp. Missing, unparseable, or pre-2000 sentinel values
+ * (e.g. `DateTime.MinValue`, which serializes as `0001-01-01`) render as an em-dash rather than a
+ * misleading "01/01/1". Otherwise the locale date is shown.
+ */
+export function formatActivityDefinitionDate(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime()) || date.getFullYear() < 2000) return "—";
+  return date.toLocaleDateString();
+}
+
 export function renderActivityIcon(icon: WorkflowNodeData["icon"]) {
   switch (icon) {
     case "flowchart":

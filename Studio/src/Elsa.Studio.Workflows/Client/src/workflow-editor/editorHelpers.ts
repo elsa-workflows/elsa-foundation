@@ -6,7 +6,7 @@ import { createActivityNode, flowchartEdges, getActivityDesignerSupport, getActi
 import { shortTypeName } from "../workflowFormatting";
 import { groupByCategory } from "../categoryGrouping";
 import { workflowSidePanelMaximizedStorageKey } from "./constants";
-import type { ActivityPaletteGroup, CreateWorkflowDraft, CreateWorkflowKind, WorkflowConnectSource, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
+import type { ActivityPaletteGroup, CreateWorkflowDraft, CreateWorkflowKind, WorkflowConnectSource, WorkflowEditorError, WorkflowErrorInput, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
 
 export function pageItems<T>(items: T[], page: number, pageSize: number) {
   return items.slice((page - 1) * pageSize, page * pageSize);
@@ -26,6 +26,52 @@ export function dispatchAiAction<TContext>(ai: StudioAiContributionApi, action: 
 
   ai.dispatchPrompt(prompt);
   return true;
+}
+
+function readStringField(source: Record<string, unknown>, key: string): string | undefined {
+  const value = source[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+// Lifts the diagnosable parts of a caught request failure (StudioHttpError-shaped: numeric `status`
+// plus the raw ProblemDetails `payload`) into a structured banner error. The ProblemDetails `detail`,
+// `traceId`, `status`, and any structured `code` are preserved so the banner can show a correlatable
+// trace id and keep the existing structured-code path working, even when the message is a generic fallback.
+export function describeWorkflowError(error: unknown, fallbackMessage: string): WorkflowEditorError {
+  // Only trust a message off an Error or a plain string; never stringify an object into "[object Object]".
+  const rawMessage = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const result: WorkflowEditorError = { message: rawMessage.trim() || fallbackMessage };
+
+  const status = typeof error === "object" && error && "status" in error
+    ? (error as { status?: unknown }).status
+    : undefined;
+  if (typeof status === "number") result.status = status;
+
+  const payload = typeof error === "object" && error && "payload" in error
+    ? (error as { payload?: unknown }).payload
+    : null;
+  if (payload && typeof payload === "object") {
+    const problem = payload as Record<string, unknown>;
+    result.detail = readStringField(problem, "detail");
+    result.traceId = readStringField(problem, "traceId") ?? readStringField(problem, "traceID");
+    result.code = readStringField(problem, "code") ?? readStringField(problem, "errorCode");
+    if (result.status === undefined) {
+      const problemStatus = problem.status;
+      if (typeof problemStatus === "number") result.status = problemStatus;
+    }
+  }
+
+  return result;
+}
+
+// Normalizes the `string | WorkflowEditorError` accepted by `setError` into either a structured banner
+// error or `null` (empty string clears the banner). Keeps every existing string call site working.
+export function normalizeWorkflowError(value: WorkflowErrorInput): WorkflowEditorError | null {
+  if (typeof value === "string") {
+    const message = value.trim();
+    return message ? { message } : null;
+  }
+  return value.message.trim() ? value : null;
 }
 
 // Weaver is asked to return a fenced ```json {"name","description"} block; parse defensively and fall

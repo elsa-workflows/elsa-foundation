@@ -101,7 +101,22 @@ export interface ActivityNode {
   inputs: unknown[];
   outputs: unknown[];
   structure?: ActivityNodeStructure | null;
+  // Present on engine-intrinsic nodes (Set Variable / Set Output, foundation #929/#942): declares an
+  // engine-owned operation authored as a graph node that neither references an activity catalog version
+  // nor activates a CLR activity at runtime. Mirrors Elsa.Workflows.Design.Core.Models.AuthoredWorkflowIntrinsic.
+  intrinsic?: AuthoredWorkflowIntrinsic | null;
   [key: string]: unknown;
+}
+
+// The authored-intrinsic block carried on an intrinsic ActivityNode (foundation AuthoredWorkflowIntrinsic).
+// `kind` is the engine-intrinsic kind ("Set" for Set Variable, "SetOutput" for Set Output — the enum member
+// name; the backend enum converter reads it case-insensitively). `valueType` pins the portable value type
+// (there is no CLR input contract to infer it from), and `variable` is the write target for variable-writing
+// kinds (Set); it is absent for Set Output, which names its output via the literal `name` input instead.
+export interface AuthoredWorkflowIntrinsic {
+  kind: string;
+  valueType?: ArgumentType | null;
+  variable?: VariableReference | null;
 }
 
 export interface ActivityNodeStructure {
@@ -152,10 +167,25 @@ export interface ActivityCatalogItem {
   ports?: unknown[];
   containerStructure?: Record<string, unknown> | null;
   authoringTemplate?: ActivityNode;
+  // Present only on built-in engine-intrinsic catalog entries (Set Variable, Set Output; foundation #942,
+  // additive). Signals the client to materialize an intrinsic ActivityNode rather than a catalog activity
+  // reference; older backends omit it and nothing new is shown. Absent ⇒ an ordinary catalog activity.
+  intrinsic?: ActivityAuthoringIntrinsic | null;
   /** Transient reusable identity derived from catalog and recommendation data; never part of ActivityNode wire state. */
   activityDefinitionId?: string;
   activityDefinitionVersionId?: string;
   activityDefinitionVersion?: string;
+}
+
+// The additive intrinsic block on a built-in engine-intrinsic catalog descriptor (foundation
+// ActivityAuthoringIntrinsicView). `kind` is the authored intrinsic kind ("Set"/"SetOutput"); the
+// input-key fields name which descriptor inputs the client maps onto the intrinsic's value, variable
+// target, and (for Set Output) literal output name.
+export interface ActivityAuthoringIntrinsic {
+  kind: string;
+  valueInputKey: string;
+  variableInputKey?: string | null;
+  outputNameInputKey?: string | null;
 }
 
 export type ActivityDescriptor = StudioActivityDescriptor;

@@ -4,7 +4,7 @@ import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { getActivityDisplay, type ChildSlot, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
-import { renderActivityIcon } from "../workflowFormatting";
+import { formatActivityVersion, renderActivityIcon } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowSlotNavigationContext } from "./contexts";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
@@ -22,6 +22,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
     ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
     : [];
   const subtitle = formatNodeSubtitle(nodeData);
+  const version = nodeData.activityDefinitionVersion ? formatActivityVersion(nodeData.activityDefinitionVersion) : null;
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
   const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
   const slotNavigation = React.useContext(WorkflowSlotNavigationContext);
@@ -43,7 +44,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         <span className="wf-node-copy">
           <strong>{nodeData.label}</strong>
           {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle ? <small>{subtitle}</small> : null}
-          {nodeData.activityDefinitionVersion ? <small className="wf-node-version">v{nodeData.activityDefinitionVersion}</small> : null}
+          {version ? <small className="wf-node-version" title={`Exact version ${version.full}`}>v{version.short}</small> : null}
         </span>
       </div>
       {nodeData.childSlots.length > 0 ? (

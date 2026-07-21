@@ -73,6 +73,31 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
+  it("humanizes source-owned CLR titles and renders a placeholder for MinValue updated dates", async () => {
+    const clr = "Elsa.Activities.Http.Activities.SendHttpRequest";
+    const sourceOwned: ActivityDefinitionManagementView = {
+      ...definition({ definitionId: "definition-http", activityTypeKey: clr, displayName: clr }),
+      updatedAt: "0001-01-01T00:00:00"
+    };
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions?")) return page([sourceOwned]);
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson);
+
+    await waitForText(rendered.container, "Send Http Request");
+    const definitionCell = rendered.container.querySelector<HTMLElement>("[data-label='Definition']")!;
+    // Title humanized, full CLR type kept once as the subtitle (never duplicated).
+    expect(definitionCell.querySelector("strong")?.textContent).toBe("Send Http Request");
+    expect(definitionCell.querySelector("small")?.textContent).toBe(clr);
+    expect([...definitionCell.querySelectorAll("strong, small")].filter(element => element.textContent === clr)).toHaveLength(1);
+    // MinValue updated timestamp renders as an em-dash rather than "01/01/1".
+    const updatedCell = rendered.container.querySelector<HTMLElement>("[data-label='Updated']")!;
+    expect(updatedCell.textContent).toBe("—");
+    await rendered.unmount();
+  });
+
   it("opens the stable definition workbench and keeps an exact draft identity in the URL", async () => {
     const navigateToStudioPath = vi.fn();
     const getJson = vi.fn(async (url: string) => {

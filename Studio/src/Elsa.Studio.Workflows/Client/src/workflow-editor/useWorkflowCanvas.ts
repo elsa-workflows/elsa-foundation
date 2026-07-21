@@ -57,7 +57,7 @@ import {
   resolveConnectEndSource,
   rightOf
 } from "./editorHelpers";
-import type { ConnectMenuState, WorkflowConnectSource, WorkflowEdge } from "./editorTypes";
+import type { ConnectMenuState, WorkflowConnectSource, WorkflowEdge, WorkflowErrorInput } from "./editorTypes";
 import type { WorkflowEdgeActions } from "./contexts";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
 import { planActivityDrop } from "./addActivityRouting";
@@ -101,7 +101,7 @@ interface WorkflowCanvasParams {
   resetToRoot(): void;
   // Transient status/error messaging owned by WorkflowEditor.
   setStatus(value: string): void;
-  setError(value: string): void;
+  setError(value: WorkflowErrorInput): void;
 }
 
 // Owns the React Flow mirror (nodes/edges) of the current scope and every interaction that mutates it:

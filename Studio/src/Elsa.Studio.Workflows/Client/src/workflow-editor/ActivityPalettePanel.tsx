@@ -2,7 +2,7 @@ import React, { useId, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, GripVertical, Search } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { getActivityDisplay, resolveActivityIcon } from "../workflowAdapter";
-import { renderActivityIcon } from "../workflowFormatting";
+import { formatActivityVersion, renderActivityIcon } from "../workflowFormatting";
 import type { ActivityPaletteGroup } from "./editorTypes";
 
 interface ActivityPalettePanelProps {
@@ -128,6 +128,9 @@ export function ActivityPalettePanel({
                   const displayName = getActivityDisplay(activity);
                   const icon = resolveActivityIcon(activity);
                   const activityKey = `activity:${activity.activityVersionId}`;
+                  const version = activity.activityDefinitionVersion
+                    ? formatActivityVersion(activity.activityDefinitionVersion)
+                    : null;
                   return (
                     <button
                       type="button"
@@ -158,9 +161,9 @@ export function ActivityPalettePanel({
                         <strong>{displayName}</strong>
                         {description ? <small id={descriptionId}>{description}</small> : null}
                       </span>
-                      {activity.activityDefinitionVersion ? (
-                        <span className="wf-palette-version" aria-label={`Exact version ${activity.activityDefinitionVersion}`}>
-                          v{activity.activityDefinitionVersion}
+                      {version ? (
+                        <span className="wf-palette-version" title={`Exact version ${version.full}`} aria-label={`Exact version ${version.full}`}>
+                          v{version.short}
                         </span>
                       ) : null}
                       <GripVertical className="wf-palette-activity-grip" size={14} aria-hidden="true" />

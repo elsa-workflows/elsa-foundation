@@ -14,11 +14,14 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // the BPMN designer mode (shape styles in the shared stylesheet + shared bpmn structure types; the
 // measured paths moved 348.18 → 352.48 kB and 337.23 → 341.54 kB). Both were raised again by 6/4 kB
 // for the binding conversion controls (issue #449: conversion settings model + control styles in the
-// shared stylesheet; measured paths moved 352.48 → 358.69 kB and 341.54 → 343.31 kB).
+// shared stylesheet; measured paths moved 352.48 → 358.69 kB and 341.54 → 343.31 kB). The definitions
+// landing budget was raised 2 kB for engine-intrinsic authoring (issue #929: Set Variable / Set Output
+// intrinsic helpers reached from the shared adapter + intrinsic inspector styles in the shared
+// stylesheet; the measured definitions path moved 358.69 → 362.31 kB).
 const budgets = {
   entryJavaScript: 125_000,
   stylesheet: 185_000,
-  definitionsLandingTotal: 362_000,
+  definitionsLandingTotal: 364_000,
   upgradeLandingTotal: 348_000,
   individualChunk: 500_000
 };

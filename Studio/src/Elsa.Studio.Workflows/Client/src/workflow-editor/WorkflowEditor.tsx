@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap } from "@xyflow/react";
-import { AlertCircle, Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Upload, Workflow as WorkflowIcon } from "lucide-react";
+import { Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
@@ -17,16 +17,18 @@ import {
 import { buildDraftFromJson } from "../workflowSerialization";
 import { WorkflowCodeView } from "../WorkflowCodeView";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
-import { maxInspectorWidth, maxPaletteWidth, minInspectorWidth, minPaletteWidth } from "./constants";
-import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorOperation, WorkflowEditorPanelTab } from "./editorTypes";
+import { maxInspectorWidth, maxPaletteWidth, minInspectorWidth, minPaletteWidth, weaverUnavailableTitle } from "./constants";
+import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput } from "./editorTypes";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowSlotNavigationContext, type WorkflowSlotNavigation } from "./contexts";
 import {
   createNodeId,
   dispatchAiAction,
   findAiAction,
   getDraftSignature,
-  groupActivityPalette
+  groupActivityPalette,
+  normalizeWorkflowError
 } from "./editorHelpers";
+import { WorkflowAlert } from "./WorkflowAlert";
 import { nodeTypes, edgeTypes, ConnectMenu } from "./graph";
 import { workflowCanvasAriaLabelConfig } from "./workflowAccessibility";
 import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
@@ -59,6 +61,7 @@ import { SlotEmptyState } from "./SlotEmptyState";
 import type { PublicationIntent } from "../api/publishing";
 import { publicationChangesFor, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
 import { useDialogFocus } from "./useDialogFocus";
+import { useAiProviderAvailability } from "./useAiProviderAvailability";
 import { useFullActivityDefinitionVersion } from "../api/activityDesign";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import type { ActivityVersionChangeApplyRequest } from "./ActivityVersionChangeDialog";
@@ -108,7 +111,8 @@ export function WorkflowEditor({
     clearTestRun,
     setPublishedArtifact
   } = editorDoc;
-  const [error, setError] = useState("");
+  const [error, setErrorState] = useState<WorkflowEditorError | null>(null);
+  const setError = useCallback((value: WorkflowErrorInput) => setErrorState(normalizeWorkflowError(value)), []);
   const [status, setStatus] = useState("");
   const [operation, setOperation] = useState<WorkflowEditorOperation>("idle");
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
@@ -227,6 +231,7 @@ export function WorkflowEditor({
     [draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
+  const aiProviderAvailable = useAiProviderAvailability(ai);
 
   // The React Flow canvas mirror and every graph interaction (add/drag/connect/splice/delete/auto-layout)
   // live here; it commits edits back into the draft through the document reducer.
@@ -465,7 +470,7 @@ export function WorkflowEditor({
     if (plan) navigateToScope(plan.frames, plan.selectedNodeId);
     setError("");
     setStatus(replaced ? `Replaced ${slot.label} content` : `Assigned ${getActivityDisplay(activity)} to ${slot.label}`);
-  }, [catalogByVersion, editDraft, frames, navigateToScope, scopeOwner]);
+  }, [catalogByVersion, editDraft, frames, navigateToScope, scopeOwner, setError]);
 
   // Canvas slot badges navigate into their slot (matching the run viewer), wired through a context so
   // node data identity stays stable across drag re-renders. Null (static badges) for the
@@ -589,7 +594,7 @@ export function WorkflowEditor({
     setError("");
     setAutosavePaused(true);
     setVersionChange({ occurrence, current, recommendation: inspectedRecommendation });
-  }, [inspectedRecommendation, setAutosavePaused]);
+  }, [inspectedRecommendation, setAutosavePaused, setError]);
 
   const cancelVersionChange = useCallback(() => {
     setVersionChange(null);
@@ -658,7 +663,7 @@ export function WorkflowEditor({
   const publishedEquivalent = useDraftEquivalence(context, definitionId, renderedTestRun);
 
   if (!details || !draft) {
-    return <div className="wf-empty">{error || "Loading workflow editor..."}</div>;
+    return <div className="wf-empty">{error?.message || "Loading workflow editor..."}</div>;
   }
 
   // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which
@@ -839,10 +844,22 @@ export function WorkflowEditor({
             <span>Autosave</span>
           </label>
           {findRisksAction ? (
-            <button type="button" onClick={() => dispatchAiAction(ai, findRisksAction, { definition: details.definition, draft })}><Sparkles size={15} /> Risks</button>
+            <button
+              type="button"
+              disabled={!aiProviderAvailable}
+              title={aiProviderAvailable ? "Ask Weaver to review this draft for risks" : weaverUnavailableTitle}
+              onClick={() => dispatchAiAction(ai, findRisksAction, { definition: details.definition, draft })}>
+              <Sparkles size={15} /> Risks
+            </button>
           ) : null}
           {proposeUpdateAction ? (
-            <button type="button" onClick={() => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })}><Sparkles size={15} /> Propose</button>
+            <button
+              type="button"
+              disabled={!aiProviderAvailable}
+              title={aiProviderAvailable ? "Ask Weaver to propose a reviewed update" : weaverUnavailableTitle}
+              onClick={() => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })}>
+              <Sparkles size={15} /> Propose
+            </button>
           ) : null}
           {canUseBpmnInterchange ? (
             <>
@@ -895,7 +912,14 @@ export function WorkflowEditor({
         </div>
       </div>
 
-      {error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {error ? (
+        <WorkflowAlert
+          error={error}
+          onDismiss={() => setError("")}
+          onCopied={label => setStatus(`${label} copied.`)}
+          onCopyFailed={label => setStatus(`Could not copy ${label}.`)}
+        />
+      ) : null}
 
       {versionChange ? (
         <React.Suspense fallback={<p role="status">Loading exact version review…</p>}>
@@ -1024,6 +1048,7 @@ export function WorkflowEditor({
                 maxZoom={1.8}
                 nodesConnectable={canCreateActivityFromPort}
                 nodesDraggable={!isUnsupportedDesigner}
+                nodeDragThreshold={5}
                 selectionOnDrag
                 multiSelectionKeyCode={["Shift", "Meta", "Control"]}
                 deleteKeyCode={isUnsupportedDesigner ? null : ["Backspace", "Delete"]}

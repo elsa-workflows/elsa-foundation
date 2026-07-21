@@ -4425,6 +4425,7 @@ function testApi(): ElsaStudioModuleApi {
       const resultListeners = new Set<(result: unknown) => void>();
       return {
         promptActions: registry(),
+        providerAvailability: { get: () => true, set: vi.fn(), subscribe: (listener: (available: boolean) => void) => { listener(true); return () => {}; } },
         dispatchPrompt: vi.fn(),
         onPrompt: vi.fn(() => () => {}),
         publishPromptResult: (result: unknown) => { for (const listener of resultListeners) listener(result); },

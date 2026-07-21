@@ -2,6 +2,7 @@ import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, DesignMetadataRecord, IncidentStateSummary } from "./workflowTypes";
 import { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
 import { bpmnStructureKind } from "./bpmn/bpmnTypes";
+import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
 export { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
@@ -748,6 +749,19 @@ export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[]) {
 }
 
 export function createActivityNode(activity: ActivityCatalogItem, nodeId: string): ActivityNode {
+  // Engine intrinsics (Set Variable / Set Output) materialize an intrinsic node carrying an authored
+  // intrinsic block, not a catalog activity reference or an authored structure.
+  const intrinsicDescriptor = readIntrinsicDescriptor(activity);
+  if (intrinsicDescriptor) {
+    return {
+      nodeId,
+      activityVersionId: activity.activityVersionId,
+      inputs: [],
+      outputs: [],
+      intrinsic: buildIntrinsicWireBlock(intrinsicDescriptor)
+    };
+  }
+
   const template = activity.authoringTemplate ? structuredClone(activity.authoringTemplate) : null;
   return template
     ? { ...template, nodeId, activityVersionId: activity.activityVersionId, structure: createStructureForActivity(activity) }

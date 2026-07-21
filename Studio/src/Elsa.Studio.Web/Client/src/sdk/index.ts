@@ -1168,12 +1168,27 @@ export interface StudioAiPromptDispatcher {
   onPromptResult(listener: (result: StudioAiPromptResult) => void): () => void;
 }
 
+/**
+ * Observable availability of the AI provider backing Weaver surfaces. The host reports the latest state
+ * (from the agent bootstrap's provider status); modules subscribe to gate provider-dependent affordances
+ * — e.g. disabling an AI-only action with an explanatory tooltip when the provider is not configured.
+ * Defaults to available so affordances stay enabled until the host reports otherwise.
+ */
+export interface StudioAiProviderAvailability {
+  get(): boolean;
+  /** Reports the latest provider availability; notifies subscribers only when the value changes. */
+  set(available: boolean): void;
+  /** Subscribes to availability changes; the listener is invoked immediately with the current value. Returns an unsubscribe function. */
+  subscribe(listener: (available: boolean) => void): () => void;
+}
+
 export interface StudioAiContributionApi extends StudioAiPromptDispatcher {
   readonly contextProviders: StudioContributionRegistry<StudioAiContextProviderContribution>;
   readonly promptActions: StudioContributionRegistry<StudioAiPromptActionContribution>;
   readonly tools: StudioContributionRegistry<StudioAiToolContribution>;
   readonly proposalRenderers: StudioContributionRegistry<StudioAiProposalRendererContribution>;
   readonly surfaces: StudioContributionRegistry<StudioAiSurfaceContribution>;
+  readonly providerAvailability: StudioAiProviderAvailability;
 }
 
 export interface ElsaStudioHostContext extends StudioEndpointContext {
@@ -1392,6 +1407,8 @@ export function createDashboardWidgetRegistry(): StudioDashboardWidgetRegistry {
 export function createAiContributionApi(): StudioAiContributionApi {
   const listeners = new Set<(request: StudioAiPromptRequest) => void>();
   const resultListeners = new Set<(result: StudioAiPromptResult) => void>();
+  const availabilityListeners = new Set<(available: boolean) => void>();
+  let providerAvailable = true;
 
   return {
     contextProviders: createContributionRegistry({ slot: studioSlots.aiContextProviders }),
@@ -1399,6 +1416,21 @@ export function createAiContributionApi(): StudioAiContributionApi {
     tools: createContributionRegistry({ slot: studioSlots.aiTools }),
     proposalRenderers: createContributionRegistry({ slot: studioSlots.aiProposalRenderers }),
     surfaces: createContributionRegistry({ slot: studioSlots.aiSurfaces }),
+    providerAvailability: {
+      get: () => providerAvailable,
+      set(available) {
+        if (available === providerAvailable) return;
+        providerAvailable = available;
+        for (const listener of availabilityListeners) {
+          listener(available);
+        }
+      },
+      subscribe(listener) {
+        availabilityListeners.add(listener);
+        listener(providerAvailable);
+        return () => availabilityListeners.delete(listener);
+      }
+    },
     dispatchPrompt(request) {
       for (const listener of listeners) {
         listener(request);

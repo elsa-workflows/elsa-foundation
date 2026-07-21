@@ -85,6 +85,32 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   });
 
+  it("labels the create dialog fields with accessible names and placeholders", async () => {
+    const rendered = renderPage({
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url.startsWith("/design/activities/definitions?")) return page([]);
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "No Activity Definitions yet");
+    click(buttonByText(rendered.container, "Create Activity Definition"));
+    await waitForText(rendered.container, "Activity Graph");
+
+    const displayName = rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!;
+    const category = rendered.container.querySelector<HTMLInputElement>("input[name='category']")!;
+    const description = rendered.container.querySelector<HTMLTextAreaElement>("textarea[name='description']")!;
+    expect(displayName.getAttribute("aria-label")).toBe("Display name");
+    expect(displayName.getAttribute("placeholder")).toBeTruthy();
+    expect(category.getAttribute("aria-label")).toBe("Category");
+    expect(category.getAttribute("placeholder")).toBeTruthy();
+    expect(description.getAttribute("aria-label")).toBe("Description");
+    expect(description.getAttribute("placeholder")).toBeTruthy();
+    await rendered.unmount();
+  });
+
   it("does not preselect among multiple providers and sends an intentional exact key override", async () => {
     const capabilitiesResponse = authoringCapabilities();
     capabilitiesResponse.providers.push({
@@ -1419,6 +1445,66 @@ describe("Activity Definition publication", () => {
       version: "3.2.1",
       reviewToken: "sha256:review"
     }));
+    await rendered.unmount();
+  });
+
+  it("refreshes the published-head panel and success feedback after a first publication without a reload", async () => {
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/publication-preflight")) return publicationPreflight();
+      if (url.endsWith("/publish")) {
+        const request = body as { version: string; idempotencyKey: string; expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null; reviewToken: string };
+        return publicationReceipt({
+          idempotencyKey: request.idempotencyKey,
+          expectedDraftRevision: request.expectedDraftRevision,
+          expectedDefinitionHeadVersionId: request.expectedDefinitionHeadVersionId ?? null,
+          reviewToken: request.reviewToken,
+          requestedVersion: request.version
+        });
+      }
+      throw new Error(`Unexpected POST ${url}`);
+    });
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      postJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        if (url === "/design/activities/definitions/activity-def-1") return managementDefinition();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Prepare publication"));
+    await waitForText(rendered.container, "No published head");
+    click(buttonByText(rendered.container, "Publish 1.0.0"));
+
+    await waitForText(rendered.container, "Published immutable version 1.0.0");
+    // The published-head summary refreshes in place (no manual reload) and no longer shows the stale head.
+    const summary = rendered.container.querySelector<HTMLElement>(".ad-publication-summary")!;
+    expect(summary.textContent).toContain("version-published");
+    expect(summary.textContent).not.toContain("No published head");
+    // The action affordance no longer invites a repeat publish of the same version.
+    expect(buttonByText(rendered.container, "Published 1.0.0")).toBeTruthy();
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Publish 1.0.0")).toBe(false);
+    // The definition management view is re-fetched so downstream panels reflect the new version.
+    await waitFor(() => expect(postJson.mock.calls.filter(([url]) => String(url).endsWith("/publish"))).toHaveLength(1));
+    await rendered.unmount();
+  });
+
+  it("shows the definition display name in the draft editor header", async () => {
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        if (url === "/design/activities/definitions/activity-def-1") return managementDefinition();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    await waitFor(() => expect(rendered.container.querySelector("#activity-draft-title")?.textContent).toBe("Invoice evaluator — Draft activity-draft-1"));
     await rendered.unmount();
   });
 

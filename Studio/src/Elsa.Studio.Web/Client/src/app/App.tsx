@@ -48,7 +48,7 @@ import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
 import { ThemeBuilderPage } from "./modules/ThemeBuilderPage";
 import { registerBuiltInPropertyEditors } from "./propertyEditors";
 import elsaLogo from "../assets/images/icon.png";
-import { AgentLauncher, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
+import { AgentLauncher, createAgentClient, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import { WeaverSurface } from "./weaver";
 import "./styles.css";
 import "./agent/agent.css";
@@ -161,6 +161,22 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
       setAssistantOpen(true);
       setIncomingPrompt({ id: `prompt-${Date.now()}`, message: prompt.message, requestId: prompt.requestId });
     });
+  }, [api]);
+
+  // Probe the agent provider once so provider-gated affordances (e.g. the workflow "Risks" action) can be
+  // disabled before the user opens the Weaver dock. "unavailable"/"disabled" mean the provider can deliver
+  // nothing; a failed probe is treated the same. The Weaver dock refreshes this on its own bootstrap.
+  useEffect(() => {
+    if (!api) return;
+    let disposed = false;
+    void createAgentClient(api.backend).bootstrap()
+      .then(result => {
+        if (!disposed) api.ai.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
+      })
+      .catch(() => {
+        if (!disposed) api.ai.providerAvailability.set(false);
+      });
+    return () => { disposed = true; };
   }, [api]);
 
   // The boot manifest is fetched through TanStack Query, using the authenticated shell HTTP client so
