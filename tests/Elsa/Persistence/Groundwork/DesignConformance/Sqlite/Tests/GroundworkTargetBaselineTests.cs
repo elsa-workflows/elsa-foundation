@@ -15,8 +15,8 @@ public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
     private const string ExpectedGroundworkVersion = "0.0.1-preview.77";
-    private const string ExpectedTargetFingerprint = "509443e8639a7ef510fd25edc229623d675bfa2a66a6b7a36eb0a1fe51ead3b0";
-    private const string ExpectedPlanFingerprint = "04ab0839221428ef1b109fcbe38b817d4e0305b3c96796f835778477a6250d3d";
+    private const string ExpectedTargetFingerprint = "cb225b048807efca76cf870674373782b631682a2278bf7fdfebf7c1245cb217";
+    private const string ExpectedPlanFingerprint = "5b90a248cfc36967c5aa2deaf38427398ebf3212d59b9ffd31b22bd30a712fdc";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()

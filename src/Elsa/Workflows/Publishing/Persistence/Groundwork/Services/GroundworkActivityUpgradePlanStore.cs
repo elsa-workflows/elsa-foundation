@@ -997,7 +997,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
                 // The by-key routes declare their order as (key field, document id); present that same order.
                 [
                     new DocumentQueryOrder(fieldPath, PhysicalSortDirection.Ascending),
-                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)
+                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.EntityIdField, PhysicalSortDirection.Ascending)
                 ],
                 take: 2),
             cancellationToken);

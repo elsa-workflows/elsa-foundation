@@ -355,10 +355,12 @@ checkpoints on top of the merged US1 result `4d44cd435`:
   activity search route to the display-name index, removed the duplicate ordered
   current-draft index the same way (identical key pattern to drafts-by-definition),
   and bounded the projected searchable column widths (text 256, identity/sort keys
-  128) so every compound index key fits SQL Server's 1700-byte limit; the
-  fingerprints advanced to target
-  `509443e8639a7ef510fd25edc229623d675bfa2a66a6b7a36eb0a1fe51ead3b0`, plan
-  `04ab0839221428ef1b109fcbe38b817d4e0305b3c96796f835778477a6250d3d`.
+  128) so every compound index key fits SQL Server's 1700-byte limit; the auxiliary
+  exhaustive routes additionally moved their deterministic tie-break from the wide
+  envelope comparison key onto a bounded projected `entity_id` column (the main
+  units' established pattern), and the fingerprints advanced to target
+  `cb225b048807efca76cf870674373782b631682a2278bf7fdfebf7c1245cb217`, plan
+  `5b90a248cfc36967c5aa2deaf38427398ebf3212d59b9ffd31b22bd30a712fdc`.
 - **T042/T046** — `ElsaGroundworkQueryRoutes.MaximumMembershipCount` (`200`) is the
   declared IN cardinality; the translator rejects a larger single membership before
   provider I/O, and `GroundworkMembershipBatches` canonicalizes oversized caller sets
