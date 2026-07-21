@@ -132,6 +132,110 @@ curve and the engine-perf bar for a *default-on* change is high, group commit la
 finely — can decide the default. This matches the campaign's discipline of gating perf defaults on
 trustworthy measurement.
 
+## Quiet-machine follow-up (2026-07-21) — the default stays OFF
+
+The verdict above deferred the default to "a quiet-machine run — ideally also probing mid-N more
+finely". That run has now happened, post-merge (PR #916), and it settles the question.
+
+**Conditions.** 8 cores; ambient 1-min load 2.7–4.8 at the start of each pass (waited out a
+load-38–56 iCloud sync storm before starting), versus 28–400+ in every prior round. The A/B levels
+were extended to N ∈ {8, **16**, 32, **64**, 128} and the paired, order-alternated instrument was run
+three full times (3 reps/level/pass → 9 pairs per level, 6 at N=128). Pass 1 aborted before its
+N=128 level on a benchmark-infra race unrelated to group commit: the paged
+`IWorkflowExecutableStore.ListAllAsync` traversal returned the same artifact row twice while 128
+concurrent harnesses were inserting executables, tripping the dependency-graph
+`ConflictingIdentity` guard (`more than one artifact with ID 'artifact-85'`). Filed as its own
+follow-up; passes 2 and 3 completed all levels.
+
+**All quiet pairs** (`ON/OFF` < 1 = group commit faster; folding columns are the ON run's counters):
+
+| N | pass.rep | order | OFF wall (ms) | ON wall (ms) | ON/OFF | batchFlushes | batchedMembers | soloFlushes | degraded | markers/run |
+|---:|---:|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| 8 | 1.0 | OFF,ON | 399 | 438 | 1.10 | 1 | 2 | 6 | 0 | 1.0 |
+| 8 | 1.1 | ON,OFF | 571 | 537 | 0.94 | 0 | 0 | 8 | 0 | 1.0 |
+| 8 | 1.2 | OFF,ON | 471 | 485 | 1.03 | 0 | 0 | 8 | 0 | 1.0 |
+| 8 | 2.0 | OFF,ON | 416 | 407 | 0.98 | 1 | 3 | 5 | 0 | 1.0 |
+| 8 | 2.1 | ON,OFF | 630 | 425 | 0.67 | 1 | 2 | 6 | 0 | 1.0 |
+| 8 | 2.2 | OFF,ON | 395 | 427 | 1.08 | 0 | 0 | 8 | 0 | 1.0 |
+| 8 | 3.0 | OFF,ON | 481 | 456 | 0.95 | 2 | 6 | 2 | 0 | 1.0 |
+| 8 | 3.1 | ON,OFF | 485 | 539 | 1.11 | 0 | 0 | 8 | 0 | 1.0 |
+| 8 | 3.2 | OFF,ON | 557 | 485 | 0.87 | 0 | 0 | 8 | 0 | 1.0 |
+| 16 | 1.0 | OFF,ON | 1 075 | 1 222 | 1.14 | 0 | 0 | 16 | 0 | 1.0 |
+| 16 | 1.1 | ON,OFF | 769 | 993 | 1.29 | 1 | 2 | 14 | 0 | 1.0 |
+| 16 | 1.2 | OFF,ON | 930 | 869 | 0.93 | 2 | 4 | 12 | 0 | 1.0 |
+| 16 | 2.0 | OFF,ON | 994 | 914 | 0.92 | 3 | 6 | 10 | 0 | 1.0 |
+| 16 | 2.1 | ON,OFF | 902 | 684 | 0.76 | 1 | 3 | 13 | 0 | 1.0 |
+| 16 | 2.2 | OFF,ON | 605 | 1 639 | 2.71 | 1 | 2 | 14 | 0 | 1.0 |
+| 16 | 3.0 | OFF,ON | 1 375 | 902 | 0.66 | 3 | 7 | 9 | 0 | 1.0 |
+| 16 | 3.1 | ON,OFF | 923 | 890 | 0.96 | 2 | 6 | 10 | 0 | 1.0 |
+| 16 | 3.2 | OFF,ON | 926 | 1 002 | 1.08 | 1 | 4 | 12 | 0 | 1.0 |
+| 32 | 1.0 | OFF,ON | 3 096 | 3 336 | 1.08 | 5 | 14 | 18 | 0 | 1.0 |
+| 32 | 1.1 | ON,OFF | 1 513 | 2 840 | 1.88 | 3 | 6 | 26 | 0 | 1.0 |
+| 32 | 1.2 | OFF,ON | 3 273 | 2 659 | 0.81 | 3 | 7 | 25 | 0 | 1.0 |
+| 32 | 2.0 | OFF,ON | 2 010 | 1 820 | 0.91 | 5 | 22 | 10 | 0 | 1.0 |
+| 32 | 2.1 | ON,OFF | 1 776 | 3 278 | 1.85 | 4 | 15 | 17 | 0 | 1.0 |
+| 32 | 2.2 | OFF,ON | 1 546 | 1 977 | 1.28 | 4 | 8 | 24 | 0 | 1.0 |
+| 32 | 3.0 | OFF,ON | 3 446 | 1 622 | 0.47 | 6 | 25 | 7 | 0 | 1.0 |
+| 32 | 3.1 | ON,OFF | 2 482 | 1 699 | 0.68 | 6 | 20 | 12 | 0 | 1.0 |
+| 32 | 3.2 | OFF,ON | 2 986 | 3 380 | 1.13 | 2 | 4 | 28 | 0 | 1.0 |
+| 64 | 1.0 | OFF,ON | 12 942 | 7 822 | 0.60 | 9 | 54 | 10 | 0 | 1.0 |
+| 64 | 1.1 | ON,OFF | 7 162 | 4 341 | 0.61 | 8 | 56 | 8 | 0 | 1.0 |
+| 64 | 1.2 | OFF,ON | 5 081 | 7 600 | 1.50 | 10 | 42 | 22 | 0 | 1.0 |
+| 64 | 2.0 | OFF,ON | 3 919 | 4 308 | 1.10 | 11 | 48 | 16 | 0 | 1.0 |
+| 64 | 2.1 | ON,OFF | 6 790 | 5 578 | 0.82 | 12 | 38 | 26 | 0 | 1.0 |
+| 64 | 2.2 | OFF,ON | 5 661 | 5 133 | 0.91 | 10 | 41 | 23 | 0 | 1.0 |
+| 64 | 3.0 | OFF,ON | 13 094 | 9 564 | 0.73 | 15 | 42 | 22 | 0 | 1.0 |
+| 64 | 3.1 | ON,OFF | 6 402 | 6 848 | 1.07 | 14 | 43 | 21 | 0 | 1.0 |
+| 64 | 3.2 | OFF,ON | 10 161 | 10 983 | 1.08 | 9 | 27 | 37 | 0 | 1.0 |
+| 128 | 2.0 | OFF,ON | 14 662 | 23 882 | 1.63 | 22 | 114 | 14 | 0 | 1.0 |
+| 128 | 2.1 | ON,OFF | 21 294 | 15 989 | 0.75 | 14 | 117 | 11 | 0 | 1.0 |
+| 128 | 2.2 | OFF,ON | 19 720 | 25 530 | 1.29 | 13 | 110 | 18 | 0 | 1.0 |
+| 128 | 3.0 | OFF,ON | 37 363 | 28 840 | 0.77 | 23 | 107 | 21 | 0 | 1.0 |
+| 128 | 3.1 | ON,OFF | 36 335 | 32 193 | 0.89 | 23 | 99 | 29 | 0 | 1.0 |
+| 128 | 3.2 | OFF,ON | 25 101 | 21 434 | 0.85 | 10 | 119 | 9 | 0 | 1.0 |
+
+N=1 solo probes (one per pass): OFF 78/70/112 ms vs ON 79/71/95 ms — no solo regression,
+`soloFlushes=1, batchFlushes=0` every time.
+
+**Per-level summary of the ON/OFF wall ratio:**
+
+| N | pairs | geomean | median | min–max | folded members (of N) | t vs 1.0 (ln ratios) |
+|---:|---:|--:|--:|--:|--:|--:|
+| 8 | 9 | 0.96 | 0.98 | 0.67–1.11 | 0–6 | −0.78 (n.s.) |
+| 16 | 9 | 1.07 | 0.96 | 0.66–2.71 | 0–7 | +0.44 (n.s.) |
+| 32 | 9 | 1.03 | 1.08 | 0.47–1.88 | 4–25 | +0.19 (n.s.) |
+| 64 | 9 | 0.90 | 0.91 | 0.60–1.50 | 27–56 | −1.07 (n.s.) |
+| 128 | 6 | 0.99 | 0.87 | 0.75–1.63 | 99–119 | −0.11 (n.s.) |
+
+**Reading:**
+
+- **The folding mechanism behaves exactly as designed, and its engagement scales with N**: rare at
+  N ≤ 16, partial at 32, strong at 64 (~40–90%), near-total at 128 (77–93% of members fold, into
+  10–23 flushes, mean batch ≈ 5–12 members — nowhere near the `MaxBatchSize = 64` cap; zero degraded
+  batches; markers exactly 1/run at every level, pair, and pass).
+- **But the wall-clock win does not survive the quiet machine.** No level's ratio distribution is
+  statistically distinguishable from 1.0. N=64 is the most favorable (geomean 0.90) and N=128's
+  median leans positive (0.87), but both spreads span well past 1.0 in 15 pairs. Round 4's
+  consistent N=128 win (0.67–0.97) was measured under heavy ambient load and does not reproduce:
+  quiet N=128 pairs include 1.63 and 1.29.
+- **Why near-total folding buys ~nothing here**: the consumed SQLite provider runs
+  `journal_mode=WAL, synchronous=NORMAL`, so an individual commit is a WAL append without a
+  guaranteed per-commit fsync — the per-transaction cost group commit amortizes is already small.
+  Meanwhile 8 cores driving N ≥ 64 concurrent drains are CPU-saturated (per-pair walls swing up to
+  ~2.5× between passes from scheduling alone), and batched members must wait for their leader's
+  flush before completing. The saved writer-gate acquisitions and the added gate wait roughly cancel.
+- Within-pair ratios remain the only trustworthy wall signal even when quiet — absolute walls at
+  N=128 swung 14.7–37.4 s (OFF) across passes as ambient load crept from ~2.7 to ~4.8.
+
+**Recommendation: keep `AddGroundworkRuntimeGroupCommit` opt-in, default OFF.** The quiet-machine
+curve gives no statistically defensible throughput win at any N on this hardware, so the default-on
+bar set by the verdict above is not met. `MaxBatchSize = 64` remains a fine default for opt-in users
+(observed batches never approached it). The opt-in stays valuable where it was designed to pay:
+deployments whose durable store has expensive per-commit fsyncs (`synchronous=FULL`, network
+filesystems, or a future provider without WAL) — re-run this instrument in that configuration before
+enabling. If a later unit wants to move shared-writer throughput on this configuration, the lever is
+the round-trip count, not the commit count (see the note below).
+
 ### Note for the next unit
 
 Spec 114's 3× shared-vs-isolated gap is the *aggregate* single-writer serialization, of which the
