@@ -432,7 +432,7 @@ Recorded dispositions (accepted by the originating reviewers):
   conformance matrix.
 
 The final reviewed US2 candidate is `b66c443fa`. Verification at that candidate,
-`2026-07-21T14:23+02:00` (CEST): Groundwork querying `105/105` (includes the restored
+`2026-07-21T13:55+02:00` (CEST): Groundwork querying `105/105` (includes the restored
 pager guards), workflow design Groundwork `85/85`, activity design Groundwork
 `70/70`, shared design conformance `96` passed + `1` intentional skip, SQLite
 provider leaf `33/33`, temporary EF oracle `38` passed + `12` declared skips,
