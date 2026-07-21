@@ -110,6 +110,7 @@ public class DesignContractSuiteShapeTests
         Assert.True(typeof(WorkflowDesignQueryContractSuite).IsAbstract);
         Assert.True(typeof(ActivityDesignQueryContractSuite).IsAbstract);
         Assert.True(typeof(DesignQueryScaleContractSuite).IsAbstract);
+        Assert.True(typeof(DesignQueryPlanContractSuite).IsAbstract);
         Assert.True(typeof(DesignAtomicityContractSuite).IsAbstract);
         Assert.True(typeof(DesignIsolationAndRestartContractSuite).IsAbstract);
 
