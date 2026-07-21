@@ -442,6 +442,9 @@
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/EFCore/">
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/EFCore/Tests/Elsa.Persistence.Groundwork.DesignConformance.EFCore.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql/Tests/Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/">
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj" />
   </Folder>
