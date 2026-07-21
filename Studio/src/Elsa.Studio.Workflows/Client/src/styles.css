@@ -5925,6 +5925,15 @@ button.wf-reference-select {
   color: var(--wf-warning-text);
 }
 
+.wf-intrinsic-inspector {
+  display: grid;
+  gap: 12px;
+}
+
+.wf-intrinsic-variable {
+  margin: 0 0 4px;
+}
+
 .wf-variable-picker {
   display: flex;
   flex-direction: column;

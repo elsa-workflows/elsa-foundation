@@ -7,6 +7,8 @@ import type { ScopedVariableAnalysis } from "../api/workflowDesign";
 import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
+import { IntrinsicInspector } from "../IntrinsicInspector";
+import { readIntrinsicDescriptor } from "../intrinsicActivities";
 import { ScopedVariablesEditor } from "../WorkflowPropertiesView";
 import { readContainerVariables, shadowingWarningMap, writeContainerVariables } from "../scopedVariables";
 import { describeSlotContents } from "./editorHelpers";
@@ -101,6 +103,49 @@ export function InspectorPanel({
     return <p className="wf-muted">Select an activity to inspect properties and embedded slots.</p>;
   }
 
+  // An engine-intrinsic node (Set Variable / Set Output) authors a variable target / output name alongside
+  // the value, so it uses a dedicated inspector body; everything else uses the standard properties panel.
+  const intrinsicDescriptor = readIntrinsicDescriptor(
+    catalogByVersion?.get(selectedNode.activityVersionId) ?? catalog.find(item => item.activityVersionId === selectedNode.activityVersionId)
+  );
+
+  const propertiesPanel = intrinsicDescriptor ? (
+    <IntrinsicInspector
+      intrinsic={intrinsicDescriptor}
+      context={context}
+      workflowState={workflowState}
+      activity={selectedNode}
+      descriptor={selectedDescriptor}
+      editors={propertyEditors}
+      expressionEditors={expressionEditors}
+      expressionDescriptors={expressionDescriptors}
+      expressionDescriptorStatus={expressionDescriptorStatus}
+      onRetryDescriptors={onRetryExpressionDescriptors}
+      descriptorStatus={descriptorStatus}
+      visibleVariables={scopedVariableAnalysis.visibleVariables}
+      scopeStatus={scopedVariableAnalysis.status}
+      scopeRetry={scopedVariableAnalysis.retry}
+      onChange={onSelectedActivityChange}
+    />
+  ) : (
+    <ActivityPropertiesPanel
+      context={context}
+      workflowState={workflowState}
+      activity={selectedNode}
+      descriptor={selectedDescriptor}
+      editors={propertyEditors}
+      expressionEditors={expressionEditors}
+      expressionDescriptors={expressionDescriptors}
+      expressionDescriptorStatus={expressionDescriptorStatus}
+      onRetryDescriptors={onRetryExpressionDescriptors}
+      descriptorStatus={descriptorStatus}
+      visibleVariables={scopedVariableAnalysis.visibleVariables}
+      scopeStatus={scopedVariableAnalysis.status}
+      scopeRetry={scopedVariableAnalysis.retry}
+      onChange={onSelectedActivityChange}
+    />
+  );
+
   return (
     <div className="wf-inspector-content">
       <h3>{selectedNodeLabel}</h3>
@@ -132,22 +177,7 @@ export function InspectorPanel({
           <span>No longer available for new use · {getAvailabilityStateLabel(selectedNodeAvailability.state)}</span>
         </div>
       ) : null}
-      <ActivityPropertiesPanel
-        context={context}
-        workflowState={workflowState}
-        activity={selectedNode}
-        descriptor={selectedDescriptor}
-        editors={propertyEditors}
-        expressionEditors={expressionEditors}
-        expressionDescriptors={expressionDescriptors}
-        expressionDescriptorStatus={expressionDescriptorStatus}
-        onRetryDescriptors={onRetryExpressionDescriptors}
-        descriptorStatus={descriptorStatus}
-        visibleVariables={scopedVariableAnalysis.visibleVariables}
-        scopeStatus={scopedVariableAnalysis.status}
-        scopeRetry={scopedVariableAnalysis.retry}
-        onChange={onSelectedActivityChange}
-      />
+      {propertiesPanel}
       {selectedSupportsScopedVariables ? (
         <div className="wf-container-variables">
           <ScopedVariablesEditor
