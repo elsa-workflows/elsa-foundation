@@ -4,7 +4,7 @@ Status: Phase 1 shipped 2026-07-20. This document is the handover brief for the 
 implements Phase 2. The full original program design lives in the session plan (mirrored below where
 it matters); the Phase-1 scope record is `specs/108-bpmn-container-activity/spec.md`.
 
-## Phase 2 progress (updated 2026-07-21)
+## Phase 2 progress (updated 2026-07-21, spec 117)
 
 Spec numbers drifted from this document's suggestions: 109–111 and 113–114 were claimed by the
 engine-perf program. Shipped so far:
@@ -15,13 +15,21 @@ engine-perf program. Shipped so far:
 | Core seam B — handled child fault (absorption) | `specs/115-runtime-handled-child-fault` | #904 | merged |
 | Catch-events prerequisite — node-scoped resume targets (lifts the W8 one-instance limit) | — (documented W8 follow-up) | #911 | merged |
 | Timer/message/signal intermediate catch events (`CatchEventBehavior`; `Event` gains its mid-flow wait form + `CanStartWorkflow`) | `specs/116-bpmn-catch-events` | #917 | merged |
+| Event-defined start events (`BpmnProcess` becomes a `[TriggerActivity]` with per-start-element bindings; trigger-metadata runtime seam on `IRuntimeActivityExecutionContext`; `IRecurringTriggerScheduleProvider` goes fan-out) | `specs/117-bpmn-event-start-events` | #935 | merged |
 
-Spec 116's stated cuts, now the head of the remaining queue alongside the original later units:
-**event-defined start events** (message/signal via a BpmnProcess `IActivityTriggerStimulusProvider`,
-timer via the recurring-schedule template; `BpmnElementFamilies.ResolveStartEvent` still throws for
-event-defined starts by design) and **interchange eventDefinition wiring** (importer still drops
-`intermediateCatchEvent`; pairs with Studio authoring UX). Then: event-based gateway (seam A),
-boundary events (seams A+B), multi-instance.
+Head of the remaining queue: **interchange eventDefinition wiring** (importer still drops
+`intermediateCatchEvent` and event-defined starts; spec 117 established the event-definition property
+convention to import into — `name` for message/signal, `interval` xor `cron` for timer; pairs with
+Studio authoring UX). Then: event-based gateway (seam A), boundary events (seams A+B), multi-instance.
+
+Start-events slice notes (spec 117, 2026-07-21): the matched trigger binding's `Metadata` now flows
+end-to-end into `IRuntimeActivityExecutionContext.TriggerNodeId`/`TriggerMetadata` (reserved
+`trigger-meta:` durable slot — the seam any future container trigger reuses); message/signal starts
+share the named-event stimulus with `Event` (parity-pinned in-module duplicate), so one delivery can
+both start processes and resume catch events; a nested `BpmnProcess` opts out of the start surface via
+`CanStartWorkflow = false` (root position is not recoverable from the published node). Known
+pre-existing follow-up (chip filed): `Timer`'s interval-only stimulus hash lets two same-interval
+workflows cross-start each other.
 
 Seam facts for the remaining units: `RequestChildSubtreeCancellation` / `RequestChildFaultAbsorption`
 are staged on `IRuntimeActivityExecutionContext` during child-completion/child-fault evaluations and
