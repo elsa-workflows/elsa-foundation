@@ -158,6 +158,19 @@ public static class RuntimeMetadataKeys
     /// </summary>
     public const string TriggerNodeId = "runtime.triggerNodeId";
     /// <summary>
+    /// Metadata key on the durable value carrying the matched trigger binding's free-form metadata map
+    /// (spec 117 D4). Its value is the reserved slot name
+    /// <c>RuntimeWorkflowStateSeed.TriggerMetadataSlotName</c>. Like <see cref="TriggerNodeId"/> this is a
+    /// dedicated, spoof-proof channel — deliberately distinct from <see cref="InputName"/>: the trigger
+    /// metadata (e.g. a BPMN start element id) never shares the workflow-input namespace, so it cannot
+    /// collide with an author-declared input and cannot be injected through the caller-facing inputs bag.
+    /// The payload is the serialized <c>string→string</c> map, carried verbatim from
+    /// <c>WorkflowTriggerBinding.Metadata</c>. Read by
+    /// <c>RuntimeInputBindingStateProjection.ProjectTriggerMetadata</c>. Absent for direct (non-stimulus)
+    /// runs and for stimulus starts whose binding carried no metadata.
+    /// </summary>
+    public const string TriggerMetadataName = "runtime.triggerMetadataName";
+    /// <summary>
     /// Metadata key marking a durable value's payload as sensitive (<c>"true"</c>). Read by the workflow-output
     /// read projection (#254 Seam R1): <c>RuntimeWorkflowOutputStateProjection</c> (engine package)
     /// threads it as <c>IsSensitive</c> into the <c>IRuntimePayloadCapturePolicy</c> consult, so a sensitive-marked

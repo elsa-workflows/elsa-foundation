@@ -39,15 +39,66 @@ public sealed class BpmnExecutionEngine(
             return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
 
         var state = BpmnStatePersister.LoadState(context.ActivityExecutionState) ?? BpmnStatePersister.CreateInitialState();
-        foreach (var startEvent in graph.StartEvents)
+
+        // Spec 117 D6: a trigger delivery targets this composite (its own node id was the matched binding's node),
+        // so exactly one event-defined start element — named by the forwarded binding metadata — seeds a token.
+        // Otherwise (direct invocation) every none start event seeds a token and event-defined starts stay dormant.
+        var seedResult = context.TriggerNodeId is { } triggerNodeId && StringComparer.Ordinal.Equals(triggerNodeId, context.ExecutableNode.ExecutableNodeId)
+            ? SeedFromTrigger(context, graph, state)
+            : SeedFromDirectInvocation(graph, state);
+
+        if (seedResult.Fault is not null)
+            return ValueTask.FromResult(FinishEvaluation(context, seedResult));
+
+        var result = Propagate(context, graph, seedResult.State, context.ActivityExecutionState.Execution.ActivityExecutionId);
+        return ValueTask.FromResult(FinishEvaluation(context, result));
+    }
+
+    private static EvaluationResult SeedFromTrigger(IRuntimeActivityExecutionContext context, BpmnGraph graph, BpmnExecutionState state)
+    {
+        if (context.TriggerMetadata is not { } metadata ||
+            !metadata.TryGetValue(BpmnStartTrigger.StartElementIdMetadataKey, out var startElementId) ||
+            string.IsNullOrWhiteSpace(startElementId))
         {
-            var token = NewToken(state, startEvent.ElementId, flowId: null, parentTokenId: null, BpmnTokenStatus.Active, producingActivityExecutionId: null);
-            state = AddToken(state, token);
-            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TokenEmitted, startEvent.ElementId, null, token.TokenId, $"BPMN start event '{startEvent.ElementId}' emitted the initial token.");
+            const string message = "BPMN process was started by a trigger delivery but the matched trigger binding carried no start element id.";
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, null, null, null, message);
+            return new EvaluationResult(state, new ActivityFault("bpmn.start.unresolved-trigger", message));
         }
 
-        var result = Propagate(context, graph, state, context.ActivityExecutionState.Execution.ActivityExecutionId);
-        return ValueTask.FromResult(FinishEvaluation(context, result));
+        var startElement = graph.StartEvents.FirstOrDefault(element =>
+            StringComparer.Ordinal.Equals(element.ElementId, startElementId) && element.EventDefinitions.Count > 0);
+        if (startElement is null)
+        {
+            var message = $"BPMN process was started by a trigger delivery targeting start element '{startElementId}', which is not an event-defined start event of this process.";
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, null, null, null, message);
+            return new EvaluationResult(state, new ActivityFault("bpmn.start.unresolved-trigger", message));
+        }
+
+        return SeedToken(state, startElement.ElementId, $"BPMN event-defined start event '{startElement.ElementId}' emitted the initial token from a trigger delivery.");
+    }
+
+    private static EvaluationResult SeedFromDirectInvocation(BpmnGraph graph, BpmnExecutionState state)
+    {
+        var noneStarts = graph.StartEvents.Where(element => element.EventDefinitions.Count == 0).ToArray();
+        if (noneStarts.Length == 0)
+        {
+            const string message = "BPMN process has no none start event to start on direct invocation; its start events are all event-defined (message/signal/timer) and require a matching stimulus.";
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, null, null, null, message);
+            return new EvaluationResult(state, new ActivityFault("bpmn.start.none-available", message));
+        }
+
+        foreach (var startEvent in noneStarts)
+            state = SeedToken(state, startEvent.ElementId, $"BPMN start event '{startEvent.ElementId}' emitted the initial token.").State;
+
+        return new EvaluationResult(state);
+    }
+
+    private static EvaluationResult SeedToken(BpmnExecutionState state, string elementId, string message)
+    {
+        var token = NewToken(state, elementId, flowId: null, parentTokenId: null, BpmnTokenStatus.Active, producingActivityExecutionId: null);
+        state = AddToken(state, token);
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TokenEmitted, elementId, null, token.TokenId, message);
+        return new EvaluationResult(state);
     }
 
     public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(IRuntimeActivityExecutionContext context, ActivityChildCompletedContext completionContext)

@@ -35,12 +35,11 @@ public sealed class TimerCronProviderTests
         var node = Node(Timer.ActivityType, nameof(Timer.Interval), "PT5M");
 
         var trigger = Assert.Single(_timerTrigger.Describe(node).Descriptors);
-        var schedule = _timerSchedule.Describe(node);
+        var schedule = Assert.Single(_timerSchedule.Describe(node));
 
-        Assert.NotNull(schedule);
         Assert.Equal("Timer", trigger.StimulusType);
         Assert.Equal(TimerStimulus.Hash("PT5M"), trigger.StimulusHash);
-        Assert.Equal(trigger.StimulusHash, schedule!.StimulusHash);
+        Assert.Equal(trigger.StimulusHash, schedule.StimulusHash);
         Assert.Equal(RecurringScheduleKind.Interval, schedule.Kind);
         Assert.Equal("PT5M", schedule.Expression);
     }
@@ -51,11 +50,11 @@ public sealed class TimerCronProviderTests
         var node = Node(Cron.ActivityType, nameof(Cron.Expression), "0 * * * *");
 
         var trigger = Assert.Single(_cronTrigger.Describe(node).Descriptors);
-        var schedule = _cronSchedule.Describe(node);
+        var schedule = Assert.Single(_cronSchedule.Describe(node));
 
         Assert.Equal("Cron", trigger.StimulusType);
         Assert.Equal(CronStimulus.Hash("0 * * * *"), trigger.StimulusHash);
-        Assert.Equal(trigger.StimulusHash, schedule!.StimulusHash);
+        Assert.Equal(trigger.StimulusHash, schedule.StimulusHash);
         Assert.Equal(RecurringScheduleKind.Cron, schedule.Kind);
         Assert.Equal("0 * * * *", schedule.Expression);
     }
@@ -66,9 +65,9 @@ public sealed class TimerCronProviderTests
         var node = Node("Elsa.WriteLine", nameof(Timer.Interval), "PT5M");
 
         Assert.False(_timerTrigger.Describe(node).IsRecognized);
-        Assert.Null(_timerSchedule.Describe(node));
+        Assert.Empty(_timerSchedule.Describe(node));
         Assert.False(_cronTrigger.Describe(node).IsRecognized);
-        Assert.Null(_cronSchedule.Describe(node));
+        Assert.Empty(_cronSchedule.Describe(node));
     }
 
     [Fact]

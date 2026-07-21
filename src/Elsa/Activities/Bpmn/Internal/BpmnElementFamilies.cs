@@ -11,6 +11,9 @@ namespace Elsa.Activities.Bpmn.Internal;
 public static class BpmnElementFamilies
 {
     public const string StartEventNone = "startEvent.none";
+    public const string StartEventTimer = "startEvent.timer";
+    public const string StartEventMessage = "startEvent.message";
+    public const string StartEventSignal = "startEvent.signal";
     public const string EndEventNone = "endEvent.none";
     public const string EndEventTerminate = "endEvent.terminate";
     public const string IntermediateCatchEvent = "intermediateCatchEvent.catch";
@@ -79,13 +82,35 @@ public static class BpmnElementFamilies
         return IntermediateCatchEvent;
     }
 
+    /// <summary>
+    /// The event-defined start families (spec 117), keyed by event-definition type. A start event declaring
+    /// exactly one timer/message/signal definition registers a durable start trigger at publish time and seeds a
+    /// single token at runtime — the trigger machinery is entirely publish/dispatch-time; the runtime token
+    /// behavior equals a none start.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> EventStartFamiliesByDefinitionType =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [BpmnEventDefinitionTypes.Timer] = StartEventTimer,
+            [BpmnEventDefinitionTypes.Message] = StartEventMessage,
+            [BpmnEventDefinitionTypes.Signal] = StartEventSignal
+        };
+
+    /// <summary>The event-start families that seed at publish/dispatch time (all four route outbound like a none start).</summary>
+    public static readonly IReadOnlySet<string> StartEventFamilies =
+        new HashSet<string>(StringComparer.Ordinal) { StartEventNone, StartEventTimer, StartEventMessage, StartEventSignal };
+
     private static string ResolveStartEvent(BpmnElement element)
     {
-        if (element.EventDefinitions.Count > 0)
-            throw new BpmnExecutionException(
-                $"BPMN start event '{element.ElementId}' declares event definitions; only none start events are supported by this engine slice.");
+        if (element.EventDefinitions.Count == 0)
+            return StartEventNone;
 
-        return StartEventNone;
+        if (element.EventDefinitions.Count == 1 &&
+            EventStartFamiliesByDefinitionType.TryGetValue(element.EventDefinitions.Single().Type, out var family))
+            return family;
+
+        throw new BpmnExecutionException(
+            $"BPMN start event '{element.ElementId}' declares unsupported event definitions; only none, timer, message, and signal start events are supported by this engine slice (exactly one timer/message/signal definition).");
     }
 
     private static string ResolveEndEvent(BpmnElement element)

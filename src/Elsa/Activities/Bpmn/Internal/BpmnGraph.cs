@@ -197,6 +197,9 @@ public sealed class BpmnGraph
             switch (family)
             {
                 case BpmnElementFamilies.StartEventNone:
+                case BpmnElementFamilies.StartEventTimer:
+                case BpmnElementFamilies.StartEventMessage:
+                case BpmnElementFamilies.StartEventSignal:
                 case BpmnElementFamilies.EndEventNone:
                 case BpmnElementFamilies.EndEventTerminate:
                 case BpmnElementFamilies.ParallelGateway:

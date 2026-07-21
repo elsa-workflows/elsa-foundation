@@ -17,7 +17,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         string? triggerNodeId = null,
         WorkflowRunKind runKind = WorkflowRunKind.Unknown,
         WorkflowExecutableSourceSelection? sourceSelection = null,
-        WorkflowExecutableProvenanceRequirement provenanceRequirement = WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
+        WorkflowExecutableProvenanceRequirement provenanceRequirement = WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
         : this(
             artifactId,
             requestedBy,
@@ -35,47 +36,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
             null,
             null,
             null,
-            null)
-    {
-    }
-
-    public WorkflowExecutionStartDispatchRequest(
-        string artifactId,
-        string requestedBy,
-        string? workflowExecutionId,
-        string? idempotencyKey,
-        IReadOnlyDictionary<string, string>? metadata,
-        IReadOnlyDictionary<string, object?>? variables,
-        IReadOnlyDictionary<string, object?>? inputs,
-        JsonElement? stimulusInput,
-        string? triggerNodeId,
-        WorkflowRunKind runKind,
-        WorkflowExecutableSourceSelection? sourceSelection,
-        WorkflowExecutableProvenanceRequirement provenanceRequirement,
-        string? parentWorkflowExecutionId,
-        string? correlationId,
-        string? tenantId,
-        WorkflowExecutionPartition? partition,
-        WorkflowExecutionAuthoritySnapshot? authority)
-        : this(
-            artifactId,
-            requestedBy,
-            workflowExecutionId,
-            idempotencyKey,
-            metadata,
-            variables,
-            inputs,
-            stimulusInput,
-            triggerNodeId,
-            runKind,
-            sourceSelection,
-            provenanceRequirement,
-            parentWorkflowExecutionId,
-            correlationId,
-            tenantId,
-            partition,
-            authority,
-            null)
+            null,
+            triggerMetadata)
     {
     }
 
@@ -97,7 +59,50 @@ public sealed class WorkflowExecutionStartDispatchRequest
         string? tenantId,
         WorkflowExecutionPartition? partition,
         WorkflowExecutionAuthoritySnapshot? authority,
-        WorkflowExecutableStartAuthority? startAuthority)
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
+        : this(
+            artifactId,
+            requestedBy,
+            workflowExecutionId,
+            idempotencyKey,
+            metadata,
+            variables,
+            inputs,
+            stimulusInput,
+            triggerNodeId,
+            runKind,
+            sourceSelection,
+            provenanceRequirement,
+            parentWorkflowExecutionId,
+            correlationId,
+            tenantId,
+            partition,
+            authority,
+            null,
+            triggerMetadata)
+    {
+    }
+
+    public WorkflowExecutionStartDispatchRequest(
+        string artifactId,
+        string requestedBy,
+        string? workflowExecutionId,
+        string? idempotencyKey,
+        IReadOnlyDictionary<string, string>? metadata,
+        IReadOnlyDictionary<string, object?>? variables,
+        IReadOnlyDictionary<string, object?>? inputs,
+        JsonElement? stimulusInput,
+        string? triggerNodeId,
+        WorkflowRunKind runKind,
+        WorkflowExecutableSourceSelection? sourceSelection,
+        WorkflowExecutableProvenanceRequirement provenanceRequirement,
+        string? parentWorkflowExecutionId,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition? partition,
+        WorkflowExecutionAuthoritySnapshot? authority,
+        WorkflowExecutableStartAuthority? startAuthority,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
         : this(
             artifactId,
             requestedBy,
@@ -118,7 +123,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
             authority,
             startAuthority,
             dispatchNestingDepth: 0,
-            testScope: null)
+            testScope: null,
+            triggerMetadata: triggerMetadata)
     {
     }
 
@@ -143,7 +149,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         WorkflowExecutionAuthoritySnapshot? authority,
         WorkflowExecutableStartAuthority? startAuthority,
         int dispatchNestingDepth,
-        WorkflowTestScope? testScope = null)
+        WorkflowTestScope? testScope = null,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedBy);
@@ -176,6 +183,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
         Inputs = SnapshotValues(inputs);
         StimulusInput = stimulusInput?.Clone();
         TriggerNodeId = triggerNodeId;
+        TriggerMetadata = RuntimeModelMetadata.Snapshot(triggerMetadata);
         RunKind = runKind;
         SourceSelection = sourceSelection;
         ProvenanceRequirement = provenanceRequirement;
@@ -224,6 +232,14 @@ public sealed class WorkflowExecutionStartDispatchRequest
     /// inputs and cannot be forged through caller-facing input bags. Null for direct (non-trigger) starts.
     /// </summary>
     public string? TriggerNodeId { get; }
+
+    /// <summary>
+    /// The matched trigger binding's free-form metadata map (spec 117 D4), carried verbatim from
+    /// <c>WorkflowTriggerBinding.Metadata</c> on its own reserved channel — never part of <see cref="Inputs"/>.
+    /// Seeded durably at start so a structural trigger activity (e.g. <c>BpmnProcess</c>) can read per-descriptor
+    /// routing facets (such as the BPMN start element id). Empty for direct starts and metadata-less bindings.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> TriggerMetadata { get; }
 
     /// <summary>
     /// The explicit durable classification to pin to this execution. Background Weaver callers use
@@ -445,7 +461,8 @@ public sealed class WorkflowExecutionStartCommandPayload
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null,
         WorkflowRunKind runKind = WorkflowRunKind.Unknown,
-        WorkflowExecutableSourceProvenance? pinnedSource = null)
+        WorkflowExecutableSourceProvenance? pinnedSource = null,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
         : this(
             pinnedExecutable,
             requestedArtifactId,
@@ -459,39 +476,8 @@ public sealed class WorkflowExecutionStartCommandPayload
             null,
             null,
             null,
-            null)
-    {
-    }
-
-    public WorkflowExecutionStartCommandPayload(
-        WorkflowExecutableIdentity pinnedExecutable,
-        string requestedArtifactId,
-        IReadOnlyDictionary<string, JsonElement>? variables,
-        IReadOnlyDictionary<string, JsonElement>? inputs,
-        JsonElement? stimulusInput,
-        string? triggerNodeId,
-        WorkflowRunKind runKind,
-        WorkflowExecutableSourceProvenance? pinnedSource,
-        string? parentWorkflowExecutionId,
-        string? correlationId,
-        string? tenantId,
-        WorkflowExecutionPartition? partition,
-        WorkflowExecutionAuthoritySnapshot? authority)
-        : this(
-            pinnedExecutable,
-            requestedArtifactId,
-            variables,
-            inputs,
-            stimulusInput,
-            triggerNodeId,
-            runKind,
-            pinnedSource,
-            parentWorkflowExecutionId,
-            correlationId,
-            tenantId,
-            partition,
-            authority,
-            null)
+            null,
+            triggerMetadata)
     {
     }
 
@@ -509,7 +495,42 @@ public sealed class WorkflowExecutionStartCommandPayload
         string? tenantId,
         WorkflowExecutionPartition? partition,
         WorkflowExecutionAuthoritySnapshot? authority,
-        WorkflowExecutableStartAuthority? startAuthority)
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
+        : this(
+            pinnedExecutable,
+            requestedArtifactId,
+            variables,
+            inputs,
+            stimulusInput,
+            triggerNodeId,
+            runKind,
+            pinnedSource,
+            parentWorkflowExecutionId,
+            correlationId,
+            tenantId,
+            partition,
+            authority,
+            null,
+            triggerMetadata)
+    {
+    }
+
+    public WorkflowExecutionStartCommandPayload(
+        WorkflowExecutableIdentity pinnedExecutable,
+        string requestedArtifactId,
+        IReadOnlyDictionary<string, JsonElement>? variables,
+        IReadOnlyDictionary<string, JsonElement>? inputs,
+        JsonElement? stimulusInput,
+        string? triggerNodeId,
+        WorkflowRunKind runKind,
+        WorkflowExecutableSourceProvenance? pinnedSource,
+        string? parentWorkflowExecutionId,
+        string? correlationId,
+        string? tenantId,
+        WorkflowExecutionPartition? partition,
+        WorkflowExecutionAuthoritySnapshot? authority,
+        WorkflowExecutableStartAuthority? startAuthority,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
         : this(
             pinnedExecutable,
             requestedArtifactId,
@@ -526,7 +547,8 @@ public sealed class WorkflowExecutionStartCommandPayload
             authority,
             startAuthority,
             dispatchNestingDepth: 0,
-            testScope: null)
+            testScope: null,
+            triggerMetadata: triggerMetadata)
     {
     }
 
@@ -547,7 +569,8 @@ public sealed class WorkflowExecutionStartCommandPayload
         WorkflowExecutionAuthoritySnapshot? authority,
         WorkflowExecutableStartAuthority? startAuthority,
         int dispatchNestingDepth,
-        WorkflowTestScope? testScope = null)
+        WorkflowTestScope? testScope = null,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedArtifactId);
@@ -573,6 +596,7 @@ public sealed class WorkflowExecutionStartCommandPayload
         Inputs = SnapshotElements(inputs);
         StimulusInput = stimulusInput?.Clone();
         TriggerNodeId = triggerNodeId;
+        TriggerMetadata = RuntimeModelMetadata.Snapshot(triggerMetadata);
         RunKind = runKind;
         PinnedSource = pinnedSource;
         ParentWorkflowExecutionId = parentWorkflowExecutionId;
@@ -612,6 +636,13 @@ public sealed class WorkflowExecutionStartCommandPayload
     /// starts.
     /// </summary>
     public string? TriggerNodeId { get; }
+
+    /// <summary>
+    /// The matched trigger binding's metadata map (spec 117 D4) carried from start dispatch so the
+    /// workflow-started checkpoint can seed it on its reserved durable channel, separate from <see cref="Inputs"/>.
+    /// Empty for direct starts and metadata-less bindings.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> TriggerMetadata { get; }
 
     /// <summary>
     /// The run classification captured at dispatch. Missing values in legacy serialized commands use

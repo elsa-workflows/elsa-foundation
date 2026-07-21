@@ -26,8 +26,12 @@ public interface IRecurringTriggerScheduleProvider
     string ProviderId => GetType().FullName ?? GetType().Name;
 
     /// <summary>
-    /// Returns the recurring-start schedule for <paramref name="node"/> if this provider recognizes its activity
-    /// type; otherwise <c>null</c>.
+    /// Returns the recurring-start schedules for <paramref name="node"/> when this provider recognizes its
+    /// activity type; otherwise an empty collection. A single-schedule trigger (<c>Timer</c>/<c>Cron</c>) returns
+    /// one descriptor; a composite start-trigger activity may fan out one descriptor per authored recurring start
+    /// element (spec 117 — a BPMN process with several timer start events). An empty collection means "no
+    /// contribution" — either not this provider's activity type, or a recognized node that declares no recurring
+    /// starts — and never fails the publish on its own.
     /// </summary>
-    RecurringScheduleDescriptor? Describe(ExecutableNode node);
+    IReadOnlyCollection<RecurringScheduleDescriptor> Describe(ExecutableNode node);
 }

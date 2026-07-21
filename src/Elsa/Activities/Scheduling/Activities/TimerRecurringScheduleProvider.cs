@@ -15,18 +15,18 @@ public sealed class TimerRecurringScheduleProvider : IRecurringTriggerSchedulePr
 
     private const string IntervalInput = nameof(Timer.Interval);
 
-    public RecurringScheduleDescriptor? Describe(ExecutableNode node)
+    public IReadOnlyCollection<RecurringScheduleDescriptor> Describe(ExecutableNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
 
         if (!StringComparer.Ordinal.Equals(node.ActivityType, Timer.ActivityType))
-            return null;
+            return [];
 
         var interval = SchedulingNodeInputs.ReadLiteralString(node, IntervalInput)
             ?? throw new ArgumentException(
                 $"Timer trigger node '{node.ExecutableNodeId}' has no literal '{IntervalInput}'. A recurring " +
                 "start trigger's interval must be an authored literal so its schedule is fixed at publish time.");
 
-        return TimerStimulus.DescribeSchedule(interval);
+        return [TimerStimulus.DescribeSchedule(interval)];
     }
 }

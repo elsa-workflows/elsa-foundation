@@ -245,7 +245,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 executionContextState,
                 variableScope: null,
                 triggerPayload: projections.StimulusInput is JsonElement stimulusInput ? stimulusInput : null,
-                triggerNodeId: projections.TriggerNodeId);
+                triggerNodeId: projections.TriggerNodeId,
+                triggerMetadata: projections.TriggerMetadata);
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {

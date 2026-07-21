@@ -67,5 +67,23 @@ public sealed record RecurringTriggerSchedule(
         return $"{Escape(publicationId)}:{BuildId(artifactId, executableNodeId)}";
     }
 
+    /// <summary>
+    /// Builds a schedule id disambiguated by stimulus hash (spec 117), for a trigger node that fans out several
+    /// recurring schedules (a BPMN process with more than one timer start event). Single-schedule triggers keep
+    /// the plain <see cref="BuildId(string,string)"/> id so their schedule identity is unchanged.
+    /// </summary>
+    public static string BuildFanOutId(string artifactId, string executableNodeId, string stimulusHash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+        return $"{BuildId(artifactId, executableNodeId)}:{Escape(stimulusHash)}";
+    }
+
+    /// <summary>Publication-scoped, stimulus-hash-disambiguated schedule id (spec 117 fan-out).</summary>
+    public static string BuildFanOutId(string publicationId, string artifactId, string executableNodeId, string stimulusHash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        return $"{Escape(publicationId)}:{BuildFanOutId(artifactId, executableNodeId, stimulusHash)}";
+    }
+
     private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");
 }

@@ -23,6 +23,7 @@ namespace Elsa.Activities.Bpmn.Activities;
 /// faults the composite deterministically (surfacing a composite incident); error boundary events
 /// replace this rule in the events tier. The faulted leaf keeps its own blocking incident regardless.
 /// </remarks>
+[TriggerActivity]
 [ActivityStructure("elsa.bpmn.structure", "1.0.0", Mode = "bpmn", SupportsScopedVariables = true)]
 [ActivityChildSlot("Bpmn.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
@@ -31,6 +32,16 @@ public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : Structura
     public const string ActivitiesSlotName = "Bpmn.Activities";
     public const string StructureKind = "elsa.bpmn.structure";
     public const string StructureSchemaVersion = "1.0.0";
+
+    /// <summary>
+    /// Whether this process may be started from an event-defined start element's stimulus (spec 117). Defaults to
+    /// <c>true</c> (root-process identity). A <c>BpmnProcess</c> bound as a child inside another workflow/process
+    /// sets it to <c>false</c> so its event-defined start events register no start triggers — the publish-time
+    /// trigger provider skips it. Root position is not recoverable from the published node alone, so this is the
+    /// opt-out; a none-start process is unaffected either way (it starts on direct invocation).
+    /// </summary>
+    [ActivityInput(Key = nameof(CanStartWorkflow), DefaultValue = "true")]
+    public bool CanStartWorkflow { get; set; } = true;
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context) => executionEngine.StartAsync(context);
 

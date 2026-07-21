@@ -184,6 +184,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             seedInputs: startPayload.Inputs,
             seedStimulusInput: startPayload.StimulusInput,
             seedTriggerNodeId: startPayload.TriggerNodeId,
+            seedTriggerMetadata: startPayload.TriggerMetadata,
             runKind: startPayload.RunKind,
             pinnedSource: startPayload.PinnedSource,
             parentWorkflowExecutionId: startPayload.ParentWorkflowExecutionId,

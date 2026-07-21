@@ -25,7 +25,8 @@ public sealed class SimpleActivityExecutionContext(
     JsonElement? triggerPayload = null,
     string? triggerNodeId = null,
     string? invocationId = null,
-    string? executableNodeId = null)
+    string? executableNodeId = null,
+    IReadOnlyDictionary<string, string>? triggerMetadata = null)
     : IRuntimeActivityExecutionContext
 {
     // The single construction path for a runtime activity context.
@@ -39,7 +40,8 @@ public sealed class SimpleActivityExecutionContext(
         ActivityExecutionState? activityExecutionState,
         VariableScope? variableScope,
         JsonElement? triggerPayload = null,
-        string? triggerNodeId = null)
+        string? triggerNodeId = null,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
     {
         ArgumentNullException.ThrowIfNull(activity);
         ArgumentNullException.ThrowIfNull(workflowExecutionId);
@@ -55,7 +57,8 @@ public sealed class SimpleActivityExecutionContext(
             activityExecutionState,
             variableScope,
             triggerPayload,
-            triggerNodeId);
+            triggerNodeId,
+            triggerMetadata: triggerMetadata);
     }
 
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
@@ -72,6 +75,7 @@ public sealed class SimpleActivityExecutionContext(
         .LastOrDefault(delivery => delivery.Status == ActivityTriggerDeliveryStatus.Consumed)?
         .Payload.InlineValue?.Clone();
     public string? TriggerNodeId { get; } = string.IsNullOrWhiteSpace(triggerNodeId) ? null : triggerNodeId;
+    public IReadOnlyDictionary<string, string>? TriggerMetadata { get; } = triggerMetadata is { Count: > 0 } ? triggerMetadata : null;
     public WorkflowExecutableIdentity PinnedExecutable => pinnedExecutable ?? throw MissingRuntimeValue(nameof(PinnedExecutable));
     public RuntimeSchedulerWorkItem SchedulerWorkItem => schedulerWorkItem ?? throw MissingRuntimeValue(nameof(SchedulerWorkItem));
     public ExecutableNode ExecutableNode => executableNode ?? throw MissingRuntimeValue(nameof(ExecutableNode));

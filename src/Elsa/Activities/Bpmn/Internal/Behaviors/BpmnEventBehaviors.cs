@@ -4,11 +4,21 @@ using Elsa.Activities.Bpmn.Models;
 
 namespace Elsa.Activities.Bpmn.Internal.Behaviors;
 
-/// <summary>None start event: pass the token straight onto every outbound sequence flow.</summary>
-public sealed class NoneStartEventBehavior : IBpmnElementBehavior
+/// <summary>
+/// Start event (none / timer / message / signal): pass the arriving token straight onto every outbound sequence
+/// flow. All four start families share this token behavior — an event-defined start (spec 117) differs only in
+/// how its instance is *started* (a publish-time trigger binding + dispatch seeds the token), never in how the
+/// seeded token routes. Registered once per start family so diagnostics keep the family's display name.
+/// </summary>
+public sealed class StartEventBehavior(string elementFamily, string displayName) : IBpmnElementBehavior
 {
-    public string ElementFamily => BpmnElementFamilies.StartEventNone;
-    public string DisplayName => "Start Event (None)";
+    public string ElementFamily { get; } = elementFamily;
+    public string DisplayName { get; } = displayName;
+
+    public static StartEventBehavior None() => new(BpmnElementFamilies.StartEventNone, "Start Event (None)");
+    public static StartEventBehavior Timer() => new(BpmnElementFamilies.StartEventTimer, "Start Event (Timer)");
+    public static StartEventBehavior Message() => new(BpmnElementFamilies.StartEventMessage, "Start Event (Message)");
+    public static StartEventBehavior Signal() => new(BpmnElementFamilies.StartEventSignal, "Start Event (Signal)");
 
     public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
         BpmnBehaviorDecision.Of(BpmnBehaviorCommand.EmitTokens(BpmnFlowSelector.FlowIds(context.OutboundFlows)));
