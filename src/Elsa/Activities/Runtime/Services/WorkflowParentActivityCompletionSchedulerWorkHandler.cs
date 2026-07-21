@@ -229,6 +229,13 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
             if (callbackBypassParentState is null)
             {
+                // spec 119 D4: a parent that races sibling children (the BPMN event-based gateway) needs its
+                // direct, non-terminal children's activity-execution ids to stage seam-A subtree cancellations.
+                // This parent-scoped read is opt-in (marker-gated), so non-consumer structural activities pay nothing.
+                var liveChildActivities = parentActivity is IRuntimeLiveChildActivityConsumer
+                    ? await LoadLiveChildActivitiesAsync(activityExecutionStateStore, workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken)
+                    : [];
+
                 context = SimpleActivityExecutionContext.ForExecution(
                     parentActivity,
                     cancellationToken,
@@ -237,7 +244,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     workItem,
                     parentExecutableNode,
                     parentState,
-                    variableScope: null);
+                    variableScope: null,
+                    liveChildActivities: liveChildActivities);
 
                 if (childFaulted)
                 {
@@ -597,6 +605,30 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             containerVariableSnapshots,
             completionDurableValueChanges,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Loads the parent's direct, non-terminal child executions (spec 119 D4) for an opt-in
+    /// <c>IRuntimeLiveChildActivityConsumer</c> parent, so its child-completion/child-fault callback can
+    /// resolve a losing sibling's node id to its live activity-execution id. Terminal children are excluded —
+    /// they are never cancellation targets (the planner skips them) and a losing sibling that already
+    /// terminalized is a benign seam-112 no-op.
+    /// </summary>
+    private static async ValueTask<IReadOnlyCollection<RuntimeLiveChildActivity>> LoadLiveChildActivitiesAsync(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        string workflowExecutionId,
+        string parentActivityExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var children = await activityExecutionStateStore.ListAllByParentAsync(workflowExecutionId, parentActivityExecutionId, cancellationToken);
+        return children
+            .Where(child => child.Status is not (
+                ActivityExecutionStatus.Completed or
+                ActivityExecutionStatus.Faulted or
+                ActivityExecutionStatus.Cancelled or
+                ActivityExecutionStatus.Recovered))
+            .Select(child => new RuntimeLiveChildActivity(child.Execution.ActivityExecutionId, child.Execution.ExecutableNodeId, child.Status))
+            .ToArray();
     }
 
     /// <summary>

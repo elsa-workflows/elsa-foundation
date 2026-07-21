@@ -22,6 +22,7 @@ public static class BpmnElementFamilies
     public const string ExclusiveGateway = "exclusiveGateway";
     public const string ParallelGateway = "parallelGateway";
     public const string InclusiveGateway = "inclusiveGateway";
+    public const string EventBasedGateway = "eventBasedGateway";
 
     private static readonly HashSet<string> TaskElementTypes = new(StringComparer.Ordinal)
     {
@@ -51,6 +52,7 @@ public static class BpmnElementFamilies
             BpmnElementTypes.ExclusiveGateway => ExclusiveGateway,
             BpmnElementTypes.ParallelGateway => ParallelGateway,
             BpmnElementTypes.InclusiveGateway => InclusiveGateway,
+            BpmnElementTypes.EventBasedGateway => EventBasedGateway,
             _ => throw new BpmnExecutionException(
                 $"BPMN element '{element.ElementId}' has element type '{element.ElementType}', which this engine slice does not support.")
         };

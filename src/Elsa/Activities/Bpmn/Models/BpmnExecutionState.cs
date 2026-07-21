@@ -16,7 +16,8 @@ public sealed record BpmnExecutionState
         IReadOnlyCollection<BpmnDiagnosticEvent>? diagnostics = null,
         int sequence = 0,
         bool terminated = false,
-        BpmnPendingFault? pendingFault = null)
+        BpmnPendingFault? pendingFault = null,
+        IReadOnlyCollection<BpmnEventRace>? races = null)
     {
         Tokens = tokens ?? [];
         ActiveChildren = activeChildren ?? [];
@@ -24,12 +25,16 @@ public sealed record BpmnExecutionState
         Sequence = sequence;
         Terminated = terminated;
         PendingFault = pendingFault;
+        Races = races ?? [];
     }
 
     public IReadOnlyCollection<BpmnToken> Tokens { get; init; }
     public IReadOnlyCollection<BpmnActiveChild> ActiveChildren { get; init; }
     public IReadOnlyCollection<BpmnDiagnosticEvent> Diagnostics { get; init; }
     public int Sequence { get; init; }
+
+    /// <summary>The open/resolved first-catch-wins races opened by event-based gateways (spec 119); additive, schema stays v1.</summary>
+    public IReadOnlyCollection<BpmnEventRace> Races { get; init; }
 
     /// <summary>Set when a terminate end event ended the process; late child completions are ignored.</summary>
     public bool Terminated { get; init; }

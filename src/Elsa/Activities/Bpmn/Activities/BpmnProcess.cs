@@ -27,7 +27,7 @@ namespace Elsa.Activities.Bpmn.Activities;
 [ActivityStructure("elsa.bpmn.structure", "1.0.0", Mode = "bpmn", SupportsScopedVariables = true)]
 [ActivityChildSlot("Bpmn.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
-public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler
+public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeLiveChildActivityConsumer
 {
     public const string ActivitiesSlotName = "Bpmn.Activities";
     public const string StructureKind = "elsa.bpmn.structure";

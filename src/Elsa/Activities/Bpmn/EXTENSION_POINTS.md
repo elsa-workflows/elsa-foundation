@@ -42,6 +42,9 @@ Known implementations:
 - `ExclusiveGatewayBehavior` *(intra-domain — default)*
 - `ParallelGatewayBehavior` *(intra-domain — default)*
 - `InclusiveGatewayBehavior` *(intra-domain — default)*
+- `EventBasedGatewayBehavior` *(intra-domain — default; event-based gateway, spec 119 — emits one token
+  per outbound flow to arm the racing catch events; the first-catch-wins race resolution and losing-sibling
+  cancellation are owned by `BpmnExecutionEngine`, not this behavior)*
 
 ## Activity-owned structure contracts
 
@@ -68,6 +71,12 @@ This module also exposes these activity-owned contracts:
 - `IRuntimeActivityChildFaultHandler` — invoked when a child faults; the returned decision faults
   the process deterministically (`bpmn.child.faulted`) instead of hanging a join. Error boundary
   events replace this rule in the events tier.
+- `IRuntimeLiveChildActivityConsumer` (spec 119) — opt-in marker that makes the runtime populate
+  `IRuntimeActivityExecutionContext.GetLiveChildActivities()` for the child-completion/child-fault
+  callback. `BpmnExecutionEngine` uses it to resolve a losing event-based-gateway catch's node id to its
+  live child activity-execution id before staging that subtree's seam-A cancellation
+  (`RequestChildSubtreeCancellation`, spec 112). Cancellation reason:
+  `bpmn.event-based-gateway.superseded-by-first-catch`.
 
 ## Publish-time start-trigger surface (spec 117)
 

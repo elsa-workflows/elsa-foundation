@@ -203,6 +203,7 @@ public sealed class BpmnGraph
                 case BpmnElementFamilies.EndEventNone:
                 case BpmnElementFamilies.EndEventTerminate:
                 case BpmnElementFamilies.ParallelGateway:
+                case BpmnElementFamilies.EventBasedGateway:
                     if (element.ChildNodeId is not null)
                         throw new BpmnExecutionException($"BPMN element '{element.ElementId}' ({element.ElementType}) cannot bind a child activity.");
                     break;
@@ -256,7 +257,47 @@ public sealed class BpmnGraph
             }
         }
 
+        ValidateEventBasedGateways(elements, outboundBySource, inboundByTarget);
+
         ValidateAcyclic(elements, outboundBySource);
+    }
+
+    /// <summary>
+    /// Event-based gateway rules (spec 119 D1): at least two outbound flows; every outbound flow targets an
+    /// intermediate catch event whose only inbound flow is this gateway's; the gateway's outbound flows carry
+    /// no outcome condition and no default (the race is decided by stimulus arrival, not by a condition, so an
+    /// authored condition/default is rejected rather than silently ignored).
+    /// </summary>
+    private static void ValidateEventBasedGateways(
+        IReadOnlyCollection<BpmnElement> elements,
+        ILookup<string, BpmnSequenceFlow> outboundBySource,
+        ILookup<string, BpmnSequenceFlow> inboundByTarget)
+    {
+        var elementsById = elements.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
+
+        foreach (var gateway in elements.Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EventBasedGateway)))
+        {
+            var outbound = outboundBySource[gateway.ElementId].ToArray();
+            if (outbound.Length < 2)
+                throw new BpmnExecutionException($"BPMN event-based gateway '{gateway.ElementId}' must have at least two outbound sequence flows (a race needs at least two catch events); it has {outbound.Length}.");
+
+            if (gateway.DefaultFlowId is not null)
+                throw new BpmnExecutionException($"BPMN event-based gateway '{gateway.ElementId}' cannot declare a default sequence flow.");
+
+            foreach (var flow in outbound)
+            {
+                if (flow.ConditionOutcome is not null || flow.IsDefault)
+                    throw new BpmnExecutionException($"BPMN event-based gateway '{gateway.ElementId}' outbound flow '{flow.FlowId}' cannot carry a condition or be a default flow; the race is decided by stimulus arrival.");
+
+                if (!elementsById.TryGetValue(flow.TargetRef, out var target) ||
+                    !StringComparer.Ordinal.Equals(target.ElementType, BpmnElementTypes.IntermediateCatchEvent))
+                    throw new BpmnExecutionException($"BPMN event-based gateway '{gateway.ElementId}' outbound flow '{flow.FlowId}' must target an intermediate catch event; it targets '{flow.TargetRef}'.");
+
+                var targetInbound = inboundByTarget[flow.TargetRef].Count();
+                if (targetInbound != 1)
+                    throw new BpmnExecutionException($"BPMN event-based gateway '{gateway.ElementId}' targets catch event '{flow.TargetRef}', which must have exactly one inbound flow (the gateway); it has {targetInbound}.");
+            }
+        }
     }
 
     /// <summary>

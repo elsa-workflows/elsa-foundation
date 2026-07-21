@@ -171,6 +171,134 @@ public sealed class BpmnGraphValidationTests
         Assert.Contains("only timer, message, and signal catch events", exception.Message);
     }
 
+    [Fact]
+    public void EventBasedGateway_WithSingleOutboundFlow_IsRejected()
+    {
+        var node = NewExecutableNode(
+            children: [WorkflowChild("node-a")],
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.EventBasedGateway("gw"),
+                BpmnRuntimeFixture.IntermediateCatchEvent("catch-a", BpmnEventDefinitionTypes.Message, childNodeId: "node-a"),
+                BpmnRuntimeFixture.EndEvent()
+            ],
+            flows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "gw"),
+                BpmnRuntimeFixture.Flow("flow-2", "gw", "catch-a"),
+                BpmnRuntimeFixture.Flow("flow-3", "catch-a", "end")
+            ]);
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("at least two outbound", exception.Message);
+    }
+
+    [Fact]
+    public void EventBasedGateway_TargetingNonCatchEvent_IsRejected()
+    {
+        var node = NewExecutableNode(
+            children: [WorkflowChild("node-a")],
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.EventBasedGateway("gw"),
+                BpmnRuntimeFixture.IntermediateCatchEvent("catch-a", BpmnEventDefinitionTypes.Message, childNodeId: "node-a"),
+                BpmnRuntimeFixture.Task("task-b"),
+                BpmnRuntimeFixture.EndEvent()
+            ],
+            flows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "gw"),
+                BpmnRuntimeFixture.Flow("flow-2", "gw", "catch-a"),
+                BpmnRuntimeFixture.Flow("flow-3", "gw", "task-b"),
+                BpmnRuntimeFixture.Flow("flow-4", "catch-a", "end"),
+                BpmnRuntimeFixture.Flow("flow-5", "task-b", "end")
+            ]);
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("must target an intermediate catch event", exception.Message);
+    }
+
+    [Fact]
+    public void EventBasedGateway_TargetCatchWithExtraInboundFlow_IsRejected()
+    {
+        var node = NewExecutableNode(
+            children: [WorkflowChild("node-a"), WorkflowChild("node-b")],
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.EventBasedGateway("gw"),
+                BpmnRuntimeFixture.IntermediateCatchEvent("catch-a", BpmnEventDefinitionTypes.Message, childNodeId: "node-a"),
+                BpmnRuntimeFixture.IntermediateCatchEvent("catch-b", BpmnEventDefinitionTypes.Signal, childNodeId: "node-b"),
+                BpmnRuntimeFixture.EndEvent()
+            ],
+            flows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "gw"),
+                BpmnRuntimeFixture.Flow("flow-2", "gw", "catch-a"),
+                BpmnRuntimeFixture.Flow("flow-3", "gw", "catch-b"),
+                // catch-a also receives a second inbound flow, so it is not a pure race member.
+                BpmnRuntimeFixture.Flow("flow-4", "catch-b", "catch-a"),
+                BpmnRuntimeFixture.Flow("flow-5", "catch-a", "end")
+            ]);
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("exactly one inbound flow", exception.Message);
+    }
+
+    [Fact]
+    public void EventBasedGateway_WithConditionalOutboundFlow_IsRejected()
+    {
+        var node = NewExecutableNode(
+            children: [WorkflowChild("node-a"), WorkflowChild("node-b")],
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.EventBasedGateway("gw"),
+                BpmnRuntimeFixture.IntermediateCatchEvent("catch-a", BpmnEventDefinitionTypes.Message, childNodeId: "node-a"),
+                BpmnRuntimeFixture.IntermediateCatchEvent("catch-b", BpmnEventDefinitionTypes.Signal, childNodeId: "node-b"),
+                BpmnRuntimeFixture.EndEvent()
+            ],
+            flows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "gw"),
+                BpmnRuntimeFixture.Flow("flow-2", "gw", "catch-a", conditionOutcome: "Done"),
+                BpmnRuntimeFixture.Flow("flow-3", "gw", "catch-b"),
+                BpmnRuntimeFixture.Flow("flow-4", "catch-a", "end"),
+                BpmnRuntimeFixture.Flow("flow-5", "catch-b", "end")
+            ]);
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("cannot carry a condition", exception.Message);
+    }
+
+    [Fact]
+    public void EventBasedGateway_BindingChild_IsRejected()
+    {
+        var node = NewExecutableNode(
+            children: [WorkflowChild("node-gw"), WorkflowChild("node-a"), WorkflowChild("node-b")],
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                new BpmnElement("gw", BpmnElementTypes.EventBasedGateway, childNodeId: "node-gw"),
+                BpmnRuntimeFixture.IntermediateCatchEvent("catch-a", BpmnEventDefinitionTypes.Message, childNodeId: "node-a"),
+                BpmnRuntimeFixture.IntermediateCatchEvent("catch-b", BpmnEventDefinitionTypes.Signal, childNodeId: "node-b"),
+                BpmnRuntimeFixture.EndEvent()
+            ],
+            flows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "gw"),
+                BpmnRuntimeFixture.Flow("flow-2", "gw", "catch-a"),
+                BpmnRuntimeFixture.Flow("flow-3", "gw", "catch-b"),
+                BpmnRuntimeFixture.Flow("flow-4", "catch-a", "end"),
+                BpmnRuntimeFixture.Flow("flow-5", "catch-b", "end")
+            ]);
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("cannot bind a child activity", exception.Message);
+    }
+
     private static ExecutableNode NewCatchEventNode(BpmnElement catchElement) =>
         NewExecutableNode(
             elements: [BpmnRuntimeFixture.StartEvent(), catchElement, BpmnRuntimeFixture.EndEvent()],

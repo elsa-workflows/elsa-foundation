@@ -82,4 +82,5 @@ public static class BpmnElementTypes
     public const string ExclusiveGateway = "exclusiveGateway";
     public const string ParallelGateway = "parallelGateway";
     public const string InclusiveGateway = "inclusiveGateway";
+    public const string EventBasedGateway = "eventBasedGateway";
 }

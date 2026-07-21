@@ -34,6 +34,17 @@ children, and diagnostics.
   (BPMN's implicit AND-split), a conditional flow (`conditionOutcome`) is taken when the child
   reported that outcome, and the default flow is taken only when nothing else was. Exclusive and
   inclusive gateways may bind a decision child whose outcomes drive the selection.
+- **Event-based gateways** (spec 119) fork a token into a first-catch-wins **race**: every outbound
+  flow targets an `intermediateCatchEvent` (validated: ≥2 outbound flows, each target a catch with
+  exactly one inbound flow, no child binding, no conditional/default flows). The gateway arms all its
+  catch events simultaneously (parallel-split style); the engine records the race members and, when the
+  first member's child completes, marks that member the winner and cancels every losing sibling — its
+  token ends **and** its armed suspending child's runtime activity-execution subtree is torn down through
+  the spec 112 seam-A `RequestChildSubtreeCancellation` (this is the module's first seam-A consumer). A
+  losing sibling's late completion is absorbed by the canceled-token guard. Loser teardown is staged only
+  on a non-fault winner continuation; if the winner routing itself faults, or a terminate ends the process
+  first, the losers are cancelled **logically only** (their runtime subtrees are left as-is, matching the
+  terminate/pending-fault precedent).
 - Multi-inbound parallel joins wait for one arrival per inbound flow. Multi-inbound inclusive joins
   are activation-aware: they wait only while a live token or running child can still reach an
   un-arrived inbound flow. Everything else is an implicit XOR merge.
@@ -50,14 +61,15 @@ children, and diagnostics.
 ## Slice scope and phasing
 
 This module currently ships the Phase 1 core subset (see `specs/108-bpmn-container-activity/`) plus
-the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`) and event-start (see
-`specs/117-bpmn-event-start-events/`) slices: none/timer/message/signal start events, none/terminate
+the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`), event-start (see
+`specs/117-bpmn-event-start-events/`), and event-based-gateway (see
+`specs/119-bpmn-event-based-gateway/`) slices: none/timer/message/signal start events, none/terminate
 end events, timer/message/signal intermediate catch events, task family, embedded subprocess, and
-exclusive/parallel/inclusive gateways over **acyclic** graphs. Cyclic graphs are rejected at
-validation. The interchange importer/exporter round-trips timer/message/signal event definitions on
-event-defined start and intermediate catch events (see `specs/118-bpmn-interchange-event-definitions/`),
-so these constructs can now be authored from XML. Later units add boundary events,
-event-based gateways, multi-instance, compensation, transactions, and call activities.
+exclusive/parallel/inclusive/**event-based** gateways over **acyclic** graphs. Cyclic graphs are rejected
+at validation. The interchange importer/exporter round-trips timer/message/signal event definitions on
+event-defined start and intermediate catch events (see `specs/118-bpmn-interchange-event-definitions/`)
+and round-trips the event-based gateway element, so these constructs can now be authored from XML. Later
+units add boundary events, multi-instance, compensation, transactions, and call activities.
 
 ## Expression-driven gateway conditions
 
