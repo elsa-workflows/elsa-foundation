@@ -66,6 +66,46 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
     }
 
     [Fact]
+    public async Task Oversized_definition_sets_are_partitioned_into_deterministic_bounded_batches()
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var bounded = new RecordingBoundedDocumentStore(store);
+        var projections = new GroundworkWorkflowDefinitionListProjectionStore(
+            store,
+            bounded,
+            new FakePayloadSerializer(),
+            GroundworkTestAccess.DefaultAccessContextAccessor);
+        // 450 distinct ids requested in reverse order, with duplicates sprinkled in.
+        var requested = Enumerable.Range(0, 450).Select(index => $"definition-{index:D3}").Reverse().ToList();
+        requested.AddRange(requested.Take(10).ToArray());
+
+        var rows = await projections.ListByDefinitionIdsAsync(requested);
+
+        // One row per distinct requested id, in first-seen request order.
+        Assert.Equal(450, rows.Count);
+        Assert.Equal(requested.Distinct(StringComparer.Ordinal), rows.Select(row => row.WorkflowDefinitionId));
+
+        // Each document kind was read in three canonical ordinal batches of at most the declared
+        // membership cardinality — never one oversized request and never a full-kind fetch.
+        foreach (var queryIdentity in new[]
+                 {
+                     WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
+                     WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery
+                 })
+        {
+            var batches = bounded.Queries
+                .Where(query => query.QueryIdentity == queryIdentity)
+                .Select(query => Assert.Single(Assert.Single(query.Clauses).Comparisons).Values.Select(value => value!).ToArray())
+                .OrderBy(batch => batch[0], StringComparer.Ordinal)
+                .ToArray();
+            Assert.Equal(3, batches.Length);
+            Assert.Equal([200, 200, 50], batches.Select(batch => batch.Length));
+            Assert.Equal("definition-000", batches[0][0]);
+            Assert.Equal("definition-449", batches[^1][^1]);
+        }
+    }
+
+    [Fact]
     public async Task Empty_definition_set_returns_without_provider_io()
     {
         var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());

@@ -78,37 +78,41 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
         IReadOnlyCollection<string> workflowDefinitionIds,
         CancellationToken cancellationToken = default)
     {
-        var definitionIds = workflowDefinitionIds.Distinct(StringComparer.Ordinal).ToArray();
-        if (definitionIds.Length == 0)
+        var batches = GroundworkMembershipBatches.Create(workflowDefinitionIds);
+        if (batches.Count == 0)
             return [];
 
-        var comparison = definitionIds.Length == 1
-            ? DocumentQueryComparison.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdField, definitionIds[0])
-            : DocumentQueryComparison.In(WorkflowsDesignStorageManifest.DraftDefinitionIdField, definitionIds);
         var reader = BoundedStore();
-        IReadOnlyList<DocumentEnvelope> documents;
-        try
+        var drafts = new List<GroundworkWorkflowDefinitionDraftDocument>();
+        foreach (var batch in batches)
         {
-            documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
-                reader,
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-                WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
-                [DocumentQueryClause.Of(comparison)],
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftOrder,
-                cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            throw ProviderFailure(exception);
+            var comparison = batch.Length == 1
+                ? DocumentQueryComparison.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdField, batch[0])
+                : DocumentQueryComparison.In(WorkflowsDesignStorageManifest.DraftDefinitionIdField, batch);
+            IReadOnlyList<DocumentEnvelope> documents;
+            try
+            {
+                documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+                    reader,
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+                    WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
+                    [DocumentQueryClause.Of(comparison)],
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDraftOrder,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw ProviderFailure(exception);
+            }
+
+            drafts.AddRange(documents.Select(Deserialize));
         }
 
-        return documents
-            .Select(Deserialize)
-            .ToList();
+        return drafts;
     }
 
     public SaveDocumentRequest ToSaveRequest(
