@@ -1,29 +1,12 @@
+using Groundwork.Core.Indexing;
 using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Xunit;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 
 public sealed class ActivitiesDesignStorageManifestTests
 {
-    private static readonly string[] CollectionRouteUnits =
-    [
-        ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityAvailabilitySettingsDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityDraftValidationDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind,
-        ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind
-    ];
-
     [Fact]
     public void Manifest_compiles_all_activity_design_units_to_scoped_physical_entity_tables()
     {
@@ -54,43 +37,66 @@ public sealed class ActivitiesDesignStorageManifestTests
     {
         var manifest = ActivitiesDesignStorageManifest.Create();
 
-        foreach (var documentKind in CollectionRouteUnits)
-            AssertUnit(manifest, documentKind,
-                (ActivitiesDesignStorageManifest.ByCollectionIndex, ActivitiesDesignStorageManifest.ListAllQuery, ActivitiesDesignStorageManifest.CollectionField));
-
         AssertUnit(
             manifest,
             ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-            (ActivitiesDesignStorageManifest.ByCollectionIndex, ActivitiesDesignStorageManifest.ListAllQuery, ActivitiesDesignStorageManifest.CollectionField),
             (ActivitiesDesignStorageManifest.ByDefinitionIndex, "list-by-definition", ActivitiesDesignStorageManifest.DefinitionIdField),
             (ActivitiesDesignStorageManifest.ByHeadVersionIndex, "list-by-head-version", ActivitiesDesignStorageManifest.HeadVersionIdField));
         AssertUnit(
             manifest,
             ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-            (ActivitiesDesignStorageManifest.ByCollectionIndex, ActivitiesDesignStorageManifest.ListAllQuery, ActivitiesDesignStorageManifest.CollectionField),
             (ActivitiesDesignStorageManifest.ByDefinitionIndex, "list-by-definition", ActivitiesDesignStorageManifest.DefinitionIdField));
         AssertUnit(
             manifest,
             ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind,
-            (ActivitiesDesignStorageManifest.ByCollectionIndex, ActivitiesDesignStorageManifest.ListAllQuery, ActivitiesDesignStorageManifest.CollectionField),
             (ActivitiesDesignStorageManifest.ByDraftIndex, "list-by-draft", ActivitiesDesignStorageManifest.DraftIdField));
         AssertUnit(
             manifest,
             ActivitiesDesignStorageManifest.ActivityDraftValidationDocumentKind,
-            (ActivitiesDesignStorageManifest.ByCollectionIndex, ActivitiesDesignStorageManifest.ListAllQuery, ActivitiesDesignStorageManifest.CollectionField),
             (ActivitiesDesignStorageManifest.ByDraftIndex, "list-by-draft", ActivitiesDesignStorageManifest.DraftIdField));
         AssertUnit(
             manifest,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
-            (ActivitiesDesignStorageManifest.ByCollectionIndex, ActivitiesDesignStorageManifest.ListAllQuery, ActivitiesDesignStorageManifest.CollectionField),
             (ActivitiesDesignStorageManifest.ByDefinitionIndex, "list-by-definition", ActivitiesDesignStorageManifest.DefinitionIdField),
             (ActivitiesDesignStorageManifest.ByDefinitionVersionIndex, "list-by-definition-version", ActivitiesDesignStorageManifest.DefinitionVersionIdField));
         AssertUnit(
             manifest,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind,
+            (ActivitiesDesignStorageManifest.ByDefinitionVersionIndex, "list-by-definition-version", ActivitiesDesignStorageManifest.DefinitionVersionIdField));
+        AssertUnit(
+            manifest,
             ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
-            (ActivitiesDesignStorageManifest.ByCollectionIndex, ActivitiesDesignStorageManifest.ListAllQuery, ActivitiesDesignStorageManifest.CollectionField),
             (ActivitiesDesignStorageManifest.ByOwnerVersionIndex, "list-by-owner-version", ActivitiesDesignStorageManifest.OwnerVersionIdField),
             (ActivitiesDesignStorageManifest.ByDependencyVersionIndex, "list-by-dependency-version", ActivitiesDesignStorageManifest.DependencyVersionIdField));
+    }
+
+    [Fact]
+    public void No_activity_unit_declares_a_by_collection_enumeration_route()
+    {
+        foreach (var unit in ActivitiesDesignStorageManifest.Create().StorageUnits)
+        {
+            var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+
+            Assert.DoesNotContain(storage.LogicalIndexes, index => index.Identity == "by-collection");
+            Assert.DoesNotContain(table.Indexes, index => index.LogicalName == "by-collection");
+            Assert.All(storage.BoundedQueries, query => Assert.NotEqual("list-all", query.Identity));
+        }
+    }
+
+    [Fact]
+    public void Authoring_state_list_by_definition_route_admits_equality_and_in()
+    {
+        var manifest = ActivitiesDesignStorageManifest.Create();
+        var unit = manifest.StorageUnits.Single(unit =>
+            unit.Identity.Value == ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind);
+        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+        var query = Assert.Single(storage.BoundedQueries, candidate => candidate.Identity == "list-by-definition");
+
+        Assert.Contains(query.PredicateFields, field =>
+            field.Path == ActivitiesDesignStorageManifest.DefinitionIdField &&
+            field.Operations.Contains(PortableQueryOperation.Equal) &&
+            field.Operations.Contains(PortableQueryOperation.In));
     }
 
     [Fact]
@@ -115,7 +121,10 @@ public sealed class ActivitiesDesignStorageManifestTests
             var query = Assert.Single(storage.BoundedQueries, query =>
                 query.Identity == queryIdentity && query.IndexIdentity == indexIdentity);
             Assert.Equal(
-                [new BoundedQuerySortField(ActivitiesDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)],
+                [
+                    new BoundedQuerySortField(path, PhysicalSortDirection.Ascending),
+                    new BoundedQuerySortField(ActivitiesDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)
+                ],
                 query.SortFields);
             var physicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == indexIdentity);
             Assert.False(index.IsUnique);

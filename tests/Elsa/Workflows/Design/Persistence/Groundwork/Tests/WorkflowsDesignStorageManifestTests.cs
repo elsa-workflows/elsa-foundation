@@ -50,11 +50,7 @@ public sealed class WorkflowsDesignStorageManifestTests
             WorkflowsDesignStorageManifest.FindDraftByIdQuery,
             WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
             WorkflowsDesignStorageManifest.FindCurrentDraftByDefinitionQuery,
-            WorkflowsDesignStorageManifest.FindLayoutByVersionQuery,
-            WorkflowsDesignStorageManifest.ListAllQuery,
-            WorkflowsDesignStorageManifest.ListAllQuery,
-            WorkflowsDesignStorageManifest.ListAllQuery,
-            WorkflowsDesignStorageManifest.ListAllQuery
+            WorkflowsDesignStorageManifest.FindLayoutByVersionQuery
         };
 
         Assert.Equal(
@@ -88,7 +84,6 @@ public sealed class WorkflowsDesignStorageManifestTests
     {
         var routes = WorkflowsDesignStorageManifest.Create().StorageUnits
             .SelectMany(unit => unit.PhysicalStorage!.BoundedQueries)
-            .Where(query => query.Identity != WorkflowsDesignStorageManifest.ListAllQuery)
             .ToDictionary(query => query.Identity, StringComparer.Ordinal);
 
         var versions = routes[WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery];
@@ -187,36 +182,17 @@ public sealed class WorkflowsDesignStorageManifestTests
     }
 
     [Fact]
-    public void Transitional_collection_route_is_bounded_physical_compatibility_not_a_legacy_fallback()
+    public void No_unit_declares_a_by_collection_enumeration_route()
     {
         foreach (var unit in WorkflowsDesignStorageManifest.Create().StorageUnits)
         {
             var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
             var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
-            var query = Assert.Single(storage.BoundedQueries, candidate =>
-                candidate.Identity == WorkflowsDesignStorageManifest.ListAllQuery);
 
-            Assert.Equal(WorkflowsDesignStorageManifest.ByCollectionIndex, query.IndexIdentity);
-            Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, query.ExecutionClass);
-            Assert.Equal(QueryPagingSupport.Offset, query.PagingSupport);
-            Assert.Contains(BoundedQueryResultOperation.Documents, query.ResultOperations);
-            Assert.Contains(query.PredicateFields, field =>
-                field.Path == WorkflowsDesignStorageManifest.CollectionField &&
-                field.Operations.SetEquals([PortableQueryOperation.Equal]));
-            var index = Assert.Single(storage.LogicalIndexes, index =>
-                index.Identity == WorkflowsDesignStorageManifest.ByCollectionIndex);
-            Assert.Equal(
-                [WorkflowsDesignStorageManifest.CollectionField, WorkflowsDesignStorageManifest.DocumentIdField],
-                index.Fields.Select(field => field.Path));
-            Assert.Equal(
-                [new BoundedQuerySortField(WorkflowsDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)],
-                query.SortFields);
-            var physicalIndex = Assert.Single(table.Indexes, index =>
-                index.LogicalName == WorkflowsDesignStorageManifest.ByCollectionIndex);
-            Assert.False(physicalIndex.IsUnique);
-            Assert.Equal(
-                ["storage_scope", "collection", "id_comparison_key"],
-                physicalIndex.Columns.Select(column => column.ColumnLogicalName));
+            Assert.DoesNotContain(storage.LogicalIndexes, index => index.Identity == "by-collection");
+            Assert.DoesNotContain(table.Indexes, index => index.LogicalName == "by-collection");
+            Assert.All(storage.BoundedQueries, query =>
+                Assert.NotEqual("list-all", query.Identity));
             Assert.Empty(unit.Indexes);
             Assert.Empty(unit.Queries);
         }

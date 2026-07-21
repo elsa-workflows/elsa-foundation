@@ -20,6 +20,8 @@ using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -992,7 +994,11 @@ public sealed class GroundworkActivityUpgradePlanStore(
                 kind,
                 queryIdentity,
                 [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))],
-                ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
+                // The by-key routes declare their order as (key field, document id); present that same order.
+                [
+                    new DocumentQueryOrder(fieldPath, PhysicalSortDirection.Ascending),
+                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.DocumentIdField, PhysicalSortDirection.Ascending)
+                ],
                 take: 2),
             cancellationToken);
         return matches.Documents.Count == 1

@@ -203,6 +203,5 @@ public class GroundworkActivityDefinitionStoreTests
             ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
             any.QueryIdentity);
         Assert.Equal(BoundedQueryResultOperation.Any, any.ResultOperation);
-        Assert.NotEqual(ActivitiesDesignStorageManifest.ListAllQuery, any.QueryIdentity);
     }
 }

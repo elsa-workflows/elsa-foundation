@@ -35,6 +35,9 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
     private static readonly JsonSerializerOptions ActivityJson = GroundworkActivitiesDesignJson.Options;
     private readonly JsonSerializerOptions _workflowJson = GroundworkDesignDocumentSerialization.Create(payloadSerializer);
 
+    private const string ActivityListByDefinitionQuery = "list-by-definition";
+    private const string ActivityListByOwnerVersionQuery = "list-by-owner-version";
+
     public async Task<ActivityDependencyProjectionRebuild> RebuildAsync(CancellationToken cancellationToken = default)
     {
         var items = new List<ActivityDependencyItem>();
@@ -53,10 +56,8 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
     {
         foreach (var envelope in await ListAsync(
                      ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
-                     ActivitiesDesignStorageManifest.ListAllQuery,
-                     ActivitiesDesignStorageManifest.CollectionField,
-                     ActivitiesDesignStorageManifest.ActivityDependencyEdgeCollection,
-                     ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
+                     ActivityListByOwnerVersionQuery,
+                     ActivitiesDesignStorageManifest.ByOwnerVersionDocumentOrder,
                      cancellationToken))
         {
             var edge = DeserializeActivity<ActivityDependencyEdge>(envelope);
@@ -80,10 +81,8 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
     {
         foreach (var envelope in await ListAsync(
                      ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-                     ActivitiesDesignStorageManifest.ListAllQuery,
-                     ActivitiesDesignStorageManifest.CollectionField,
-                     ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection,
-                     ActivitiesDesignStorageManifest.DeterministicDocumentOrder,
+                     ActivityListByDefinitionQuery,
+                     ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
                      cancellationToken))
         {
             var draft = DeserializeActivity<ActivityDefinitionDraft>(envelope);
@@ -106,12 +105,13 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
 
     private async Task AddWorkflowDraftsAsync(ICollection<ActivityDependencyItem> items, CancellationToken cancellationToken)
     {
+        // The workflow-draft kind has no doc-id-sorted route after the by-collection removal; a zero-clause
+        // traversal on the by-definition route (declared drafts order) still visits every draft across
+        // definitions, and the rebuild re-keys the result so only completeness matters, not the visit order.
         foreach (var envelope in await ListAsync(
                      WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-                     WorkflowsDesignStorageManifest.ListAllQuery,
-                     WorkflowsDesignStorageManifest.CollectionField,
-                     WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
-                     WorkflowsDesignStorageManifest.DeterministicDocumentOrder,
+                     WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
+                     WorkflowsDesignStorageManifest.WorkflowDefinitionDraftOrder,
                      cancellationToken))
         {
             var document = JsonSerializer.Deserialize<WorkflowDraftDocument>(envelope.ContentJson, _workflowJson)
@@ -128,12 +128,12 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
 
     private async Task AddWorkflowVersionsAsync(ICollection<ActivityDependencyItem> items, CancellationToken cancellationToken)
     {
+        // As with drafts, the workflow-version kind keeps no doc-id-sorted route; the by-definition route's
+        // declared version order performs the exhaustive traversal, and only completeness matters here.
         foreach (var envelope in await ListAsync(
                      WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-                     WorkflowsDesignStorageManifest.ListAllQuery,
-                     WorkflowsDesignStorageManifest.CollectionField,
-                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
-                     WorkflowsDesignStorageManifest.DeterministicDocumentOrder,
+                     WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery,
+                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionOrder,
                      cancellationToken))
         {
             var document = JsonSerializer.Deserialize<GroundworkDocument<WorkflowDefinitionVersion>>(envelope.ContentJson, _workflowJson)
@@ -198,11 +198,11 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
         }
     }
 
+    // Deterministic full-kind traversal on a declared shaped route: a zero-clause bounded request the route
+    // admits, exhausted with the route's own declared order.
     private async Task<IReadOnlyList<DocumentEnvelope>> ListAsync(
         string kind,
         string queryIdentity,
-        string fieldPath,
-        string collection,
         IReadOnlyList<DocumentQueryOrder> order,
         CancellationToken cancellationToken)
     {
@@ -210,7 +210,7 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
             boundedStore,
             kind,
             queryIdentity,
-            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, collection))],
+            [],
             order,
             cancellationToken);
     }

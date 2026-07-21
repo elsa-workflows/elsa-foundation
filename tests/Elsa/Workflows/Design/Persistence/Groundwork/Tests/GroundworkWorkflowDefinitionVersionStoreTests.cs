@@ -202,7 +202,6 @@ public class GroundworkWorkflowDefinitionVersionStoreTests
             WorkflowsDesignStorageManifest.FindVersionByDefinitionAndSortKeyQuery,
             exists.QueryIdentity);
         Assert.Equal(BoundedQueryResultOperation.Any, exists.ResultOperation);
-        Assert.NotEqual(WorkflowsDesignStorageManifest.ListAllQuery, exists.QueryIdentity);
     }
 
     [Fact]
