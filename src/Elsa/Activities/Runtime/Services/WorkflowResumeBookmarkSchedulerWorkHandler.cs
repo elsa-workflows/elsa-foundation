@@ -649,12 +649,12 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 durableValueChanges: []);
 
             yield return new RuntimeSchedulerWorkItem(
-                workItemId: $"{resumeWorkItem.WorkItemId}:create-bookmark:{registration.RegistrationId}",
+                workItemId: RuntimeChainId.Derive(resumeWorkItem.WorkItemId, $"create-bookmark:{registration.RegistrationId}"),
                 workflowExecutionId: resumeWorkItem.WorkflowExecutionId,
-                commandId: $"{resumeWorkItem.CommandId}:create-bookmark:{registration.RegistrationId}",
+                commandId: RuntimeChainId.Derive(resumeWorkItem.CommandId, $"create-bookmark:{registration.RegistrationId}"),
                 commandKind: WorkflowExecutionCommandKind.CreateBookmark,
                 envelopeId: resumeWorkItem.EnvelopeId,
-                idempotencyKey: $"{resumeWorkItem.IdempotencyKey}:create-bookmark:{registration.RegistrationId}",
+                idempotencyKey: RuntimeChainId.Derive(resumeWorkItem.IdempotencyKey, $"create-bookmark:{registration.RegistrationId}"),
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: resumeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
@@ -721,12 +721,12 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{resumeWorkItem.WorkItemId}:complete:{resumePayload.ActivityExecutionId}",
+            workItemId: RuntimeChainId.Derive(resumeWorkItem.WorkItemId, $"complete:{resumePayload.ActivityExecutionId}"),
             workflowExecutionId: resumeWorkItem.WorkflowExecutionId,
-            commandId: $"{resumeWorkItem.CommandId}:complete:{resumePayload.ActivityExecutionId}",
+            commandId: RuntimeChainId.Derive(resumeWorkItem.CommandId, $"complete:{resumePayload.ActivityExecutionId}"),
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             envelopeId: resumeWorkItem.EnvelopeId,
-            idempotencyKey: $"{resumeWorkItem.IdempotencyKey}:complete:{resumePayload.ActivityExecutionId}",
+            idempotencyKey: RuntimeChainId.Derive(resumeWorkItem.IdempotencyKey, $"complete:{resumePayload.ActivityExecutionId}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: resumeWorkItem.Sequence is { } sequence ? sequence + 1 : null,

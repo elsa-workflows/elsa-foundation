@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Reconciliation.Clr.Contracts;
+using Elsa.Primitives.Extensions;
 using System.Reflection;
 
 namespace Elsa.Activities.Design.Reconciliation.Clr.Services;
@@ -10,6 +11,7 @@ namespace Elsa.Activities.Design.Reconciliation.Clr.Services;
 /// stable, author-controlled bucket (the assembly the author chose to ship them in) without
 /// requiring a per-activity annotation. A feature that wants richer categorisation (e.g. a
 /// type-level <c>[Category]</c> attribute) overrides this in isolation.
+/// The raw segment is humanized for display (<c>ControlFlow</c> → <c>Control Flow</c>, <c>Bpmn</c> → <c>BPMN</c>).
 /// </summary>
 public sealed class ActivityTypeCategoryResolver : IActivityTypeCategoryResolver
 {
@@ -20,6 +22,6 @@ public sealed class ActivityTypeCategoryResolver : IActivityTypeCategoryResolver
             return null;
 
         var segments = simpleName.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return segments is [.., var last] ? last : null;
+        return segments is [.., var last] ? last.Humanize() : null;
     }
 }

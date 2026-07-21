@@ -71,8 +71,12 @@ public sealed class RuntimeDownstreamSchedulingTests
         Assert.Collection(
             result.Items,
             first => Assert.Equal("work-1", first.WorkItemId),
-            second => Assert.Equal("work-1:continuation:actexec-source", second.WorkItemId),
-            third => Assert.Equal("work-1:continuation:actexec-source:checkpoint:WorkflowCompleted:actexec-source", third.WorkItemId));
+            second => Assert.Equal(RuntimeChainId.Derive("work-1", "continuation:actexec-source"), second.WorkItemId),
+            third => Assert.Equal(
+                RuntimeChainId.Derive(
+                    RuntimeChainId.Derive("work-1", "continuation:actexec-source"),
+                    "checkpoint:WorkflowCompleted:actexec-source"),
+                third.WorkItemId));
         var write = Assert.Single(checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, write.Commit.Checkpoint.Name);
         Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));

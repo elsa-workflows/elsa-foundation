@@ -16,6 +16,7 @@ public static class WorkflowDesignApiCapabilities
         [
             new("workflow-definitions", "design/workflows/definitions"),
             new("workflow-drafts", "design/workflows/drafts/{draftId}", templated: true),
+            new("workflow-draft-validations", "design/workflows/drafts/{draftId}/validations", templated: true),
             new("workflow-versions", "design/workflows/versions/{versionId}", templated: true)
         ],
         SourceFeatureId);

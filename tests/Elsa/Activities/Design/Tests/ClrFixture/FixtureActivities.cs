@@ -125,6 +125,25 @@ public sealed class ComplexInputFixtureActivity : FixtureActivity
     public int Count { get; set; }
 }
 
+/// <summary>
+/// Exercises display-name derivation (issue #928): a multi-word input with no authored display name must be
+/// humanized (<c>ExpectedStatusCodes</c> → <c>Expected Status Codes</c>), while an explicit
+/// <c>[ActivityInput(DisplayName = …)]</c> is respected verbatim. The typed result carries the same rule for outputs.
+/// </summary>
+public sealed class DisplayNameFixtureActivity : Activity<DisplayNameFixtureResult>
+{
+    [ActivityInput]
+    public int[] ExpectedStatusCodes { get; set; } = [];
+
+    [ActivityInput(DisplayName = "Custom Label", Description = "A hand-authored description.")]
+    public string ContentType { get; set; } = null!;
+
+    protected override ValueTask<ActivityTransition<DisplayNameFixtureResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new DisplayNameFixtureResult(0)));
+}
+
+public sealed record DisplayNameFixtureResult([property: Output] int ResponseStatusCode);
+
 /// <summary>Valid option declarations used by the reflection-only scanner contract tests.</summary>
 public sealed class InputOptionsFixtureActivity : FixtureActivity
 {

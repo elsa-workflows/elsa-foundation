@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Activities.Runtime.Services;
 
@@ -61,12 +62,12 @@ internal static class ChildFaultParentEvaluation
 
         var suffix = $"child-fault-parent:{parentActivityExecutionId}:child:{faultedChildActivityExecutionId}";
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{sourceWorkItem.WorkItemId}:{suffix}",
+            workItemId: RuntimeChainId.Derive(sourceWorkItem.WorkItemId, $"{suffix}"),
             workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
-            commandId: $"{sourceWorkItem.CommandId}:{suffix}",
+            commandId: RuntimeChainId.Derive(sourceWorkItem.CommandId, $"{suffix}"),
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             envelopeId: sourceWorkItem.EnvelopeId,
-            idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:{suffix}",
+            idempotencyKey: RuntimeChainId.Derive(sourceWorkItem.IdempotencyKey, $"{suffix}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: sourceWorkItem.Sequence is { } sequence ? sequence + 1 : null,

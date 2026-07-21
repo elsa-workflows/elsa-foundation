@@ -44,6 +44,12 @@ public sealed class PromotionGateTests
 
         Assert.Equal(draftId, ex.DraftId);
         Assert.Equal(2, ex.ErrorCount);
+
+        // Issue #927: the exception now carries the full derived error list (not just the count) so
+        // the Promote endpoint can enrich the 409 ProblemDetails with the actual violations.
+        Assert.Equal(2, ex.Errors.Count);
+        Assert.Contains(ex.Errors, e => e is { Path: "$workflow", Type: "RootActivity/Missing" });
+        Assert.Contains(ex.Errors, e => e is { Path: "n1", Type: "Graph/UnknownActivityVersion" });
     }
 
     [Fact]

@@ -14,8 +14,11 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// flow conditions export as <c>elsa:conditionOutcome</c> attributes (there is no standard BPMN
 /// representation), which the importer reads back for lossless round-trips; the flow also carries a
 /// human-readable <c>conditionExpression</c> so other modelers show the condition. Nested
-/// <c>BpmnProcess</c> children inline as <c>&lt;subProcess&gt;</c> content. Layout comes from the
-/// authored <c>diagram</c> payload; a simple left-to-right grid is synthesized when absent.
+/// <c>BpmnProcess</c> children inline as <c>&lt;subProcess&gt;</c> content. Event-defined start events and
+/// intermediate catch events emit their timer/message/signal event definitions from the populated
+/// <c>BpmnEventDefinition</c> properties (spec 118); message/signal names emit a deduped root
+/// <c>&lt;message&gt;</c>/<c>&lt;signal&gt;</c> declaration each. Layout comes from the authored
+/// <c>diagram</c> payload; a simple left-to-right grid is synthesized when absent.
 /// </summary>
 public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
 {
@@ -38,9 +41,20 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             new XAttribute(XNamespace.Xmlns + "dc", BpmnXmlNames.Dc.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "di", BpmnXmlNames.Dd.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "elsa", BpmnXmlNames.Elsa.NamespaceName),
-            new XAttribute("targetNamespace", BpmnXmlNames.Elsa.NamespaceName),
-            process,
-            BuildDiagram(processId, structure));
+            new XAttribute("targetNamespace", BpmnXmlNames.Elsa.NamespaceName));
+
+        // Root-level message/signal declarations (deduped by name) precede the process, matching the
+        // importer's global id→name index the messageRef/signalRef resolve through.
+        var declarations = new Dictionary<string, (string Type, string Name)>(StringComparer.Ordinal);
+        CollectMessageSignalDeclarations(structure, declarations);
+        foreach (var declaration in declarations.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+            definitions.Add(new XElement(
+                BpmnXmlNames.Model + (declaration.Value.Type == BpmnEventDefinitionTypes.Message ? "message" : "signal"),
+                new XAttribute("id", declaration.Key),
+                new XAttribute("name", declaration.Value.Name)));
+
+        definitions.Add(process);
+        definitions.Add(BuildDiagram(processId, structure));
 
         return new XDocument(new XDeclaration("1.0", "utf-8", null), definitions).ToString();
     }
@@ -53,7 +67,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         {
             var xmlElement = element.ElementType switch
             {
-                BpmnElementTypes.StartEvent => new XElement(BpmnXmlNames.Model + "startEvent"),
+                BpmnElementTypes.StartEvent => BuildEventElement("startEvent", element, isCatch: false),
+                BpmnElementTypes.IntermediateCatchEvent => BuildEventElement("intermediateCatchEvent", element, isCatch: true),
                 BpmnElementTypes.EndEvent => BuildEndEvent(element),
                 BpmnElementTypes.SubProcess => BuildSubProcess(element, childrenByNodeId),
                 _ => new XElement(BpmnXmlNames.Model + element.ElementType)
@@ -89,6 +104,85 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             endEvent.Add(new XElement(BpmnXmlNames.Model + "terminateEventDefinition"));
         return endEvent;
     }
+
+    /// <summary>
+    /// Builds an event-defined start or intermediate catch event, emitting its timer/message/signal event
+    /// definition from the populated <see cref="BpmnEventDefinition"/> properties (spec 118 D4). A catch
+    /// event's bound child (<c>Delay</c>/<c>Event</c>) is engine detail and is not exported.
+    /// </summary>
+    private static XElement BuildEventElement(string localName, BpmnElement element, bool isCatch)
+    {
+        var xmlElement = new XElement(BpmnXmlNames.Model + localName);
+        if (element.EventDefinitions.FirstOrDefault() is { } definition)
+            AppendEventDefinition(xmlElement, definition, isCatch);
+        return xmlElement;
+    }
+
+    private static void AppendEventDefinition(XElement host, BpmnEventDefinition definition, bool isCatch)
+    {
+        switch (definition.Type)
+        {
+            case BpmnEventDefinitionTypes.Message:
+            case BpmnEventDefinitionTypes.Signal:
+            {
+                if (!definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var name) || string.IsNullOrWhiteSpace(name))
+                    return;
+                var isMessage = definition.Type == BpmnEventDefinitionTypes.Message;
+                host.Add(new XElement(
+                    BpmnXmlNames.Model + (isMessage ? "messageEventDefinition" : "signalEventDefinition"),
+                    new XAttribute(isMessage ? "messageRef" : "signalRef", MessageSignalDeclarationId(definition.Type, name))));
+                break;
+            }
+            case BpmnEventDefinitionTypes.Timer:
+            {
+                var timer = new XElement(BpmnXmlNames.Model + "timerEventDefinition");
+                if (isCatch)
+                {
+                    // A catch timer is a one-shot relative delay → <timeDuration>.
+                    if (!definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Interval, out var interval) || string.IsNullOrWhiteSpace(interval))
+                        return;
+                    timer.Add(new XElement(BpmnXmlNames.Model + "timeDuration", interval.Trim()));
+                }
+                else if (definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Cron, out var cron) && !string.IsNullOrWhiteSpace(cron))
+                {
+                    // A recurring start schedule → <timeCycle>; a cron expression round-trips as-is (not P/R-prefixed).
+                    timer.Add(new XElement(BpmnXmlNames.Model + "timeCycle", cron.Trim()));
+                }
+                else if (definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Interval, out var interval) && !string.IsNullOrWhiteSpace(interval))
+                {
+                    // A recurring start interval → <timeCycle> as an ISO-8601 duration (round-trips via the P/R discriminator).
+                    timer.Add(new XElement(BpmnXmlNames.Model + "timeCycle", interval.Trim()));
+                }
+                else
+                {
+                    return;
+                }
+
+                host.Add(timer);
+                break;
+            }
+        }
+    }
+
+    /// <summary>Collects the distinct message/signal event names referenced by start/catch elements across the whole structure tree, keyed by their deterministic root-declaration id.</summary>
+    private static void CollectMessageSignalDeclarations(BpmnAuthoredStructure structure, Dictionary<string, (string Type, string Name)> declarationsById)
+    {
+        foreach (var definition in structure.Elements.SelectMany(element => element.EventDefinitions))
+        {
+            if (definition.Type is not (BpmnEventDefinitionTypes.Message or BpmnEventDefinitionTypes.Signal))
+                continue;
+            if (!definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var name) || string.IsNullOrWhiteSpace(name))
+                continue;
+            declarationsById[MessageSignalDeclarationId(definition.Type, name)] = (definition.Type, name.Trim());
+        }
+
+        foreach (var child in structure.Activities.Where(child => StringComparer.Ordinal.Equals(child.Structure?.Kind, BpmnProcessActivity.StructureKind)))
+            CollectMessageSignalDeclarations(ReadStructure(child), declarationsById);
+    }
+
+    /// <summary>The deterministic root-declaration id for a message/signal name (the prefix keeps message and signal namespaces disjoint).</summary>
+    private static string MessageSignalDeclarationId(string type, string name) =>
+        $"{(type == BpmnEventDefinitionTypes.Message ? "message" : "signal")}-{SanitizeId(name.Trim())}";
 
     private static XElement BuildSubProcess(BpmnElement element, IReadOnlyDictionary<string, ActivityNode> childrenByNodeId)
     {
@@ -164,7 +258,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     private static ShapeBounds SynthesizeBounds(BpmnElement element, int index)
     {
         var isEvent = StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.StartEvent)
-                      || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent);
+                      || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent)
+                      || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateCatchEvent);
         var isGateway = element.ElementType.EndsWith("Gateway", StringComparison.Ordinal);
         var (width, height) = isEvent ? (36d, 36d) : isGateway ? (50d, 50d) : (100d, 80d);
         return new ShapeBounds(100 + index * 180, 100, width, height);
