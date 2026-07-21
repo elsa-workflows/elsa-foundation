@@ -68,7 +68,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                     // Runs inside the per-Draft lock, so the validated state is exactly the state promoted.
                     var errors = await inlineEventPublisher.DeriveValidationErrorsAsync(document.Entity, token);
                     if (errors.Count > 0)
-                        throw new DraftHasValidationErrorsException(draftId, errors.Count);
+                        throw new DraftHasValidationErrorsException(draftId, errors);
 
                     var draft = document.Entity;
                     var lastVersion = await versionStore.FindLatestVersionAsync(
