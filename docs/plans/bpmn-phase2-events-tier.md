@@ -4,7 +4,7 @@ Status: Phase 1 shipped 2026-07-20. This document is the handover brief for the 
 implements Phase 2. The full original program design lives in the session plan (mirrored below where
 it matters); the Phase-1 scope record is `specs/108-bpmn-container-activity/spec.md`.
 
-## Phase 2 progress (updated 2026-07-21, spec 118)
+## Phase 2 progress (updated 2026-07-22, spec 119)
 
 Spec numbers drifted from this document's suggestions: 109–111 and 113–114 were claimed by the
 engine-perf program. Shipped so far:
@@ -17,12 +17,15 @@ engine-perf program. Shipped so far:
 | Timer/message/signal intermediate catch events (`CatchEventBehavior`; `Event` gains its mid-flow wait form + `CanStartWorkflow`) | `specs/116-bpmn-catch-events` | #917 | merged |
 | Event-defined start events (`BpmnProcess` becomes a `[TriggerActivity]` with per-start-element bindings; trigger-metadata runtime seam on `IRuntimeActivityExecutionContext`; `IRecurringTriggerScheduleProvider` goes fan-out) | `specs/117-bpmn-event-start-events` | #935 | merged |
 | Interchange eventDefinition wiring (root `message`/`signal` index → `name`; catch-event child synthesis `Delay`/`Event`; timer `timeCycle`/`timeDuration` mapping with `P`/`R` discriminator; export + publish-parity guard; no runtime changes) | `specs/118-bpmn-interchange-event-definitions` | #940 | merged |
+| Event-based gateway (first-catch-wins race: additive `BpmnEventRace` state, engine-owned resolution, seam-A loser teardown — first BPMN seam-A consumer; `IRuntimeLiveChildActivityConsumer` + `GetLiveChildActivities()` runtime seam closes the node-id→aei gap) | `specs/119-bpmn-event-based-gateway` | #948 | merged |
 
-Head of the remaining queue: **event-based gateway** (schedule all candidate catch children; first
-completion cancels the rest via seam A's `RequestChildSubtreeCancellation` — spec 112 rules: Defer/
-Complete only, terminal target = legal race no-op). Then: boundary events (seams A+B), multi-instance.
-Studio authoring UX for event definitions (separate repo) remains unpaired — pull it in only if the
-owner asks.
+Head of the remaining queue: **boundary events** (listener-child pattern: synthesized listener scheduled
+alongside the host child; host completes → cancel listener via seam A; interrupting listener fires →
+cancel host via seam A; error boundary absorbs via seam B's `RequestChildFaultAbsorption`, spec 115).
+Then: multi-instance (lifts the acyclic-graph restriction; `LoopIterationScopeRequest` iteration
+frames). Studio authoring UX for event definitions (separate repo) remains unpaired — pull it in only
+if the owner asks. Terminate/fault paths still cancel logically only (`CancelLiveWork`); routing them
+through seam A is a noted follow-up.
 
 Start-events slice notes (spec 117, 2026-07-21): the matched trigger binding's `Metadata` now flows
 end-to-end into `IRuntimeActivityExecutionContext.TriggerNodeId`/`TriggerMetadata` (reserved

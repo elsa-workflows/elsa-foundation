@@ -46,6 +46,21 @@ internal static class BpmnStateMutator
             Sequence = state.Sequence + 1
         };
 
+    public static BpmnExecutionState AddRace(BpmnExecutionState state, string gatewayElementId, IReadOnlyCollection<string> memberTokenIds)
+    {
+        var race = new BpmnEventRace(NewId(state, "race"), gatewayElementId, memberTokenIds);
+        return state with { Races = state.Races.Append(race).ToArray(), Sequence = state.Sequence + 1 };
+    }
+
+    public static BpmnExecutionState MarkRaceResolved(BpmnExecutionState state, string raceId) =>
+        state with
+        {
+            Races = state.Races
+                .Select(race => StringComparer.Ordinal.Equals(race.RaceId, raceId) ? race with { Resolved = true } : race)
+                .ToArray(),
+            Sequence = state.Sequence + 1
+        };
+
     public static BpmnToken GetRequiredToken(BpmnExecutionState state, string tokenId) =>
         state.Tokens.FirstOrDefault(token => StringComparer.Ordinal.Equals(token.TokenId, tokenId))
         ?? throw new Exceptions.BpmnExecutionException($"BPMN token '{tokenId}' was not found on the execution state.");

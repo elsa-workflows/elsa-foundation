@@ -40,6 +40,16 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests();
 
     /// <summary>
+    /// The parent's direct, non-terminal child activity executions (spec 119 D4), populated by the runtime
+    /// only during a child-completion/child-fault evaluation and only when the parent activity implements
+    /// <c>IRuntimeLiveChildActivityConsumer</c>; empty otherwise. Read-only and spoof-proof (projected from
+    /// committed activity-execution state). A structural activity that races sibling children (the BPMN
+    /// event-based gateway) resolves a losing sibling's activity-execution id from it — keyed by executable
+    /// node id — to stage the sibling's subtree cancellation via <see cref="RequestChildSubtreeCancellation"/>.
+    /// </summary>
+    IReadOnlyCollection<RuntimeLiveChildActivity> GetLiveChildActivities();
+
+    /// <summary>
     /// Stages cancellation of one scheduled child's activity-execution subtree (spec 112). Only valid
     /// during a child-completion/child-fault evaluation with a <c>Defer</c> or <c>Complete</c>
     /// continuation; applied atomically in the same checkpoint commit as the continuation.

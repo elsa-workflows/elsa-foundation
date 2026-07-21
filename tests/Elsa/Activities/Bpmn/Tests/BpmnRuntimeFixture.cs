@@ -183,6 +183,9 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static BpmnElement ParallelGateway(string elementId) =>
         new(elementId, BpmnElementTypes.ParallelGateway);
 
+    public static BpmnElement EventBasedGateway(string elementId) =>
+        new(elementId, BpmnElementTypes.EventBasedGateway);
+
     public static BpmnElement InclusiveGateway(string elementId, string? childNodeId = null, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.InclusiveGateway, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
 

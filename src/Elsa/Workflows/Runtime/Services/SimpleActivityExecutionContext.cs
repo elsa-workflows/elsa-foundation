@@ -26,7 +26,8 @@ public sealed class SimpleActivityExecutionContext(
     string? triggerNodeId = null,
     string? invocationId = null,
     string? executableNodeId = null,
-    IReadOnlyDictionary<string, string>? triggerMetadata = null)
+    IReadOnlyDictionary<string, string>? triggerMetadata = null,
+    IReadOnlyCollection<RuntimeLiveChildActivity>? liveChildActivities = null)
     : IRuntimeActivityExecutionContext
 {
     // The single construction path for a runtime activity context.
@@ -41,7 +42,8 @@ public sealed class SimpleActivityExecutionContext(
         VariableScope? variableScope,
         JsonElement? triggerPayload = null,
         string? triggerNodeId = null,
-        IReadOnlyDictionary<string, string>? triggerMetadata = null)
+        IReadOnlyDictionary<string, string>? triggerMetadata = null,
+        IReadOnlyCollection<RuntimeLiveChildActivity>? liveChildActivities = null)
     {
         ArgumentNullException.ThrowIfNull(activity);
         ArgumentNullException.ThrowIfNull(workflowExecutionId);
@@ -58,7 +60,8 @@ public sealed class SimpleActivityExecutionContext(
             variableScope,
             triggerPayload,
             triggerNodeId,
-            triggerMetadata: triggerMetadata);
+            triggerMetadata: triggerMetadata,
+            liveChildActivities: liveChildActivities);
     }
 
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
@@ -98,6 +101,10 @@ public sealed class SimpleActivityExecutionContext(
 
     public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>
         _childActivityScheduleRequests.ToArray();
+
+    private readonly IReadOnlyCollection<RuntimeLiveChildActivity> _liveChildActivities = liveChildActivities ?? [];
+
+    public IReadOnlyCollection<RuntimeLiveChildActivity> GetLiveChildActivities() => _liveChildActivities;
 
     public void RequestChildSubtreeCancellation(
         string childActivityExecutionId,

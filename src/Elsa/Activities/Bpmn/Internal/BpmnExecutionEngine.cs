@@ -30,6 +30,9 @@ public sealed class BpmnExecutionEngine(
     public const string SchedulingCauseMetadataKey = "bpmn.schedulingCause";
     public const string TargetNodeIdMetadataKey = "bpmn.targetNodeId";
 
+    /// <summary>The seam-A cancellation reason recorded on a losing event-based-gateway catch's cancelled subtree (spec 119).</summary>
+    public const string EventGatewayRaceCancellationReason = "bpmn.event-based-gateway.superseded-by-first-catch";
+
     public ValueTask<RuntimeStructuralContinuation> StartAsync(IRuntimeActivityExecutionContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -119,6 +122,17 @@ public sealed class BpmnExecutionEngine(
             return ValueTask.FromResult(FinishEvaluation(context, new EvaluationResult(state)));
         }
 
+        // spec 119 D2/D3: if the completing token is a live event-based-gateway race member, it is the winner.
+        // Resolve the race logically first (cancel losing member tokens, drop their active children), and carry
+        // the losers' seam-A subtree cancellations — they are staged later only on a non-fault continuation.
+        IReadOnlyCollection<BpmnLoserCancellation> loserCancellations = [];
+        var race = state.Races.FirstOrDefault(candidate => !candidate.Resolved && candidate.MemberTokenIds.Contains(token.TokenId, StringComparer.Ordinal));
+        if (race is not null)
+        {
+            (state, loserCancellations) = ResolveEventRace(context, state, race, token.TokenId);
+            token = GetRequiredToken(state, token.TokenId);
+        }
+
         var element = graph.GetRequiredElement(token.AtElementId);
         var behavior = behaviorRegistry.GetRequired(BpmnElementFamilies.Resolve(element));
         var behaviorContext = new BpmnBehaviorContext(
@@ -134,7 +148,7 @@ public sealed class BpmnExecutionEngine(
         if (result is { Fault: null, Terminated: false })
             result = Propagate(context, graph, result.State, completionContext.CompletedChildActivityExecutionId);
 
-        return ValueTask.FromResult(FinishEvaluation(context, result));
+        return ValueTask.FromResult(FinishEvaluation(context, result with { LoserCancellations = loserCancellations }));
     }
 
     /// <summary>
@@ -162,7 +176,14 @@ public sealed class BpmnExecutionEngine(
             state));
     }
 
-    private sealed record EvaluationResult(BpmnExecutionState State, ActivityFault? Fault = null, bool Terminated = false);
+    private sealed record EvaluationResult(
+        BpmnExecutionState State,
+        ActivityFault? Fault = null,
+        bool Terminated = false,
+        IReadOnlyCollection<BpmnLoserCancellation>? LoserCancellations = null);
+
+    /// <summary>One losing event-based-gateway race member whose live armed child subtree is to be torn down via seam A (spec 119).</summary>
+    private sealed record BpmnLoserCancellation(string ActivityExecutionId, string LoserElementId);
 
     /// <summary>
     /// The token propagation loop: releases ready joins, then dispatches the first live
@@ -242,6 +263,10 @@ public sealed class BpmnExecutionEngine(
                         break;
                     }
 
+                    // spec 119: the tokens an event-based gateway mints are the members of a first-catch-wins race.
+                    var isEventBasedGateway = StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EventBasedGateway);
+                    var memberTokenIds = isEventBasedGateway ? new List<string>(command.FlowIds.Count) : null;
+
                     foreach (var flowId in command.FlowIds)
                     {
                         var flow = graph.GetRequiredFlow(flowId);
@@ -251,6 +276,7 @@ public sealed class BpmnExecutionEngine(
                         var status = BpmnTokenCoordinator.ShouldWaitAtJoin(graph, flow.TargetRef) ? BpmnTokenStatus.WaitingAtJoin : BpmnTokenStatus.Active;
                         var emitted = NewToken(state, flow.TargetRef, flow.FlowId, token.TokenId, status, schedulingActivityExecutionId);
                         state = AddToken(state, emitted);
+                        memberTokenIds?.Add(emitted.TokenId);
                         state = BpmnDiagnosticAccumulator.Add(
                             state,
                             status == BpmnTokenStatus.WaitingAtJoin ? BpmnDiagnosticKind.Waiting : BpmnDiagnosticKind.TokenEmitted,
@@ -261,6 +287,9 @@ public sealed class BpmnExecutionEngine(
                                 ? $"BPMN token '{emitted.TokenId}' is waiting at join '{flow.TargetRef}'."
                                 : $"BPMN token '{emitted.TokenId}' arrived at element '{flow.TargetRef}' via flow '{flow.FlowId}'.");
                     }
+
+                    if (memberTokenIds is { Count: > 0 })
+                        state = AddRace(state, element.ElementId, memberTokenIds);
 
                     break;
                 }
@@ -342,6 +371,8 @@ public sealed class BpmnExecutionEngine(
         var liveTokens = state.Tokens.Where(token => token.Status is BpmnTokenStatus.Active or BpmnTokenStatus.AwaitingChild or BpmnTokenStatus.WaitingAtJoin).ToArray();
         if (liveTokens.Length == 0 && state.ActiveChildren.Count == 0)
         {
+            // Clean completion — legal to tear down the losing race members' subtrees in this commit (spec 119 D3).
+            StageLoserCancellations(context, result.LoserCancellations);
             state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Completed, null, null, null, "BPMN process completed because no live tokens remain.");
             return persister.StageState(RuntimeStructuralContinuation.Complete(), state);
         }
@@ -357,7 +388,63 @@ public sealed class BpmnExecutionEngine(
             return persister.StageState(RuntimeStructuralContinuation.Faulted(new ActivityFault("bpmn.join.deadlock", message)), state);
         }
 
+        // Clean deferral — legal to tear down the losing race members' subtrees in this commit (spec 119 D3).
+        StageLoserCancellations(context, result.LoserCancellations);
         return persister.StageState(RuntimeStructuralContinuation.Defer, state);
+    }
+
+    /// <summary>
+    /// Resolves a first-catch-wins race (spec 119): flips every losing member token to <c>Canceled</c>, drops
+    /// each loser's active-child record, and marks the race resolved. Returns the losers whose armed child is a
+    /// live direct child of the process so their runtime subtrees can be torn down via seam A on a clean
+    /// continuation (D3); a loser whose child is not live is a benign skip (the token is still canceled, which
+    /// absorbs its late completion). Purely logical — no context mutation happens here.
+    /// </summary>
+    private static (BpmnExecutionState State, IReadOnlyCollection<BpmnLoserCancellation> Cancellations) ResolveEventRace(
+        IRuntimeActivityExecutionContext context,
+        BpmnExecutionState state,
+        BpmnEventRace race,
+        string winnerTokenId)
+    {
+        var liveChildAeiByNode = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var live in context.GetLiveChildActivities())
+            liveChildAeiByNode[live.ExecutableNodeId] = live.ActivityExecutionId; // node ids are unique among a process's live direct children (validation-enforced).
+
+        var cancellations = new List<BpmnLoserCancellation>();
+        foreach (var loserTokenId in race.MemberTokenIds.Where(id => !StringComparer.Ordinal.Equals(id, winnerTokenId)))
+        {
+            var loser = state.Tokens.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.TokenId, loserTokenId));
+            if (loser is null || loser.Status is BpmnTokenStatus.Consumed or BpmnTokenStatus.Canceled)
+                continue;
+
+            var loserChild = state.ActiveChildren.FirstOrDefault(child => StringComparer.Ordinal.Equals(child.TokenId, loserTokenId));
+            state = UpdateToken(state, loser with { Status = BpmnTokenStatus.Canceled });
+            if (loserChild is not null)
+            {
+                state = RemoveActiveChild(state, loserTokenId);
+                if (liveChildAeiByNode.TryGetValue(loserChild.NodeId, out var activityExecutionId))
+                    cancellations.Add(new BpmnLoserCancellation(activityExecutionId, loser.AtElementId));
+            }
+
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Canceled, loser.AtElementId, loser.FlowId, loser.TokenId,
+                $"BPMN event-based gateway '{race.GatewayElementId}' cancelled losing race member token '{loser.TokenId}' at '{loser.AtElementId}' after the first catch won.");
+        }
+
+        state = MarkRaceResolved(state, race.RaceId);
+        return (state, cancellations);
+    }
+
+    /// <summary>Stages each carried loser subtree cancellation on the runtime context (seam A). Only called from a non-fault continuation (spec 119 D3).</summary>
+    private static void StageLoserCancellations(IRuntimeActivityExecutionContext context, IReadOnlyCollection<BpmnLoserCancellation>? cancellations)
+    {
+        if (cancellations is null)
+            return;
+
+        foreach (var cancellation in cancellations)
+            context.RequestChildSubtreeCancellation(
+                cancellation.ActivityExecutionId,
+                EventGatewayRaceCancellationReason,
+                new Dictionary<string, string> { [ElementIdMetadataKey] = cancellation.LoserElementId });
     }
 
     /// <summary>Cancels every live token and drops the active-child records; in-flight children keep running and their late completions are absorbed by the token-status guard.</summary>
