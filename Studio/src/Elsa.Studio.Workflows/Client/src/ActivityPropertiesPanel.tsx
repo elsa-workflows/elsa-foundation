@@ -19,8 +19,6 @@ import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from 
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
 import {
-  describeCollectionForInput,
-  describeDictionaryForInput,
   formatTypeName,
   getLiteralEditorValue,
   getLiteralDefaultValue,
@@ -45,6 +43,7 @@ import {
   type ConversionProfileReference
 } from "./conversionSettings";
 import { listConversionProfiles } from "./api/expressions";
+import { describeCollectionForInput, describeDictionaryForInput } from "./collectionInputDescriptor";
 import { readOptionsProvider, useActivityInputOptions } from "./activityInputOptions";
 import {
   readWorkflowInputs,

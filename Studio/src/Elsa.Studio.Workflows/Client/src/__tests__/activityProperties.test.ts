@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
+import { describeCollectionForInput, describeDictionaryForInput } from "../collectionInputDescriptor";
 import {
   camelize,
   defaultCollectionItem,
-  describeCollectionForInput,
-  describeDictionaryForInput,
   describeDictionaryType,
   describeCollectionType,
   formatTypeName,

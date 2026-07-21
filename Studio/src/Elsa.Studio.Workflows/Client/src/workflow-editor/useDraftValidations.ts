@@ -33,6 +33,12 @@ export function useDraftValidations({
 }): DraftValidationsState {
   const [state, setState] = useState<DraftValidationsState>({ status: "idle", available: null, errors: [] });
   const availableRef = useRef<boolean | null>(null);
+  // Hold the context in a ref so the effect can depend on the stable `baseUrl` string rather than the
+  // context object identity. Depending on the object would re-run the effect on every parent render —
+  // continuously resetting the debounce timer (so the fetch never fires) and thrashing re-renders.
+  const contextRef = useRef(context);
+  contextRef.current = context;
+  const baseUrl = context.baseUrl ?? "";
   const signature = draft ? getDraftSignature(draft) : "";
   const draftId = draft?.id ?? "";
 
@@ -46,9 +52,10 @@ export function useDraftValidations({
 
     const controller = new AbortController();
     let active = true;
-    setState(previous => ({ ...previous, status: "loading" }));
+    // Reflect loading without forcing an extra render on the common path where we're already loading.
+    setState(previous => previous.status === "loading" ? previous : { ...previous, status: "loading" });
     const timeout = window.setTimeout(() => {
-      getDraftValidations(context, draftId, controller.signal).then(
+      getDraftValidations(contextRef.current, draftId, controller.signal).then(
         errors => {
           if (!active || controller.signal.aborted) return;
           if (errors === null) {
@@ -71,7 +78,7 @@ export function useDraftValidations({
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [context, draftId, signature, enabled]);
+  }, [baseUrl, draftId, signature, enabled]);
 
   return state;
 }
