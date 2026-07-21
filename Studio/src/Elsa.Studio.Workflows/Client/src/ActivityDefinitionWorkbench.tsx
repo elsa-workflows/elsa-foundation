@@ -13,6 +13,7 @@ import { activityDesignKeys, classifyActivityDefinitionReadFailure, redactActivi
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
 import { ActivityDefinitionDraftDialog, isActionAllowed } from "./ActivityDefinitionDraftManagementDialogs";
 import { ActivityDefinitionForkDialog } from "./ActivityDefinitionForkDialog";
+import { formatActivityDefinitionDate as formatDate } from "./workflowFormatting";
 
 const ActivityDefinitionVersionLifecycleDialog = lazy(async () => {
   const module = await import("./ActivityDefinitionVersionLifecycleDialog");
@@ -265,5 +266,3 @@ function handleTabKey(event: KeyboardEvent, tabs: { id: Section }[], active: Sec
   navigate(tabs[next].id);
   window.setTimeout(() => elements[next]?.focus());
 }
-
-function formatDate(value: string | null | undefined) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString(); }

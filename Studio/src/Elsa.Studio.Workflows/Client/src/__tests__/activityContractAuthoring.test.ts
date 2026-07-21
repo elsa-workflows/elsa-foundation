@@ -32,6 +32,48 @@ describe("Activity contract authoring model", () => {
     });
   });
 
+  it("defaults new members to a String capability type and a Single collection kind", () => {
+    const capabilities = authoringCapabilities();
+    // A Boolean type that sorts before "String" alphabetically and advertises Array before Single —
+    // exactly the shape that previously produced a Boolean + Array default.
+    capabilities.types.unshift({
+      alias: "Boolean",
+      displayName: "Boolean",
+      category: "Primitive",
+      defaultEditor: "checkbox",
+      supportedCollectionKinds: ["Array", "Single"],
+      supportsNull: false,
+      supportsDurability: true,
+      compatibleStorageDriverKeys: ["elsa.json"]
+    });
+    capabilities.types[1] = { ...capabilities.types[1], supportedCollectionKinds: ["Array", "Single"] };
+
+    expect(createInputContract("Note", emptyContract(), capabilities)).toMatchObject({
+      type: { alias: "String", collectionKind: "Single" }
+    });
+    expect(createOutputContract("Result", emptyContract(), capabilities)).toMatchObject({
+      type: { alias: "String", collectionKind: "Single" }
+    });
+  });
+
+  it("falls back to the first authorable type when no String type is advertised", () => {
+    const capabilities = authoringCapabilities();
+    capabilities.types = [{
+      alias: "Number",
+      displayName: "Number",
+      category: "Primitive",
+      defaultEditor: "number",
+      supportedCollectionKinds: ["List"],
+      supportsNull: false,
+      supportsDurability: true,
+      compatibleStorageDriverKeys: ["elsa.json"]
+    }];
+
+    expect(createInputContract("Amount", emptyContract(), capabilities)).toMatchObject({
+      type: { alias: "Number", collectionKind: "List" }
+    });
+  });
+
   it("generates deterministic collision-safe reference keys without requiring unique names", () => {
     expect(generateReferenceKey("Résumé status", ["resume-status"])).toBe("resume-status-2");
     expect(generateReferenceKey("Résumé status", ["resume-status", "resume-status-2"])).toBe("resume-status-3");
