@@ -151,6 +151,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         const result = await agentClient.bootstrap();
         if (!disposed) {
           setBootstrap(result);
+          api.ai.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
           // Adopt the deployment's default autonomy mode (already clamped to its ceiling server-side).
           // The dropdown is disabled until ready, so this can't clobber a user's choice.
           setAutoApplyMode(result.policy.defaultAutonomyMode);
@@ -158,12 +159,13 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       } catch (e) {
         if (!disposed) {
           setBootstrap({ enabled: false, providerStatus: "unavailable", modes: [], capabilities: [], provider: undefined, policy: DISABLED_POLICY });
+          api.ai.providerAvailability.set(false);
           setError(getAgentErrorMessage(e));
         }
       }
     })();
     return () => { disposed = true; };
-  }, [agentClient]);
+  }, [agentClient, api]);
 
   const ensureSession = useCallback(async (collected: StudioAgentContextAttachment[]) => {
     if (sessionIdRef.current) return sessionIdRef.current;

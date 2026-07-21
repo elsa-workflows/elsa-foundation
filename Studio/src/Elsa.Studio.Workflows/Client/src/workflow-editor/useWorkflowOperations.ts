@@ -13,8 +13,8 @@ import {
 import { decorateConversionDiagnostic } from "../conversionSettings";
 import { buildExportPayload, downloadWorkflowJson } from "../workflowSerialization";
 import { readWorkflowInputs } from "../workflowReferenceAuthoring";
-import { createDraftSnapshotId, getDraftSignature, isRejectedTestRun } from "./editorHelpers";
-import type { WorkflowEditorOperation, WorkflowTestRunState } from "./editorTypes";
+import { createDraftSnapshotId, describeWorkflowError, getDraftSignature, isRejectedTestRun } from "./editorHelpers";
+import type { WorkflowEditorOperation, WorkflowErrorInput, WorkflowTestRunState } from "./editorTypes";
 import { createPublicationReview, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationReviewState } from "./publicationReview";
 
 interface WorkflowOperationsParams {
@@ -30,7 +30,7 @@ interface WorkflowOperationsParams {
   setPublishedArtifact(id: string | null): void;
   setOperation(operation: WorkflowEditorOperation): void;
   setStatus(value: string): void;
-  setError(value: string): void;
+  setError(value: WorkflowErrorInput): void;
   setActiveRightPanelId(id: string): void;
   setInspectorCollapsed(collapsed: boolean): void;
   setAutosavePaused(paused: boolean): void;
@@ -326,7 +326,7 @@ export function useWorkflowOperations({
       setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
     } catch (e) {
       setStatus("");
-      setError(e instanceof Error ? e.message : String(e));
+      setError(describeWorkflowError(e, "The test run could not be dispatched."));
     } finally {
       setOperation("idle");
     }

@@ -17,3 +17,5 @@ export const maxInspectorWidth = 560;
 export const defaultInspectorWidth = 320;
 export const collapsedSidePanelWidth = 42;
 export const sidePanelResizeStep = 16;
+// Shown on AI-only toolbar actions (Risks/Propose) when the Weaver provider is not configured/reachable.
+export const weaverUnavailableTitle = "Risk analysis requires the Weaver assistant, which is not configured.";

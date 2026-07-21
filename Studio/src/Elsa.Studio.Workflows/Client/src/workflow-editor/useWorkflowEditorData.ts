@@ -7,6 +7,8 @@ import { ApiCapabilityUnavailableError } from "../api/capabilities";
 import type { RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import { listExpressionDescriptors } from "../api/expressions";
 import { observeReusableActivity } from "../reusableActivityObservability";
+import type { WorkflowErrorInput } from "./editorTypes";
+import { describeWorkflowError } from "./editorHelpers";
 
 interface WorkflowEditorDataParams {
   context: StudioEndpointContext;
@@ -16,7 +18,7 @@ interface WorkflowEditorDataParams {
   loadDraft(draft: WorkflowDraft | null): void;
   // Seed the persistence baseline so a just-loaded draft doesn't immediately autosave.
   markSaved(draft: WorkflowDraft | null): void;
-  setError(value: string): void;
+  setError(value: WorkflowErrorInput): void;
 }
 
 // Loads (and reloads, after a promote) everything the editor renders around the draft: the definition
@@ -108,7 +110,7 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
   }, [context, definitionId, resetHistory, loadDraft, markSaved, reloadExpressionDescriptors, setError]);
 
   useEffect(() => {
-    void reload().catch(e => setError(e instanceof Error ? e.message : String(e)));
+    void reload().catch(e => setError(describeWorkflowError(e, "Could not load the workflow editor.")));
   }, [reload, setError]);
 
   const expressionStateMatchesAuthority = expressionDescriptorState.context === context
