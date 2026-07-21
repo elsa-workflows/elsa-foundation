@@ -22,6 +22,12 @@ neutral ports. Each provider feature registers a scoped access-bound `IDocumentS
 | `GroundworkRuntimePersistenceMongoDb` | MongoDB replica set | Runtime only | `MongoDbGroundworkRuntimePersistenceShellFeature` |
 | `GroundworkUnifiedPersistenceMongoDb` | MongoDB replica set | Six provider-level families; Identity explicit | `AddGroundworkMongoDbUnifiedPersistence` |
 
+**Optional cross-drain group commit (spec 115).** `AddGroundworkRuntimeGroupCommit(options?)` — called
+after `AddGroundworkRuntimeStores()` — registers a process-wide `RuntimeGroupCommitCoordinator` that folds
+concurrent checkpoint commits contending for the single durable writer into one shared unit-of-work / one
+fsync (`RuntimeGroupCommitOptions.MaxBatchSize`, default 64). Off unless registered; a lone committer is
+never batched, and a failed batch degrades to per-member individual commits.
+
 The unified features share one host-selected provider-neutral manifest snapshot for Runtime, Secrets,
 Distributed Runtime, Workflows Design, Activities Design, and Publishing. Identity contributes its own
 manifest only when the host explicitly selects it and uses the matching deployment schema. SQLite stays the default composition; PostgreSQL is opt-in via
