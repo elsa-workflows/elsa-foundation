@@ -461,6 +461,43 @@ Groundwork core persistence `639/639`, architecture ratchets `263/263`, full
 `Elsa.Server.slnx` Release build `0` errors, `git diff --check` clean; the T048
 domain/API counts are unchanged from the evidence section above.
 
+### T062 provider-materialization ledger closure and one-provider-per-host evidence (2026-07-21)
+
+The single open §2.23 ledger row — SQLite/PostgreSQL/SQL Server/MongoDB provider
+registrations, initializers, target compilers, and shell features — is closed against
+suites that already exist on the branch rather than by duplicating them: per-provider
+registration/composition resolution (`GroundworkRuntimePersistenceRegistrationTests`
+Sqlite facts, `SqlServerGroundworkPersistenceRegistrationTests`,
+`PostgreSqlGroundworkRuntimePersistenceRegistrationTests`,
+`MongoDbGroundworkPersistenceRegistrationTests`, `UnifiedGroundworkHostTests`),
+admission-only initializers, and exact target/route evidence (SQLite
+`GroundworkTargetBaselineTests` pins the applied target and plan fingerprints at
+Groundwork `0.0.1-preview.78`; SQL Server dispatch/stimulus/history route-fit and
+`Production_initializer_is_admission_only_and_constructs_the_exact_physical_store`).
+
+The one-provider-per-host guard is proven directly against the reference-host
+composition surfaces. A provider-neutral abstract suite
+`ProviderLeafConflictContractSuite` lives in the shared `DesignConformance/Tests`
+assembly (no provider SDK reference — the `DesignContractSuiteShapeTests` purity audit
+stays green) and is subclassed per leaf as
+`{Sqlite,SqlServer,PostgreSql,MongoDb}ProviderLeafConflictContractSuite`. Each subclass
+composes its provider in the runtime-only, design-only, and combined reference-host
+shapes through the production registration methods (`AddGroundwork{Provider}UnifiedPersistence`,
+`Add{Provider}GroundworkDocumentStore` + `AddGroundworkRuntimeStores` /
+`AddGroundworkWorkflowsDesignStores` + `AddGroundworkActivitiesDesignStores`) and then
+composes a second, different Groundwork provider leaf. The guard rejects the second leaf
+at registration time (no connection opened, Docker-free) with the established
+`SelectGroundworkProviderLeaf` diagnostic — `Conflicting Groundwork provider leaves were
+selected: … Select exactly one concrete Groundwork provider leaf per host.` — asserted in
+both composition orders (6 branches per provider).
+
+Verification (Release, `2026-07-21`): shared design conformance `96` passed + `1`
+intentional skip (purity audit included); SQLite design-conformance leaf full run
+`51/51` (45 prior + 6 new conflict branches); the SQL Server, PostgreSQL, and MongoDB
+leaves each pass their `ProviderLeafConflict` branches `6/6` without Docker (their
+Testcontainers integration suites are unaffected). Production manifests and the SQLite
+`GroundworkTargetBaselineTests` fingerprints are unchanged.
+
 ## 1. Restore and build
 
 ```bash
