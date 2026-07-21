@@ -348,7 +348,17 @@ checkpoints on top of the merged US1 result `4d44cd435`:
   admissible. The SQLite schema fingerprints advanced accordingly: target
   `eaaf809f763873c2b9b5a750c3b5103b133716020675aca38773dadb0739ef56`, plan
   `7cded8b9102fe778b7746fd4f1d3e94c2fe548b9d52669e742fb69e433b85bdd`
-  (Groundwork family unchanged at `0.0.1-preview.77`).
+  (Groundwork family unchanged at `0.0.1-preview.77`). US3 later removed the
+  duplicate `activity-definition-by-search` physical index (identical
+  (display_name, activity_definition_id) key pattern to the display-name index —
+  rejected by MongoDB and double-paid on writes by every provider), rebinding the
+  activity search route to the display-name index, removed the duplicate ordered
+  current-draft index the same way (identical key pattern to drafts-by-definition),
+  and bounded the projected searchable column widths (text 256, identity/sort keys
+  128) so every compound index key fits SQL Server's 1700-byte limit; the
+  fingerprints advanced to target
+  `509443e8639a7ef510fd25edc229623d675bfa2a66a6b7a36eb0a1fe51ead3b0`, plan
+  `04ab0839221428ef1b109fcbe38b817d4e0305b3c96796f835778477a6250d3d`.
 - **T042/T046** — `ElsaGroundworkQueryRoutes.MaximumMembershipCount` (`200`) is the
   declared IN cardinality; the translator rejects a larger single membership before
   provider I/O, and `GroundworkMembershipBatches` canonicalizes oversized caller sets

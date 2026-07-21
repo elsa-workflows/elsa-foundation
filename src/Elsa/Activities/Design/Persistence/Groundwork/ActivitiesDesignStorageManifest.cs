@@ -298,8 +298,7 @@ public static class ActivitiesDesignStorageManifest
             LogicalIndex("activity-definition-by-type-key", [ActivityDefinitionTypeKeyField, ActivityDefinitionIdField]),
             LogicalIndex("activity-definition-by-category", [ActivityDefinitionCategoryField, ActivityDefinitionIdField]),
             LogicalIndex("activity-definition-by-display-name", [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField]),
-            LogicalIndex("activity-definition-by-description", [ActivityDefinitionDescriptionField, ActivityDefinitionIdField]),
-            LogicalIndex("activity-definition-by-search", [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField])
+            LogicalIndex("activity-definition-by-description", [ActivityDefinitionDescriptionField, ActivityDefinitionIdField])
         };
         var physicalIndexes = new[]
         {
@@ -308,8 +307,7 @@ public static class ActivitiesDesignStorageManifest
             PhysicalIndex("activity-definition-by-type-key", "activity_type_key", "activity_definition_id"),
             PhysicalIndex("activity-definition-by-category", "category", "activity_definition_id"),
             PhysicalIndex("activity-definition-by-display-name", "display_name", "activity_definition_id"),
-            PhysicalIndex("activity-definition-by-description", "description", "activity_definition_id"),
-            PhysicalIndex("activity-definition-by-search", "display_name", "activity_definition_id")
+            PhysicalIndex("activity-definition-by-description", "description", "activity_definition_id")
         };
         var documentResults = new[]
         {
@@ -404,9 +402,12 @@ public static class ActivitiesDesignStorageManifest
                 supportsDisjunction: true,
                 sortFields: DefinitionSort(ActivityDefinitionDescriptionField),
                 residualPredicateFields: DefinitionResiduals(ActivityDefinitionDescriptionField)),
+            // The search route rides the display-name index: a separate search index would repeat
+            // the identical (display_name, activity_definition_id) key pattern, which MongoDB
+            // rejects as a duplicate and every provider would pay twice for on writes.
             BoundedQuery(
                 SearchActivityDefinitionsQuery,
-                "activity-definition-by-search",
+                "activity-definition-by-display-name",
                 [
                     Predicate(
                         ActivityDefinitionDisplayNameField,
@@ -425,7 +426,7 @@ public static class ActivitiesDesignStorageManifest
             ActivityDefinitionDocumentKind,
             "Activity definition",
             [
-                Column("activity_definition_id", ActivityDefinitionIdField, false),
+                Column("activity_definition_id", ActivityDefinitionIdField, false, IdentityColumnLength),
                 Column("activity_type_key", ActivityDefinitionTypeKeyField, false),
                 Column("category", ActivityDefinitionCategoryField, false),
                 Column("display_name", ActivityDefinitionDisplayNameField),
@@ -503,9 +504,9 @@ public static class ActivitiesDesignStorageManifest
             ActivityDefinitionVersionDocumentKind,
             "Activity definition version",
             [
-                Column("version_id", ActivityDefinitionVersionIdField, false),
-                Column("definition_id", ActivityDefinitionVersionDefinitionIdField, false),
-                Column("sem_ver_sort_key", ActivityDefinitionVersionSemVerSortKeyField, false)
+                Column("version_id", ActivityDefinitionVersionIdField, false, IdentityColumnLength),
+                Column("definition_id", ActivityDefinitionVersionDefinitionIdField, false, IdentityColumnLength),
+                Column("sem_ver_sort_key", ActivityDefinitionVersionSemVerSortKeyField, false, IdentityColumnLength)
             ],
             logicalIndexes,
             physicalIndexes,
@@ -551,10 +552,10 @@ public static class ActivitiesDesignStorageManifest
         var unit = BaseUnit(documentKind, label, LifecyclePolicy.Mutable);
         var columns = new[]
         {
-            Column("resource_id", ManagementResourceIdField, false),
-            Column("definition_id", DefinitionIdField, false),
-            Column("draft_id", DraftIdField),
-            Column("definition_version_id", DefinitionVersionIdField),
+            Column("resource_id", ManagementResourceIdField, false, IdentityColumnLength),
+            Column("definition_id", DefinitionIdField, false, IdentityColumnLength),
+            Column("draft_id", DraftIdField, length: IdentityColumnLength),
+            Column("definition_version_id", DefinitionVersionIdField, length: IdentityColumnLength),
             Column("valid_from", ManagementValidFromField, false, ManagementSequenceKeyLength),
             Column("valid_to", ManagementValidToField, false, ManagementSequenceKeyLength),
             Column("visibility", ManagementVisibilityField, false),
@@ -856,11 +857,17 @@ public static class ActivitiesDesignStorageManifest
         new(ActivityDefinitionVersionIdField, PhysicalSortDirection.Ascending)
     ];
 
+    // Searchable text columns are bounded to 256 characters and identity/sort-key columns to 128 so
+    // every declared compound index key stays under SQL Server's 1700-byte nonclustered limit.
+    // Over-limit values fail projection validation rather than truncate, per the ratified data model.
+    private const int TextColumnLength = 256;
+    private const int IdentityColumnLength = 128;
+
     private static ProjectedColumnDefinition Column(
         string name,
         string path,
         bool nullable = true,
-        int length = 450) => new(name, path, PortablePhysicalType.String, length, IsNullable: nullable);
+        int length = TextColumnLength) => new(name, path, PortablePhysicalType.String, length, IsNullable: nullable);
 
     private static BoundedQueryPredicateField Predicate(string path, params PortableQueryOperation[] operations) =>
         new(path, operations.ToHashSet());
@@ -903,10 +910,15 @@ public static class ActivitiesDesignStorageManifest
         var indexedColumns = indexes
             .SelectMany(index => index.Fields)
             .Distinct(StringComparer.Ordinal)
-            .Select(field => Column(ColumnName(field), field))
+            .Select(field => Column(
+                ColumnName(field),
+                field,
+                length: ColumnName(field).EndsWith("_id", StringComparison.Ordinal)
+                    ? IdentityColumnLength
+                    : TextColumnLength))
             .ToArray();
         var columns = indexedColumns.Length == 0
-            ? [Column("entity_id", "entity.id", false)]
+            ? [Column("entity_id", "entity.id", false, IdentityColumnLength)]
             : indexedColumns;
         var physicalIndexes = indexes
             .Select(index => new PhysicalIndexDefinition(
