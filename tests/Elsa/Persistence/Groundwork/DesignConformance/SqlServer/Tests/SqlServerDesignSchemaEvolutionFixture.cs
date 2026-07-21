@@ -87,8 +87,7 @@ internal sealed class SqlServerDesignSchemaEvolutionFixture : IDesignSchemaEvolu
             PendingOperationsBeforeApply: pending,
             ApplySucceeded: apply.IsReady,
             AppliedOperations: apply.AppliedOperationCount,
-            LiveValidationReady: validate.IsReady && validate.PendingOperations.Count == 0,
-            AppliedOperationAppliedTwiceDestructively: false);
+            LiveValidationReady: validate.IsReady && validate.PendingOperations.Count == 0);
     }
 
     public async Task<DesignEvolutionAdmissionReport> RestartUnderEvolvedSchemaAsync(CancellationToken cancellationToken = default)
@@ -117,11 +116,17 @@ internal sealed class SqlServerDesignSchemaEvolutionFixture : IDesignSchemaEvolu
     {
         var host = _host ?? throw new InvalidOperationException("No host is open to probe the evolved route.");
         using var scope = CreateScope(host, DesignPersistenceFixtureData.ScopeA);
-        _ = await scope.ServiceProvider.GetRequiredService<IDocumentStore>().LoadAsync(
+        var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
+        // Writing a probe document and reading it back proves the freshly provisioned table accepts
+        // the unit's projections and serves point reads, not merely that the table exists.
+        const string probeId = "design-evolution-probe-1";
+        await store.SaveAsync(new SaveDocumentRequest(
             DesignEvolutionProbeManifest.ProbeKind,
-            "design-evolution-probe-absent",
-            cancellationToken);
-        return true;
+            probeId,
+            "1.0.0",
+            $"{{\"collection\":\"{DesignEvolutionProbeManifest.ProbeCollection}\",\"entity\":{{\"id\":\"{probeId}\",\"value\":\"probe\"}}}}"));
+        var read = await store.LoadAsync(DesignEvolutionProbeManifest.ProbeKind, probeId, cancellationToken);
+        return read is not null;
     }
 
     public async Task<DesignEvolutionCollisionReport> InspectNameCollisionAsync(CancellationToken cancellationToken = default)
@@ -181,8 +186,7 @@ internal sealed class SqlServerDesignSchemaEvolutionFixture : IDesignSchemaEvolu
             PendingOperationsBeforeApply: 0,
             ApplySucceeded: apply.IsReady,
             AppliedOperations: apply.AppliedOperationCount,
-            LiveValidationReady: validate.IsReady && validate.PendingOperations.Count == 0,
-            AppliedOperationAppliedTwiceDestructively: false);
+            LiveValidationReady: validate.IsReady && validate.PendingOperations.Count == 0);
     }
 
     public async Task<DesignEvolutionDriftReport> PerturbAppliedObjectAndInspectAsync(CancellationToken cancellationToken = default)

@@ -107,7 +107,6 @@ public abstract class UnifiedSchemaEvolutionContractSuite
         var resumed = await fixture.ResumeInterruptedEvolutionAsync();
         Assert.True(resumed.ApplySucceeded, "The resuming safe apply must succeed.");
         Assert.True(resumed.LiveValidationReady, "Validation must report ready after the resume.");
-        Assert.False(resumed.AppliedOperationAppliedTwiceDestructively, "No operation may be applied twice destructively.");
 
         var admission = await fixture.RestartUnderEvolvedSchemaAsync();
         Assert.True(admission.IsReady, "Admission must be green after the interrupted apply is resumed to ready.");
@@ -223,8 +222,7 @@ public sealed record DesignEvolutionApplyReport(
     int PendingOperationsBeforeApply,
     bool ApplySucceeded,
     int AppliedOperations,
-    bool LiveValidationReady,
-    bool AppliedOperationAppliedTwiceDestructively);
+    bool LiveValidationReady);
 
 /// <summary>Restart-admission readiness under the evolved deployment schema.</summary>
 public sealed record DesignEvolutionAdmissionReport(bool IsReady, int PendingOperations);

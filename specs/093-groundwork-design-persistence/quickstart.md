@@ -532,7 +532,9 @@ The complete conformance suite ran in full on all four real providers at candida
 | `UnifiedHost.Tests` (SQLite host, incl. lane-exclusion shapes) | 45/45 |
 | `PostgreSql.UnifiedHost.Tests` / `SqlServer.UnifiedHost.Tests` / `MongoDb.UnifiedHost.Tests` | 6/6 each |
 
-Deployment shapes are proven at the reference-host composition surfaces: the
+Deployment shapes are proven at the reference-host composition surfaces (the
+production registration methods the `Elsa.Server` shell features invoke —
+registration-time proofs, not a live boot of the app process): the
 combined shape runs the full contract matrix through every leaf fixture
 (production `AddGroundwork{Provider}UnifiedPersistence` compositions with startup
 auto-apply disabled and admission-gated startup); the design-only and runtime-only
