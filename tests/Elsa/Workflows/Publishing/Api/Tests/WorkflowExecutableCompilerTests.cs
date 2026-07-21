@@ -252,6 +252,80 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Placed_reusable_activity_binds_an_authored_literal_to_a_contract_input()
+    {
+        // #930 (part 2): a value authored on a placed design-owned reusable activity for one of its public
+        // contract inputs must lower to a literal boundary binding that reaches the published executable.
+        var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
+            "value", "Value", new TypeReference("Int32"), true,
+            false, null, "elsa.json")], [new ActivityOutputContract(
+            "result", "Result", new TypeReference("Int32"), true, false, "elsa.json")], []);
+        var root = new ExecutableNode(
+            "local-root", "local-root", "test.boundary", "1",
+            new("test.boundary", "1", JsonSerializer.SerializeToElement(new { plan = 1 })),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
+            [new ExecutableChildSlot("Graph.Entry", [new ExecutableNode(
+                "local-child", "local-child", "test.child", "1",
+                new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
+            activityContract: BoundaryRuntimeContract(hasValueInput: true));
+        var template = new ExecutableActivityTemplate(
+            "template-greet", "hash-greet", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
+        var publication = new ActivityDefinitionVersionPublication
+        {
+            Id = "version-greet",
+            DefinitionVersionId = "version-greet",
+            DefinitionId = "definition-greet",
+            Version = "1.0.0",
+            ActivityTypeKey = "activity.greet",
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
+            Contract = contract,
+            Provider = new("test", "1", JsonSerializer.SerializeToElement(new { })),
+            TemplateId = template.TemplateId,
+            TemplateHash = template.TemplateHash,
+            SourceReferenceId = "source-greet",
+            ProviderFingerprint = "fingerprint",
+            DirectDependencyCount = 0,
+            ClosedTemplateCount = 0,
+            RuntimeRequirements = [],
+            Lifecycle = ActivityDefinitionVersionLifecycle.Active
+        };
+        var sourceReference = new WorkflowExecutableSourceReference(
+            "source-greet", template.TemplateId, "ActivityDefinitionVersion", publication.DefinitionVersionId,
+            publication.Version, publication.DefinitionId, publication.DefinitionVersionId, publication.Version,
+            DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, WorkflowExecutableReferenceScope.Published,
+            LayoutSidecar: new ExecutableLayoutSidecar([new(
+                "layout", ActivityInvocationOrigin.Empty, template.TemplateHash,
+                [new("local-root", "local-root", "local-root", 1, 2)], [])]));
+        var outputTarget = new WorkflowArgumentState(
+            "result",
+            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result", declaringScopeId = "workflow" }), "Variable"),
+            null, null, null, null);
+        var authoredInput = new WorkflowArgumentState(
+            "value",
+            new ArgumentValue(JsonSerializer.SerializeToElement(42), "Literal"),
+            null, null, null, null);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(
+                new ActivityNode("use-greet", publication.DefinitionVersionId, [authoredInput], [outputTarget]),
+                variables: [new("caller-result", "CallerResult", new TypeReference("Int32"), null, null)])),
+            new FakeActivityVersionStore([]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            new SinglePublicationStore(publication),
+            new ReusableTemplateReader(template),
+            new ReusableSourceReader(sourceReference),
+            new WorkflowExecutablePlacementSidecarContext());
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = executable.RootActivity.InputBindings["value"];
+        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
+        Assert.Equal(42, binding.LiteralValue!.Value.GetInt32());
+    }
+
+    [Fact]
     public async Task Source_owned_flowchart_publication_compiles_authored_children_as_ordinary_structure()
     {
         var root = FlowchartNode("flowchart-0affb8fb", [Node("writeline-1a75fea9", Text("hello"))]);

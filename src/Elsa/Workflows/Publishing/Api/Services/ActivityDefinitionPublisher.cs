@@ -809,12 +809,49 @@ public sealed class ActivityDefinitionPublisher(
             ConsumerKey = template.Root.Descriptor.ConsumerKey,
             ConsumerSchemaVersion = template.Root.Descriptor.SchemaVersion,
             DescriptorPayload = template.Root.Descriptor.Payload,
+            // Project the published public contract's inputs/outputs into the canvas descriptors the
+            // authoring catalog reads. Without this a design-owned (e.g. elsa.activity-graph) version
+            // surfaces no editable properties in the workflow editor, unlike CLR-scanned versions whose
+            // InputDefinition/OutputDefinition projections are populated by the reconciler. See #930.
+            Inputs = draft.State.Contract.Inputs.Select(ToInputDefinition).ToArray(),
+            Outputs = draft.State.Contract.Outputs.Select(ToOutputDefinition).ToArray(),
             SourceKind = "ActivityDefinitionDraft",
             SourceId = draft.Id,
             Hash = template.TemplateHash,
             CreatedAt = now,
             LastModifiedAt = now
         };
+
+    private static InputDefinition ToInputDefinition(ActivityInputContract input) => new(
+        ReferenceKey: input.ReferenceKey,
+        Name: input.Name,
+        Type: input.Type,
+        StorageDriverType: input.StorageDriverKey,
+        DisplayName: string.IsNullOrWhiteSpace(input.DisplayName) ? input.Name : input.DisplayName,
+        Category: input.Category,
+        IsNullable: input.IsNullable,
+        Description: input.Description,
+        Order: input.Order,
+        UiHint: input.UiHint,
+        UISpecifications: input.UiSpecifications,
+        IsRequired: input.IsRequired,
+        DefaultValue: input.Default?.Value,
+        DefaultSyntax: input.Default?.Syntax);
+
+    private static OutputDefinition ToOutputDefinition(ActivityOutputContract output) => new(
+        ReferenceKey: output.ReferenceKey,
+        Name: output.Name,
+        Type: output.Type,
+        StorageDriverType: output.StorageDriverKey,
+        DisplayName: string.IsNullOrWhiteSpace(output.DisplayName) ? output.Name : output.DisplayName,
+        Category: output.Category,
+        IsNullable: output.IsNullable,
+        Description: output.Description,
+        Order: output.Order,
+        UiHint: output.UiHint,
+        UISpecifications: output.UiSpecifications,
+        IsRequired: output.IsRequired,
+        SourceRepresentation: output.SourceRepresentation);
 
     private static ActivityDefinitionVersionPublication CreatePublication(
         ActivityDefinition definition,
