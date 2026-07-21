@@ -517,6 +517,37 @@ dotnet test tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence
 
 Expected: registration, serialization, command, atomic rollback, and unified-host scenarios all pass.
 
+### T063 four-provider matrix through the reference-host compositions (2026-07-21)
+
+The complete conformance suite ran in full on all four real providers at candidate
+`94d57a3bf` plus the deployment-shape lane tests, every project green:
+
+| Project | Result |
+| --- | --- |
+| `DesignConformance.Sqlite.Tests` (contracts + baseline + CLI + evolution + conflict) | 51/51 |
+| `DesignConformance.PostgreSql.Tests` (50 contracts + 5 evolution + 6 conflict) | 61/61 |
+| `DesignConformance.SqlServer.Tests` (50 contracts + 5 evolution + 6 conflict) | 61/61 |
+| `DesignConformance.MongoDb.Tests` (52 contracts/topology + 6 conflict) | 58/58 |
+| Shared `DesignConformance.Tests` (neutral suites + shape/purity audits) | 96 passed, 1 intentional skip |
+| `UnifiedHost.Tests` (SQLite host, incl. lane-exclusion shapes) | 45/45 |
+| `PostgreSql.UnifiedHost.Tests` / `SqlServer.UnifiedHost.Tests` / `MongoDb.UnifiedHost.Tests` | 6/6 each |
+
+Deployment shapes are proven at the reference-host composition surfaces: the
+combined shape runs the full contract matrix through every leaf fixture
+(production `AddGroundwork{Provider}UnifiedPersistence` compositions with startup
+auto-apply disabled and admission-gated startup); the design-only and runtime-only
+shapes are exercised by `ProviderLeafConflictContractSuite` in all four leaves, and
+`DeploymentShapeLaneExclusionTests` proves the lane contract directly — a
+runtime-only composition registers the Groundwork runtime bridges and the runtime
+manifest source but no design store, design command, atomic writer, or design
+manifest source; the design-only composition is the mirror image; the combined
+composition registers both lanes. No provider-specific semantic, plan, or
+composition remediation remained after the strict-projection parity fix — the
+provider differences US3 surfaced (MongoDB duplicate index key patterns, SQL Server
+index key width, MongoDB numeric enum projections, MongoDB topology gate) were each
+remediated in the manifests or proven as intentional topology semantics earlier in
+this story and are recorded in the fingerprint history and research reconciliation.
+
 ### Phase 2 bounded-query substrate evidence (T019)
 
 On 2026-07-20, the canonical in-memory Groundwork test substrate was updated to
