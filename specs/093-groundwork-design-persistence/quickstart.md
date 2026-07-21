@@ -550,6 +550,50 @@ index key width, MongoDB numeric enum projections, MongoDB topology gate) were e
 remediated in the manifests or proven as intentional topology semantics earlier in
 this story and are recorded in the fingerprint history and research reconciliation.
 
+### T066 US3 independent review and final evidence (2026-07-21)
+
+**Reviewed range:** `2faae0d1590d0927f3893f9a0461a0ff85e8e097..60598f7a551e158092ec3c0bd66f219a36a4e77b`
+(the 14 US3 commits), by three independent read-only reviewers on distinct axes.
+**Final candidate:** `820fe042e` (the reviewed range plus four dispositioned follow-ups below).
+
+Verdicts:
+
+- **Provider parity / physical manifests — PASS** (after disposition). The one blocker —
+  "SQLite silently stores over-length projected text where the other providers reject" —
+  was founded on a stale Groundwork source checkout and was formally withdrawn: Groundwork
+  PR #105 (shipped since `preview.69`, present in the pinned `preview.78`) validates string
+  length at the shared pre-I/O projection boundary on every provider
+  (`PhysicalProjectionValueValidationException`, diagnostic `GW-PHYSICAL-037`, UTF-16
+  code-unit measure). The reviewer's valid sub-finding (no conformance proof existed) is
+  remediated by the `AtomicityProjectionOverLimitRejection` scenario (`820fe042e`), green
+  9/9 in each provider leaf's atomicity run and explicitly N/A for the legacy EF oracle.
+  Numeric enum re-typing, index rebinds, `entity_id` ordinal-collation determinism
+  (binary collation on all four providers), index-key byte budgets (≤1536 B < 1700 B),
+  and fingerprint pins were all judged sound.
+- **Schema operations — PASS.** Readiness guard genuinely inspect-only with no bypass path;
+  CLI contract keeps secrets out of argv; evolution seams honest (interruption structurally
+  proven pre-completion; collision offline with fingerprint-verified non-mutation; drift
+  drops real applied indexes). Advisories remediated in `086e084ae`: the evolved-route
+  servable probe now writes-then-reads per its contract, the vacuous destructive-double-apply
+  flag was dropped, and the CLI provenance comment reflects preview.78.
+- **Test & spec integrity — PASS.** All modified tests judged legitimate contract evolution
+  (several strengthened); purity audit and PR-gate CI routing verified to have teeth; tick
+  notes and evidence counts verified against code; scope hygiene clean. Advisory remediated:
+  quickstart now states the host-shape proofs are registration-time.
+
+Post-range commits, each dispositioned above: `086e084ae` (R2/R3 advisory remediations),
+`cc20574a1` (mechanical spec-094 checkpoint/fence evidence rotation to preview.78 required
+by the coverage-ledger version ratchet — publisher re-run + tuple-keyed import, no row
+status changed), `820fe042e` (over-limit rejection scenario; re-verified by the originating
+reviewer, who returned the final PASS).
+
+Final gate matrix at `820fe042e`, all green: full `Elsa.Server.slnx` Release build 0 errors;
+architecture 263/263; Groundwork querying 105; workflows-design GW 85; activities-design GW
+70; publishing API 394; conformance leaves SQLite 52/52, PostgreSQL 62/62, SQL Server 62/62,
+MongoDB 59/59, legacy EF oracle 38 passed + 13 intentional N/A skips, shared suites 96 + 1
+intentional skip; unified hosts 45/45 (SQLite base incl. deployment-shape lane exclusion)
+and 6/6 on PostgreSQL, SQL Server, and MongoDB.
+
 ### Phase 2 bounded-query substrate evidence (T019)
 
 On 2026-07-20, the canonical in-memory Groundwork test substrate was updated to
