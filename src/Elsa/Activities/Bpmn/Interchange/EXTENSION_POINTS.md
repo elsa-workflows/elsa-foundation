@@ -24,6 +24,15 @@
   `sequenceFlow` — the lossless XML carrier for outcome-matched flow conditions.
 - The authored `diagram` payload shape (`shapes: {id: {x,y,width,height}}`,
   `edges: {id: {waypoints: [{x,y}]}}`) mirrors BPMNDI and is treated as opaque by the runtime.
+- **Event-definition mapping (spec 118)** between BPMN XML and `BpmnEventDefinition` properties:
+  `messageEventDefinition`/`signalEventDefinition` `messageRef`/`signalRef` ↔ root `<message>`/`<signal>`
+  declaration `name` ↔ `BpmnEventDefinitionProperties.Name`; start `timerEventDefinition` `<timeCycle>` ↔
+  `Cron`/`Interval` (the `P`/`R` discriminator); catch `timerEventDefinition` `<timeDuration>` ↔
+  `Interval`. The root declaration id is the deterministic `message-{name}` / `signal-{name}`. A timer
+  catch event synthesizes a bound `Delay` child (`Duration` literal); a message/signal catch event
+  synthesizes a bound `Event` child (`EventName` literal + `CanStartWorkflow = false`) — these carry the
+  placeholder activity version ids `BpmnDocumentImporter.DefaultDelayActivityVersionId` (`"Elsa.Delay"`)
+  and `DefaultEventActivityVersionId` (`"Elsa.Event"`), which hosts resolve to real catalog rows.
 
 ## Owned HTTP endpoints
 
