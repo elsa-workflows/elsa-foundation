@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { DraftValidationError, WorkflowDraft } from "../workflowTypes";
-import { getDraftValidations } from "../api/workflowDesign";
+import { getDraftValidations } from "../api/draftValidations";
 import { getDraftSignature } from "./editorHelpers";
 
 export type DraftValidationsStatus = "idle" | "loading" | "ready" | "unavailable" | "error";

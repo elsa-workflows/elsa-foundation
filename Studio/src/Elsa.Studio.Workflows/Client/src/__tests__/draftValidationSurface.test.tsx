@@ -9,7 +9,7 @@ import {
   detectStructuralValidationErrors,
   fromDraftValidationError
 } from "../draftValidation";
-import { getDraftValidations, isDraftValidationsAvailable } from "../api/workflowDesign";
+import { getDraftValidations, isDraftValidationsAvailable } from "../api/draftValidations";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { parsePromotionValidationErrors } from "../workflow-editor/useWorkflowOperations";
 import { ValidationPanel } from "../workflow-editor/editorPanels";
