@@ -3,9 +3,9 @@ using System.Text.Json.Serialization;
 namespace Elsa.Activities.Bpmn.Models;
 
 /// <summary>
-/// One BPMN flow element in the process graph. Gateways and events are engine-interpreted (they carry no
-/// Elsa child activity); task-family and subprocess elements bind an Elsa child from the
-/// <c>Bpmn.Activities</c> slot through <see cref="ChildNodeId"/>.
+/// One BPMN flow element in the process graph. Gateways and start/end events are engine-interpreted
+/// (they carry no Elsa child activity); task-family, subprocess, and intermediate-catch-event elements
+/// bind an Elsa child from the <c>Bpmn.Activities</c> slot through <see cref="ChildNodeId"/>.
 /// </summary>
 public sealed class BpmnElement
 {
@@ -69,6 +69,7 @@ public static class BpmnElementTypes
 {
     public const string StartEvent = "startEvent";
     public const string EndEvent = "endEvent";
+    public const string IntermediateCatchEvent = "intermediateCatchEvent";
     public const string Task = "task";
     public const string UserTask = "userTask";
     public const string ServiceTask = "serviceTask";

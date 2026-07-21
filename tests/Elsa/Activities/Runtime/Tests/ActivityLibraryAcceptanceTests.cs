@@ -55,7 +55,7 @@ public sealed class ActivityLibraryAcceptanceTests
             { typeof(Inline), typeof(object), [nameof(Inline.Expression)] },
             { typeof(ReadLine), typeof(ReadLineResult), [] },
             { typeof(WriteLines), typeof(ActivityUnit), [nameof(WriteLines.Lines)] },
-            { typeof(Event), typeof(EventResult), [nameof(Event.EventName), nameof(Event.CorrelationId)] }
+            { typeof(Event), typeof(EventResult), [nameof(Event.EventName), nameof(Event.CorrelationId), nameof(Event.CanStartWorkflow)] }
         };
 
     [Theory]

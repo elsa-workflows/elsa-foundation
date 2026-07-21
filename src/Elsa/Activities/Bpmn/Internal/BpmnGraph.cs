@@ -207,6 +207,10 @@ public sealed class BpmnGraph
                     if (element.ChildNodeId is null)
                         throw new BpmnExecutionException($"BPMN subprocess '{element.ElementId}' requires a bound child activity (for example a nested BPMN process).");
                     break;
+                case BpmnElementFamilies.IntermediateCatchEvent:
+                    if (element.ChildNodeId is null)
+                        throw new BpmnExecutionException($"BPMN intermediate catch event '{element.ElementId}' requires a bound suspending child activity (for example Delay for timer, Event for message/signal).");
+                    break;
             }
         }
 

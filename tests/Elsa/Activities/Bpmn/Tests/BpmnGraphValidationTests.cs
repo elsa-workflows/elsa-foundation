@@ -127,6 +127,60 @@ public sealed class BpmnGraphValidationTests
         Assert.Contains("does not support", exception.Message);
     }
 
+    [Fact]
+    public void CatchEventWithoutChild_IsRejected()
+    {
+        var node = NewCatchEventNode(BpmnRuntimeFixture.IntermediateCatchEvent("catch-1", BpmnEventDefinitionTypes.Message));
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("requires a bound suspending child", exception.Message);
+    }
+
+    [Fact]
+    public void CatchEventWithoutEventDefinitions_IsRejected()
+    {
+        var node = NewCatchEventNode(new BpmnElement("catch-1", BpmnElementTypes.IntermediateCatchEvent, childNodeId: "node-a"));
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("exactly one event definition", exception.Message);
+    }
+
+    [Fact]
+    public void CatchEventWithMultipleEventDefinitions_IsRejected()
+    {
+        var node = NewCatchEventNode(new BpmnElement(
+            "catch-1",
+            BpmnElementTypes.IntermediateCatchEvent,
+            childNodeId: "node-a",
+            eventDefinitions:
+            [
+                new BpmnEventDefinition(BpmnEventDefinitionTypes.Message),
+                new BpmnEventDefinition(BpmnEventDefinitionTypes.Signal)
+            ]));
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("exactly one event definition", exception.Message);
+    }
+
+    [Fact]
+    public void CatchEventWithUnsupportedEventDefinition_IsRejected()
+    {
+        var node = NewCatchEventNode(BpmnRuntimeFixture.IntermediateCatchEvent("catch-1", BpmnEventDefinitionTypes.Error, childNodeId: "node-a"));
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("only timer, message, and signal catch events", exception.Message);
+    }
+
+    private static ExecutableNode NewCatchEventNode(BpmnElement catchElement) =>
+        NewExecutableNode(
+            elements: [BpmnRuntimeFixture.StartEvent(), catchElement, BpmnRuntimeFixture.EndEvent()],
+            flows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "catch-1"),
+                BpmnRuntimeFixture.Flow("flow-2", "catch-1", "end")
+            ],
+            children: catchElement.ChildNodeId is null ? [] : [WorkflowChild(catchElement.ChildNodeId)]);
+
     private static ExecutableNode WorkflowChild(string nodeId) =>
         Elsa.Activities.Testing.WorkflowExecutionHarness.NewProbeNode(nodeId);
 
