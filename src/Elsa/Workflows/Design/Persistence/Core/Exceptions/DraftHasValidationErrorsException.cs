@@ -1,3 +1,5 @@
+using Elsa.Workflows.Design.Validations.Core.Models;
+
 namespace Elsa.Workflows.Design.Persistence.Core.Exceptions;
 
 /// <summary>
@@ -9,9 +11,18 @@ namespace Elsa.Workflows.Design.Persistence.Core.Exceptions;
 /// time; bypassing it (e.g. inserting a Version row directly through
 /// <c>IAddCommand&lt;WorkflowDefinitionVersion&gt;</c>) is forbidden by domain contract.
 /// </summary>
-public sealed class DraftHasValidationErrorsException(string draftId, int errorCount)
-    : Exception($"Cannot promote draft '{draftId}' to a version: {errorCount} validation error(s) present.")
+/// <remarks>
+/// The exception carries the full derived <see cref="Errors"/> list (not just the count) so the API
+/// surface can enrich the 409 ProblemDetails with the actual violations — clients no longer have to
+/// make a second call to discover what is wrong. <see cref="ErrorCount"/> and the message text are
+/// retained unchanged for backward compatibility.
+/// </remarks>
+public sealed class DraftHasValidationErrorsException(string draftId, IReadOnlyList<ValidationError> errors)
+    : Exception($"Cannot promote draft '{draftId}' to a version: {errors.Count} validation error(s) present.")
 {
     public string DraftId { get; } = draftId;
-    public int ErrorCount { get; } = errorCount;
+    public int ErrorCount { get; } = errors.Count;
+
+    /// <summary>The full set of validation errors that blocked promotion. Derived state, never persisted.</summary>
+    public IReadOnlyList<ValidationError> Errors { get; } = errors;
 }

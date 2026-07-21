@@ -48,7 +48,7 @@ public sealed class PromoteDraftToVersion(
         var errors = await inlineEventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
 
         if (errors.Count > 0)
-            throw new DraftHasValidationErrorsException(draftId, errors.Count);
+            throw new DraftHasValidationErrorsException(draftId, errors);
 
         var lastVersion = await dbContext.WorkflowDefinitionVersions
             .Where(v => v.DefinitionId == draft.WorkflowDefinitionId)
