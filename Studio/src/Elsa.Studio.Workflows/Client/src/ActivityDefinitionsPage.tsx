@@ -7,6 +7,7 @@ import {
   type ActivityDefinitionCollectionRequest,
   type ActivityDefinitionManagementView
 } from "./activityDefinitionTypes";
+import { formatActivityVersion } from "./workflowFormatting";
 import { classifyActivityDefinitionReadFailure, redactActivityDefinitionManagementCache, useActivityDefinitions } from "./api/activityDesign";
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
@@ -216,7 +217,7 @@ function ActivityDefinitionCollection({ context, activityEditors, onImport, onPl
             <span role="cell" data-label="Definition"><strong>{definition.definition.displayName}</strong><small>{definition.definition.activityTypeKey}</small></span>
             <span role="cell" data-label="Authority"><AuthorityBadge kind={definition.definition.contentAuthority.kind} /></span>
             <span role="cell" data-label="Provider">{definition.lifecycle.recommendation?.providerKey ?? definition.lifecycle.head?.providerKey ?? "Not established"}</span>
-            <span role="cell" data-label="Recommendation">{definition.lifecycle.recommendation ? `${definition.lifecycle.recommendation.version} · ${definition.lifecycle.recommendation.lifecycle}` : "Not recommended"}</span>
+            <span role="cell" data-label="Recommendation">{definition.lifecycle.recommendation ? (() => { const version = formatActivityVersion(definition.lifecycle.recommendation.version); return <span title={`Exact version ${version.full}`}>{version.short} · {definition.lifecycle.recommendation.lifecycle}</span>; })() : "Not recommended"}</span>
             <span role="cell" data-label="Updated">{formatDate(definition.updatedAt)}</span>
           </div>)}
         </div>

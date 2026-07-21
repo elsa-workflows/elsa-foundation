@@ -129,6 +129,23 @@ describe("workflow designer keyboard accessibility", () => {
   });
 });
 
+describe("activity palette version chip", () => {
+  it("shows the short semantic version and keeps the full behavioral hash in the title", () => {
+    const exactVersion = "1.0.0+892535311ec55c1b9930041e93cee112b2494283";
+    const writeLine = { ...activity("write-line", "Write Line"), activityDefinitionVersion: exactVersion };
+
+    flushSync(() => root.render(<PaletteHarness activities={[writeLine]} onInsert={() => {}} />));
+
+    const chip = container.querySelector<HTMLElement>(".wf-palette-version")!;
+    expect(chip.textContent).toBe("v1.0.0");
+    expect(chip.textContent).not.toContain("+");
+    expect(chip.getAttribute("title")).toBe(`Exact version ${exactVersion}`);
+    expect(chip.getAttribute("aria-label")).toBe(`Exact version ${exactVersion}`);
+    // The activity name must remain visible alongside the compact chip.
+    expect(container.querySelector(".wf-palette-activity-text strong")?.textContent).toBe("Write Line");
+  });
+});
+
 function PaletteHarness({ activities, onInsert }: { activities: ActivityCatalogItem[]; onInsert(activity: ActivityCatalogItem): void }) {
   const [expanded, setExpanded] = useState(() => new Set(["Primitives"]));
   const [search, setSearch] = useState("");

@@ -7,6 +7,7 @@ import {
   type WorkflowGraphOperationBatch
 } from "../workflowGraphOperationBatch";
 import { cloneWorkflowDraftForUndo } from "./editorHelpers";
+import type { WorkflowErrorInput } from "./editorTypes";
 
 interface WorkflowGraphOperationBatchParams {
   draft: WorkflowDraft | null;
@@ -15,7 +16,7 @@ interface WorkflowGraphOperationBatchParams {
   // Applies a batch result / undo restore to the editor document (resets scope, selection, run, artifact).
   replaceDraftByBatch(draft: WorkflowDraft, selectedNodeId: string | null): void;
   setStatus(value: string): void;
-  setError(value: string): void;
+  setError(value: WorkflowErrorInput): void;
 }
 
 // Bridges Weaver's window-dispatched graph-operation batches into the editor. Apply mutates the live

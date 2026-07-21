@@ -3,7 +3,8 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
 import { updateDraft } from "../api/workflowDesign";
 import { autosaveDelayMs } from "./constants";
-import { getDraftSignature } from "./editorHelpers";
+import { describeWorkflowError, getDraftSignature } from "./editorHelpers";
+import type { WorkflowErrorInput } from "./editorTypes";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
 
 interface WorkflowPersistenceParams {
@@ -12,7 +13,7 @@ interface WorkflowPersistenceParams {
   autosaveEnabledByDefault?: boolean;
   editDraft(recipe: WorkflowDraftRecipe): void;
   setStatus(value: string): void;
-  setError(value: string): void;
+  setError(value: WorkflowErrorInput): void;
 }
 
 // Owns draft persistence: the serialised save queue (so concurrent saves apply in order), the
@@ -52,7 +53,7 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
       } catch (e) {
         if (requestId === saveRequestIdRef.current) {
           setStatus("");
-          setError(e instanceof Error ? e.message : String(e));
+          setError(describeWorkflowError(e, "Could not save the workflow draft."));
         }
         throw e;
       }

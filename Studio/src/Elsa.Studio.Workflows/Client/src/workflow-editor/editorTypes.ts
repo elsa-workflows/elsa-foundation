@@ -25,6 +25,21 @@ export interface ActivityPaletteGroup {
 
 export type CanvasView = "designer" | "code" | "properties";
 
+// A structured editor error so banners can surface ProblemDetails `detail`, a correlatable `traceId`,
+// and the HTTP status alongside the human-readable message. Plain strings are still accepted anywhere a
+// `WorkflowErrorInput` is expected and are normalized into `{ message }`.
+export interface WorkflowEditorError {
+  message: string;
+  detail?: string;
+  traceId?: string;
+  status?: number;
+  code?: string;
+}
+
+export type WorkflowErrorInput = string | WorkflowEditorError;
+
+export type SetWorkflowError = (value: WorkflowErrorInput) => void;
+
 export type WorkflowEdge = Edge<WorkflowEdgeData>;
 
 export type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "publicationPreflight" | "publishing" | "testRunPreparing" | "testRunStarting";
