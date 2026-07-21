@@ -4,6 +4,7 @@ using Elsa.Activities.Bpmn.Interchange.Contracts;
 using Elsa.Activities.Bpmn.Interchange.Exceptions;
 using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 
@@ -11,10 +12,13 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 
 /// <summary>
 /// Maps BPMN 2.0 XML onto the native <c>elsa.bpmn.structure</c> authored payload. Supported elements
-/// (Phase 1 subset) import cleanly; event-defined start events degrade to none start events; expression
-/// flow conditions degrade to unconditional flows (reported); unsupported flow nodes are dropped with
-/// an issue. An embedded <c>subProcess</c> becomes a nested <c>BpmnProcess</c> activity node bound by
-/// the subprocess element, mirroring the runtime module's composition model. BPMNDI shapes/edges are
+/// (Phase 1 core plus the Phase 2 event tier) import cleanly; expression flow conditions degrade to
+/// unconditional flows (reported); unsupported flow nodes are dropped with an issue. An embedded
+/// <c>subProcess</c> becomes a nested <c>BpmnProcess</c> activity node bound by the subprocess element,
+/// mirroring the runtime module's composition model. Event-defined start events (spec 117) import as pure
+/// elements carrying a populated <c>BpmnEventDefinition</c>; intermediate catch events (spec 116) import
+/// with a populated definition plus a synthesized bound suspending child (a <c>Delay</c> for timer, an
+/// <c>Event</c> for message/signal) in the <c>Bpmn.Activities</c> slot (spec 118). BPMNDI shapes/edges are
 /// preserved on the authored <c>diagram</c> payload for lossless layout round-trips.
 /// </summary>
 public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
@@ -23,6 +27,12 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
     /// <summary>Placeholder activity version id for nested BPMN process nodes; API hosts override via options later.</summary>
     public const string DefaultBpmnProcessActivityVersionId = "Elsa.BpmnProcess";
+
+    /// <summary>Placeholder activity version id for a timer catch event's synthesized <c>Delay</c> child (hosts resolve the real catalog row later).</summary>
+    public const string DefaultDelayActivityVersionId = "Elsa.Delay";
+
+    /// <summary>Placeholder activity version id for a message/signal catch event's synthesized <c>Event</c> child (matches <c>Event.ActivityType</c>).</summary>
+    public const string DefaultEventActivityVersionId = "Elsa.Event";
 
     public BpmnImportAnalysis Analyze(string xml, BpmnImportOptions? options = null)
     {
@@ -69,12 +79,13 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
               ?? processes[0];
 
         var diagram = ReadDiagram(definitions);
+        var messageSignalNames = ReadMessageSignalDeclarations(definitions);
         var processIdValue = IdOf(process) ?? "process";
         var nodeId = $"{options?.NodeIdPrefix ?? "node"}-{processIdValue}";
-        return BuildProcessNode(process, nodeId, diagram, context);
+        return BuildProcessNode(process, nodeId, diagram, messageSignalNames, context);
     }
 
-    private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, ImportContext context)
+    private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, IReadOnlyDictionary<string, string> messageSignalNames, ImportContext context)
     {
         var elements = new List<BpmnElement>();
         var flows = new List<BpmnSequenceFlow>();
@@ -92,9 +103,31 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 case "startEvent":
                 {
                     if (id is null) break;
-                    if (child.Elements().Any(IsEventDefinition))
-                        context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Start event '{id}' declares event definitions; imported as a none start event (event-defined starts arrive in the events tier).", id));
-                    elements.Add(new BpmnElement(id, BpmnElementTypes.StartEvent, name: NameOf(child)));
+                    var startDefinitions = child.Elements().Where(IsEventDefinition).ToArray();
+                    var startDefinition = startDefinitions.Length == 0
+                        ? null
+                        : ResolveStartEventDefinition(id, startDefinitions, messageSignalNames, context);
+                    elements.Add(new BpmnElement(
+                        id,
+                        BpmnElementTypes.StartEvent,
+                        name: NameOf(child),
+                        eventDefinitions: startDefinition is null ? null : [startDefinition]));
+                    break;
+                }
+                case "intermediateCatchEvent":
+                {
+                    if (id is null) break;
+                    var resolved = ResolveCatchEvent(id, child, messageSignalNames, context);
+                    if (resolved is not { } catchImport)
+                        break; // Dropped (finding added inside); its sequence flows cascade-drop as unresolved refs.
+                    childActivities.Add(catchImport.Child);
+                    elements.Add(new BpmnElement(
+                        id,
+                        BpmnElementTypes.IntermediateCatchEvent,
+                        name: NameOf(child),
+                        childNodeId: catchImport.Child.NodeId,
+                        defaultFlowId: DefaultOf(child),
+                        eventDefinitions: [catchImport.Definition]));
                     break;
                 }
                 case "endEvent":
@@ -115,7 +148,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 {
                     if (id is null) break;
                     var nestedNodeId = $"node-{id}";
-                    childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, context));
+                    childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, context));
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child)));
                     break;
                 }
@@ -268,6 +301,191 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
         return elementIds.Any(Visit);
     }
+
+    /// <summary>
+    /// Root-level <c>&lt;message&gt;</c>/<c>&lt;signal&gt;</c> declarations index (id → name); a
+    /// message/signal event definition resolves its <c>messageRef</c>/<c>signalRef</c> through this to
+    /// the event name that drives the stimulus (spec 118 D3).
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ReadMessageSignalDeclarations(XElement definitions)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var declaration in definitions.Elements().Where(element =>
+                     element.Name.Namespace == BpmnXmlNames.Model &&
+                     element.Name.LocalName is "message" or "signal"))
+        {
+            var declarationId = IdOf(declaration);
+            var name = NameOf(declaration);
+            if (declarationId is not null && name is not null)
+                result[declarationId] = name;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Resolves the single event definition of an event-defined start element (spec 117/118 D2/D3) into a
+    /// populated <see cref="BpmnEventDefinition"/>, or returns <c>null</c> and reports a <c>Degraded</c>
+    /// finding (importing a plain none start) when the definition set is unusable.
+    /// </summary>
+    private static BpmnEventDefinition? ResolveStartEventDefinition(string id, IReadOnlyList<XElement> definitions, IReadOnlyDictionary<string, string> messageSignalNames, ImportContext context)
+    {
+        if (definitions.Count != 1)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Start event '{id}' declares {definitions.Count} event definitions; only a single timer/message/signal definition is supported, so it imported as a none start event.", id));
+            return null;
+        }
+
+        var definition = definitions[0];
+        switch (definition.Name.LocalName)
+        {
+            case "messageEventDefinition":
+            case "signalEventDefinition":
+            {
+                var type = definition.Name.LocalName == "messageEventDefinition" ? BpmnEventDefinitionTypes.Message : BpmnEventDefinitionTypes.Signal;
+                var name = ResolveMessageSignalName(definition, type, messageSignalNames);
+                if (name is null)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Start event '{id}' declares a {type} event definition with no resolvable name (missing or unresolvable {type}Ref); it imported as a none start event.", id));
+                    return null;
+                }
+
+                return new BpmnEventDefinition(type, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name });
+            }
+            case "timerEventDefinition":
+            {
+                var properties = ResolveStartTimerProperties(definition);
+                if (properties is null)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Start event '{id}' declares a timer event definition that is not a recurring schedule; only a <timeCycle> interval/cron start is supported, so it imported as a none start event.", id));
+                    return null;
+                }
+
+                return new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, properties);
+            }
+            default:
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Start event '{id}' declares an unsupported '{definition.Name.LocalName}'; only timer/message/signal start events are supported, so it imported as a none start event.", id));
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Resolves an intermediate catch event (spec 116/118 D1) into a populated definition plus a
+    /// synthesized bound suspending child, or returns <c>null</c> and reports a <c>Dropped</c> finding when
+    /// the catch cannot form a valid graph (its sequence flows then cascade-drop as unresolved references).
+    /// </summary>
+    private static (BpmnEventDefinition Definition, ActivityNode Child)? ResolveCatchEvent(string id, XElement element, IReadOnlyDictionary<string, string> messageSignalNames, ImportContext context)
+    {
+        var definitions = element.Elements().Where(IsEventDefinition).ToArray();
+        if (definitions.Length != 1)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Intermediate catch event '{id}' declares {definitions.Length} event definitions; exactly one timer/message/signal definition is required, so it was dropped.", id));
+            return null;
+        }
+
+        var definition = definitions[0];
+        var childNodeId = $"node-{id}";
+        switch (definition.Name.LocalName)
+        {
+            case "messageEventDefinition":
+            case "signalEventDefinition":
+            {
+                var type = definition.Name.LocalName == "messageEventDefinition" ? BpmnEventDefinitionTypes.Message : BpmnEventDefinitionTypes.Signal;
+                var name = ResolveMessageSignalName(definition, type, messageSignalNames);
+                if (name is null)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Intermediate catch event '{id}' declares a {type} event definition with no resolvable name (missing or unresolvable {type}Ref), so it was dropped.", id));
+                    return null;
+                }
+
+                var eventChild = BuildEventCatchChild(childNodeId, name);
+                return (new BpmnEventDefinition(type, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name }), eventChild);
+            }
+            case "timerEventDefinition":
+            {
+                var duration = ResolveCatchTimerDuration(definition);
+                if (duration is null)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Intermediate catch event '{id}' declares a timer event definition without a <timeDuration>; only a one-shot duration catch timer is supported, so it was dropped.", id));
+                    return null;
+                }
+
+                var delayChild = BuildDelayCatchChild(childNodeId, duration);
+                return (new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = duration }), delayChild);
+            }
+            default:
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Intermediate catch event '{id}' declares an unsupported '{definition.Name.LocalName}'; only timer/message/signal catch events are supported, so it was dropped.", id));
+                return null;
+        }
+    }
+
+    /// <summary>Resolves a message/signal event name through the root-declaration index; <c>null</c> when the ref is missing, unresolvable, or names a blank declaration.</summary>
+    private static string? ResolveMessageSignalName(XElement definition, string type, IReadOnlyDictionary<string, string> messageSignalNames)
+    {
+        var refAttribute = type == BpmnEventDefinitionTypes.Message ? "messageRef" : "signalRef";
+        if ((string?)definition.Attribute(refAttribute) is not { } reference)
+            return null;
+        if (!messageSignalNames.TryGetValue(reference.Trim(), out var name) || string.IsNullOrWhiteSpace(name))
+            return null;
+        return name.Trim();
+    }
+
+    /// <summary>
+    /// Maps a start timer's <c>&lt;timeCycle&gt;</c> to the recurring interval-xor-cron properties (spec 118 D3):
+    /// a <c>'P'</c>/<c>'R'</c>-prefixed text is an ISO-8601 duration interval (any leading <c>R…/</c> repetition
+    /// prefix stripped), otherwise a cron expression. A non-recurring <c>&lt;timeDuration&gt;</c>/<c>&lt;timeDate&gt;</c>
+    /// start, or an empty cycle, returns <c>null</c> (degrade to none).
+    /// </summary>
+    private static IReadOnlyDictionary<string, string>? ResolveStartTimerProperties(XElement definition)
+    {
+        if (definition.Element(BpmnXmlNames.Model + "timeCycle") is not { } timeCycle)
+            return null;
+
+        var text = timeCycle.Value.Trim();
+        if (text.Length == 0)
+            return null;
+
+        if (text[0] is 'P' or 'R')
+        {
+            var interval = StripRepetitionPrefix(text);
+            return interval.Length == 0
+                ? null
+                : new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = interval };
+        }
+
+        return new Dictionary<string, string> { [BpmnEventDefinitionProperties.Cron] = text };
+    }
+
+    /// <summary>Maps a catch timer's <c>&lt;timeDuration&gt;</c> (ISO-8601 duration) to the interval/delay text; <c>null</c> for a <c>&lt;timeCycle&gt;</c>/<c>&lt;timeDate&gt;</c> catch (drop).</summary>
+    private static string? ResolveCatchTimerDuration(XElement definition)
+    {
+        if (definition.Element(BpmnXmlNames.Model + "timeDuration") is not { } timeDuration)
+            return null;
+
+        var text = timeDuration.Value.Trim();
+        return text.Length == 0 ? null : text;
+    }
+
+    /// <summary>Strips an ISO-8601 repetition prefix (<c>R…/</c>) from a recurring cycle, leaving the bare duration.</summary>
+    private static string StripRepetitionPrefix(string text)
+    {
+        if (text[0] != 'R')
+            return text;
+        var slash = text.IndexOf('/');
+        return slash >= 0 ? text[(slash + 1)..].Trim() : text;
+    }
+
+    /// <summary>A timer catch event's synthesized child: the durable <see cref="Elsa.Activities.Scheduling.Activities.Delay"/> (its <c>Duration</c> literal is the ISO-8601 duration).</summary>
+    private static ActivityNode BuildDelayCatchChild(string nodeId, string isoDuration) =>
+        new(nodeId, DefaultDelayActivityVersionId, [LiteralArgument("Duration", isoDuration)], []);
+
+    /// <summary>A message/signal catch event's synthesized child: a mid-flow <c>Event</c> wait (<c>CanStartWorkflow = false</c>).</summary>
+    private static ActivityNode BuildEventCatchChild(string nodeId, string eventName) =>
+        new(nodeId, DefaultEventActivityVersionId, [LiteralArgument("EventName", eventName), LiteralArgument("CanStartWorkflow", false)], []);
+
+    /// <summary>Authors a single literal input binding for a synthesized child node.</summary>
+    private static ArgumentState LiteralArgument(string key, object? value) =>
+        new(key, new ArgumentValue(value, "Literal"), null, null, null, null);
 
     private static bool IsEventDefinition(XElement element) =>
         element.Name.Namespace == BpmnXmlNames.Model && element.Name.LocalName.EndsWith("EventDefinition", StringComparison.Ordinal);
