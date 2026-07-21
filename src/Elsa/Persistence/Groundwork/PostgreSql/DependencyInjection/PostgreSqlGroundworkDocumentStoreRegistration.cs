@@ -53,6 +53,7 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
             RegistrationIndex: -1,
             IsExplicit: true,
             Source: $"{nameof(PostgreSqlGroundworkDocumentStoreRegistration)}.{nameof(AddPostgreSqlGroundworkDocumentStore)}"));
+        services.AddGroundworkSchemaReadinessGuard();
         return services;
     }
 }

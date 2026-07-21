@@ -87,7 +87,15 @@ public sealed class GroundworkPersistenceLifetimeTests
         new(
             "src/Elsa/Persistence/Groundwork/MongoDb/DependencyInjection/MongoDbGroundworkDocumentStoreRegistration.cs",
             "IShellInitializer",
-            "This application-lifetime alias exposes the same provider startup initializer through the shell contract.")
+            "This application-lifetime alias exposes the same provider startup initializer through the shell contract."),
+        new(
+            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkSchemaReadinessRegistration.cs",
+            "GroundworkSchemaReadinessTask",
+            "The readiness guard is a stateless one-shot Start-phase validator over the application-lifetime session source; it opens no sessions and retains no request context."),
+        new(
+            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkSchemaReadinessRegistration.cs",
+            "IShellInitializer",
+            "This application-lifetime alias exposes the same readiness guard through the shell contract.")
     ];
 
     private static readonly ScopedConsumerRegistration[] ScopedConsumerRegistrations =

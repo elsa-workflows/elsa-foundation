@@ -53,6 +53,7 @@ public static class SqliteGroundworkDocumentStoreRegistration
             RegistrationIndex: -1,
             IsExplicit: true,
             Source: $"{nameof(SqliteGroundworkDocumentStoreRegistration)}.{nameof(AddSqliteGroundworkDocumentStore)}"));
+        services.AddGroundworkSchemaReadinessGuard();
         return services;
     }
 }

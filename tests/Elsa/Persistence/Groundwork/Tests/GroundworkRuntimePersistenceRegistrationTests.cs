@@ -463,7 +463,10 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBoundedDocumentStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(SqliteGroundworkDocumentStoreInitializer));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IShellInitializer));
+        // Exactly two shell initializers: the provider admission initializer and, registered after
+        // it, the provider-neutral schema readiness guard.
+        Assert.Equal(2, services.Count(descriptor => descriptor.ServiceType == typeof(IShellInitializer)));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkSchemaReadinessTask));
     }
 
     [Fact]
