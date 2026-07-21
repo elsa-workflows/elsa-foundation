@@ -66,6 +66,68 @@ public sealed class RuntimeSchedulerWorkQueueTests
     }
 
     [Fact]
+    public async Task ListAsync_KeysetContinuation_DoesNotReServeRowsWhenAnEarlierItemIsInsertedBetweenPages()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem(2));
+        await queue.EnqueueAsync(NewWorkItem(4));
+
+        var first = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1", limit: 1));
+        // Sorts before the page boundary (sequence 1 < 2); offset paging would re-serve work-2.
+        await queue.EnqueueAsync(NewWorkItem(1));
+        var second = await queue.ListAsync(new RuntimeSchedulerWorkQuery(
+            "wfexec-1",
+            limit: 1,
+            continuationToken: first.NextContinuationToken));
+
+        Assert.Equal(["work-2"], first.Items.Select(item => item.WorkItemId));
+        Assert.Equal(["work-4"], second.Items.Select(item => item.WorkItemId));
+        Assert.Null(second.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task ListAsync_KeysetContinuation_DoesNotSkipRowsWhenAServedItemIsRemovedBetweenPages()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+        await queue.EnqueueAsync(NewWorkItem(3));
+
+        var first = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1", limit: 1));
+        // Consuming the already-served head shrinks the queue; offset paging would skip work-2.
+        Assert.True(await queue.DeleteAsync("wfexec-1", "work-1"));
+        var second = await queue.ListAsync(new RuntimeSchedulerWorkQuery(
+            "wfexec-1",
+            limit: 1,
+            continuationToken: first.NextContinuationToken));
+
+        Assert.Equal(["work-1"], first.Items.Select(item => item.WorkItemId));
+        Assert.Equal(["work-2"], second.Items.Select(item => item.WorkItemId));
+        Assert.NotNull(second.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task ListAsync_RejectsContinuationTokensThatAreForeignOrMalformed()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+        await queue.EnqueueAsync(NewWorkItem(1, workflowExecutionId: "wfexec-2"));
+
+        var first = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1", limit: 1));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => queue.ListAsync(new RuntimeSchedulerWorkQuery(
+            "wfexec-2",
+            continuationToken: first.NextContinuationToken)).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => queue.ListAsync(new RuntimeSchedulerWorkQuery(
+            "wfexec-1",
+            continuationToken: "not-base64!")).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => queue.ListAsync(new RuntimeSchedulerWorkQuery(
+            "wfexec-1",
+            continuationToken: Convert.ToBase64String("wfexec-1\ngarbage-order-key"u8))).AsTask());
+    }
+
+    [Fact]
     public async Task ListPendingWorkflowExecutionIdsAsync_ReturnsDistinctOrderedBacklog()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
