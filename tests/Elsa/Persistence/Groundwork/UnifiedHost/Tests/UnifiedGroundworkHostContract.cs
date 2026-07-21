@@ -146,6 +146,17 @@ public static class UnifiedGroundworkHostContract
         Assert.Equal("draft-write", readDraft!.Id);
     }
 
-    private static Task SaveAsync(IDocumentStore store, string kind, string id, string collection) =>
-        store.SaveAsync(new SaveDocumentRequest(kind, id, "1.0.0", $"{{\"collection\":\"{collection}\"}}"));
+    // The synthetic documents carry every member a kind's non-nullable projected columns require;
+    // MongoDB resolves projections strictly at save time where the relational providers coerce.
+    private static Task SaveAsync(IDocumentStore store, string kind, string id, string collection)
+    {
+        var entity = collection switch
+        {
+            "activityDefinition" =>
+                $"{{\"id\":\"{id}\",\"activityTypeKey\":\"Fixture.{id}\",\"category\":\"Fixtures\"}}",
+            _ => $"{{\"id\":\"{id}\"}}"
+        };
+        return store.SaveAsync(new SaveDocumentRequest(
+            kind, id, "1.0.0", $"{{\"collection\":\"{collection}\",\"entity\":{entity}}}"));
+    }
 }

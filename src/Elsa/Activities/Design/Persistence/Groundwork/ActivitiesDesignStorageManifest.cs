@@ -568,12 +568,12 @@ public static class ActivitiesDesignStorageManifest
             Column("visibility", ManagementVisibilityField, false),
             Column("sort_key", ManagementSortField, false),
             Column("search_text", ManagementSearchField, false, ManagementSearchMaximumLength),
-            Column("authority", ManagementAuthorityField),
+            NumberColumn("authority", ManagementAuthorityField),
             Column("provider", ManagementProviderField),
             Column("head_provider", ManagementHeadProviderField),
             Column("recommendation_provider", ManagementRecommendationProviderField),
-            Column("draft_status", ManagementDraftStatusField),
-            Column("version_lifecycle", ManagementVersionLifecycleField)
+            NumberColumn("draft_status", ManagementDraftStatusField),
+            NumberColumn("version_lifecycle", ManagementVersionLifecycleField)
         };
         var equality = new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal };
         var pageOperations = new HashSet<PortableQueryOperation>
@@ -604,7 +604,7 @@ public static class ActivitiesDesignStorageManifest
         var pageResidualPredicates = pagePredicates
             .Select(predicate => new BoundedQueryResidualPredicateField(
                 predicate.Path,
-                IndexValueKind.Keyword,
+                NumericMemberPaths.Contains(predicate.Path) ? IndexValueKind.Number : IndexValueKind.Keyword,
                 predicate.Operations))
             .ToArray();
         var logicalIndexes = new[]
@@ -876,13 +876,32 @@ public static class ActivitiesDesignStorageManifest
         bool nullable = true,
         int length = TextColumnLength) => new(name, path, PortablePhysicalType.String, length, IsNullable: nullable);
 
+    /// <summary>
+    /// A numeric projection for canonical JSON number members (for example enum kinds). MongoDB
+    /// resolves projections strictly by JSON type, so a number member must not be declared String.
+    /// </summary>
+    private static ProjectedColumnDefinition NumberColumn(string name, string path, bool nullable = true) =>
+        new(name, path, PortablePhysicalType.Int32, IsNullable: nullable);
+
     private static BoundedQueryPredicateField Predicate(string path, params PortableQueryOperation[] operations) =>
         new(path, operations.ToHashSet());
+
+    // These members are canonical JSON numbers (enum kinds), so their residual predicates and
+    // projected columns must both be numeric; every other residual member is a keyword string.
+    private static readonly HashSet<string> NumericMemberPaths =
+    [
+        ManagementAuthorityField,
+        ManagementDraftStatusField,
+        ManagementVersionLifecycleField
+    ];
 
     private static BoundedQueryResidualPredicateField ResidualPredicate(
         string path,
         params PortableQueryOperation[] operations) =>
-        new(path, IndexValueKind.Keyword, operations.ToHashSet());
+        new(
+            path,
+            NumericMemberPaths.Contains(path) ? IndexValueKind.Number : IndexValueKind.Keyword,
+            operations.ToHashSet());
 
     private static StorageUnit PhysicalUnit(
         string documentKind,
