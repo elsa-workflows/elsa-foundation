@@ -43,6 +43,13 @@ public static class RuntimeWorkflowStateSeed
     public const string TriggerNodeValueIdPrefix = "trigger:";
     public const string TriggerNodeIdSlotName = "nodeId";
 
+    // Reserved durable-value-id namespace for the matched trigger binding's metadata map (spec 117 D4). A
+    // single reserved slot holding the serialized string→string map: like the trigger-node identity above it
+    // deliberately does NOT share the input:* namespace, so it can never collide with (or be spoofed through)
+    // author-declared workflow inputs.
+    public const string TriggerMetadataValueIdPrefix = "trigger-meta:";
+    public const string TriggerMetadataSlotName = "metadata";
+
     // Reserved durable-value-id namespace for the workflow-identity projection (correlation id / instance name).
     // The identity slot name is the suffix (e.g. "identity:correlationId"); it doubles as the IdentityName tag
     // value the read-side projection filters on. Kept distinct from the variable/input/output namespaces above.
@@ -61,7 +68,8 @@ public static class RuntimeWorkflowStateSeed
         IReadOnlyDictionary<string, object?>? inputs,
         DateTimeOffset capturedAt,
         JsonElement? stimulusInput = null,
-        string? triggerNodeId = null)
+        string? triggerNodeId = null,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
@@ -80,6 +88,17 @@ public static class RuntimeWorkflowStateSeed
         // The trigger-node identity rides its own reserved channel (spec 089 D): never the input:* namespace.
         if (!string.IsNullOrWhiteSpace(triggerNodeId))
             changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.TriggerNodeId, TriggerNodeValueIdPrefix, TriggerNodeIdSlotName, triggerNodeId, capturedAt));
+
+        // The matched trigger binding's metadata map rides its own reserved channel (spec 117 D4): the whole
+        // string→string map is one durable value, never the input:* namespace. An empty map is not seeded.
+        if (triggerMetadata is { Count: > 0 })
+            changes.Add(NewSeedChange(
+                workflowExecutionId,
+                RuntimeMetadataKeys.TriggerMetadataName,
+                TriggerMetadataValueIdPrefix,
+                TriggerMetadataSlotName,
+                triggerMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+                capturedAt));
 
         return changes;
     }

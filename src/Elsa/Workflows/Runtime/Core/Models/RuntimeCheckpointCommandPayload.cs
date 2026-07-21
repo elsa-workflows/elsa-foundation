@@ -22,7 +22,8 @@ public sealed class RuntimeCheckpointCommandPayload
         JsonElement? seedStimulusInput = null,
         string? seedTriggerNodeId = null,
         WorkflowRunKind runKind = WorkflowRunKind.Unknown,
-        WorkflowExecutableSourceProvenance? pinnedSource = null)
+        WorkflowExecutableSourceProvenance? pinnedSource = null,
+        IReadOnlyDictionary<string, string>? seedTriggerMetadata = null)
         : this(
             pinnedExecutable,
             checkpointName,
@@ -39,7 +40,8 @@ public sealed class RuntimeCheckpointCommandPayload
             null,
             null,
             null,
-            null)
+            null,
+            seedTriggerMetadata)
     {
     }
 
@@ -59,7 +61,8 @@ public sealed class RuntimeCheckpointCommandPayload
         string? correlationId,
         string? tenantId,
         WorkflowExecutionPartition? partition,
-        WorkflowExecutionAuthoritySnapshot? authority)
+        WorkflowExecutionAuthoritySnapshot? authority,
+        IReadOnlyDictionary<string, string>? seedTriggerMetadata = null)
         : this(
             pinnedExecutable,
             checkpointName,
@@ -78,7 +81,8 @@ public sealed class RuntimeCheckpointCommandPayload
             partition,
             authority,
             dispatchNestingDepth: 0,
-            testScope: null)
+            testScope: null,
+            seedTriggerMetadata: seedTriggerMetadata)
     {
     }
 
@@ -101,7 +105,8 @@ public sealed class RuntimeCheckpointCommandPayload
         WorkflowExecutionPartition? partition,
         WorkflowExecutionAuthoritySnapshot? authority,
         int dispatchNestingDepth,
-        WorkflowTestScope? testScope = null)
+        WorkflowTestScope? testScope = null,
+        IReadOnlyDictionary<string, string>? seedTriggerMetadata = null)
     {
         if (pinnedExecutable is null)
             throw new RuntimeCheckpointCommandPayloadValidationException("Pinned executable cannot be null.", nameof(pinnedExecutable));
@@ -152,6 +157,8 @@ public sealed class RuntimeCheckpointCommandPayload
         SeedInputs = SnapshotElements(seedInputs);
         SeedStimulusInput = seedStimulusInput?.Clone();
         SeedTriggerNodeId = seedTriggerNodeId;
+        SeedTriggerMetadata = (seedTriggerMetadata ?? new Dictionary<string, string>())
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         RunKind = runKind;
         PinnedSource = pinnedSource;
         ParentWorkflowExecutionId = parentWorkflowExecutionId;
@@ -192,6 +199,13 @@ public sealed class RuntimeCheckpointCommandPayload
     /// commits. Populated only for the workflow-started checkpoint of a trigger-matched start; null otherwise.
     /// </summary>
     public string? SeedTriggerNodeId { get; }
+
+    /// <summary>
+    /// The matched trigger binding's metadata map (spec 117 D4) to persist on its reserved durable channel when
+    /// this checkpoint commits. Populated only for the workflow-started checkpoint of a trigger-matched start with
+    /// binding metadata; empty otherwise.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> SeedTriggerMetadata { get; }
 
     /// <summary>
     /// The durable execution classification carried from the start command into the first checkpoint.

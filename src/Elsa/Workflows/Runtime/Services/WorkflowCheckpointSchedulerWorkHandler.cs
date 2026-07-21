@@ -183,7 +183,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt)
     {
-        if (payload.SeedVariables.Count == 0 && payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId))
+        if (payload.SeedVariables.Count == 0 && payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId) && payload.SeedTriggerMetadata.Count == 0)
             return [];
 
         return RuntimeWorkflowStateSeed.BuildSeedChanges(
@@ -192,7 +192,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             payload.SeedInputs.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal),
             occurredAt,
             stimulusInput: payload.SeedStimulusInput,
-            triggerNodeId: payload.SeedTriggerNodeId);
+            triggerNodeId: payload.SeedTriggerNodeId,
+            triggerMetadata: payload.SeedTriggerMetadata);
     }
 
     private static void ValidateTerminalCheckpointStatus(

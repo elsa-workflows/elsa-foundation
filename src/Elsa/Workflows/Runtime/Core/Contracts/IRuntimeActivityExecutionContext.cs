@@ -14,6 +14,22 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     ExecutableNode ExecutableNode { get; }
     ActivityExecutionState ActivityExecutionState { get; }
 
+    /// <summary>
+    /// The executable node id of the matched trigger binding that started this run (spec 089 D / 117 D4),
+    /// populated from the committed workflow-started seed (spoof-proof, not user input). Null for direct
+    /// (non-stimulus) starts. A structural trigger activity (e.g. <c>BpmnProcess</c>) compares it to
+    /// <c>ExecutableNodeId</c> to tell whether it was the node that started this run.
+    /// </summary>
+    string? TriggerNodeId { get; }
+
+    /// <summary>
+    /// The matched trigger binding's free-form metadata map (spec 117 D4), carried verbatim from
+    /// <c>WorkflowTriggerBinding.Metadata</c> and seeded on its own reserved durable channel. Null for direct
+    /// starts and for stimulus starts whose binding carried no metadata. A structural trigger activity reads
+    /// per-descriptor routing facets from it (e.g. the BPMN start element id under <c>"bpmn.startElementId"</c>).
+    /// </summary>
+    IReadOnlyDictionary<string, string>? TriggerMetadata { get; }
+
     void ScheduleChildActivity(
         string executableNodeId,
         string? schedulingActivityExecutionId = null,

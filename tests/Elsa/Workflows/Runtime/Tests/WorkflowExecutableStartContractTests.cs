@@ -17,20 +17,23 @@ public sealed class WorkflowExecutableStartContractTests
     [Fact]
     public void ExistingRequestAndCommandConstructors_RemainAvailable()
     {
+        // spec 117 D4 appended a trailing optional trigger-metadata channel to these convenience constructors.
         Assert.NotNull(typeof(WorkflowExecutionStartDispatchRequest).GetConstructor([
             typeof(string), typeof(string), typeof(string), typeof(string),
             typeof(IReadOnlyDictionary<string, string>), typeof(IReadOnlyDictionary<string, object>),
             typeof(IReadOnlyDictionary<string, object>), typeof(JsonElement?), typeof(string),
             typeof(WorkflowRunKind), typeof(WorkflowExecutableSourceSelection),
             typeof(WorkflowExecutableProvenanceRequirement), typeof(string), typeof(string), typeof(string),
-            typeof(WorkflowExecutionPartition), typeof(WorkflowExecutionAuthoritySnapshot)
+            typeof(WorkflowExecutionPartition), typeof(WorkflowExecutionAuthoritySnapshot),
+            typeof(IReadOnlyDictionary<string, string>)
         ]));
         Assert.NotNull(typeof(WorkflowExecutionStartCommandPayload).GetConstructor([
             typeof(WorkflowExecutableIdentity), typeof(string),
             typeof(IReadOnlyDictionary<string, JsonElement>), typeof(IReadOnlyDictionary<string, JsonElement>),
             typeof(JsonElement?), typeof(string), typeof(WorkflowRunKind),
             typeof(WorkflowExecutableSourceProvenance), typeof(string), typeof(string), typeof(string),
-            typeof(WorkflowExecutionPartition), typeof(WorkflowExecutionAuthoritySnapshot)
+            typeof(WorkflowExecutionPartition), typeof(WorkflowExecutionAuthoritySnapshot),
+            typeof(IReadOnlyDictionary<string, string>)
         ]));
     }
 

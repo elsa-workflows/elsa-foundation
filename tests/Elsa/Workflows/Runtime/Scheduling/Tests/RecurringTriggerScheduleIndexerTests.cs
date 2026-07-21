@@ -434,20 +434,20 @@ public sealed class RecurringTriggerScheduleIndexerTests
     {
         public string ProviderId => providerId!;
 
-        public RecurringScheduleDescriptor? Describe(ExecutableNode node) =>
+        public IReadOnlyCollection<RecurringScheduleDescriptor> Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
-                ? new RecurringScheduleDescriptor(stimulusType, stimulusHash, kind, expression)
-                : null;
+                ? [new RecurringScheduleDescriptor(stimulusType, stimulusHash, kind, expression)]
+                : [];
     }
 
     private sealed class ThrowingScheduleProvider(string activityType, string? providerId, Exception exception) : IRecurringTriggerScheduleProvider
     {
         public string ProviderId => providerId!;
 
-        public RecurringScheduleDescriptor? Describe(ExecutableNode node)
+        public IReadOnlyCollection<RecurringScheduleDescriptor> Describe(ExecutableNode node)
         {
             if (!StringComparer.Ordinal.Equals(node.ActivityType, activityType))
-                return null;
+                return [];
 
             throw exception;
         }
