@@ -267,7 +267,37 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             cancellationToken);
     }
 
+    /// <summary>
+    /// Discrete adapter: builds the fused-mode <c>ActivityStarted</c> commit core and re-attaches the
+    /// <c>InvokeActivity</c> continuation intent, reproducing today's commit byte-for-byte. The commit builder and the
+    /// derived <c>InvokeActivity</c> work item are extracted into <see cref="BuildStartedCommitAsync"/> so the spec-123
+    /// fusion driver can commit the same stage without the continuation intent and dispatch the invoke handler inline.
+    /// </summary>
     private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeStartActivityCommandPayload startPayload,
+        ActivityExecutionState runningState,
+        CancellationToken cancellationToken)
+    {
+        var core = await BuildStartedCommitAsync(workItem, startPayload, runningState, cancellationToken);
+        return core.Commit with
+        {
+            PostCommitIntents =
+            [
+                SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
+                    workItem, startPayload.ActivityExecutionId, core.InvokeWorkItem, core.OccurredAt)
+            ]
+        };
+    }
+
+    /// <summary>
+    /// The <c>ActivityStarted</c> stage core (spec 123 FR-002): produces the <c>ActivityStarted</c> checkpoint commit
+    /// <b>without</b> its <c>InvokeActivity</c> post-commit intent, alongside the derived <c>InvokeActivity</c> work
+    /// item and the checkpoint's occurrence time. The discrete handler re-attaches the intent
+    /// (<see cref="NewCommitAsync"/>); the fused driver commits the intent-free commit and dispatches the returned work
+    /// item through the unchanged invoke handler inline.
+    /// </summary>
+    internal async ValueTask<StartedCommitCore> BuildStartedCommitAsync(
         RuntimeSchedulerWorkItem workItem,
         RuntimeStartActivityCommandPayload startPayload,
         ActivityExecutionState runningState,
@@ -290,7 +320,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         var inspection = await _inspectionAccumulator.BuildProjectionAsync(runningState, checkpointId, occurredAt, metadata: metadata, cancellationToken: cancellationToken);
         var invokeWorkItem = NewInvokeActivityWorkItem(workItem, startPayload);
 
-        return new RuntimeCheckpointCommit(
+        var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{workItem.WorkItemId}:activity-started:{startPayload.ActivityExecutionId}",
             Checkpoint: new RuntimeCheckpoint(
                 CheckpointId: checkpointId,
@@ -322,9 +352,20 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
                         State: inspection,
                         Metadata: metadata)
                 ]),
-            PostCommitIntents: [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(workItem, startPayload.ActivityExecutionId, invokeWorkItem, occurredAt)],
+            PostCommitIntents: [],
             Metadata: metadata);
+
+        return new StartedCommitCore(commit, invokeWorkItem, occurredAt);
     }
+
+    /// <summary>
+    /// The intent-free <c>ActivityStarted</c> commit plus the derived <c>InvokeActivity</c> continuation work item and
+    /// the checkpoint's occurrence time (spec 123 FR-002).
+    /// </summary>
+    internal readonly record struct StartedCommitCore(
+        RuntimeCheckpointCommit Commit,
+        RuntimeSchedulerWorkItem InvokeWorkItem,
+        DateTimeOffset OccurredAt);
 
     private async ValueTask EnqueueInvokeActivityAsync(
         RuntimeSchedulerWorkItem startWorkItem,

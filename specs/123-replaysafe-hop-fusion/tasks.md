@@ -36,9 +36,16 @@ proves coalesced folds (coalesced commits < immediate) and ReplaySafe probe reso
   commits fold into a segment (proves the harness path works before any fusion code exists). Commit:
   `test(harness): coalesced-mode harness path + ReplaySafe probe activity (spec 123 prep)`.
 
-## Increment A — stage-core extraction refactor (behavior-preserving)
+## Increment A — stage-core extraction refactor (behavior-preserving) — DONE 2026-07-22 (reduced scope per §8.1)
 
-- [ ] **A1** Extract the **schedule stage core** from `WorkflowScheduleActivitySchedulerWorkHandler.ExecuteAsync`
+Landed the schedule + start commit-builder cores only (A3 invoke / A4 parent-completion deferred to D2 per §8.1):
+`WorkflowScheduleActivitySchedulerWorkHandler.BuildScheduledCommitAsync` → `ScheduledCommitCore(commit-no-intent,
+StartWorkItem, OccurredAt)` and `WorkflowStartActivitySchedulerWorkHandler.BuildStartedCommitAsync` →
+`StartedCommitCore(commit-no-intent, InvokeWorkItem, OccurredAt)`. Each discrete `NewCommitAsync` is now a thin adapter
+that re-attaches the continuation intent via `with { PostCommitIntents = [...] }`, reproducing today's commit
+byte-for-byte. Gate green, unchanged: Workflows.Runtime.Tests **1378**, Activities.Runtime.Tests **198**.
+
+- [x] **A1** Extract the **schedule stage core** from `WorkflowScheduleActivitySchedulerWorkHandler.ExecuteAsync`
   (`src/Elsa/Workflows/Runtime/Services/`) into a reusable core that returns
   `(RuntimeCheckpointCommit? commit, RuntimeSchedulerWorkItem? nextWorkItem)` — the `ActivityScheduled`
   commit + the `StartActivity` item from `NewStartActivityWorkItem`. Handler becomes a thin adapter.
