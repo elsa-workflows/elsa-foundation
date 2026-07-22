@@ -1,9 +1,16 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
-import { registerBuiltInSettingEditors, selectSettingEditor } from "@elsa-workflows/studio-ui";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
+import {
+  registerBuiltInSettingEditors,
+  selectSettingEditor,
+  SkeletonRows,
+  StudioAlert,
+  StudioTabs,
+  StudioToolbar,
+  StudioToolbarGroup
+} from "@elsa-workflows/studio-ui";
 import type {
   ElsaStudioModuleApi,
-  StudioSettingDescriptor,
   StudioSettingDescriptor
 } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
@@ -474,31 +481,45 @@ export function FeatureManagementPage() {
           <h2>Features</h2>
           <p>{activeHost.label}: {enabledCount} enabled of {draft.length} available{dirty ? " - Unsaved changes" : ""}</p>
         </div>
-        <div className="feature-management-actions">
-          <button type="button" className="feature-management-icon-button" aria-label="Refresh features" title="Refresh" onClick={() => refreshHost()} disabled={loading || applying}>
-            <RefreshCcw size={15} />
-          </button>
-          <button type="button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</button>
-          <button type="button" className="primary" onClick={apply} disabled={!dirty || loading || applying || readOnly}>
-            {applying ? "Applying" : "Apply"}
-          </button>
-        </div>
+        <StudioToolbar>
+          <StudioToolbarGroup>
+            <button type="button" className="studio-icon-button" aria-label="Refresh features" title="Refresh" onClick={() => refreshHost()} disabled={loading || applying}>
+              <RefreshCcw size={15} />
+            </button>
+            <button type="button" className="studio-button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</button>
+            <button type="button" className="studio-button studio-button-primary" onClick={apply} disabled={!dirty || loading || applying || readOnly}>
+              {applying ? "Applying" : "Apply"}
+            </button>
+          </StudioToolbarGroup>
+        </StudioToolbar>
       </div>
 
-      <HostTabs hosts={hosts} activeHostId={activeHost.id} onSelect={setActiveHostId} />
+      <StudioTabs
+        tabs={hosts.map(host => ({ id: host.id, label: host.label }))}
+        activeTab={activeHost.id}
+        onSelect={hostId => setActiveHostId(hostId as FeatureHostId)}
+        ariaLabel="Hosts"
+      />
 
-      {error ? <div className="feature-management-error">{error}</div> : null}
-      {status ? <div className="feature-management-status">{status}</div> : null}
+      {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
+      {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
       <div className="feature-management-layout">
-        <CategoryFilter
-          categories={categories}
-          selectedCategory={selectedCategory}
-          filterText={filterText}
-          onSelect={category => updateHostState(activeHost.id, state => ({ ...state, selectedCategory: category }))}
-          onFilterTextChange={value => updateHostState(activeHost.id, state => ({ ...state, filterText: value }))}
-        />
-
         <div className="feature-management-list-column">
+          <div className="feature-management-list-toolbar">
+            <input
+              type="search"
+              aria-label="Filter features"
+              placeholder="Filter by name, package, setting..."
+              value={filterText}
+              onChange={event => updateHostState(activeHost.id, state => ({ ...state, filterText: event.target.value }))}
+            />
+            <CategorySelect
+              categories={categories}
+              selectedCategory={selectedCategory}
+              onSelect={category => updateHostState(activeHost.id, state => ({ ...state, selectedCategory: category }))}
+            />
+          </div>
+
           <div className="feature-management-list-heading">
             <div>
               <strong>{selectedCategoryLabel}</strong>
@@ -521,7 +542,7 @@ export function FeatureManagementPage() {
           />
 
           <div className="feature-management-list" aria-busy={loading}>
-            {loading && draft.length === 0 ? <p className="feature-management-muted">Loading features...</p> : null}
+            {loading && draft.length === 0 ? <SkeletonRows rows={6} label="Loading features" /> : null}
             {!loading && draft.length === 0 ? <p className="feature-management-muted">No features are available.</p> : null}
             {!loading && draft.length > 0 && filteredDraft.length === 0 ? <p className="feature-management-muted">{filterText.trim() ? "No features match this filter." : "No features match this category."}</p> : null}
             {filteredDraft.map(feature => (
@@ -548,34 +569,6 @@ export function FeatureManagementPage() {
         />
       </div>
     </section>
-  );
-}
-
-function HostTabs({
-  hosts,
-  activeHostId,
-  onSelect
-}: {
-  hosts: FeatureHostConfig[];
-  activeHostId: FeatureHostId;
-  onSelect(hostId: FeatureHostId): void;
-}) {
-  return (
-    <div className="feature-management-host-tabs" role="tablist" aria-label="Feature host">
-      {hosts.map(host => (
-        <button
-          key={host.id}
-          type="button"
-          role="tab"
-          aria-selected={host.id === activeHostId}
-          className={host.id === activeHostId ? "active" : ""}
-          onClick={() => onSelect(host.id)}
-        >
-          <span>{host.label}</span>
-          <small>{host.runtime}</small>
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -638,46 +631,113 @@ function BulkFeatureActions({
   );
 }
 
-function CategoryFilter({
+/**
+ * Searchable category picker embedded in the feature list toolbar. Replaces the former
+ * dedicated categories column: after picking a category the full-width list and inspector
+ * get the reclaimed space, while the popover keeps every category (with counts) one click
+ * away and filterable by text.
+ */
+function CategorySelect({
   categories,
   selectedCategory,
-  filterText,
-  onFilterTextChange,
   onSelect
 }: {
   categories: CategoryFilterItem[];
   selectedCategory: string;
-  filterText: string;
-  onFilterTextChange(value: string): void;
   onSelect(categoryId: string): void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const selected = categories.find(category => category.id === selectedCategory) ?? categories[0];
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleCategories = normalizedQuery
+    ? categories.filter(category => category.label.toLowerCase().includes(normalizedQuery))
+    : categories;
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function onPointerDown(event: PointerEvent) {
+      if (containerRef.current && event.target instanceof Node && !containerRef.current.contains(event.target)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      searchRef.current?.focus();
+    }
+  }, [open]);
+
+  function close() {
+    setOpen(false);
+    setQuery("");
+  }
+
   return (
-    <aside className="feature-management-categories" aria-label="Feature categories">
-      <span className="feature-management-panel-label">Categories</span>
-      <label className="feature-management-filter">
-        <span>Filter features</span>
-        <input
-          type="search"
-          aria-label="Filter features"
-          placeholder="Filter by name, package, setting..."
-          value={filterText}
-          onChange={event => onFilterTextChange(event.target.value)}
-        />
-      </label>
-      <div className="feature-management-category-list">
-        {categories.map(category => (
-          <button
-            key={category.id}
-            type="button"
-            className={category.id === selectedCategory ? "active" : ""}
-            onClick={() => onSelect(category.id)}
-          >
-            <span>{category.label}</span>
-            <em>{category.count}</em>
-          </button>
-        ))}
-      </div>
-    </aside>
+    <div
+      className="feature-management-category-select"
+      ref={containerRef}
+      onKeyDown={event => {
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          close();
+        }
+      }}
+    >
+      <button
+        type="button"
+        className="feature-management-category-trigger"
+        aria-label="Filter by category"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => (open ? close() : setOpen(true))}
+      >
+        <span>{selected?.label ?? "All categories"}</span>
+        <em>{selected?.count ?? 0}</em>
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="feature-management-category-popover">
+          <input
+            ref={searchRef}
+            type="search"
+            aria-label="Search categories"
+            placeholder="Search categories"
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+          />
+          <div className="feature-management-category-options" role="listbox" aria-label="Feature categories">
+            {visibleCategories.length === 0 ? <p className="feature-management-muted">No categories match.</p> : null}
+            {visibleCategories.map(category => (
+              <button
+                key={category.id}
+                type="button"
+                role="option"
+                aria-selected={category.id === selectedCategory}
+                className={category.id === selectedCategory ? "active" : ""}
+                onClick={() => {
+                  onSelect(category.id);
+                  close();
+                }}
+              >
+                <span>{category.label}</span>
+                <em>{category.count}</em>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -785,7 +845,7 @@ function FeatureInspector({
       {feature.readError ? <div className="feature-management-warning">{feature.readError}</div> : null}
 
       <section className="feature-management-inspector-section" aria-label="Feature metadata">
-        <FeatureMetadata feature={feature} displayName={displayName} dependents={dependents} />
+        <FeatureMetadata feature={feature} dependents={dependents} />
       </section>
 
       <section className="feature-management-inspector-section feature-management-settings-panel" aria-label="Feature settings">
@@ -821,8 +881,12 @@ function FeatureInspector({
   );
 }
 
-function FeatureMetadata({ feature, displayName, dependents }: { feature: DraftFeature; displayName: string; dependents: string[] }) {
-  const source = getSourceMeta(feature.sourceKind);
+/**
+ * Metadata that is not already visible in the inspector heading. Status, source, and the
+ * advanced/experimental flags render once as badges above the title, and the display name
+ * and description live in the heading, so this list intentionally does not repeat them.
+ */
+function FeatureMetadata({ feature, dependents }: { feature: DraftFeature; dependents: string[] }) {
   const dependencies = feature.dependencies.map(dependency => dependency.id);
   const packageName = feature.packageId
     ? [feature.packageId, feature.packageVersion].filter(Boolean).join(" ")
@@ -832,18 +896,12 @@ function FeatureMetadata({ feature, displayName, dependents }: { feature: DraftF
     <section className="feature-management-metadata" aria-label="Feature metadata">
       <h4>Metadata</h4>
       <dl className="feature-management-detail-list">
-        <div><dt>Display name</dt><dd>{displayName}</dd></div>
         <div><dt>Technical name</dt><dd><code>{feature.id}</code></dd></div>
-        <div><dt>Status</dt><dd><FeatureBadge tone={feature.enabled ? "enabled" : "neutral"}>{feature.enabled ? "Enabled" : "Disabled"}</FeatureBadge></dd></div>
-        <div><dt>Source</dt><dd><FeatureBadge tone={source.tone} title={source.title}>{source.label}</FeatureBadge></dd></div>
+        <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
         <div className="feature-management-detail-wide"><dt>Categories</dt><dd><CategoryChips categories={feature.categories} /></dd></div>
         <div className="feature-management-detail-wide"><dt>Package</dt><dd>{feature.packageId ? <FeatureBadge tone="violet"><Package size={11} />{packageName}</FeatureBadge> : <span className="feature-management-muted">{packageName}</span>}</dd></div>
-        <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
         {dependencies.length > 0 ? <div className="feature-management-detail-wide"><dt>Depends on</dt><dd><FeatureLinkChips ids={dependencies} /></dd></div> : null}
         {dependents.length > 0 ? <div className="feature-management-detail-wide"><dt>Required by</dt><dd><FeatureLinkChips ids={dependents} /></dd></div> : null}
-        <div><dt>Advanced</dt><dd>{feature.advanced ? <FeatureBadge tone="advanced">Advanced</FeatureBadge> : <span className="feature-management-muted">No</span>}</dd></div>
-        <div><dt>Experimental</dt><dd>{feature.experimental ? <FeatureBadge tone="experimental">Experimental</FeatureBadge> : <span className="feature-management-muted">No</span>}</dd></div>
-        {feature.description ? <div className="feature-management-detail-wide"><dt>Description</dt><dd>{feature.description}</dd></div> : null}
         {feature.manifestHash ? <div className="feature-management-detail-wide"><dt>Manifest hash</dt><dd><code>{feature.manifestHash}</code></dd></div> : null}
         {feature.manifestPath ? <div className="feature-management-detail-wide"><dt>Manifest path</dt><dd><code>{feature.manifestPath}</code></dd></div> : null}
       </dl>

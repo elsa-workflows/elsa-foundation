@@ -341,7 +341,7 @@ describe("feature management module", () => {
     await unmount();
   });
 
-  it("filters features by category and marks the selected feature", async () => {
+  it("filters features by category through the searchable dropdown and marks the selected feature", async () => {
     const api = stubApi({
       getJson: async () => ({
         revision: "rev-1",
@@ -354,8 +354,21 @@ describe("feature management module", () => {
     register(api);
     const { container, unmount } = await renderFeatureManagementPage();
 
-    await click(buttonContainingText(container, "Storage"));
+    await click(container.querySelector("[aria-label='Filter by category']"));
 
+    const searchInput = container.querySelector("[aria-label='Search categories']") as HTMLInputElement | null;
+    expect(searchInput).toBeTruthy();
+
+    // The category search narrows the option list before a category is picked.
+    await changeInput(searchInput, "stor");
+    const listbox = container.querySelector("[role='listbox']");
+    expect(listbox?.textContent).toContain("Storage");
+    expect(listbox?.textContent).not.toContain("Runtime");
+
+    await click(buttonContainingText(listbox as Element, "Storage"));
+
+    expect(container.querySelector(".feature-management-category-popover")).toBeNull();
+    expect(container.querySelector("[aria-label='Filter by category']")?.textContent).toContain("Storage");
     expect(container.textContent).toContain("1 feature");
     expect(container.textContent).toContain("StorageA");
     expect(container.textContent).not.toContain("RuntimeA");
@@ -409,10 +422,13 @@ describe("feature management module", () => {
 
     expect(selectedCard?.querySelector("strong")?.textContent).toBe("RuntimeA");
     expect(selectedCard?.querySelector("code")).toBeNull();
-    expect(metadata?.textContent).toContain("Display name");
     expect(metadata?.textContent).toContain("Technical name");
     expect(metadata?.textContent).toContain("RuntimeA");
     expect(metadata?.textContent).toContain("Runtime");
+    // Status and source render once as inspector heading badges, not repeated in metadata.
+    expect(metadata?.textContent).not.toContain("Display name");
+    expect(metadata?.textContent).not.toContain("Status");
+    expect(metadata?.textContent).not.toContain("Source");
 
     const settingsSection = container.querySelector("[aria-label='Feature settings']");
     expect(settingsSection?.textContent).toContain("Settings");
@@ -459,20 +475,23 @@ describe("feature management module", () => {
 
     expect(metadataSection).toBeTruthy();
     expect(metadataSection?.textContent).not.toContain("Timeout");
-    expect(metadata?.textContent).toContain("Display name");
-    expect(metadata?.textContent).toContain("Runtime A");
     expect(metadata?.textContent).toContain("Technical name");
     expect(metadata?.textContent).toContain("RuntimeA");
-    expect(metadata?.textContent).toContain("Description");
-    expect(metadata?.textContent).toContain("Runs workflow activities.");
     expect(metadata?.textContent).toContain("Package");
     expect(metadata?.textContent).toContain("Elsa.Runtime.Features 1.2.3");
     expect(metadata?.textContent).toContain("Manifest hash");
     expect(metadata?.textContent).toContain("abc123");
     expect(metadata?.textContent).toContain("Manifest path");
     expect(metadata?.textContent).toContain("/packages/elsa-package.json");
-    expect(metadata?.textContent).toContain("Advanced");
-    expect(metadata?.textContent).toContain("Experimental");
+    // Display name, description, status, source, and the advanced/experimental flags render
+    // once in the inspector heading, so the metadata list must not repeat them.
+    expect(metadata?.textContent).not.toContain("Display name");
+    expect(metadata?.textContent).not.toContain("Description");
+    expect(metadata?.textContent).not.toContain("Advanced");
+    expect(metadata?.textContent).not.toContain("Experimental");
+    const heading = container.querySelector(".feature-management-inspector-heading");
+    expect(heading?.textContent).toContain("Advanced");
+    expect(heading?.textContent).toContain("Experimental");
     expect(settingsSection).toBeTruthy();
     expect(settingsSection?.textContent).toContain("Timeout");
     expect(settingsSection?.textContent).toContain("5");

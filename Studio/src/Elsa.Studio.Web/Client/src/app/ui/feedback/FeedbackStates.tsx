@@ -29,3 +29,24 @@ export function EmptyState({
     </div>
   );
 }
+
+/**
+ * Shimmering placeholder rows for content that is still loading. The rows fade in after a
+ * short delay (see the `.studio-skeleton` styles), so responses that resolve quickly never
+ * flash a loading state at all.
+ */
+export function SkeletonRows({
+  rows = 5,
+  label = "Loading"
+}: {
+  rows?: number;
+  label?: string;
+}) {
+  return (
+    <div className="studio-skeleton-list" role="status" aria-live="polite" aria-busy="true" aria-label={label}>
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="studio-skeleton studio-skeleton-row" style={{ width: `${92 - (index % 3) * 14}%` }} />
+      ))}
+    </div>
+  );
+}

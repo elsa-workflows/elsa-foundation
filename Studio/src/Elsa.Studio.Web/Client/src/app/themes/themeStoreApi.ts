@@ -15,6 +15,8 @@ export interface ThemeStoreResponse {
   themes: StudioThemeDefinition[];
   defaultThemeId: string;
   assets: ThemeStoreAsset[];
+  /** Built-in theme ids an admin has hidden from the theme picker dropdown. */
+  disabledBuiltInThemeIds: string[];
 }
 
 export interface ThemeStoreCapabilities {
@@ -69,8 +71,18 @@ export function normalizeThemeStore(value?: Partial<ThemeStoreResponse> | null):
     .map(normalizeThemeDefinition)
     .filter(Boolean) as StudioThemeDefinition[];
   const builtInIds = new Set(builtInThemeDefinitions.map(theme => theme.id));
+  // Admin-disabled built-ins stay in the store (the Theme Builder still lists them for
+  // re-enabling) but are marked disabled so getSelectableThemes drops them from the picker.
+  const disabledBuiltInThemeIds = (value?.disabledBuiltInThemeIds ?? [])
+    .filter(id => typeof id === "string")
+    .map(id => id.toLowerCase())
+    .filter(id => builtInIds.has(id));
+  const disabledBuiltIns = new Set(disabledBuiltInThemeIds);
   const themes = [
-    ...builtInThemeDefinitions.map(theme => cloneThemeDefinition(theme)),
+    ...builtInThemeDefinitions.map(theme => ({
+      ...cloneThemeDefinition(theme),
+      enabled: !disabledBuiltIns.has(theme.id.toLowerCase())
+    })),
     ...customThemes.filter(theme => !builtInIds.has(theme.id))
   ];
   const defaultThemeId = themes.some(theme => theme.id === value?.defaultThemeId)
@@ -80,7 +92,8 @@ export function normalizeThemeStore(value?: Partial<ThemeStoreResponse> | null):
   return {
     themes,
     defaultThemeId,
-    assets: value?.assets ?? []
+    assets: value?.assets ?? [],
+    disabledBuiltInThemeIds
   };
 }
 
@@ -163,6 +176,15 @@ async function getThemeFeatureCapability(context: StudioEndpointContext, feature
 
 export async function saveTheme(context: StudioEndpointContext, theme: StudioThemeDefinition) {
   return normalizeThemeStore(await context.http.putJson<ThemeStoreResponse>(`/_elsa/theme-store/themes/${encodeURIComponent(theme.id)}`, theme));
+}
+
+/**
+ * Shows or hides a BUILT-IN theme in the theme picker. Built-in definitions remain read-only
+ * seeds; this only records the admin's visibility choice. Custom themes keep using saveTheme
+ * with their own enabled flag.
+ */
+export async function setBuiltInThemeEnabled(context: StudioEndpointContext, themeId: string, enabled: boolean) {
+  return normalizeThemeStore(await context.http.putJson<ThemeStoreResponse>(`/_elsa/theme-store/themes/${encodeURIComponent(themeId)}/visibility`, { enabled }));
 }
 
 export async function duplicateTheme(context: StudioEndpointContext, themeId: string, name?: string) {

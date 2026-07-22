@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
-import { EmptyState, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { EmptyState, SkeletonRows, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   deleteDropFolderPackage,
   formatFileSize,
@@ -212,7 +212,9 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
               )
             ) : null}
             {visibleRows.length === 0 ? (
-              <p className="modules-muted">{getEmptyRowsMessage(activeHost, activeView.sourceView, nuplaneRows.length, effectivePackageSourceFilter)}</p>
+              !registry && isLoading
+                ? <SkeletonRows rows={6} label={`Loading ${activeHost.label} modules`} />
+                : <p className="modules-muted">{getEmptyRowsMessage(activeHost, activeView.sourceView, nuplaneRows.length, effectivePackageSourceFilter)}</p>
             ) : (
               <StudioDataGrid
                 columns={activeColumns}
