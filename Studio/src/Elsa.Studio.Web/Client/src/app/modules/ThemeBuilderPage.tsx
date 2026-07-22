@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
-import { EmptyState, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   cloneThemeDefinition,
   themeTokenNames,
@@ -17,6 +17,7 @@ import {
   fetchThemeStore,
   importThemePack,
   saveTheme,
+  setBuiltInThemeEnabled,
   setDefaultTheme,
   uploadThemeAsset,
   validateThemeDefinition,
@@ -137,6 +138,21 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }, "Theme deleted.");
   }
 
+  // Built-in themes stay read-only seeds, but admins can hide/show them in the theme picker.
+  // The toggle applies immediately (no draft/apply cycle) because it is stored outside the
+  // theme definition itself.
+  async function setBuiltInVisibility(enabled: boolean) {
+    if (!draft || draft.source !== "built-in") return;
+    await run(async () => {
+      const nextStore = await setBuiltInThemeEnabled(api.host, draft.id, enabled);
+      setStore(nextStore);
+      await refreshThemes();
+      window.dispatchEvent(new Event("elsa-studio:theme-store-changed"));
+    }, enabled
+      ? "Theme enabled. It is available in the theme picker again."
+      : "Theme disabled. It is hidden from the theme picker.");
+  }
+
   async function makeDefault() {
     if (!draft) return;
     await run(async () => {
@@ -226,7 +242,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
             <p>Loading Theme Store definitions.</p>
           </div>
         </div>
-        <EmptyState icon={<Paintbrush size={22} />}>Loading themes...</EmptyState>
+        <SkeletonRows rows={6} label="Loading themes" />
       </section>
     );
   }
@@ -292,7 +308,14 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           <StudioTabs tabs={builderTabs} activeTab={tab} onSelect={id => setTab(id as BuilderTab)} ariaLabel="Theme Builder views" />
 
           {tab === "overview" ? (
-            <OverviewEditor draft={draft} readOnly={isReadOnly} validationIssues={validation.issues} onPatch={patchDraft} />
+            <OverviewEditor
+              draft={draft}
+              readOnly={isReadOnly}
+              isDefaultTheme={draft.id === store.defaultThemeId}
+              validationIssues={validation.issues}
+              onPatch={patchDraft}
+              onToggleBuiltInEnabled={enabled => void setBuiltInVisibility(enabled)}
+            />
           ) : null}
 
           {tab === "tokens" ? (
@@ -361,14 +384,28 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 function OverviewEditor({
   draft,
   readOnly,
+  isDefaultTheme,
   validationIssues,
-  onPatch
+  onPatch,
+  onToggleBuiltInEnabled
 }: {
   draft: StudioThemeDefinition;
   readOnly: boolean;
+  isDefaultTheme: boolean;
   validationIssues: ThemeValidationIssue[];
   onPatch: (patch: Partial<StudioThemeDefinition>) => void;
+  onToggleBuiltInEnabled: (enabled: boolean) => void;
 }) {
+  // Built-in themes are read-only definitions, but their picker visibility ("Enabled") is an
+  // admin choice that applies immediately. The current default theme must stay enabled.
+  const isBuiltIn = draft.source === "built-in";
+  const enabledToggleDisabled = isBuiltIn ? isDefaultTheme : readOnly;
+  const enabledToggleTitle = isBuiltIn
+    ? (isDefaultTheme
+      ? "The default theme cannot be disabled. Pick another default theme first."
+      : "Controls whether this built-in theme appears in the theme picker.")
+    : undefined;
+
   return (
     <div className="theme-overview-editor">
       <label>
@@ -381,8 +418,22 @@ function OverviewEditor({
       </label>
       <div className="theme-toggle-row">
         <label><input type="checkbox" checked={draft.published} disabled={readOnly} onChange={event => onPatch({ published: event.target.checked })} /> Published</label>
-        <label><input type="checkbox" checked={draft.enabled} disabled={readOnly} onChange={event => onPatch({ enabled: event.target.checked })} /> Enabled</label>
+        <label title={enabledToggleTitle}>
+          <input
+            type="checkbox"
+            checked={draft.enabled}
+            disabled={enabledToggleDisabled}
+            aria-label={`${draft.enabled ? "Disable" : "Enable"} ${draft.name}`}
+            onChange={event => isBuiltIn ? onToggleBuiltInEnabled(event.target.checked) : onPatch({ enabled: event.target.checked })}
+          />
+          {" "}Enabled
+        </label>
       </div>
+      {isBuiltIn ? (
+        <p className="theme-builder-hint">
+          Disabling a built-in theme removes it from the theme picker dropdown; it stays listed here so it can be re-enabled.
+        </p>
+      ) : null}
       <ValidationList issues={validationIssues} />
     </div>
   );

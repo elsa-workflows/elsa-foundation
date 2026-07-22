@@ -157,6 +157,32 @@
   color: var(--studio-danger-fg);
 }
 
+/* Screen-reader-only text (the lazy fallback announces itself while showing skeleton rows). */
+.wf-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  border: 0;
+  padding: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Suspense fallback rendered as shimmer rows (mirrors WfListSkeleton) instead of a
+   centered text box, so the route swap reads as one continuous loading treatment. */
+.wf-lazy-state.wf-lazy-skeleton {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  border: 0;
+  background: transparent;
+  padding: 12px 0;
+  text-align: left;
+}
+
 .wf-lazy-reload {
   min-height: 32px;
   padding: 0 10px;
@@ -5754,7 +5780,8 @@ button.wf-reference-select {
   animation: wf-pop-in 0.13s ease;
 }
 
-/* Skeleton loader — matches Elsa 3's pulse rows. */
+/* Skeleton loader — matches Elsa 3's pulse rows. Rows start invisible and fade in after a
+   short delay, so responses that resolve quickly never flash a loading state at all. */
 .wf-skeleton {
   border-radius: var(--wf-radius-sm);
   background: linear-gradient(
@@ -5764,7 +5791,16 @@ button.wf-reference-select {
     var(--wf-panel-muted) 63%
   );
   background-size: 200% 100%;
-  animation: wf-shimmer 1.4s ease-in-out infinite;
+  opacity: 0;
+  animation:
+    wf-shimmer 1.4s ease-in-out infinite,
+    wf-skeleton-appear 0.2s ease 0.15s forwards;
+}
+
+@keyframes wf-skeleton-appear {
+  to {
+    opacity: 1;
+  }
 }
 
 .wf-skeleton-row {
@@ -5868,7 +5904,9 @@ button.wf-reference-select {
   .wf-editor,
   .wf-editor *,
   .wf-editor *::before,
-  .wf-editor *::after {
+  .wf-editor *::after,
+  .wf-lazy-state,
+  .wf-lazy-state * {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;

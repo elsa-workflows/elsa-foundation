@@ -15,6 +15,8 @@ import {
   Paintbrush,
   PackagePlus,
   PackageSearch,
+  PanelLeftClose,
+  PanelLeftOpen,
   RefreshCw,
   Search
 } from "lucide-react";
@@ -40,6 +42,7 @@ import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
 import { getHealthErrorMessage } from "./hooks/useHostHealth";
 import { DialogHost } from "./ui/dialog/DialogHost";
+import { SkeletonRows } from "./ui/feedback/FeedbackStates";
 import { registerBuiltInSettingEditors } from "./ui/shared";
 import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
@@ -96,6 +99,7 @@ const themeBuilderNavigation: StudioNavigationContribution = {
 };
 
 const ModulesChangedEventName = "elsa-studio:modules-changed";
+const sidebarCollapsedStorageKey = "elsa-studio-sidebar-collapsed";
 const bottomPanelHeightStorageKey = "elsa-studio-bottom-panel-height";
 const activeBottomPanelStorageKey = "elsa-studio-active-bottom-panel";
 const bottomPanelCollapsedStorageKey = "elsa-studio-bottom-panel-collapsed";
@@ -305,7 +309,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     return (
       <ThemeProvider storeContext={shellContext}>
         <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
-          <div className="empty-state">Loading Studio modules...</div>
+          <SkeletonRows rows={8} label="Loading Studio modules" />
         </ShellFrame>
       </ThemeProvider>
     );
@@ -396,6 +400,24 @@ export function ShellFrame({
   children: React.ReactNode;
 }) {
   const [navQuery, setNavQuery] = useState("");
+  const [navCollapsed, setNavCollapsed] = useState(() => getInitialBoolean(sidebarCollapsedStorageKey, false));
+
+  useEffect(() => {
+    window.localStorage.setItem(sidebarCollapsedStorageKey, String(navCollapsed));
+  }, [navCollapsed]);
+
+  function toggleNavCollapsed() {
+    setNavCollapsed(current => {
+      const next = !current;
+      if (next) {
+        // The search box is hidden while collapsed, so drop any active filter rather than
+        // leaving the nav invisibly filtered.
+        setNavQuery("");
+      }
+      return next;
+    });
+  }
+
   const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
   for (const item of navigation) {
     if (!item.parentId) {
@@ -421,34 +443,48 @@ export function ShellFrame({
   const hasNavResults = navigationSections.length > 0;
 
   return (
-    <div className="studio-shell">
+    <div className={navCollapsed ? "studio-shell sidebar-collapsed" : "studio-shell"}>
       <aside className="sidebar">
-        <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
-          <span className="brand-mark" aria-hidden="true">
-            <img src={elsaLogo} alt="" />
-          </span>
-          <span>
-            <strong>Elsa Studio</strong>
-            <small>Foundation</small>
-          </span>
-        </a>
+        <div className="sidebar-top">
+          <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
+            <span className="brand-mark" aria-hidden="true">
+              <img src={elsaLogo} alt="" />
+            </span>
+            <span className="nav-label">
+              <strong>Elsa Studio</strong>
+              <small>Foundation</small>
+            </span>
+          </a>
+          <button
+            type="button"
+            className="sidebar-collapse-toggle"
+            aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+            aria-expanded={!navCollapsed}
+            title={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+            onClick={toggleNavCollapsed}
+          >
+            {navCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+        </div>
 
-        <label className="sidebar-search">
-          <Search size={16} aria-hidden="true" />
-          <input
-            type="search"
-            aria-label="Search modules"
-            placeholder="Search modules"
-            value={navQuery}
-            onChange={event => setNavQuery(event.target.value)}
-            onKeyDown={event => {
-              if (event.key === "Escape" && navQuery) {
-                event.preventDefault();
-                setNavQuery("");
-              }
-            }}
-          />
-        </label>
+        {!navCollapsed ? (
+          <label className="sidebar-search">
+            <Search size={16} aria-hidden="true" />
+            <input
+              type="search"
+              aria-label="Search modules"
+              placeholder="Search modules"
+              value={navQuery}
+              onChange={event => setNavQuery(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === "Escape" && navQuery) {
+                  event.preventDefault();
+                  setNavQuery("");
+                }
+              }}
+            />
+          </label>
+        ) : null}
 
         {query && !hasNavResults ? (
           <p className="sidebar-search-empty" role="status">No modules match "{navQuery.trim()}".</p>
@@ -471,13 +507,15 @@ export function ShellFrame({
                     className={[itemActive ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
                     href={item.path}
                     aria-current={itemActive ? "page" : undefined}
+                    aria-label={item.label}
+                    title={navCollapsed ? item.label : undefined}
                     onClick={event => {
                       event.preventDefault();
                       onNavigate(item.path);
                     }}
                   >
                     <NavIconTile item={item} />
-                    {item.label}
+                    <span className="nav-label">{item.label}</span>
                   </a>
                   {childItems.length > 0 ? (
                     <div className="nav-children">

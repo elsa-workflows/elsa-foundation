@@ -74,6 +74,7 @@ internal static class ElsaThemeStoreApi
 
         group.MapGet("/capabilities/management", () => Results.Ok(new ThemeFeatureCapabilityResponse(true)));
         group.MapPut("/themes/{id}", SaveThemeAsync);
+        group.MapPut("/themes/{id}/visibility", SetThemeVisibilityAsync);
         group.MapPost("/themes/{id}/duplicate", DuplicateThemeAsync);
         group.MapDelete("/themes/{id}", DeleteThemeAsync);
         group.MapPut("/default", SetDefaultThemeAsync);
@@ -119,6 +120,56 @@ internal static class ElsaThemeStoreApi
             var themes = store.Themes.Where(x => !StringComparer.OrdinalIgnoreCase.Equals(x.Id, theme.Id)).ToList();
             themes.Add(theme with { Source = "custom" });
             store = store with { Themes = themes.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray() };
+            await WriteStoreAsync(environment, store, cancellationToken);
+            return Results.Ok(store);
+        }
+        finally
+        {
+            ConfigFileWriter.WriteGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Toggles a BUILT-IN theme's visibility in the theme picker. Built-in theme definitions stay
+    /// read-only seeds (they cannot be edited or deleted), but admins can hide them from the picker
+    /// dropdown by recording the id in the store's disabled list. Custom themes keep using the
+    /// regular save endpoint's <c>Enabled</c> flag.
+    /// </summary>
+    private static async Task<IResult> SetThemeVisibilityAsync(
+        string id,
+        [FromBody] ThemeVisibilityRequest request,
+        [FromServices] IWebHostEnvironment environment,
+        HttpRequest httpRequest,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return Results.BadRequest(new ThemeStoreErrorResponse("Visibility payload is required."));
+        if (!BuiltInThemeIds.Contains(id))
+            return Results.BadRequest(new ThemeStoreErrorResponse("Only built-in themes use the visibility endpoint. Save custom themes with their enabled flag instead."));
+
+        await ConfigFileWriter.WriteGate.WaitAsync(cancellationToken);
+        try
+        {
+            var store = await ReadStoreAsync(environment, httpRequest, cancellationToken);
+            var disabled = new HashSet<string>(store.DisabledBuiltInThemeIds ?? [], StringComparer.OrdinalIgnoreCase);
+
+            if (request.Enabled)
+            {
+                disabled.Remove(id);
+            }
+            else
+            {
+                if (StringComparer.OrdinalIgnoreCase.Equals(store.DefaultThemeId, id))
+                    return Results.BadRequest(new ThemeStoreErrorResponse("The default theme cannot be disabled. Pick another default theme first."));
+
+                disabled.Add(id);
+                var enabledBuiltInCount = BuiltInThemeIds.Count(builtIn => !disabled.Contains(builtIn));
+                var enabledCustomCount = store.Themes.Count(theme => theme.Source == "custom" && theme is { Enabled: true, Published: true });
+                if (enabledBuiltInCount + enabledCustomCount == 0)
+                    return Results.BadRequest(new ThemeStoreErrorResponse("At least one selectable theme must remain enabled."));
+            }
+
+            store = store with { DisabledBuiltInThemeIds = disabled.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray() };
             await WriteStoreAsync(environment, store, cancellationToken);
             return Results.Ok(store);
         }
@@ -214,6 +265,8 @@ internal static class ElsaThemeStoreApi
                 return Results.NotFound(new ThemeStoreErrorResponse($"Theme '{request.ThemeId}' was not found."));
             if (theme is not null && (!theme.Enabled || !theme.Published))
                 return Results.BadRequest(new ThemeStoreErrorResponse("Default theme must be published and enabled."));
+            if (theme is null && (store.DisabledBuiltInThemeIds ?? []).Contains(request.ThemeId, StringComparer.OrdinalIgnoreCase))
+                return Results.BadRequest(new ThemeStoreErrorResponse("Default theme must be enabled. Re-enable the built-in theme first."));
 
             store = store with { DefaultThemeId = request.ThemeId };
             await WriteStoreAsync(environment, store, cancellationToken);
@@ -347,7 +400,13 @@ internal static class ElsaThemeStoreApi
             ? JsonSerializer.Deserialize<ThemeStoreResponse>(await File.ReadAllTextAsync(path, cancellationToken), JsonOptions) ?? EmptyStore()
             : EmptyStore();
 
-        return store with { Assets = ListAssets(environment, request) };
+        return store with
+        {
+            Assets = ListAssets(environment, request),
+            DisabledBuiltInThemeIds = (store.DisabledBuiltInThemeIds ?? [])
+                .Where(BuiltInThemeIds.Contains)
+                .ToArray()
+        };
     }
 
     private static Task WriteStoreAsync(IWebHostEnvironment environment, ThemeStoreResponse store, CancellationToken cancellationToken)
@@ -465,11 +524,16 @@ internal static class ElsaThemeStoreApi
     private static string GetAssetFolder(IWebHostEnvironment environment) => Path.Combine(environment.ContentRootPath, AssetFolderName);
 }
 
-internal sealed record ThemeStoreResponse(StudioThemeDefinition[] Themes, string DefaultThemeId, ThemeStoreAsset[] Assets);
+internal sealed record ThemeStoreResponse(
+    StudioThemeDefinition[] Themes,
+    string DefaultThemeId,
+    ThemeStoreAsset[] Assets,
+    string[]? DisabledBuiltInThemeIds = null);
 internal sealed record ThemeStoreAsset(string Id, string FileName, string ContentType, long Size, string Url);
 internal sealed record ThemeStoreErrorResponse(string Message);
 internal sealed record ThemeFeatureCapabilityResponse(bool Enabled);
 internal sealed record ThemeDuplicateRequest(string? Name);
+internal sealed record ThemeVisibilityRequest(bool Enabled);
 internal sealed record ThemeDefaultRequest(string ThemeId);
 internal sealed record ThemePack(int Version, StudioThemeDefinition[] Themes, ThemeStoreAsset[]? Assets);
 

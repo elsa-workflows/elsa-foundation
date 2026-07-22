@@ -42,8 +42,20 @@ export class WorkflowLazyBoundary extends Component<WorkflowLazyBoundaryProps, W
 
     return (
       <Suspense fallback={(
-        <div className="wf-lazy-state" role="status" aria-live="polite" aria-busy="true">
-          Loading {this.props.label}…
+        // Skeleton rows matching the destination pages' own loading skeletons, so the route
+        // transition renders one continuous loading treatment instead of a text flash followed
+        // by a different-looking skeleton. Rows fade in delayed (see .wf-skeleton), so a chunk
+        // that resolves quickly never flashes a fallback at all.
+        <div
+          className="wf-lazy-state wf-lazy-skeleton"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <span className="wf-visually-hidden">Loading {this.props.label}…</span>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="wf-skeleton wf-skeleton-row" aria-hidden="true" style={{ width: `${90 - (index % 3) * 12}%` }} />
+          ))}
         </div>
       )}>
         {this.props.children}

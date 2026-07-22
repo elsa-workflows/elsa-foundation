@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Boxes, PackagePlus, Pencil, RefreshCcw, Scissors, Trash2, X } from "lucide-react";
+import { PackagePlus, Pencil, RefreshCcw, Scissors, Trash2, X } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
-import { EmptyState, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   addFeed,
   defaultRetentionPolicy,
@@ -95,7 +95,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
       ) : unavailable ? (
         <BackendRegistryUnavailable host={activeHost} status={unavailable.status} detail={unavailable.detail} />
       ) : (
-        <EmptyState icon={<Boxes size={22} />}>Loading {activeHost.label} package feeds.</EmptyState>
+        <SkeletonRows rows={6} label={`Loading ${activeHost.label} package feeds`} />
       )}
     </section>
   );
