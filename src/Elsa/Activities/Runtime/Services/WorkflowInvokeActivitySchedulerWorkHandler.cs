@@ -286,6 +286,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         WorkflowDispatchCheckpointRequest? stagedWorkflowDispatch = null;
         ActivityFault? returnedFault = null;
         string? returnedCancellationReason = null;
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotificationWorkItems = [];
         var stagedState = state;
         try
         {
@@ -330,6 +331,20 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 throw new InvalidOperationException("An initial structural execution cannot cancel child subtrees; cancellation requests are only valid during a child-completion evaluation (spec 112).");
             if (context.GetChildFaultAbsorptionRequests().Count > 0)
                 throw new InvalidOperationException("An initial structural execution cannot absorb child faults; absorption requests are only valid during a child-fault evaluation (spec 115).");
+
+            // spec 126 seam C: a non-root structural child may notify its own parent during its initial
+            // structural execution. Harvest the staged notifications now so a root staging or a Fault/Cancel
+            // continuation with staged notifications faults the evaluation inside this callback boundary; the
+            // built work items ride the same Defer/Complete commit below.
+            parentNotificationWorkItems = await ParentNotificationEvaluation.BuildAsync(
+                activityExecutionStateStore,
+                _timeProvider,
+                workItem,
+                invokePayload.PinnedExecutable,
+                stagedState,
+                context.GetParentNotificationRequests(),
+                structuralContinuation ?? RuntimeStructuralContinuation.Defer,
+                cancellationToken);
 
             if (returnedTransition is IStatefulActivitySuspensionTransition statefulSuspension)
             {
@@ -597,6 +612,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 invokePayload,
                 state,
                 childScheduling.Requests,
+                parentNotificationWorkItems,
                 valueSnapshots,
                 durableValueChanges,
                 cancellationToken);
@@ -632,6 +648,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             invokePayload,
             completedState,
             ReadCompletionOutcomeNames(completedState),
+            parentNotificationWorkItems,
             valueSnapshots,
             durableValueChanges,
             workflowVariableWriteBack,
@@ -776,7 +793,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             bookmarkMetadata[RuntimeMetadataKeys.Reason] = RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason;
             var activityMetadata = suspendedState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
             activityMetadata[RuntimeMetadataKeys.BookmarkId] = waitBookmark.BookmarkId;
-            activityMetadata[RuntimeMetadataKeys.ResumeTargetId] = waitBookmark.ResumeTargetId;
+            activityMetadata[RuntimeMetadataKeys.ResumeTargetId] = registration.ResumeTargetKey;
             activityMetadata[RuntimeMetadataKeys.SuspendReason] = RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason;
             suspendedState = suspendedState with
             {
@@ -792,7 +809,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     invokeWorkItem.WorkflowExecutionId,
                     invokePayload.ActivityExecutionId,
                     invokePayload.ExecutableNodeId,
-                    waitBookmark.ResumeTargetId,
+                    registration.ResumeTargetKey,
                     waitBookmark.StimulusType,
                     waitBookmark.StimulusHash,
                     waitBookmark.Payload,
@@ -924,6 +941,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState state,
         IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotifications,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         CancellationToken cancellationToken)
@@ -985,6 +1003,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 operational: [],
                 activityExecutionInspections: inspectionChanges),
             PostCommitIntents: childWorkItems
+                .Concat(parentNotifications)
                 .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
                 .ToArray(),
             Metadata: metadata);
@@ -1093,6 +1112,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState completedState,
         IReadOnlyCollection<string> outcomeNames,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotifications,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
@@ -1115,9 +1135,14 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
         var completionIntent = SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
             invokeWorkItem, invokePayload.ActivityExecutionId, core.CompletionWorkItem, occurredAt);
+        // spec 126 seam C: a structural child completing on its initial execution may also notify its parent;
+        // the notification intents ride behind the completion cascade intent and ahead of any staged dispatch.
+        var notificationIntents = parentNotifications
+            .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
+            .ToArray();
         var commit = core.Commit with
         {
-            PostCommitIntents = [completionIntent, .. core.Commit.PostCommitIntents]
+            PostCommitIntents = [completionIntent, .. notificationIntents, .. core.Commit.PostCommitIntents]
         };
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
@@ -1235,9 +1260,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState suspendedState,
         ActivityBookmarkRequest bookmark)
     {
+        // The registration's ResumeTargetKey is the node-scoped id resolved by the suspension projector;
+        // the staged wait bookmark still carries the activity's local id, so match on the wait identity
+        // (stimulus type + hash) and let the registration supply the authoritative resume-target id.
         var matches = (suspendedState.TriggerRegistrations ?? [])
             .Where(registration =>
-                StringComparer.Ordinal.Equals(registration.ResumeTargetKey, bookmark.ResumeTargetId) &&
                 StringComparer.Ordinal.Equals(registration.StimulusType, bookmark.StimulusType) &&
                 StringComparer.Ordinal.Equals(registration.StimulusHash, bookmark.StimulusHash))
             .ToArray();

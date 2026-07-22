@@ -97,6 +97,156 @@ public sealed class PassthroughStructuralActivity : StructuralActivity,
         ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
 }
 
+/// <summary>Collects the notifications delivered to a <see cref="NotificationConsumingParentActivity"/> for assertions (spec 126).</summary>
+public sealed class ParentNotificationRecorder
+{
+    private readonly List<RecordedParentNotification> _notifications = [];
+    public IReadOnlyList<RecordedParentNotification> Notifications => _notifications;
+    public void Add(RecordedParentNotification notification) => _notifications.Add(notification);
+}
+
+public sealed record RecordedParentNotification(
+    string Code,
+    string? Payload,
+    string NotifyingChildActivityExecutionId,
+    string NotifyingChildExecutableNodeId,
+    string? NotifyingChildIterationId);
+
+/// <summary>What a <see cref="NotifyingStructuralChildActivity"/> stages toward its parent (spec 126, seam C).</summary>
+public sealed record ParentNotificationDirective
+{
+    /// <summary>Notification codes staged during the child's initial structural execution.</summary>
+    public IReadOnlyList<string> InvokeCodes { get; init; } = [];
+
+    /// <summary>Notification code staged during the child's own child-completion evaluation (parent-completion harvest path).</summary>
+    public string? CompletionCode { get; init; }
+
+    /// <summary>Optional JSON payload attached to every staged notification.</summary>
+    public JsonElement? Payload { get; init; }
+
+    /// <summary>Return a <c>Fault</c> continuation after staging (spec 126: Fault + staged notification faults the evaluation).</summary>
+    public bool FaultInsteadOfDefer { get; init; }
+
+    /// <summary>Stage the notification from the ROOT structural activity (no parent) to exercise the root-reject rule.</summary>
+    public bool StageFromRoot { get; init; }
+}
+
+/// <summary>How a <see cref="NotificationConsumingParentActivity"/> responds to a child notification (spec 126).</summary>
+public sealed record ParentNotificationConsumerDirective
+{
+    public bool CancelNotifyingChildOnNotify { get; init; }
+    public bool CompleteOnNotify { get; init; }
+    public bool FaultOnNotify { get; init; }
+}
+
+/// <summary>
+/// A structural child (spec 126) that stages parent notifications during its own evaluations, then schedules
+/// its single leaf and defers (or faults per the directive). On the leaf's completion it optionally stages one
+/// more notification and completes.
+/// </summary>
+public sealed class NotifyingStructuralChildActivity(ParentNotificationDirective directive) : StructuralActivity,
+    IRuntimeStructuralActivity,
+    IRuntimeActivityChildCompletionHandler
+{
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+    {
+        foreach (var code in directive.InvokeCodes)
+            context.RequestParentNotification(code, directive.Payload);
+
+        if (directive.FaultInsteadOfDefer)
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault("test.notify.fault", "fault with staged notification")));
+
+        var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+        context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
+    {
+        if (directive.CompletionCode is { } code)
+            ((IRuntimeActivityExecutionContext)context.ParentContext).RequestParentNotification(code, directive.Payload);
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
+}
+
+/// <summary>
+/// The ROOT structural activity variant that stages a notification during its own initial execution — it has no
+/// committed parent, so the runtime rejects the staging (spec 126 root-reject rule).
+/// </summary>
+public sealed class RootNotifyingStructuralActivity(ParentNotificationDirective directive) : StructuralActivity,
+    IRuntimeStructuralActivity,
+    IRuntimeActivityChildCompletionHandler
+{
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+    {
+        context.RequestParentNotification(directive.InvokeCodes.Count > 0 ? directive.InvokeCodes[0] : "escalate", directive.Payload);
+        var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+        context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+        ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+}
+
+/// <summary>
+/// A structural parent (spec 126) that consumes a child notification: it records the delivered code/payload/child
+/// identity and, per its directive, defers (keeps running), completes, faults, or stages a seam-A subtree
+/// cancellation of the notifying child (interrupting escalation). Completes when its child completes.
+/// </summary>
+public sealed class NotificationConsumingParentActivity(ParentNotificationRecorder recorder, ParentNotificationConsumerDirective directive) : StructuralActivity,
+    IRuntimeStructuralActivity,
+    IRuntimeActivityChildCompletionHandler,
+    IRuntimeActivityChildNotificationHandler,
+    IRuntimeLiveChildActivityConsumer
+{
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+    {
+        var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+        context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+        ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+
+    public ValueTask<RuntimeStructuralContinuation> OnChildNotifiedAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext notification)
+    {
+        recorder.Add(new RecordedParentNotification(
+            notification.Code,
+            notification.Payload?.GetRawText(),
+            notification.NotifyingChildActivityExecutionId,
+            notification.NotifyingChildExecutableNodeId,
+            notification.NotifyingChildIterationId));
+
+        if (directive.CancelNotifyingChildOnNotify)
+            context.RequestChildSubtreeCancellation(notification.NotifyingChildActivityExecutionId, "escalated");
+
+        if (directive.FaultOnNotify)
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault("test.notify.consumer.fault", "consumer faulted on notification")));
+
+        return ValueTask.FromResult(directive.CompleteOnNotify
+            ? RuntimeStructuralContinuation.Complete()
+            : RuntimeStructuralContinuation.Defer);
+    }
+}
+
+/// <summary>A parent that never implements <c>IRuntimeActivityChildNotificationHandler</c>: notifications to it are silently acked (spec 126).</summary>
+public sealed class NonNotificationConsumingParentActivity : StructuralActivity,
+    IRuntimeStructuralActivity,
+    IRuntimeActivityChildCompletionHandler
+{
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+    {
+        var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+        context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+        ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+}
+
 /// <summary>Schedules all slot children; a child fault re-faults the composite (Flowchart #308 style).</summary>
 public sealed class RefaultingForkActivity : StructuralActivity,
     IRuntimeStructuralActivity,

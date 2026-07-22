@@ -120,6 +120,45 @@ public sealed class CancelEndEventBehavior : IBpmnElementBehavior
         throw new BpmnExecutionException($"BPMN cancel end event '{context.Element.ElementId}' cannot own a child activity.");
 }
 
+/// <summary>
+/// Escalation intermediate throw event (spec 127): on token arrival, emit a <see cref="BpmnBehaviorCommandKind.RaiseEscalation"/>
+/// command followed by <see cref="BpmnBehaviorCommandKind.EmitTokens"/> over its selected outbound flows — the
+/// throw signals its parent scope and continues immediately (fire-and-continue; escalation is non-blocking). The
+/// engine reads the escalation code from the element and owns the seam-C staging (or the root no-op); the
+/// behavior stays semantics-unaware.
+/// </summary>
+public sealed class EscalationThrowEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.IntermediateThrowEventEscalation;
+    public string DisplayName => "Escalation Throw Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(
+            BpmnBehaviorCommand.RaiseEscalation(),
+            BpmnBehaviorCommand.EmitTokens(BpmnFlowSelector.FlowIds(BpmnFlowSelector.SelectTaskFlows(context))));
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
+        throw new BpmnExecutionException($"BPMN escalation throw event '{context.Element.ElementId}' cannot own a child activity.");
+}
+
+/// <summary>
+/// Escalation end event (spec 127): on token arrival, emit a <see cref="BpmnBehaviorCommandKind.RaiseEscalation"/>
+/// command followed by <see cref="BpmnBehaviorCommandKind.ConsumeToken"/> (none-end semantics) — the throw signals
+/// its parent scope and consumes its token. The engine owns the seam-C staging (or the root no-op); the behavior
+/// stays semantics-unaware.
+/// </summary>
+public sealed class EscalationEndEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.EndEventEscalation;
+    public string DisplayName => "Escalation End Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.RaiseEscalation(), BpmnBehaviorCommand.ConsumeToken());
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
+        throw new BpmnExecutionException($"BPMN escalation end event '{context.Element.ElementId}' cannot own a child activity.");
+}
+
 /// <summary>Terminate end event: consume every live token and complete the process immediately.</summary>
 public sealed class TerminateEndEventBehavior : IBpmnElementBehavior
 {

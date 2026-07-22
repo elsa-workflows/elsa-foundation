@@ -274,7 +274,7 @@ public sealed class DispatchWorkflowDeliveryRecoveryCrashTests
             dispatch.ParentWorkflowExecutionId,
             dispatch.ParentActivityExecutionId,
             "dispatch-node",
-            DispatchWorkflowConstants.CompletionResumeTargetId,
+            WorkflowExecutableResumeTarget.ComposeScopedId("dispatch-node", DispatchWorkflowConstants.CompletionResumeTargetId),
             DispatchWorkflowConstants.WaitStimulusType,
             identity.WaitStimulusHash,
             null,

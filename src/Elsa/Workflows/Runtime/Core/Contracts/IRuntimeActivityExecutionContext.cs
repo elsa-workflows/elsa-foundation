@@ -93,6 +93,19 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         IReadOnlyDictionary<string, string>? metadata = null);
 
     IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> GetChildFaultAbsorptionRequests();
+
+    /// <summary>
+    /// Stages a non-terminal, coded notification from this still-running structural child to its own
+    /// committed parent (spec 126, seam C). The notification always and only reaches the notifying child's
+    /// committed parent — there is no target parameter (spoof-proofing). Valid during any of the child's own
+    /// evaluations that end in a <c>Defer</c> or <c>Complete</c> continuation; it commits atomically with that
+    /// state as a durable post-commit work item. Staging from a root activity (no committed parent) or
+    /// alongside a <c>Fault</c>/<c>Cancel</c> continuation faults the evaluation. Multiple notifications per
+    /// evaluation are allowed and preserve staging order.
+    /// </summary>
+    void RequestParentNotification(string code, System.Text.Json.JsonElement? payload = null);
+
+    IReadOnlyCollection<RuntimeParentNotificationRequest> GetParentNotificationRequests();
 }
 
 /// <summary>

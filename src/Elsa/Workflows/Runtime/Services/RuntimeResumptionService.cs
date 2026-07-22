@@ -77,6 +77,7 @@ public sealed class RuntimeResumptionService(
             if (await IsTerminalAsync(workflowExecutionId, cancellationToken))
             {
                 purgedWorkItemCount += await PurgeResidualSchedulerWorkAsync(request, workflowExecutionId, cancellationToken);
+                await ReapTerminalMailboxAsync(workflowExecutionId, cancellationToken);
                 terminalExecutionsPurged++;
                 continue;
             }
@@ -99,6 +100,23 @@ public sealed class RuntimeResumptionService(
     {
         var state = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
         return state is not null && state.Status.IsTerminal();
+    }
+
+    // Straggler reaper (#542 / spec 128). The eager terminal-eviction trigger runs at drain end on the node that owns
+    // the mailbox; this reaps a mailbox that outlived its execution because eviction was disabled, skipped (e.g. a
+    // cancelled dispatch token), or never fired (the terminal status was reached by a post-commit intent or a sibling
+    // fork rather than the dispatched command). PassivateAsync is idempotent — a no-op when no mailbox exists — and on
+    // the distributed provider it also releases the placement lease for the completed execution.
+    private async ValueTask ReapTerminalMailboxAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        await agentProvider.PassivateAsync(
+            new WorkflowExecutionActorPassivationRequest(
+                workflowExecutionId: workflowExecutionId,
+                boundary: WorkflowExecutionActorPassivationBoundary.ProviderSafeBoundary,
+                requestedAt: timeProvider.GetUtcNow(),
+                reason: "runtime-resumption terminal reaper",
+                partition: CurrentPartition()),
+            cancellationToken);
     }
 
     // Deletes every scheduler work item still queued for a terminal execution. Reads a bounded page, deletes each

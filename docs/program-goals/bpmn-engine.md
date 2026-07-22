@@ -36,9 +36,11 @@ general, spoof-proof runtime seam rather than a BPMN-private side channel.
 
 ## Active objectives
 
-- Phase 3 delivery, sequenced by the control room: collection-mode multi-instance via the
-  scoped-variable read seam (spec 123, in flight), then compensation, transactions/cancel events,
-  escalation, event subprocesses, call activity, executable collaborations.
+- Phase 3 delivery, sequenced by the control room: specs 123 (scoped-variable read seam +
+  collection-mode multi-instance, PR #965), 124 (compensation, PR #966), 125 (transactions/cancel
+  events, PR #970), 126 (runtime seam C — child→parent notification, PR #974), and 127 (escalation, PR #975)
+  are merged; next is event subprocesses (riding seam C), then call activity and executable
+  collaborations.
 - Carried follow-ups from Phase 2: terminate/fault teardown through seam A (`CancelLiveWork` is
   logical-only today), error-code matching for error boundaries, non-interrupting timer repetition,
   `completionCondition`, MI output aggregation, `standardLoopCharacteristics`, unbounded-loop

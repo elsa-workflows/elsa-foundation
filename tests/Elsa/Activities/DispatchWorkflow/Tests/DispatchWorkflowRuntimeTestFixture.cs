@@ -418,14 +418,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 "1.0.0",
                 $"sha256:parent-{caseId}"),
             rootActivity: node,
-            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>
-            {
-                [DispatchWorkflowConstants.CompletionResumeTargetId] = new(
-                    DispatchWorkflowConstants.CompletionResumeTargetId,
-                    node.ExecutableNodeId,
-                    "OnChildCompletedAsync",
-                    new Dictionary<string, string>())
-            },
+            resumeTargets: NodeScopedResumeTargets(node),
             createdAt: Now,
             compatibilityMetadata: new Dictionary<string, string>(),
             inputContract: null,
@@ -436,6 +429,27 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                     ChildIdentity.ArtifactHash,
                     [node.ExecutableNodeId])
             ]);
+    }
+
+    /// <summary>
+    /// Builds the resume-target map the production <c>ExecutableNodeCompiler</c> would emit for the dispatch
+    /// node: node-scoped key/id with the local id preserved, so resolution exercises the production
+    /// (ExecutableNodeId, LocalResumeTargetId) fallback rather than a raw-id direct hit.
+    /// </summary>
+    public static Dictionary<string, WorkflowExecutableResumeTarget> NodeScopedResumeTargets(ExecutableNode node)
+    {
+        var scopedId = WorkflowExecutableResumeTarget.ComposeScopedId(
+            node.ExecutableNodeId,
+            DispatchWorkflowConstants.CompletionResumeTargetId);
+        return new Dictionary<string, WorkflowExecutableResumeTarget>
+        {
+            [scopedId] = new(
+                scopedId,
+                node.ExecutableNodeId,
+                "OnChildCompletedAsync",
+                new Dictionary<string, string>(),
+                DispatchWorkflowConstants.CompletionResumeTargetId)
+        };
     }
 
     private static RuntimeInputBinding LiteralBinding(string name, object value, Type type)

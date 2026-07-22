@@ -81,7 +81,7 @@ public sealed class EventPreservationTests
     {
         // SC-008 (partial): the lifecycle events stay bound to Create/Clone/Discard — an Update
         // that produces several diffs must publish none of them.
-        using var host = WorkflowsDesignTestHost.Create();
+        using var host = await WorkflowsDesignTestHost.CreateAsync();
         var draftId = await SeedEmptyDraft(host); // emits OnDraftCreated (a lifecycle event) — pre-skip.
 
         var skip = host.EventPublisher.CapturedEvents.Count;

@@ -232,6 +232,11 @@ public static class RuntimeMetadataKeys
 
     public const string ParentCompletionReason = "runtime.parentCompletionReason";
     public const string ParentCompletionSchedulerWorkItemId = "runtime.parentCompletionSchedulerWorkItemId";
+
+    // spec 126 seam C: provenance of a non-terminal child→parent notification evaluation.
+    public const string NotifyParentSchedulerWorkItemId = "runtime.notifyParentSchedulerWorkItemId";
+    public const string NotifyingChildActivityExecutionId = "runtime.notifyingChildActivityExecutionId";
+    public const string ParentNotificationCode = "runtime.parentNotificationCode";
     public const string PinnedArtifactId = "runtime.pinnedArtifactId";
     public const string PinnedArtifactVersion = "runtime.pinnedArtifactVersion";
     public const string PinnedArtifactHash = "runtime.pinnedArtifactHash";

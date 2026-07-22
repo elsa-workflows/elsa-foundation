@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Scoping;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
@@ -21,15 +23,18 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
     private static readonly JsonSerializerOptions MarkerJsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IDocumentStore _store;
+    private readonly IGroundworkStoreSessionFactory? _sessions;
     private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _reconciliationTimeout;
 
     public GroundworkDesignAtomicWrite(
         IDocumentStore store,
         TimeProvider? timeProvider = null,
-        TimeSpan? reconciliationTimeout = null)
+        TimeSpan? reconciliationTimeout = null,
+        IGroundworkStoreSessionFactory? sessions = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _sessions = sessions;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _reconciliationTimeout = reconciliationTimeout ?? DefaultReconciliationTimeout;
         if (_reconciliationTimeout <= TimeSpan.Zero)
@@ -76,7 +81,18 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
         }
 
         var markerId = CreateMarkerId(request.Operation);
-        if (await LoadMarkerAsync(markerId, request.Operation, cancellationToken) is { } existing)
+
+        // The replay preflight and the write attempt share one Groundwork session so a proceeding write opens a
+        // single provider connection instead of one for the marker lookup and a second for the transaction. The
+        // marker read deliberately stays outside BEGIN IMMEDIATE — an exact replay must not open a unit of work —
+        // so replay/dedup ordering is byte-for-byte unchanged; a concurrent same-key writer is still reconciled by
+        // the ExpectedVersion:0 marker-race path below. Reconciliation and race reloads use the ambient store so
+        // they observe a committed winner on a fresh session (the attempt session may be terminal after an
+        // uncertain acknowledgement).
+        await using var operation = await OpenOperationStoreAsync(cancellationToken);
+        var operationStore = operation.Store;
+
+        if (await LoadMarkerAsync(operationStore, markerId, request.Operation, cancellationToken) is { } existing)
         {
             return Resolve(
                 existing,
@@ -89,13 +105,13 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
 
         try
         {
-            return await ExecuteAttemptAsync(request, markerId, stage, cancellationToken);
+            return await ExecuteAttemptAsync(operationStore, request, markerId, stage, cancellationToken);
         }
         catch (DesignOperationMarkerRaceException)
         {
             try
             {
-                var marker = await LoadMarkerAsync(markerId, request.Operation, cancellationToken)
+                var marker = await LoadMarkerAsync(_store, markerId, request.Operation, cancellationToken)
                              ?? throw new UncertainDesignCommitException(
                                  $"Design operation marker '{markerId}' conflicted, but the winning marker could not be reloaded.");
                 return Resolve(
@@ -123,7 +139,7 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
             using var reconciliation = new CancellationTokenSource(_reconciliationTimeout, _timeProvider);
             try
             {
-                if (await LoadMarkerAsync(markerId, request.Operation, reconciliation.Token) is { } marker)
+                if (await LoadMarkerAsync(_store, markerId, request.Operation, reconciliation.Token) is { } marker)
                 {
                     return Resolve(
                         marker,
@@ -151,7 +167,31 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
         }
     }
 
+    /// <summary>
+    /// Opens the store the replay preflight and the write attempt share for one operation. With a session factory
+    /// (the production wiring) this is a single provider session reused by both the marker lookup and the
+    /// transaction; without one (the contract test doubles) it is the ambient store, preserving the exact call
+    /// sequence those suites pin.
+    /// </summary>
+    private async ValueTask<OperationStoreLease> OpenOperationStoreAsync(CancellationToken cancellationToken)
+    {
+        if (_sessions is null)
+            return new OperationStoreLease(_store, session: null);
+
+        var session = await _sessions.CreateAsync(PersistenceAccessPolicy.Ordinary, cancellationToken);
+        return new OperationStoreLease(session.DocumentStore, session);
+    }
+
+    private readonly struct OperationStoreLease(IDocumentStore store, GroundworkStoreSession? session)
+        : IAsyncDisposable
+    {
+        public IDocumentStore Store { get; } = store;
+
+        public ValueTask DisposeAsync() => session?.DisposeAsync() ?? ValueTask.CompletedTask;
+    }
+
     private async Task<GroundworkDesignAtomicWriteResult> ExecuteAttemptAsync(
+        IDocumentStore operationStore,
         GroundworkDesignAtomicWriteRequest request,
         string markerId,
         Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
@@ -160,7 +200,7 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
         IDocumentUnitOfWork unitOfWork;
         try
         {
-            unitOfWork = await _store.BeginAsync(CommitScope(request), cancellationToken);
+            unitOfWork = await operationStore.BeginAsync(CommitScope(request), cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -283,6 +323,7 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
     }
 
     private async Task<DesignOperationMarker?> LoadMarkerAsync(
+        IDocumentStore operationStore,
         string markerId,
         GroundworkDesignOperationIdentity operation,
         CancellationToken cancellationToken)
@@ -290,7 +331,7 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
         DocumentEnvelope? envelope;
         try
         {
-            envelope = await _store.LoadAsync(
+            envelope = await operationStore.LoadAsync(
                 GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind,
                 markerId,
                 cancellationToken);

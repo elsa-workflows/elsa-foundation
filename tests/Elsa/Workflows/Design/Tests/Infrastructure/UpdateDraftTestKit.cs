@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Core.Models;
@@ -22,11 +23,17 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// </summary>
 internal static class UpdateDraftTestKit
 {
+    // Each lifecycle operation gets a fresh operation key. On the Groundwork target the operation key is
+    // a caller-supplied idempotency/replay token: reusing one constant across distinct operations makes
+    // the second call replay (or conflict on different material). Distinct authoring actions in a test
+    // are distinct operations, so they carry distinct keys.
+    private static DesignOperationKey NextOperationKey() => new($"workflow-design-test-{Guid.NewGuid():N}");
+
     public static async Task<string> SeedEmptyDraft(WorkflowsDesignTestHost host, string workflowDefinitionId = "wf-1")
     {
         await host.EnsureDefinition(workflowDefinitionId);
         using var scope = host.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, workflowDefinitionId);
+        return await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute(NextOperationKey(), workflowDefinitionId);
     }
 
     public static async Task Update(
@@ -37,7 +44,7 @@ internal static class UpdateDraftTestKit
     {
         using var scope = host.Services.CreateScope();
         var command = scope.ServiceProvider.GetRequiredService<IUpdateDraftCommand>();
-        await command.Execute(WorkflowsDesignTestHost.TestOperationKey, new UpdateDraftRequest(draftId, state, layout ?? []));
+        await command.Execute(NextOperationKey(), new UpdateDraftRequest(draftId, state, layout ?? []));
     }
 
     /// <summary>

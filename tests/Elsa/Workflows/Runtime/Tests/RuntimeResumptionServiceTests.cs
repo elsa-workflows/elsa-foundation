@@ -360,6 +360,39 @@ public sealed class RuntimeResumptionServiceTests
         Assert.Equal(0, result.TerminalExecutionsPurged);
         Assert.Equal(0, result.PurgedWorkItemCount);
         Assert.Equal(WorkflowExecutionCommandKind.RunSchedulerWork, Assert.Single(agentProvider.Agent.Envelopes).Command.Kind);
+        // The non-terminal execution is re-driven, never reaped.
+        Assert.Empty(agentProvider.Passivations);
+    }
+
+    [Fact]
+    public async Task SweepAsync_ReapsLingeringTerminalMailbox_AfterPurgingResidualWork()
+    {
+        // #542 / spec 128 straggler reaper: a terminal execution whose mailbox outlived it (eager eviction disabled,
+        // skipped, or the terminal status arrived from a post-commit intent rather than the dispatched command) is
+        // collected by the sweep — it purges residual work AND passivates the mailbox through the agent provider.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewResidualWorkItem("wfexec-terminal", 1));
+        var stateStore = new InMemoryWorkflowExecutionStateStore();
+        await stateStore.SaveAsync(NewState("wfexec-terminal", WorkflowExecutionStatus.Completed));
+        var agentProvider = new FakeAgentProvider();
+        var service = new RuntimeResumptionService(
+            new FakeOutboxProcessor(),
+            queue,
+            new FakeRecoveryScanner(),
+            agentProvider,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now),
+            stateStore);
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        // Never re-driven, but reaped: exactly one passivation for the terminal id.
+        Assert.Empty(result.Dispatches);
+        Assert.Empty(agentProvider.Activations);
+        var passivation = Assert.Single(agentProvider.Passivations);
+        Assert.Equal("wfexec-terminal", passivation.WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionActorPassivationBoundary.ProviderSafeBoundary, passivation.Boundary);
+        Assert.Equal(1, result.TerminalExecutionsPurged);
     }
 
     private static RuntimeSchedulerWorkItem NewResidualWorkItem(string workflowExecutionId, int index) =>
@@ -493,6 +526,7 @@ public sealed class RuntimeResumptionServiceTests
     private sealed class FakeAgentProvider : IWorkflowExecutionActorProvider
     {
         public List<WorkflowExecutionActorActivationRequest> Activations { get; } = [];
+        public List<WorkflowExecutionActorPassivationRequest> Passivations { get; } = [];
         public FakeAgent Agent { get; } = new();
         public string? FailFor { get; set; }
 
@@ -507,7 +541,11 @@ public sealed class RuntimeResumptionServiceTests
             return new(Agent);
         }
 
-        public ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default) => default;
+        public ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default)
+        {
+            Passivations.Add(request);
+            return default;
+        }
     }
 
     private sealed class FakeAgent : IWorkflowExecutionActor

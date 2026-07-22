@@ -58,5 +58,17 @@ public enum BpmnDiagnosticKind
     Compensated,
 
     /// <summary>A cancel end event began (or completed) cancelling a transaction scope (spec 125).</summary>
-    TransactionCancelled
+    TransactionCancelled,
+
+    /// <summary>An escalation throw/end event staged a seam-C notification to its parent (spec 127).</summary>
+    EscalationRaised,
+
+    /// <summary>An escalation notification matched an attached boundary and fired it (spec 127).</summary>
+    EscalationCaught,
+
+    /// <summary>An escalation reached a scope that could not catch it: a root-process throw, or a root-unmatched notification (spec 127); a no-op, never a fault.</summary>
+    EscalationUnhandled,
+
+    /// <summary>An interrupting escalation boundary matched a notification whose host had already terminalized (spec 127); a no-op, never a fault.</summary>
+    EscalationLate
 }

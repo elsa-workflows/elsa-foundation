@@ -51,6 +51,76 @@ clone commands. It owns identity allocation, per-draft locking, validation, atom
 and lifecycle-event publication while each public command retains its own canonical operation
 material. Replace it only when specializing that complete Groundwork origination lifecycle.
 
+## Storage manifest declaration
+
+`WorkflowsDesignGroundworkStorageManifestSource` (feature identity `elsa-workflows-design`) implements
+`IGroundworkStorageManifestSource`. It physicalizes `WorkflowsDesignStorageManifest.Create()` through
+`LegacyGroundworkStorageManifestPhysicalizer.Physicalize` and declares the read ports it owns
+(`IWorkflowDefinitionStore`, `IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionDraftStore`,
+`IWorkflowDefinitionListProjectionStore`, `IWorkflowDefinitionVersionLayoutStore`).
+
+The manifest declares each storage unit's projected columns, logical and physical indexes, and the
+bounded, scale-bearing queries (`BoundedQueryExecutionClass.ScaleBearing`) that the provider admits.
+There is no load-all or client-side evaluation route.
+
+### Bounded-width rules
+
+Projected columns are width-bounded so every declared compound index key stays under SQL Server's
+1700-byte nonclustered index limit:
+
+| Column class | Limit | Constant |
+|---|---|---|
+| Searchable text (name, description, …) | 256 chars | `TextColumnLength` |
+| Identity / sort-key (id, version_id, …) | 128 chars | `IdentityColumnLength` |
+
+Over-limit values **fail projection validation rather than truncate**, per the ratified data model
+(the `AtomicityProjectionOverLimitRejection` contract). All workflow-design projected members are
+keyword strings or `DateTime` (`ValueKind`); there are no numeric projected members in this lane.
+
+## Design atomic writer and shared operation document
+
+`IDesignAtomicWriter` (defined in `Elsa.Persistence.Groundwork.Querying`, default
+`GroundworkDesignAtomicWrite`) owns replay-safe multi-document mutation: durable operation markers,
+staged writes, and uncertain-commit reconciliation for both workflow- and activity-design commands.
+Its durable ledger is the shared `designOperation` document declared by
+`GroundworkDesignAtomicWriteStorageManifest` (owner `elsa.design.atomic-write`, route
+`design-atomic-write`, topology requirement `multi-document-transactions`). Both design lanes
+contribute `GroundworkDesignAtomicWriteStorageManifestSource` via `TryAddEnumerable`, so the operation
+document is declared exactly once regardless of composition order.
+
+## Registration and manifest sources
+
+`AddGroundworkWorkflowsDesignStores()`
+(`Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection`) is the lane registration method.
+It:
+
+- swaps every replacement contract in the tables above to its Groundwork implementation
+  (`RemoveAll<T>()` then `AddScoped<T, …>()`), enforcing the one-active-provider rule;
+- contributes `WorkflowsDesignGroundworkStorageManifestSource` and the shared
+  `GroundworkDesignAtomicWriteStorageManifestSource` as `IGroundworkStorageManifestSource` enumerables;
+- registers the `IDesignAtomicWriter` and `IDraftOriginator` specialization seams with `TryAddScoped`;
+- registers the default entity factories.
+
+## Schema readiness guard
+
+The `GroundworkSchemaReadinessTask` start-phase guard (base `Elsa.Persistence.Groundwork`) validates
+that the applied physical target matches the composed manifest and **never auto-applies or repairs**
+schema unless the host opts into safe startup auto-apply. It is wired per provider by
+`AddGroundworkSchemaReadinessGuard()`, called from each provider's document-store registration — not
+by this lane. Schema application stays an operator/CLI responsibility.
+
+## Host composition (unified vs lane-specific)
+
+- **Unified (shipped reference host):** enabling one provider feature —
+  `AddGroundwork{Sqlite|SqlServer|PostgreSql|MongoDb}UnifiedPersistence(…)` — routes through
+  `AddGroundworkUnifiedStoreFamilies()`, which composes this lane
+  (`AddGroundworkWorkflowsDesignStores`) alongside the activities-design and other store families over
+  one physical document store. The selected provider's document-store registration owns the readiness
+  guard. See [`../../../../Persistence/Groundwork/Unified/README.md`](../../../../Persistence/Groundwork/Unified/README.md).
+- **Lane-specific:** a host may call `AddGroundworkWorkflowsDesignStores()` directly after registering
+  a provider `IDocumentStore` and the host `IPayloadSerializer`, composing only this lane (the shape
+  the registration tests exercise).
+
 ## Document model
 
 The Groundwork `workflowDefinitionDraft` document embeds the draft entity and current designer
@@ -63,6 +133,8 @@ derives errors on demand from the already-loaded draft through the shielded vali
 
 ## Cross-references
 
-- EF Core provider catalog: [`../EFCore/EXTENSION_POINTS.md`](../EFCore/EXTENSION_POINTS.md)
+- The EF Core design persistence implementation is removed by spec 093 US4; Groundwork is the sole
+  workflow-design persistence provider.
 - Validation extension points: [`../../Validations/EXTENSION_POINTS.md`](../../Validations/EXTENSION_POINTS.md)
+- Unified provider selection and schema operations: [`../../../../Persistence/Groundwork/Unified/README.md`](../../../../Persistence/Groundwork/Unified/README.md)
 - Repo-wide index: [`../../../../../../EXTENSION_POINTS.md`](../../../../../../EXTENSION_POINTS.md)
