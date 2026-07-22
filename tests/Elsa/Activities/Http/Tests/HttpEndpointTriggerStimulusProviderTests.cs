@@ -426,6 +426,49 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     }
 
     [Fact]
+    public void Describe_AbsentLiteralOptions_AreTreatedAsUnauthored_AndDoNotThrow()
+    {
+        // Regression: an unauthored nullable option does NOT arrive as a missing binding — the executable-node
+        // compiler emits a Literal binding whose value is *absent* (RuntimeInputBindingSource.Literal with no
+        // LiteralValue). The preflight must treat that as unauthored (apply the declared default) rather than
+        // rejecting it as "non-literal"; otherwise an HttpEndpoint whose optional options are left blank fails to
+        // publish with a 500. (The earlier missing-binding test above does not exercise this path, because there
+        // FindBinding returns null; here the binding is present but carries an absent literal.)
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook"),
+            [nameof(HttpEndpoint.SupportedMethods)] = AbsentLiteralBinding(nameof(HttpEndpoint.SupportedMethods)),
+            [nameof(HttpEndpoint.Policy)] = AbsentLiteralBinding(nameof(HttpEndpoint.Policy)),
+            [nameof(HttpEndpoint.RequestTimeout)] = AbsentLiteralBinding(nameof(HttpEndpoint.RequestTimeout)),
+            [nameof(HttpEndpoint.RequestSizeLimit)] = AbsentLiteralBinding(nameof(HttpEndpoint.RequestSizeLimit))
+        };
+
+        var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)).Descriptors);
+
+        // SupportedMethods absent-literal → default GET; the other absent-literal options are omitted from metadata.
+        Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook", "GET"), descriptor.StimulusHash);
+        Assert.DoesNotContain(HttpEndpointRouting.PolicyMetadataKey, descriptor.Metadata.Keys);
+        Assert.DoesNotContain(HttpEndpointRouting.RequestTimeoutMetadataKey, descriptor.Metadata.Keys);
+        Assert.DoesNotContain(HttpEndpointRouting.RequestSizeLimitMetadataKey, descriptor.Metadata.Keys);
+    }
+
+    [Fact]
+    public void Describe_ExplicitNullLiteralOption_IsTreatedAsUnauthored_AndDoesNotThrow()
+    {
+        // An explicit-null literal (Source.Literal, ExplicitNull envelope -> LiteralValue kind Null) is likewise
+        // "no value authored" and must apply the default rather than throw.
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook"),
+            [nameof(HttpEndpoint.Policy)] = ExplicitNullLiteralBinding(nameof(HttpEndpoint.Policy))
+        };
+
+        var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)).Descriptors);
+
+        Assert.DoesNotContain(HttpEndpointRouting.PolicyMetadataKey, descriptor.Metadata.Keys);
+    }
+
+    [Fact]
     public void Describe_AggregatesEveryOptionProblem_InOnePass()
     {
         // Issue #925: a missing required path plus several non-literal options are reported together in one preflight
@@ -510,6 +553,32 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding("JavaScript", "input.foo"));
+
+    // A Literal-source binding whose value is ABSENT - exactly what the compiler emits for an unauthored,
+    // nullable optional input (see CompileOmitted). Distinct from a missing binding (FindBinding == null).
+    private static RuntimeInputBinding AbsentLiteralBinding(string name)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any");
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Absent(type, ValueProtectionPolicy.InstanceInline));
+    }
+
+    // A Literal-source binding carrying an EXPLICIT null - the ExplicitNull envelope an authored null flows
+    // through in production (ValueEnvelope.Null), as opposed to an Inline envelope holding a JSON null.
+    private static RuntimeInputBinding ExplicitNullLiteralBinding(string name)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any");
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Null(type, ValueProtectionPolicy.InstanceInline));
+    }
 
     private static RuntimeInputBinding CanonicalLiteral(string name, JsonElement value, string typeAlias)
     {
