@@ -110,6 +110,16 @@ policy. Such execution cannot suspend, migrate, or depend on durable retry. Reco
 burst-local caches from [ADR 0031](0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md)
 remain optimizations and are not workflow value sources.
 
+**Amendment (issue #977): opt-in per-pass input re-materialization for structural evaluations.** A
+structural composite may implement the marker `IRuntimeRematerializeInputsOnChildCompletion` to have
+its inputs re-materialized from live committed variable frames before each child-completion/child-fault
+evaluation, so a loop condition observes state its body committed (an [ADR 0027](0027-scoped-variable-references-include-declaring-scope.md)
+scope mutation written back per pass; iteration identity per [ADR 0028](0028-loop-body-runs-in-a-per-iteration-variable-scope.md)).
+The pinned invocation record is unchanged: the committed `InputSnapshot` stays immutable and the
+re-materialized snapshot is transient — recomputed deterministically from committed frame state on any
+redelivery — so retries and history retain the original record. `While` is the sole implementer; all
+other composites keep the immutable-snapshot behavior above.
+
 ### 4. Use explicit lexical variables and structured results
 
 A `Variable<T>` is an authored declaration handle, not runtime storage. Variable declarations are

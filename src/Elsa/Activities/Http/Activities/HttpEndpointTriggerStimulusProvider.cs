@@ -146,10 +146,18 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         if (binding is null)
             return null;
 
-        if (binding.Source != RuntimeInputBindingSource.Literal || binding.LiteralValue is not { } literal)
+        // A non-literal source (expression/variable/activity-result/workflow-request) has no value to fix at
+        // publish time, so it genuinely cannot back an endpoint option.
+        if (binding.Source != RuntimeInputBindingSource.Literal)
             throw new ArgumentException(
                 $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a non-literal '{inputName}'. Endpoint " +
                 "options must be authored literals so they are fixed at publish time.");
+
+        // A literal source with no value is an unauthored optional input (it compiles to an omitted/absent literal)
+        // or an explicit null: treat both as unauthored so the caller applies the documented default and the shell
+        // still publishes when the option was left blank.
+        if (binding.LiteralValue is not { } literal)
+            return null;
 
         return literal.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? null : literal;
     }
@@ -258,12 +266,13 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         if (binding is null)
             return null;
 
-        if (binding.Source != RuntimeInputBindingSource.Literal || binding.LiteralValue is not { } literal)
+        if (binding.Source != RuntimeInputBindingSource.Literal)
             throw new ArgumentException(
                 $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a non-literal '{inputName}'. Supported " +
                 "methods must be an authored literal so the endpoint's per-method stimuli are fixed at publish time.");
 
-        if (literal.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        // Unauthored (omitted/absent literal) or explicitly null: apply the default (["GET"]) rather than fail.
+        if (binding.LiteralValue is not { } literal || literal.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return null;
 
         if (literal.ValueKind != JsonValueKind.Array)
