@@ -94,6 +94,11 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         var lanes = new List<BpmnLane>();
         var childActivities = new List<ActivityNode>();
         var pendingBoundaries = new List<XElement>();
+        // spec 124: compensate throw/end and boundary→handler associations resolve in later passes so their
+        // targets are known regardless of document order.
+        var pendingCompensateThrows = new List<XElement>();
+        var pendingCompensateEnds = new List<XElement>();
+        var associations = new List<(string Source, string Target)>();
 
         // spec 123 D3: the container's declared container-scoped variables gate collection-mode loop imports —
         // an elsa:collection naming a variable declared here imports as a real collection loop; an undeclared or
@@ -142,6 +147,13 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 case "endEvent":
                 {
                     if (id is null) break;
+                    // spec 124: a compensate end event resolves in a later pass (its activityRef targets a host
+                    // whose compensation boundary is known only after the boundary pass).
+                    if (child.Element(BpmnXmlNames.Model + "compensateEventDefinition") is not null)
+                    {
+                        pendingCompensateEnds.Add(child);
+                        break;
+                    }
                     var isTerminate = child.Elements(BpmnXmlNames.Model + "terminateEventDefinition").Any();
                     var otherDefinitions = child.Elements().Where(IsEventDefinition).Any(definition => definition.Name.LocalName != "terminateEventDefinition");
                     if (otherDefinitions)
@@ -153,13 +165,30 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                         eventDefinitions: isTerminate ? [new BpmnEventDefinition(BpmnEventDefinitionTypes.Terminate)] : null));
                     break;
                 }
+                case "intermediateThrowEvent":
+                {
+                    if (id is null) break;
+                    // spec 124: resolved in a later pass (compensate → keep with resolvable activityRef; anything
+                    // else drops, its flows cascading as unresolved references).
+                    pendingCompensateThrows.Add(child);
+                    break;
+                }
+                case "association":
+                {
+                    var sourceRef = ((string?)child.Attribute("sourceRef"))?.Trim();
+                    var targetRef = ((string?)child.Attribute("targetRef"))?.Trim();
+                    if (!string.IsNullOrWhiteSpace(sourceRef) && !string.IsNullOrWhiteSpace(targetRef))
+                        associations.Add((sourceRef, targetRef));
+                    break;
+                }
                 case "subProcess":
                 {
                     if (id is null) break;
                     var nestedNodeId = $"node-{id}";
                     childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, context));
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
-                        loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context)));
+                        loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context),
+                        isForCompensation: IsForCompensationOf(child)));
                     break;
                 }
                 case "boundaryEvent":
@@ -208,7 +237,8 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                         // Tasks import unbound (no ChildNodeId until an Elsa activity is bound), so a
                         // multi-instance task is a childless host on import → degrade (validate-representable).
                         elements.Add(new BpmnElement(id, taskType, name: NameOf(child), defaultFlowId: DefaultOf(child),
-                            loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: false, declaredVariableNames, context)));
+                            loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: false, declaredVariableNames, context),
+                            isForCompensation: IsForCompensationOf(child)));
                         if (taskType != BpmnElementTypes.Task)
                             context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"{Capitalize(localName)} '{id}' imported unbound; bind an Elsa activity to execute it.", id));
                         break;
@@ -230,21 +260,54 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
             }
         }
 
-        // Second pass: boundary events resolve against the now-complete host set (spec 120 D6).
+        // Second pass: boundary events resolve against the now-complete host set (spec 120 D6 / spec 124 D4).
         var elementsById = elements.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
+        var referencedHandlerIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var boundaryXml in pendingBoundaries)
         {
-            var resolved = ResolveBoundaryEvent(boundaryXml, elementsById, messageSignalNames, context);
+            var resolved = ResolveBoundaryEvent(boundaryXml, elementsById, messageSignalNames, associations, context);
             if (resolved is not { } boundaryImport)
                 continue; // Dropped (finding added inside); its sequence flows cascade-drop as unresolved refs.
             if (boundaryImport.Child is not null)
                 childActivities.Add(boundaryImport.Child);
             elements.Add(boundaryImport.Boundary);
+
+            // spec 124: a compensation boundary marks its resolved handler as a compensation handler.
+            if (boundaryImport.Boundary.CompensationHandlerElementId is { } handlerId)
+            {
+                referencedHandlerIds.Add(handlerId);
+                MarkHandlerForCompensation(elements, handlerId);
+            }
+        }
+
+        // Third pass: compensate throw/end events resolve against the full element set + the compensation hosts
+        // (elements carrying a compensation boundary) now known (spec 124 D4).
+        var compensationHostIds = elements
+            .Where(element => element.CompensationHandlerElementId is not null && element.AttachedToRef is not null)
+            .Select(element => element.AttachedToRef!)
+            .ToHashSet(StringComparer.Ordinal);
+        var importedElementIds = elements.Select(element => element.ElementId).ToHashSet(StringComparer.Ordinal);
+        foreach (var throwXml in pendingCompensateThrows)
+        {
+            if (ResolveCompensateThrow(throwXml, importedElementIds, compensationHostIds, context) is { } throwElement)
+                elements.Add(throwElement);
+        }
+        foreach (var endXml in pendingCompensateEnds)
+            elements.Add(ResolveCompensateEnd(endXml, importedElementIds, compensationHostIds, context));
+
+        // spec 124: an isForCompensation activity referenced by no compensation boundary cannot ride normal flow —
+        // drop it (and its bound child) with a finding.
+        foreach (var orphan in elements.Where(element => element.IsForCompensation && !referencedHandlerIds.Contains(element.ElementId)).ToArray())
+        {
+            elements.Remove(orphan);
+            if (orphan.ChildNodeId is { } orphanChildId)
+                childActivities.RemoveAll(child => StringComparer.Ordinal.Equals(child.NodeId, orphanChildId));
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Activity '{orphan.ElementId}' is marked isForCompensation but is referenced by no compensation boundary; it cannot ride normal flow and was dropped.", orphan.ElementId));
         }
 
         var elementsWithLanes = elements
             .Select(element => context.LaneByElementId.TryGetValue(element.ElementId, out var laneId)
-                ? new BpmnElement(element.ElementId, element.ElementType, element.Name, element.ChildNodeId, laneId, element.DefaultFlowId, element.EventDefinitions, element.Properties, element.AttachedToRef, element.CancelActivity, element.LoopCharacteristics)
+                ? new BpmnElement(element.ElementId, element.ElementType, element.Name, element.ChildNodeId, laneId, element.DefaultFlowId, element.EventDefinitions, element.Properties, element.AttachedToRef, element.CancelActivity, element.LoopCharacteristics, element.IsForCompensation, element.CompensationHandlerElementId)
                 : element)
             .ToArray();
 
@@ -445,6 +508,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         XElement element,
         IReadOnlyDictionary<string, BpmnElement> elementsById,
         IReadOnlyDictionary<string, string> messageSignalNames,
+        IReadOnlyList<(string Source, string Target)> associations,
         ImportContext context)
     {
         var id = IdOf(element)!;
@@ -486,6 +550,25 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         var childNodeId = $"node-{id}";
         switch (definition.Name.LocalName)
         {
+            case "compensateEventDefinition":
+            {
+                // spec 124 D4: a compensation boundary resolves its handler via a boundary↔activity association
+                // (either direction). No resolvable association, or a handler that is not an importable
+                // task-family/subprocess binding a child, drops the boundary (validate-representable). cancelActivity
+                // is imported as authored but ignored, so it is not read here.
+                var handlerId = ResolveCompensationHandler(id, associations, elementsById);
+                if (handlerId is null)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Compensation boundary event '{id}' has no association to an importable compensation handler activity and was dropped.", id));
+                    return null;
+                }
+
+                var compensationElement = new BpmnElement(id, BpmnElementTypes.BoundaryEvent, name: NameOf(element),
+                    eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation)],
+                    attachedToRef: attachedToRef, cancelActivity: cancelActivity,
+                    compensationHandlerElementId: handlerId);
+                return (compensationElement, null);
+            }
             case "errorEventDefinition":
             {
                 if (!cancelActivity)
@@ -536,10 +619,111 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 return (timerElement, delayChild);
             }
             default:
-                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' declares an unsupported '{definition.Name.LocalName}'; only timer/message/signal/error boundary events are supported, so it was dropped.", id));
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' declares an unsupported '{definition.Name.LocalName}'; only timer/message/signal/error/compensation boundary events are supported, so it was dropped.", id));
                 return null;
         }
     }
+
+    /// <summary>
+    /// Resolves a compensation boundary's handler element id via a boundary↔activity association (spec 124 D4):
+    /// an association with one endpoint at the boundary and the other at an importable task-family/subprocess that
+    /// binds a child (a childless task cannot host a handler). Either association direction is accepted; <c>null</c>
+    /// when no such association/handler exists.
+    /// </summary>
+    private static string? ResolveCompensationHandler(
+        string boundaryId,
+        IReadOnlyList<(string Source, string Target)> associations,
+        IReadOnlyDictionary<string, BpmnElement> elementsById)
+    {
+        foreach (var (source, target) in associations)
+        {
+            var other = StringComparer.Ordinal.Equals(source, boundaryId) ? target
+                : StringComparer.Ordinal.Equals(target, boundaryId) ? source
+                : null;
+            if (other is null || !elementsById.TryGetValue(other, out var candidate))
+                continue;
+            var isTaskFamily = BpmnXmlNames.TaskLocalNamesToElementTypes.Values.Contains(candidate.ElementType, StringComparer.Ordinal);
+            var isSubProcess = StringComparer.Ordinal.Equals(candidate.ElementType, BpmnElementTypes.SubProcess);
+            if ((isTaskFamily || isSubProcess) && candidate.ChildNodeId is not null)
+                return other;
+        }
+
+        return null;
+    }
+
+    /// <summary>Marks a resolved compensation handler element as <c>IsForCompensation</c> in place (spec 124 D4); idempotent.</summary>
+    private static void MarkHandlerForCompensation(List<BpmnElement> elements, string handlerId)
+    {
+        var index = elements.FindIndex(element => StringComparer.Ordinal.Equals(element.ElementId, handlerId));
+        if (index < 0 || elements[index].IsForCompensation)
+            return;
+        var handler = elements[index];
+        elements[index] = new BpmnElement(handler.ElementId, handler.ElementType, handler.Name, handler.ChildNodeId, handler.LaneId,
+            handler.DefaultFlowId, handler.EventDefinitions, handler.Properties, handler.AttachedToRef, handler.CancelActivity,
+            handler.LoopCharacteristics, isForCompensation: true, compensationHandlerElementId: handler.CompensationHandlerElementId);
+    }
+
+    /// <summary>
+    /// Resolves a compensate intermediate throw event (spec 124 D4). A ref-less throw compensates everything; an
+    /// <c>activityRef</c> keeps the throw only when it names an existing element with an attached compensation
+    /// boundary — otherwise the throw imports WITHOUT the compensate definition and is Dropped with a finding (its
+    /// flows cascade-drop as unresolved references), so the importer never emits a graph the validator rejects.
+    /// </summary>
+    private static BpmnElement? ResolveCompensateThrow(
+        XElement element,
+        IReadOnlySet<string> importedElementIds,
+        IReadOnlySet<string> compensationHostIds,
+        ImportContext context)
+    {
+        var id = IdOf(element)!;
+        var definitions = element.Elements().Where(IsEventDefinition).ToArray();
+        if (definitions.Length != 1 || definitions[0].Name.LocalName != "compensateEventDefinition")
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Intermediate throw event '{id}' does not declare exactly one compensate event definition; only compensate throw events are supported, so it was dropped.", id));
+            return null;
+        }
+
+        var activityRef = ((string?)definitions[0].Attribute("activityRef"))?.Trim();
+        if (activityRef is { Length: > 0 } && !(importedElementIds.Contains(activityRef) && compensationHostIds.Contains(activityRef)))
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Compensate throw event '{id}' targets activityRef '{activityRef}', which is not an element with an attached compensation boundary; it was dropped.", id));
+            return null;
+        }
+
+        return new BpmnElement(id, BpmnElementTypes.IntermediateThrowEvent, name: NameOf(element),
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation, CompensationProperties(activityRef))]);
+    }
+
+    /// <summary>
+    /// Resolves a compensate end event (spec 124 D4). A ref-less end compensates everything; an unresolvable
+    /// <c>activityRef</c> degrades the end event to a plain none end event (which never rejects the graph) with a
+    /// finding rather than dropping it (an end event has no flows to cascade).
+    /// </summary>
+    private static BpmnElement ResolveCompensateEnd(
+        XElement element,
+        IReadOnlySet<string> importedElementIds,
+        IReadOnlySet<string> compensationHostIds,
+        ImportContext context)
+    {
+        var id = IdOf(element)!;
+        var activityRef = ((string?)element.Element(BpmnXmlNames.Model + "compensateEventDefinition")?.Attribute("activityRef"))?.Trim();
+        if (activityRef is { Length: > 0 } && !(importedElementIds.Contains(activityRef) && compensationHostIds.Contains(activityRef)))
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Compensate end event '{id}' targets activityRef '{activityRef}', which is not an element with an attached compensation boundary; it imported as a none end event.", id));
+            return new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(element));
+        }
+
+        return new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(element),
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation, CompensationProperties(activityRef))]);
+    }
+
+    private static IReadOnlyDictionary<string, string>? CompensationProperties(string? activityRef) =>
+        string.IsNullOrWhiteSpace(activityRef)
+            ? null
+            : new Dictionary<string, string> { [BpmnEventDefinitionProperties.ActivityRef] = activityRef.Trim() };
+
+    private static bool IsForCompensationOf(XElement element) =>
+        (bool?)element.Attribute("isForCompensation") ?? false;
 
     /// <summary>
     /// Resolves a task/subprocess element's <c>&lt;multiInstanceLoopCharacteristics&gt;</c> (spec 121 D4):
