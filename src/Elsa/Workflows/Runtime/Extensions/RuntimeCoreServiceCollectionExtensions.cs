@@ -252,6 +252,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IWorkflowOutputSource, WorkflowOutputSource>();
         services.TryAddSingleton<IRuntimeInputBindingResolver, RuntimeInputBindingResolver>();
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
+        // Issue #977: shared snapshot materialization, resolvable by the parent-completion evaluation so an
+        // IRuntimeRematerializeInputsOnChildCompletion composite (While) re-reads live frames per pass.
+        services.TryAddScoped<RuntimeActivityInputSnapshotMaterializer>();
         services.TryAddScoped<WorkflowIntrinsicExecutor>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
         // Registered before BlockingIncidentWorkflowFaultObserver: the blocking incident it projects from a parked

@@ -52,7 +52,7 @@ namespace Elsa.Activities.While.Activities;
 [ActivityStructure("elsa.while.structure", "1.0.0")]
 [ActivityChildSlot("While.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
-public sealed class While : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
+public sealed class While : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeRematerializeInputsOnChildCompletion
 {
     public const string BodySlotName = "While.Body";
     public const string StructureKind = "elsa.while.structure";
