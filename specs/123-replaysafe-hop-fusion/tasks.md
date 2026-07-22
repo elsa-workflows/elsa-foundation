@@ -65,9 +65,15 @@ byte-for-byte. Gate green, unchanged: Workflows.Runtime.Tests **1378**, Activiti
 - [ ] **A5 GATE**: run FULL `Elsa.Workflows.Runtime.Tests` + `Elsa.Activities.Runtime.Tests` — must pass
   unchanged (proves behavior-preserving). Commit: `refactor(runtime): extract scheduler stage cores for reuse`.
 
-## Increment B — toggle + dispatch counter
+## Increment B — toggle + dispatch counter — DONE 2026-07-22
 
-- [ ] **B1** Add `src/Elsa/Workflows/Runtime/Core/Models/RuntimeReplaySafeFusionOptions.cs`
+Landed `RuntimeReplaySafeFusionOptions { Enabled = true }` (default-ON, registered in RuntimeCore) and a singleton
+`RuntimeSchedulerDispatchDiagnostics { Dispatches, FusedSpans }` incremented once per `WorkflowSchedulerDrainer.DispatchAsync`
+(new optional last ctor arg, wired through the RuntimeCore drainer factory) — exposed as `DispatchesPerRun`/`FusedSpansPerRun`
+on `DurableRoundTripDiagnostics`. The single diagnostics singleton doubles as the fusion-engagement counter the C guardrail reads.
+Gate green: build + Workflows.Runtime.Tests **1378**.
+
+- [x] **B1** Add `src/Elsa/Workflows/Runtime/Core/Models/RuntimeReplaySafeFusionOptions.cs`
   (`{ bool Enabled = true }`), mirroring `RuntimeInProcessHopFastPathOptions` doc/shape.
 - [ ] **B2** Register it default-ON in `RuntimeCoreServiceCollectionExtensions`; thread an optional
   `RuntimeReplaySafeFusionOptions?` ctor arg (default `new()`) into the fusion seam collaborator.

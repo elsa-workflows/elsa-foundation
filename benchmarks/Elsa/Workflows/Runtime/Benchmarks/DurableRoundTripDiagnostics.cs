@@ -12,6 +12,7 @@ using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
@@ -82,7 +83,7 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
         public ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(RuntimeStorePageRequest r, CancellationToken ct = default) { Interlocked.Increment(ref c.ListPage); return inner.ListPageAsync(r, ct); }
     }
 
-    private readonly record struct RunCounts(long CheckpointCommits, int QueueOps, int ExecutableReads);
+    private readonly record struct RunCounts(long CheckpointCommits, int QueueOps, int ExecutableReads, long DispatchesPerRun, long FusedSpansPerRun);
 
     [Theory]
     [InlineData(false, "2-node Immediate")]
@@ -158,12 +159,17 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
         var run = await harness.RunAsync(executable);
         run.AssertWorkflowCompleted();
 
+        var dispatchDiagnostics = harness.Services.GetService<RuntimeSchedulerDispatchDiagnostics>();
+        var dispatchesPerRun = dispatchDiagnostics?.Dispatches ?? 0;
+        var fusedSpansPerRun = dispatchDiagnostics?.FusedSpans ?? 0;
+
 #pragma warning disable GW0004
         var docs = await store.QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
 #pragma warning restore GW0004
 
         output.WriteLine($"=== {label} ===");
         output.WriteLine($"durable checkpoint-commit documents/run = {docs.TotalCount}");
+        output.WriteLine($"dispatches/run = {dispatchesPerRun}   fused-spans/run = {fusedSpansPerRun}");
         output.WriteLine($"root-write-lease + executable-store ops/run: {counters}");
         output.WriteLine($"=> per durable checkpoint flush there is 1 acquire(read+write) + 1 release(read+write) + closure find(s); " +
                          $"lease writes/run ≈ {counters.Acquire + counters.Release + counters.Renew} fsync-scale, vs {docs.TotalCount} checkpoint-marker fsyncs.");
@@ -176,7 +182,7 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
 
         var queueOps = counters.QEnqueue + counters.QDequeue + counters.QDelete + counters.QConsume +
                        counters.QClaim + counters.QComplete + counters.QRelease;
-        return new RunCounts(docs.TotalCount, queueOps, counters.Find);
+        return new RunCounts(docs.TotalCount, queueOps, counters.Find, dispatchesPerRun, fusedSpansPerRun);
     }
 
     private static WorkflowExecutable BuildTwoNode()

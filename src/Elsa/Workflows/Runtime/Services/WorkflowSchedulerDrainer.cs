@@ -23,6 +23,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IWorkflowEngineTracer _tracer;
     private readonly RuntimeSchedulerWorkClaimOptions _claimOptions;
     private readonly IRuntimeConsumedSchedulerWorkClaimAccessor? _consumedWorkClaimAccessor;
+    private readonly RuntimeSchedulerDispatchDiagnostics? _dispatchDiagnostics;
     private readonly string _claimOwnerId = $"scheduler-drainer:{Guid.NewGuid():N}";
 
     /// <summary>
@@ -45,7 +46,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IRuntimeDomainRetryPolicy? retryPolicy = null,
         IWorkflowEngineTracer? tracer = null,
         RuntimeSchedulerWorkClaimOptions? claimOptions = null,
-        IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null)
+        IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
+        RuntimeSchedulerDispatchDiagnostics? dispatchDiagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
@@ -65,6 +67,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _tracer = tracer ?? NullWorkflowEngineTracer.Instance;
         _claimOptions = claimOptions ?? new RuntimeSchedulerWorkClaimOptions();
         _consumedWorkClaimAccessor = consumedWorkClaimAccessor;
+        _dispatchDiagnostics = dispatchDiagnostics;
         if (_claimOptions.VisibilityTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(claimOptions), "Scheduler work visibility timeout must be greater than zero.");
     }
@@ -164,6 +167,10 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IWorkflowSchedulerWorkHandler? handler = null;
         var startedAt = _timeProvider.GetUtcNow();
         var renewal = claim is null ? null : new ClaimRenewalState(claim);
+
+        // spec 123 FR-008: one dispatch per drained work item. This is the deterministic hop-count evidence for the
+        // ReplaySafe fusion A/B (fusion elides the intermediate StartActivity/InvokeActivity dispatches).
+        _dispatchDiagnostics?.RecordDispatch();
 
         // WU-1 / spec 105: stage this dispatch's claim so a checkpoint commit can fold its fence-checked deletion into the
         // commit unit-of-work. When it does, the committer marks it consumed and the separate acknowledgement below is
