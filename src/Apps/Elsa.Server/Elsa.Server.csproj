@@ -57,6 +57,8 @@
 		<ProjectReference Include="..\..\Elsa\Activities\Bpmn\Elsa.Activities.Bpmn.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />

@@ -5,6 +5,8 @@
         "Name": "default",
         "Features": {
           "ActivitiesControlFlow": {},
+          "ActivitiesDispatchWorkflowRuntime": {},
+          "ActivitiesDispatchWorkflowDesign": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphDesign": {},
           "ActivitiesDesignReconciliation": {},
