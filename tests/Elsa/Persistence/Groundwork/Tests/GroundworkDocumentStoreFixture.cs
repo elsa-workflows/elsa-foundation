@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
@@ -111,6 +110,10 @@ internal sealed class GroundworkDocumentStoreFixture(
     private sealed class LegacyBoundedQueryAdapter(IDocumentStore store, StorageManifest manifest)
         : IBoundedDocumentStore
     {
+        private const string ContinuationTokenPrefix = "groundwork-test";
+        private const string InvalidContinuationMessage =
+            "The Groundwork test continuation is invalid or belongs to another query.";
+
         public async Task<DocumentQueryResult> QueryAsync(
             DocumentQuery query,
             CancellationToken cancellationToken = default)
@@ -222,11 +225,14 @@ internal sealed class GroundworkDocumentStoreFixture(
                 .OrderBy(candidate => candidate.OrderKey, StringComparer.Ordinal)
                 .ThenBy(candidate => candidate.Document.Id, StringComparer.Ordinal)
                 .ToArray();
-            return KeysetPage(
+            return TestKeysetContinuations.Page(
                 query,
+                ContinuationTokenPrefix,
                 matches,
                 candidate => [candidate.OrderKey, candidate.Document.Id],
-                candidate => candidate.Document);
+                candidate => candidate.Document,
+                [PhysicalSortDirection.Ascending, PhysicalSortDirection.Ascending],
+                InvalidContinuationMessage);
         }
 
         private async Task<DocumentQueryResult> QueryPendingSchedulerExecutionsAsync(
@@ -254,76 +260,14 @@ internal sealed class GroundworkDocumentStoreFixture(
                 .ThenBy(candidate => candidate.OrderKey, StringComparer.Ordinal)
                 .ThenBy(candidate => candidate.Document.Id, StringComparer.Ordinal)
                 .ToArray();
-            return KeysetPage(
+            return TestKeysetContinuations.Page(
                 query,
+                ContinuationTokenPrefix,
                 matches,
                 candidate => [candidate.WorkflowExecutionId, candidate.OrderKey, candidate.Document.Id],
-                candidate => candidate.Document);
-        }
-
-        // Keyset continuation: the token carries the last returned row's order-key fields (id-tie-broken)
-        // so the next page resumes strictly after it even when documents are inserted before or removed
-        // behind the page boundary between pages. An offset over the re-run live query would re-serve or
-        // skip rows under such mutation.
-        private static DocumentQueryResult KeysetPage<TCandidate>(
-            DocumentQuery query,
-            IReadOnlyList<TCandidate> matches,
-            Func<TCandidate, string[]> keyOf,
-            Func<TCandidate, DocumentEnvelope> documentOf)
-        {
-            var boundary = DecodeContinuation(query);
-            var remaining = boundary is null
-                ? matches
-                : matches.Where(candidate => IsAfter(keyOf(candidate), boundary)).ToArray();
-            var window = remaining.Skip(query.Skip ?? 0).ToArray();
-            var page = query.Take is { } take ? window.Take(take).ToArray() : window;
-            return new DocumentQueryResult(
-                page.Select(documentOf).ToArray(),
-                matches.Count,
-                query.Take is not null && page.Length > 0 && window.Length > page.Length
-                    ? EncodeContinuation(query, keyOf(page[^1]))
-                    : null);
-        }
-
-        private static bool IsAfter(string[] key, string[] boundary)
-        {
-            if (key.Length != boundary.Length)
-                throw new InvalidDocumentQueryContinuationException(
-                    "The Groundwork test continuation is invalid or belongs to another query.");
-
-            foreach (var (candidate, bound) in key.Zip(boundary))
-            {
-                var compared = StringComparer.Ordinal.Compare(candidate, bound);
-                if (compared != 0)
-                    return compared > 0;
-            }
-
-            return false;
-        }
-
-        private static string EncodeContinuation(DocumentQuery query, string[] keyFields) =>
-            $"groundwork-test:{query.DocumentKind}:{query.QueryIdentity}:" +
-            Convert.ToBase64String(Encoding.UTF8.GetBytes(string.Join('\n', keyFields)));
-
-        private static string[]? DecodeContinuation(DocumentQuery query)
-        {
-            if (query.Continuation is null)
-                return null;
-
-            var prefix = $"groundwork-test:{query.DocumentKind}:{query.QueryIdentity}:";
-            if (query.Continuation.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                try
-                {
-                    return Encoding.UTF8.GetString(Convert.FromBase64String(query.Continuation[prefix.Length..])).Split('\n');
-                }
-                catch (FormatException)
-                {
-                }
-            }
-
-            throw new InvalidDocumentQueryContinuationException(
-                "The Groundwork test continuation is invalid or belongs to another query.");
+                candidate => candidate.Document,
+                [PhysicalSortDirection.Ascending, PhysicalSortDirection.Ascending, PhysicalSortDirection.Ascending],
+                InvalidContinuationMessage);
         }
 
         private static string ReadRequiredString(DocumentEnvelope envelope, string path)
