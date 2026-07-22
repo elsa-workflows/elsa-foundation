@@ -34,6 +34,32 @@ public sealed class ValueConversionProfilesEndpointTests
     }
 
     [Fact]
+    public void Every_endpoint_request_dto_in_the_assembly_is_bindable_by_fastendpoints()
+    {
+        // FastEndpoints' RequestBinder<T> static initializer rejects DTOs without publicly accessible
+        // properties at first request, not at startup; parameterless endpoints must use EmptyRequest.
+        var endpointTypes = typeof(ConversionProfilesCapabilitySource).Assembly.GetTypes()
+            .Where(type => !type.IsAbstract && typeof(BaseEndpoint).IsAssignableFrom(type));
+
+        foreach (var endpointType in endpointTypes)
+        {
+            var requestType = RequestTypeOf(endpointType);
+            var exception = Record.Exception(() => Activator.CreateInstance(typeof(RequestBinder<>).MakeGenericType(requestType)));
+            Assert.True(exception is null, $"FastEndpoints cannot bind request DTO '{requestType}' of endpoint '{endpointType}': {exception?.InnerException ?? exception}");
+        }
+    }
+
+    private static Type RequestTypeOf(Type endpointType)
+    {
+        for (var type = endpointType; type is not null; type = type.BaseType)
+        {
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Endpoint<,>))
+                return type.GenericTypeArguments[0];
+        }
+        throw new InvalidOperationException($"Endpoint '{endpointType}' does not derive from FastEndpoints.Endpoint<TRequest, TResponse>.");
+    }
+
+    [Fact]
     public async Task Default_host_surfaces_the_built_in_json_and_xml_profiles()
     {
         var handler = new ListValueConversionProfilesRequestHandler(BuiltInValueConversionProfileRegistry.Instance);
