@@ -135,7 +135,44 @@ ControlFlow **196**, Bpmn **107**, Publishing.Api **401**; full `dotnet build El
 
 ## Increment D — D2 inline single-predecessor completion
 
-> **STATUS 2026-07-22 (finishing session): D-part-1 DONE; D-part-2 (D2 driver) DEFERRED at a genuine correctness/scope boundary — see below.**
+> **STATUS 2026-07-22 (D2 session): DONE — the D2 driver landed, resolving both recorded blockers. Gate green.**
+>
+> **What shipped (commit `spec 123 D2`):**
+> - **Blocker 1 (cross-assembly probe) resolved as designed:** `IReplaySafeSuccessorRoutingProbe` in Runtime.Core;
+>   `FlowchartReplaySafeSuccessorRoutingProbe` reads the successor's inbound count off the spec-119
+>   `GetOrAddRoutingStructure(FlowchartGraph.From)` memo; `SequenceReplaySafeSuccessorRoutingProbe` answers from the
+>   `SequenceNavigator` memo (first child 0, others 1). Registered from `ActivitiesFlowchartFeature` /
+>   `ActivitiesSequenceFeature`; injected optionally into `ReplaySafeFusionDriver`; unanswered probe ⇒ fallback.
+>   Per-successor parent resolution: schedule payload provenance `ParentActivityExecutionId` → parent activity state →
+>   parent `ExecutableNode`; `inbound <= 1` fuses (a composite's entry node has 0), `> 1` is the join fallback.
+> - **Blocker 2 (pump vs session invariants) resolved with one deviation from the recorded sketch:** the overlay
+>   queue's strict-FIFO claim contract keeps the drain loop's head claim (the fused span's originating item) live for
+>   the whole span, so the pump **cannot claim** overlay items at all (`ClaimAsync` only serves the head). Instead the
+>   session grew a single-writer peek/consume pair (`PeekNextPumpableOverlayItemAsync` — FIFO-first item with no live
+>   claim, via a new insertion-order `InMemoryWorkflowSchedulerWorkQueue.PeekFirstAvailableAsync` —
+>   plus `ConsumePumpedOverlayItemAsync`). Consumption is FIFO-after-the-claimed-head, so
+>   `AdvanceInnerQueueAsync`'s consumed-seeded-prefix accounting still holds at every flush (in-flight claims are
+>   excluded before counting); an item mid-inline-dispatch at a flush counts as remaining continuation — the durable
+>   crash backstop — and a redelivery resolves through the existing idempotency ladder. The pump mirrors the drain
+>   loop exactly: per-cycle `IRuntimePostCommitOutboxProcessor.ProcessAsync` (EnqueueSchedulerWork), pause-gate and
+>   W5 terminal-status parity, custom-before-fallback handler resolution, session-deactivation stop, and re-entrancy
+>   guard (nested fused spans are D1-only; the top pump owns the loop iteratively).
+> - **A byte-identity fix the pump surfaced:** the session's outbox delivery/claim ordering tie-broke same-timestamp
+>   items by outbox-item id (arbitrary hash order). Same-tick bursts — the norm inside a coalesced segment, and every
+>   run under the guardrail's fixed clock — could interleave sibling branches differently fused vs discrete. The
+>   tie-break is now causal insertion order (stable sort over `_outboxOrder`), byte-identical whenever timestamps are
+>   strictly monotonic.
+> - **Gate (all green):** guardrails 9 (straight-line + suspend + External + determinism + D1-only + branch + join;
+>   engagement proven via `FusedSpans`/`InlineCascadeDispatches`/`CascadeJoinFallbacks`); Groundwork crash suite 8
+>   kill points on a 5-leaf chain (inside D1 spans, the inline completion pass, and the D2→D1 recursion boundary);
+>   A/B hot-loop×10 dispatches **58 (none) → 36 (D1) → 5 (D1+D2)**, inline-cascade 31, commits unchanged (already
+>   folded to 1 by coalescing). Suites: Workflows.Runtime **1381**, Activities.Runtime **205**, Flowchart **74**,
+>   Sequence **16**, ControlFlow **196**, Bpmn **143**, Groundwork **662**, Publishing.Api **401**; full
+>   `dotnet build Elsa.Server.slnx` **0 errors**.
+>
+> The original deferral record (D-part-1 seam + the two blockers) is retained below for provenance.
+>
+> **STATUS 2026-07-22 (earlier finishing session): D-part-1 DONE; D-part-2 (D2 driver) DEFERRED at a genuine correctness/scope boundary — see below.**
 >
 > **D-part-1 (DONE, committed `8d6941533`):** behavior-preserving completion-seam extraction.
 > `WorkflowInvokeActivitySchedulerWorkHandler.CommitCompletedActivityAsync` split into a
@@ -193,18 +230,19 @@ ControlFlow **196**, Bpmn **107**, Publishing.Api **401**; full `dotnet build El
 >
 > The tasks below (D1 probe, D2 driver, D3/D4 guardrails+crash) remain the plan for that session.
 
-- [ ] **D1** Add the single-predecessor probe on the routing memo:
+- [x] **D1** Add the single-predecessor probe on the routing memo:
   `ExecutableNode.GetOrAddRoutingStructure<FlowchartGraph>(FlowchartGraph.From).GetInboundConnections(successorNodeId).Count == 1`
   (Sequence is intrinsically single-successor). No graph walk, no second cache.
-- [ ] **D2** Extend the driver: when the invoke core returns Completed and the parent is a `ReplaySafe`
-  routing composite and the successor edge is single-predecessor, call the parent-completion core inline,
-  then emit the successor `ScheduleActivity` directly into the D1 driver (re-enters C1). Fan-in/join
-  (`Count > 1`) and External parents fall back to the discrete cascade.
-- [ ] **D3** Extend `ReplaySafeFusionGuardrailTests`: shapes (b) multi-outcome branch (single-predecessor
-  successors) and (c) join-falls-back — ENABLED vs DISABLED byte-identical.
-- [ ] **D4** Extend `ReplaySafeFusionCrashConvergenceTests`: D2 kill points inside the inline cascade.
-- [ ] **D5 GATE**: all guardrails + eight QA suites + full solution build. Commit:
-  `feat(runtime): D2 inline single-predecessor completion propagation for ReplaySafe composites`.
+  *(Landed as `IReplaySafeSuccessorRoutingProbe` + Flowchart/Sequence impls — see the D2-session status above.)*
+- [x] **D2** Extend the driver: inline completion pump on the coalescing overlay (the recorded pump design, not the
+  original call-the-cores sketch): the same handlers run inline in drain-loop FIFO order; a fusable successor
+  `ScheduleActivity` re-enters the D1 driver (re-entrancy-guarded). Fan-in/join (`Count > 1`), child-fault
+  evaluations, External parents, and the workflow tail fall back to the discrete cascade.
+- [x] **D3** Extend `ReplaySafeFusionGuardrailTests`: shapes (b) multi-outcome branch (single-predecessor
+  successors) and (c) join-falls-back — ENABLED vs DISABLED byte-identical, join fallback proven via counters.
+- [x] **D4** Extend `ReplaySafeFusionCrashConvergenceTests`: D2 kill points inside the inline cascade and across
+  the D2→D1 recursion boundary (8 ordinals, 5-leaf chain).
+- [x] **D5 GATE**: all guardrails + eight QA suites + full solution build — green (counts in the status block).
 
 ## Increment E — amendments + A/B benchmark + final QA
 
@@ -229,7 +267,8 @@ ControlFlow **196**, Bpmn **107**, Publishing.Api **401**; full `dotnet build El
 >   (10 leaves + the ReplaySafe Flowchart composite) and cuts dispatches 58→36; commits are already folded to 1
 >   by coalescing (D1 does not change commit count — the completion cascade still dispatches per stage until D2
 >   folds it, which is exactly why ON here is labelled D1-only). The **D1+D2** third column lands with the D2
->   follow-up.
+>   follow-up. *(Landed by the D2 session: the benchmark now runs all three columns via the `FuseCompletionCascade`
+>   dial — dispatches none 58 / D1 36 / D1+D2 **5**, inline-cascade 31 — with run-order-swapped walls.)*
 > - **E4 (done):** full 8-project battery + `dotnet build Elsa.Server.slnx` — results recorded in the report.
 
 - [ ] **E1** Spec-095 FR amendment: in `specs/095-runtime-intent-handlers/spec.md` add an amendment note to
