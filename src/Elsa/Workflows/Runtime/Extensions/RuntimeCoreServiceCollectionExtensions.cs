@@ -49,6 +49,11 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<RuntimeReplaySafeFusionOptions>();
         services.TryAddSingleton<RuntimeSchedulerDispatchDiagnostics>();
 
+        // spec 128 / #542: in-process actor terminal-eviction policy (default ON). Bounds the live agent registry by
+        // passivating an execution's mailbox after a terminal drain. The kill switch (PassivateOnTerminal = false)
+        // restores the pre-#542 unbounded-growth behavior byte-for-byte.
+        services.TryAddSingleton<RuntimeActorEvictionOptions>();
+
         // MS-9 self-instrumentation: the engine hot path (drain/dispatch/activity-execute/checkpoint-commit) resolves an
         // IWorkflowEngineTracer. The default is a no-op that returns null spans at zero cost, so the fenced drain/commit
         // path is byte-for-byte unchanged unless WorkflowsRuntimeTracingFeature replaces it with the ActivitySource-backed
@@ -279,7 +284,12 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, MissingBookmarkResumeSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, MissingGeneratedEventSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, NoopWorkflowSchedulerWorkHandler>());
-        services.TryAddSingleton<IWorkflowExecutionActorProvider, InProcessWorkflowExecutionActorProvider>();
+        // Explicit factory (not greedy ctor selection) so the eviction options are wired in and the provider owns its
+        // self-instrumentation meter; the container disposes the singleton (and its meter) on shutdown.
+        services.TryAddSingleton<IWorkflowExecutionActorProvider>(serviceProvider =>
+            new InProcessWorkflowExecutionActorProvider(
+                serviceProvider.GetRequiredService<IWorkflowExecutionCommandExecutor>(),
+                serviceProvider.GetRequiredService<RuntimeActorEvictionOptions>()));
         services.TryAddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         services.TryAddScoped<IWorkflowStartDispatcher>(serviceProvider =>
         {

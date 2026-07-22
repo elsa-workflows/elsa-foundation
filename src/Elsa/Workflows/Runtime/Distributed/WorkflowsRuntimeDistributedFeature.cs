@@ -112,8 +112,14 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
 
         // Compose the in-process provider as the local-drain engine, then replace the single active actor provider
         // registration with the distributed one (S=2.6 single active provider). Keeping the in-process provider as a
-        // concrete registration avoids a self-referential resolution of IWorkflowExecutionActorProvider.
-        services.TryAddSingleton<InProcessWorkflowExecutionActorProvider>();
+        // concrete registration avoids a self-referential resolution of IWorkflowExecutionActorProvider. The composed
+        // local provider inherits the same terminal-eviction options (#542 / spec 128); driving a local drain through
+        // the distributed provider still bounds the local mailbox registry, and the distributed PassivateAsync releases
+        // the placement lease when the resumption reaper collects a lingering terminal execution.
+        services.TryAddSingleton<RuntimeActorEvictionOptions>();
+        services.TryAddSingleton(sp => new InProcessWorkflowExecutionActorProvider(
+            sp.GetRequiredService<IWorkflowExecutionCommandExecutor>(),
+            sp.GetRequiredService<RuntimeActorEvictionOptions>()));
         services.TryAddSingleton(sp => new DistributedWorkflowExecutionActorProvider(
             sp.GetRequiredService<InProcessWorkflowExecutionActorProvider>(),
             sp.GetRequiredService<IPersistenceOperationScopeFactory>(),
