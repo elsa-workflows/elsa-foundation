@@ -16,7 +16,13 @@ public static class BpmnElementFamilies
     public const string StartEventSignal = "startEvent.signal";
     public const string EndEventNone = "endEvent.none";
     public const string EndEventTerminate = "endEvent.terminate";
+
+    /// <summary>The compensate end event family (spec 124): triggers a compensation replay, then consumes its token (none-end semantics).</summary>
+    public const string EndEventCompensation = "endEvent.compensation";
     public const string IntermediateCatchEvent = "intermediateCatchEvent.catch";
+
+    /// <summary>The compensate intermediate throw event family (spec 124): triggers a compensation replay, then routes its outbound flows.</summary>
+    public const string IntermediateThrowEventCompensation = "intermediateThrowEvent.compensation";
     public const string Task = "task";
     public const string SubProcess = "subProcess";
     public const string ExclusiveGateway = "exclusiveGateway";
@@ -51,6 +57,7 @@ public static class BpmnElementFamilies
             BpmnElementTypes.StartEvent => ResolveStartEvent(element),
             BpmnElementTypes.EndEvent => ResolveEndEvent(element),
             BpmnElementTypes.IntermediateCatchEvent => ResolveIntermediateCatchEvent(element),
+            BpmnElementTypes.IntermediateThrowEvent => ResolveIntermediateThrowEvent(element),
             BpmnElementTypes.SubProcess => SubProcess,
             BpmnElementTypes.ExclusiveGateway => ExclusiveGateway,
             BpmnElementTypes.ParallelGateway => ParallelGateway,
@@ -84,7 +91,8 @@ public static class BpmnElementFamilies
         BpmnEventDefinitionTypes.Timer,
         BpmnEventDefinitionTypes.Message,
         BpmnEventDefinitionTypes.Signal,
-        BpmnEventDefinitionTypes.Error
+        BpmnEventDefinitionTypes.Error,
+        BpmnEventDefinitionTypes.Compensation
     };
 
     private static string ResolveBoundaryEvent(BpmnElement element)
@@ -106,6 +114,17 @@ public static class BpmnElementFamilies
         StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) &&
         element.EventDefinitions.Count == 1 &&
         StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Error);
+
+    /// <summary>True when a <c>boundaryEvent</c> is a compensation boundary (spec 124): it is dormant (no listener, no outbound flows) and its handler is reached by association, not by token flow.</summary>
+    public static bool IsCompensationBoundary(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Compensation);
+
+    /// <summary>True when an element carries a compensate event definition (spec 124): a compensate throw or a compensate end event.</summary>
+    public static bool HasCompensateDefinition(BpmnElement element) =>
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Compensation);
 
     /// <summary>The host families a boundary event may attach to (spec 120 D2): the task family and embedded subprocesses.</summary>
     public static bool IsBoundaryHostFamily(BpmnElement element) =>
@@ -162,11 +181,35 @@ public static class BpmnElementFamilies
         if (element.EventDefinitions.Count == 0)
             return EndEventNone;
 
-        if (element.EventDefinitions.Count == 1 &&
-            StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Terminate))
-            return EndEventTerminate;
+        if (element.EventDefinitions.Count == 1)
+        {
+            var type = element.EventDefinitions.Single().Type;
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Terminate))
+                return EndEventTerminate;
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Compensation))
+                return EndEventCompensation;
+        }
 
         throw new BpmnExecutionException(
-            $"BPMN end event '{element.ElementId}' declares unsupported event definitions; only none and terminate end events are supported by this engine slice.");
+            $"BPMN end event '{element.ElementId}' declares unsupported event definitions; only none, terminate, and compensate end events are supported by this engine slice.");
+    }
+
+    /// <summary>
+    /// Resolves an intermediate throw event (spec 124). This slice wires it for the compensation definition only:
+    /// exactly one <see cref="BpmnEventDefinitionTypes.Compensation"/> definition → the compensate throw family;
+    /// any other (or no) definition is rejected.
+    /// </summary>
+    private static string ResolveIntermediateThrowEvent(BpmnElement element)
+    {
+        if (element.EventDefinitions.Count != 1)
+            throw new BpmnExecutionException(
+                $"BPMN intermediate throw event '{element.ElementId}' must declare exactly one event definition; it declares {element.EventDefinitions.Count}.");
+
+        var definitionType = element.EventDefinitions.Single().Type;
+        if (!StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Compensation))
+            throw new BpmnExecutionException(
+                $"BPMN intermediate throw event '{element.ElementId}' declares event definition type '{definitionType}'; only compensate throw events are supported by this engine slice.");
+
+        return IntermediateThrowEventCompensation;
     }
 }

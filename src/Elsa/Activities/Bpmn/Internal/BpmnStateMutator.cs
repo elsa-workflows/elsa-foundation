@@ -107,6 +107,53 @@ internal static class BpmnStateMutator
     public static BpmnLoopState? FindLoopByCoordinator(BpmnExecutionState state, string coordinatorTokenId) =>
         state.Loops.FirstOrDefault(loop => StringComparer.Ordinal.Equals(loop.TokenId, coordinatorTokenId));
 
+    /// <summary>Appends a <c>Registered</c> compensation-log entry (spec 124); <c>comp:N</c> derives from <see cref="BpmnExecutionState.Sequence"/> so registration order is total and deterministic.</summary>
+    public static (BpmnExecutionState State, BpmnCompensable Compensable) AddCompensable(
+        BpmnExecutionState state, string hostElementId, string handlerElementId)
+    {
+        var compensable = new BpmnCompensable(NewId(state, "comp"), hostElementId, handlerElementId, BpmnCompensableStatus.Registered);
+        return (state with { Compensables = state.Compensables.Append(compensable).ToArray(), Sequence = state.Sequence + 1 }, compensable);
+    }
+
+    public static BpmnExecutionState UpdateCompensable(BpmnExecutionState state, BpmnCompensable compensable) =>
+        state with
+        {
+            Compensables = state.Compensables
+                .Select(existing => StringComparer.Ordinal.Equals(existing.CompensableId, compensable.CompensableId) ? compensable : existing)
+                .ToArray(),
+            Sequence = state.Sequence + 1
+        };
+
+    /// <summary>Opens a compensation replay run (spec 124); <c>comprun:N</c> derives from <see cref="BpmnExecutionState.Sequence"/>.</summary>
+    public static (BpmnExecutionState State, BpmnCompensationRun Run) AddCompensationRun(
+        BpmnExecutionState state, string throwTokenId, IReadOnlyList<string> pendingCompensableIds)
+    {
+        var run = new BpmnCompensationRun(NewId(state, "comprun"), throwTokenId, pendingCompensableIds);
+        return (state with { CompensationRuns = state.CompensationRuns.Append(run).ToArray(), Sequence = state.Sequence + 1 }, run);
+    }
+
+    public static BpmnExecutionState UpdateCompensationRun(BpmnExecutionState state, BpmnCompensationRun run) =>
+        state with
+        {
+            CompensationRuns = state.CompensationRuns
+                .Select(existing => StringComparer.Ordinal.Equals(existing.RunId, run.RunId) ? run : existing)
+                .ToArray(),
+            Sequence = state.Sequence + 1
+        };
+
+    public static BpmnExecutionState RemoveCompensationRun(BpmnExecutionState state, string runId) =>
+        state with
+        {
+            CompensationRuns = state.CompensationRuns
+                .Where(run => !StringComparer.Ordinal.Equals(run.RunId, runId))
+                .ToArray(),
+            Sequence = state.Sequence + 1
+        };
+
+    /// <summary>The in-flight compensation run coordinated by <paramref name="throwTokenId"/>, or <c>null</c> when that token is not a run coordinator.</summary>
+    public static BpmnCompensationRun? FindCompensationRun(BpmnExecutionState state, string throwTokenId) =>
+        state.CompensationRuns.FirstOrDefault(run => StringComparer.Ordinal.Equals(run.ThrowTokenId, throwTokenId));
+
     public static BpmnToken GetRequiredToken(BpmnExecutionState state, string tokenId) =>
         state.Tokens.FirstOrDefault(token => StringComparer.Ordinal.Equals(token.TokenId, tokenId))
         ?? throw new Exceptions.BpmnExecutionException($"BPMN token '{tokenId}' was not found on the execution state.");

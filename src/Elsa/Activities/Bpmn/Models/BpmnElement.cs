@@ -21,7 +21,9 @@ public sealed class BpmnElement
         IReadOnlyDictionary<string, string>? properties = null,
         string? attachedToRef = null,
         bool cancelActivity = true,
-        BpmnLoopCharacteristics? loopCharacteristics = null)
+        BpmnLoopCharacteristics? loopCharacteristics = null,
+        bool isForCompensation = false,
+        string? compensationHandlerElementId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(elementId);
         ArgumentException.ThrowIfNullOrWhiteSpace(elementType);
@@ -37,6 +39,8 @@ public sealed class BpmnElement
         AttachedToRef = string.IsNullOrWhiteSpace(attachedToRef) ? null : attachedToRef.Trim();
         CancelActivity = cancelActivity;
         LoopCharacteristics = loopCharacteristics;
+        IsForCompensation = isForCompensation;
+        CompensationHandlerElementId = string.IsNullOrWhiteSpace(compensationHandlerElementId) ? null : compensationHandlerElementId.Trim();
     }
 
     [JsonPropertyName("elementId")]
@@ -87,6 +91,23 @@ public sealed class BpmnElement
     /// </summary>
     [JsonPropertyName("loopCharacteristics")]
     public BpmnLoopCharacteristics? LoopCharacteristics { get; }
+
+    /// <summary>
+    /// Marks a <b>compensation handler</b> element (spec 124): a task-family or <c>subProcess</c> element that
+    /// binds a child, participates in <b>no</b> sequence flows, and is invoked only by the compensation replay
+    /// (never by normal token flow). <c>false</c> on every ordinary element.
+    /// </summary>
+    [JsonPropertyName("isForCompensation")]
+    public bool IsForCompensation { get; }
+
+    /// <summary>
+    /// Set only on a <b>compensation boundary event</b> (a <c>boundaryEvent</c> whose single event definition is
+    /// <see cref="BpmnEventDefinitionTypes.Compensation"/>): the element id of its
+    /// <see cref="IsForCompensation"/> handler (spec 124). This models the BPMN boundary→handler association;
+    /// <c>null</c> on every other element.
+    /// </summary>
+    [JsonPropertyName("compensationHandlerElementId")]
+    public string? CompensationHandlerElementId { get; }
 }
 
 /// <summary>
@@ -98,6 +119,9 @@ public static class BpmnElementTypes
     public const string StartEvent = "startEvent";
     public const string EndEvent = "endEvent";
     public const string IntermediateCatchEvent = "intermediateCatchEvent";
+
+    /// <summary>An intermediate throw event (spec 124); this slice wires it for the compensation definition only.</summary>
+    public const string IntermediateThrowEvent = "intermediateThrowEvent";
     public const string Task = "task";
     public const string UserTask = "userTask";
     public const string ServiceTask = "serviceTask";
