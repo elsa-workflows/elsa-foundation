@@ -83,9 +83,11 @@ public sealed class RuntimeContainerScopeService(
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(activityState);
 
+        // Every container node with declarations owns its own frame — INCLUDING the root node (#972). The
+        // root node's structure variables are a normal container scope (scope id = its node id), distinct
+        // from the "workflow" root frame, which declares exactly the executable's workflow-scope variables.
         var declarations = _declarations.ProjectInitialValues(node);
-        var isWorkflowRoot = StringComparer.Ordinal.Equals(node.ExecutableNodeId, executable.RootActivity.ExecutableNodeId);
-        var ownsContainer = !isWorkflowRoot && declarations.Count > 0;
+        var ownsContainer = declarations.Count > 0;
         var pendingIteration = ResolveIterationRequest(activityState, iterationRequest);
         if (activityState.VariableFrame is not null || activityState.IterationVariableFrame is not null)
         {
@@ -288,12 +290,11 @@ public sealed class RuntimeContainerScopeService(
                 continue;
             }
 
-            var owner = frame.Kind == VariableFrameKind.Root
-                ? executable.RootActivity
+            var declarations = frame.Kind == VariableFrameKind.Root
+                ? _declarations.ProjectDeclarations(executable.WorkflowVariables)
                 : executable.NodesById.TryGetValue(frame.ScopeId, out var node)
-                    ? node
+                    ? _declarations.ProjectDeclarations(node)
                     : throw new InvalidOperationException($"Variable frame '{frame.FrameId}' references missing executable scope '{frame.ScopeId}'.");
-            var declarations = _declarations.ProjectDeclarations(owner);
             foreach (var (key, value) in frame.Values)
             {
                 if (!declarations.TryGetValue(key, out var declaration))

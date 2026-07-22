@@ -552,6 +552,27 @@ public sealed class ExecutableNodeCompiler(
             JsonSerializer.SerializeToElement(payload, DescriptorSerializerOptions));
     }
 
+    /// <summary>
+    /// Compiles the authored workflow-scope variable declarations (<c>state.Variables</c>) into the canonical
+    /// executable form carried on <see cref="WorkflowExecutable.WorkflowVariables"/>. These seed the runtime's
+    /// root variable frame (scope id <c>"workflow"</c>); the same VF-ACT-005 storage rules and literal-default
+    /// requirement apply as for container-structure declarations.
+    /// </summary>
+    public IReadOnlyCollection<RuntimeVariableDeclaration> CompileWorkflowVariables(IEnumerable<VariableDefinition> variables)
+    {
+        ArgumentNullException.ThrowIfNull(variables);
+        var authored = variables.ToArray();
+        var duplicate = authored
+            .GroupBy(variable => variable.ReferenceKey, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicate is not null)
+            throw new ArgumentException($"Workflow variable '{duplicate.Key}' is declared more than once.");
+
+        return authored
+            .Select(variable => CompileVariableDeclaration(VariableReference.WorkflowScopeId, variable))
+            .ToArray();
+    }
+
     private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
     {
         var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);

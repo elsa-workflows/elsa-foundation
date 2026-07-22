@@ -86,7 +86,8 @@ must be able to evolve without silently breaking already-suspended workflows. Th
   supported range — never a silent default-valued hydrate.
 - **Clean baseline, with one explicit rolling window.** `ElsaRuntimeDocumentVersions` sets
   minimum-readable equal to current for every Runtime kind except `executableActivityTemplate`.
-  Workflow executable v6 is a clean baseline that requires explicit input nullability. Executable activity
+  Workflow executable v7 is a clean baseline that adds the compiled workflow-scope variable declarations
+  (`workflowVariables`, #972) on top of v6's explicit input nullability. Executable activity
   template v2 retains v1 and upcasts the legacy nested runtime descriptor into the split consumer/schema/payload
   fields used by `ExecutableNode`. There is no Elsa upcaster interface, registry, or generic historical
   compatibility chain.
@@ -206,12 +207,13 @@ scope for this wave — a heavy durable dedup store was explicitly out of scope.
 
 A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Groundwork
 bridge as every other runtime kind — the **`workflowExecutable`** document kind (current and
-minimum-readable version 6 in
+minimum-readable version 7 in
 [`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs)),
 written by
 [`GroundworkWorkflowExecutableStore`](../src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutableStore.cs)
-over the `IWorkflowExecutableStore` seam, with one clean v6 golden fixture. Version 6 includes
-the pinned activity contract and explicit input-nullability data required by typed value flow. The
+over the `IWorkflowExecutableStore` seam, with one clean v7 golden fixture. Version 7 adds the compiled
+workflow-scope variable declarations (`workflowVariables`, #972) to v6's pinned activity contract and
+explicit input-nullability data required by typed value flow. The
 `InMemory` executable store registered by `WorkflowsPublishingApiFeature` is a `TryAdd` default that the
 Groundwork runtime-persistence feature overrides; when durable persistence is composed, publishing is durable
 by construction. The `PublishWorkflowRequestHandler` saves the compiled artifact and then builds its trigger
