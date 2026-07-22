@@ -12,7 +12,7 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 /// internal <see cref="GroundworkSchemaCli"/> helper (same assembly, same env-var / connection
 /// convention, <c>ELSA_DESIGN_GROUNDWORK_SQLITE_CONNECTION</c>).
 ///
-/// The exit-code contract pinned here (discovered empirically against tool preview.78) is:
+/// The exit-code contract pinned here (discovered empirically against tool preview.79) is:
 ///   * validate --offline (no connection)  -> exit 0, outcome "ready"       (schema well-formedness only)
 ///   * validate (live, unapplied target)   -> exit 0, outcome "ready"       (surfaces pendingOperations; never gates on applied state)
 ///   * plan   (unapplied target)           -> exit 2, outcome "pending"

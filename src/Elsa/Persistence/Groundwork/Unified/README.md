@@ -51,7 +51,7 @@ dotnet groundwork apply  … --connection-env <ENV_VAR> --safe
 dotnet groundwork status … --connection-env <ENV_VAR>
 ```
 
-Pinned CLI contract (tool `0.0.1-preview.78`; executable evidence in
+Pinned CLI contract (tool `0.0.1-preview.79`; executable evidence in
 `UnifiedSchemaToolContractTests`):
 
 - `validate --offline` — exit `0` with deterministic target fingerprints; mutation-free; rejects a
