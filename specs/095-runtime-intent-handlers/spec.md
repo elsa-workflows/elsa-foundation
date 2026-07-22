@@ -76,6 +76,8 @@ As a runtime operator, I receive a visible delivery failure when committed work 
 - **FR-009**: The contribution model MUST introduce no broker-specific package or contract and no dependency on the workflow-definition activity.
 - **FR-010**: The owning runtime extension-point catalog MUST document the contribution contract, registration mechanism, duplicate/conflict rules, delivery context, and failure semantics.
 
+> **Amendment (ADR 0047 D1+D2, [spec 123](../123-replaysafe-hop-fusion/spec.md), 2026-07-22 — travels with the implementing unit, same discipline as the ADR 0032 R2 FR amendment).** FR-004's "delivery ordering / queueing behavior" and any wording elsewhere that presumes **one work item per scheduler stage** (the 5–7-hop-per-activity model) is scoped to the discrete durable path. Inside a live coalescing burst, for a `SideEffectProfile.ReplaySafe` activity with the fusion toggle on, the runtime MAY execute the schedule→start→invoke stages (and a single-predecessor `ReplaySafe`-parent completion cascade) as **fused in-process handler passes** — the intermediate `StartActivity` / `InvokeActivity` (and intermediate completion-cascade) work items are then **never enqueued**. This changes dispatch locality only: the durable wire contract, command kinds, persisted identifiers, payload validation, and the delivery contract for items that ARE enqueued are unchanged, and a run with fusion disabled commits byte-identical durable state. `External`/unmarked activities keep every per-stage work item exactly as this FR describes.
+
 ### Key Entities
 
 - **Post-commit intent kind**: Stable ordinal identifier selecting the handler responsible for committed outbound runtime work.

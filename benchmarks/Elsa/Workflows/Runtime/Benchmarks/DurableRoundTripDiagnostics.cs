@@ -12,7 +12,9 @@ using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
@@ -82,7 +84,7 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
         public ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(RuntimeStorePageRequest r, CancellationToken ct = default) { Interlocked.Increment(ref c.ListPage); return inner.ListPageAsync(r, ct); }
     }
 
-    private readonly record struct RunCounts(long CheckpointCommits, int QueueOps, int ExecutableReads);
+    private readonly record struct RunCounts(long CheckpointCommits, int QueueOps, int ExecutableReads, long DispatchesPerRun, long FusedSpansPerRun, long WallMs = 0);
 
     [Theory]
     [InlineData(false, "2-node Immediate")]
@@ -109,7 +111,47 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
         Assert.Equal(immediate.ExecutableReads, coalesced.ExecutableReads);
     }
 
-    private async Task<RunCounts> RunAsync(bool coalesce, string label, WorkflowExecutable executable, int? cap = null)
+    /// <summary>
+    /// Spec 123 / ADR 0047 A/B acceptance instrument: ReplaySafe hot-loop×10 under the Coalesced cadence with the
+    /// fusion toggle OFF (no fusion) vs ON (D1 fused schedule→start→invoke — the shipped default). D2 (inline
+    /// completion cascade) is NOT yet implemented (deferred, see spec 123 tasks.md Increment D), so ON here is
+    /// <b>D1-only</b>; the D1+D2 third column lands with the D2 follow-up. Counters are the deterministic evidence
+    /// (parallel fleet sessions share the machine, so walls are indicative only and reported with a run-order swap).
+    /// Durable (Groundwork/Sqlite) and in-memory substrates are both exercised. Run on demand with:
+    /// dotnet test benchmarks/.../Elsa.Workflows.Runtime.Benchmarks.csproj \
+    ///   --filter "FullyQualifiedName~ReplaySafeFusionDispatchAb" --logger "console;verbosity=detailed"
+    /// </summary>
+    [Fact]
+    public async Task ReplaySafeFusionDispatchAb()
+    {
+        // Run-order swap for the wall caveat: none→D1 then D1→none, on each substrate.
+        var durableOffFirst = await RunAsync(true, "durable: fusion OFF (none)", BuildReplaySafeHotLoop(), cap: 256, fusionEnabled: false);
+        var durableOnFirst = await RunAsync(true, "durable: fusion ON (D1)", BuildReplaySafeHotLoop(), cap: 256, fusionEnabled: true);
+        var durableOff = await RunAsync(true, "durable: fusion OFF (none) [swap]", BuildReplaySafeHotLoop(), cap: 256, fusionEnabled: false);
+        var durableOn = await RunAsync(true, "durable: fusion ON (D1) [swap]", BuildReplaySafeHotLoop(), cap: 256, fusionEnabled: true);
+
+        var memOff = await RunInMemoryAsync("in-memory: fusion OFF (none)", BuildReplaySafeHotLoop(), fusionEnabled: false);
+        var memOn = await RunInMemoryAsync("in-memory: fusion ON (D1)", BuildReplaySafeHotLoop(), fusionEnabled: true);
+
+        output.WriteLine("=== spec 123 A/B: ReplaySafe hot-loop×10, none vs D1 (D1+D2 pending D2 follow-up) ===");
+        output.WriteLine($"durable OFF : dispatches={durableOffFirst.DispatchesPerRun} fused={durableOffFirst.FusedSpansPerRun} commits={durableOffFirst.CheckpointCommits} reads={durableOffFirst.ExecutableReads} wall={durableOffFirst.WallMs}ms (swap {durableOff.WallMs}ms)");
+        output.WriteLine($"durable ON  : dispatches={durableOnFirst.DispatchesPerRun} fused={durableOnFirst.FusedSpansPerRun} commits={durableOnFirst.CheckpointCommits} reads={durableOnFirst.ExecutableReads} wall={durableOnFirst.WallMs}ms (swap {durableOn.WallMs}ms)");
+        output.WriteLine($"in-mem  OFF : dispatches={memOff.DispatchesPerRun} fused={memOff.FusedSpansPerRun} commits={memOff.CheckpointCommits} reads={memOff.ExecutableReads} wall={memOff.WallMs}ms");
+        output.WriteLine($"in-mem  ON  : dispatches={memOn.DispatchesPerRun} fused={memOn.FusedSpansPerRun} commits={memOn.CheckpointCommits} reads={memOn.ExecutableReads} wall={memOn.WallMs}ms");
+
+        // Deterministic evidence: D1 fusion strictly cuts scheduler dispatches and engages on every ReplaySafe leaf,
+        // while OFF never fuses. (Commit count is unchanged by D1 — the completion cascade still commits per stage
+        // until D2 folds it; that is why the ON column here is labelled D1-only.)
+        Assert.True(durableOnFirst.DispatchesPerRun < durableOffFirst.DispatchesPerRun,
+            $"Durable D1 dispatches ({durableOnFirst.DispatchesPerRun}) must be < none ({durableOffFirst.DispatchesPerRun}).");
+        Assert.True(memOn.DispatchesPerRun < memOff.DispatchesPerRun,
+            $"In-memory D1 dispatches ({memOn.DispatchesPerRun}) must be < none ({memOff.DispatchesPerRun}).");
+        Assert.True(durableOnFirst.FusedSpansPerRun > 0 && memOn.FusedSpansPerRun > 0);
+        Assert.Equal(0, durableOffFirst.FusedSpansPerRun);
+        Assert.Equal(0, memOff.FusedSpansPerRun);
+    }
+
+    private async Task<RunCounts> RunAsync(bool coalesce, string label, WorkflowExecutable executable, int? cap = null, bool fusionEnabled = true)
     {
         var counters = new Counters();
         var databasePath = Path.Combine(Path.GetTempPath(), $"scratch-{Guid.NewGuid():N}.db");
@@ -152,11 +194,20 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
 
                 if (coalesce)
                     services.AddCoalescingRuntimeCheckpointPersistence(o => { if (cap is { } v) o.MaxSegmentCheckpoints = v; });
+
+                // spec 123 A/B lever: supersede the runtime default so the same graph runs fusion-OFF vs -ON.
+                services.AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = fusionEnabled });
             })
             .Build(Enumerable.Range(0, 64).Select(i => $"actexec-{i}").ToArray());
 
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var run = await harness.RunAsync(executable);
+        stopwatch.Stop();
         run.AssertWorkflowCompleted();
+
+        var dispatchDiagnostics = harness.Services.GetService<RuntimeSchedulerDispatchDiagnostics>();
+        var dispatchesPerRun = dispatchDiagnostics?.Dispatches ?? 0;
+        var fusedSpansPerRun = dispatchDiagnostics?.FusedSpans ?? 0;
 
 #pragma warning disable GW0004
         var docs = await store.QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
@@ -164,6 +215,7 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
 
         output.WriteLine($"=== {label} ===");
         output.WriteLine($"durable checkpoint-commit documents/run = {docs.TotalCount}");
+        output.WriteLine($"dispatches/run = {dispatchesPerRun}   fused-spans/run = {fusedSpansPerRun}");
         output.WriteLine($"root-write-lease + executable-store ops/run: {counters}");
         output.WriteLine($"=> per durable checkpoint flush there is 1 acquire(read+write) + 1 release(read+write) + closure find(s); " +
                          $"lease writes/run ≈ {counters.Acquire + counters.Release + counters.Renew} fsync-scale, vs {docs.TotalCount} checkpoint-marker fsyncs.");
@@ -176,7 +228,32 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
 
         var queueOps = counters.QEnqueue + counters.QDequeue + counters.QDelete + counters.QConsume +
                        counters.QClaim + counters.QComplete + counters.QRelease;
-        return new RunCounts(docs.TotalCount, queueOps, counters.Find);
+        return new RunCounts(docs.TotalCount, queueOps, counters.Find, dispatchesPerRun, fusedSpansPerRun, stopwatch.ElapsedMilliseconds);
+    }
+
+    // In-memory substrate variant (no Groundwork/Sqlite): coalesced, fusion OFF vs ON. Commits counted from the
+    // in-memory commit store; dispatch/fused-span counters from the shared diagnostics singleton.
+    private async Task<RunCounts> RunInMemoryAsync(string label, WorkflowExecutable executable, bool fusionEnabled)
+    {
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithCoalescing()
+            .ConfigureServices(services => services.AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = fusionEnabled }))
+            .Build(Enumerable.Range(0, 64).Select(i => $"actexec-{i}").ToArray());
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var run = await harness.RunAsync(executable);
+        stopwatch.Stop();
+        run.AssertWorkflowCompleted();
+
+        var dispatchDiagnostics = harness.Services.GetService<RuntimeSchedulerDispatchDiagnostics>();
+        var commitStore = harness.Services.GetService<InMemoryRuntimeCheckpointCommitStore>();
+        var commits = commitStore?.ListCommits().Count ?? 0;
+
+        output.WriteLine($"=== {label} ===");
+        output.WriteLine($"commits/run = {commits}   dispatches/run = {dispatchDiagnostics?.Dispatches ?? 0}   fused-spans/run = {dispatchDiagnostics?.FusedSpans ?? 0}   wall = {stopwatch.ElapsedMilliseconds}ms");
+
+        return new RunCounts(commits, 0, 0, dispatchDiagnostics?.Dispatches ?? 0, dispatchDiagnostics?.FusedSpans ?? 0, stopwatch.ElapsedMilliseconds);
     }
 
     private static WorkflowExecutable BuildTwoNode()
@@ -188,6 +265,15 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
     private static WorkflowExecutable BuildHotLoop()
     {
         var leaves = Enumerable.Range(0, 10).Select(i => NewNoOp($"node-loop-{i}")).ToArray();
+        var connections = Enumerable.Range(0, 9)
+            .Select(i => new FlowchartConnection(new FlowchartEndpoint(leaves[i].ExecutableNodeId), new FlowchartEndpoint(leaves[i + 1].ExecutableNodeId)))
+            .ToArray();
+        return NewFlowchart(leaves, connections, leaves[0].ExecutableNodeId);
+    }
+
+    private static WorkflowExecutable BuildReplaySafeHotLoop()
+    {
+        var leaves = Enumerable.Range(0, 10).Select(i => WorkflowExecutionHarness.NewReplaySafeProbeNode($"node-loop-{i}")).ToArray();
         var connections = Enumerable.Range(0, 9)
             .Select(i => new FlowchartConnection(new FlowchartEndpoint(leaves[i].ExecutableNodeId), new FlowchartEndpoint(leaves[i + 1].ExecutableNodeId)))
             .ToArray();

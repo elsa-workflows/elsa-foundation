@@ -44,6 +44,11 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Scheduler work handlers take TimeProvider via constructor injection; register it so GetServices<IWorkflowSchedulerWorkHandler>() can activate them.
         services.TryAddSingleton(TimeProvider.System);
 
+        // spec 123: ReplaySafe hop-fusion toggle (default ON, ratification resolution #3) + the deterministic
+        // dispatch/fusion counters (FR-008). Singleton counters survive the per-command drain scopes.
+        services.TryAddSingleton<RuntimeReplaySafeFusionOptions>();
+        services.TryAddSingleton<RuntimeSchedulerDispatchDiagnostics>();
+
         // MS-9 self-instrumentation: the engine hot path (drain/dispatch/activity-execute/checkpoint-commit) resolves an
         // IWorkflowEngineTracer. The default is a no-op that returns null spans at zero cost, so the fenced drain/commit
         // path is byte-for-byte unchanged unless WorkflowsRuntimeTracingFeature replaces it with the ActivitySource-backed
@@ -212,7 +217,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimeDomainRetryPolicy>(),
                 serviceProvider.GetRequiredService<IWorkflowEngineTracer>(),
                 serviceProvider.GetRequiredService<RuntimeSchedulerWorkClaimOptions>(),
-                serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>()));
+                serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
+                serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimeCheckpointCadenceResolver, RuntimeCheckpointCadenceResolver>();
@@ -255,6 +261,11 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowScheduleActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartActivitySchedulerWorkHandler>());
+        // spec 123 D1: the fusion driver runs the start stage inline via the concrete start handler (registered here so
+        // it is injectable) and dispatches the invoke stage through the scheduler-work-handler set. The schedule handler
+        // takes the driver as an optional dependency; it stays null-safe when the runtime is composed without it.
+        services.TryAddScoped<WorkflowStartActivitySchedulerWorkHandler>();
+        services.TryAddScoped<ReplaySafeFusionDriver>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCompleteActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCreateBookmarkSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCheckpointSchedulerWorkHandler>());
