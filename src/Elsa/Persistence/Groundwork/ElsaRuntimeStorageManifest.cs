@@ -587,8 +587,20 @@ public static class ElsaRuntimeStorageManifest
         };
     }
 
-    private static BoundedQueryDeclaration WithCursorPaging(BoundedQueryDeclaration query) =>
-        new(
+    private static BoundedQueryDeclaration WithCursorPaging(BoundedQueryDeclaration query)
+    {
+        // These cursor-paged collection reads are also counted (e.g. the workflow-instances list projects a
+        // per-instance incident count via IIncidentStateStore.CountAsync over 'list-by-workflow-execution').
+        // A bounded query carries only Documents by default, so BoundedStore.CountAsync would be rejected with
+        // "does not declare result operation 'Count'". Declare Count alongside the existing operations, and set
+        // SupportsTotalCount to keep the declaration consistent (GW-PHYSICAL-029 requires Count and total-count
+        // to agree); the count resolves against the same index route the Documents read already uses.
+        var resultOperations = query.ResultOperations is { Count: > 0 }
+            ? new HashSet<BoundedQueryResultOperation>(query.ResultOperations)
+            : new HashSet<BoundedQueryResultOperation> { BoundedQueryResultOperation.Documents };
+        resultOperations.Add(BoundedQueryResultOperation.Count);
+
+        return new(
             query.Identity,
             query.IndexIdentity,
             query.Operations,
@@ -596,12 +608,13 @@ public static class ElsaRuntimeStorageManifest
             QueryPagingSupport.Cursor,
             query.ExecutionClass,
             query.SupportsDisjunction,
-            query.SupportsTotalCount,
+            supportsTotalCount: true,
             query.SortFields,
             query.PredicateFields,
-            query.ResultOperations,
+            resultOperations,
             query.LatestPerKeyPath,
             query.ResidualPredicateFields);
+    }
 
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),

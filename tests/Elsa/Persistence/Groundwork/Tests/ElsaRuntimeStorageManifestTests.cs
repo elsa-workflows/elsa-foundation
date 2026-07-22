@@ -78,6 +78,25 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
+    public void IncidentState_ListByWorkflowExecution_Declares_Count_TerminalOperation()
+    {
+        // Regression: the workflow-instances list (GET /runtime/workflows/instances) projects a per-instance
+        // incident count via IIncidentStateStore.CountAsync over the incident 'list-by-workflow-execution' bounded
+        // query. A bounded query carries only Documents by default, so BoundedStore.CountAsync is rejected with
+        // "does not declare result operation 'Count'" and the whole list endpoint 500s. The cursor-paged incident
+        // query must therefore declare Count alongside Documents, with a consistent total-count flag.
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
+        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.IncidentStateDocumentKind);
+        var query = Assert.Single(
+            unit.PhysicalStorage!.BoundedQueries,
+            q => q.Identity == ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery);
+
+        Assert.Contains(BoundedQueryResultOperation.Documents, query.ResultOperations);
+        Assert.Contains(BoundedQueryResultOperation.Count, query.ResultOperations);
+        Assert.True(query.SupportsTotalCount);
+    }
+
+    [Fact]
     public async Task Activity_execution_inspection_declares_ordered_cursor_summary_route()
     {
         var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
