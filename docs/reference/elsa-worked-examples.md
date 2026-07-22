@@ -42,9 +42,9 @@ The observable cross-`.Core` reference today is in Design's sub-sub-domain Cores
 
 Implementations:
 
-- `Elsa.Workflows.Design.Persistence.EFCore` - EF Core implementation of the design-persistence sub-sub-domain.
+- `Elsa.Workflows.Design.Persistence.Groundwork` - Groundwork implementation of the design-persistence sub-sub-domain (the only shipped design-persistence provider; the former EF Core implementation was removed by spec 093).
 
-Impl-to-impl carve-out: implementations across unrelated sub-domains never reference each other. Implementations within the same provider family may, for example an `Elsa.Workflows.Design.Persistence.EFCore.SqlServer` provider package extending an `Elsa.Workflows.Design.Persistence.EFCore` base implementation.
+Impl-to-impl carve-out: implementations across unrelated sub-domains never reference each other. Implementations within the same provider family may reference each other — for example a provider-specific package extending a shared base implementation within the same persistence family (`Elsa.Persistence.EFCore.Sqlite` extending `Elsa.Persistence.EFCore`).
 
 ## Adapter pattern: Elsa.Locking
 

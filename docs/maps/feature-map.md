@@ -6,20 +6,17 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 102
+- Discovered feature classes: 100
 
 ## Features
 
 | Feature class | Kind | Project | Base/interface | File |
 |---|---|---|---|---|
-| EFCoreActivitiesPersistenceFeatureBase | EF Core feature base | Elsa.Activities.Design.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreActivitiesPersistenceFeatureBase.cs](../../src/Elsa/Activities/Design/Persistence/EFCore/EFCoreActivitiesPersistenceFeatureBase.cs) |
 | EFCoreOpenTelemetryPersistenceFeatureBase | EF Core feature base | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreOpenTelemetryPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/EFCoreOpenTelemetryPersistenceFeatureBase.cs) |
 | EFCoreStructuredLogsPersistenceFeatureBase | EF Core feature base | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreStructuredLogsPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/EFCoreStructuredLogsPersistenceFeatureBase.cs) |
-| EFCoreWorkflowsPersistenceFeatureBase | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreWorkflowsPersistenceFeatureBase.cs](../../src/Elsa/Workflows/Design/Persistence/EFCore/EFCoreWorkflowsPersistenceFeatureBase.cs) |
-| SqliteActivitiesDesignPersistenceShellFeature | EF Core feature base | Elsa.Activities.Design.Persistence.EFCore.Sqlite | EFCoreActivitiesPersistenceFeatureBase | [SqliteActivitiesDesignPersistenceShellFeature.cs](../../src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/SqliteActivitiesDesignPersistenceShellFeature.cs) |
 | SqliteOpenTelemetryPersistenceShellFeature | EF Core feature base | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite | EFCoreOpenTelemetryPersistenceFeatureBase | [SqliteOpenTelemetryPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/SqliteOpenTelemetryPersistenceShellFeature.cs) |
 | SqliteStructuredLogsPersistenceShellFeature | EF Core feature base | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite | EFCoreStructuredLogsPersistenceFeatureBase | [SqliteStructuredLogsPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/SqliteStructuredLogsPersistenceShellFeature.cs) |
-| SqliteWorkflowsDesignPersistenceShellFeature | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | EFCoreWorkflowsPersistenceFeatureBase | [SqliteWorkflowsDesignPersistenceShellFeature.cs](../../src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/SqliteWorkflowsDesignPersistenceShellFeature.cs) |
+| ActivitiesBpmnFeature | direct IShellFeature | Elsa.Activities.Bpmn | IShellFeature | [ActivitiesBpmnFeature.cs](../../src/Elsa/Activities/Bpmn/ActivitiesBpmnFeature.cs) |
 | ActivitiesControlFlowFeature | direct IShellFeature | Elsa.Activities.ControlFlow | IShellFeature | [ActivitiesControlFlowFeature.cs](../../src/Elsa/Activities/ControlFlow/ActivitiesControlFlowFeature.cs) |
 | ActivitiesDesignReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation | IShellFeature | [ActivitiesDesignReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |
 | ActivitiesFlowchartFeature | direct IShellFeature | Elsa.Activities.Flowchart | IShellFeature | [ActivitiesFlowchartFeature.cs](../../src/Elsa/Activities/Flowchart/ActivitiesFlowchartFeature.cs) |
@@ -95,6 +92,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeSchedulingFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeSchedulingFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeSchedulingFeature.cs) |
 | WorkflowsRuntimeTracingFeature | direct IShellFeature | Elsa.Workflows.Runtime.Tracing | IShellFeature | [WorkflowsRuntimeTracingFeature.cs](../../src/Elsa/Workflows/Runtime/Tracing/WorkflowsRuntimeTracingFeature.cs) |
 | WorkflowsRuntimeTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature | [WorkflowsRuntimeTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs) |
+| ActivitiesBpmnInterchangeFeature | FastEndpoints feature | Elsa.Activities.Bpmn.Interchange | FastEndpointsFeatureBase | [ActivitiesBpmnInterchangeFeature.cs](../../src/Elsa/Activities/Bpmn/Interchange/ActivitiesBpmnInterchangeFeature.cs) |
 | ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
 | ApiCapabilitiesFeature | FastEndpoints feature | Elsa.Api.Capabilities | FastEndpointsFeatureBase | [ApiCapabilitiesFeature.cs](../../src/Elsa/Api/Capabilities/ApiCapabilitiesFeature.cs) |
 | AspNetCoreIdentityFeature | FastEndpoints feature | Elsa.Foundation.Identity.AspNetCoreIdentity | FastEndpointsFeatureBase | [AspNetCoreIdentityFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/AspNetCoreIdentityFeature.cs) |

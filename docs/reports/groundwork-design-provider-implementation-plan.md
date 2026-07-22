@@ -1,6 +1,11 @@
 # Groundwork design persistence provider — implementation plan
 
-Status: **Implemented for Elsa-side provider switch** (Groundwork foundation proven and consumed). Owner program goal:
+Status: **Complete — Groundwork is the only design-persistence provider.** Spec 093 (US1–US4, issue
+[#641](https://github.com/elsa-workflows/elsa-foundation/issues/641)) merged the bounded four-provider design lane
+and deleted the EF design implementation family together with its in-memory query fallback. Every design read and
+write now runs as a bounded, server-side Groundwork query across the four mandatory providers (SQLite, SQL Server,
+PostgreSQL, MongoDB). The narrative below is retained as the design/decision history that produced that outcome; the
+current-state summary is in [Landed (spec 093)](#landed-spec-093) at the end. Owner program goal:
 [Groundwork persistence readiness](../program-goals/groundwork-persistence-readiness.md).
 Companion verdict: [Groundwork host-configurable persistence feasibility](groundwork-host-configurable-persistence-feasibility.md).
 Companion handoff: [Groundwork closed-query capability spec](groundwork-closed-query-capability-spec.md).
@@ -352,7 +357,15 @@ repo previously hosted locally. Elsa now consumes those upstream APIs instead of
   Groundwork activity tests cover the expanded activity store contract, and the Groundwork workflow/activity
   extension-point catalogs plus generated maps record the replacement-contract registrations.
 
-### Remaining optimization
-- `gw-fallback-cleanup`: drop the `GroundworkReadStore` in-memory operator fallback where
-  `ClosedQueryNativeSupport.Evaluate` reports native support. Requires the in-memory test doubles to
-  faithfully implement the `PortableDocumentQuery` overloads (currently NotSupported stubs).
+### Landed (spec 093)
+`gw-fallback-cleanup` is **done**, and with it the whole design-provider program. Spec 093 (US1–US4) deleted the
+`GroundworkReadStore` in-memory operator fallback, `ClosedQueryNativeSupport`, and the load-all evaluator, along
+with the entire temporary EF design lane (`Elsa.Workflows.Design.Persistence.EFCore[.Sqlite]`,
+`Elsa.Activities.Design.Persistence.EFCore[.Sqlite]`). The provider-neutral design contracts and orchestration
+(`IDraftStateDiffEngine`, `WorkflowDefinitionLookup`, the command interfaces) live in the `*.Design.Persistence.Core`
+layers; the only concrete implementation family is `*.Design.Persistence.Groundwork`. Every design read/write now
+resolves to a bounded, server-side Groundwork query — no client-side operator fallback remains — and this is guarded
+by `tests/Elsa/Architecture/DesignPersistenceBoundedQueryTests.cs` and the design-persistence boundary tests. The
+EF-core surface ratchet (`tests/Elsa/Architecture/Baselines/ef-core-surface.json`) holds zero design-persistence
+entries. The gate-5 performance criterion was replaced by the ratified 2026-07-22 absolute-budget amendment
+(19/19 budget rows pass); see [`groundwork-design-persistence-performance.md`](groundwork-design-persistence-performance.md).

@@ -129,8 +129,7 @@ not automatic constitution violations.
 | Activities design — reconciliation sources | [`src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Activities design — CLR reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
 | Activities design — JSON reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
-| Activities design — persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
-| Activities design — Groundwork persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Activities design — persistence commands + lookup (Groundwork) | [`src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Activities design API — catalog and availability services | [`src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md) |
 | Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md`](src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md) |
 
@@ -141,8 +140,7 @@ not automatic constitution violations.
 | Workflows design — model, activity-input option providers, mutation events, commands, diff engine | [`src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md) |
 | Workflows design — draft validators | [`src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md) |
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
-| Workflows design — persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
-| Workflows design — Groundwork persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Workflows design — persistence commands + diff engine (Groundwork) | [`src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Workflows publishing — policy, slot authority, preflight, projection reconciliation, compiler, and persistence stores | [`src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
 | Workflows publishing core — authority and projection contracts | [`src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
