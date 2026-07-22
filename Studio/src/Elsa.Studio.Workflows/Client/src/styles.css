@@ -6697,3 +6697,65 @@ html[data-theme="brass-instrument"] .wf-chip {
 .wf-conversion-plan-fingerprint {
   font-size: 10px;
 }
+
+/* Progressive disclosure of the authored-conversion control on property rows. */
+.wf-property-row-header-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wf-conversion-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: var(--wf-radius);
+  background: none;
+  color: var(--wf-muted-text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.wf-conversion-toggle:hover,
+.wf-conversion-toggle:focus-visible {
+  border-color: color-mix(in srgb, var(--wf-accent) 36%, var(--wf-border));
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent);
+  outline: none;
+}
+
+.wf-conversion-toggle.authored {
+  border-color: color-mix(in srgb, var(--wf-accent) 36%, var(--wf-border));
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent);
+}
+
+.wf-conversion-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--wf-border);
+  border-radius: 999px;
+  background: var(--wf-panel-muted);
+  color: var(--wf-muted-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-conversion-chip:hover,
+.wf-conversion-chip:focus-visible {
+  border-color: color-mix(in srgb, var(--wf-accent) 36%, var(--wf-border));
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent);
+  outline: none;
+}

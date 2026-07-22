@@ -48,6 +48,16 @@ export function readConversionMode(request: unknown): ConversionMode {
   return conversionModes.has(mode) ? mode as ConversionMode : "auto";
 }
 
+/**
+ * True when the request is absent or the pure legacy default (Auto with nothing else authored) —
+ * the same shape `withConversionMode` collapses to null. Requests carrying preserved unknown
+ * fields (`limits`, `options`) are not default so the editor never hides them.
+ */
+export function isDefaultConversion(request: unknown): boolean {
+  if (!isRecord(request)) return true;
+  return readConversionMode(request) === "auto" && Object.keys(request).every(key => key === "mode");
+}
+
 export function readConversionProfile(request: unknown): ConversionProfileReference | null {
   if (!isRecord(request) || !isRecord(request.profile)) return null;
   const id = readString(request.profile.id);

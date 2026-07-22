@@ -17,12 +17,15 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // shared stylesheet; measured paths moved 352.48 → 358.69 kB and 341.54 → 343.31 kB). The definitions
 // landing budget was raised 2 kB for engine-intrinsic authoring (issue #929: Set Variable / Set Output
 // intrinsic helpers reached from the shared adapter + intrinsic inspector styles in the shared
-// stylesheet; the measured definitions path moved 358.69 → 362.31 kB).
+// stylesheet; the measured definitions path moved 358.69 → 362.31 kB). Both landing budgets were
+// raised another 2 kB for the conversion-control progressive disclosure (icon toggle + chip markup in
+// the shared properties panel and their styles in the shared stylesheet; the measured paths moved to
+// 364.13 kB and 348.63 kB).
 const budgets = {
   entryJavaScript: 125_000,
   stylesheet: 185_000,
-  definitionsLandingTotal: 364_000,
-  upgradeLandingTotal: 348_000,
+  definitionsLandingTotal: 366_000,
+  upgradeLandingTotal: 350_000,
   individualChunk: 500_000
 };
 

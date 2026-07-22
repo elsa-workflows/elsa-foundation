@@ -1,5 +1,5 @@
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
-import { Maximize2, X } from "lucide-react";
+import { Maximize2, SlidersHorizontal, X } from "lucide-react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
 import type {
   StudioActivityDescriptor,
@@ -37,6 +37,7 @@ import {
   builtInConversionProfiles,
   conversionModeDescriptors,
   describeInferredSource,
+  isDefaultConversion,
   readConversionMode,
   readConversionProfile,
   withConversionMode,
@@ -280,13 +281,23 @@ function PropertyRow({
   ));
   const [expanded, setExpanded] = useState(false);
   const [focusRequested, setFocusRequested] = useState(false);
+  const [conversionOpen, setConversionOpen] = useState(false);
   const [pendingTransition, setPendingTransition] = useState<{
     descriptor: StudioExpressionDescriptor;
     nextValue: unknown;
   } | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const cancelTransitionRef = useRef<HTMLButtonElement>(null);
+  const conversionToggleRef = useRef<HTMLButtonElement>(null);
   const transitionDescriptionId = useId();
+  const conversionRegionId = useId();
+  const conversionMode = wrapped ? readConversionMode(wrapped.conversion) : "auto";
+  const conversionAuthored = wrapped ? !isDefaultConversion(wrapped.conversion) : false;
+  const conversionModeDisplayName =
+    conversionModeDescriptors.find(descriptor => descriptor.mode === conversionMode)?.displayName ?? "Auto";
+  const conversionCaption = wrapped
+    ? `${describeInferredSource(wrapped.expression.type, wrapped.expression.value, conversionMode)} → ${formatTypeName(input.typeName)}`
+    : "";
 
   useEffect(() => {
     if (!focusRequested) return;
@@ -305,6 +316,19 @@ function PropertyRow({
     const frame = requestAnimationFrame(() => cancelTransitionRef.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [pendingTransition]);
+
+  useEffect(() => {
+    if (!conversionOpen) return;
+    // Scoped to the conversion control — a bare trigger query would hit the row's own syntax picker.
+    const frame = requestAnimationFrame(() =>
+      rowRef.current?.querySelector<HTMLButtonElement>(".wf-conversion-control .wf-syntax-picker-trigger")?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [conversionOpen]);
+
+  const closeConversion = () => {
+    setConversionOpen(false);
+    requestAnimationFrame(() => conversionToggleRef.current?.focus());
+  };
 
   const setRaw = (nextValue: unknown) => {
     const next = wrapped ? withLiteralValue(wrapped, nextValue) : nextValue;
@@ -432,7 +456,23 @@ function PropertyRow({
     <div ref={rowRef} className="wf-property-row">
       <div className="wf-property-row-header">
         <label>{input.displayName || input.name}</label>
-        <span>{formatTypeName(input.typeName)}</span>
+        <div className="wf-property-row-header-meta">
+          <span>{formatTypeName(input.typeName)}</span>
+          {wrapped ? (
+            <button
+              ref={conversionToggleRef}
+              type="button"
+              className={conversionAuthored ? "wf-conversion-toggle authored" : "wf-conversion-toggle"}
+              aria-label={`${input.displayName || input.name} conversion: ${conversionModeDisplayName} (${conversionCaption})`}
+              title={`Conversion: ${conversionModeDisplayName} (${conversionCaption})`}
+              aria-expanded={conversionOpen}
+              aria-controls={conversionRegionId}
+              onClick={() => (conversionOpen ? closeConversion() : setConversionOpen(true))}
+            >
+              <SlidersHorizontal size={13} />
+            </button>
+          ) : null}
+        </div>
       </div>
       {input.description ? <p>{input.description}</p> : null}
       {wrapped && !useInlineSyntaxPicker ? (
@@ -478,15 +518,39 @@ function PropertyRow({
           {renderExpressionDiagnostics(inlineDiagnostics)}
         </>
       )}
-      {wrapped ? (
-        <ConversionControl
-          inputLabel={input.displayName || input.name}
-          targetTypeName={input.typeName}
-          wrapped={wrapped}
-          profiles={conversionProfiles}
-          disabled={readOnly}
-          onChange={next => onChange(writeInputValue(activity, input, next))}
-        />
+      {wrapped && (conversionOpen || conversionAuthored) ? (
+        <div id={conversionRegionId} className="wf-conversion-region">
+          {conversionOpen ? (
+            <div
+              onKeyDown={event => {
+                // The nested mode picker preventDefaults its own Escape (closing its listbox) — only
+                // an unhandled Escape collapses the reveal.
+                if (event.key !== "Escape" || event.defaultPrevented) return;
+                event.preventDefault();
+                event.stopPropagation();
+                closeConversion();
+              }}
+            >
+              <ConversionControl
+                inputLabel={input.displayName || input.name}
+                targetTypeName={input.typeName}
+                wrapped={wrapped}
+                profiles={conversionProfiles}
+                disabled={readOnly}
+                onChange={next => onChange(writeInputValue(activity, input, next))}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="wf-conversion-chip"
+              aria-label={`Edit ${input.displayName || input.name} conversion: ${conversionModeDisplayName} (${conversionCaption})`}
+              onClick={() => setConversionOpen(true)}
+            >
+              {conversionModeDisplayName} · {conversionCaption}
+            </button>
+          )}
+        </div>
       ) : null}
       {pendingTransition ? (
         <div
@@ -555,7 +619,10 @@ function PropertyRow({
           propertyEditors={editors}
           expressionEditors={expressionEditors}
           disabled={readOnly}
+          wrapped={wrapped}
+          conversionProfiles={conversionProfiles}
           onChange={setRaw}
+          onConversionChange={next => onChange(writeInputValue(activity, input, next))}
           onSyntaxChange={setSyntax}
           onClose={closeExpanded}
         />
@@ -576,7 +643,10 @@ function ExpandedPropertyEditor({
   propertyEditors,
   expressionEditors,
   disabled,
+  wrapped,
+  conversionProfiles,
   onChange,
+  onConversionChange,
   onSyntaxChange,
   onClose
 }: {
@@ -591,7 +661,10 @@ function ExpandedPropertyEditor({
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   disabled: boolean;
+  wrapped: WrappedActivityInputValue | null;
+  conversionProfiles: ConversionProfileReference[];
   onChange(value: unknown): void;
+  onConversionChange(next: WrappedActivityInputValue): void;
   onSyntaxChange(value: string): void;
   onClose(): void;
 }) {
@@ -699,6 +772,16 @@ function ExpandedPropertyEditor({
             <UnavailableExpressionEditor syntax={syntax} />
           )}
           {renderExpressionDiagnostics(diagnostics)}
+          {wrapped ? (
+            <ConversionControl
+              inputLabel={displayName}
+              targetTypeName={input.typeName}
+              wrapped={wrapped}
+              profiles={conversionProfiles}
+              disabled={disabled}
+              onChange={onConversionChange}
+            />
+          ) : null}
         </div>
         <footer>
           <span>Changes update the draft immediately.</span>
