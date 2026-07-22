@@ -99,7 +99,10 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBoundedDocumentStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IShellInitializer));
+        // Two distinct shell initializers are expected: the document-store initializer (Prepare)
+        // and the schema readiness guard (Start). Idempotency means re-registration adds no third.
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkSchemaReadinessTask));
+        Assert.Equal(2, services.Count(descriptor => descriptor.ServiceType == typeof(IShellInitializer)));
     }
 
     [Fact]

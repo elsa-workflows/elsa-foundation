@@ -50,7 +50,7 @@ public sealed class ProviderNativePlanTests
             declared.SequenceEqual(covered, StringComparer.Ordinal),
             $"Missing native route scenarios: {string.Join(", ", declared.Except(covered, StringComparer.Ordinal))}. " +
             $"Unexpected native route scenarios: {string.Join(", ", covered.Except(declared, StringComparer.Ordinal))}.");
-        Assert.Equal(65, declared.Length);
+        Assert.Equal(66, declared.Length);
         Assert.DoesNotContain(
             RouteKey(SecretsStorageManifest.SecretDocumentKind, SecretsStorageManifest.SearchFilteredQuery),
             declared);
@@ -111,9 +111,11 @@ public sealed class ProviderNativePlanTests
                         scenario.Query.ResultOperation);
                     if (scenario.Query.QueryIdentity == ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery)
                     {
+                        // Compare the logical identity: the provider-physical Identifier is
+                        // sanitized and length-truncated per provider.
                         Assert.Equal(
                             ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex,
-                            plan.IndexName?.Identifier);
+                            plan.IndexName?.LogicalName);
                     }
                     var request = NativePlanRequest(
                         scenario,
@@ -185,7 +187,7 @@ public sealed class ProviderNativePlanTests
                 }
             }
 
-            Assert.Equal(55, results.Count);
+            Assert.Equal(56, results.Count);
             Assert.Equal(
                 results.Count,
                 results.Select(result => RouteKey(
@@ -481,6 +483,10 @@ public sealed class ProviderNativePlanTests
                         ? "native-other"
                         : "native-target",
                     value),
+            // The bound itself satisfies '<=' while any appended suffix is ordinally greater,
+            // so the noise row falls strictly outside the bound.
+            QueryComparisonOperator.LessThanOrEqual =>
+                GroundworkNativeRouteProjectedValue.String(field, value, $"{value}~"),
             _ => throw new InvalidOperationException(
                 $"Native-route string oracle does not support '{operation}'.")
         };
@@ -869,6 +875,15 @@ public sealed class ProviderNativePlanTests
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableTimerDueTimeField),
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableTimerIdField)
                 ]),
+            Documents(
+                ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
+                ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery,
+                // Mirrors GroundworkDurableTimerStore.ClaimOrderUpperBound: "{ticks:D19}.~" caps the
+                // "{ticks:D19}.{hash}" claim-order key space at the as-of instant.
+                [LessThanOrEqual(
+                    ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField,
+                    $"{Now.UtcTicks:D19}.~")],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField)]),
             Documents(
                 ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
                 ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery,
