@@ -43,9 +43,7 @@ These are registered alongside any others and dispatched by a single aggregating
 - **Register:** `services.AddEntitySavingHandler<TDbContext, TEntity, THandler>()` or scan with `services.AddEntitySavingHandlersFrom(assembly)`.
 - **Consumed by:** the single `ApplyEntitySavingHandlers : IEventHandler<OnEntitySaving>` (this assembly), registered once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`.
 
-**Known implementations (shipped):**
-- `Elsa.Activities.Design.Persistence.EFCore` — `ActivityDefinitionVersionSavingHandler` *(cross-domain)*
-- `Elsa.Workflows.Design.Persistence.EFCore` — `WorkflowDefinitionVersionSavingHandler`, `WorkflowDefinitionDraftSavingHandler` *(cross-domain)*
+**Known implementations (shipped):** none currently in-repo. The design-domain handlers were removed when design persistence moved to Groundwork (spec 093), and the surviving diagnostics EF lanes map their columns directly without `[NotMapped]` projections. The seam remains for domain persistence features that need it.
 
 ### `IEntityLoadingHandler<TDbContext, TEntity>` *(Feature contract — `Elsa.Persistence.EFCore`)*
 - **Kind:** entity Handler (action-named contributor). **Lives in:** `Elsa.Persistence.EFCore` (`Contracts/`).
@@ -54,9 +52,7 @@ These are registered alongside any others and dispatched by a single aggregating
 - **Register:** `services.AddEntityLoadingHandler<TDbContext, TEntity, THandler>()` or scan with `services.AddEntityLoadingHandlersFrom(assembly)`.
 - **Consumed by:** the single `ApplyEntityLoadingHandlers : IEventHandler<OnEntityLoading>` (this assembly), registered once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`.
 
-**Known implementations (shipped):**
-- `Elsa.Activities.Design.Persistence.EFCore` — `ActivityDefinitionVersionLoadingHandler` *(cross-domain)*
-- `Elsa.Workflows.Design.Persistence.EFCore` — `WorkflowDefinitionVersionLoadingHandler`, `WorkflowDefinitionDraftLoadingHandler` *(cross-domain)*
+**Known implementations (shipped):** none currently in-repo. The design-domain handlers were removed when design persistence moved to Groundwork (spec 093), and the surviving diagnostics EF lanes map their columns directly without `[NotMapped]` projections. The seam remains for domain persistence features that need it.
 
 ### Out-of-band hooks (NOT event-dispatched)
 
@@ -119,8 +115,7 @@ Heading convention per research item R4: `### <EventClassName>`.
 - Exactly one `IEventHandler<OnEntitySaving>`: `ApplyEntitySavingHandlers` (this assembly). Registered once per process by `EFCorePersistenceShellFeatureBase.ConfigureServices` via `TryAddEnumerable` (dedupes by implementation type even with several EF Core persistence features enabled).
 
 **Contributing handlers (`IEntitySavingHandler<,>` impls).**
-- `ActivityDefinitionVersionSavingHandler` (`Elsa.Activities.Design.Persistence.EFCore`) — serialises `Inputs`/`Outputs`/`DesignFacets` and the opaque descriptor payload into `DescriptorPayloadSource`; stable provider/consumer identity is producer-owned. The legacy `DescriptorType` column is an obsolete EF-only compatibility mapping, not runtime dispatch identity.
-- `WorkflowDefinitionVersionSavingHandler` / `WorkflowDefinitionDraftSavingHandler` (`Elsa.Workflows.Design.Persistence.EFCore`) — serialise the workflow `State` / version payloads into their `*Source` columns.
+- None currently in-repo (the design-domain handlers were removed when design persistence moved to Groundwork, spec 093). The seam remains: a domain persistence feature registers typed handlers and the aggregator dispatches them.
 
 **Ordering guarantees.**
 - Fires for each modified entity BEFORE the underlying write (`SaveChangesAsync` / raw upsert SQL).
@@ -142,14 +137,13 @@ Heading convention per research item R4: `### <EventClassName>`.
 
 **Publication sites.**
 - `EFCoreReadStore.QueryAsync` / `FirstOrDefaultAsync` (this assembly) — the **read path** behind every named read port. Published for every entity returned by a port read (per-item and per-list fan-out). These results are `AsNoTracking`; hydration is in-memory.
-- `UpdateDraft.LoadAndHydrate` (`Elsa.Workflows.Design.Persistence.EFCore`) — the **mutate-then-save path**. The command loads the Draft through its own **tracked** `DbContextFactory` context (NOT a named read store, which returns a detached `AsNoTracking` entity it could not save), then publishes `OnEntityLoading` Sequential so the aggregator hydrates the already-tracked instance via the same context that will `SaveChangesAsync`.
+- Mutate-then-save commands — the **mutate-then-save path**. A command that loads an entity through its own **tracked** `DbContextFactory` context (NOT a named read store, which returns a detached `AsNoTracking` entity it could not save) publishes `OnEntityLoading` Sequential itself, so the aggregator hydrates the already-tracked instance via the same context that will `SaveChangesAsync`.
 
 **Expected handler.**
 - Exactly one `IEventHandler<OnEntityLoading>`: `ApplyEntityLoadingHandlers` (this assembly). Registered once per process by `EFCorePersistenceShellFeatureBase.ConfigureServices` via `TryAddEnumerable`.
 
 **Contributing handlers (`IEntityLoadingHandler<,>` impls).**
-- `ActivityDefinitionVersionLoadingHandler` (`Elsa.Activities.Design.Persistence.EFCore`) — deserialises `*Source` + the implementation-descriptor payload (via the descriptor-kind registry) back into rich projections.
-- `WorkflowDefinitionVersionLoadingHandler` / `WorkflowDefinitionDraftLoadingHandler` (`Elsa.Workflows.Design.Persistence.EFCore`) — hydrate the workflow `State` from its `StateSource` column.
+- None currently in-repo (the design-domain handlers were removed when design persistence moved to Groundwork, spec 093). The seam remains: a domain persistence feature registers typed handlers and the aggregator dispatches them.
 
 **Ordering guarantees.**
 - Fires AFTER materialisation, BEFORE the entity is read/returned by the caller.

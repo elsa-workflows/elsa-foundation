@@ -14,8 +14,8 @@ namespace Elsa.Persistence.EFCore.Events;
 /// <para>
 /// Publication sites: <c>EFCoreQueries</c> publishes it for every entity returned by the
 /// read-only (<c>AsNoTracking</c>) query path; mutate-then-save commands that load through their
-/// own tracked context (e.g. <c>UpdateDraft.LoadAndHydrate</c>) publish it themselves so the
-/// already-tracked instance is hydrated by the same context that will save it.
+/// own tracked context publish it themselves so the already-tracked instance is hydrated by the
+/// same context that will save it.
 /// </para>
 /// <para>
 /// Published on the default (Sequential) strategy so hydration completes before the entity is
