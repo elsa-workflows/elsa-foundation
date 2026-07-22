@@ -177,3 +177,64 @@ ReplaySafe. Rationale (recorded for the plan):
 This is the plan of record for the code increment (see tasks.md). It is deliberately handed off with the
 guardrail harnesses specified rather than implemented, because byte-identical + crash-convergence are
 empirical gates that must be run green before the driver is trustworthy.
+
+## 8. De-risking discovered while starting the implementation (2026-07-22, load recovered)
+
+These are concrete findings from beginning Increment A — they materially change the plan and are recorded
+so the implementer starts ahead. Baseline confirmed green before any change:
+`Elsa.Workflows.Runtime.Tests` **1378 passed**, `Elsa.Activities.Runtime.Tests` **196 passed**.
+
+### 8.1 The D1 driver needs NO surgery on the 1310-line invoke handler (major de-risk)
+The spec assumed extracting the invoke stage core. It is not necessary for **D1**. D1 = fuse
+schedule→start→invoke into one dispatch; D2 (the completion cascade) is separate. So the driver can:
+1. run the **schedule** core in *fused mode* → commit `ActivityScheduled` **without** the `StartActivity`
+   post-commit intent; keep the `StartActivity` work item in hand;
+2. run the **start** core in *fused mode* → commit `ActivityStarted` **without** the `InvokeActivity`
+   intent; keep the `InvokeActivity` work item;
+3. dispatch that `InvokeActivity` item through the **existing, unchanged**
+   `WorkflowInvokeActivitySchedulerWorkHandler.HandleAsync` **inline** — it commits its completion (with
+   the parent-completion intent) exactly as today; the completion cascade then flows normally (that is D1
+   only). The intermediate `StartActivity`/`InvokeActivity` items are never enqueued.
+
+Only the **schedule** and **start** handlers need a "fused-mode" commit builder (omit the continuation
+post-commit intent, return the next work item). The invoke handler is untouched by D1. This removes the
+single biggest risk in the original plan. `WorkflowInvokeActivitySchedulerWorkHandler.CommitCompletedActivityAsync`
++ `NewCompletionWorkItem` (lines ~1055–1193) is the D2 seam — leave it for D2.
+
+### 8.2 Byte-identity scope: compare checkpoint + state, NOT the transient outbox
+In fused mode the intermediate commits omit their continuation post-commit intents (the driver runs the
+next stage inline), so the **outbox rows differ** between fused and discrete. This is fine and expected:
+the ADR's "byte-identical checkpoint/state documents" and the spec-109 harness
+(`RuntimeInProcessHopFastPathGuardrailTests.FingerprintCommits`/`FingerprintStates`) compare the
+`RuntimeCheckpointCommit` records + terminal activity/workflow state — the outbox is transient delivery
+bookkeeping (reconciled/cleared at flush) and is not fingerprinted. **The guardrail as written already
+compares the right thing.** Do not add the outbox to the fingerprint.
+
+### 8.3 Inline reads already see buffered state (confirmed)
+`src/Elsa/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs` overlays
+`IActivityExecutionStateStore` reads through the session (`RuntimeCoalescingSession.TryGetActivity` /
+`MergeActivityList`). So when the driver runs the start core inline after buffering the schedule commit,
+`FindAsync(scheduled)` returns the buffered `Scheduled` state from the overlay — exactly as the discrete
+coalesced path already works hop-to-hop. No new read plumbing.
+
+### 8.4 TWO test-harness prerequisites must be built BEFORE the guardrail can exercise fusion
+The reusable end-to-end harness is `tests/Elsa/Activities/Testing/WorkflowExecutionHarness.cs` (drives a
+real flowchart to completion over an in-memory durable substrate; `RunAsync` + `NewProbeNode`). The
+spec-109 guardrail (`RuntimeInProcessHopFastPathGuardrailTests`) is the fingerprint template. But:
+- **(P1) The harness runs Immediate, not Coalesced.** Fusion only engages inside a coalescing burst
+  (research §2). The harness has no coalescing configuration knob today (only
+  `WorkflowOutputReadBackEndToEndExecutionTests` touches coalescing in the Activities.Runtime suite). A
+  **coalesced-mode harness path** must be added first (register `IRuntimeCoalescingDrainScopeFactory` +
+  `CoalescingRuntimeCheckpointPersistenceOptions` + the coalescing store decorators + cadence resolver),
+  so the guardrail can drive the SAME workflow coalesced with fusion ON vs OFF.
+- **(P2) `ProbeActivity` is unmarked ⇒ `External`.** `NewProbeNode` derives the profile from
+  `ProbeActivity`'s `ActivitySideEffectProfileAttribute` (`WorkflowExecutionHarness.cs` ~L558–560), and
+  `ProbeActivity` has none. A **`ReplaySafe` probe activity** (or a `NewProbeNode(..., replaySafe: true)`
+  overload that pins a ReplaySafe contract) is required, else fusion never fires and the guardrail is
+  vacuous. Do NOT flip `ProbeActivity` to ReplaySafe globally — it would perturb unrelated External
+  attempt/poison suites (guardrail 3). Add a separate ReplaySafe probe.
+
+These two prerequisites are now **Increment A0** in tasks.md — they are the true first step, ahead of the
+stage-core extraction, because without them Increment C's guardrail cannot be written to actually engage
+fusion, and an un-engaged guardrail would pass vacuously (the exact failure mode the determinism
+self-check exists to catch, but only if fusion is proven to engage via the dispatch counter).

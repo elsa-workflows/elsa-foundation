@@ -3,6 +3,34 @@
 Dependency-ordered. Each increment is one review-able commit. File paths are absolute-from-repo-root.
 Locate classes by name where the `Core/Services` vs `Services` folder split varies.
 
+> **Baseline (verify before starting, confirmed green 2026-07-22):**
+> `Elsa.Workflows.Runtime.Tests` 1378 passed · `Elsa.Activities.Runtime.Tests` 196 passed.
+>
+> **Read [research.md §8](./research.md) first — it de-risks this plan substantially:**
+> - **D1 needs NO invoke-handler surgery** (§8.1): only the schedule + start handlers get a fused-mode
+>   commit builder; the driver dispatches the existing invoke handler inline. This supersedes task A3 below
+>   (invoke-core extraction) for D1 — A3 is deferred to the D2 seam only.
+> - **Byte-identity compares checkpoint+state, not the outbox** (§8.2) — the spec-109 fingerprint is
+>   already correct; do not add the outbox.
+> - **Inline reads already overlay through the coalescing session** (§8.3) — no new read plumbing.
+> - **Two harness prerequisites gate the guardrail** (§8.4) — now **Increment A0**, the true first step.
+
+## Increment A0 — test-harness prerequisites (MUST precede the guardrail; without these C's guardrail is vacuous)
+
+- [ ] **A0.1** Add a **coalesced-mode path to `WorkflowExecutionHarness`**
+  (`tests/Elsa/Activities/Testing/WorkflowExecutionHarness.cs`): a `WithCoalescing(maxSegmentCheckpoints)`
+  builder that registers `IRuntimeCoalescingDrainScopeFactory`, `CoalescingRuntimeCheckpointPersistenceOptions`,
+  the coalescing store decorators (`CoalescingRuntimeStateStores` etc.), and a cadence resolver, so the
+  same workflow can be driven coalesced. Model the registration on how the coalescing feature wires them in
+  `RuntimeCoreServiceCollectionExtensions` / the coalescing tests (`RuntimeCheckpointCoalescingTests`).
+- [ ] **A0.2** Add a **`ReplaySafe` probe activity** (e.g. `ReplaySafeProbeActivity` marked
+  `[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]`) + a `NewProbeNode(..., replaySafe: true)`
+  overload (or a `NewReplaySafeProbeNode`) so a fusion shape's leaves pin a ReplaySafe contract. Do NOT
+  change `ProbeActivity` itself (would perturb the External guardrail-3 suites).
+- [ ] **A0.3 GATE**: build tests + a throwaway assertion that a coalesced ReplaySafe run completes and its
+  commits fold into a segment (proves the harness path works before any fusion code exists). Commit:
+  `test(harness): coalesced-mode harness path + ReplaySafe probe activity (spec 123 prep)`.
+
 ## Increment A — stage-core extraction refactor (behavior-preserving)
 
 - [ ] **A1** Extract the **schedule stage core** from `WorkflowScheduleActivitySchedulerWorkHandler.ExecuteAsync`
@@ -45,9 +73,13 @@ Locate classes by name where the `Core/Services` vs `Services` folder split vari
   gated by: `RuntimeReplaySafeFusionOptions.Enabled` AND an active coalescing session
   (`IRuntimeCoalescingSessionAccessor.Current?.AppliesTo(executionId)`) AND
   `executableNode.ActivityContract?.SideEffectProfile == ReplaySafe` AND not a mutating intrinsic.
-- [ ] **C2** Driver loop: after the schedule core commits, call the start core inline with its produced
-  work item; if the start core returns a non-mutating-intrinsic Running result, call the invoke core
+- [ ] **C2** Driver loop (per research §8.1 — the safer, no-invoke-surgery shape): after committing the
+  schedule core's *fused-mode* `ActivityScheduled` (no `StartActivity` intent), run the start core in
+  fused mode inline → commit `ActivityStarted` (no `InvokeActivity` intent), then dispatch the retained
+  `InvokeActivity` work item through the **existing unchanged** `WorkflowInvokeActivitySchedulerWorkHandler`
   inline. Stage every commit through the same `RuntimeCheckpointCommitter` (buffers into the same segment).
+  Only the schedule + start handlers gain a fused-mode commit builder (omit continuation intent, return
+  the next work item); the invoke handler is untouched for D1.
 - [ ] **C3** Fallback wiring: on Suspended / Faulted / ChildScheduling / mutating-intrinsic / non-ReplaySafe
   results, STOP fusing and let the last produced work item flow to the overlay queue via the normal
   enqueue path (do not enqueue anything the discrete path would not have). Never enqueue the intermediate
