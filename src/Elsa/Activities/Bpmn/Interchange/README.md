@@ -69,6 +69,14 @@ Mapping rules for this slice:
   boundary; attached to a non-transaction host, or a second one on the same transaction, it drops with a
   finding (its flows cascade-drop). Inner spec-124 compensation constructs inside a transaction resolve as
   usual (the transaction is imported recursively).
+- **Escalation** (spec 127): root `<escalation id name escalationCode>` declarations index by id (the
+  `<message>`/`<signal>` precedent); an `escalationEventDefinition`'s `escalationRef` resolves to the matching
+  code via the fallback chain `escalationCode → declaration name → ref id`. On an `intermediateThrowEvent` →
+  escalation throw, on an `endEvent` → escalation end (both carry the resolved `code` + optional `name`); a
+  **ref-less** throw is **dropped** with a finding (its flows cascade-drop), a **ref-less end** degrades to a
+  none end event (no flows to cascade). On a `boundaryEvent` attached to a **subprocess** host → escalation
+  boundary (ref-less = code-less catch-all); attached to a **task-family** host (childless on import), a
+  **colliding code**, or a **second catch-all** on one host → dropped with a finding (validate-representable).
 - Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes
   (call activities, event subprocesses, …) are dropped with an issue. **Cyclic graphs import clean** — a
   loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation
@@ -97,7 +105,10 @@ emits no BPMNEdge (this exporter emits no DI edges for connectors at all — a d
 compensation-specific). A **transaction** element emits `<transaction>` (everything else identical to a
 subprocess); a cancel end event emits `<endEvent><cancelEventDefinition/></endEvent>` and a cancel boundary
 emits `<boundaryEvent attachedToRef="…"><cancelEventDefinition/></boundaryEvent>`, both riding the existing
-event DI bounds (no association involved). Each
+event DI bounds (no association involved). An **escalation** throw/end/boundary emits an
+`<escalationEventDefinition>` with an `escalationRef` pointing at a deduped root `<escalation
+id="escalation-{code}" escalationCode="{code}" [name]>` declaration (message/signal precedent); a code-less
+catch-all boundary emits a ref-less `<escalationEventDefinition/>` and contributes no root declaration. Each
 distinct message/signal
 name emits one deduped root `<message>`/`<signal>` declaration (deterministic id `message-{name}` /
 `signal-{name}`) that the element's `messageRef`/`signalRef` targets — a name that sanitizes to a

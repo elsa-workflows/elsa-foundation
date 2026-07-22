@@ -54,6 +54,20 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                 new XAttribute("id", declaration.Key),
                 new XAttribute("name", declaration.Value.Name)));
 
+        // spec 127 D4: root-level <escalation> declarations (deduped by code) precede the process, matching the
+        // importer's global id→(code,name) index the escalationRef resolve through.
+        var escalationDeclarations = new Dictionary<string, string?>(StringComparer.Ordinal);
+        CollectEscalationDeclarations(structure, escalationDeclarations);
+        foreach (var declaration in escalationDeclarations.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            var escalation = new XElement(BpmnXmlNames.Model + "escalation",
+                new XAttribute("id", EscalationDeclarationId(declaration.Key)),
+                new XAttribute("escalationCode", declaration.Key));
+            if (declaration.Value is { Length: > 0 } name)
+                escalation.SetAttributeValue("name", name);
+            definitions.Add(escalation);
+        }
+
         definitions.Add(process);
         definitions.Add(BuildDiagram(processId, structure));
 
@@ -160,16 +174,30 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         // spec 125: a cancel end event emits a cancelEventDefinition.
         else if (element.EventDefinitions.Any(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Cancel)))
             endEvent.Add(new XElement(BpmnXmlNames.Model + "cancelEventDefinition"));
+        // spec 127: an escalation end event emits an escalationEventDefinition + escalationRef.
+        else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation)) is { } escalation)
+            endEvent.Add(BuildEscalationEventDefinition(escalation));
         return endEvent;
     }
 
-    /// <summary>Builds a compensate intermediate throw event (spec 124): <c>&lt;intermediateThrowEvent&gt;</c> + <c>&lt;compensateEventDefinition&gt;</c> (+ optional <c>activityRef</c>).</summary>
+    /// <summary>Builds a compensate/escalation intermediate throw event (spec 124/127): <c>&lt;intermediateThrowEvent&gt;</c> + the single event definition.</summary>
     private static XElement BuildThrowEvent(BpmnElement element)
     {
         var throwEvent = new XElement(BpmnXmlNames.Model + "intermediateThrowEvent");
         if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Compensation)) is { } compensation)
             throwEvent.Add(BuildCompensateEventDefinition(compensation));
+        else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation)) is { } escalation)
+            throwEvent.Add(BuildEscalationEventDefinition(escalation));
         return throwEvent;
+    }
+
+    /// <summary>Builds an <c>&lt;escalationEventDefinition&gt;</c> (spec 127): an <c>escalationRef</c> pointing at the deduped root declaration when the definition carries a code; ref-less for a code-less catch-all boundary.</summary>
+    private static XElement BuildEscalationEventDefinition(BpmnEventDefinition definition)
+    {
+        var escalation = new XElement(BpmnXmlNames.Model + "escalationEventDefinition");
+        if (definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Code, out var code) && !string.IsNullOrWhiteSpace(code))
+            escalation.SetAttributeValue("escalationRef", EscalationDeclarationId(code.Trim()));
+        return escalation;
     }
 
     private static XElement BuildCompensateEventDefinition(BpmnEventDefinition definition)
@@ -212,6 +240,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         {
             if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Error))
                 boundary.Add(new XElement(BpmnXmlNames.Model + "errorEventDefinition"));
+            else if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation))
+                boundary.Add(BuildEscalationEventDefinition(definition));
             else if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Compensation))
                 boundary.Add(new XElement(BpmnXmlNames.Model + "compensateEventDefinition"));
             else if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Cancel))
@@ -288,6 +318,29 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     /// <summary>The deterministic root-declaration id for a message/signal name (the prefix keeps message and signal namespaces disjoint).</summary>
     private static string MessageSignalDeclarationId(string type, string name) =>
         $"{(type == BpmnEventDefinitionTypes.Message ? "message" : "signal")}-{SanitizeId(name.Trim())}";
+
+    /// <summary>Collects the distinct escalation codes (→ display name) referenced by escalation throw/end/boundary elements across the whole structure tree (spec 127 D4); a code-less catch-all boundary contributes no declaration.</summary>
+    private static void CollectEscalationDeclarations(BpmnAuthoredStructure structure, Dictionary<string, string?> declarationsByCode)
+    {
+        foreach (var definition in structure.Elements.SelectMany(element => element.EventDefinitions))
+        {
+            if (!StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation))
+                continue;
+            if (!definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Code, out var code) || string.IsNullOrWhiteSpace(code))
+                continue;
+            var name = definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var nameValue) && !string.IsNullOrWhiteSpace(nameValue) ? nameValue.Trim() : null;
+            // Prefer a declaration carrying a name over a bare one, so a coded throw's name survives even if a
+            // code-only boundary is enumerated first.
+            if (!declarationsByCode.TryGetValue(code.Trim(), out var existing) || existing is null)
+                declarationsByCode[code.Trim()] = name;
+        }
+
+        foreach (var child in structure.Activities.Where(child => StringComparer.Ordinal.Equals(child.Structure?.Kind, BpmnProcessActivity.StructureKind)))
+            CollectEscalationDeclarations(ReadStructure(child), declarationsByCode);
+    }
+
+    /// <summary>The deterministic root-declaration id for an escalation code (spec 127 D4; message/signal precedent).</summary>
+    private static string EscalationDeclarationId(string code) => $"escalation-{SanitizeId(code.Trim())}";
 
     private static XElement BuildSubProcess(BpmnElement element, IReadOnlyDictionary<string, ActivityNode> childrenByNodeId)
     {

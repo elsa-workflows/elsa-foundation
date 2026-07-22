@@ -240,3 +240,42 @@ mutation home; continuation/seam-staging exclusion rules unchanged; behaviors de
   with real nested `BpmnProcess` children.
 - Full test projects green: BPMN, BPMN Interchange, Activities Runtime, Workflows Runtime,
   ControlFlow, Architecture. Full solution build clean.
+
+## Deviations from the ratified plan
+
+- **`RaiseEscalation` carries no code (read from the element).** The command is argument-less; the engine
+  reads `code`/`name` from the throw/end element's escalation event definition in `ApplyDecision`'s
+  `RaiseEscalation` case — mirroring how the spec-124 compensate throw reads its `activityRef` from the element.
+  This keeps behaviors decision-only (FR-10) and the `BpmnBehaviorCommand` shape unchanged. Same effect the plan
+  specifies ("behaviors emit `[RaiseEscalation, EmitTokens|ConsumeToken]`"), reached without widening the
+  command payload.
+- **Interrupting-teardown determinism in tests (D4 ordering, not a code change).** A nested process that raises
+  an escalation **and** schedules a descendant in the **same** evaluation stages the seam-C notification and the
+  descendant's child-schedule as sibling post-commit intents with the **same** derived sequence number, so their
+  drain order is the documented spec-126 D4 non-determinism. For a *deterministic* interrupting-teardown pin
+  (durable child state cancelled, bookmarks gone) the descendant must be a committed-live child on an **earlier**
+  evaluation: the interrupting and MI runtime tests use a fork(keeper Event + trigger Event) nested process whose
+  keeper suspends on the process's start evaluation, then resume the trigger to raise the escalation. The
+  non-interrupting/late/bubbling tests assert only the deterministic *outcome* (the boundary fires and never
+  faults), tolerating both orders. No engine change was needed — the seam-A cascade reclaims the whole nested
+  subtree when the descendant is committed-live.
+- **Task-host escalation boundary drops at the childless-host guard on import.** The importer's escalation
+  boundary "host must be a subprocess" rule is only reachable for a *bound* task host, which the importer never
+  produces (imported tasks are always childless), so a task-host escalation boundary drops at the existing
+  childless-host guard with that finding. The subprocess-host rule is fully exercised at the **validation**
+  level (`ValidateEscalation`, `EscalationBoundary_OnTaskHost_IsRejected`). Validate-representable either way.
+
+## Tripwire outcomes (none tripped)
+
+1. **Seam-C context sufficiency — clear.** The notification evaluation's context populated the spec-119
+   live-children projection (BpmnProcess is `IRuntimeLiveChildActivityConsumer`), accepted seam-A subtree
+   staging and a re-staged bubble notification, and the `{code, name?}` payload round-tripped — the
+   interrupting/MI teardown tests confirm the notifying child's subtree is reclaimed via the live-children lookup.
+2. **Bubbling re-stage — clear.** `RequestParentNotification` from within a notification evaluation (carried as
+   `BpmnPendingParentNotification`, staged at the clean Defer exit) tripped no seam-C validation rule; the
+   two-level L3→L2→L1 bubbling test passes end-to-end with real nested `BpmnProcess` children.
+3. **Interrupting-cancel-then-mint on `FinishEvaluation` exits — clear.** The cancel cascade + boundary-token
+   mint + Propagate rides the existing clean Defer/Complete exits; pending cancellations stage only there.
+4. **3-level nested fixture — clear.** `BpmnRuntimeFixture.NestedProcessNode` builds arbitrarily nested
+   `BpmnProcess` executable nodes (child slots carrying further nested nodes); no harness shim was needed.
+5. **Spec-vs-code contradiction — none.**

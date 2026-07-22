@@ -58,6 +58,10 @@ Known implementations:
   single `CancelTransaction` command and nothing else; stopping other live work, claiming the scope's
   compensables, the spec-124 replay, and the `Cancelled` completion are all owned by `BpmnExecutionEngine`,
   not this behavior)*
+- `EscalationThrowEventBehavior` / `EscalationEndEventBehavior` *(intra-domain — default; escalation, spec 127
+  — an escalation intermediate throw / escalation end event emits `[RaiseEscalation, EmitTokens|ConsumeToken]`;
+  reading the escalation code from the element, seam-C staging (or the root no-op), and all boundary
+  matching/firing/bubbling/late-race handling are owned by `BpmnExecutionEngine`, not these behaviors)*
 - **Compensation (spec 124)** adds one command kind — `BpmnBehaviorCommandKind.TriggerCompensation` — and no
   new token status or state-schema break. A **compensation boundary** (`BpmnEventDefinitionTypes.Compensation`
   on a `boundaryEvent`, dormant like an error boundary) names its handler via
@@ -89,6 +93,27 @@ Known implementations:
   attached cancel boundary (error-boundary minting pattern); no cancel boundary faults
   `bpmn.transaction.cancelled-unhandled`. All of it lives in the engine; behaviors stay semantics-unaware.
   The one touch outside the module is the structure-dependent `Cancelled` outcome declaration (see below).
+- **Escalation (spec 127)** adds one command kind — `BpmnBehaviorCommandKind.RaiseEscalation` — and **no** new
+  token status or state-record type; it is the module's first consumer of **runtime seam C** (spec 126).
+  `BpmnEventDefinitionProperties.Code` carries the matching key on an escalation throw/end (required) and
+  escalation boundary (optional = catch-all). `EscalationThrowEventBehavior` / `EscalationEndEventBehavior`
+  emit `[RaiseEscalation, EmitTokens|ConsumeToken]`; on `RaiseEscalation` the engine stages
+  `context.RequestParentNotification(BpmnExecutionEngine.EscalationNotificationCode = "bpmn.escalation", { code,
+  name? })` when the process has a committed parent (`ActivityExecutionState.ParentActivityExecutionId`), else a
+  root `EscalationUnhandled` no-op. `BpmnProcess : IRuntimeActivityChildNotificationHandler`;
+  `OnChildNotifiedAsync` delegates to `BpmnExecutionEngine.OnChildNotifiedAsync`, which resolves the host
+  element via `BpmnGraph.FindElementByChildNodeId`, matches the payload code against
+  `BpmnGraph.AttachedEscalationBoundaries` (exact beats catch-all), and fires: non-interrupting mints an
+  `Active` boundary token alongside the untouched host; interrupting cancels the host token (or the MI
+  coordinator) through the reused `CancelTokenAndChild` cascade (reason
+  `BpmnExecutionEngine.EscalationHostInterruptedReason = "bpmn.escalation.host-interrupted"`, seam-A staged from
+  the live-children projection) before minting. Unmatched → bubble (a carried `BpmnPendingParentNotification`
+  re-staged via `RequestParentNotification` at the clean exit) or a root `EscalationUnhandled` no-op; late races
+  fire non-interrupting boundaries and `EscalationLate`-no-op interrupting ones; any other seam-C code is a
+  diagnostic pass-through. Four additive diagnostic kinds
+  (`EscalationRaised`/`EscalationCaught`/`EscalationUnhandled`/`EscalationLate`). Escalation boundaries are
+  validated (`ValidateEscalation`): dormant, subprocess host only, distinct codes + ≤1 catch-all per host. All
+  of it lives in the engine; behaviors stay decision-only.
 - **Multi-instance loops (spec 121)** add no behavior: a `BpmnElement.LoopCharacteristics`
   (`BpmnLoopCharacteristics`) turns a task/subprocess host's `ScheduleChild` decision into a loop the
   engine owns entirely — a coordinator token plus private per-instance sub-tokens, each scheduled through
