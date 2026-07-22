@@ -45,8 +45,16 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private readonly InMemoryWorkflowExecutableStore _store = new();
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
-    private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion("activity-sequence", typeof(SequenceActivity).FullName!);
-    private readonly ActivityDefinitionVersion _flowchartActivity = ActivityVersion("activity-flowchart", typeof(FlowchartActivity).FullName!);
+    private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion(
+        "activity-sequence",
+        typeof(SequenceActivity).FullName!,
+        [],
+        StructureFacet(SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion));
+    private readonly ActivityDefinitionVersion _flowchartActivity = ActivityVersion(
+        "activity-flowchart",
+        typeof(FlowchartActivity).FullName!,
+        [],
+        StructureFacet(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion));
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
     private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
     private readonly InMemoryPublicationSlotStore _slotStore = new();
@@ -511,6 +519,29 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
+    public async Task RejectsDeclaredStructureWhoseHandlerIsMissing()
+    {
+        // The sequence activity's catalog row declares its structure contract (design facet), but this
+        // shell has no structure handler registered — the composition mismatch that previously let a
+        // composite publish opaquely and fault deep in runtime execution.
+        var root = SequenceNode("seq", [Node("write-one", Text("one"))]);
+        var workflowVersion = WorkflowVersion(root);
+        var versionStore = new FakeVersionStore(workflowVersion);
+        var compiler = TestCompiler.Create(
+            versionStore,
+            new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
+            new DefaultActivityStructureService([]),
+            TestWellKnownTypeRegistry.Create());
+        var handler = Handler(layout: null, compiler, versionStore);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+
+        Assert.Contains(SequenceActivity.StructureKind, exception.Message);
+        Assert.Contains("no structure handler", exception.Message);
+    }
+
+    [Fact]
     public async Task RejectsWorkflowWithoutRootActivity()
     {
         var workflowVersion = WorkflowVersion(rootActivity: null);
@@ -806,7 +837,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey) =>
         ActivityVersion(id, activityTypeKey, []);
 
-    private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey, IReadOnlyCollection<InputDefinition> inputs) =>
+    private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey, IReadOnlyCollection<InputDefinition> inputs, params ActivityDesignFacet[] designFacets) =>
         new("1.0.0", "activity-definition-1")
         {
             Id = id,
@@ -821,8 +852,13 @@ public sealed class PublishWorkflowRequestHandlerTests
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TestActivityAliases.ForActivityVersionId(id))),
-            Inputs = inputs
+            Inputs = inputs,
+            DesignFacets = designFacets
         };
+
+    // Mirrors the structure facet ClrAssemblyScanner projects from an [ActivityStructure] declaration.
+    private static ActivityDesignFacet StructureFacet(string kind, string schemaVersion) =>
+        new(kind, schemaVersion, JsonSerializer.SerializeToElement(new { mode = "generic" }));
 
     private static IActivityStructureService ActivityStructureService()
     {

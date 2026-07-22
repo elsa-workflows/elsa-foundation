@@ -17,6 +17,16 @@ public interface IActivityStructureService
     ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity);
 
     /// <summary>
+    /// Whether a structure handler is registered for <paramref name="structure"/>'s kind and schema
+    /// version. Lets publish-time guards distinguish a legitimately opaque structure (spec 071
+    /// FR-008: unknown kinds are copied as opaque non-composite structure) from a composite
+    /// structure whose owning feature is missing from the shell. Defaults to <see langword="true"/>
+    /// (assume handled) so custom/stub implementations that always project their children never
+    /// trip the guard.
+    /// </summary>
+    bool HasHandler(ActivityNodeStructure structure) => true;
+
+    /// <summary>
     /// Projects the container-scoped variables declared by <paramref name="activity"/>. Returns an
     /// empty collection when the node has no structure handler or declares no container variables.
     /// </summary>

@@ -60,6 +60,13 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : new ActivityNodeStructure(activity.Structure.Kind, activity.Structure.SchemaVersion, activity.Structure.Payload);
     }
 
+    public bool HasHandler(ActivityNodeStructure structure)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+
+        return TryGetHandler(structure, out _);
+    }
+
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity)
     {
         ArgumentNullException.ThrowIfNull(activity);
