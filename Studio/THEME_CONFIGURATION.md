@@ -4,10 +4,10 @@ This document describes how to configure custom themes and theme defaults for El
 
 ## Configuration Options
 
-Themes can be configured in two ways:
-
-1. **appsettings.json** - for base configuration
-2. **Environment Variables** - to override configuration (takes precedence)
+Themes are configured through the standard ASP.NET Core Configuration API under the `Themes`
+section. Because the app uses the Configuration API, the same settings can be supplied from any
+registered source — `appsettings.json`, environment variables, command-line arguments, user
+secrets, etc. — with the usual precedence (later providers override earlier ones).
 
 ### appsettings.json
 
@@ -25,11 +25,12 @@ Add a `Themes` section to your `appsettings.json`:
 
 ### Environment Variables
 
-Set these ENV vars to override the configuration:
+The same keys are available as environment variables using the standard double-underscore (`__`)
+separator. These override values from `appsettings.json`:
 
-- `ELSA_THEMES_DIRECTORY` - Path to custom themes
-- `ELSA_THEMES_MODE` - How to combine with built-ins
-- `ELSA_DEFAULT_THEME` - Default theme ID
+- `Themes__ThemesDirectory` - Path to custom themes
+- `Themes__ThemesMode` - How to combine with built-ins
+- `Themes__DefaultThemeId` - Default theme ID
 
 ## Configuration Properties
 
@@ -114,18 +115,18 @@ custom-themes/
 ### Use Environment Variables
 
 ```bash
-export ELSA_THEMES_DIRECTORY="/opt/themes"
-export ELSA_THEMES_MODE="AddToBuiltIns"
-export ELSA_DEFAULT_THEME="my-theme"
+export Themes__ThemesDirectory="/opt/themes"
+export Themes__ThemesMode="AddToBuiltIns"
+export Themes__DefaultThemeId="my-theme"
 ```
 
 Or in Docker Compose:
 
 ```yaml
 environment:
-  ELSA_THEMES_DIRECTORY: /app/themes
-  ELSA_THEMES_MODE: AddToBuiltIns
-  ELSA_DEFAULT_THEME: dark-mode
+  Themes__ThemesDirectory: /app/themes
+  Themes__ThemesMode: AddToBuiltIns
+  Themes__DefaultThemeId: dark-mode
 ```
 
 ## Theme File Format
@@ -211,7 +212,7 @@ For detailed color format specifications (hex, oklch, rgb, hsl), see the Theme B
 ## How It Works
 
 1. **Startup**: The `ThemeConfigurationService` is registered and initialized
-2. **Configuration Load**: Reads theme config from `appsettings.json` and ENV vars
+2. **Configuration Load**: Binds the `Themes` section via the Configuration API (appsettings.json, ENV vars, etc.)
 3. **Custom Themes Load**: Loads custom themes from the configured directory (if set)
 4. **API Response**: When `/api/_elsa/theme-store` is called:
    - Custom themes from directory are loaded
@@ -236,8 +237,8 @@ For detailed color format specifications (hex, oklch, rgb, hsl), see the Theme B
 ### Default Theme Not Applied
 
 1. Verify theme ID matches an available theme exactly (case-sensitive)
-2. Check both ENV vars and `appsettings.json`
-3. ENV vars take precedence over config file
+2. Check both environment variables and `appsettings.json`
+3. Environment variables take precedence over the config file (standard Configuration API ordering)
 
 ### Persisted Themes Still There
 

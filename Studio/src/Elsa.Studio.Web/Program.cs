@@ -34,16 +34,10 @@ builder.WebHost.UseStaticWebAssets();
 
 builder.Services.AddSingleton<IConfigurationRoot>(configuration);
 
-// Theme configuration
+// Theme configuration. Bound from the "Themes" section, which the Configuration API populates from
+// appsettings.json, environment variables (Themes__ThemesDirectory, etc.), and any other registered source.
 var themeConfig = new ThemeConfiguration();
 configuration.GetSection("Themes").Bind(themeConfig);
-// Allow ENV vars to override config
-if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ELSA_THEMES_DIRECTORY")))
-    themeConfig.ThemesDirectory = Environment.GetEnvironmentVariable("ELSA_THEMES_DIRECTORY");
-if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ELSA_THEMES_MODE")))
-    themeConfig.ThemesMode = Environment.GetEnvironmentVariable("ELSA_THEMES_MODE")!;
-if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ELSA_DEFAULT_THEME")))
-    themeConfig.DefaultThemeId = Environment.GetEnvironmentVariable("ELSA_DEFAULT_THEME");
 builder.Services.AddSingleton(themeConfig);
 builder.Services.AddSingleton<ThemeConfigurationService>();
 

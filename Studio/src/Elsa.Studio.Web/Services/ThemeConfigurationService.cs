@@ -33,11 +33,10 @@ internal sealed class ThemeConfigurationService
         try
         {
             var customThemes = await LoadCustomThemesAsync(cancellationToken);
-            var defaultThemeId = ResolveDefaultThemeId();
 
             return new ThemeConfigurationResult(
                 Themes: customThemes.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToArray(),
-                DefaultThemeId: defaultThemeId
+                DefaultThemeId: _config.DefaultThemeId ?? ""
             );
         }
         catch (Exception ex)
@@ -111,23 +110,6 @@ internal sealed class ThemeConfigurationService
         }
 
         return themes.ToArray();
-    }
-
-    /// <summary>
-    /// Resolves the default theme ID from configuration or ENV vars.
-    /// </summary>
-    private string ResolveDefaultThemeId()
-    {
-        // ENV var takes precedence
-        var envDefault = Environment.GetEnvironmentVariable("ELSA_DEFAULT_THEME");
-        if (!string.IsNullOrWhiteSpace(envDefault))
-            return envDefault;
-
-        // Config setting as fallback
-        if (!string.IsNullOrWhiteSpace(_config.DefaultThemeId))
-            return _config.DefaultThemeId;
-
-        return "";
     }
 }
 
