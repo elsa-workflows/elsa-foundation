@@ -77,19 +77,27 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(unit.Queries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByParentActivityExecutionIndex);
     }
 
-    [Fact]
-    public void IncidentState_ListByWorkflowExecution_Declares_Count_TerminalOperation()
+    [Theory]
+    [InlineData(ElsaRuntimeStorageManifest.SchedulerStateDocumentKind, ElsaRuntimeStorageManifest.ListAllQuery)]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind, ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery)]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind, ElsaRuntimeStorageManifest.ListAllQuery)]
+    [InlineData(ElsaRuntimeStorageManifest.IncidentStateDocumentKind, ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery)]
+    [InlineData(ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind, ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery)]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind, ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentQuery)]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind, ElsaRuntimeStorageManifest.ListWorkflowDispatchesQuery)]
+    public void CursorPagedCollectionQueries_Declare_Count_TerminalOperation(string documentKind, string queryIdentity)
     {
         // Regression: the workflow-instances list (GET /runtime/workflows/instances) projects a per-instance
         // incident count via IIncidentStateStore.CountAsync over the incident 'list-by-workflow-execution' bounded
         // query. A bounded query carries only Documents by default, so BoundedStore.CountAsync is rejected with
-        // "does not declare result operation 'Count'" and the whole list endpoint 500s. The cursor-paged incident
-        // query must therefore declare Count alongside Documents, with a consistent total-count flag.
+        // "does not declare result operation 'Count'" and the whole list endpoint 500s. Every cursor-paged
+        // compatibility collection query (the set wrapped by EnableCompatibilityCollectionPaging) must therefore
+        // declare Count alongside Documents, with a consistent total-count flag (GW-PHYSICAL-029).
         var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
-        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.IncidentStateDocumentKind);
+        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == documentKind);
         var query = Assert.Single(
             unit.PhysicalStorage!.BoundedQueries,
-            q => q.Identity == ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery);
+            q => q.Identity == queryIdentity);
 
         Assert.Contains(BoundedQueryResultOperation.Documents, query.ResultOperations);
         Assert.Contains(BoundedQueryResultOperation.Count, query.ResultOperations);

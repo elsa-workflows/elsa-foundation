@@ -591,14 +591,15 @@ public static class ElsaRuntimeStorageManifest
     {
         // These cursor-paged collection reads are also counted (e.g. the workflow-instances list projects a
         // per-instance incident count via IIncidentStateStore.CountAsync over 'list-by-workflow-execution').
-        // A bounded query carries only Documents by default, so BoundedStore.CountAsync would be rejected with
-        // "does not declare result operation 'Count'". Declare Count alongside the existing operations, and set
-        // SupportsTotalCount to keep the declaration consistent (GW-PHYSICAL-029 requires Count and total-count
-        // to agree); the count resolves against the same index route the Documents read already uses.
-        var resultOperations = query.ResultOperations is { Count: > 0 }
-            ? new HashSet<BoundedQueryResultOperation>(query.ResultOperations)
-            : new HashSet<BoundedQueryResultOperation> { BoundedQueryResultOperation.Documents };
-        resultOperations.Add(BoundedQueryResultOperation.Count);
+        // The legacy bridge omits the Count result operation when the portable query didn't claim total-count
+        // support, so BoundedStore.CountAsync would be rejected with "does not declare result operation 'Count'".
+        // Declare Count alongside the bridged operations, and set SupportsTotalCount to keep the declaration
+        // consistent (GW-PHYSICAL-029 requires Count and total-count to agree); the count resolves against the
+        // same index route the Documents read already uses.
+        var resultOperations = new HashSet<BoundedQueryResultOperation>(query.ResultOperations)
+        {
+            BoundedQueryResultOperation.Count
+        };
 
         return new(
             query.Identity,
