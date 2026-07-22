@@ -38,9 +38,9 @@ general, spoof-proof runtime seam rather than a BPMN-private side channel.
 
 - Phase 3 delivery, sequenced by the control room: specs 123 (scoped-variable read seam +
   collection-mode multi-instance, PR #965), 124 (compensation, PR #966), 125 (transactions/cancel
-  events, PR #970), and 126 (runtime seam C — child→parent notification, PR #974) are merged; next
-  is BPMN escalation consuming seam C (spec 127), then event subprocesses, call activity,
-  executable collaborations.
+  events, PR #970), 126 (runtime seam C — child→parent notification, PR #974), and 127 (escalation, PR #975)
+  are merged; next is event subprocesses (riding seam C), then call activity and executable
+  collaborations.
 - Carried follow-ups from Phase 2: terminate/fault teardown through seam A (`CancelLiveWork` is
   logical-only today), error-code matching for error boundaries, non-interrupting timer repetition,
   `completionCondition`, MI output aggregation, `standardLoopCharacteristics`, unbounded-loop
