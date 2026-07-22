@@ -73,23 +73,7 @@ static async Task<int> RunMatrixAsync(ArgList args)
 
     Console.WriteLine();
     Console.WriteLine($"=== matrix {scale.Name} ({(settings.IsSmoke ? "smoke" : "acceptance")}) ===");
-    Console.WriteLine($"correctness (hashes match across all targets): {(output.CorrectnessPassed ? "PASS" : "FAIL")}");
-    foreach (var row in output.Correctness.Where(r => !r.AllMatch))
-        Console.WriteLine($"  MISMATCH {row.Operation}: {string.Join(", ", row.HashesByTarget.Select(h => $"{h.Key}={h.Value[..8]}"))}");
-    if (output.EfRatio.Count > 0)
-    {
-        Console.WriteLine($"EF-ratio gate (100K): {(output.EfRatioPassed ? "PASS" : "FAIL")}");
-        foreach (var row in output.EfRatio)
-            Console.WriteLine($"  {row.Operation,-32} p95x={row.P95Ratio,5:F2} tput%={row.ThroughputRatio * 100,5:F0} p99x={row.P99Ratio,5:F2} -> {(row.Pass ? "pass" : "FAIL")}");
-    }
-
-    if (output.Form.Count > 0)
-    {
-        Console.WriteLine($"form-selection (this scale): {(output.FormPassedThisScale ? "PASS" : "FAIL")}");
-        foreach (var row in output.Form)
-            Console.WriteLine($"  {(row.Discriminating ? "*" : " ")}{row.Operation,-27} vs {row.Alternative,-20} p95+={row.MedianP95ImprovementPct,6:F1}% tput+={row.MedianThroughputImprovementPct,6:F1}% ci=[{row.CiLow,6:F3},{row.CiHigh,6:F3}] -> {(row.Pass ? "pass" : "FAIL")}");
-    }
-
+    PrintComparison(output);
     Console.WriteLine($"comparison -> {Path.Combine(outDir, $"comparison.{scale.Name}.json")}");
     return output.CorrectnessPassed ? 0 : 1;
 }
@@ -101,25 +85,39 @@ static int RunCompare(ArgList args)
     var output = Orchestrator.Compare(scale, outDir, smoke: args.Flag("--smoke"), inProcess: false);
 
     Console.WriteLine($"=== compare {scale.Name} (from run files in {outDir}) ===");
+    PrintComparison(output);
+    Console.WriteLine($"comparison -> {Path.Combine(outDir, $"comparison.{scale.Name}.json")}");
+    return output.CorrectnessPassed ? 0 : 1;
+}
+
+// Prints correctness, the ratified budget gate (gate 5), the recorded EF-ratio evidence table (no
+// longer a gate), and the form-selection gate (gate 6) for one scale's comparison output.
+static void PrintComparison(Orchestrator.MatrixOutput output)
+{
     Console.WriteLine($"correctness: {(output.CorrectnessPassed ? "PASS" : "FAIL")}");
     foreach (var row in output.Correctness.Where(r => !r.AllMatch))
         Console.WriteLine($"  MISMATCH {row.Operation}");
+
+    if (output.Budget is { Count: > 0 })
+    {
+        Console.WriteLine($"budget gate (gate 5, ratified 2026-07-22 — absolute 100K budgets): {(output.BudgetGatePassed ? "PASS" : "FAIL")}");
+        foreach (var row in output.Budget)
+            Console.WriteLine($"  {row.Operation,-32} [{row.Class,-18}] p95={row.P95Ms,8:F3}/{row.P95BudgetMs,-7:F1} p99={row.P99Ms,9:F3}/{row.P99BudgetMs,-6:F1} tput={row.ThroughputPerSecond,9:F1}>={row.ThroughputFloor,8:F1} -> {(row.Pass ? "pass" : "FAIL")}");
+    }
+
     if (output.EfRatio.Count > 0)
     {
-        Console.WriteLine($"EF-ratio gate: {(output.EfRatioPassed ? "PASS" : "FAIL")}");
+        Console.WriteLine($"EF-ratio (recorded evidence, NOT a gate — semantically unequal work): all-rows-pass={output.EfRatioPassed}");
         foreach (var row in output.EfRatio)
-            Console.WriteLine($"  {row.Operation,-32} p95x={row.P95Ratio,6:F2} tput%={row.ThroughputRatio * 100,5:F0} p99x={row.P99Ratio,6:F2} -> {(row.Pass ? "pass" : "FAIL")}");
+            Console.WriteLine($"  {row.Operation,-32} p95x={row.P95Ratio,6:F2} tput%={row.ThroughputRatio * 100,5:F0} p99x={row.P99Ratio,6:F2} -> {(row.Pass ? "pass" : "fail")}");
     }
 
     if (output.Form.Count > 0)
     {
-        Console.WriteLine($"form-selection (this scale, * = gated): {(output.FormPassedThisScale ? "PASS" : "FAIL")}");
+        Console.WriteLine($"form-selection gate (gate 6, this scale, * = gated): {(output.FormPassedThisScale ? "PASS" : "FAIL")}");
         foreach (var row in output.Form)
             Console.WriteLine($"  {(row.Discriminating ? "*" : " ")}{row.Operation,-27} vs {row.Alternative,-20} p95+={row.MedianP95ImprovementPct,7:F1}% tput+={row.MedianThroughputImprovementPct,7:F1}% ci=[{row.CiLow,6:F3},{row.CiHigh,6:F3}] -> {(row.Pass ? "pass" : "FAIL")}");
     }
-
-    Console.WriteLine($"comparison -> {Path.Combine(outDir, $"comparison.{scale.Name}.json")}");
-    return output.CorrectnessPassed ? 0 : 1;
 }
 
 static int RunGate(ArgList args)
@@ -133,9 +131,14 @@ static int RunGate(ArgList args)
     var hundredK = Json.Read<Orchestrator.MatrixOutput>(hundredKPath);
     var oneM = Json.Read<Orchestrator.MatrixOutput>(oneMPath);
 
-    var gate5 = hundredK.EfRatioPassed;
+    // Gate 5 (ratified amendment 2026-07-22, program-owner decision, T079 review validating): absolute
+    // operational budgets on the 100K Benchmark Acceptance Catalog rows replace the per-row EF ratio,
+    // which compared semantically unequal work (Groundwork ledger/replay/scope/atomic-staging per op vs
+    // bare EF SaveChanges). The EF ratio remains recorded as evidence below but is no longer a gate.
+    var gate5 = hundredK.BudgetGatePassed;
+    var budgetRows = hundredK.Budget ?? [];
 
-    // Form gate: entity must beat each alternative at BOTH 100K and 1M.
+    // Form gate (gate 6, unchanged): entity must beat each alternative at BOTH 100K and 1M.
     var oneMByKey = oneM.Form.ToDictionary(r => (r.Operation, r.Alternative));
     var formRows = new List<(string Operation, string Alternative, bool Discriminating, bool Pass)>();
     foreach (var row in hundredK.Form)
@@ -149,15 +152,31 @@ static int RunGate(ArgList args)
 
     var verdict = new
     {
-        EfRatioGatePassed = gate5,
+        BudgetGatePassed = gate5,
         FormSelectionGatePassed = gate6,
+        BudgetRows = budgetRows.Select(r => new
+        {
+            r.Operation, r.Class,
+            r.P95Ms, r.P95BudgetMs, r.P95Pass,
+            r.P99Ms, r.P99BudgetMs, r.P99Pass,
+            r.ThroughputPerSecond, r.ThroughputFloor, r.ThroughputPass,
+            r.Pass
+        }),
+        EfRatioEvidence = new
+        {
+            Note = "Recorded evidence only, NOT a gate (ratified amendment 2026-07-22): EF oracle runs bare SaveChanges while Groundwork runs ledger/replay/scope/atomic-staging per op; its LegacyEfOracle profile declares those scenarios N/A.",
+            AllRowsWouldPass = hundredK.EfRatioPassed
+        },
         FormRows = formRows.Select(r => new { r.Operation, r.Alternative, r.Discriminating, PassesAt100KAnd1M = r.Pass }),
-        Note = "Gate rows encode plan.md thresholds. Correctness must be green in every comparison before timing is trusted."
+        Note = "Gate 5 = absolute 100K budget rows; gate 6 = form selection at 100K & 1M. Correctness must be green in every comparison before timing is trusted."
     };
     Json.Write(Path.Combine(outDir, "gates.json"), verdict);
 
-    Console.WriteLine($"EF-ratio gate (100K): {(gate5 ? "PASS" : "FAIL")}");
-    Console.WriteLine($"form-selection gate (100K & 1M): {(gate6 ? "PASS" : "FAIL")}");
+    Console.WriteLine($"budget gate (gate 5, 100K absolute budgets): {(gate5 ? "PASS" : "FAIL")}  ({budgetRows.Count(r => r.Pass)}/{budgetRows.Count} rows)");
+    foreach (var row in budgetRows.Where(r => !r.Pass))
+        Console.WriteLine($"  FAIL {row.Operation} [{row.Class}] p95={row.P95Ms:F3}/{row.P95BudgetMs:F1} p99={row.P99Ms:F3}/{row.P99BudgetMs:F1} tput={row.ThroughputPerSecond:F1}>={row.ThroughputFloor:F1}");
+    Console.WriteLine($"EF-ratio (recorded evidence, NOT a gate): all-rows-pass={hundredK.EfRatioPassed}");
+    Console.WriteLine($"form-selection gate (gate 6, 100K & 1M): {(gate6 ? "PASS" : "FAIL")}");
     foreach (var row in discriminating.Where(r => !r.Pass))
         Console.WriteLine($"  FAIL {row.Operation} vs {row.Alternative}");
     Console.WriteLine($"gates -> {Path.Combine(outDir, "gates.json")}");

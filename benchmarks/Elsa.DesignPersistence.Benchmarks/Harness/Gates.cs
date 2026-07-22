@@ -2,10 +2,18 @@ using Elsa.DesignPersistence.Benchmarks.Workload;
 
 namespace Elsa.DesignPersistence.Benchmarks.Harness;
 
-/// <summary>Aggregates the three measured runs per target and encodes the accepted performance gates:
-/// the same-provider EF-ratio gate (p95 &lt;= 1.25x, throughput &gt;= 80%, p99 &lt;= 2x) and the
-/// physical-form selection gate (entity improves median p95 or throughput by &gt;= 10% over both other
-/// forms, same direction in all three runs, 95% bootstrap CI excluding zero).</summary>
+/// <summary>Aggregates the three measured runs per target and encodes the accepted performance gates.
+///
+/// Gate 5 (ratified amendment 2026-07-22, program-owner interactive decision, T079 review validating):
+/// the per-row same-provider EF ratio was REPLACED by absolute operational budgets on the Benchmark
+/// Acceptance Catalog rows, because the ratio compared semantically unequal work — the Groundwork write
+/// path runs the ratified operation-ledger marker, replay preflight, scope-bound sessions, and atomic
+/// multi-document staging per operation, while the temporary EF oracle performs bare SaveChanges (its
+/// LegacyEfOracle conformance profile declares the ledger/replay/scope scenarios N/A). The EF ratio
+/// table is still computed and printed, but only as RECORDED EVIDENCE — it is no longer a gate.
+///
+/// Gate 6 (unchanged) is the physical-form selection gate (entity improves median p95 or throughput by
+/// &gt;= 10% over both other forms, same direction in all three runs, 95% bootstrap CI excluding zero).</summary>
 public static class Gates
 {
     public const string EfKey = "ef.normalized";
@@ -35,6 +43,19 @@ public static class Gates
     public sealed record FormRow(
         string Operation, string Alternative, bool Discriminating, double MedianP95ImprovementPct, double MedianThroughputImprovementPct,
         bool DirectionConsistentAllRuns, double CiLow, double CiHigh, bool CiExcludesZero, bool Pass);
+
+    /// <summary>Absolute operational budget for one Benchmark Acceptance Catalog class (ratified gate-5
+    /// amendment 2026-07-22). <paramref name="MinThroughput"/> is <see cref="double.NaN"/> for the
+    /// write@c16 class, whose floor is resolved per row to the same row's @c1 throughput (write scaling
+    /// must not invert).</summary>
+    public sealed record BudgetThreshold(double P95Ms, double P99Ms, double MinThroughput);
+
+    public sealed record BudgetRow(
+        string Operation, string Class,
+        double P95Ms, double P95BudgetMs, bool P95Pass,
+        double P99Ms, double P99BudgetMs, bool P99Pass,
+        double ThroughputPerSecond, double ThroughputFloor, bool ThroughputPass,
+        bool Pass);
 
     /// <summary>
     /// The scale-bearing routes whose cost depends on the physical form. Pure primary-key identity
@@ -120,6 +141,97 @@ public static class Gates
                 efOp.MedianThroughput, gw.MedianThroughput, tputRatio, tputPass,
                 efOp.MedianP99, gw.MedianP99, p99Ratio, p99Pass,
                 p95Pass && tputPass && p99Pass));
+        }
+
+        return rows.OrderBy(r => r.Operation, StringComparer.Ordinal).ToList();
+    }
+
+    // --- Ratified gate-5 budget table (100K acceptance scale) ---
+    // Absolute operational budgets that bound the product-relevant authoring envelope (interactive-save
+    // perception thresholds, point-lookup latencies, catalog page responsiveness). See the design
+    // persistence contract "Performance and Removal Gate" item 5 for the decision record.
+    private static readonly IReadOnlySet<string> PointReadOps = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "wf.identity.get", "wf.identity.version-exact", "wf.identity.version-latest",
+        "wf.version.exists", "act.identity.get", "act.identity.version-exact"
+    };
+    private static readonly IReadOnlySet<string> BatchProjectionOps = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "act.catalog.versions-batch", "wf.catalog.projection"
+    };
+    private static readonly IReadOnlySet<string> CatalogPageOps = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "wf.catalog.filter-page", "act.catalog.filter-page", "wf.catalog.count"
+    };
+
+    private static readonly BudgetThreshold PointReadBudget = new(P95Ms: 0.8, P99Ms: 2.5, MinThroughput: 2000);
+    private static readonly BudgetThreshold BatchProjectionBudget = new(P95Ms: 5, P99Ms: 20, MinThroughput: 200);
+    private static readonly BudgetThreshold CatalogPageBudget = new(P95Ms: 400, P99Ms: 800, MinThroughput: 4);
+    private static readonly BudgetThreshold WriteC1Budget = new(P95Ms: 3, P99Ms: 25, MinThroughput: 400);
+    private static readonly BudgetThreshold WriteC16Budget = new(P95Ms: 100, P99Ms: 500, MinThroughput: double.NaN);
+
+    /// <summary>Evaluates the ratified absolute-budget gate (gate 5) against the composed
+    /// <c>groundwork.store</c> rows only. EF measurements stay recorded as evidence and are not consulted
+    /// here. The write@c16 throughput floor is the same row's measured @c1 throughput.</summary>
+    public static IReadOnlyList<BudgetRow> EvaluateBudget(TargetAggregate groundworkStore)
+    {
+        var rows = new List<BudgetRow>();
+        foreach (var (operation, op) in groundworkStore.Operations)
+        {
+            string className;
+            BudgetThreshold budget;
+            double throughputFloor;
+
+            if (PointReadOps.Contains(operation))
+            {
+                className = "point-read";
+                budget = PointReadBudget;
+                throughputFloor = budget.MinThroughput;
+            }
+            else if (BatchProjectionOps.Contains(operation))
+            {
+                className = "batch/projection";
+                budget = BatchProjectionBudget;
+                throughputFloor = budget.MinThroughput;
+            }
+            else if (CatalogPageOps.Contains(operation))
+            {
+                className = "catalog page/count";
+                budget = CatalogPageBudget;
+                throughputFloor = budget.MinThroughput;
+            }
+            else if (operation.EndsWith("@c1", StringComparison.Ordinal))
+            {
+                className = "write@c1";
+                budget = WriteC1Budget;
+                throughputFloor = budget.MinThroughput;
+            }
+            else if (operation.EndsWith("@c16", StringComparison.Ordinal))
+            {
+                className = "write@c16";
+                budget = WriteC16Budget;
+                var sibling = string.Concat(operation.AsSpan(0, operation.Length - "@c16".Length), "@c1");
+                throughputFloor = groundworkStore.Operations.TryGetValue(sibling, out var c1)
+                    ? c1.MedianThroughput
+                    : double.PositiveInfinity;
+            }
+            else
+            {
+                // Unknown route: fail loudly rather than silently passing an unbudgeted operation.
+                className = "unclassified";
+                budget = new BudgetThreshold(0, 0, double.PositiveInfinity);
+                throughputFloor = double.PositiveInfinity;
+            }
+
+            var p95Pass = op.MedianP95 <= budget.P95Ms;
+            var p99Pass = op.MedianP99 <= budget.P99Ms;
+            var throughputPass = op.MedianThroughput >= throughputFloor;
+            rows.Add(new BudgetRow(
+                operation, className,
+                op.MedianP95, budget.P95Ms, p95Pass,
+                op.MedianP99, budget.P99Ms, p99Pass,
+                op.MedianThroughput, throughputFloor, throughputPass,
+                p95Pass && p99Pass && throughputPass));
         }
 
         return rows.OrderBy(r => r.Operation, StringComparer.Ordinal).ToList();

@@ -21,6 +21,8 @@ public static class Orchestrator
         bool CorrectnessPassed,
         IReadOnlyList<Gates.EfRatioRow> EfRatio,
         bool EfRatioPassed,
+        IReadOnlyList<Gates.BudgetRow> Budget,
+        bool BudgetGatePassed,
         IReadOnlyList<Gates.FormRow> Form,
         bool FormPassedThisScale);
 
@@ -66,6 +68,13 @@ public static class Orchestrator
             : [];
         var efRatioPassed = efRatio.Count > 0 && efRatio.All(r => r.Pass);
 
+        // Gate 5 (ratified amendment 2026-07-22): absolute operational budgets on the groundwork.store
+        // rows, evaluated at the 100K acceptance scale only. EF ratios above stay recorded as evidence.
+        var budget = scale.Name == "100k" && aggregates.TryGetValue(Gates.GroundworkStoreKey, out var gwStore)
+            ? Gates.EvaluateBudget(gwStore)
+            : [];
+        var budgetPassed = budget.Count > 0 && budget.All(r => r.Pass);
+
         var formRows = aggregates.TryGetValue(Gates.EntityKey, out var entity)
             ? Gates.EvaluateForm(entity,
                 aggregates.TryGetValue(Gates.SharedKey, out var shared) ? shared : new Gates.TargetAggregate(Gates.SharedKey, new Dictionary<string, Gates.OperationAggregate>()),
@@ -79,6 +88,7 @@ public static class Orchestrator
             targets.Select(t => TargetFactory.TargetKey(t.Adapter, t.Form)).ToList(),
             correctness, correctnessPassed,
             efRatio, efRatioPassed,
+            budget, budgetPassed,
             formRows, formPassed);
 
         Json.Write(Path.Combine(outDir, $"comparison.{scale.Name}.json"), output);
