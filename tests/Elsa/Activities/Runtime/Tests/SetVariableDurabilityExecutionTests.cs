@@ -1,12 +1,17 @@
 using System.Text.Json;
+using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript;
+using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Primitives.Models;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -67,6 +72,26 @@ public sealed class SetVariableDurabilityExecutionTests
         Assert.Equal(["current", "suffix"], evaluator.Request.ParameterValues.Keys);
         Assert.Equal("initial", evaluator.Request.ParameterValues["current"].GetString());
         Assert.Equal("updated", evaluator.Request.ParameterValues["suffix"].GetString());
+    }
+
+    [Theory]
+    [InlineData("getVariable('greeting') + '!'")]
+    [InlineData("variables.greeting + '!'")]
+    [InlineData("getGreeting() + '!'")]
+    public async Task Set_intrinsic_reads_the_visible_variable_through_the_javascript_ambient_surface(string script)
+    {
+        // Issue #984: the loop-counter/variable-read case. A Set whose value is a native JavaScript expression must
+        // observe the variable lexically visible to it through variables.X / getVariable('X') / get<Name>() — not just
+        // statically declared args — and write the computed result back into the frame.
+        await using var jsProvider = BuildJavaScriptProvider();
+        await using var harness = await CreateHarnessAsync(
+            NewJavaScriptVariableWriteNode(script),
+            portableExpressionEvaluator: jsProvider.GetRequiredService<IPortableExpressionEvaluator>());
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
+        Assert.Equal("initial!", persistedWorkflow!.RootVariableFrame!.Values["greeting"].InlineValue!.Value.GetString());
     }
 
     [Theory]
@@ -215,6 +240,60 @@ public sealed class SetVariableDurabilityExecutionTests
             new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.Set,
             intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
+    }
+
+    private static ExecutableNode NewJavaScriptVariableWriteNode(string script)
+    {
+        using var descriptor = JsonDocument.Parse("{}");
+        var expression = new RuntimeExpressionBinding(
+            "JavaScript",
+            script,
+            new RuntimeValueTypeDescriptor("alias", "String", null),
+            capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1);
+        // The workflow-scope "greeting" variable is declared on the root structure so the runtime can project it into
+        // the JavaScript ambient read surface by its author name.
+        var structure = new ExecutableActivityStructure(
+            "test.structure",
+            "1.0.0",
+            JsonSerializer.SerializeToElement(
+                new { variables = new[] { new RuntimeVariableDeclaration("greeting", "greeting", StringType, ValueProtectionPolicy.InstanceInline) } },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        return new ExecutableNode(
+            "node-set-javascript",
+            "authored-set-javascript",
+            "elsa.intrinsic.set",
+            "1.0.0",
+            "intrinsic",
+            descriptor.RootElement,
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Value] = new(
+                    WorkflowIntrinsicInputKeys.Value,
+                    StringType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Expression,
+                    expression: expression)
+            },
+            new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId),
+            structure: structure);
+    }
+
+    private static ServiceProvider BuildJavaScriptProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMemoryCache();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        new ExpressionsFeature().ConfigureServices(services);
+        new JavaScriptFeature().ConfigureServices(services);
+        new JintFeature().ConfigureServices(services);
+        var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        foreach (var task in scope.ServiceProvider.GetServices<IStartupTask>())
+            task.ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
+        return provider;
     }
 
     private static ExecutableNode NewTerminalNode(WorkflowIntrinsicKind intrinsicKind)

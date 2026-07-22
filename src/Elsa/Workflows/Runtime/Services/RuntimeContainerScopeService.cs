@@ -247,10 +247,11 @@ public sealed class RuntimeContainerScopeService(
         WorkflowExecutable executable,
         RuntimeVisibleVariableFrames visibleFrames)
     {
+        ArgumentNullException.ThrowIfNull(visibleFrames);
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         // Frames run root → innermost, so a later (inner) write of a shadowed name overwrites the outer one:
         // innermost scope wins.
-        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames))
+        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false))
             result[name] = Materialize(envelope);
         return result;
     }
@@ -265,20 +266,41 @@ public sealed class RuntimeContainerScopeService(
         WorkflowExecutable executable,
         RuntimeVisibleVariableFrames visibleFrames)
     {
+        ArgumentNullException.ThrowIfNull(visibleFrames);
         var result = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
-        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames))
+        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false))
             result[name] = envelope;
         return result;
     }
 
-    private IEnumerable<(string Name, ValueEnvelope Envelope)> EnumerateVisibleVariables(
+    /// <summary>
+    /// Projects an ordered (root → innermost) visible frame chain into the author-facing name → committed-envelope
+    /// view for the JavaScript ambient read surface (issue #984), with the innermost scope winning for a shadowed
+    /// name. Unlike the strict spec-123 reader projection, this is a best-effort convenience surface: a frame whose
+    /// scope or key cannot be resolved to an author name is silently skipped rather than faulting expression
+    /// evaluation — the value remains reachable through statically declared parameters. Exposed as a static so
+    /// producers that assemble the visible chain by hand (e.g. the intrinsic executor) reuse one name resolution.
+    /// </summary>
+    public static IReadOnlyDictionary<string, ValueEnvelope> ProjectAmbientVisibleVariableEnvelopes(
         WorkflowExecutable executable,
-        RuntimeVisibleVariableFrames visibleFrames)
+        IReadOnlyList<VariableFrameState> orderedFrames)
+    {
+        var result = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, orderedFrames, lenient: true))
+            result[name] = envelope;
+        return result;
+    }
+
+    private static IEnumerable<(string Name, ValueEnvelope Envelope)> EnumerateVisibleVariables(
+        WorkflowExecutable executable,
+        IReadOnlyList<VariableFrameState> orderedFrames,
+        bool lenient)
     {
         ArgumentNullException.ThrowIfNull(executable);
-        ArgumentNullException.ThrowIfNull(visibleFrames);
+        ArgumentNullException.ThrowIfNull(orderedFrames);
 
-        foreach (var frame in visibleFrames.Frames)
+        var declarationProjector = new RuntimeVariableDeclarationProjector();
+        foreach (var frame in orderedFrames)
         {
             if (frame.Kind == VariableFrameKind.Iteration)
             {
@@ -288,16 +310,26 @@ public sealed class RuntimeContainerScopeService(
                 continue;
             }
 
-            var owner = frame.Kind == VariableFrameKind.Root
-                ? executable.RootActivity
-                : executable.NodesById.TryGetValue(frame.ScopeId, out var node)
-                    ? node
-                    : throw new InvalidOperationException($"Variable frame '{frame.FrameId}' references missing executable scope '{frame.ScopeId}'.");
-            var declarations = _declarations.ProjectDeclarations(owner);
+            ExecutableNode owner;
+            if (frame.Kind == VariableFrameKind.Root)
+                owner = executable.RootActivity;
+            else if (executable.NodesById.TryGetValue(frame.ScopeId, out var node))
+                owner = node;
+            else if (lenient)
+                continue;
+            else
+                throw new InvalidOperationException($"Variable frame '{frame.FrameId}' references missing executable scope '{frame.ScopeId}'.");
+
+            var declarations = declarationProjector.ProjectDeclarations(owner);
             foreach (var (key, value) in frame.Values)
             {
                 if (!declarations.TryGetValue(key, out var declaration))
+                {
+                    if (lenient)
+                        continue;
                     throw new InvalidOperationException($"Variable frame '{frame.FrameId}' contains undeclared variable key '{key}'.");
+                }
+
                 yield return (declaration.Name, value);
             }
         }

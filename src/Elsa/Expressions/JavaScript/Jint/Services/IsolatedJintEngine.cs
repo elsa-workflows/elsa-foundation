@@ -6,6 +6,7 @@ using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Jint.Native;
 using Jint.Runtime.Descriptors;
+using Jint.Runtime.Interop;
 using JintOptions = Jint.Options;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services;
@@ -85,6 +86,67 @@ internal static class IsolatedJintEngine
 
         args.PreventExtensions();
         engine.Global.DefineOwnProperty("args", new PropertyDescriptor(args, writable: false, enumerable: true, configurable: false));
+    }
+
+    /// <summary>
+    /// Installs the host-pinned visible-variable read surface (issue #984): a frozen <c>variables</c> object plus a
+    /// <c>getVariable('name')</c> function and per-variable <c>get&lt;Name&gt;()</c> accessors, all sourced from the
+    /// same immutable snapshot. When <paramref name="variables"/> is empty nothing is installed, so a pure binding
+    /// expression continues to see no <c>variables</c>/<c>getVariable</c> surface at all — the values are provided
+    /// data, not an engine capability, so determinism and the binding-pure-v1 grant are unaffected.
+    /// </summary>
+    public static void SetReadOnlyVariables(
+        Engine engine,
+        IReadOnlyDictionary<string, JsonElement> variables,
+        FeatureOptions configured)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+        ArgumentNullException.ThrowIfNull(variables);
+        ArgumentNullException.ThrowIfNull(configured);
+        if (variables.Count == 0)
+            return;
+        ValidateInput(variables, configured);
+
+        var ordered = variables.OrderBy(item => item.Key, StringComparer.Ordinal).ToArray();
+        var values = new Dictionary<string, JsValue>(StringComparer.Ordinal);
+        var container = engine.Intrinsics.Object.Construct([]);
+        foreach (var (name, element) in ordered)
+        {
+            var value = CreateValue(engine, element);
+            values[name] = value;
+            container.DefineOwnProperty(name, new PropertyDescriptor(value, writable: false, enumerable: true, configurable: false));
+        }
+
+        container.PreventExtensions();
+        engine.Global.DefineOwnProperty("variables", new PropertyDescriptor(container, writable: false, enumerable: true, configurable: false));
+
+        var getVariable = new ClrFunction(engine, "getVariable", (_, callArguments) =>
+            callArguments.Length >= 1 && callArguments[0].IsString() && values.TryGetValue(callArguments[0].AsString(), out var resolved)
+                ? resolved
+                : JsValue.Undefined);
+        engine.Global.DefineOwnProperty("getVariable", new PropertyDescriptor(getVariable, writable: false, enumerable: false, configurable: false));
+
+        foreach (var (name, _) in ordered)
+        {
+            var getterName = ToGetterName(name);
+            if (getterName is null || engine.Global.HasOwnProperty(getterName))
+                continue;
+            var captured = values[name];
+            var getter = new ClrFunction(engine, getterName, (_, _) => captured);
+            engine.Global.DefineOwnProperty(getterName, new PropertyDescriptor(getter, writable: false, enumerable: false, configurable: false));
+        }
+    }
+
+    /// <summary>
+    /// Produces the Elsa 3 convenience getter name (<c>get&lt;PascalCaseName&gt;</c>) for a variable, or
+    /// <see langword="null"/> when the variable name is not a bare JavaScript identifier (in which case only
+    /// <c>variables['name']</c> and <c>getVariable('name')</c> remain available for it).
+    /// </summary>
+    private static string? ToGetterName(string name)
+    {
+        if (name.Length == 0 || !name.All(character => char.IsLetterOrDigit(character) || character is '_' or '$'))
+            return null;
+        return $"get{char.ToUpperInvariant(name[0])}{name[1..]}";
     }
 
     private static void DisableAmbientCapabilities(Engine engine)

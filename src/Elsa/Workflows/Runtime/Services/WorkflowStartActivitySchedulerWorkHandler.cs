@@ -308,6 +308,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         CancellationToken cancellationToken) =>
         // Shares the one materialization implementation with the parent-completion re-materialization seam
         // (issue #977), constructed from this handler's own stores so the pinned entry snapshot is unchanged.
+        // The JavaScript ambient variable projection (issue #984) lives inside that shared materializer, so both
+        // the entry path and the re-materialization seam expose visible variables to expressions identically.
         new RuntimeActivityInputSnapshotMaterializer(_activityExecutionStateStore, _durableValueStateStore, _workflowExecutionStateStore)
             .MaterializeAsync(executable, executableNode, state, serviceProvider, materializedAt, cancellationToken);
 
