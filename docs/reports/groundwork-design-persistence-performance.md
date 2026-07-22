@@ -138,7 +138,7 @@ ratio gate was replaced.
 ## 5. The amendment (ratified gate-5 replacement)
 
 **Decision record.** On 2026-07-22, after reviewing the fair-conditions data, the program owner ratified
-(via interactive decision; validated by the T079 independent review) **replacing gate 5 — the per-row
+(via interactive decision; validated by the T079 three-axis independent review of 2026-07-22: performance-gate legitimacy PASS, test-objective preservation PASS, deletion completeness and core independence PASS, zero blockers) **replacing gate 5 — the per-row
 EF-ratio gate at 100K — with absolute operational budgets** for the Benchmark Acceptance Catalog rows.
 Gates 1–4 and 6–9 are unchanged. EF measurements remain **recorded as evidence, not a gate**.
 
@@ -283,5 +283,11 @@ The aggregate comparison files, gate verdicts, and orchestration logs are commit
 [`docs/reports/evidence/093-design-benchmarks/`](evidence/093-design-benchmarks/) (including the
 pre-remediation 100K comparison for the contamination disclosure). The raw per-operation sample
 files (~3.6 GB per generation) remain local benchmark outputs; every aggregate in this report is
-recomputable from them via the harness `compare` command, and the committed comparisons embed the
-per-run medians, percentiles, and bootstrap intervals used by the gates.
+recomputable by checking out commit `30ec15491` (the last commit carrying the harness, whose
+`Gates.cs` produced the committed `gates.json`) and running its `compare`/`gate` commands over the
+raw run files; the committed comparisons embed the per-run medians, percentiles, and bootstrap
+intervals used by the gates. The harness was deleted by the subsequent removal commit per the
+contract's evaluate-then-delete ordering, so the quoted gate output in §5 reproduces the
+`30ec15491` harness state rather than any committed orchestration log. Upstream remediation
+provenance: groundwork PR #124 merge `ad8ac47c7` (preview.79) and PR #125 merge `b7a31055a`
+(preview.80), both verified on the framework's `origin/main`.

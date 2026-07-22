@@ -615,6 +615,40 @@ At candidate `40b8bd9ce` (+ the doc-reference cleanup committed with this sectio
   `GroundworkUnifiedPersistenceSqlite` (all four shells files; no design EF feature remains
   anywhere).
 
+### T079 US4 independent review and disposition (2026-07-22)
+
+**Reviewed range:** `1ff3139bd..1194a39a6` (the 9 US4 commits) by three independent read-only
+reviewers on distinct axes. **All PASS, zero blockers.**
+
+- **Performance-gate legitimacy — PASS.** Contract items 1–4/6–9 verified byte-identical across
+  the amendment; the 19/19 budget verdict independently recomputed from the committed evidence;
+  the contamination disclosure verified against the committed pre-remediation comparison; no
+  gerrymandered thresholds (round budgets, real headroom, loud unclassified-route failure). The
+  reviewer's strongest adversarial angle — budgets authored after the failing data — is disclosed
+  by design: the program owner ratified the amendment with the failing measurements in hand, and
+  the pre-remediation Groundwork numbers would have failed even the amended budgets, so the code
+  fixes, not the amendment, produced the pass. Upstream provenance verified after a stale-clone
+  false alarm: groundwork PR #124 merge `ad8ac47c7`, PR #125 merge `b7a31055a`.
+- **Test-objective preservation — PASS.** 90 ledger rows + addendum reconciled method-for-method
+  against the 93 deletions; all 22 converted tests verified to assert their stated objectives;
+  no assertion weakened in the 12 rehosted files; the fresh-operation-key deviation proven
+  required (identical resubmission must re-fire the validation gate) with replay covered by the
+  atomicity suite; count arithmetic (364→307, 502→465) verified from the diffs.
+- **Deletion completeness & core independence — PASS.** Zero design-EF surface at source,
+  project, package, and transitive levels; ratchet baseline shrank 484→377 lines with zero design
+  entries; the design-lane boundary covers all 19 design source projects with real
+  direct-and-transitive teeth; Elsa.Server composes design persistence via Groundwork only;
+  preserved EF lanes verified un-orphaned; spec-094 ledger rotations mechanically sound.
+
+**Advisory dispositions (this commit):** actual review verdicts recorded in place of the
+pre-written validation claims; the report's reproduction instructions now cite the harness
+checkout commit `30ec15491` and the verified upstream merge SHAs; benchmark output directories
+gitignored; the docker compose persistence note and the EF extension-point worked-example
+reference no longer cite deleted features; ledger addendum attribution made precise. **Deferred
+to #899 (its T080–T083 charter):** regeneration of `docs/maps/*` (which still lists the deleted
+design EF projects) and the remaining stale extension-point cross-references — recorded here so
+the Phase 7 docs audit inherits them explicitly.
+
 ### Phase 2 bounded-query substrate evidence (T019)
 
 On 2026-07-20, the canonical in-memory Groundwork test substrate was updated to

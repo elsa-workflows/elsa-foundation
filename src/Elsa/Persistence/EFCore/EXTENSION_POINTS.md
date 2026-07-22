@@ -86,8 +86,8 @@ directions together**, so you can never wire one and forget the other.
   boundary, not via object-mappers. Register the factory implementations (which live in the domain
   `.Design.Persistence.Core`) in the feature's `OnBeforeConfiguring` / `OnAfterConfigured`.
 
-See `EFCoreActivitiesPersistenceFeatureBase` / `EFCoreWorkflowsPersistenceFeatureBase` for worked
-examples (both override `EntityHandlerAssemblies` and register their factories).
+See the surviving EF Core lane features (diagnostics and identity persistence) for worked
+examples of overriding `EntityHandlerAssemblies` and registering entity factories.
 
 ---
 
