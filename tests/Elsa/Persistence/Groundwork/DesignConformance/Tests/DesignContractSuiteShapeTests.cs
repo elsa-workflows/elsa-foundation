@@ -201,52 +201,15 @@ public class DesignContractSuiteShapeTests
     }
 
     [Fact]
-    public void Contract_profiles_pin_the_complete_target_and_legacy_ef_oracle_applicability_matrix()
+    public void Contract_profiles_pin_the_complete_target_applicability_matrix()
     {
+        // The temporary legacy-EF-oracle profile was removed with the design EF lane (spec 093 T072/T073);
+        // the Target profile is the sole shipped conformance profile and every scenario is applicable.
         var target = DesignPersistenceContractProfiles.Target;
         Assert.Equal("target", target.Name);
         Assert.Equal(Enum.GetValues<DesignPersistenceContractScenario>().Order(), target.Applicability.Keys.Order());
         Assert.All(target.Applicability.Values, applicability => Assert.True(applicability.IsApplicable));
         Assert.All(target.Applicability.Values, applicability => Assert.Null(applicability.NotApplicableReason));
-
-        var legacyEfOracle = DesignPersistenceContractProfiles.LegacyEfOracle;
-        Assert.Equal("legacy-ef-oracle", legacyEfOracle.Name);
-        var expected = new Dictionary<DesignPersistenceContractScenario, string?>
-        {
-            [DesignPersistenceContractScenario.AtomicityPartialStagingFailure] = null,
-            [DesignPersistenceContractScenario.AtomicityNonSuccessProviderDecision] = "Legacy EF commands expose provider failures as exceptions, not a provider-decision non-success result.",
-            [DesignPersistenceContractScenario.AtomicityCancellation] = null,
-            [DesignPersistenceContractScenario.AtomicityLostAcknowledgement] = "Legacy EF commands do not persist an operation ledger that can reconcile acknowledgement loss.",
-            [DesignPersistenceContractScenario.AtomicityExactReplay] = "Legacy EF mutation contracts do not accept a caller-stable operation key or persist replay outcomes.",
-            [DesignPersistenceContractScenario.AtomicityKeyReuseConflict] = "Legacy EF mutation contracts do not accept a caller-stable operation key or compare canonical request fingerprints.",
-            [DesignPersistenceContractScenario.AtomicityDuplicateDelivery] = "Legacy EF mutation contracts have no durable operation ledger to suppress duplicate delivery outcomes.",
-            [DesignPersistenceContractScenario.AtomicityProjectionOverLimitRejection] = "Legacy EF design tables declare unbounded text and have no projected-column contract to enforce a declared maximum length.",
-            [DesignPersistenceContractScenario.IsolationSamePointIdentities] = "Legacy EF identity keys are global and cannot represent the target scope-local same-identity semantics.",
-            [DesignPersistenceContractScenario.IsolationForeignPointReads] = "Legacy EF fixtures do not bind point reads to a storage scope and therefore cannot prove target non-disclosure.",
-            [DesignPersistenceContractScenario.IsolationForeignScopeWrites] = "Legacy EF fixtures do not bind writes to a storage scope and therefore cannot prove target cross-scope rejection.",
-            [DesignPersistenceContractScenario.IsolationDuplicateIdentities] = null,
-            [DesignPersistenceContractScenario.IsolationReusableActivityDraftOcc] = "Legacy EF reusable activity drafts do not expose the target expected-revision replace contract.",
-            [DesignPersistenceContractScenario.IsolationWorkflowDraftLastWriterWins] = null,
-            [DesignPersistenceContractScenario.IsolationSingleScopeRestart] = null,
-            [DesignPersistenceContractScenario.IsolationCrossScopeSameIdentityRestart] = "Legacy EF identity keys are global and cannot represent cross-scope same-identity restart isolation.",
-            [DesignPersistenceContractScenario.QueryScalePagedListing] = null,
-            [DesignPersistenceContractScenario.QueryScaleBatchProjection] = "Legacy EF projection reads resolve only persisted definitions and cannot emit the target's empty-facts rows for unknown definition ids.",
-            [DesignPersistenceContractScenario.QueryScaleOversizedMembership] = "Legacy EF projection reads resolve only persisted definitions and cannot emit the target's empty-facts rows for unknown definition ids.",
-            [DesignPersistenceContractScenario.QueryScaleKnownBatchParity] = null,
-            [DesignPersistenceContractScenario.QueryScaleExistenceConsistency] = null
-        };
-
-        Assert.Equal(expected.Keys.Order(), legacyEfOracle.Applicability.Keys.Order());
-
-        foreach (var (scenario, reason) in expected)
-        {
-            var applicability = legacyEfOracle.GetApplicability(scenario);
-            Assert.Equal(reason is null, applicability.IsApplicable);
-            Assert.Equal(reason, applicability.NotApplicableReason);
-        }
-
-        Assert.Equal(8, legacyEfOracle.Applicability.Values.Count(applicability => applicability.IsApplicable));
-        Assert.Equal(13, legacyEfOracle.Applicability.Values.Count(applicability => !applicability.IsApplicable));
     }
 
     [Fact]

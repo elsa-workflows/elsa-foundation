@@ -20,15 +20,35 @@ namespace Elsa.Persistence.Groundwork;
 /// </remarks>
 public sealed class GroundworkBoundedDocumentStoreRouter : IBoundedDocumentStore, IPhysicalDocumentQueryExplainer
 {
-    private readonly IReadOnlyDictionary<string, IBoundedDocumentStore> stores;
+    private readonly IReadOnlyDictionary<string, Lazy<IBoundedDocumentStore>> stores;
 
+    /// <summary>
+    /// Admits already-materialized per-route runtimes. Prefer the factory overload on the session-open path so
+    /// a route's provider runtime is only compiled when a query first reaches that route (point reads that
+    /// never route pay no compilation at all).
+    /// </summary>
     public GroundworkBoundedDocumentStoreRouter(
         IEnumerable<KeyValuePair<string, IBoundedDocumentStore>> stores)
+        : this(Project(stores))
     {
-        ArgumentNullException.ThrowIfNull(stores);
-        var entries = stores.ToArray();
+    }
+
+    /// <summary>
+    /// Admits per-route runtime factories that materialize lazily on first use within this router and are then
+    /// memoized. Building the router therefore never compiles a route's query plan; a route is compiled only
+    /// when the first query for its document kind is routed. A router that is only ever used for point reads
+    /// (which never route) consequently compiles nothing. Exposed as a factory rather than a constructor overload
+    /// so an empty route set (<c>[]</c>) never becomes ambiguous with the materialized-runtime constructor.
+    /// </summary>
+    public static GroundworkBoundedDocumentStoreRouter CreateLazy(
+        IEnumerable<KeyValuePair<string, Func<IBoundedDocumentStore>>> routeFactories) =>
+        new(Project(routeFactories));
+
+    private GroundworkBoundedDocumentStoreRouter(
+        IReadOnlyList<KeyValuePair<string, Lazy<IBoundedDocumentStore>>> entries)
+    {
         if (entries.Any(entry => string.IsNullOrWhiteSpace(entry.Key) || entry.Value is null))
-            throw new ArgumentException("Bounded document-store routes require a document kind and runtime.", nameof(stores));
+            throw new ArgumentException("Bounded document-store routes require a document kind and runtime.", nameof(entries));
 
         var duplicates = entries
             .GroupBy(entry => entry.Key, StringComparer.Ordinal)
@@ -40,10 +60,36 @@ public sealed class GroundworkBoundedDocumentStoreRouter : IBoundedDocumentStore
         {
             throw new ArgumentException(
                 $"Bounded document-store routes must be unique by document kind: {string.Join(", ", duplicates)}.",
-                nameof(stores));
+                nameof(entries));
         }
 
-        this.stores = entries.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+        stores = entries.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, Lazy<IBoundedDocumentStore>>> Project(
+        IEnumerable<KeyValuePair<string, IBoundedDocumentStore>> stores)
+    {
+        ArgumentNullException.ThrowIfNull(stores);
+        return stores
+            .Select(entry => KeyValuePair.Create(
+                entry.Key,
+                entry.Value is null ? null! : new Lazy<IBoundedDocumentStore>(entry.Value)))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, Lazy<IBoundedDocumentStore>>> Project(
+        IEnumerable<KeyValuePair<string, Func<IBoundedDocumentStore>>> routeFactories)
+    {
+        ArgumentNullException.ThrowIfNull(routeFactories);
+        return routeFactories
+            .Select(entry => KeyValuePair.Create(
+                entry.Key,
+                entry.Value is null
+                    ? null!
+                    // Sessions are single-consumer, but ExecutionAndPublication keeps the memoization correct and
+                    // costs nothing measurable versus the plan compile it guards.
+                    : new Lazy<IBoundedDocumentStore>(entry.Value, LazyThreadSafetyMode.ExecutionAndPublication)))
+            .ToArray();
     }
 
     public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
@@ -72,7 +118,7 @@ public sealed class GroundworkBoundedDocumentStoreRouter : IBoundedDocumentStore
     {
         ArgumentNullException.ThrowIfNull(query);
         return stores.TryGetValue(query.DocumentKind, out var store)
-            ? store
+            ? store.Value
             : throw new InvalidOperationException(
                 $"No bounded document-query runtime was admitted for document kind '{query.DocumentKind}'.");
     }

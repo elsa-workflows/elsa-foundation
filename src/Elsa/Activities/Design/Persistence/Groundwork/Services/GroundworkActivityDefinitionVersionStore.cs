@@ -12,7 +12,7 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
 /// <summary>
 /// Groundwork (document) implementation of <see cref="IActivityDefinitionVersionStore"/>, the document-store
-/// counterpart of <c>EFCoreActivityDefinitionVersionStore</c>. It is the most complex rich design aggregate
+/// implementation of the version-store contract. It is the most complex rich design aggregate
 /// on the document path: its authored projection collections (inputs/outputs/design facets) are serialized
 /// via <see cref="IPayloadSerializer"/> (the same serializer the EF handlers use), and the owning definition
 /// is fetched with an explicit <b>second read</b> rather than a relational join — exactly what

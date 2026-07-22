@@ -35,9 +35,9 @@ public class DesignContractSuiteHarnessTests
     }
 
     [SkippableFact]
-    public async Task Legacy_ef_oracle_non_applicable_atomicity_row_skips_before_fixture_creation()
+    public async Task Non_applicable_atomicity_row_skips_before_fixture_creation()
     {
-        var suite = new LegacyEfOracleAtomicityContractSuite();
+        var suite = new NonApplicableAtomicityContractSuite();
 
         await suite.Lost_acknowledgement_after_durable_decision_reconciles_the_authoritative_result_on_retry();
     }
@@ -61,12 +61,21 @@ public class DesignContractSuiteHarnessTests
             Task.FromResult<IDesignPersistenceContractFixture>(new AtomicityHarnessFixture());
     }
 
-    private sealed class LegacyEfOracleAtomicityContractSuite : DesignAtomicityContractSuite
+    private sealed class NonApplicableAtomicityContractSuite : DesignAtomicityContractSuite
     {
-        protected override DesignPersistenceContractProfile ContractProfile => DesignPersistenceContractProfiles.LegacyEfOracle;
+        // A test-only profile that marks one atomicity scenario not-applicable, proving the harness
+        // skips it before creating a fixture. The design-EF "legacy-ef-oracle" profile that formerly
+        // served this role was removed with the EF lane (spec 093 T072/T073).
+        protected override DesignPersistenceContractProfile ContractProfile { get; } = new(
+            "harness-non-applicable",
+            Enum.GetValues<DesignPersistenceContractScenario>().ToDictionary(
+                scenario => scenario,
+                scenario => scenario == DesignPersistenceContractScenario.AtomicityLostAcknowledgement
+                    ? DesignPersistenceScenarioApplicability.NotApplicable("Harness: this row is intentionally not applicable.")
+                    : DesignPersistenceScenarioApplicability.Applicable()));
 
         protected override Task<IDesignPersistenceContractFixture> CreateFixtureAsync(CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("A non-applicable legacy-EF row must skip before it creates a fixture.");
+            throw new InvalidOperationException("A non-applicable row must skip before it creates a fixture.");
     }
 
     private sealed class HarnessFixture : IDesignPersistenceContractFixture

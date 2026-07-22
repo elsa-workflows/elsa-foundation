@@ -27,7 +27,7 @@ public sealed class ValidationLifecycleTests
     [Fact]
     public async Task Validation_error_lifecycle_round_trips_through_the_derive_port()
     {
-        using var host = WorkflowsDesignTestHost.Create();
+        using var host = await WorkflowsDesignTestHost.CreateAsync();
 
         // Wire the real VariableUniquenessValidator into the capturing publisher's hook so every
         // OnDraftValidating dispatch runs the production validator code against the snapshot.

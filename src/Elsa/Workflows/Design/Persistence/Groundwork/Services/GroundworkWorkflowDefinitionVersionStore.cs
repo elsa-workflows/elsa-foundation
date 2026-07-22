@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 /// <summary>
 /// Groundwork (document) implementation of <see cref="IWorkflowDefinitionVersionStore"/>, the document-store
-/// counterpart of <c>EFCoreWorkflowDefinitionVersionStore</c>. It translates each closed
+/// implementation of the version-store contract. It translates each closed
 /// <see cref="Query{TEntity}"/> shape to an explicitly admitted Groundwork route and executes it through one
 /// access-bound store session.
 /// <para>

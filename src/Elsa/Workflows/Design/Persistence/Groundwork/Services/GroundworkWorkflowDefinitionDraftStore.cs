@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 /// <summary>
 /// Groundwork (document) implementation of <see cref="IWorkflowDefinitionDraftStore"/>, the document-store
-/// counterpart of <c>EFCoreWorkflowDefinitionDraftStore</c>. Like the version store, the draft is a rich
+/// implementation of the draft-store contract. Like the version store, the draft is a rich
 /// aggregate: its authored <c>WorkflowDefinitionState</c> is serialized via <see cref="IPayloadSerializer"/>
 /// and the EF shadow / navigation members are excluded from the document.
 /// </summary>

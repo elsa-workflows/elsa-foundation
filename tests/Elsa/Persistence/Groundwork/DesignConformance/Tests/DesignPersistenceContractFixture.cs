@@ -290,30 +290,7 @@ public static class DesignPersistenceContractProfiles
         Enum.GetValues<DesignPersistenceContractScenario>()
             .ToDictionary(scenario => scenario, _ => DesignPersistenceScenarioApplicability.Applicable()));
 
-    public static DesignPersistenceContractProfile LegacyEfOracle { get; } = new(
-        "legacy-ef-oracle",
-        new Dictionary<DesignPersistenceContractScenario, DesignPersistenceScenarioApplicability>
-        {
-            [DesignPersistenceContractScenario.AtomicityPartialStagingFailure] = DesignPersistenceScenarioApplicability.Applicable(),
-            [DesignPersistenceContractScenario.AtomicityNonSuccessProviderDecision] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF commands expose provider failures as exceptions, not a provider-decision non-success result."),
-            [DesignPersistenceContractScenario.AtomicityCancellation] = DesignPersistenceScenarioApplicability.Applicable(),
-            [DesignPersistenceContractScenario.AtomicityLostAcknowledgement] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF commands do not persist an operation ledger that can reconcile acknowledgement loss."),
-            [DesignPersistenceContractScenario.AtomicityExactReplay] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF mutation contracts do not accept a caller-stable operation key or persist replay outcomes."),
-            [DesignPersistenceContractScenario.AtomicityKeyReuseConflict] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF mutation contracts do not accept a caller-stable operation key or compare canonical request fingerprints."),
-            [DesignPersistenceContractScenario.AtomicityDuplicateDelivery] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF mutation contracts have no durable operation ledger to suppress duplicate delivery outcomes."),
-            [DesignPersistenceContractScenario.AtomicityProjectionOverLimitRejection] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF design tables declare unbounded text and have no projected-column contract to enforce a declared maximum length."),
-            [DesignPersistenceContractScenario.IsolationSamePointIdentities] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF identity keys are global and cannot represent the target scope-local same-identity semantics."),
-            [DesignPersistenceContractScenario.IsolationForeignPointReads] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF fixtures do not bind point reads to a storage scope and therefore cannot prove target non-disclosure."),
-            [DesignPersistenceContractScenario.IsolationForeignScopeWrites] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF fixtures do not bind writes to a storage scope and therefore cannot prove target cross-scope rejection."),
-            [DesignPersistenceContractScenario.IsolationDuplicateIdentities] = DesignPersistenceScenarioApplicability.Applicable(),
-            [DesignPersistenceContractScenario.IsolationReusableActivityDraftOcc] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF reusable activity drafts do not expose the target expected-revision replace contract."),
-            [DesignPersistenceContractScenario.IsolationWorkflowDraftLastWriterWins] = DesignPersistenceScenarioApplicability.Applicable(),
-            [DesignPersistenceContractScenario.IsolationSingleScopeRestart] = DesignPersistenceScenarioApplicability.Applicable(),
-            [DesignPersistenceContractScenario.IsolationCrossScopeSameIdentityRestart] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF identity keys are global and cannot represent cross-scope same-identity restart isolation."),
-            [DesignPersistenceContractScenario.QueryScalePagedListing] = DesignPersistenceScenarioApplicability.Applicable(),
-            [DesignPersistenceContractScenario.QueryScaleBatchProjection] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF projection reads resolve only persisted definitions and cannot emit the target's empty-facts rows for unknown definition ids."),
-            [DesignPersistenceContractScenario.QueryScaleOversizedMembership] = DesignPersistenceScenarioApplicability.NotApplicable("Legacy EF projection reads resolve only persisted definitions and cannot emit the target's empty-facts rows for unknown definition ids."),
-            [DesignPersistenceContractScenario.QueryScaleKnownBatchParity] = DesignPersistenceScenarioApplicability.Applicable(),
-            [DesignPersistenceContractScenario.QueryScaleExistenceConsistency] = DesignPersistenceScenarioApplicability.Applicable()
-        });
+    // The temporary "legacy-ef-oracle" profile existed only for the design EF behavioural oracle leaf
+    // (spec 093 T025) and the T067 benchmark harness. Both were removed with the design EF lane
+    // (T072/T073), so the profile and its shape-test pins were removed together.
 }
