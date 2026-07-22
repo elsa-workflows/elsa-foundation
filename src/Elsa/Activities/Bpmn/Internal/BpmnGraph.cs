@@ -374,9 +374,9 @@ public sealed class BpmnGraph
     /// <summary>
     /// Multi-instance loop rules (spec 121 D1): loop characteristics are valid only on a task-family or
     /// <c>subProcess</c> host that binds a child; exactly one of cardinality (≥ 1) XOR collection variable is
-    /// set; a collection variable must name a declared container-scoped variable. Collection mode is a stated
-    /// cut in this slice (not executable) and is rejected — the follow-up unit that adds the container-variable
-    /// read seam removes this rule.
+    /// set; a collection variable must name a declared container-scoped variable, and the item variable must not
+    /// shadow the reserved <c>loopIndex</c> key (spec 123 D2 — collection mode is executable since the
+    /// scoped-variable read seam landed).
     /// </summary>
     private static void ValidateMultiInstance(IReadOnlyCollection<BpmnElement> elements, IReadOnlySet<string> declaredVariableNames)
     {
