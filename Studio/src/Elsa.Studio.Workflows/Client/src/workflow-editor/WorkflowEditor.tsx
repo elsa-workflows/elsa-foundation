@@ -34,6 +34,8 @@ import { workflowCanvasAriaLabelConfig } from "./workflowAccessibility";
 import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ValidationPanel, TestRunStatus, WorkflowRuntimePanel } from "./editorPanels";
+import { useDraftValidations } from "./useDraftValidations";
+import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
 import { useSidePanelLayout } from "./useSidePanelLayout";
@@ -145,7 +147,7 @@ export function WorkflowEditor({
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { saveDraft, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft, autosaveEnabledByDefault, editDraft, setStatus, setError });
+  const { saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft, autosaveEnabledByDefault, editDraft, setStatus, setError });
   const {
     details,
     setDetails,
@@ -212,6 +214,21 @@ export function WorkflowEditor({
   }, [paletteCatalog, paletteSearch, paletteGroups]);
   const busy = operation !== "idle";
   const canRunTest = !!draft?.state.rootActivity && !busy;
+
+  // Draft validation surface (#453): fetch server-derived validations after the draft settles (when the
+  // backend advertises the relation), and combine them with the draft's reconciled errors and
+  // designer-side structural checks so the editor panel agrees with the promotion gate.
+  const draftValidations = useDraftValidations({ context, draft });
+  const structuralValidationErrors = useMemo(
+    () => detectStructuralValidationErrors(draft?.state),
+    [draft?.state]);
+  const combinedValidationErrors = useMemo(
+    () => combineValidationErrors({
+      draftErrors: draft?.validationErrors,
+      serverErrors: draftValidations.available ? draftValidations.errors : null,
+      structuralErrors: structuralValidationErrors
+    }),
+    [draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const aiProviderAvailable = useAiProviderAvailability(ai);
@@ -376,6 +393,7 @@ export function WorkflowEditor({
     catalog,
     busy,
     saveDraft,
+    flushPendingSave,
     reload,
     startTestRun,
     clearTestRun,
@@ -867,7 +885,14 @@ export function WorkflowEditor({
           ) : null}
           <button type="button" title="Export workflow as JSON" onClick={exportJson}><Download size={15} /> Export</button>
           <button type="button" disabled={busy} onClick={() => void save()}><Save size={15} /> Save</button>
-          <button type="button" disabled={busy} onClick={() => void preparePublication()}><GitBranch size={15} /> Review &amp; publish</button>
+          <button
+            type="button"
+            disabled={busy}
+            title={saving ? "Finishing the current save; the review will open once it settles." : undefined}
+            onClick={() => void preparePublication()}
+          >
+            <GitBranch size={15} /> {saving ? "Saving…" : "Review & publish"}
+          </button>
           {renderedTestRun ? (
             <TestRunStatus
               testRun={renderedTestRun}
@@ -1060,7 +1085,13 @@ export function WorkflowEditor({
               />
             ) : null}
           </div>
-          <ValidationPanel draft={draft} onRepair={repairVariableReference} />
+          <ValidationPanel
+            draft={draft}
+            errors={combinedValidationErrors}
+            onRepair={repairVariableReference}
+            onSelectNode={repairVariableReference}
+            unavailable={draftValidations.available === false}
+          />
           </>
           )}
         </main>

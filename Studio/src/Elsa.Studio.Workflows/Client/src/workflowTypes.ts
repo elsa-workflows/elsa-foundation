@@ -472,6 +472,24 @@ export interface PromoteDraftResponse {
   version: string;
 }
 
+/**
+ * A single server-derived draft validation error (foundation #937). The R2 path is decomposed into a
+ * node pointer (`nodeId`, null for workflow-scope) plus a `member` suffix, and the R3 category surfaces
+ * as `code`. Shape of an entry in `GET design/workflows/drafts/{draftId}/validations`.
+ */
+export interface DraftValidationError {
+  code: string;
+  message: string;
+  nodeId?: string | null;
+  member?: string | null;
+  severity?: string | null;
+}
+
+export interface DraftValidationsResponse {
+  draftId: string;
+  errors: DraftValidationError[];
+}
+
 export interface PublishedWorkflowResponse {
   artifactId: string;
   definitionId: string;

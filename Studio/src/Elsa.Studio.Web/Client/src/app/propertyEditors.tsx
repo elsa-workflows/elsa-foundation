@@ -1,3 +1,4 @@
+import { useEffect, useId, useState } from "react";
 import {
   readActivityInputOptionsProvider,
   type ElsaStudioModuleApi,
@@ -8,6 +9,21 @@ import {
 } from "../sdk";
 
 const textLikeTypes = new Set(["string", "system.string", "text"]);
+
+// CLR numeric primitives (short simple name after the last dot). Integer families are separated so the
+// editor can reject fractional input for integer types while allowing it for real/decimal types.
+const integerTypeNames = new Set([
+  "int", "int16", "int32", "int64", "short", "long", "byte", "sbyte",
+  "uint", "uint16", "uint32", "uint64", "ushort", "ulong", "nint", "nuint",
+  "biginteger"
+]);
+const realTypeNames = new Set(["decimal", "double", "single", "float"]);
+const timeSpanTypeNames = new Set(["timespan", "system.timespan"]);
+
+// Accepts the common .NET TimeSpan literals: "hh:mm:ss", "d.hh:mm:ss", either with an optional
+// fractional-seconds tail, plus the bare "hh:mm" shorthand. Deliberately lenient — the authoritative
+// parse is server-side; this only stops obviously malformed text from being accepted silently.
+const timeSpanPattern = /^-?(\d+\.)?\d{1,2}:\d{2}(:\d{2}(\.\d{1,7})?)?$/;
 
 export function registerBuiltInPropertyEditors(api: ElsaStudioModuleApi) {
   for (const editor of builtInPropertyEditors) {
@@ -35,6 +51,22 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
     order: 120,
     supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "checkbox") || isBooleanDescriptor(descriptor)),
     component: CheckboxEditor
+  },
+  {
+    id: "studio.property.timespan",
+    order: 128,
+    // Element-scoped TimeSpan fields (scalar or collection element): typed input with a format hint and
+    // inline validation, so an unparsable duration is flagged while authoring instead of at preflight.
+    supports: (descriptor, context) => isElementScope(context) && !hasOptionSource(descriptor) && isTimeSpanDescriptor(descriptor),
+    component: TimeSpanEditor
+  },
+  {
+    id: "studio.property.number",
+    order: 130,
+    // Element-scoped numeric fields (scalar or collection element, e.g. an Int32[] item): a number
+    // input that rejects non-numeric text inline rather than letting it reach the server as a literal.
+    supports: (descriptor, context) => isElementScope(context) && !hasOptionSource(descriptor) && isNumericDescriptor(descriptor),
+    component: NumericEditor
   },
   {
     id: "studio.property.multiline",
@@ -124,25 +156,131 @@ function sameOptionValue(left: unknown, right: unknown) {
 }
 
 function SinglelineEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
+  // An enum-typed input with no options payload can't offer a select; fall back to text but hint the
+  // caller (via title) that a specific member name is expected instead of an arbitrary string.
+  const enumHint = isEnumDescriptor(descriptor) && !hasOptionSource(descriptor)
+    ? `Enter a valid ${formatSimpleTypeName(descriptor.typeName)} value (enum member name).`
+    : undefined;
   return (
     <input
       type="text"
+      aria-label={accessibleName(descriptor)}
+      title={enumHint}
       value={value == null ? "" : String(value)}
       disabled={disabled}
-      placeholder={stringValue(descriptor.defaultValue)}
+      placeholder={stringValue(descriptor.defaultValue) || (enumHint ? formatSimpleTypeName(descriptor.typeName) : "")}
       onChange={event => onChange(event.target.value)}
     />
   );
 }
 
-function MultilineEditor({ value, disabled, onChange }: StudioActivityPropertyEditorProps) {
+function MultilineEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
   return (
     <textarea
+      aria-label={accessibleName(descriptor)}
       value={value == null ? "" : String(value)}
       disabled={disabled}
       rows={4}
       onChange={event => onChange(event.target.value)}
     />
+  );
+}
+
+function NumericEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
+  const integer = isIntegerDescriptor(descriptor);
+  const errorId = useId();
+  const [text, setText] = useState(() => numericText(value));
+  const [error, setError] = useState<string | null>(null);
+
+  // Reconcile external value changes (autosave round-trips numbers back as strings) without clobbering
+  // an in-progress invalid entry: only re-seed the field when the incoming value differs numerically.
+  useEffect(() => {
+    if (error) return;
+    const incoming = numericText(value);
+    setText(current => (Number(current) === Number(incoming) && current.trim() !== "" ? current : incoming));
+  }, [value, error]);
+
+  const commit = (next: string) => {
+    setText(next);
+    const trimmed = next.trim();
+    if (trimmed === "") {
+      setError(null);
+      onChange("");
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) {
+      setError(`Enter a valid ${integer ? "whole " : ""}number.`);
+      return;
+    }
+    if (integer && !Number.isInteger(parsed)) {
+      setError("Enter a whole number without a decimal point.");
+      return;
+    }
+    setError(null);
+    onChange(parsed);
+  };
+
+  return (
+    <>
+      <input
+        type="text"
+        inputMode={integer ? "numeric" : "decimal"}
+        aria-label={accessibleName(descriptor)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        value={text}
+        disabled={disabled}
+        spellCheck={false}
+        autoComplete="off"
+        placeholder={stringValue(descriptor.defaultValue)}
+        onChange={event => commit(event.target.value)}
+      />
+      {error ? <p id={errorId} className="studio-property-error" role="alert">{error}</p> : null}
+    </>
+  );
+}
+
+function TimeSpanEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
+  const errorId = useId();
+  const hintId = useId();
+  const [text, setText] = useState(() => (value == null ? "" : String(value)));
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (error) return;
+    setText(value == null ? "" : String(value));
+  }, [value, error]);
+
+  const commit = (next: string) => {
+    setText(next);
+    const trimmed = next.trim();
+    if (trimmed === "" || timeSpanPattern.test(trimmed)) {
+      setError(null);
+      onChange(next);
+      return;
+    }
+    setError("Enter a duration as hh:mm:ss (optionally d.hh:mm:ss).");
+  };
+
+  return (
+    <>
+      <input
+        type="text"
+        aria-label={accessibleName(descriptor)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : hintId}
+        value={text}
+        disabled={disabled}
+        spellCheck={false}
+        autoComplete="off"
+        placeholder="hh:mm:ss"
+        onChange={event => commit(event.target.value)}
+      />
+      {error
+        ? <p id={errorId} className="studio-property-error" role="alert">{error}</p>
+        : <p id={hintId} className="studio-property-hint">Format: hh:mm:ss (e.g. 00:00:30), or d.hh:mm:ss for days.</p>}
+    </>
   );
 }
 
@@ -171,7 +309,7 @@ function DropdownEditor({ descriptor, value, disabled, onChange }: StudioActivit
   const options = getOptions(descriptor);
   const renderedOptions = withUnavailableOptions(options, value == null || value === "" ? [] : [value]);
   return (
-    <select value={value == null || value === "" ? "" : optionKey(value)} disabled={disabled} onChange={event => {
+    <select aria-label={accessibleName(descriptor)} value={value == null || value === "" ? "" : optionKey(value)} disabled={disabled} onChange={event => {
       const option = renderedOptions.find(candidate => optionKey(candidate.value) === event.target.value);
       onChange(option ? option.value : event.target.value);
     }}>
@@ -243,6 +381,52 @@ function isBooleanDescriptor(descriptor: StudioActivityInputDescriptor) {
 
 function isTextDescriptor(descriptor: StudioActivityInputDescriptor) {
   return textLikeTypes.has(descriptor.typeName.toLowerCase());
+}
+
+function isNumericDescriptor(descriptor: StudioActivityInputDescriptor) {
+  const simple = simpleTypeName(descriptor.typeName);
+  return integerTypeNames.has(simple) || realTypeNames.has(simple);
+}
+
+function isIntegerDescriptor(descriptor: StudioActivityInputDescriptor) {
+  return integerTypeNames.has(simpleTypeName(descriptor.typeName));
+}
+
+function isTimeSpanDescriptor(descriptor: StudioActivityInputDescriptor) {
+  return timeSpanTypeNames.has(descriptor.typeName.trim().toLowerCase());
+}
+
+// A descriptor is enum-like when the backend flags it as one. #924 will report enum members via
+// uiSpecifications; until then honour an explicit `enum` marker or an `enum` ui hint. Keyed off
+// descriptor metadata only — never off the activity type — so no activity-specific hacks leak in.
+function isEnumDescriptor(descriptor: StudioActivityInputDescriptor) {
+  if (hasUiHint(descriptor, "enum")) return true;
+  const specs = descriptor.uiSpecifications as (Record<string, unknown> | null | undefined);
+  const marker = specs?.enum ?? specs?.isEnum ?? specs?.enumType;
+  return marker === true || (typeof marker === "string" && marker.trim().length > 0);
+}
+
+function accessibleName(descriptor: StudioActivityInputDescriptor) {
+  return descriptor.displayName?.trim() || descriptor.name;
+}
+
+// Short simple name after the last "." (and nested-type "+"), lower-cased — e.g. "System.Int32" -> "int32".
+function simpleTypeName(typeName: string): string {
+  const core = typeName.split(",", 1)[0]?.trim() ?? "";
+  const segment = core.split(".").filter(Boolean).at(-1) ?? core;
+  return (segment.split("+").filter(Boolean).at(-1) ?? segment).toLowerCase();
+}
+
+function formatSimpleTypeName(typeName: string): string {
+  const core = typeName.split(",", 1)[0]?.trim() ?? typeName;
+  const segment = core.split(".").filter(Boolean).at(-1) ?? core;
+  return segment.split("+").filter(Boolean).at(-1) ?? segment;
+}
+
+function numericText(value: unknown): string {
+  if (value == null || value === "") return "";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+  return String(value);
 }
 
 function stringValue(value: unknown) {

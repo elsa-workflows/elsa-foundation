@@ -27,6 +27,62 @@ public sealed class ElsaThemeStoreApiTests : IAsyncDisposable
         Assert.Equal("material-design", store.DefaultThemeId);
     }
 
+    [Fact]
+    public async Task BuiltInThemeCanBeDisabledAndReEnabled()
+    {
+        var client = await StartThemeStoreHostAsync();
+
+        var disableResponse = await client.PutAsJsonAsync("/_elsa/theme-store/themes/hot-pink/visibility", new { Enabled = false });
+        disableResponse.EnsureSuccessStatusCode();
+        var disabledStore = await disableResponse.Content.ReadFromJsonAsync<ThemeStoreResponse>();
+
+        Assert.NotNull(disabledStore);
+        Assert.Contains("hot-pink", disabledStore.DisabledBuiltInThemeIds ?? []);
+
+        var enableResponse = await client.PutAsJsonAsync("/_elsa/theme-store/themes/hot-pink/visibility", new { Enabled = true });
+        enableResponse.EnsureSuccessStatusCode();
+        var enabledStore = await enableResponse.Content.ReadFromJsonAsync<ThemeStoreResponse>();
+
+        Assert.NotNull(enabledStore);
+        Assert.DoesNotContain("hot-pink", enabledStore.DisabledBuiltInThemeIds ?? []);
+    }
+
+    [Fact]
+    public async Task DefaultBuiltInThemeCannotBeDisabled()
+    {
+        var client = await StartThemeStoreHostAsync();
+
+        var defaultResponse = await client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "material-design" });
+        defaultResponse.EnsureSuccessStatusCode();
+
+        var disableResponse = await client.PutAsJsonAsync("/_elsa/theme-store/themes/material-design/visibility", new { Enabled = false });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, disableResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task VisibilityEndpointRejectsNonBuiltInThemeIds()
+    {
+        var client = await StartThemeStoreHostAsync();
+
+        var response = await client.PutAsJsonAsync("/_elsa/theme-store/themes/some-custom-theme/visibility", new { Enabled = false });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DisabledBuiltInThemeCannotBecomeTheDefault()
+    {
+        var client = await StartThemeStoreHostAsync();
+
+        var disableResponse = await client.PutAsJsonAsync("/_elsa/theme-store/themes/hot-pink/visibility", new { Enabled = false });
+        disableResponse.EnsureSuccessStatusCode();
+
+        var defaultResponse = await client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "hot-pink" });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, defaultResponse.StatusCode);
+    }
+
     private async Task<HttpClient> StartThemeStoreHostAsync()
     {
         Directory.CreateDirectory(_contentRoot);

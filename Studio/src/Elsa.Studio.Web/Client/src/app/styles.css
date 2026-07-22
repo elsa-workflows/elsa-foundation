@@ -169,6 +169,22 @@ button {
   cursor: not-allowed;
 }
 
+.studio-property-error {
+  margin: var(--spacing-xs) 0 0;
+  color: var(--studio-danger-fg);
+  font-size: 0.75rem;
+}
+
+.studio-property-hint {
+  margin: var(--spacing-xs) 0 0;
+  color: var(--studio-text-muted);
+  font-size: 0.75rem;
+}
+
+input[aria-invalid="true"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 60%, transparent);
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -663,6 +679,94 @@ textarea:focus {
   border-radius: 999px;
   background: var(--success);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+}
+
+.sidebar-top .brand {
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-collapse-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-collapse-toggle:hover {
+  border-color: var(--border);
+  background: var(--sidebar-active);
+  color: var(--sidebar-foreground);
+}
+
+.sidebar-collapse-toggle:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+/* Collapsed navigation: the sidebar shrinks to an icon rail. Labels, search, section
+   headings, child links, and footer copy are hidden; icon tiles keep the wayfinding.
+   Scoped to desktop widths — below 1024px the sidebar renders as a horizontal strip
+   (see the max-width media block), where the icon-rail collapse does not apply. */
+@media (min-width: 1025px) {
+  .studio-shell.sidebar-collapsed {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .sidebar-collapsed .sidebar {
+    padding: 14px 8px;
+  }
+
+  .sidebar-collapsed .sidebar-top {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .sidebar-collapsed .sidebar-top .brand {
+    flex: none;
+    justify-content: center;
+    padding: 2px;
+  }
+
+  .sidebar-collapsed .sidebar .nav-label,
+  .sidebar-collapsed .sidebar .nav-heading,
+  .sidebar-collapsed .sidebar .nav-children,
+  .sidebar-collapsed .sidebar-footer span:last-child {
+    display: none;
+  }
+
+  .sidebar-collapsed .nav-section {
+    gap: var(--spacing-sm);
+  }
+
+  .sidebar-collapsed .nav-section a {
+    justify-content: center;
+    padding: 6px;
+  }
+
+  .sidebar-collapsed .sidebar-footer {
+    grid-template-columns: 8px;
+    justify-content: center;
+    padding: 12px 0 2px;
+  }
+
+  .sidebar-collapsed .sidebar-footer .sidebar-status-dot {
+    margin-top: 0;
+  }
 }
 
 .main-frame {
@@ -1339,6 +1443,13 @@ textarea:focus {
   font-size: 13px;
 }
 
+.theme-builder-hint {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .theme-token-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -1579,6 +1690,49 @@ textarea:focus {
   font-size: var(--studio-body-size);
   padding: 28px 18px;
   text-align: center;
+}
+
+.studio-skeleton-list {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+/* Shimmer rows start invisible and fade in after a short delay, so fast responses swap
+   straight to content without flashing a loading state first. */
+.studio-skeleton {
+  border-radius: var(--studio-radius);
+  background: linear-gradient(
+    90deg,
+    var(--studio-surface-muted) 25%,
+    color-mix(in srgb, var(--studio-text-muted) 14%, var(--studio-surface-muted)) 37%,
+    var(--studio-surface-muted) 63%
+  );
+  background-size: 200% 100%;
+  opacity: 0;
+  animation:
+    studio-skeleton-shimmer 1.4s ease-in-out infinite,
+    studio-skeleton-appear 0.2s ease 0.15s forwards;
+}
+
+.studio-skeleton-row {
+  height: 16px;
+  margin: 8px 0;
+}
+
+@keyframes studio-skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes studio-skeleton-appear {
+  to {
+    opacity: 1;
+  }
 }
 
 .studio-tabs {
@@ -3245,6 +3399,12 @@ textarea:focus {
     padding: 12px 16px;
   }
 
+  /* The sidebar renders as a horizontal strip here; the desktop icon-rail collapse
+     does not apply, so the toggle is hidden. */
+  .sidebar-collapse-toggle {
+    display: none;
+  }
+
   .bottom-panel {
     grid-row: 3;
   }
@@ -3524,6 +3684,12 @@ textarea:focus {
   .studio-dialog-overlay[data-state="open"],
   .studio-dialog[data-state="open"] {
     animation: none;
+  }
+
+  /* Show skeleton placeholders statically instead of shimmering/fading them. */
+  .studio-skeleton {
+    animation: none;
+    opacity: 1;
   }
 
   /* Stop the refresh spinner from rotating, but keep the icon rendered so the "loading" affordance

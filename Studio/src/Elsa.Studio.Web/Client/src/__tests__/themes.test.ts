@@ -3,7 +3,7 @@ import type { StudioEndpointContext } from "../sdk";
 import { builtInThemeDefinitions, getSupportedThemeModes, getTheme, getThemeNames, isMaterialTheme, materialThemeIds, resolveThemeMode, supportsThemeMode } from "../app/themes/presets";
 import type { ThemeMaterialMode } from "../app/themes/presets";
 import { applyMaterialVariables } from "../app/components/ThemeProvider";
-import { createCustomThemeFrom, findSelectableTheme, normalizeThemeStore, saveTheme, validateThemeDefinition } from "../app/themes/themeStoreApi";
+import { createCustomThemeFrom, findSelectableTheme, getSelectableThemes, normalizeThemeStore, saveTheme, setBuiltInThemeEnabled, validateThemeDefinition } from "../app/themes/themeStoreApi";
 
 describe("theme presets", () => {
   it("includes the hot pink theme", () => {
@@ -135,6 +135,36 @@ describe("theme presets", () => {
 
     expect(validateThemeDefinition(theme).valid).toBe(false);
     expect(validateThemeDefinition(theme).issues.some(issue => issue.message.includes("arbitrary CSS"))).toBe(true);
+  });
+
+  it("hides admin-disabled built-in themes from the selectable picker list", () => {
+    const store = normalizeThemeStore({ disabledBuiltInThemeIds: ["hot-pink", "not-a-built-in"] });
+    const hotPink = store.themes.find(theme => theme.id === "hot-pink");
+
+    // The definition stays listed (so the Theme Builder can re-enable it) but is not selectable.
+    expect(hotPink?.enabled).toBe(false);
+    expect(getSelectableThemes(store).some(theme => theme.id === "hot-pink")).toBe(false);
+    expect(findSelectableTheme(store, "hot-pink").id).not.toBe("hot-pink");
+    // Unknown ids are dropped rather than persisted back.
+    expect(store.disabledBuiltInThemeIds).toEqual(["hot-pink"]);
+  });
+
+  it("sends built-in visibility changes to the visibility endpoint and normalizes the result", async () => {
+    let requested: { url: string; body: unknown } | null = null;
+    const context = {
+      http: {
+        putJson: async (url: string, body: unknown) => {
+          requested = { url, body };
+          return { themes: [], defaultThemeId: "black-glass", assets: [], disabledBuiltInThemeIds: ["hot-pink"] };
+        }
+      }
+    };
+
+    const store = await setBuiltInThemeEnabled(context as unknown as StudioEndpointContext, "hot-pink", false);
+
+    expect(requested).toEqual({ url: "/_elsa/theme-store/themes/hot-pink/visibility", body: { enabled: false } });
+    expect(store.themes.find(theme => theme.id === "hot-pink")?.enabled).toBe(false);
+    expect(store.themes.filter(theme => theme.enabled).length).toBeGreaterThan(0);
   });
 
   it("normalizes store-shaped mutation responses with built-in themes", async () => {
