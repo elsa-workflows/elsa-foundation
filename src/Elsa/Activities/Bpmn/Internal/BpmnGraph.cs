@@ -118,10 +118,16 @@ public sealed class BpmnGraph
     public IReadOnlyCollection<BpmnSequenceFlow> InboundFlows(string elementId) =>
         _inboundByTarget[elementId].ToArray();
 
-    /// <summary>The timer/message/signal catch boundary events attached to <paramref name="hostElementId"/> (spec 120); these arm a suspending listener child when the host is scheduled. Error, compensation, and cancel boundaries arm nothing (spec 120/124/125).</summary>
+    /// <summary>The timer/message/signal catch boundary events attached to <paramref name="hostElementId"/> (spec 120); these arm a suspending listener child when the host is scheduled. Error, escalation, compensation, and cancel boundaries arm nothing (spec 120/124/125/127).</summary>
     public IReadOnlyCollection<BpmnElement> AttachedCatchBoundaries(string hostElementId) =>
         _boundariesByHost[hostElementId]
-            .Where(boundary => !BpmnElementFamilies.IsErrorBoundary(boundary) && !BpmnElementFamilies.IsCompensationBoundary(boundary) && !BpmnElementFamilies.IsCancelBoundary(boundary))
+            .Where(boundary => !BpmnElementFamilies.IsErrorBoundary(boundary) && !BpmnElementFamilies.IsEscalationBoundary(boundary) && !BpmnElementFamilies.IsCompensationBoundary(boundary) && !BpmnElementFamilies.IsCancelBoundary(boundary))
+            .ToArray();
+
+    /// <summary>The escalation boundary events attached to <paramref name="hostElementId"/> (spec 127), in element order; dormant and notification-driven. A host may carry several with distinct codes plus at most one code-less catch-all.</summary>
+    public IReadOnlyCollection<BpmnElement> AttachedEscalationBoundaries(string hostElementId) =>
+        _boundariesByHost[hostElementId]
+            .Where(BpmnElementFamilies.IsEscalationBoundary)
             .ToArray();
 
     /// <summary>The single error boundary attached to <paramref name="hostElementId"/> (spec 120), or <c>null</c> when the host has none; validation caps a host at one error boundary.</summary>
@@ -359,6 +365,8 @@ public sealed class BpmnGraph
 
         ValidateBoundaryEvents(elements, outboundBySource, inboundByTarget);
 
+        ValidateEscalation(elements);
+
         ValidateCompensation(elements, outboundBySource, inboundByTarget);
 
         ValidateTransaction(elements, structureIsTransaction);
@@ -484,12 +492,76 @@ public sealed class BpmnGraph
                 if (boundary.ChildNodeId is not null)
                     throw new BpmnExecutionException($"BPMN cancel boundary event '{boundary.ElementId}' cannot bind a child activity; it is dormant and fires on the transaction's Cancelled outcome.");
             }
+            else if (BpmnElementFamilies.IsEscalationBoundary(boundary))
+            {
+                // spec 127: an escalation boundary is dormant (no listener child) and routes its outbound flows
+                // (≥1, already enforced above) when a matching escalation notification arrives. CancelActivity is
+                // honored (interrupting and non-interrupting are both meaningful). The host-must-be-a-subprocess,
+                // distinct-codes, and single-catch-all rules live in ValidateEscalation.
+                if (boundary.ChildNodeId is not null)
+                    throw new BpmnExecutionException($"BPMN escalation boundary event '{boundary.ElementId}' cannot bind a child activity; it is dormant and fires when a matching escalation notification arrives.");
+            }
             else if (boundary.ChildNodeId is null)
             {
                 throw new BpmnExecutionException($"BPMN catch boundary event '{boundary.ElementId}' requires a bound suspending listener child (a Delay for timer, an Event for message/signal).");
             }
         }
     }
+
+    /// <summary>
+    /// Escalation rules (spec 127 D1). An escalation throw (intermediate) or end event must carry a non-empty
+    /// escalation <c>code</c> (a throw must say what it escalates) and bind no child. An escalation boundary must
+    /// bind no child (already enforced in <see cref="ValidateBoundaryEvents"/>), attach to a <c>subProcess</c>-family
+    /// host (a task host is dead by construction — a task's bound child is a leaf that can never escalate), and per
+    /// host the escalation boundary codes must be distinct with at most one code-less catch-all. Each rule rejects
+    /// deterministically with the offending element named.
+    /// </summary>
+    private static void ValidateEscalation(IReadOnlyCollection<BpmnElement> elements)
+    {
+        var elementsById = elements.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
+
+        // Rule 1 — an escalation throw/end carries a non-empty code and binds no child.
+        foreach (var thrower in elements.Where(BpmnElementFamilies.IsEscalationThrowOrEnd))
+        {
+            if (thrower.ChildNodeId is not null)
+                throw new BpmnExecutionException($"BPMN escalation {(StringComparer.Ordinal.Equals(thrower.ElementType, BpmnElementTypes.EndEvent) ? "end" : "throw")} event '{thrower.ElementId}' cannot bind a child activity.");
+            if (ReadEscalationCode(thrower) is null)
+                throw new BpmnExecutionException($"BPMN escalation {(StringComparer.Ordinal.Equals(thrower.ElementType, BpmnElementTypes.EndEvent) ? "end" : "throw")} event '{thrower.ElementId}' must declare a non-empty escalation code; a throw must say what it escalates.");
+        }
+
+        // Rules 2/3 — escalation boundary host family + per-host distinct codes and a single catch-all.
+        var codesByHost = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        var catchAllByHost = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var boundary in elements.Where(BpmnElementFamilies.IsEscalationBoundary))
+        {
+            // ValidateBoundaryEvents already rejects a missing/unresolvable host, so a resolvable host is expected here.
+            if (boundary.AttachedToRef is not { } hostId || !elementsById.TryGetValue(hostId, out var host))
+                continue;
+            if (!StringComparer.Ordinal.Equals(host.ElementType, BpmnElementTypes.SubProcess))
+                throw new BpmnExecutionException($"BPMN escalation boundary event '{boundary.ElementId}' is attached to '{hostId}' ({host.ElementType}); an escalation boundary may only attach to a subprocess host (a task's bound child is a leaf that can never escalate).");
+
+            var code = ReadEscalationCode(boundary);
+            if (code is null)
+            {
+                if (!catchAllByHost.Add(hostId))
+                    throw new BpmnExecutionException($"BPMN host '{hostId}' declares more than one code-less catch-all escalation boundary; a host may carry at most one.");
+            }
+            else
+            {
+                var codes = codesByHost.TryGetValue(hostId, out var existing) ? existing : codesByHost[hostId] = new HashSet<string>(StringComparer.Ordinal);
+                if (!codes.Add(code))
+                    throw new BpmnExecutionException($"BPMN host '{hostId}' declares more than one escalation boundary for code '{code}'; escalation boundary codes on one host must be distinct.");
+            }
+        }
+    }
+
+    /// <summary>The non-empty escalation code an escalation throw/end/boundary declares (spec 127), or <c>null</c> when absent/blank (a code-less boundary is the catch-all).</summary>
+    private static string? ReadEscalationCode(BpmnElement element) =>
+        element.EventDefinitions.SingleOrDefault() is { } definition
+        && definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Code, out var code)
+        && !string.IsNullOrWhiteSpace(code)
+            ? code.Trim()
+            : null;
 
     /// <summary>
     /// Compensation rules (spec 124 D1). Compensation boundaries reference an existing handler; handlers are

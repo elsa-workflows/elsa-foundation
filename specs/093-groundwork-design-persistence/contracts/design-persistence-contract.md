@@ -147,7 +147,17 @@ EF remains a temporary oracle only until all of the following are attached to th
 2. all four provider conformance suites green;
 3. provider-native plans accepted for every scale-bearing query;
 4. atomicity, retry, scope, restart, and schema-evolution tests green;
-5. for every row in the Benchmark Acceptance Catalog at 100K, the median of three independent measured processes (one untimed warm-up, at least 100 operations and 30 seconds steady state each) has Groundwork p95 `<= 1.25x` same-provider EF, throughput `>= 80%` EF, and p99 `<= 2x` EF;
+5. for every row in the Benchmark Acceptance Catalog at 100K, the median of three independent measured processes (one untimed warm-up, at least 100 operations and 30 seconds steady state each) meets the absolute operational budget for its class:
+
+   | Class | Rows | p95 | p99 | Throughput |
+   |---|---|---|---|---|
+   | point-read | identity get / version-exact / version-latest / exists (6) | ≤ 0.8 ms | ≤ 2.5 ms | ≥ 2,000 ops/s |
+   | batch/projection reads | `act.catalog.versions-batch`, `wf.catalog.projection` | ≤ 5 ms | ≤ 20 ms | ≥ 200 ops/s |
+   | catalog page/count | `wf`+`act` filter-page, `wf.catalog.count` | ≤ 400 ms | ≤ 800 ms | ≥ 4 ops/s |
+   | writes @c1 | create/materialize/create/add-version (4) | ≤ 3 ms | ≤ 25 ms | ≥ 400 ops/s |
+   | writes @c16 | the same 4 rows at concurrency 16 | ≤ 100 ms | ≤ 500 ms | ≥ the same row's @c1 throughput (write scaling must not invert) |
+
+   **Decision record (ratified 2026-07-22 by program-owner interactive decision, after reviewing the fair-conditions data; validated by the T079 three-axis independent review of 2026-07-22: performance-gate legitimacy PASS, test-objective preservation PASS, deletion completeness and core independence PASS, zero blockers).** This item previously required Groundwork p95 `<= 1.25x` same-provider EF, throughput `>= 80%` EF, and p99 `<= 2x` EF. That per-row EF ratio is **replaced** by the absolute budgets above because the ratio compared semantically unequal work: the Groundwork write path executes the ratified operation-ledger marker, replay preflight, scope-bound sessions, and atomic multi-document staging per operation, while the temporary EF oracle performs bare `SaveChanges`. The EF oracle's own conformance profile (`DesignPersistenceContractProfiles.LegacyEfOracle`, research.md) declares the ledger, replay, and storage-scope scenarios **N/A** ("No durable operation ledger…", "No caller-stable operation key or durable replay outcome", "No storage-scope-bound write boundary"), so an EF ratio charges Groundwork for correctness work the oracle does not perform. The budgets instead bound the product-relevant authoring envelope (interactive-save perception thresholds, point-lookup latencies, catalog page responsiveness) and protect against regression; each measured median is recorded alongside its budget so headroom is visible. Same-provider EF measurements remain **RECORDED as evidence, not a gate**. Verified: the fair same-conditions re-measurement of 2026-07-22 passes 19/19 (`docs/reports/groundwork-design-persistence-performance.md`, `docs/reports/evidence/093-design-benchmarks/comparison.100k.json`, `docs/reports/evidence/093-design-benchmarks/gates.json`).
 6. at 100K and 1M, every selected physical-entity type improves median p95 or throughput by at least 10% over both shared/linked and dedicated-document forms, in the same direction in all three runs, with a 95% bootstrap confidence interval excluding zero;
 7. reference design composition uses Groundwork;
 8. design source/project/package/test dependency audit reports zero EF;

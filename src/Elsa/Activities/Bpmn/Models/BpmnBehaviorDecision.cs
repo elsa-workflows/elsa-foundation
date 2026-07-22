@@ -58,6 +58,8 @@ public sealed record BpmnBehaviorCommand
     public static BpmnBehaviorCommand TriggerCompensation() => new(BpmnBehaviorCommandKind.TriggerCompensation);
 
     public static BpmnBehaviorCommand CancelTransaction() => new(BpmnBehaviorCommandKind.CancelTransaction);
+
+    public static BpmnBehaviorCommand RaiseEscalation() => new(BpmnBehaviorCommandKind.RaiseEscalation);
 }
 
 public enum BpmnBehaviorCommandKind
@@ -90,5 +92,14 @@ public enum BpmnBehaviorCommandKind
     /// complete the process with the <c>Cancelled</c> outcome. The behavior stays decision-only — stopping,
     /// claiming, replay, and completion are engine-owned.
     /// </summary>
-    CancelTransaction
+    CancelTransaction,
+
+    /// <summary>
+    /// Raise an escalation (spec 127): an escalation throw/end event requests the engine to signal its parent
+    /// scope through seam C (<c>RequestParentNotification</c>) — or, at a root process, to record a no-op
+    /// diagnostic. Companion to the throw's routing command (<c>EmitTokens</c> on an intermediate throw,
+    /// <c>ConsumeToken</c> on an end event), which routes/consumes as usual. The behavior stays decision-only —
+    /// the escalation code is read from the element, and matching/firing/bubbling are engine-owned.
+    /// </summary>
+    RaiseEscalation
 }

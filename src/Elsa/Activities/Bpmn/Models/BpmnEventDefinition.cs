@@ -49,6 +49,14 @@ public static class BpmnEventDefinitionProperties
     /// <see cref="BpmnEventDefinitionTypes.Compensation"/> definition of a throw/end event.
     /// </summary>
     public const string ActivityRef = "activityRef";
+
+    /// <summary>
+    /// The escalation code an <see cref="BpmnEventDefinitionTypes.Escalation"/> definition carries (spec 127):
+    /// the matching key. <b>Required</b> and non-empty on an escalation throw/end event (a throw must say what
+    /// it escalates); <b>optional</b> on an escalation boundary event — a code-less boundary is the code-less
+    /// catch-all that matches any escalation whose specific code no other boundary on the host claims.
+    /// </summary>
+    public const string Code = "code";
 }
 
 public static class BpmnEventDefinitionTypes

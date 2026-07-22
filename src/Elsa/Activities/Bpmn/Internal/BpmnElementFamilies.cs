@@ -26,6 +26,12 @@ public static class BpmnElementFamilies
 
     /// <summary>The compensate intermediate throw event family (spec 124): triggers a compensation replay, then routes its outbound flows.</summary>
     public const string IntermediateThrowEventCompensation = "intermediateThrowEvent.compensation";
+
+    /// <summary>The escalation intermediate throw event family (spec 127): raises an escalation to the parent scope, then routes its outbound flows (fire-and-continue).</summary>
+    public const string IntermediateThrowEventEscalation = "intermediateThrowEvent.escalation";
+
+    /// <summary>The escalation end event family (spec 127): raises an escalation to the parent scope, then consumes its token (none-end semantics).</summary>
+    public const string EndEventEscalation = "endEvent.escalation";
     public const string Task = "task";
     public const string SubProcess = "subProcess";
     public const string ExclusiveGateway = "exclusiveGateway";
@@ -95,6 +101,7 @@ public static class BpmnElementFamilies
         BpmnEventDefinitionTypes.Message,
         BpmnEventDefinitionTypes.Signal,
         BpmnEventDefinitionTypes.Error,
+        BpmnEventDefinitionTypes.Escalation,
         BpmnEventDefinitionTypes.Compensation,
         BpmnEventDefinitionTypes.Cancel
     };
@@ -108,10 +115,23 @@ public static class BpmnElementFamilies
         var definitionType = element.EventDefinitions.Single().Type;
         if (!SupportedBoundaryDefinitionTypes.Contains(definitionType))
             throw new BpmnExecutionException(
-                $"BPMN boundary event '{element.ElementId}' declares event definition type '{definitionType}'; only timer, message, signal, error, compensation, and cancel boundary events are supported by this engine slice.");
+                $"BPMN boundary event '{element.ElementId}' declares event definition type '{definitionType}'; only timer, message, signal, error, escalation, compensation, and cancel boundary events are supported by this engine slice.");
 
         return BoundaryEvent;
     }
+
+    /// <summary>True when a <c>boundaryEvent</c> is an escalation boundary (spec 127): dormant (no listener child), notification-driven, routes its outbound flows.</summary>
+    public static bool IsEscalationBoundary(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Escalation);
+
+    /// <summary>True when an element is an escalation throw (intermediate) or escalation end event (spec 127): it carries exactly one escalation event definition.</summary>
+    public static bool IsEscalationThrowOrEnd(BpmnElement element) =>
+        (StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateThrowEvent) ||
+         StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent)) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Escalation);
 
     /// <summary>True when a <c>boundaryEvent</c> is an error boundary (absorbs the host's child fault, no listener child); false when it is a timer/message/signal catch boundary.</summary>
     public static bool IsErrorBoundary(BpmnElement element) =>
@@ -206,16 +226,19 @@ public static class BpmnElementFamilies
                 return EndEventCompensation;
             if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Cancel))
                 return EndEventCancel;
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Escalation))
+                return EndEventEscalation;
         }
 
         throw new BpmnExecutionException(
-            $"BPMN end event '{element.ElementId}' declares unsupported event definitions; only none, terminate, compensate, and cancel end events are supported by this engine slice.");
+            $"BPMN end event '{element.ElementId}' declares unsupported event definitions; only none, terminate, compensate, cancel, and escalation end events are supported by this engine slice.");
     }
 
     /// <summary>
-    /// Resolves an intermediate throw event (spec 124). This slice wires it for the compensation definition only:
-    /// exactly one <see cref="BpmnEventDefinitionTypes.Compensation"/> definition → the compensate throw family;
-    /// any other (or no) definition is rejected.
+    /// Resolves an intermediate throw event. This slice wires two definitions: exactly one
+    /// <see cref="BpmnEventDefinitionTypes.Compensation"/> definition → the compensate throw family (spec 124);
+    /// exactly one <see cref="BpmnEventDefinitionTypes.Escalation"/> definition → the escalation throw family
+    /// (spec 127); any other (or no) definition is rejected.
     /// </summary>
     private static string ResolveIntermediateThrowEvent(BpmnElement element)
     {
@@ -224,10 +247,12 @@ public static class BpmnElementFamilies
                 $"BPMN intermediate throw event '{element.ElementId}' must declare exactly one event definition; it declares {element.EventDefinitions.Count}.");
 
         var definitionType = element.EventDefinitions.Single().Type;
-        if (!StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Compensation))
-            throw new BpmnExecutionException(
-                $"BPMN intermediate throw event '{element.ElementId}' declares event definition type '{definitionType}'; only compensate throw events are supported by this engine slice.");
+        if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Compensation))
+            return IntermediateThrowEventCompensation;
+        if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Escalation))
+            return IntermediateThrowEventEscalation;
 
-        return IntermediateThrowEventCompensation;
+        throw new BpmnExecutionException(
+            $"BPMN intermediate throw event '{element.ElementId}' declares event definition type '{definitionType}'; only compensate and escalation throw events are supported by this engine slice.");
     }
 }

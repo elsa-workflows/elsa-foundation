@@ -61,6 +61,12 @@ public sealed class BpmnExecutionEngine(
     /// <summary>The distinguishable outcome a cancelled transaction completes with (spec 125); the parent maps it to the attached cancel boundary, and a root transaction completes the workflow with it.</summary>
     public const string CancelledOutcomeName = "Cancelled";
 
+    /// <summary>The single reserved seam-C notification code the module raises for every escalation (spec 127); the escalation identity travels in the payload, keeping the seam-C code namespace clean.</summary>
+    public const string EscalationNotificationCode = "bpmn.escalation";
+
+    /// <summary>The seam-A reason recorded on the host's (and its subtree's) cancelled tokens when an interrupting escalation boundary fired (spec 127).</summary>
+    public const string EscalationHostInterruptedReason = "bpmn.escalation.host-interrupted";
+
     /// <summary>The deterministic fault code raised when a transaction child completes Cancelled but no cancel boundary is attached to route the cancellation (spec 125 D2b).</summary>
     public const string TransactionCancelledUnhandledFaultCode = "bpmn.transaction.cancelled-unhandled";
 
@@ -355,6 +361,226 @@ public sealed class BpmnExecutionEngine(
 
         return FinishEvaluation(context, result);
     }
+
+    /// <summary>
+    /// Raises an escalation from an escalation throw/end event (spec 127 D2a), on the thrower's own (nested)
+    /// evaluation. When this process has a committed parent, stages a seam-C <c>RequestParentNotification</c>
+    /// (code <see cref="EscalationNotificationCode"/>, payload <c>{ code, name? }</c>) that rides the evaluation's
+    /// Defer/Complete commit; at a root process it is a no-op with an <c>EscalationUnhandled</c> diagnostic (an
+    /// escalation nobody can catch is a signal into the void, not an error). Never faults. The companion routing
+    /// command routes/consumes as usual.
+    /// </summary>
+    private static BpmnExecutionState RaiseEscalation(
+        IRuntimeActivityExecutionContext context,
+        BpmnExecutionState state,
+        BpmnToken token,
+        BpmnElement element)
+    {
+        var (code, name) = ReadEscalation(element);
+
+        if (context.ActivityExecutionState.ParentActivityExecutionId is not null)
+        {
+            context.RequestParentNotification(EscalationNotificationCode, BuildEscalationPayload(code, name));
+            return BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationRaised, element.ElementId, null, token.TokenId,
+                $"BPMN escalation event '{element.ElementId}' raised escalation code '{code}' to its parent scope.");
+        }
+
+        return BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationUnhandled, element.ElementId, null, token.TokenId,
+            $"BPMN escalation event '{element.ElementId}' raised escalation code '{code}' at a root process; no parent scope can catch it (no-op).");
+    }
+
+    /// <summary>
+    /// Handles a non-terminal child→parent escalation notification (spec 127 D2b, seam C), on the parent scope's
+    /// evaluation. Resolves the notifying child to its host element, matches the payload's escalation code against
+    /// the host's attached escalation boundaries (exact code beats the code-less catch-all), and fires: a
+    /// non-interrupting match mints a boundary token alongside the untouched host (repeated notifications fire
+    /// repeatedly); an interrupting match cancels the host token (its subtree torn down via seam A, MI coordinator
+    /// cascades honored) before routing the boundary path. An unmatched escalation bubbles (re-staged to the
+    /// grandparent when this process itself has a parent, else a root <c>EscalationUnhandled</c> no-op). Late races
+    /// (notifying child no longer live / host token terminal) fire non-interrupting boundaries but no-op
+    /// interrupting ones with an <c>EscalationLate</c> diagnostic. Any non-escalation seam-C code is a
+    /// forward-compatible diagnostic pass-through. Never faults.
+    /// </summary>
+    public ValueTask<RuntimeStructuralContinuation> OnChildNotifiedAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext notification)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(notification);
+
+        var graph = context.ExecutableNode.GetOrAddRoutingStructure(BpmnGraph.From);
+        var state = BpmnStatePersister.LoadState(context.ActivityExecutionState) ?? BpmnStatePersister.CreateInitialState();
+
+        // spec 127 D2b: a non-escalation seam-C code (a future consumer's) is ignored with a diagnostic — never a fault.
+        if (!StringComparer.Ordinal.Equals(notification.Code, EscalationNotificationCode))
+        {
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationUnhandled, null, null, null,
+                $"BPMN process ignored a child notification with unrecognized seam-C code '{notification.Code}' (forward-compatible pass-through).");
+            return ValueTask.FromResult(FinishEvaluation(context, new EvaluationResult(state)));
+        }
+
+        return ValueTask.FromResult(FinishEvaluation(context, HandleEscalationNotification(context, graph, state, notification)));
+    }
+
+    /// <summary>Resolves, matches, and fires an escalation notification (spec 127 D2b); the escalation-specific body of <see cref="OnChildNotifiedAsync"/>.</summary>
+    private EvaluationResult HandleEscalationNotification(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        ActivityChildNotifiedContext notification)
+    {
+        var escalationCode = ReadPayloadCode(notification.Payload);
+
+        // Resolve the host element from the notifying child's node id (robust to the late case: the host element
+        // is graph-derived, so it resolves even after the notifying child stopped being an active child).
+        var hostElement = graph.FindElementByChildNodeId(notification.NotifyingChildExecutableNodeId);
+        if (hostElement is null || escalationCode is null)
+            return BubbleOrUnhandled(context, state, notification, escalationCode, hostElementId: hostElement?.ElementId);
+
+        // The notifying child's active-child record (present in the live case; absent in the late case — the child
+        // already completed/faulted and its record was dropped).
+        var activeChild = state.ActiveChildren.FirstOrDefault(child =>
+            StringComparer.Ordinal.Equals(child.NodeId, notification.NotifyingChildExecutableNodeId) &&
+            StringComparer.Ordinal.Equals(child.IterationId, notification.NotifyingChildIterationId));
+        var hostToken = activeChild is not null
+            ? state.Tokens.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.TokenId, activeChild.TokenId))
+            : null;
+        var isLate = hostToken is null || hostToken.Status is BpmnTokenStatus.Consumed or BpmnTokenStatus.Canceled;
+
+        var boundary = MatchEscalationBoundary(graph, hostElement.ElementId, escalationCode);
+        if (boundary is null)
+            return BubbleOrUnhandled(context, state, notification, escalationCode, hostElement.ElementId);
+
+        // Non-interrupting fire (live or late): mint a boundary token alongside the untouched host and route.
+        if (!boundary.CancelActivity)
+            return FireEscalationBoundary(context, graph, state, boundary, hostToken, interruptTokenId: null, notification, escalationCode);
+
+        // Interrupting fire. A late race (host already terminal) no-ops deterministically — interrupting it
+        // retroactively would double-route the host's already-taken outbound.
+        if (isLate)
+        {
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationLate, boundary.ElementId, null, hostToken?.TokenId,
+                $"BPMN interrupting escalation boundary '{boundary.ElementId}' matched code '{escalationCode}', but host '{hostElement.ElementId}' had already terminalized; no-op (late race).");
+            return new EvaluationResult(state);
+        }
+
+        // The interrupt target is the multi-instance loop coordinator when the notifying child is an instance,
+        // otherwise the host token itself (the spec 120 error-boundary interrupt precedent).
+        var interruptTokenId = ResolveMultiInstanceCoordinatorTokenId(state, hostToken!) ?? hostToken!.TokenId;
+        return FireEscalationBoundary(context, graph, state, boundary, hostToken, interruptTokenId, notification, escalationCode);
+    }
+
+    /// <summary>
+    /// Fires a matched escalation boundary (spec 127 D2b). When <paramref name="interruptTokenId"/> is set
+    /// (interrupting), cancels that token via the existing cascade (its subtree torn down via seam A; an MI
+    /// coordinator cascade-cancels every instance) and its still-armed sibling catch listeners before minting the
+    /// boundary token; otherwise (non-interrupting) leaves the host and its child untouched. The minted
+    /// <c>Active</c> token inherits the host token's loop-iteration key and propagates the boundary's outbound
+    /// flows. Seam-A cancellations ride the clean continuation.
+    /// </summary>
+    private EvaluationResult FireEscalationBoundary(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnElement boundary,
+        BpmnToken? hostToken,
+        string? interruptTokenId,
+        ActivityChildNotifiedContext notification,
+        string escalationCode)
+    {
+        var pendingCancellations = new List<BpmnPendingSubtreeCancellation>();
+
+        if (interruptTokenId is not null)
+        {
+            var liveChildAeiByNode = BuildLiveChildAeiByNode(context);
+            state = CancelTokenAndChild(state, interruptTokenId, EscalationHostInterruptedReason, liveChildAeiByNode, pendingCancellations,
+                (token, reason) => $"BPMN interrupting escalation boundary '{boundary.ElementId}' matched code '{escalationCode}' and cancelled token '{token.TokenId}' at '{token.AtElementId}' ({reason}).");
+            state = CancelHostListeners(graph, state, interruptTokenId, listenerTokenToSkip: null, EscalationHostInterruptedReason, liveChildAeiByNode, pendingCancellations);
+        }
+
+        var iterationKey = hostToken?.IterationKey;
+        var boundaryToken = NewToken(state, boundary.ElementId, flowId: null, parentTokenId: hostToken?.TokenId, BpmnTokenStatus.Active,
+            producingActivityExecutionId: notification.NotifyingChildActivityExecutionId, iterationKey: iterationKey);
+        state = AddToken(state, boundaryToken);
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationCaught, boundary.ElementId, null, boundaryToken.TokenId,
+            $"BPMN {(interruptTokenId is null ? "non-interrupting" : "interrupting")} escalation boundary '{boundary.ElementId}' caught escalation code '{escalationCode}' and emitted token '{boundaryToken.TokenId}' to route the escalation path.");
+
+        var schedulingActivityExecutionId = context.ActivityExecutionState.Execution.ActivityExecutionId;
+        var result = Propagate(context, graph, state, schedulingActivityExecutionId);
+        return result with { PendingSubtreeCancellations = pendingCancellations };
+    }
+
+    /// <summary>
+    /// Bubbles an unmatched escalation (spec 127 D2b): when this process itself has a committed parent, carries a
+    /// seam-C re-stage of the identical code/payload to the grandparent (consumer-side recursion, one hop per
+    /// level); at a root process it is a no-op with an <c>EscalationUnhandled</c> diagnostic.
+    /// </summary>
+    private static EvaluationResult BubbleOrUnhandled(
+        IRuntimeActivityExecutionContext context,
+        BpmnExecutionState state,
+        ActivityChildNotifiedContext notification,
+        string? escalationCode,
+        string? hostElementId)
+    {
+        if (context.ActivityExecutionState.ParentActivityExecutionId is not null)
+        {
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationRaised, hostElementId, null, null,
+                $"BPMN process found no escalation boundary for code '{escalationCode ?? "(none)"}'{(hostElementId is null ? "" : $" on host '{hostElementId}'")}; bubbling the escalation to its parent scope.");
+            return new EvaluationResult(state, PendingParentNotification: new BpmnPendingParentNotification(notification.Code, notification.Payload));
+        }
+
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationUnhandled, hostElementId, null, null,
+            $"BPMN root process found no escalation boundary for code '{escalationCode ?? "(none)"}'{(hostElementId is null ? "" : $" on host '{hostElementId}'")}; the escalation is unhandled (no-op).");
+        return new EvaluationResult(state);
+    }
+
+    /// <summary>Matches an escalation code against a host's attached escalation boundaries (spec 127 D2b): an exact code match wins; else the code-less catch-all; else <c>null</c> (no match — bubble).</summary>
+    private static BpmnElement? MatchEscalationBoundary(BpmnGraph graph, string hostElementId, string escalationCode)
+    {
+        var boundaries = graph.AttachedEscalationBoundaries(hostElementId);
+        return boundaries.FirstOrDefault(boundary => StringComparer.Ordinal.Equals(ReadEscalationBoundaryCode(boundary), escalationCode))
+               ?? boundaries.FirstOrDefault(boundary => ReadEscalationBoundaryCode(boundary) is null);
+    }
+
+    /// <summary>The escalation code+name an escalation throw/end event carries (spec 127); the code is validated non-empty at graph build.</summary>
+    private static (string Code, string? Name) ReadEscalation(BpmnElement element)
+    {
+        var properties = element.EventDefinitions.Single().Properties;
+        var code = properties.TryGetValue(BpmnEventDefinitionProperties.Code, out var codeValue) && !string.IsNullOrWhiteSpace(codeValue)
+            ? codeValue.Trim()
+            : throw new BpmnExecutionException($"BPMN escalation event '{element.ElementId}' declares no escalation code; the graph validator should have rejected it.");
+        var name = properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var nameValue) && !string.IsNullOrWhiteSpace(nameValue)
+            ? nameValue.Trim()
+            : null;
+        return (code, name);
+    }
+
+    /// <summary>The escalation code an escalation boundary declares (spec 127), or <c>null</c> when it is the code-less catch-all.</summary>
+    private static string? ReadEscalationBoundaryCode(BpmnElement boundary) =>
+        boundary.EventDefinitions.SingleOrDefault() is { } definition
+        && definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Code, out var code)
+        && !string.IsNullOrWhiteSpace(code)
+            ? code.Trim()
+            : null;
+
+    /// <summary>Builds the seam-C escalation payload <c>{ code, name? }</c> (spec 127 D2a); the escalation identity travels here, keeping the seam-C code namespace clean. <c>name</c> is omitted when absent.</summary>
+    private static JsonElement BuildEscalationPayload(string code, string? name) =>
+        JsonSerializer.SerializeToElement(new EscalationPayload(code, name), EscalationPayloadOptions);
+
+    /// <summary>Reads the escalation code from a seam-C escalation payload (spec 127 D2b); <c>null</c> when absent/malformed (defensive — the module builds the payload, so unreachable in practice).</summary>
+    private static string? ReadPayloadCode(JsonElement? payload) =>
+        payload is { ValueKind: JsonValueKind.Object } element
+        && element.TryGetProperty("code", out var code)
+        && code.ValueKind == JsonValueKind.String
+        && code.GetString() is { Length: > 0 } value
+            ? value
+            : null;
+
+    private static readonly JsonSerializerOptions EscalationPayloadOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
+
+    /// <summary>The seam-C escalation payload shape (spec 127 D2a): the required matching <c>code</c> and an optional display <c>name</c>.</summary>
+    private sealed record EscalationPayload(string Code, string? Name = null);
 
     /// <summary>
     /// Handles a transaction child that completed with the <c>Cancelled</c> outcome (spec 125 D2b), in the parent
@@ -655,7 +881,8 @@ public sealed class BpmnExecutionEngine(
         ActivityFault? Fault = null,
         bool Terminated = false,
         IReadOnlyCollection<BpmnPendingSubtreeCancellation>? PendingSubtreeCancellations = null,
-        BpmnFaultAbsorption? FaultAbsorption = null);
+        BpmnFaultAbsorption? FaultAbsorption = null,
+        BpmnPendingParentNotification? PendingParentNotification = null);
 
     /// <summary>
     /// One live armed child subtree to be torn down via seam A (spec 119 event-based-gateway losers and spec
@@ -666,6 +893,9 @@ public sealed class BpmnExecutionEngine(
 
     /// <summary>The seam-B fault absorption an error boundary staged for a child-fault evaluation (spec 120); staged only on a clean (non-fault) continuation.</summary>
     private sealed record BpmnFaultAbsorption(string IncidentId, string Reason);
+
+    /// <summary>The seam-C parent notification a bubbling escalation re-stages (spec 127): an escalation unmatched at this scope is re-raised verbatim to the grandparent. Staged only on a clean (non-fault) continuation.</summary>
+    private sealed record BpmnPendingParentNotification(string Code, JsonElement? Payload);
 
     /// <summary>
     /// The token propagation loop: releases ready joins, then dispatches the first live
@@ -767,6 +997,15 @@ public sealed class BpmnExecutionEngine(
                     // spec 125: the cancel end token requests the transaction cancellation. CancelTransaction is the
                     // sole command a cancel-end behavior emits, so the resolved result is returned directly.
                     return CancelTransaction(context, graph, state, token, element, schedulingActivityExecutionId);
+                }
+                case BpmnBehaviorCommandKind.RaiseEscalation:
+                {
+                    // spec 127: the escalation throw/end raises an escalation. RaiseEscalation is the FIRST command of
+                    // the throw's decision ([RaiseEscalation, EmitTokens|ConsumeToken]); it stages a seam-C parent
+                    // notification (a nested process) or records a root no-op diagnostic (never a fault), and the loop
+                    // then processes the companion routing command as usual.
+                    state = RaiseEscalation(context, state, token, element);
+                    break;
                 }
                 case BpmnBehaviorCommandKind.ScheduleChild:
                 {
@@ -1379,7 +1618,7 @@ public sealed class BpmnExecutionEngine(
         return liveChildAeiByNode;
     }
 
-    /// <summary>Stages each carried seam-A subtree cancellation and the seam-B fault absorption on the runtime context. Only called from a clean (non-fault) continuation (spec 119 D3 / spec 120 D5).</summary>
+    /// <summary>Stages each carried seam-A subtree cancellation, the seam-B fault absorption, and the seam-C bubbled parent notification on the runtime context. Only called from a clean (non-fault) continuation (spec 119 D3 / spec 120 D5 / spec 127 D2b).</summary>
     private static void StagePendingSubtreeCancellations(IRuntimeActivityExecutionContext context, EvaluationResult result)
     {
         foreach (var cancellation in result.PendingSubtreeCancellations ?? [])
@@ -1390,6 +1629,9 @@ public sealed class BpmnExecutionEngine(
 
         if (result.FaultAbsorption is { } absorption)
             context.RequestChildFaultAbsorption(absorption.IncidentId, absorption.Reason);
+
+        if (result.PendingParentNotification is { } notification)
+            context.RequestParentNotification(notification.Code, notification.Payload);
     }
 
     /// <summary>Cancels every live token and drops the active-child records; in-flight children keep running and their late completions are absorbed by the token-status guard.</summary>

@@ -15,9 +15,9 @@ namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 public sealed class RegistrationTests
 {
     [Fact]
-    public void UpdateDraftCommand_resolves_to_its_implementation()
+    public async Task UpdateDraftCommand_resolves_to_its_implementation()
     {
-        using var host = WorkflowsDesignTestHost.Create();
+        using var host = await WorkflowsDesignTestHost.CreateAsync();
         using var scope = host.Services.CreateScope();
 
         var resolved = scope.ServiceProvider.GetService<IUpdateDraftCommand>();
@@ -27,12 +27,12 @@ public sealed class RegistrationTests
     }
 
     [Fact]
-    public void DraftStateDiffEngine_is_not_registered()
+    public async Task DraftStateDiffEngine_is_not_registered()
     {
         // Per-diff mutation-event publication is retired until an event-sourcing consumer exists,
         // so neither provider registers the diff engine. The engine + event records remain as the
         // tested contract (constructed directly by the engine-level diff tests), not resolved from DI.
-        using var host = WorkflowsDesignTestHost.Create();
+        using var host = await WorkflowsDesignTestHost.CreateAsync();
         using var scope = host.Services.CreateScope();
 
         Assert.Null(scope.ServiceProvider.GetService<IDraftStateDiffEngine>());

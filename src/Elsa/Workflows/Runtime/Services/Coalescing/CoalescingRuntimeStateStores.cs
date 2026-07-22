@@ -267,6 +267,43 @@ internal static class CoalescingRuntimeStorePageMerger
     private sealed record InnerCandidate<T>(T Item, InnerCursor Before, InnerCursor After) where T : class;
 }
 
+/// <summary>
+/// Coalescing-aware overlay for <see cref="IActivityExecutionInspectionStore"/>. Unlike its sibling overlays it never
+/// serves the session's buffered (unflushed) state: <see cref="FindAsync"/> memoizes the <b>durable baseline</b> per
+/// activity execution for the duration of a coalesced window, so the per-hop inspection-projection build stops paying
+/// a durable store read for every intermediate hop the fold discards, while every read stays byte-identical to a
+/// fresh durable read (serving buffered state would flip the accumulator's FromState/Merge branch and change the
+/// flushed projection document). The memo is invalidated at every durable flush; the single-writer ownership lease
+/// guarantees the durable rows cannot change between flushes. Disabled (per-hop pass-through) via
+/// <see cref="CoalescingRuntimeCheckpointPersistenceOptions.CoalesceInspectionReads"/>.
+/// </summary>
+public sealed class CoalescingActivityExecutionInspectionStore(
+    CoalescingInner<IActivityExecutionInspectionStore> inner,
+    IRuntimeCoalescingSessionAccessor sessionAccessor,
+    CoalescingRuntimeCheckpointPersistenceOptions options) : IActivityExecutionInspectionStore
+{
+    private readonly IActivityExecutionInspectionStore _inner = inner.Value;
+
+    public async ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
+    {
+        if (!options.CoalesceInspectionReads ||
+            sessionAccessor.Current is not { } session || !session.AppliesTo(workflowExecutionId))
+            return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+
+        if (session.TryGetInspectionBaseline(activityExecutionId, out var baseline))
+            return baseline;
+
+        var projection = await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+        session.CacheInspectionBaseline(activityExecutionId, projection);
+        return projection;
+    }
+
+    public ValueTask<ActivityExecutionInspectionSummaryPage> ListSummariesPageAsync(
+        ActivityExecutionInspectionSummaryPageQuery query,
+        CancellationToken cancellationToken = default) =>
+        _inner.ListSummariesPageAsync(query, cancellationToken);
+}
+
 /// <summary>Coalescing-aware overlay for <see cref="ISchedulerStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>
 public sealed class CoalescingSchedulerStateStore(
     CoalescingInner<ISchedulerStateStore> inner,

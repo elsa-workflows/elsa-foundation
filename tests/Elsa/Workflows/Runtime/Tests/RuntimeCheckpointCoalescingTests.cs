@@ -41,6 +41,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.IsType<CoalescingActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<CoalescingDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<CoalescingSchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
+        Assert.IsType<CoalescingActivityExecutionInspectionStore>(provider.GetRequiredService<IActivityExecutionInspectionStore>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingSessionAccessor>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
     }

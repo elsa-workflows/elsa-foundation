@@ -333,7 +333,7 @@ public sealed class ParentResumeExecutorTests
         "parent-resume",
         "activity-resume",
         "node-dispatch",
-        DispatchWorkflowConstants.CompletionResumeTargetId,
+        WorkflowExecutableResumeTarget.ComposeScopedId("node-dispatch", DispatchWorkflowConstants.CompletionResumeTargetId),
         DispatchWorkflowConstants.WaitStimulusType,
         Identity().WaitStimulusHash,
         null,

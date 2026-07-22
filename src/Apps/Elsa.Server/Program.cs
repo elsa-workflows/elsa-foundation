@@ -1,11 +1,14 @@
+using System.Diagnostics;
 using ConsoleLogStreaming.AspNetCore.DependencyInjection;
 using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Configuration;
+using CShells.Lifecycle;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Management.Api;
 using Elsa.Api.FastEndpoints;
 using Elsa.Server;
+using Elsa.Server.Boot;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
@@ -73,6 +76,11 @@ using Nuplane.Sources.Directory.Configuration;
 using Elsa.Modularity.ExtensionBuilder;
 using Elsa.Modularity.ExtensionBuilder.Extensions;
 
+// Boot phase-timing stopwatch (spec 129). Started at process entry so the opt-in cold-start instrument can
+// attribute host-build and first-request wall time. The Stopwatch itself is negligible; nothing is recorded
+// unless the Elsa:Boot:PhaseTiming:Enabled switch turns the timeline on below.
+var bootStopwatch = Stopwatch.StartNew();
+
 ConsoleLogStreamingSetup.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
@@ -89,6 +97,16 @@ builder.Configuration
     .AddEnvironmentVariables()
     .AddCommandLine(args);
 var configuration = builder.Configuration;
+
+// Opt-in cold-start phase instrument (spec 129). Null unless Elsa:Boot:PhaseTiming:Enabled is set, so the host
+// registers no boot services and pays nothing when the switch is off. When on, the timeline is a root singleton
+// consumed by the first-request middleware, the shell-activation observer, and the ApplicationStarted hook.
+var bootTimeline = BootPhaseTimeline.CreateIfEnabled(configuration, bootStopwatch);
+if (bootTimeline is not null)
+{
+    bootTimeline.Mark("config-ready");
+    builder.Services.AddSingleton(bootTimeline);
+}
 
 // Console log streaming is a process-global, host-level diagnostic (not a shell feature): capture is a static tee on
 // Console.Out and the live stream is a long-lived SignalR connection, so it is composed once on the application root
@@ -308,6 +326,28 @@ builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+if (bootTimeline is not null)
+{
+    // Phase A: everything from process entry to a built host — feature catalog discovery, Nuplane package-ALC
+    // loads and DI container construction.
+    bootTimeline.Measure("host-build", 0d, "CreateBuilder → Build (feature catalog + package ALC + DI)");
+    var hostBuiltMs = bootTimeline.ElapsedMs;
+
+    // Phase B: Kestrel accepting connections. Shell activation is still lazy at this point.
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        bootTimeline.Measure("kestrel-startup", hostBuiltMs, "Build → listening");
+        bootTimeline.Mark("kestrel-ready");
+    });
+
+    // Phase B/C: observe the lazy shell-activation cliff (Initializing→Active wall) via the one host-observable
+    // CShells seam. Per-initializer attribution is not host-observable — see BootShellActivationObserver.
+    app.Services.GetService<IShellRegistry>()?.Subscribe(new BootShellActivationObserver(bootTimeline));
+
+    // Time the first request end-to-end (it triggers activation) and print the phase table when it completes.
+    app.UseMiddleware<BootFirstRequestMiddleware>();
+}
 
 app.UseCors(studioCorsPolicy);
 

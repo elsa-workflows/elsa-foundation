@@ -1,0 +1,381 @@
+{
+  "Scale": "1m",
+  "Smoke": false,
+  "InProcess": false,
+  "Targets": [
+    "groundwork.shared",
+    "groundwork.dedicated",
+    "groundwork.entity"
+  ],
+  "Correctness": [
+    {
+      "Operation": "act.catalog.filter-page",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "37efb6fe7c907ab99547f3d8c914b606c568feb0bb835de2028b20eab91df23c",
+        "groundwork.dedicated": "37efb6fe7c907ab99547f3d8c914b606c568feb0bb835de2028b20eab91df23c",
+        "groundwork.entity": "37efb6fe7c907ab99547f3d8c914b606c568feb0bb835de2028b20eab91df23c"
+      }
+    },
+    {
+      "Operation": "act.catalog.versions-batch",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "99b94082cdbbdb7f73e3acc9cf0adffeabed2ed7c8dc7a7443c20048c9461b84",
+        "groundwork.dedicated": "99b94082cdbbdb7f73e3acc9cf0adffeabed2ed7c8dc7a7443c20048c9461b84",
+        "groundwork.entity": "99b94082cdbbdb7f73e3acc9cf0adffeabed2ed7c8dc7a7443c20048c9461b84"
+      }
+    },
+    {
+      "Operation": "act.identity.get",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "7eeca58ddf02d102188b07fcd9550197f0ecdaef4deed4536c23b69d0d0dee89",
+        "groundwork.dedicated": "7eeca58ddf02d102188b07fcd9550197f0ecdaef4deed4536c23b69d0d0dee89",
+        "groundwork.entity": "7eeca58ddf02d102188b07fcd9550197f0ecdaef4deed4536c23b69d0d0dee89"
+      }
+    },
+    {
+      "Operation": "act.identity.version-exact",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "b72a6afeffa78f01855e3637c59c381b71d1c6857c09fff9ea85a5a004d42c47",
+        "groundwork.dedicated": "b72a6afeffa78f01855e3637c59c381b71d1c6857c09fff9ea85a5a004d42c47",
+        "groundwork.entity": "b72a6afeffa78f01855e3637c59c381b71d1c6857c09fff9ea85a5a004d42c47"
+      }
+    },
+    {
+      "Operation": "wf.catalog.count",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "44540e8ce81eb2d3e8130c64ff889cc3c7d8cbb8a96be6ed93b99979e39399d6",
+        "groundwork.dedicated": "44540e8ce81eb2d3e8130c64ff889cc3c7d8cbb8a96be6ed93b99979e39399d6",
+        "groundwork.entity": "44540e8ce81eb2d3e8130c64ff889cc3c7d8cbb8a96be6ed93b99979e39399d6"
+      }
+    },
+    {
+      "Operation": "wf.catalog.filter-page",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "9639201b9f4c4253eff541f1d3599361730d0eba26edf4deae19b111d90cc896",
+        "groundwork.dedicated": "9639201b9f4c4253eff541f1d3599361730d0eba26edf4deae19b111d90cc896",
+        "groundwork.entity": "9639201b9f4c4253eff541f1d3599361730d0eba26edf4deae19b111d90cc896"
+      }
+    },
+    {
+      "Operation": "wf.catalog.projection",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "47ef1afafc69c9f4079bd10afe29892a27f51cf2c7e9e7e8c5cef0885ff15eca",
+        "groundwork.dedicated": "47ef1afafc69c9f4079bd10afe29892a27f51cf2c7e9e7e8c5cef0885ff15eca",
+        "groundwork.entity": "47ef1afafc69c9f4079bd10afe29892a27f51cf2c7e9e7e8c5cef0885ff15eca"
+      }
+    },
+    {
+      "Operation": "wf.identity.get",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "7eeca58ddf02d102188b07fcd9550197f0ecdaef4deed4536c23b69d0d0dee89",
+        "groundwork.dedicated": "7eeca58ddf02d102188b07fcd9550197f0ecdaef4deed4536c23b69d0d0dee89",
+        "groundwork.entity": "7eeca58ddf02d102188b07fcd9550197f0ecdaef4deed4536c23b69d0d0dee89"
+      }
+    },
+    {
+      "Operation": "wf.identity.version-exact",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "f1f1b732ba6c0f7c0a3b8ed5baea13006496d2426d8b303774d43d37cedcd242",
+        "groundwork.dedicated": "f1f1b732ba6c0f7c0a3b8ed5baea13006496d2426d8b303774d43d37cedcd242",
+        "groundwork.entity": "f1f1b732ba6c0f7c0a3b8ed5baea13006496d2426d8b303774d43d37cedcd242"
+      }
+    },
+    {
+      "Operation": "wf.identity.version-latest",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "e28041c2b24985389b9d3fe0a069b8f3932f6b85097d8420a89515cc5a295e74",
+        "groundwork.dedicated": "e28041c2b24985389b9d3fe0a069b8f3932f6b85097d8420a89515cc5a295e74",
+        "groundwork.entity": "e28041c2b24985389b9d3fe0a069b8f3932f6b85097d8420a89515cc5a295e74"
+      }
+    },
+    {
+      "Operation": "wf.version.exists",
+      "AllMatch": true,
+      "HashesByTarget": {
+        "groundwork.shared": "8063e5a51719c58189c7d5209a5f37b34d14764198145a3f84bfd11c062f11d2",
+        "groundwork.dedicated": "8063e5a51719c58189c7d5209a5f37b34d14764198145a3f84bfd11c062f11d2",
+        "groundwork.entity": "8063e5a51719c58189c7d5209a5f37b34d14764198145a3f84bfd11c062f11d2"
+      }
+    }
+  ],
+  "CorrectnessPassed": true,
+  "EfRatio": [],
+  "EfRatioPassed": false,
+  "Form": [
+    {
+      "Operation": "act.catalog.filter-page",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 74.19006813450343,
+      "MedianThroughputImprovementPct": 290.68463546680266,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.7386828945722008,
+      "CiHigh": 0.7438767315431118,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.catalog.filter-page",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 74.6304766997381,
+      "MedianThroughputImprovementPct": 304.3108676440579,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.7462528632805651,
+      "CiHigh": 0.7523971805361136,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.catalog.versions-batch",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 99.66214204902849,
+      "MedianThroughputImprovementPct": 29667.957550171046,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9965834268259891,
+      "CiHigh": 0.9966795278442425,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.catalog.versions-batch",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 99.68473300699851,
+      "MedianThroughputImprovementPct": 32174.117815425838,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9968164843417182,
+      "CiHigh": 0.9969079876924456,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.identity.get",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": false,
+      "MedianP95ImprovementPct": 99.99039687112602,
+      "MedianThroughputImprovementPct": 572388.5251139527,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9999040631857302,
+      "CiHigh": 0.9999053957647988,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.identity.get",
+      "Alternative": "groundwork.shared",
+      "Discriminating": false,
+      "MedianP95ImprovementPct": 99.99125200334095,
+      "MedianThroughputImprovementPct": 624291.2759570169,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9999124512681855,
+      "CiHigh": 0.9999135377519062,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.identity.version-exact",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 99.9780269078824,
+      "MedianThroughputImprovementPct": 270442.456709169,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9997783713960624,
+      "CiHigh": 0.9997826512930773,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.identity.version-exact",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 99.98010450817634,
+      "MedianThroughputImprovementPct": 300036.07142629864,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9997990990116561,
+      "CiHigh": 0.9998032163587767,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.catalog.count",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 84.59401572784292,
+      "MedianThroughputImprovementPct": 556.0375284344632,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.8440266582696129,
+      "CiHigh": 0.8546645671402143,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.catalog.count",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 91.5498197301674,
+      "MedianThroughputImprovementPct": 1067.1351291350795,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9124143995608646,
+      "CiHigh": 0.9170519362904164,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.catalog.filter-page",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 73.19493903623224,
+      "MedianThroughputImprovementPct": 276.5996583475922,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.7289831889635279,
+      "CiHigh": 0.7335007408590545,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.catalog.filter-page",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 84.8139642150174,
+      "MedianThroughputImprovementPct": 563.1341123461007,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.8459637757284715,
+      "CiHigh": 0.8491357745764957,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.catalog.projection",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 99.96891613679873,
+      "MedianThroughputImprovementPct": 331056.24213547964,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9996780457823996,
+      "CiHigh": 0.9996930377806355,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.catalog.projection",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 99.97501066673858,
+      "MedianThroughputImprovementPct": 414235.73803317896,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9997463541244781,
+      "CiHigh": 0.9997541217219088,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.identity.get",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": false,
+      "MedianP95ImprovementPct": 13.636363636363633,
+      "MedianThroughputImprovementPct": 14.721943819796705,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.10185185185185187,
+      "CiHigh": 0.15929203539823006,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.identity.get",
+      "Alternative": "groundwork.shared",
+      "Discriminating": false,
+      "MedianP95ImprovementPct": 22.764227642276424,
+      "MedianThroughputImprovementPct": 26.33852492532317,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.20317906156987434,
+      "CiHigh": 0.2522956021251461,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.identity.version-exact",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": false,
+      "MedianP95ImprovementPct": 14.814814814814811,
+      "MedianThroughputImprovementPct": 18.65983620786932,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.1358024691358024,
+      "CiHigh": 0.15853658536585374,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.identity.version-exact",
+      "Alternative": "groundwork.shared",
+      "Discriminating": false,
+      "MedianP95ImprovementPct": 17.857142857142854,
+      "MedianThroughputImprovementPct": 21.59433697114585,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.1666666666666666,
+      "CiHigh": 0.18823529411764714,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.identity.version-latest",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 99.99421768443648,
+      "MedianThroughputImprovementPct": 1681008.1893191868,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9999413447267824,
+      "CiHigh": 0.9999428473793393,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.identity.version-latest",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 99.99468380366329,
+      "MedianThroughputImprovementPct": 1828007.0063323248,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9999455167506454,
+      "CiHigh": 0.9999472828283972,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.version.exists",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 99.99513883376824,
+      "MedianThroughputImprovementPct": 1143800.097713617,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9999505156271651,
+      "CiHigh": 0.9999518552286726,
+      "CiExcludesZero": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.version.exists",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "MedianP95ImprovementPct": 99.9955387638033,
+      "MedianThroughputImprovementPct": 1249229.9835508196,
+      "DirectionConsistentAllRuns": true,
+      "CiLow": 0.9999539749262666,
+      "CiHigh": 0.9999554734287686,
+      "CiExcludesZero": true,
+      "Pass": true
+    }
+  ],
+  "FormPassedThisScale": true
+}

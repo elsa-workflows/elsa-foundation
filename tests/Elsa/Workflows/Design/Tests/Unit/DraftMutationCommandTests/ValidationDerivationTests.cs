@@ -33,7 +33,7 @@ public sealed class ValidationDerivationTests
     [Fact]
     public async Task CreateDraft_surfaces_an_empty_error_set_on_OnDraftValidated()
     {
-        using var host = WorkflowsDesignTestHost.Create();
+        using var host = await WorkflowsDesignTestHost.CreateAsync();
 
         await CreateDraft(host, "wf-1");
 
@@ -45,7 +45,7 @@ public sealed class ValidationDerivationTests
     [Fact]
     public async Task Validator_contribution_appears_on_OnDraftValidated_after_update()
     {
-        using var host = WorkflowsDesignTestHost.Create();
+        using var host = await WorkflowsDesignTestHost.CreateAsync();
         host.EventPublisher.ContributeError(StubError);
 
         var draftId = await CreateDraft(host, "wf-1");
@@ -59,7 +59,7 @@ public sealed class ValidationDerivationTests
     [Fact]
     public async Task A_subsequent_clean_mutation_yields_OnDraftValidated_with_the_error_gone()
     {
-        using var host = WorkflowsDesignTestHost.Create();
+        using var host = await WorkflowsDesignTestHost.CreateAsync();
 
         // First pass yields an error.
         host.EventPublisher.ContributeError(StubError);
@@ -77,7 +77,7 @@ public sealed class ValidationDerivationTests
     [Fact]
     public async Task Gate_derives_the_current_error_set_on_demand()
     {
-        using var host = WorkflowsDesignTestHost.Create();
+        using var host = await WorkflowsDesignTestHost.CreateAsync();
         host.EventPublisher.ContributeError(StubError);
 
         var draftId = await CreateDraft(host, "wf-1");

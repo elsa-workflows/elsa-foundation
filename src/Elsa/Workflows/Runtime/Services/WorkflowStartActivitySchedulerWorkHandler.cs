@@ -300,43 +300,17 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         };
     }
 
-    private async ValueTask<ActivityInputSnapshot> MaterializeInputSnapshotAsync(
+    private ValueTask<ActivityInputSnapshot> MaterializeInputSnapshotAsync(
         WorkflowExecutable executable,
         ExecutableNode executableNode,
         ActivityExecutionState state,
         IServiceProvider serviceProvider,
         DateTimeOffset materializedAt,
-        CancellationToken cancellationToken)
-    {
-        var inputMaterializer = serviceProvider.GetService<IRuntimeActivityInputMaterializer>()
-            ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an input snapshot materializer.");
-        var durableValueStateStore = _durableValueStateStore
-            ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a durable value state store.");
-        var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
-        var runtimeView = await _activityExecutionStateStore.ListAllAsync(state.Execution.WorkflowExecutionId, cancellationToken);
-        var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
-        var workflowExecutionStateStore = _workflowExecutionStateStore
-            ?? serviceProvider.GetService<IWorkflowExecutionStateStore>()
-            ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires the canonical workflow variable-frame owner store.");
-        var variableEnvelopes = (await new RuntimeContainerScopeService(_activityExecutionStateStore, workflowExecutionStateStore)
-                .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken))
-            .Values;
-        var resolutionContext = new RuntimeInputBindingResolutionContext(
-            workflowExecutionId: state.Execution.WorkflowExecutionId,
-            activityExecutionId: state.InvocationId,
-            consumerInvocation: state,
-            runtimeView: runtimeView,
-            executable: executable,
-            workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
-            variableEnvelopes: variableEnvelopes);
-
-        return await inputMaterializer.MaterializeSnapshotAsync(
-            executableNode,
-            state.InvocationId,
-            resolutionContext,
-            materializedAt,
-            cancellationToken);
-    }
+        CancellationToken cancellationToken) =>
+        // Shares the one materialization implementation with the parent-completion re-materialization seam
+        // (issue #977), constructed from this handler's own stores so the pinned entry snapshot is unchanged.
+        new RuntimeActivityInputSnapshotMaterializer(_activityExecutionStateStore, _durableValueStateStore, _workflowExecutionStateStore)
+            .MaterializeAsync(executable, executableNode, state, serviceProvider, materializedAt, cancellationToken);
 
     /// <summary>
     /// Discrete adapter: builds the fused-mode <c>ActivityStarted</c> commit core and re-attaches the

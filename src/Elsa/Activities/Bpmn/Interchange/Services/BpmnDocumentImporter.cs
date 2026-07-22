@@ -82,12 +82,13 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
         var diagram = ReadDiagram(definitions);
         var messageSignalNames = ReadMessageSignalDeclarations(definitions);
+        var escalationDeclarations = ReadEscalationDeclarations(definitions);
         var processIdValue = IdOf(process) ?? "process";
         var nodeId = $"{options?.NodeIdPrefix ?? "node"}-{processIdValue}";
-        return BuildProcessNode(process, nodeId, diagram, messageSignalNames, context);
+        return BuildProcessNode(process, nodeId, diagram, messageSignalNames, escalationDeclarations, context);
     }
 
-    private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, IReadOnlyDictionary<string, string> messageSignalNames, ImportContext context, bool isTransaction = false)
+    private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, IReadOnlyDictionary<string, string> messageSignalNames, IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations, ImportContext context, bool isTransaction = false)
     {
         var elements = new List<BpmnElement>();
         var flows = new List<BpmnSequenceFlow>();
@@ -154,6 +155,13 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                         pendingCompensateEnds.Add(child);
                         break;
                     }
+                    // spec 127 D4: an escalation end event resolves its escalationRef to a code; a ref-less end
+                    // degrades to a none end event with a finding (an end has no flows to cascade).
+                    if (child.Element(BpmnXmlNames.Model + "escalationEventDefinition") is { } escalationEndDefinition)
+                    {
+                        elements.Add(ResolveEscalationEnd(id, child, escalationEndDefinition, escalationDeclarations, context));
+                        break;
+                    }
                     // spec 125 D4: a cancel end event is valid only inside a transaction; outside one it degrades to
                     // a none end event with a finding (the validator would reject a cancel end in a non-transaction).
                     if (child.Element(BpmnXmlNames.Model + "cancelEventDefinition") is not null)
@@ -183,6 +191,14 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 case "intermediateThrowEvent":
                 {
                     if (id is null) break;
+                    // spec 127 D4: an escalation throw resolves its escalationRef to a code; a ref-less throw is
+                    // Dropped with a finding (its flows cascade-drop as unresolved references).
+                    if (child.Element(BpmnXmlNames.Model + "escalationEventDefinition") is { } escalationThrowDefinition)
+                    {
+                        if (ResolveEscalationThrow(id, child, escalationThrowDefinition, escalationDeclarations, context) is { } escalationThrow)
+                            elements.Add(escalationThrow);
+                        break;
+                    }
                     // spec 124: resolved in a later pass (compensate → keep with resolvable activityRef; anything
                     // else drops, its flows cascading as unresolved references).
                     pendingCompensateThrows.Add(child);
@@ -200,7 +216,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 {
                     if (id is null) break;
                     var nestedNodeId = $"node-{id}";
-                    childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, context));
+                    childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, escalationDeclarations, context));
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
                         loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context),
                         isForCompensation: IsForCompensationOf(child)));
@@ -212,7 +228,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     // spec 125 D4: a <transaction> imports exactly like a <subProcess> (nested BpmnProcess node
                     // synthesis) plus IsTransaction on the element AND on the nested authored structure.
                     var nestedNodeId = $"node-{id}";
-                    childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, context, isTransaction: true));
+                    childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, escalationDeclarations, context, isTransaction: true));
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
                         loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context),
                         isForCompensation: IsForCompensationOf(child), isTransaction: true));
@@ -298,9 +314,12 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
             .ToHashSet(StringComparer.Ordinal);
         // spec 125 D4: at most one cancel boundary per transaction host; a second one drops with a finding.
         var transactionHostsWithCancelBoundary = new HashSet<string>(StringComparer.Ordinal);
+        // spec 127 D4: distinct escalation codes per host and at most one code-less catch-all; a collision drops with a finding.
+        var escalationCodesByHost = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        var escalationCatchAllHosts = new HashSet<string>(StringComparer.Ordinal);
         foreach (var boundaryXml in pendingBoundaries)
         {
-            var resolved = ResolveBoundaryEvent(boundaryXml, elementsById, messageSignalNames, associations, flowParticipantIds, transactionHostsWithCancelBoundary, context);
+            var resolved = ResolveBoundaryEvent(boundaryXml, elementsById, messageSignalNames, escalationDeclarations, associations, flowParticipantIds, transactionHostsWithCancelBoundary, escalationCodesByHost, escalationCatchAllHosts, context);
             if (resolved is not { } boundaryImport)
                 continue; // Dropped (finding added inside); its sequence flows cascade-drop as unresolved refs.
             if (boundaryImport.Child is not null)
@@ -439,6 +458,101 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     }
 
     /// <summary>
+    /// Root-level <c>&lt;escalation id name escalationCode&gt;</c> declarations index (spec 127 D4): an escalation
+    /// event definition's <c>escalationRef</c> resolves through this to the matching code (falling back to the
+    /// declaration's <c>name</c>, else the ref id) and the display name. Mirrors
+    /// <see cref="ReadMessageSignalDeclarations"/>.
+    /// </summary>
+    private static IReadOnlyDictionary<string, EscalationDeclaration> ReadEscalationDeclarations(XElement definitions)
+    {
+        var result = new Dictionary<string, EscalationDeclaration>(StringComparer.Ordinal);
+        foreach (var declaration in definitions.Elements(BpmnXmlNames.Model + "escalation"))
+        {
+            if (IdOf(declaration) is not { } declarationId)
+                continue;
+            var code = ((string?)declaration.Attribute("escalationCode"))?.Trim();
+            var name = NameOf(declaration)?.Trim();
+            result[declarationId] = new EscalationDeclaration(
+                string.IsNullOrWhiteSpace(code) ? null : code,
+                string.IsNullOrWhiteSpace(name) ? null : name);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Resolves an <c>escalationEventDefinition</c>'s <c>escalationRef</c> to its matching code (spec 127 D4): the
+    /// declaration's <c>escalationCode</c> → the declaration's <c>name</c> → the ref id itself. Returns <c>null</c>
+    /// when the definition carries no <c>escalationRef</c> (a ref-less throw/end degrades; a ref-less boundary is
+    /// the catch-all).
+    /// </summary>
+    private static string? ResolveEscalationRefCode(XElement definition, IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations)
+    {
+        if (((string?)definition.Attribute("escalationRef"))?.Trim() is not { Length: > 0 } escalationRef)
+            return null;
+
+        if (escalationDeclarations.TryGetValue(escalationRef, out var declaration))
+            return declaration.Code ?? declaration.Name ?? escalationRef;
+
+        return escalationRef;
+    }
+
+    /// <summary>
+    /// Resolves an escalation intermediate throw event (spec 127 D4): a resolvable <c>escalationRef</c> keeps the
+    /// throw with its matched code (+ the declaration name); a ref-less throw is Dropped with a finding (its flows
+    /// cascade-drop as unresolved references), so the importer never emits a graph the validator rejects.
+    /// </summary>
+    private static BpmnElement? ResolveEscalationThrow(string id, XElement element, XElement definition, IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations, ImportContext context)
+    {
+        var code = ResolveEscalationRefCode(definition, escalationDeclarations);
+        if (code is null)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Escalation throw event '{id}' declares no escalationRef; a throw must say what it escalates, so it was dropped.", id));
+            return null;
+        }
+
+        return new BpmnElement(id, BpmnElementTypes.IntermediateThrowEvent, name: NameOf(element),
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, EscalationProperties(code, ResolveEscalationRefName(definition, escalationDeclarations)))]);
+    }
+
+    /// <summary>
+    /// Resolves an escalation end event (spec 127 D4): a resolvable <c>escalationRef</c> keeps the escalation end
+    /// with its matched code; a ref-less end degrades to a none end event with a finding (an end has no flows to
+    /// cascade).
+    /// </summary>
+    private static BpmnElement ResolveEscalationEnd(string id, XElement element, XElement definition, IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations, ImportContext context)
+    {
+        var code = ResolveEscalationRefCode(definition, escalationDeclarations);
+        if (code is null)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Escalation end event '{id}' declares no escalationRef; a throw must say what it escalates, so it imported as a none end event.", id));
+            return new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(element));
+        }
+
+        return new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(element),
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, EscalationProperties(code, ResolveEscalationRefName(definition, escalationDeclarations)))]);
+    }
+
+    /// <summary>The display name an escalation ref resolves to (the declaration's <c>name</c>), or <c>null</c>.</summary>
+    private static string? ResolveEscalationRefName(XElement definition, IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations) =>
+        ((string?)definition.Attribute("escalationRef"))?.Trim() is { Length: > 0 } escalationRef
+        && escalationDeclarations.TryGetValue(escalationRef, out var declaration)
+            ? declaration.Name
+            : null;
+
+    /// <summary>Builds the escalation event-definition properties (spec 127): the required <c>code</c> plus the optional display <c>name</c>.</summary>
+    private static IReadOnlyDictionary<string, string> EscalationProperties(string code, string? name)
+    {
+        var properties = new Dictionary<string, string>(StringComparer.Ordinal) { [BpmnEventDefinitionProperties.Code] = code };
+        if (!string.IsNullOrWhiteSpace(name))
+            properties[BpmnEventDefinitionProperties.Name] = name.Trim();
+        return properties;
+    }
+
+    /// <summary>A root escalation declaration (spec 127 D4): the optional explicit code and display name.</summary>
+    private readonly record struct EscalationDeclaration(string? Code, string? Name);
+
+    /// <summary>
     /// Resolves the single event definition of an event-defined start element (spec 117/118 D2/D3) into a
     /// populated <see cref="BpmnEventDefinition"/>, or returns <c>null</c> and reports a <c>Degraded</c>
     /// finding (importing a plain none start) when the definition set is unusable.
@@ -544,9 +658,12 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         XElement element,
         IReadOnlyDictionary<string, BpmnElement> elementsById,
         IReadOnlyDictionary<string, string> messageSignalNames,
+        IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations,
         IReadOnlyList<(string Source, string Target)> associations,
         IReadOnlySet<string> flowParticipantIds,
         HashSet<string> transactionHostsWithCancelBoundary,
+        Dictionary<string, HashSet<string>> escalationCodesByHost,
+        HashSet<string> escalationCatchAllHosts,
         ImportContext context)
     {
         var id = IdOf(element)!;
@@ -628,6 +745,42 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     attachedToRef: attachedToRef, cancelActivity: cancelActivity);
                 return (cancelElement, null);
             }
+            case "escalationEventDefinition":
+            {
+                // spec 127 D4: an escalation boundary attaches only to a subprocess host (a task host is dead by
+                // construction — its bound child is a leaf that can never escalate). A ref-less boundary is the
+                // code-less catch-all; a code collision or a second catch-all on one host drops with a finding.
+                if (!StringComparer.Ordinal.Equals(host.ElementType, BpmnElementTypes.SubProcess))
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Escalation boundary event '{id}' is attached to '{attachedToRef}' ({host.ElementType}), which is not a subprocess host; it was dropped.", id));
+                    return null;
+                }
+
+                var code = ResolveEscalationRefCode(definition, escalationDeclarations);
+                if (code is null)
+                {
+                    if (!escalationCatchAllHosts.Add(attachedToRef))
+                    {
+                        context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Escalation boundary event '{id}' is a second code-less catch-all on host '{attachedToRef}', which may carry at most one; it was dropped.", id));
+                        return null;
+                    }
+                }
+                else
+                {
+                    var codes = escalationCodesByHost.TryGetValue(attachedToRef, out var existing) ? existing : escalationCodesByHost[attachedToRef] = new HashSet<string>(StringComparer.Ordinal);
+                    if (!codes.Add(code))
+                    {
+                        context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Escalation boundary event '{id}' declares code '{code}', which another escalation boundary on host '{attachedToRef}' already claims; it was dropped.", id));
+                        return null;
+                    }
+                }
+
+                var escalationProperties = code is null ? null : new Dictionary<string, string> { [BpmnEventDefinitionProperties.Code] = code };
+                var escalationElement = new BpmnElement(id, BpmnElementTypes.BoundaryEvent, name: NameOf(element),
+                    eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, escalationProperties)],
+                    attachedToRef: attachedToRef, cancelActivity: cancelActivity);
+                return (escalationElement, null);
+            }
             case "errorEventDefinition":
             {
                 if (!cancelActivity)
@@ -678,7 +831,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 return (timerElement, delayChild);
             }
             default:
-                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' declares an unsupported '{definition.Name.LocalName}'; only timer/message/signal/error/compensation boundary events are supported, so it was dropped.", id));
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' declares an unsupported '{definition.Name.LocalName}'; only timer/message/signal/error/escalation/compensation/cancel boundary events are supported, so it was dropped.", id));
                 return null;
         }
     }

@@ -257,6 +257,91 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static BpmnElement CompensationHandler(string elementId, string childNodeId) =>
         new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, isForCompensation: true);
 
+    /// <summary>A plain subprocess element that binds a nested <c>BpmnProcess</c> child (spec 127 escalation host).</summary>
+    public static BpmnElement SubProcess(string elementId, string childNodeId, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.SubProcess, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
+
+    /// <summary>A multi-instance subprocess host (spec 121/127): runs its bound nested process <paramref name="cardinality"/> times.</summary>
+    public static BpmnElement MultiInstanceSubProcess(string elementId, string childNodeId, int cardinality, bool isSequential, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.SubProcess, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
+            loopCharacteristics: new BpmnLoopCharacteristics(isSequential: isSequential, cardinality: cardinality));
+
+    /// <summary>An escalation intermediate throw event (spec 127): raises escalation code <paramref name="code"/> to the parent scope, then routes onward (fire-and-continue).</summary>
+    public static BpmnElement EscalationThrow(string elementId, string code, string? name = null) =>
+        new(elementId, BpmnElementTypes.IntermediateThrowEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, EscalationProperties(code, name))]);
+
+    /// <summary>An escalation end event (spec 127): raises escalation code <paramref name="code"/> to the parent scope, then consumes its token (none-end semantics).</summary>
+    public static BpmnElement EscalationEnd(string elementId, string code, string? name = null) =>
+        new(elementId, BpmnElementTypes.EndEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, EscalationProperties(code, name))]);
+
+    /// <summary>An escalation boundary event (spec 127) attached to a subprocess host; dormant (no listener). A <c>null</c> <paramref name="code"/> is the code-less catch-all.</summary>
+    public static BpmnElement EscalationBoundary(string elementId, string attachedToRef, string? code = null, bool cancelActivity = true) =>
+        new(elementId, BpmnElementTypes.BoundaryEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, code is null ? null : EscalationProperties(code, null))], attachedToRef: attachedToRef, cancelActivity: cancelActivity);
+
+    private static IReadOnlyDictionary<string, string> EscalationProperties(string code, string? name)
+    {
+        var properties = new Dictionary<string, string> { [BpmnEventDefinitionProperties.Code] = code };
+        if (!string.IsNullOrWhiteSpace(name))
+            properties[BpmnEventDefinitionProperties.Name] = name;
+        return properties;
+    }
+
+    /// <summary>
+    /// Builds a nested <c>BpmnProcess</c> executable node (spec 127 escalation scenarios): its own element graph
+    /// plus a child slot of inner activity nodes (probes/waiters/further nested processes). Mirrors how the publish
+    /// compiler emits an embedded subprocess as a nested <c>BpmnProcess</c> activity node.
+    /// </summary>
+    public static ExecutableNode NestedProcessNode(
+        string nodeId,
+        IReadOnlyCollection<BpmnElement> elements,
+        IReadOnlyCollection<BpmnSequenceFlow> flows,
+        IReadOnlyCollection<ExecutableNode>? innerChildren = null,
+        bool isTransaction = false) =>
+        new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: typeof(BpmnProcessActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: "InnerDescriptor",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(BpmnProcessActivity.ActivitiesSlotName, innerChildren ?? [])],
+            structure: new ExecutableActivityStructure(
+                BpmnProcessActivity.StructureKind,
+                BpmnProcessActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new BpmnStructure(elements, flows, isTransaction: isTransaction))));
+
+    /// <summary>A mid-flow <c>Event</c> wait child (<c>CanStartWorkflow = false</c>) for building nested-process waiters.</summary>
+    public static ExecutableNode EventWaitNode(string nodeId, string eventName) =>
+        NewClrNode(nodeId, typeof(Elsa.Activities.Primitives.Activities.Event), new Dictionary<string, object?>
+        {
+            [nameof(Elsa.Activities.Primitives.Activities.Event.EventName)] = eventName,
+            [nameof(Elsa.Activities.Primitives.Activities.Event.CanStartWorkflow)] = false
+        });
+
+    private static ExecutableNode NewClrNode(string nodeId, Type activityType, IReadOnlyDictionary<string, object?> literals) =>
+        new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: activityType.FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test/clr",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { type = "clr" }),
+            inputBindings: literals.ToDictionary(
+                literal => literal.Key,
+                literal => new RuntimeInputBinding(
+                    inputKey: literal.Key,
+                    targetType: new ValueTypeDescriptor("String"),
+                    effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                    source: RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(
+                        new ValueTypeDescriptor("String"),
+                        JsonSerializer.SerializeToElement(literal.Value),
+                        ValueProtectionPolicy.InstanceInline)),
+                StringComparer.Ordinal),
+            metadata: new Dictionary<string, string>());
+
     /// <summary>A transaction subprocess element (spec 125): a <c>subProcess</c> host marked <c>IsTransaction</c> that binds a nested transaction process.</summary>
     public static BpmnElement TransactionSubProcess(string elementId, string childNodeId, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.SubProcess, childNodeId: childNodeId, defaultFlowId: defaultFlowId, isTransaction: true);

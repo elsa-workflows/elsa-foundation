@@ -6,6 +6,8 @@
         "Features": {
           "ActivitiesBpmn": {},
           "ActivitiesControlFlow": {},
+          "ActivitiesDispatchWorkflowRuntime": {},
+          "ActivitiesDispatchWorkflowDesign": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphDesign": {},
           "ActivitiesDesignReconciliation": {},
