@@ -13,6 +13,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -269,20 +270,34 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             compatibilityMetadata: new Dictionary<string, string>());
 
     /// <summary>Builds a leaf probe node that records execution and emits the given outcomes (default <c>Done</c>).</summary>
-    public static ExecutableNode NewProbeNode(string nodeId, IReadOnlyCollection<string>? outcomes = null)
+    public static ExecutableNode NewProbeNode(string nodeId, IReadOnlyCollection<string>? outcomes = null) =>
+        NewProbeNode(nodeId, typeof(ProbeActivity), nameof(ProbeActivity.Outcomes), outcomes);
+
+    /// <summary>
+    /// Builds a leaf probe node whose pinned contract declares <see cref="SideEffectProfile.ReplaySafe"/> (spec 123).
+    /// Behaviorally identical to <see cref="NewProbeNode(string, IReadOnlyCollection{string})"/>, but eligible for the
+    /// ReplaySafe hop-fusion pass so fusion guardrails can drive a shape whose leaves actually resolve ReplaySafe.
+    /// </summary>
+    public static ExecutableNode NewReplaySafeProbeNode(string nodeId, IReadOnlyCollection<string>? outcomes = null) =>
+        NewProbeNode(nodeId, typeof(ReplaySafeProbeActivity), nameof(ReplaySafeProbeActivity.Outcomes), outcomes);
+
+    private static ExecutableNode NewProbeNode(
+        string nodeId,
+        Type activityType,
+        string outcomesInputKey,
+        IReadOnlyCollection<string>? outcomes)
     {
         var selectedOutcomes = outcomes ?? [ActivityOutcomes.Done];
         if (selectedOutcomes.Count != 1)
             throw new ArgumentException("A probe invocation must complete with exactly one outcome.", nameof(outcomes));
 
-        var activityType = typeof(ProbeActivity);
         var descriptor = NewClrDescriptor(activityType);
         var inputType = NewValueType(typeof(IReadOnlyCollection<string>));
-        var binding = NewLiteralBinding(nameof(ProbeActivity.Outcomes), inputType, selectedOutcomes);
+        var binding = NewLiteralBinding(outcomesInputKey, inputType, selectedOutcomes);
         var contract = NewActivityContract(
             activityType,
             descriptor,
-            [new ActivityInputContract(nameof(ProbeActivity.Outcomes), nameof(ProbeActivity.Outcomes), inputType, true, false, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract(outcomesInputKey, outcomesInputKey, inputType, true, false, false, null, ActivityValuePolicy.Default)],
             selectedOutcomes);
 
         return new ExecutableNode(
@@ -634,6 +649,23 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         public Builder WithFeature(Action<IServiceCollection> configureFeature)
         {
             _featureConfigurators.Add(configureFeature);
+            return this;
+        }
+
+        /// <summary>
+        /// Drives the harness under the opt-in burst-coalescing checkpoint persistence policy (ADR 0032 / spec 115)
+        /// instead of the default Immediate cadence, so intra-drain checkpoints fold into one atomic commit at
+        /// quiescence — the mode a ReplaySafe hop-fusion pass engages inside (spec 123 research §2). Applied after the
+        /// runtime feature registration (which the ctor seeds first), so the coalescing decorators capture the runtime
+        /// stores. Optionally caps the per-segment checkpoint count (models a mid-drain fold-and-flush).
+        /// </summary>
+        public Builder WithCoalescing(int? maxSegmentCheckpoints = null)
+        {
+            _featureConfigurators.Add(services => services.AddCoalescingRuntimeCheckpointPersistence(options =>
+            {
+                if (maxSegmentCheckpoints is { } cap)
+                    options.MaxSegmentCheckpoints = cap;
+            }));
             return this;
         }
 
