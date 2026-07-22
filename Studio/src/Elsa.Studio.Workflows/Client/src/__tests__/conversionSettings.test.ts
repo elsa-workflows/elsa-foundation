@@ -4,6 +4,7 @@ import {
   decorateConversionDiagnostic,
   describeInferredSource,
   formatTypeContract,
+  isDefaultConversion,
   readConversionMode,
   readConversionPlan,
   readConversionProfile,
@@ -36,6 +37,18 @@ describe("authored conversion requests", () => {
 
     // Returning to Auto keeps the request because limits/unknowns are still authored.
     expect(withConversionMode(next, "auto")).toEqual({ mode: "auto", limits: { maxDepth: 4 }, futureField: true });
+  });
+
+  it("treats absent and pure-Auto requests as default, but never one carrying authored fields", () => {
+    expect(isDefaultConversion(undefined)).toBe(true);
+    expect(isDefaultConversion(null)).toBe(true);
+    expect(isDefaultConversion("auto")).toBe(true);
+    expect(isDefaultConversion({})).toBe(true);
+    expect(isDefaultConversion({ mode: "auto" })).toBe(true);
+    expect(isDefaultConversion({ mode: "AUTO" })).toBe(true);
+    expect(isDefaultConversion({ mode: "json" })).toBe(false);
+    // Preserved forward-compatible fields keep the request visible, mirroring withConversionMode.
+    expect(isDefaultConversion({ mode: "auto", limits: { maxDepth: 4 } })).toBe(false);
   });
 
   it("drops a stale profile reference when leaving Profile mode and writes one when entering it", () => {

@@ -20,12 +20,14 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // stylesheet; the measured definitions path moved 358.69 → 362.31 kB). Both landing budgets were
 // raised another 2 kB for the route-transition skeleton fallback (lazy-boundary shimmer rows +
 // delayed fade-in styles in the shared stylesheet; the measured paths moved 362.31 → 364.16 kB and
-// 346.93 → 348.78 kB).
+// 346.93 → 348.78 kB), and another 2 kB on top for the conversion-control progressive disclosure
+// (icon toggle + chip markup in the shared properties panel and their styles in the shared
+// stylesheet; the measured paths moved 364.16 → 365.48 kB and 348.78 → 349.99 kB).
 const budgets = {
   entryJavaScript: 125_000,
   stylesheet: 185_000,
-  definitionsLandingTotal: 366_000,
-  upgradeLandingTotal: 350_000,
+  definitionsLandingTotal: 368_000,
+  upgradeLandingTotal: 352_000,
   individualChunk: 500_000
 };
 
