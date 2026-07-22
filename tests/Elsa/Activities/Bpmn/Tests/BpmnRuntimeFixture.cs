@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -13,6 +14,8 @@ namespace Elsa.Activities.Bpmn.Tests;
 public sealed class BpmnRuntimeFixture : IAsyncDisposable
 {
     public const string ProcessNodeId = "node-bpmn";
+
+    private static readonly JsonSerializerOptions WebOptions = new(JsonSerializerDefaults.Web);
 
     private readonly WorkflowExecutionHarness _harness;
 
@@ -106,8 +109,16 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
         IReadOnlyCollection<ExecutableNode> children,
         IReadOnlyCollection<BpmnElement> elements,
         IReadOnlyCollection<BpmnSequenceFlow> sequenceFlows,
-        IReadOnlyCollection<WorkflowExecutableResumeTarget>? resumeTargets = null)
+        IReadOnlyCollection<WorkflowExecutableResumeTarget>? resumeTargets = null,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null)
     {
+        // The runtime reads the container's declared variables as RuntimeVariableDeclaration; BpmnStructure carries
+        // authored VariableDefinition, so a spec-123 collection variable is injected as the runtime shape here (the
+        // real publish compiler does the VariableDefinition→RuntimeVariableDeclaration lowering).
+        var structurePayload = JsonSerializer.SerializeToNode(new BpmnStructure(elements, sequenceFlows), WebOptions)!.AsObject();
+        if (variables is { Count: > 0 })
+            structurePayload["variables"] = JsonSerializer.SerializeToNode(variables, WebOptions);
+
         var root = new ExecutableNode(
             executableNodeId: ProcessNodeId,
             authoredActivityId: "authored-bpmn",
@@ -124,7 +135,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
             structure: new ExecutableActivityStructure(
                 BpmnProcessActivity.StructureKind,
                 BpmnProcessActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new BpmnStructure(elements, sequenceFlows))));
+                JsonSerializer.SerializeToElement(structurePayload)));
 
         var executable = WorkflowExecutionHarness.NewExecutable(root);
         if (resumeTargets is not { Count: > 0 })
@@ -181,6 +192,45 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static BpmnElement MultiInstanceTask(string elementId, string childNodeId, int cardinality, bool isSequential, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
             loopCharacteristics: new BpmnLoopCharacteristics(isSequential: isSequential, cardinality: cardinality));
+
+    /// <summary>A collection-mode multi-instance task (spec 123): runs its bound child once per item of the declared <paramref name="collectionVariable"/>.</summary>
+    public static BpmnElement MultiInstanceCollectionTask(string elementId, string childNodeId, string collectionVariable, bool isSequential, string? itemVariable = null, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
+            loopCharacteristics: new BpmnLoopCharacteristics(isSequential: isSequential, collectionVariable: collectionVariable, itemVariable: itemVariable));
+
+    /// <summary>
+    /// A container-scoped variable declaration (spec 123) whose durable initial value is the given inline JSON,
+    /// in the runtime <see cref="RuntimeVariableDeclaration"/> shape the frame projector reads (a collection
+    /// variable seeds a JSON array). Typed as the canonical dynamic <c>Elsa.Any</c>.
+    /// </summary>
+    public static RuntimeVariableDeclaration InlineVariable(string name, JsonElement value)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any");
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeVariableDeclaration(name, name, type, policy, new RuntimeInputBinding(
+            inputKey: name,
+            targetType: type,
+            effectivePolicy: policy,
+            source: RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, value, policy)));
+    }
+
+    /// <summary>An <c>Elsa.Any</c> variable declaration seeded with a JSON array of the given string items.</summary>
+    public static RuntimeVariableDeclaration StringArrayVariable(string name, params string[] items) =>
+        InlineVariable(name, JsonSerializer.SerializeToElement(items));
+
+    /// <summary>An <c>Elsa.Any</c> variable declaration whose durable initial value is an explicit null (spec 123 empty-loop path).</summary>
+    public static RuntimeVariableDeclaration NullVariable(string name)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any");
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeVariableDeclaration(name, name, type, policy, new RuntimeInputBinding(
+            inputKey: name,
+            targetType: type,
+            effectivePolicy: policy,
+            source: RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Null(type, policy)));
+    }
 
     public static BpmnElement ExclusiveGateway(string elementId, string? childNodeId = null, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.ExclusiveGateway, childNodeId: childNodeId, defaultFlowId: defaultFlowId);

@@ -119,6 +119,87 @@ public sealed class BpmnMultiInstanceInterchangeTests
         Assert.Null(structure.Elements.Single(element => element.ElementId == "mi-seq").LoopCharacteristics);
     }
 
+    // spec 123 D3: a collection-mode loop over a declared container-scoped variable imports as a real loop and
+    // round-trips; an undeclared variable or a reserved item variable degrades.
+    private const string CollectionLoopDocument = """
+        <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:elsa="https://elsa-workflows.io/schemas/bpmn" id="defs" targetNamespace="https://example.org">
+          <process id="p" isExecutable="true">
+            <extensionElements>
+              <elsa:variable name="items" />
+            </extensionElements>
+            <startEvent id="start" />
+            <subProcess id="mi-col">
+              <multiInstanceLoopCharacteristics isSequential="true" elsa:collection="items" elsa:itemVariable="line" />
+              <startEvent id="s2" />
+              <task id="t2" />
+              <endEvent id="e2" />
+              <sequenceFlow id="sf1" sourceRef="s2" targetRef="t2" />
+              <sequenceFlow id="sf2" sourceRef="t2" targetRef="e2" />
+            </subProcess>
+            <endEvent id="end" />
+            <sequenceFlow id="f1" sourceRef="start" targetRef="mi-col" />
+            <sequenceFlow id="f2" sourceRef="mi-col" targetRef="end" />
+          </process>
+        </definitions>
+        """;
+
+    [Fact]
+    public void Import_CollectionMode_DeclaredVariable_ResolvesCollectionLoop()
+    {
+        var structure = Import(CollectionLoopDocument);
+
+        Assert.Contains(structure.Variables, variable => variable.Name == "items");
+        var loop = structure.Elements.Single(element => element.ElementId == "mi-col").LoopCharacteristics;
+        Assert.NotNull(loop);
+        Assert.True(loop!.IsSequential);
+        Assert.Equal("items", loop.CollectionVariable);
+        Assert.Equal("line", loop.ItemVariable);
+        Assert.Null(loop.Cardinality);
+    }
+
+    [Fact]
+    public void Import_CollectionMode_UndeclaredVariable_DegradesToNoLoop_WithFinding()
+    {
+        var document = CollectionLoopDocument.Replace("<elsa:variable name=\"items\" />", "");
+
+        var analysis = _importer.Analyze(document);
+        Assert.Contains(analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Degraded && issue.ElementId == "mi-col" && issue.Message.Contains("not a declared", StringComparison.OrdinalIgnoreCase));
+
+        var structure = Import(document);
+        Assert.Null(structure.Elements.Single(element => element.ElementId == "mi-col").LoopCharacteristics);
+    }
+
+    [Fact]
+    public void Import_CollectionMode_ReservedItemVariable_DegradesToNoLoop_WithFinding()
+    {
+        var document = CollectionLoopDocument.Replace("elsa:itemVariable=\"line\"", "elsa:itemVariable=\"loopIndex\"");
+
+        var analysis = _importer.Analyze(document);
+        Assert.Contains(analysis.Issues, issue => issue.Severity == BpmnImportIssueSeverity.Degraded && issue.ElementId == "mi-col" && issue.Message.Contains("reserved", StringComparison.OrdinalIgnoreCase));
+
+        var structure = Import(document);
+        Assert.Null(structure.Elements.Single(element => element.ElementId == "mi-col").LoopCharacteristics);
+    }
+
+    [Fact]
+    public void CollectionLoop_RoundTripsThroughExportImport_WithFidelity()
+    {
+        var imported = _importer.Import(CollectionLoopDocument).ProcessNode;
+
+        var xml = _exporter.Export(imported);
+        Assert.Contains("elsa:collection=\"items\"", xml, StringComparison.Ordinal);
+        Assert.Contains("elsa:itemVariable=\"line\"", xml, StringComparison.Ordinal);
+        Assert.Contains("<elsa:variable", xml, StringComparison.Ordinal);
+
+        var reimported = _importer.Import(xml).ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        var loop = reimported.Elements.Single(element => element.ElementId == "mi-col").LoopCharacteristics;
+        Assert.NotNull(loop);
+        Assert.True(loop!.IsSequential);
+        Assert.Equal("items", loop.CollectionVariable);
+        Assert.Equal("line", loop.ItemVariable);
+        Assert.Contains(reimported.Variables, variable => variable.Name == "items");
+    }
+
     [Fact]
     public void Import_NonIntegerCardinality_DegradesToNoLoop_WithFinding()
     {

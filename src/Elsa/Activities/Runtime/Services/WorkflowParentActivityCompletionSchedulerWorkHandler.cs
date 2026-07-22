@@ -236,6 +236,12 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     ? await LoadLiveChildActivitiesAsync(activityExecutionStateStore, workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken)
                     : [];
 
+                // spec 123 D1: populate the scoped-variable read seam for a marker consumer (the BpmnProcess) from
+                // committed frame state so a collection-mode multi-instance host can read its collection variable
+                // during a child-completion propagation that reaches the loop-start element.
+                var scopedVariableEnvelopes = await scopeService.ProjectScopedVariablesForReaderAsync(
+                    parentActivity, executable, parentState, cancellationToken);
+
                 context = SimpleActivityExecutionContext.ForExecution(
                     parentActivity,
                     cancellationToken,
@@ -245,7 +251,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     parentExecutableNode,
                     parentState,
                     variableScope: null,
-                    liveChildActivities: liveChildActivities);
+                    liveChildActivities: liveChildActivities,
+                    scopedVariableEnvelopes: scopedVariableEnvelopes);
 
                 if (childFaulted)
                 {

@@ -27,7 +27,8 @@ public sealed class SimpleActivityExecutionContext(
     string? invocationId = null,
     string? executableNodeId = null,
     IReadOnlyDictionary<string, string>? triggerMetadata = null,
-    IReadOnlyCollection<RuntimeLiveChildActivity>? liveChildActivities = null)
+    IReadOnlyCollection<RuntimeLiveChildActivity>? liveChildActivities = null,
+    IReadOnlyDictionary<string, ValueEnvelope>? scopedVariableEnvelopes = null)
     : IRuntimeActivityExecutionContext
 {
     // The single construction path for a runtime activity context.
@@ -43,7 +44,8 @@ public sealed class SimpleActivityExecutionContext(
         JsonElement? triggerPayload = null,
         string? triggerNodeId = null,
         IReadOnlyDictionary<string, string>? triggerMetadata = null,
-        IReadOnlyCollection<RuntimeLiveChildActivity>? liveChildActivities = null)
+        IReadOnlyCollection<RuntimeLiveChildActivity>? liveChildActivities = null,
+        IReadOnlyDictionary<string, ValueEnvelope>? scopedVariableEnvelopes = null)
     {
         ArgumentNullException.ThrowIfNull(activity);
         ArgumentNullException.ThrowIfNull(workflowExecutionId);
@@ -61,7 +63,8 @@ public sealed class SimpleActivityExecutionContext(
             triggerPayload,
             triggerNodeId,
             triggerMetadata: triggerMetadata,
-            liveChildActivities: liveChildActivities);
+            liveChildActivities: liveChildActivities,
+            scopedVariableEnvelopes: scopedVariableEnvelopes);
     }
 
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
@@ -105,6 +108,22 @@ public sealed class SimpleActivityExecutionContext(
     private readonly IReadOnlyCollection<RuntimeLiveChildActivity> _liveChildActivities = liveChildActivities ?? [];
 
     public IReadOnlyCollection<RuntimeLiveChildActivity> GetLiveChildActivities() => _liveChildActivities;
+
+    // The visible name→committed-envelope projection the runtime built for an IRuntimeScopedVariableReader
+    // activity (spec 123 D1). Null for every non-marker activity and for any handler path that did not populate
+    // it, so a read there always returns false — no throw-on-unpopulated.
+    private readonly IReadOnlyDictionary<string, ValueEnvelope>? _scopedVariableEnvelopes = scopedVariableEnvelopes;
+
+    public bool TryReadScopedVariableValue(string variableName, out ValueEnvelope? envelope)
+    {
+        envelope = null;
+        if (_scopedVariableEnvelopes is null || string.IsNullOrEmpty(variableName))
+            return false;
+        if (!_scopedVariableEnvelopes.TryGetValue(variableName, out var committed))
+            return false;
+        envelope = committed;
+        return true;
+    }
 
     public void RequestChildSubtreeCancellation(
         string childActivityExecutionId,

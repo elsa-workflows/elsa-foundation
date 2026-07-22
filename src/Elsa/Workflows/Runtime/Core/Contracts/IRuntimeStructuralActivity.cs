@@ -30,3 +30,15 @@ public interface IRuntimeActivityChildFaultHandler
 /// its subtree cancellation (spec 112).
 /// </summary>
 public interface IRuntimeLiveChildActivityConsumer;
+
+/// <summary>
+/// Opt-in marker for a structural activity that reads its enclosing container-scoped variable values during
+/// its structural evaluations (spec 123 D1, sibling of <see cref="IRuntimeLiveChildActivityConsumer"/>). Only
+/// an activity implementing this pays the extra visible-frame projection; the runtime then populates
+/// <see cref="IRuntimeActivityExecutionContext.TryReadScopedVariableValue"/> for the invoke,
+/// child-completion/child-fault, and bookmark-resume evaluations from committed frame state. The read is
+/// read-only, committed-state-backed, and spoof-proof (built from the activity's own lexical ancestor chain);
+/// a non-marker activity always reads <see langword="false"/>. Used by <c>BpmnProcess</c> to read a
+/// collection-mode multi-instance host's collection variable once at loop start.
+/// </summary>
+public interface IRuntimeScopedVariableReader;

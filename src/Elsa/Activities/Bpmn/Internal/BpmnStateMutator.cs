@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Bpmn.Models;
 
 namespace Elsa.Activities.Bpmn.Internal;
@@ -77,9 +78,10 @@ internal static class BpmnStateMutator
         string coordinatorTokenId,
         string elementId,
         bool isSequential,
-        int totalCount)
+        int totalCount,
+        IReadOnlyList<JsonElement>? items = null)
     {
-        var loop = new BpmnLoopState(NewId(state, "loop"), coordinatorTokenId, elementId, isSequential, totalCount, nextIndex: 0, completedCount: 0);
+        var loop = new BpmnLoopState(NewId(state, "loop"), coordinatorTokenId, elementId, isSequential, totalCount, nextIndex: 0, completedCount: 0, items);
         return (state with { Loops = state.Loops.Append(loop).ToArray(), Sequence = state.Sequence + 1 }, loop);
     }
 

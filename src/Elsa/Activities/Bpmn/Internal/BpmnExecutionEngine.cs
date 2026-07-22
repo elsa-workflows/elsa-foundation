@@ -50,6 +50,15 @@ public sealed class BpmnExecutionEngine(
     /// <summary>The prefix of a multi-instance instance's minted iteration id (spec 121); the instance token id is Sequence-derived and unique across the process.</summary>
     public const string MultiInstanceIterationIdPrefix = "bpmn-mi:";
 
+    /// <summary>The deterministic fault code raised when a collection-mode multi-instance host's collection variable is not visible/declared (spec 123 D2; defensive — unreachable post-validation for a process's own variable).</summary>
+    public const string CollectionUnreadableFaultCode = "bpmn.loop.collection-unreadable";
+
+    /// <summary>The deterministic fault code raised when a collection-mode multi-instance host's collection variable holds a present, non-array value (spec 123 D2).</summary>
+    public const string CollectionNotACollectionFaultCode = "bpmn.loop.collection-not-a-collection";
+
+    /// <summary>The deterministic fault code raised when a collection-mode multi-instance host's collection variable holds an externally-stored (non-inline) payload (spec 123 D2 stated cut).</summary>
+    public const string CollectionNotInlineFaultCode = "bpmn.loop.collection-not-inline";
+
     public ValueTask<RuntimeStructuralContinuation> StartAsync(IRuntimeActivityExecutionContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -331,16 +340,33 @@ public sealed class BpmnExecutionEngine(
     {
         var loopCharacteristics = element.LoopCharacteristics!;
 
-        // Cardinality mode is the only executable multi-instance shape this slice (collection mode is a
-        // validated cut, so a null cardinality here would be a graph the validator should already have rejected).
-        var total = loopCharacteristics.Cardinality
-            ?? throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' resolved no instance count; collection mode is not executable in this engine slice.");
+        // Resolve the instance count N and, in collection mode, the per-instance item snapshot. Cardinality mode
+        // takes N from the literal; collection mode reads the collection variable ONCE (a documented snapshot,
+        // spec 123 D2) through the runtime scoped-variable read seam. A collection read failure faults
+        // deterministically.
+        IReadOnlyList<JsonElement>? items = null;
+        int total;
+        if (loopCharacteristics.IsCollectionMode)
+        {
+            var resolution = ResolveCollectionInstances(context, state, element, loopCharacteristics);
+            if (resolution.Fault is not null)
+                return new EvaluationResult(resolution.State, resolution.Fault);
+            state = resolution.State;
+            items = resolution.Items;
+            total = items?.Count ?? 0;
+        }
+        else
+        {
+            // A null cardinality here would be a graph the validator should already have rejected.
+            total = loopCharacteristics.Cardinality
+                ?? throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' resolved no instance count; its loop characteristics declare neither a cardinality nor a collection.");
+        }
 
         if (total <= 0)
             return RouteMultiInstanceCoordinatorOutbound(context, graph, state, element, coordinatorToken, schedulingActivityExecutionId);
 
         state = UpdateToken(state, coordinatorToken with { Status = BpmnTokenStatus.AwaitingChild });
-        var (stateWithLoop, loop) = AddLoop(state, coordinatorToken.TokenId, element.ElementId, loopCharacteristics.IsSequential, total);
+        var (stateWithLoop, loop) = AddLoop(state, coordinatorToken.TokenId, element.ElementId, loopCharacteristics.IsSequential, total, items);
         state = stateWithLoop;
         state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Scheduled, element.ElementId, null, coordinatorToken.TokenId,
             $"BPMN multi-instance element '{element.ElementId}' started a {(loopCharacteristics.IsSequential ? "sequential" : "parallel")} loop of {total} instance(s).");
@@ -350,10 +376,54 @@ public sealed class BpmnExecutionEngine(
 
         var instanceCount = loopCharacteristics.IsSequential ? 1 : total;
         for (var index = 0; index < instanceCount; index++)
-            state = ScheduleMultiInstanceInstance(context, state, element, coordinatorToken.TokenId, childNodeId, index);
+            state = ScheduleMultiInstanceInstance(context, state, element, loop, childNodeId, index);
 
         state = UpdateLoop(state, loop with { NextIndex = instanceCount });
         return new EvaluationResult(state);
+    }
+
+    /// <summary>
+    /// Reads a collection-mode host's collection variable once at loop start (spec 123 D2), returning the
+    /// per-instance item snapshot (in array order) or a deterministic fault: unreadable (variable not visible —
+    /// defensive, unreachable post-validation), non-array present value, or an externally-stored (non-inline)
+    /// payload (stated cut). A null/absent collection resolves to an empty snapshot, which the caller routes as
+    /// an immediate <c>N == 0</c> completion.
+    /// </summary>
+    private static (BpmnExecutionState State, IReadOnlyList<JsonElement>? Items, ActivityFault? Fault) ResolveCollectionInstances(
+        IRuntimeActivityExecutionContext context,
+        BpmnExecutionState state,
+        BpmnElement element,
+        BpmnLoopCharacteristics loopCharacteristics)
+    {
+        var variableName = loopCharacteristics.CollectionVariable!;
+        if (!context.TryReadScopedVariableValue(variableName, out var envelope) || envelope is null)
+        {
+            var message = $"BPMN multi-instance element '{element.ElementId}' could not read collection variable '{variableName}'; it is not a visible declared container-scoped variable of the process.";
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, element.ElementId, null, null, message);
+            return (state, null, new ActivityFault(CollectionUnreadableFaultCode, message));
+        }
+
+        // null / absent → an empty loop (N == 0): complete immediately and route outbound (spec 123 D2).
+        if (envelope.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull)
+            return (state, [], null);
+
+        // A present value stored externally is a stated cut — resolving it needs machinery beyond the inline read.
+        if (envelope.InlineValue is not { } inline)
+        {
+            var message = $"BPMN multi-instance element '{element.ElementId}' collection variable '{variableName}' holds an externally-stored value; only an inline collection is executable in this slice.";
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, element.ElementId, null, null, message);
+            return (state, null, new ActivityFault(CollectionNotInlineFaultCode, message));
+        }
+
+        if (inline.ValueKind != JsonValueKind.Array)
+        {
+            var message = $"BPMN multi-instance element '{element.ElementId}' collection variable '{variableName}' is a {inline.ValueKind} value, not a collection; a collection-mode loop requires an array.";
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, element.ElementId, null, null, message);
+            return (state, null, new ActivityFault(CollectionNotACollectionFaultCode, message));
+        }
+
+        var items = inline.EnumerateArray().Select(item => item.Clone()).ToArray();
+        return (state, items, null);
     }
 
     /// <summary>
@@ -368,27 +438,38 @@ public sealed class BpmnExecutionEngine(
         IRuntimeActivityExecutionContext context,
         BpmnExecutionState state,
         BpmnElement element,
-        string coordinatorTokenId,
+        BpmnLoopState loop,
         string childNodeId,
         int index)
     {
         var ownerActivityExecutionId = context.ActivityExecutionState.Execution.ActivityExecutionId;
         // spec 122: an instance sub-token inherits the coordinator token's loop-iteration key, so a
         // multi-instance host revisited across loop passes keeps each pass's instances in their own iteration.
-        var coordinatorIterationKey = GetRequiredToken(state, coordinatorTokenId).IterationKey;
-        var instanceToken = NewToken(state, element.ElementId, flowId: null, parentTokenId: coordinatorTokenId, BpmnTokenStatus.AwaitingChild, producingActivityExecutionId: ownerActivityExecutionId, iterationKey: coordinatorIterationKey);
+        var coordinatorIterationKey = GetRequiredToken(state, loop.TokenId).IterationKey;
+        var instanceToken = NewToken(state, element.ElementId, flowId: null, parentTokenId: loop.TokenId, BpmnTokenStatus.AwaitingChild, producingActivityExecutionId: ownerActivityExecutionId, iterationKey: coordinatorIterationKey);
         state = AddToken(state, instanceToken);
 
+        // spec 123 D2: in collection mode the instance's item comes from the loop-start snapshot on the record
+        // (never re-reading the variable — snapshot discipline), seeded under the host's ItemVariable.
+        var item = loop.Items is { } items && index < items.Count ? items[index] : (JsonElement?)null;
+        var itemVariable = element.LoopCharacteristics!.IsCollectionMode ? element.LoopCharacteristics.ItemVariable : null;
+
         var iterationId = MultiInstanceIterationIdPrefix + instanceToken.TokenId;
-        var frame = BuildMultiInstanceIterationFrame(context, iterationId, index);
+        var frame = BuildMultiInstanceIterationFrame(context, iterationId, index, item, itemVariable);
         state = BpmnScheduler.ScheduleChild(context, state, childNodeId, element.ElementId, instanceToken.TokenId, ownerActivityExecutionId, MultiInstanceSchedulingCause, frame, iterationId);
 
         return BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Scheduled, element.ElementId, null, instanceToken.TokenId,
             $"BPMN multi-instance element '{element.ElementId}' scheduled instance {index} (child '{childNodeId}').");
     }
 
-    /// <summary>Builds a per-instance iteration frame owned by the <c>BpmnProcess</c> node (spec 121 D2b), seeding a durable zero-based <c>loopIndex</c>.</summary>
-    private static LoopIterationScopeRequest BuildMultiInstanceIterationFrame(IRuntimeActivityExecutionContext context, string iterationId, int index)
+    /// <summary>
+    /// Builds a per-instance iteration frame owned by the <c>BpmnProcess</c> node (spec 121 D2b / spec 123 D2),
+    /// seeding a durable zero-based <c>loopIndex</c> and, in collection mode, the current item under the host's
+    /// <c>ItemVariable</c> as a durable <c>InstanceInline</c> envelope typed with the canonical dynamic value
+    /// type (ADR 0035 <c>Elsa.Any</c>, mirroring how <c>ForEach</c> types a generic item).
+    /// </summary>
+    private static LoopIterationScopeRequest BuildMultiInstanceIterationFrame(
+        IRuntimeActivityExecutionContext context, string iterationId, int index, JsonElement? item, string? itemVariable)
     {
         var values = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal)
         {
@@ -397,7 +478,13 @@ public sealed class BpmnExecutionEngine(
                 JsonSerializer.SerializeToElement(index),
                 ValueProtectionPolicy.InstanceInline)
         };
-        // Collection mode would add the current item under ItemVariable here (deferred this slice).
+        if (itemVariable is not null && item is { } itemValue)
+        {
+            values[itemVariable] = ValueEnvelope.Inline(
+                new ValueTypeDescriptor("Elsa.Any"),
+                itemValue,
+                ValueProtectionPolicy.InstanceInline);
+        }
         return new LoopIterationScopeRequest(context.ExecutableNode.ExecutableNodeId, iterationId, values);
     }
 
@@ -428,7 +515,7 @@ public sealed class BpmnExecutionEngine(
             if (loop.IsSequential && loop.NextIndex < loop.TotalCount)
             {
                 var hostElement = graph.GetRequiredElement(loop.ElementId);
-                state = ScheduleMultiInstanceInstance(context, state, hostElement, loop.TokenId, hostElement.ChildNodeId!, loop.NextIndex);
+                state = ScheduleMultiInstanceInstance(context, state, hostElement, loop, hostElement.ChildNodeId!, loop.NextIndex);
                 state = UpdateLoop(state, loop with { NextIndex = loop.NextIndex + 1, CompletedCount = completedCount });
             }
             else

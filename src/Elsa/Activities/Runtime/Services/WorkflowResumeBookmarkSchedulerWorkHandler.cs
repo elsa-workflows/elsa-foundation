@@ -226,6 +226,15 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 cancellationToken);
             activity = activationLease.Activity;
 
+            // spec 123 D1: populate the scoped-variable read seam for a marker consumer (the BpmnProcess) from
+            // committed frame state, so a bookmark-resume evaluation that reaches a collection-mode loop-start
+            // element reads the collection variable through the same committed-basis projection as the other paths.
+            var scopeService = new RuntimeContainerScopeService(
+                serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+            var scopedVariableEnvelopes = await scopeService.ProjectScopedVariablesForReaderAsync(
+                activity, executable, executionState, cancellationToken);
+
             context = SimpleActivityExecutionContext.ForExecution(
                 activity,
                 cancellationToken,
@@ -234,7 +243,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 workItem,
                 executableNode,
                 executionState,
-                variableScope: null);
+                variableScope: null,
+                scopedVariableEnvelopes: scopedVariableEnvelopes);
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {

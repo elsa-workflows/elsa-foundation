@@ -64,6 +64,16 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     {
         var childrenByNodeId = structure.Activities.ToDictionary(activity => activity.NodeId, StringComparer.Ordinal);
 
+        // spec 123 D3: container-scoped variable declarations emit as elsa-namespaced extension elements so a
+        // collection-mode loop's declared variable survives the round-trip and re-imports as a real loop.
+        if (structure.Variables.Count > 0)
+        {
+            var extensionElements = new XElement(BpmnXmlNames.Model + "extensionElements");
+            foreach (var variable in structure.Variables)
+                extensionElements.Add(new XElement(BpmnXmlNames.Elsa + "variable", new XAttribute("name", variable.Name)));
+            container.Add(extensionElements);
+        }
+
         foreach (var element in structure.Elements)
         {
             var xmlElement = element.ElementType switch
@@ -101,11 +111,12 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     }
 
     /// <summary>
-    /// Emits a <c>&lt;multiInstanceLoopCharacteristics&gt;</c> child (spec 121 D4) for a task/subprocess host
-    /// that carries loop characteristics: <c>isSequential</c> + a literal <c>&lt;loopCardinality&gt;</c>
-    /// (cardinality mode), or the elsa-namespaced <c>elsa:collection</c>/<c>elsa:itemVariable</c> attributes
-    /// (collection mode — only reachable once the collection follow-up unit lands). Prepended so it precedes any
-    /// subprocess content, and round-trips through this importer regardless of order.
+    /// Emits a <c>&lt;multiInstanceLoopCharacteristics&gt;</c> child (spec 121 D4 / spec 123 D3) for a
+    /// task/subprocess host that carries loop characteristics: <c>isSequential</c> + a literal
+    /// <c>&lt;loopCardinality&gt;</c> (cardinality mode), or the elsa-namespaced
+    /// <c>elsa:collection</c>/<c>elsa:itemVariable</c> attributes (collection mode; <c>elsa:itemVariable</c>
+    /// explicit even at default). Prepended so it precedes any subprocess content, and round-trips through this
+    /// importer regardless of order.
     /// </summary>
     private static void AppendLoopCharacteristics(XElement host, BpmnElement element)
     {

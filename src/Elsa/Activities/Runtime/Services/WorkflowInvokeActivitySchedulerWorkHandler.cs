@@ -235,6 +235,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         .Append(valueFlowAttempt)
                         .ToArray()
                 };
+            // spec 123 D1: a structural activity that reads its enclosing container-scoped variable values (the
+            // BpmnProcess) gets a committed name→envelope projection of its own visible frame chain; marker-gated,
+            // so a non-consumer activity pays nothing and reads always return false.
+            var scopedVariableEnvelopes = await scopeService.ProjectScopedVariablesForReaderAsync(
+                activity, executable, executionContextState, cancellationToken);
+
             context = SimpleActivityExecutionContext.ForExecution(
                 activity,
                 cancellationToken,
@@ -246,7 +252,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 variableScope: null,
                 triggerPayload: projections.StimulusInput is JsonElement stimulusInput ? stimulusInput : null,
                 triggerNodeId: projections.TriggerNodeId,
-                triggerMetadata: projections.TriggerMetadata);
+                triggerMetadata: projections.TriggerMetadata,
+                scopedVariableEnvelopes: scopedVariableEnvelopes);
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
