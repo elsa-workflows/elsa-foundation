@@ -7,7 +7,7 @@ namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 /// <summary>
 /// Opt-in publication entry point for the B6 local IAM/secrets facts executed by the provider matrix.
 /// It intentionally excludes the #644 authority rows: their checked-in source artifacts target preview.60,
-/// whereas the Spec 094 ledger currently requires preview.77 evidence.
+/// whereas the Spec 094 ledger currently requires preview.78 evidence.
 /// </summary>
 public sealed class IamSecretsProviderEvidencePublicationTests
 {
@@ -15,7 +15,7 @@ public sealed class IamSecretsProviderEvidencePublicationTests
     private const string EvidenceOutput = "ELSA_GROUNDWORK_EVIDENCE_OUTPUT";
 
     [Fact]
-    public void Preview60_identity_authority_artifacts_cannot_satisfy_the_preview77_B6_ledger()
+    public void Preview60_identity_authority_artifacts_cannot_satisfy_the_preview78_B6_ledger()
     {
         var ledgerVersion = JsonNode.Parse(File.ReadAllText(Path.Combine(
             RepoRoot,
@@ -30,7 +30,7 @@ public sealed class IamSecretsProviderEvidencePublicationTests
             generation,
             "sqlite.json")))!.AsObject();
 
-        Assert.Equal("0.0.1-preview.77", ledgerVersion);
+        Assert.Equal("0.0.1-preview.78", ledgerVersion);
         var artifactVersion = artifact["testedCandidate"]!["groundworkPackageFamilyVersion"]!.GetValue<string>();
         Assert.Equal("0.0.1-preview.60", artifactVersion);
         Assert.NotEqual(ledgerVersion, artifactVersion);
