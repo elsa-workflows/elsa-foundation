@@ -22,11 +22,17 @@ engine-perf program. Shipped so far:
 | Multi-instance (cardinality mode, sequential + parallel; uniform sub-token model; first-ever concurrent same-node scheduling; `RuntimeLiveChildActivity.IterationId` + `(NodeId, IterationId)` teardown keying; collection mode authoring-modeled but deferred — needs a container-variable read seam) | `specs/121-bpmn-multi-instance` | #954 | merged |
 | Cyclic sequence flows (token `IterationKey`; DFS back-edge classification — NOT Flowchart's naive CanReach, chip filed to check Flowchart; join accounting grouped by (element, iteration key); `ValidateAcyclic` removed; importer cycle degradation lifted) | `specs/122-bpmn-cyclic-flows` | #956 | merged |
 
-The events-tier runtime scope is COMPLETE with spec 122. Remaining queued follow-ups (not part of
-the tier's runtime scope): **collection-mode multi-instance execution** (spec 121 authoring-modeled it;
-needs a runtime seam exposing a container variable's current value to structural evaluations —
-`VariableScope` is threaded null into every structural evaluation today); **Flowchart backward-edge
-classification check** (chip filed during spec 122 — Flowchart's `IsBackwardEdge` looks naive);
+The events-tier runtime scope is COMPLETE with spec 122.
+
+## Phase 3 progress (control room active 2026-07-22; program-goal bucket: `docs/program-goals/bpmn-engine.md`, PR #963)
+
+| Unit | Spec | PR | State |
+|---|---|---|---|
+| Runtime scoped-variable read seam + collection-mode multi-instance (marker `IRuntimeScopedVariableReader` + `TryReadScopedVariableValue`, committed-basis, all three handler paths; spec 121 rule-5 cut removed; `BpmnLoopState.Items` snapshot; interchange `elsa:variable` declarations + collection round-trip) | `specs/123-runtime-scoped-variable-read` | #965 | merged |
+
+Remaining queued follow-ups (not part of
+the tier's runtime scope): **Flowchart backward-edge
+classification check** — resolved: confirmed + fixed via PR #958 (2026-07-22);
 Studio authoring UX (event definitions, boundary attachment, loop markers; separate repo) — pull in
 only if the owner asks. Terminate/fault paths still cancel logically only (`CancelLiveWork`); routing
 them through seam A is a noted follow-up. Deferred construct cuts: escalation/compensation boundaries,
