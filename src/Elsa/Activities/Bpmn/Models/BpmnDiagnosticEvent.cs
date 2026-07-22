@@ -55,5 +55,8 @@ public enum BpmnDiagnosticKind
     CompensationTriggered,
 
     /// <summary>A compensation handler ran to completion for one registered compensable (spec 124).</summary>
-    Compensated
+    Compensated,
+
+    /// <summary>A cancel end event began (or completed) cancelling a transaction scope (spec 125).</summary>
+    TransactionCancelled
 }

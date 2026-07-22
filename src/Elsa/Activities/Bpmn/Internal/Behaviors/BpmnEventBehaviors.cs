@@ -102,6 +102,24 @@ public sealed class CompensationEndEventBehavior : IBpmnElementBehavior
         throw new BpmnExecutionException($"BPMN compensate end event '{context.Element.ElementId}' cannot own a child activity.");
 }
 
+/// <summary>
+/// Cancel end event (spec 125): on token arrival, emit the single
+/// <see cref="BpmnBehaviorCommandKind.CancelTransaction"/> command and nothing else. The engine owns the
+/// stop-then-claim-then-replay sequencing and the <c>Cancelled</c> completion; the behavior stays
+/// semantics-unaware. Valid only inside a transaction (enforced by graph validation).
+/// </summary>
+public sealed class CancelEndEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.EndEventCancel;
+    public string DisplayName => "Cancel End Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.CancelTransaction());
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
+        throw new BpmnExecutionException($"BPMN cancel end event '{context.Element.ElementId}' cannot own a child activity.");
+}
+
 /// <summary>Terminate end event: consume every live token and complete the process immediately.</summary>
 public sealed class TerminateEndEventBehavior : IBpmnElementBehavior
 {

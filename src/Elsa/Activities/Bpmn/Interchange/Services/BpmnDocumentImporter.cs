@@ -87,7 +87,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         return BuildProcessNode(process, nodeId, diagram, messageSignalNames, context);
     }
 
-    private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, IReadOnlyDictionary<string, string> messageSignalNames, ImportContext context)
+    private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, IReadOnlyDictionary<string, string> messageSignalNames, ImportContext context, bool isTransaction = false)
     {
         var elements = new List<BpmnElement>();
         var flows = new List<BpmnSequenceFlow>();
@@ -154,6 +154,21 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                         pendingCompensateEnds.Add(child);
                         break;
                     }
+                    // spec 125 D4: a cancel end event is valid only inside a transaction; outside one it degrades to
+                    // a none end event with a finding (the validator would reject a cancel end in a non-transaction).
+                    if (child.Element(BpmnXmlNames.Model + "cancelEventDefinition") is not null)
+                    {
+                        if (isTransaction)
+                        {
+                            elements.Add(new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(child),
+                                eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Cancel)]));
+                            break;
+                        }
+
+                        context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"End event '{id}' declares a cancel event definition but is not inside a transaction; it imported as a none end event.", id));
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(child)));
+                        break;
+                    }
                     var isTerminate = child.Elements(BpmnXmlNames.Model + "terminateEventDefinition").Any();
                     var otherDefinitions = child.Elements().Where(IsEventDefinition).Any(definition => definition.Name.LocalName != "terminateEventDefinition");
                     if (otherDefinitions)
@@ -189,6 +204,18 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
                         loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context),
                         isForCompensation: IsForCompensationOf(child)));
+                    break;
+                }
+                case "transaction":
+                {
+                    if (id is null) break;
+                    // spec 125 D4: a <transaction> imports exactly like a <subProcess> (nested BpmnProcess node
+                    // synthesis) plus IsTransaction on the element AND on the nested authored structure.
+                    var nestedNodeId = $"node-{id}";
+                    childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, context, isTransaction: true));
+                    elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
+                        loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context),
+                        isForCompensation: IsForCompensationOf(child), isTransaction: true));
                     break;
                 }
                 case "boundaryEvent":
@@ -269,9 +296,11 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         var flowParticipantIds = flows
             .SelectMany(flow => new[] { flow.SourceRef, flow.TargetRef })
             .ToHashSet(StringComparer.Ordinal);
+        // spec 125 D4: at most one cancel boundary per transaction host; a second one drops with a finding.
+        var transactionHostsWithCancelBoundary = new HashSet<string>(StringComparer.Ordinal);
         foreach (var boundaryXml in pendingBoundaries)
         {
-            var resolved = ResolveBoundaryEvent(boundaryXml, elementsById, messageSignalNames, associations, flowParticipantIds, context);
+            var resolved = ResolveBoundaryEvent(boundaryXml, elementsById, messageSignalNames, associations, flowParticipantIds, transactionHostsWithCancelBoundary, context);
             if (resolved is not { } boundaryImport)
                 continue; // Dropped (finding added inside); its sequence flows cascade-drop as unresolved refs.
             if (boundaryImport.Child is not null)
@@ -313,7 +342,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
         var elementsWithLanes = elements
             .Select(element => context.LaneByElementId.TryGetValue(element.ElementId, out var laneId)
-                ? new BpmnElement(element.ElementId, element.ElementType, element.Name, element.ChildNodeId, laneId, element.DefaultFlowId, element.EventDefinitions, element.Properties, element.AttachedToRef, element.CancelActivity, element.LoopCharacteristics, element.IsForCompensation, element.CompensationHandlerElementId)
+                ? new BpmnElement(element.ElementId, element.ElementType, element.Name, element.ChildNodeId, laneId, element.DefaultFlowId, element.EventDefinitions, element.Properties, element.AttachedToRef, element.CancelActivity, element.LoopCharacteristics, element.IsForCompensation, element.CompensationHandlerElementId, element.IsTransaction)
                 : element)
             .ToArray();
 
@@ -335,7 +364,8 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
             sequenceFlows: connectedFlows,
             lanes: lanes,
             variables: declaredVariables,
-            diagram: diagram);
+            diagram: diagram,
+            isTransaction: isTransaction);
 
         return new ActivityNode(
             nodeId,
@@ -516,6 +546,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         IReadOnlyDictionary<string, string> messageSignalNames,
         IReadOnlyList<(string Source, string Target)> associations,
         IReadOnlySet<string> flowParticipantIds,
+        HashSet<string> transactionHostsWithCancelBoundary,
         ImportContext context)
     {
         var id = IdOf(element)!;
@@ -575,6 +606,27 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     attachedToRef: attachedToRef, cancelActivity: cancelActivity,
                     compensationHandlerElementId: handlerId);
                 return (compensationElement, null);
+            }
+            case "cancelEventDefinition":
+            {
+                // spec 125 D4: a cancel boundary attaches only to a transaction host, at most one per host.
+                // cancelActivity is imported as authored but ignored (the host is finished when it fires).
+                if (!host.IsTransaction)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Cancel boundary event '{id}' is attached to '{attachedToRef}', which is not a transaction; it was dropped.", id));
+                    return null;
+                }
+
+                if (!transactionHostsWithCancelBoundary.Add(attachedToRef))
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Cancel boundary event '{id}' is a second cancel boundary on transaction '{attachedToRef}', which may carry at most one; it was dropped.", id));
+                    return null;
+                }
+
+                var cancelElement = new BpmnElement(id, BpmnElementTypes.BoundaryEvent, name: NameOf(element),
+                    eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Cancel)],
+                    attachedToRef: attachedToRef, cancelActivity: cancelActivity);
+                return (cancelElement, null);
             }
             case "errorEventDefinition":
             {
@@ -670,7 +722,8 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         var handler = elements[index];
         elements[index] = new BpmnElement(handler.ElementId, handler.ElementType, handler.Name, handler.ChildNodeId, handler.LaneId,
             handler.DefaultFlowId, handler.EventDefinitions, handler.Properties, handler.AttachedToRef, handler.CancelActivity,
-            handler.LoopCharacteristics, isForCompensation: true, compensationHandlerElementId: handler.CompensationHandlerElementId);
+            handler.LoopCharacteristics, isForCompensation: true, compensationHandlerElementId: handler.CompensationHandlerElementId,
+            isTransaction: handler.IsTransaction);
     }
 
     /// <summary>

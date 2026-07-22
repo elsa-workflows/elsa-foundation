@@ -423,6 +423,17 @@ public sealed class ExecutableNodeCompiler(
                     outcomes.Add(value);
         }
 
+        // spec 125: a BPMN transaction subprocess declares the additional "Cancelled" outcome (structure-dependent,
+        // the same FlowSwitch/VF-ACT-006 pattern as Switch case labels): a cancel end event inside the transaction
+        // completes the nested process with "Cancelled" instead of "Done". A non-transaction BpmnProcess keeps only
+        // its statically declared "Done" outcome, so the contract stays byte-identical for ordinary processes.
+        if (StringComparer.Ordinal.Equals(structure?.Kind, "elsa.bpmn.structure") &&
+            structure.Payload.TryGetProperty("isTransaction", out var isTransaction) &&
+            isTransaction.ValueKind == JsonValueKind.True)
+        {
+            outcomes.Add("Cancelled");
+        }
+
         AddValueDerivedOutcomes(activityType, inputBindings, outcomes);
 
         if (outcomes.Count == 0)

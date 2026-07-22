@@ -104,6 +104,31 @@ children, and diagnostics.
   throw behaviors emit `TriggerCompensation` and nothing else; registration, ordering, claiming, and replay
   are engine-owned. Compensation on a multi-instance host, nested-process cascade, escalation, and
   compensation event subprocesses are stated cuts.
+- **Transactions** (spec 125) let a `subProcess` model a **transaction** whose nested scope can be
+  **cancelled from within**. The flag lives on **both** sides independently (isolation): the parent's
+  `BpmnElement.IsTransaction` (drives cancel-boundary validation + the parent-side outcome mapping) and the
+  nested `BpmnStructure.IsTransaction` (drives cancel-end validation + the contract's extra outcome). A
+  **cancel end event** (only inside a transaction) emits a single `CancelTransaction` command; the engine
+  stops all **other** live work logically (routing every other live token through `CancelTokenAndChild` so
+  MI/race/compensation-run cascades tear down consistently, while in-flight children keep running and are
+  absorbed on late completion — the terminate precedent), records a `Cancelling` verdict, then **claims every
+  `Registered` compensable** (the whole scope, reverse registration order) and opens a spec-124
+  `BpmnCompensationRun` coordinated by the cancel-end token — reusing the compensation replay machinery
+  verbatim. When the replay finishes (or the log was empty) the process **completes with the distinguishable
+  `Cancelled` outcome** instead of `Done` (`FinishEvaluation` grows the outcome-aware exit; the runtime's
+  `Cancel` continuation is deliberately NOT used — it would never reach the parent's completion handler). The
+  published contract declares `Cancelled` **in addition to** `Done` iff the authored structure is a
+  transaction — the structure-dependent outcome pattern (VF-ACT-006 / FlowSwitch), via the
+  `ExecutableNodeCompiler` outcome resolver reading the compiled `elsa.bpmn.structure` `isTransaction` flag.
+  In the parent scope, a transaction child completing `Cancelled` is intercepted **before** normal routing and
+  Case B registration: the host token is consumed, **no** compensable registers, **no** normal outbound
+  routes, still-armed catch listeners tear down, and an `Active` token is minted at the attached **cancel
+  boundary** (dormant, no listener, ≥1 outbound — the error-boundary minting pattern) to route the
+  cancellation path; with no cancel boundary the parent faults `bpmn.transaction.cancelled-unhandled`. A
+  transaction completing `Done` is byte-identical to a plain subprocess (normal routing + Case B). A handler
+  fault mid-cancel rides the ordinary `bpmn.child.faulted` composite path (no `Cancelled` completion).
+  Multi-instance transactions, auto-compensation when a transaction is interrupted from outside, escalation,
+  transaction hazards, and nested-transaction cross-scope cascades are stated cuts.
 - **Cyclic sequence flows** are executable (spec 122): a token carries an **iteration key** (`null` on the
   implicit first pass); traversing a **backward** (loop-back) sequence flow — the standard DFS back edge,
   precomputed once as `BpmnGraph.IsBackwardFlow` — mints a fresh key, and forward propagation inherits the
@@ -134,11 +159,12 @@ the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`), event-start (see
 `specs/117-bpmn-event-start-events/`), event-based-gateway (see
 `specs/119-bpmn-event-based-gateway/`), boundary-events (see `specs/120-bpmn-boundary-events/`), and
 multi-instance (see `specs/121-bpmn-multi-instance/` and `specs/123-runtime-scoped-variable-read/`),
-cyclic-sequence-flow (see `specs/122-bpmn-cyclic-flows/`), and compensation (see
-`specs/124-bpmn-compensation/`) slices: none/timer/message/signal start events,
-none/terminate/**compensate** end events, timer/message/signal intermediate catch events, **compensate
-intermediate throw events**, timer/message/signal/error/**compensation** **boundary events**, compensation
-**handler** activities, cardinality and collection **multi-instance** (sequential + parallel) loops, task
+cyclic-sequence-flow (see `specs/122-bpmn-cyclic-flows/`), compensation (see
+`specs/124-bpmn-compensation/`), and transactions (see `specs/125-bpmn-transactions/`) slices:
+none/timer/message/signal start events, none/terminate/**compensate**/**cancel** end events,
+timer/message/signal intermediate catch events, **compensate intermediate throw events**,
+timer/message/signal/error/**compensation**/**cancel** **boundary events**, **transaction** subprocesses,
+compensation **handler** activities, cardinality and collection **multi-instance** (sequential + parallel) loops, task
 family, embedded subprocess, and exclusive/parallel/inclusive/event-based gateways over **cyclic or acyclic**
 graphs — loop-back sequence flows are executable via token iteration keys (spec 122). The interchange
 importer/exporter round-trips timer/message/signal event definitions on event-defined start and intermediate
@@ -146,9 +172,10 @@ catch events (see `specs/118-bpmn-interchange-event-definitions/`) and round-tri
 boundary event, cardinality **and collection** multi-instance elements (collection variables carry as
 `elsa:collection`/`elsa:itemVariable` plus `elsa:variable` declarations), and **compensation** (boundary +
 `compensateEventDefinition` + `<association>` to an `isForCompensation` handler; compensate throw/end with an
-optional `activityRef`), so these constructs can now be authored from XML; a cyclic document imports clean.
-Later units add a loop-iteration variable surface, escalation boundaries, compensation event subprocesses,
-transactions, and call activities.
+optional `activityRef`) and **transactions** (`<transaction>` + `cancelEventDefinition` on an end event inside
+a transaction and on a boundary attached to a transaction host), so these constructs can now be authored from
+XML; a cyclic document imports clean. Later units add a loop-iteration variable surface, escalation
+boundaries, compensation event subprocesses, and call activities.
 
 ## Expression-driven gateway conditions
 

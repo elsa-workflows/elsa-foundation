@@ -157,6 +157,9 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         // spec 124: a compensate end event emits a compensateEventDefinition (+ optional activityRef).
         else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Compensation)) is { } compensation)
             endEvent.Add(BuildCompensateEventDefinition(compensation));
+        // spec 125: a cancel end event emits a cancelEventDefinition.
+        else if (element.EventDefinitions.Any(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Cancel)))
+            endEvent.Add(new XElement(BpmnXmlNames.Model + "cancelEventDefinition"));
         return endEvent;
     }
 
@@ -211,6 +214,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                 boundary.Add(new XElement(BpmnXmlNames.Model + "errorEventDefinition"));
             else if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Compensation))
                 boundary.Add(new XElement(BpmnXmlNames.Model + "compensateEventDefinition"));
+            else if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Cancel))
+                boundary.Add(new XElement(BpmnXmlNames.Model + "cancelEventDefinition"));
             else
                 AppendEventDefinition(boundary, definition, isCatch: true);
         }
@@ -286,7 +291,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
 
     private static XElement BuildSubProcess(BpmnElement element, IReadOnlyDictionary<string, ActivityNode> childrenByNodeId)
     {
-        var subProcess = new XElement(BpmnXmlNames.Model + "subProcess");
+        // spec 125: a transaction subprocess exports as <transaction>; everything else is identical to a subprocess.
+        var subProcess = new XElement(BpmnXmlNames.Model + (element.IsTransaction ? "transaction" : "subProcess"));
 
         // A nested BpmnProcess child inlines as subprocess content; any other bound activity has no
         // BPMN representation for its internals, so the subprocess exports empty (the binding is an

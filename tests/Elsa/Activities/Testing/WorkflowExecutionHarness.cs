@@ -515,6 +515,15 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                     outcomes.Add(value);
         }
 
+        // spec 125: a BPMN transaction subprocess declares the additional "Cancelled" outcome (structure-dependent,
+        // the same FlowSwitch/VF-ACT-006 pattern). Mirror ExecutableNodeCompiler.ResolveOutcomes for test graphs.
+        if (StringComparer.Ordinal.Equals(node.Structure?.Kind, "elsa.bpmn.structure") &&
+            node.Structure.Payload.TryGetProperty("isTransaction", out var isTransaction) &&
+            isTransaction.ValueKind == JsonValueKind.True)
+        {
+            outcomes.Add("Cancelled");
+        }
+
         if (outcomes.Count == 0)
             outcomes.Add(ActivityOutcomes.Done);
         return outcomes.ToArray();
