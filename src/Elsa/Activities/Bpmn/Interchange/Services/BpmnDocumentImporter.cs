@@ -250,8 +250,8 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
             return connected;
         }).ToArray();
 
-        if (HasCycle(elementIds, connectedFlows))
-            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, "The process graph contains a cycle; it will import but is not executable in this slice (loops arrive in the events tier)."));
+        // spec 122: cyclic sequence flows are executable (loop-back edges become loop-iteration keys), so a
+        // cycle no longer degrades the import; the structural rules still constrain where a loop-back may land.
 
         var structure = new BpmnAuthoredStructure(
             activities: childActivities,
@@ -308,23 +308,6 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         }
 
         return JsonSerializer.SerializeToElement(new { shapes, edges }, SerializerOptions);
-    }
-
-    private static bool HasCycle(IReadOnlyCollection<string> elementIds, IReadOnlyCollection<BpmnSequenceFlow> flows)
-    {
-        var outbound = flows.ToLookup(flow => flow.SourceRef, StringComparer.Ordinal);
-        var states = new Dictionary<string, int>(StringComparer.Ordinal);
-
-        bool Visit(string elementId)
-        {
-            if (states.TryGetValue(elementId, out var known)) return known == 1;
-            states[elementId] = 1;
-            if (outbound[elementId].Any(flow => Visit(flow.TargetRef))) return true;
-            states[elementId] = 2;
-            return false;
-        }
-
-        return elementIds.Any(Visit);
     }
 
     /// <summary>

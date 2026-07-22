@@ -10,7 +10,9 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// The parsed, validated executable BPMN graph: elements, sequence flows, child bindings, and family
 /// resolution. Construction validates the structural invariants of this engine slice (unique ids,
 /// resolvable references, ≥1 none start event, event/gateway binding rules, single default flow per
-/// element, acyclicity) so the engine can navigate without re-checking.
+/// element) so the engine can navigate without re-checking, and precomputes the backward (loop-back) flow
+/// set so the engine can mint loop-iteration keys (spec 122). Cyclic graphs are executable; the structural
+/// rules still forbid a loop-back into a start event, a boundary event, or an event-gateway-armed catch.
 /// </summary>
 public sealed class BpmnGraph
 {
@@ -23,6 +25,7 @@ public sealed class BpmnGraph
     private readonly ILookup<string, BpmnSequenceFlow> _outboundBySource;
     private readonly ILookup<string, BpmnSequenceFlow> _inboundByTarget;
     private readonly ILookup<string, BpmnElement> _boundariesByHost;
+    private readonly IReadOnlySet<string> _backwardFlowIds;
 
     private BpmnGraph(
         IReadOnlyCollection<BpmnElement> elements,
@@ -45,11 +48,15 @@ public sealed class BpmnGraph
         StartEvents = elements
             .Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.StartEvent))
             .ToArray();
+        _backwardFlowIds = ComputeBackwardFlowIds(elements, _outboundBySource, StartEvents);
     }
 
     public IReadOnlyCollection<BpmnElement> Elements { get; }
     public IReadOnlyCollection<BpmnSequenceFlow> SequenceFlows { get; }
     public IReadOnlyCollection<BpmnElement> StartEvents { get; }
+
+    /// <summary>The loop-closing (backward) sequence flow ids (spec 122); a token that traverses one mints a fresh iteration key.</summary>
+    public IReadOnlyCollection<string> BackwardFlowIds => _backwardFlowIds;
 
     public static BpmnGraph From(ExecutableNode executableNode)
     {
@@ -145,6 +152,66 @@ public sealed class BpmnGraph
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="flowId"/> is a backward (loop-back) sequence flow (spec 122): a token that
+    /// traverses it mints a fresh loop-iteration key rather than inheriting the emitting token's. The set is
+    /// precomputed at construction (<see cref="ComputeBackwardFlowIds"/>) and is a deterministic function of
+    /// the element/flow/start-event sets.
+    /// </summary>
+    public bool IsBackwardFlow(string flowId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(flowId);
+        return _backwardFlowIds.Contains(flowId);
+    }
+
+    /// <summary>
+    /// Classifies the graph's backward (loop-closing) sequence flows once at construction (spec 122). A
+    /// backward edge is the standard compiler back edge: during a depth-first traversal from the start-event
+    /// roots, an edge <c>u → v</c> is backward iff <c>v</c> is GRAY — on the current DFS stack, an ancestor of
+    /// <c>u</c> — when the edge is examined. This marks exactly the loop-closing edge of each loop and never a
+    /// forward/cross edge of the cycle (unlike the naive "target can reach source", which marks every edge of
+    /// a cycle). Roots are the start events, then any remaining unvisited elements; both root lists and each
+    /// node's outbound flows are ordinal-sorted, so the result is stable regardless of authoring order and of
+    /// multi-start iteration order.
+    /// </summary>
+    private static IReadOnlySet<string> ComputeBackwardFlowIds(
+        IReadOnlyCollection<BpmnElement> elements,
+        ILookup<string, BpmnSequenceFlow> outboundBySource,
+        IReadOnlyCollection<BpmnElement> startEvents)
+    {
+        const int gray = 1;
+        const int black = 2;
+
+        var backward = new HashSet<string>(StringComparer.Ordinal);
+        var color = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        var roots = startEvents.Select(element => element.ElementId)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .Concat(elements.Select(element => element.ElementId).OrderBy(id => id, StringComparer.Ordinal))
+            .Distinct(StringComparer.Ordinal);
+
+        foreach (var root in roots)
+            Visit(root);
+
+        return backward;
+
+        void Visit(string elementId)
+        {
+            color[elementId] = gray;
+
+            foreach (var flow in outboundBySource[elementId].OrderBy(flow => flow.FlowId, StringComparer.Ordinal))
+            {
+                var known = color.TryGetValue(flow.TargetRef, out var state) ? state : 0;
+                if (known == gray)
+                    backward.Add(flow.FlowId); // target is on the current DFS stack — a loop-closing edge.
+                else if (known != black)
+                    Visit(flow.TargetRef);
+            }
+
+            color[elementId] = black;
+        }
     }
 
     private static BpmnStructure? ReadStructure(ExecutableNode executableNode)
@@ -277,7 +344,10 @@ public sealed class BpmnGraph
 
         ValidateMultiInstance(elements, declaredVariableNames);
 
-        ValidateAcyclic(elements, outboundBySource);
+        // Cyclic sequence flows are executable (spec 122): loop-back edges become loop-iteration keys. The
+        // structural rules above still constrain where a loop-back may land — a loop-back into a start event
+        // (no inbound), a boundary event (no inbound), or an event-gateway-armed catch (exactly-one-inbound)
+        // is rejected by those rules — so no acyclicity check remains.
     }
 
     /// <summary>
@@ -409,36 +479,4 @@ public sealed class BpmnGraph
         }
     }
 
-    /// <summary>
-    /// This engine slice rejects cyclic graphs: BPMN loops arrive with loop characteristics and
-    /// iteration scopes in the events tier (see the module README's phasing notes).
-    /// </summary>
-    private static void ValidateAcyclic(IReadOnlyCollection<BpmnElement> elements, ILookup<string, BpmnSequenceFlow> outboundBySource)
-    {
-        var states = new Dictionary<string, int>(StringComparer.Ordinal);
-
-        foreach (var element in elements)
-        {
-            if (Visit(element.ElementId) is { } cycleElementId)
-                throw new BpmnExecutionException($"BPMN structure contains a cycle through element '{cycleElementId}'; cyclic graphs are not supported by this engine slice.");
-        }
-
-        return;
-
-        string? Visit(string elementId)
-        {
-            if (states.TryGetValue(elementId, out var known))
-                return known == 1 ? elementId : null;
-
-            states[elementId] = 1;
-            foreach (var flow in outboundBySource[elementId])
-            {
-                if (Visit(flow.TargetRef) is { } cycleElementId)
-                    return cycleElementId;
-            }
-
-            states[elementId] = 2;
-            return null;
-        }
-    }
 }

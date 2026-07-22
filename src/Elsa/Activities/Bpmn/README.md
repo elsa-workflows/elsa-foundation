@@ -77,11 +77,19 @@ children, and diagnostics.
   lives in the engine. **Collection mode** (run once per item of a container-scoped collection variable) is
   authoring-modeled and validated as a stated cut but **not executable in this slice** — its per-instance
   item read needs a container-variable read seam that structural evaluations do not yet expose; the graph
-  validator rejects it and the importer degrades it (follow-up unit). Cyclic sequence flows and token
-  iteration keys for join accounting stay out of scope.
-- Multi-inbound parallel joins wait for one arrival per inbound flow. Multi-inbound inclusive joins
-  are activation-aware: they wait only while a live token or running child can still reach an
-  un-arrived inbound flow. Everything else is an implicit XOR merge.
+  validator rejects it and the importer degrades it (follow-up unit).
+- **Cyclic sequence flows** are executable (spec 122): a token carries an **iteration key** (`null` on the
+  implicit first pass); traversing a **backward** (loop-back) sequence flow — the standard DFS back edge,
+  precomputed once as `BpmnGraph.IsBackwardFlow` — mints a fresh key, and forward propagation inherits the
+  emitting token's key. Join accounting groups arrivals by `(element, iteration key)`, so a join revisited
+  across loop iterations never conflates iteration *N* with *N+1*. Every per-token construct re-arms on a
+  revisit (a multi-instance host starts a second independent loop, a catch/boundary re-arms, an event
+  gateway re-races). The structural rules still forbid a loop-back into a start event, a boundary event, or
+  an event-gateway-armed catch. No loop-iteration variable is exposed and no runaway-loop guardrail is added
+  (an un-terminating loop is the author's responsibility).
+- Multi-inbound parallel joins wait for one arrival per inbound flow (per iteration key). Multi-inbound
+  inclusive joins are activation-aware: they wait only while a live token or running child **of the same
+  iteration** can still reach an un-arrived inbound flow. Everything else is an implicit XOR merge.
 - A terminate end event consumes every live token and completes the composite; late completions of
   in-flight children are absorbed (Flowchart Break parity).
 - Branch faults are fault-aware (Flowchart #308 parity): a faulted child whose host has no error boundary
@@ -99,16 +107,18 @@ This module currently ships the Phase 1 core subset (see `specs/108-bpmn-contain
 the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`), event-start (see
 `specs/117-bpmn-event-start-events/`), event-based-gateway (see
 `specs/119-bpmn-event-based-gateway/`), boundary-events (see `specs/120-bpmn-boundary-events/`), and
-multi-instance (see `specs/121-bpmn-multi-instance/`) slices: none/timer/message/signal start events,
-none/terminate end events, timer/message/signal intermediate catch events, timer/message/signal/error
-**boundary events**, cardinality **multi-instance** (sequential + parallel) loops, task family, embedded
-subprocess, and exclusive/parallel/inclusive/event-based gateways over **acyclic** graphs. Cyclic graphs
-are rejected at validation. The interchange importer/exporter round-trips timer/message/signal event
-definitions on event-defined start and intermediate catch events (see
+multi-instance (see `specs/121-bpmn-multi-instance/`), and cyclic-sequence-flow (see
+`specs/122-bpmn-cyclic-flows/`) slices: none/timer/message/signal start events, none/terminate end events,
+timer/message/signal intermediate catch events, timer/message/signal/error **boundary events**, cardinality
+**multi-instance** (sequential + parallel) loops, task family, embedded subprocess, and
+exclusive/parallel/inclusive/event-based gateways over **cyclic or acyclic** graphs — loop-back sequence
+flows are executable via token iteration keys (spec 122). The interchange importer/exporter round-trips
+timer/message/signal event definitions on event-defined start and intermediate catch events (see
 `specs/118-bpmn-interchange-event-definitions/`) and round-trips the event-based gateway, boundary event,
-and cardinality multi-instance elements, so these constructs can now be authored from XML. Later units add
-collection-mode multi-instance (needs a container-variable read seam), cyclic sequence flows,
-escalation/compensation boundaries, event subprocesses, transactions, and call activities.
+and cardinality multi-instance elements, so these constructs can now be authored from XML; a cyclic document
+imports clean. Later units add collection-mode multi-instance (needs a container-variable read seam), a
+loop-iteration variable surface, escalation/compensation boundaries, event subprocesses, transactions, and
+call activities.
 
 ## Expression-driven gateway conditions
 

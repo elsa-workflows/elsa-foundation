@@ -48,8 +48,9 @@ Mapping rules for this slice:
   host WITHOUT loop characteristics with a finding (validate-representable — the importer never emits a loop
   the graph validator would reject; collection mode is a stated cut in this slice).
 - Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes
-  (call activities, event subprocesses, …) are dropped with an issue. Cyclic graphs import but are flagged
-  as not executable in this slice.
+  (call activities, event subprocesses, …) are dropped with an issue. **Cyclic graphs import clean** — a
+  loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation
+  finding is gone; the graph validator's structural rules still constrain where a loop-back may land.
 - BPMNDI shapes/edges are preserved verbatim on the authored `diagram` payload.
 
 ## Export
