@@ -13,7 +13,8 @@ public sealed record WorkflowExecutionCommandProcessResult(
     RuntimeSchedulerDrainStopReason? StopReason,
     bool Faulted,
     bool OutboxDeliveryFailed,
-    string? FaultReason)
+    string? FaultReason,
+    bool WorkflowTerminated = false)
 {
     /// <summary>
     /// The command was enqueued but no drain was performed (the drain policy returned no request). There is no fault verdict.
@@ -53,6 +54,14 @@ public sealed record WorkflowExecutionCommandProcessResult(
             StopReason: drainResult.StopReason,
             Faulted: faulted,
             OutboxDeliveryFailed: outboxDeliveryFailed,
-            FaultReason: faultReason);
+            FaultReason: faultReason,
+            WorkflowTerminated: drainResult.StoppedOnTerminalStatus);
     }
+
+    /// <summary>
+    /// A completed drain that ended by committing a terminal workflow status without faulting. Test/support factory for
+    /// the terminal-eviction path (#542); production always projects the real drain through <see cref="FromDrain"/>.
+    /// </summary>
+    public static WorkflowExecutionCommandProcessResult Terminal { get; } =
+        new(true, RuntimeSchedulerDrainStopReason.WorkflowTerminated, false, false, null, WorkflowTerminated: true);
 }
