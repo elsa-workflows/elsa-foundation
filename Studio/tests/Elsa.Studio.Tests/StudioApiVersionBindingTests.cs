@@ -22,37 +22,27 @@ public sealed class StudioApiVersionBindingTests
         RequiredSdkVersion: "*",
         Capabilities: ["routes"]);
 
-    [Fact]
-    public async Task HostVersion_DefaultsToAssemblyVersion_LeavingModuleIncompatible()
+    [Theory]
+    // No configured host version defaults to the host assembly version (1.0.0), leaving a module requiring ^2.0.0 incompatible.
+    [InlineData(null, null, "incompatible")]
+    // A configured host version flows through to the compatibility gate and flips the verdict.
+    [InlineData("2.3.1", "2.3.1", "compatible")]
+    public async Task HostVersion_BindsFromConfiguration_AndGatesModuleCompatibility(
+        string? configuredHostVersion, string? expectedHostVersion, string expectedCompatibility)
     {
-        var provider = BuildProvider(configuration: null);
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(CancellationToken.None);
-
-        // Assembly version is 1.0.0, so a module requiring host ^2.0.0 is incompatible.
-        Assert.Equal(StudioApiOptions.ResolveAssemblyVersion(), response.HostVersion);
-        var module = Assert.Single(response.Modules, x => x.Id == RequiresHostV2.Id);
-        Assert.Equal("incompatible", module.Compatibility);
-    }
-
-    [Fact]
-    public async Task HostVersion_BoundFromConfiguration_FlipsModuleToCompatible()
-    {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Studio:Api:HostVersion"] = "2.3.1"
-            })
-            .Build();
+        var configuration = configuredHostVersion is null
+            ? null
+            : new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?> { ["Studio:Api:HostVersion"] = configuredHostVersion })
+                .Build();
 
         var provider = BuildProvider(configuration);
 
         var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(CancellationToken.None);
 
-        // The configured host version flows through to the compatibility gate and flips the verdict.
-        Assert.Equal("2.3.1", response.HostVersion);
+        Assert.Equal(expectedHostVersion ?? StudioApiOptions.ResolveAssemblyVersion(), response.HostVersion);
         var module = Assert.Single(response.Modules, x => x.Id == RequiresHostV2.Id);
-        Assert.Equal("compatible", module.Compatibility);
+        Assert.Equal(expectedCompatibility, module.Compatibility);
     }
 
     private static ServiceProvider BuildProvider(IConfiguration? configuration)

@@ -70,26 +70,26 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    [Fact]
-    public async Task RejectsRequestWithoutBearerWhenAuthEnabled()
+    [Theory]
+    [MemberData(nameof(BaseGateHeaderCases))]
+    public async Task BaseGateHonorsBearerHeaderWhenAuthEnabled(string? bearer, HttpStatusCode expected)
     {
+        // With auth on, the base gate admits a recognized bearer and rejects a missing or unrecognized one as 401.
         var client = await StartGatedHostAsync(authEnabled: true);
+        if (bearer is not null)
+            client.DefaultRequestHeaders.Authorization = new("Bearer", bearer);
 
         var response = await client.PostAsync("/gated", content: null);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(expected, response.StatusCode);
     }
 
-    [Fact]
-    public async Task AllowsRequestWithValidBearerHeaderWhenAuthEnabled()
+    public static TheoryData<string?, HttpStatusCode> BaseGateHeaderCases => new()
     {
-        var client = await StartGatedHostAsync(authEnabled: true);
-        client.DefaultRequestHeaders.Authorization = new("Bearer", ValidBearer);
-
-        var response = await client.PostAsync("/gated", content: null);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
+        { ValidBearer, HttpStatusCode.OK },
+        { "not-a-recognized-token", HttpStatusCode.Unauthorized },
+        { null, HttpStatusCode.Unauthorized }
+    };
 
     [Fact]
     public async Task UsesDedicatedServerBaseUrlToValidateBearerWhenConfigured()
@@ -104,48 +104,20 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         Assert.Equal(backendServerBaseUrl, _backendStub?.LastRequestUri?.GetLeftPart(UriPartial.Authority));
     }
 
-    [Fact]
-    public async Task RejectsRequestWithInvalidBearerHeaderWhenAuthEnabled()
-    {
-        var client = await StartGatedHostAsync(authEnabled: true);
-        client.DefaultRequestHeaders.Authorization = new("Bearer", "not-a-recognized-token");
-
-        var response = await client.PostAsync("/gated", content: null);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task AllowsValidAccessTokenQueryParameterOnHubPathWhenAuthEnabled()
-    {
-        // Browsers cannot attach headers to the WebSocket/SSE handshake; SignalR falls back to ?access_token=, honoured
-        // only on the configured hub path.
-        var client = await StartGatedHostAsync(authEnabled: true);
-
-        var response = await client.PostAsync($"{HubPath}?{StudioBridgeAuth.AccessTokenQueryParameterName}={ValidBearer}", content: null);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task RejectsValidAccessTokenQueryParameterOnNonHubPathWhenAuthEnabled()
-    {
-        // Off the hub path the query credential is ignored so the bearer never lands in access logs of REST endpoints.
-        var client = await StartGatedHostAsync(authEnabled: true);
-
-        var response = await client.PostAsync($"/gated?{StudioBridgeAuth.AccessTokenQueryParameterName}={ValidBearer}", content: null);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task RejectsInvalidAccessTokenQueryParameterOnHubPathWhenAuthEnabled()
+    // Browsers cannot attach headers to the WebSocket/SSE handshake, so SignalR falls back to ?access_token=. It is
+    // honoured only on the configured hub path; off that path the query credential is ignored so the bearer never lands
+    // in the access logs of REST endpoints.
+    [Theory]
+    [InlineData(HubPath, ValidBearer, HttpStatusCode.OK)]
+    [InlineData(HubPath, "not-a-recognized-token", HttpStatusCode.Unauthorized)]
+    [InlineData("/gated", ValidBearer, HttpStatusCode.Unauthorized)]
+    public async Task AccessTokenQueryParameterHonoredOnlyOnHubPathWhenAuthEnabled(string path, string token, HttpStatusCode expected)
     {
         var client = await StartGatedHostAsync(authEnabled: true);
 
-        var response = await client.PostAsync($"{HubPath}?{StudioBridgeAuth.AccessTokenQueryParameterName}=not-a-recognized-token", content: null);
+        var response = await client.PostAsync($"{path}?{StudioBridgeAuth.AccessTokenQueryParameterName}={token}", content: null);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(expected, response.StatusCode);
     }
 
     [Fact]
@@ -165,111 +137,34 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
     // from 401); a holder of the read permission → 200 on reads; a manage holder passes reads AND mutations; a read-only
     // holder → 403 on mutations; and auth disabled → everything allowed anonymously (demo posture).
 
-    [Fact]
-    public async Task ReadSurfaceRejectsWithoutBearerAs401WhenAuthEnabled()
+    [Theory]
+    [MemberData(nameof(PermissionMatrixCases))]
+    public async Task PermissionSurfaceEnforcesItsPolicyWhenAuthEnabled(string method, string route, string? bearer, HttpStatusCode expected)
     {
-        var client = await StartGatedHostAsync(authEnabled: true);
+        var response = await SendWithBearerAsync(new HttpMethod(method), route, bearer);
 
-        var response = await client.GetAsync(ReadRoute);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(expected, response.StatusCode);
     }
 
-    [Fact]
-    public async Task ReadSurfaceForbidsSignedInUserMissingPermissionAs403()
+    // Every gated surface keyed by (method, route, bearer, expected). A read surface returns 401 for no bearer ("not
+    // signed in") but 403 for a live session missing the permission ("Studio denied you"); manage implies read, so a
+    // manage-only holder passes the read surface. A mutation surface forbids a read-only holder. Extension Builder is
+    // independently gated (#256): a module-management holder does not satisfy it, and its manage implies its read.
+    public static TheoryData<string, string, string?, HttpStatusCode> PermissionMatrixCases => new()
     {
-        // A live session that lacks module-management.read is FORBIDDEN (403), not unauthenticated (401): "Studio denied
-        // you" is distinct from "you are not signed in".
-        var response = await SendWithBearerAsync(HttpMethod.Get, ReadRoute, NoPermissionBearer);
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ReadSurfaceAllowsModuleReadHolder()
-    {
-        var response = await SendWithBearerAsync(HttpMethod.Get, ReadRoute, ModuleReadBearer);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ReadSurfaceAllowsManageHolder()
-    {
-        // manage implies read: a manage-only holder satisfies the read surface (expanded locally by the read policy).
-        var response = await SendWithBearerAsync(HttpMethod.Get, ReadRoute, ModuleManageBearer);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task MutationSurfaceForbidsReadOnlyHolderAs403()
-    {
-        // A read-only holder must NOT be able to mutate: the manage surface forbids a session that holds only read.
-        var response = await SendWithBearerAsync(HttpMethod.Post, ManageRoute, ModuleReadBearer);
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task MutationSurfaceAllowsManageHolder()
-    {
-        var response = await SendWithBearerAsync(HttpMethod.Post, ManageRoute, ModuleManageBearer);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task MutationSurfaceForbidsSignedInUserMissingPermissionAs403()
-    {
-        var response = await SendWithBearerAsync(HttpMethod.Post, ManageRoute, NoPermissionBearer);
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ExtensionBuilderReadSurfaceForbidsHolderOfOnlyModulePermission()
-    {
-        // module-management permissions must NOT satisfy the Extension Builder surface — the two are independently gated.
-        var response = await SendWithBearerAsync(HttpMethod.Get, ExtensionBuilderReadRoute, ModuleManageBearer);
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ExtensionBuilderReadSurfaceAllowsExtensionBuilderReadHolder()
-    {
-        var response = await SendWithBearerAsync(HttpMethod.Get, ExtensionBuilderReadRoute, ExtensionBuilderReadBearer);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ExtensionBuilderReadSurfaceAllowsExtensionBuilderManageHolder()
-    {
-        // extension-builder.manage implies extension-builder.read, expanded locally by the read policy (#256).
-        var response = await SendWithBearerAsync(HttpMethod.Get, ExtensionBuilderReadRoute, ExtensionBuilderManageBearer);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ExtensionBuilderManageSurfaceAllowsExtensionBuilderManageHolder()
-    {
-        var response = await SendWithBearerAsync(HttpMethod.Post, ExtensionBuilderManageRoute, ExtensionBuilderManageBearer);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ExtensionBuilderManageSurfaceForbidsReadOnlyHolderAs403()
-    {
-        // A read-only Extension Builder holder must NOT be able to mutate: the manage surface forbids a session that
-        // holds only extension-builder.read.
-        var response = await SendWithBearerAsync(HttpMethod.Post, ExtensionBuilderManageRoute, ExtensionBuilderReadBearer);
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
+        { "GET", ReadRoute, null, HttpStatusCode.Unauthorized },
+        { "GET", ReadRoute, NoPermissionBearer, HttpStatusCode.Forbidden },
+        { "GET", ReadRoute, ModuleReadBearer, HttpStatusCode.OK },
+        { "GET", ReadRoute, ModuleManageBearer, HttpStatusCode.OK },
+        { "POST", ManageRoute, NoPermissionBearer, HttpStatusCode.Forbidden },
+        { "POST", ManageRoute, ModuleReadBearer, HttpStatusCode.Forbidden },
+        { "POST", ManageRoute, ModuleManageBearer, HttpStatusCode.OK },
+        { "GET", ExtensionBuilderReadRoute, ModuleManageBearer, HttpStatusCode.Forbidden },
+        { "GET", ExtensionBuilderReadRoute, ExtensionBuilderReadBearer, HttpStatusCode.OK },
+        { "GET", ExtensionBuilderReadRoute, ExtensionBuilderManageBearer, HttpStatusCode.OK },
+        { "POST", ExtensionBuilderManageRoute, ExtensionBuilderReadBearer, HttpStatusCode.Forbidden },
+        { "POST", ExtensionBuilderManageRoute, ExtensionBuilderManageBearer, HttpStatusCode.OK }
+    };
 
     [Theory]
     [InlineData("GET", ReadRoute)]
@@ -466,11 +361,12 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         return client.SendAsync(request);
     }
 
-    private async Task<HttpResponseMessage> SendWithBearerAsync(HttpMethod method, string route, string bearer)
+    private async Task<HttpResponseMessage> SendWithBearerAsync(HttpMethod method, string route, string? bearer)
     {
         var client = await StartGatedHostAsync(authEnabled: true);
         var request = new HttpRequestMessage(method, route);
-        request.Headers.Authorization = new("Bearer", bearer);
+        if (bearer is not null)
+            request.Headers.Authorization = new("Bearer", bearer);
         return await client.SendAsync(request);
     }
 

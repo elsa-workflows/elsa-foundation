@@ -3,6 +3,7 @@ using CShells;
 using CShells.Features;
 using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Extensions;
+using Elsa.Studio.Api.Models;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.Core.Attributes;
@@ -21,162 +22,91 @@ using Elsa.Studio.Workflows.Dashboard;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Studio.Tests;
 
 public sealed class StudioModuleManifestProviderTests
 {
-    [Fact]
-    public async Task GetModules_ReturnsHostSdkVersionsAndCollectedModuleManifests()
-    {
-        var provider = CreateProvider();
+    private static readonly string[] ExpectedModuleIds =
+    [
+        "Elsa.Studio.ConsoleStream",
+        "Elsa.Studio.Diagnostics.OpenTelemetry",
+        "Elsa.Studio.Diagnostics.StructuredLogs",
+        "Elsa.Studio.ExpressionEditors.JavaScript",
+        "Elsa.Studio.ExpressionEditors.Liquid",
+        "Elsa.Studio.FeatureManagement",
+        "Elsa.Studio.Workflows",
+        "Elsa.Studio.Dashboard",
+        "Elsa.Studio.Attention",
+        "Elsa.Studio.Workflows.Dashboard",
+        "Elsa.Studio.Samples.WeatherForecast",
+        "Elsa.Studio.Weaver.Workflows"
+    ];
 
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+    [Fact]
+    public async Task GetModules_ReturnsHostSdkVersionsAndCollectsEveryModule()
+    {
+        var response = await GetModulesAsync();
 
         Assert.Equal("1.0.0", response.HostVersion);
         Assert.Equal("1.0.0", response.SdkVersion);
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.ConsoleStream");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.OpenTelemetry");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.StructuredLogs");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.ExpressionEditors.JavaScript");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.ExpressionEditors.Liquid");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Dashboard");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Attention");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows.Dashboard");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
+        Assert.All(ExpectedModuleIds, id => Assert.Contains(response.Modules, x => x.Id == id));
         Assert.Contains(response.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
     }
 
-    [Fact]
-    public async Task GetModules_ReturnsWeaverManifestsAndCapabilities()
+    public static TheoryData<ModuleExpectation> ModuleManifests => new()
     {
-        var provider = CreateProvider();
+        new("Elsa.Studio.Workflows", "Workflows",
+            AssetPath: "/_content/Elsa.Studio.Workflows/studio/modules/workflows/",
+            Version: "1.0.8",
+            Capabilities: ["navigation", "routes", "workflow-designer"]),
+        new("Elsa.Studio.FeatureManagement", "Feature management",
+            AssetPath: "/_content/Elsa.Studio.FeatureManagement/studio/modules/features/",
+            Capabilities: ["navigation", "routes", "setting-editors"]),
+        new("Elsa.Studio.ExpressionEditors.JavaScript", "JavaScript expression editor",
+            AssetPath: "/_content/Elsa.Studio.ExpressionEditors.JavaScript/studio/modules/expression-editors/javascript/",
+            ShellFeatureName: "JavaScriptExpressionEditorStudio",
+            Capabilities: ["expression-editors", "javascript"]),
+        new("Elsa.Studio.ExpressionEditors.Liquid", "Liquid expression editor",
+            AssetPath: "/_content/Elsa.Studio.ExpressionEditors.Liquid/studio/modules/expression-editors/liquid/",
+            ShellFeatureName: "LiquidExpressionEditorStudio",
+            Capabilities: ["expression-editors", "liquid"]),
+        new("Elsa.Studio.Diagnostics.StructuredLogs", "Structured logs",
+            AssetPath: "/_content/Elsa.Studio.Diagnostics.StructuredLogs/studio/modules/structured-logs/",
+            Capabilities: ["navigation", "routes", "panels", "http", "sse", "diagnostics"]),
+        new("Elsa.Studio.Diagnostics.OpenTelemetry", "OpenTelemetry",
+            AssetPath: "/_content/Elsa.Studio.Diagnostics.OpenTelemetry/studio/modules/open-telemetry/",
+            Capabilities: ["navigation", "routes", "http", "diagnostics", "otel", "traces", "metrics", "logs"]),
+        // Weaver is a backend-only AI module: it carries capabilities but ships no frontend bundle, so AssetPath stays null.
+        new("Elsa.Studio.Weaver.Workflows", "Weaver workflows",
+            ShellFeatureName: "WeaverWorkflowsStudio",
+            Capabilities: ["weaver-workflows", "ai-context-providers", "ai-prompt-actions", "ai-proposal-renderers", "ai-tools"])
+    };
 
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        var workflows = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
-        Assert.Equal("Weaver workflows", workflows.DisplayName);
-        Assert.Equal("WeaverWorkflowsStudio", workflows.ShellFeatureName);
-        Assert.Contains("weaver-workflows", workflows.Capabilities);
-        Assert.Contains("ai-context-providers", workflows.Capabilities);
-        Assert.Contains("ai-prompt-actions", workflows.Capabilities);
-        Assert.Contains("ai-proposal-renderers", workflows.Capabilities);
-        Assert.Contains("ai-tools", workflows.Capabilities);
-    }
-
-    [Fact]
-    public async Task GetModules_ReturnsWorkflowsManifestAssetsAndCapabilities()
+    [Theory]
+    [MemberData(nameof(ModuleManifests))]
+    public async Task GetModules_ProjectsModuleManifest(ModuleExpectation expected)
     {
-        var provider = CreateProvider();
+        var response = await GetModulesAsync();
 
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+        var module = Assert.Single(response.Modules, x => x.Id == expected.Id);
+        Assert.Equal(expected.DisplayName, module.DisplayName);
+        Assert.All(expected.Capabilities, capability => Assert.Contains(capability, module.Capabilities));
 
-        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
-        Assert.Equal("Workflows", module.DisplayName);
-        Assert.Equal("1.0.8", module.Version);
-        Assert.StartsWith("/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.js", module.Entry, StringComparison.Ordinal);
-        Assert.Contains($"v={module.Version}", module.Entry);
-        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.css", StringComparison.Ordinal));
-        Assert.All(module.Styles, style => Assert.Contains($"v={module.Version}", style));
-        Assert.Contains("navigation", module.Capabilities);
-        Assert.Contains("routes", module.Capabilities);
-        Assert.Contains("workflow-designer", module.Capabilities);
-    }
+        if (expected.ShellFeatureName is not null)
+            Assert.Equal(expected.ShellFeatureName, module.ShellFeatureName);
 
-    [Fact]
-    public async Task GetModules_ReturnsFeatureManagementManifestAssetsAndCapabilities()
-    {
-        var provider = CreateProvider();
+        if (expected.Version is not null)
+            Assert.Equal(expected.Version, module.Version);
 
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
-        Assert.Equal("Feature management", module.DisplayName);
-        Assert.StartsWith("/_content/Elsa.Studio.FeatureManagement/studio/modules/features/module.js", module.Entry, StringComparison.Ordinal);
-        Assert.Contains($"v={module.Version}", module.Entry);
-        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.FeatureManagement/studio/modules/features/module.css", StringComparison.Ordinal));
-        Assert.Contains("navigation", module.Capabilities);
-        Assert.Contains("routes", module.Capabilities);
-        Assert.Contains("setting-editors", module.Capabilities);
-    }
-
-    [Fact]
-    public async Task GetModules_ReturnsJavaScriptExpressionEditorManifestAssetsAndCapabilities()
-    {
-        var provider = CreateProvider();
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.ExpressionEditors.JavaScript");
-        Assert.Equal("JavaScript expression editor", module.DisplayName);
-        Assert.Equal("JavaScriptExpressionEditorStudio", module.ShellFeatureName);
-        Assert.StartsWith("/_content/Elsa.Studio.ExpressionEditors.JavaScript/studio/modules/expression-editors/javascript/module.js", module.Entry, StringComparison.Ordinal);
-        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.ExpressionEditors.JavaScript/studio/modules/expression-editors/javascript/module.css", StringComparison.Ordinal));
-        Assert.Contains("expression-editors", module.Capabilities);
-        Assert.Contains("javascript", module.Capabilities);
-    }
-
-    [Fact]
-    public async Task GetModules_ReturnsLiquidExpressionEditorManifestAssetsAndCapabilities()
-    {
-        var provider = CreateProvider();
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.ExpressionEditors.Liquid");
-        Assert.Equal("Liquid expression editor", module.DisplayName);
-        Assert.Equal("LiquidExpressionEditorStudio", module.ShellFeatureName);
-        Assert.StartsWith("/_content/Elsa.Studio.ExpressionEditors.Liquid/studio/modules/expression-editors/liquid/module.js", module.Entry, StringComparison.Ordinal);
-        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.ExpressionEditors.Liquid/studio/modules/expression-editors/liquid/module.css", StringComparison.Ordinal));
-        Assert.Contains("expression-editors", module.Capabilities);
-        Assert.Contains("liquid", module.Capabilities);
-    }
-
-    [Fact]
-    public async Task GetModules_ReturnsStructuredLogsManifestAssetsAndCapabilities()
-    {
-        var provider = CreateProvider();
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.StructuredLogs");
-        Assert.Equal("Structured logs", module.DisplayName);
-        Assert.StartsWith("/_content/Elsa.Studio.Diagnostics.StructuredLogs/studio/modules/structured-logs/module.js", module.Entry, StringComparison.Ordinal);
-        Assert.Contains($"v={module.Version}", module.Entry);
-        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Diagnostics.StructuredLogs/studio/modules/structured-logs/module.css", StringComparison.Ordinal));
-        Assert.Contains("navigation", module.Capabilities);
-        Assert.Contains("routes", module.Capabilities);
-        Assert.Contains("panels", module.Capabilities);
-        Assert.Contains("http", module.Capabilities);
-        Assert.Contains("sse", module.Capabilities);
-        Assert.Contains("diagnostics", module.Capabilities);
-    }
-
-    [Fact]
-    public async Task GetModules_ReturnsOpenTelemetryManifestAssetsAndCapabilities()
-    {
-        var provider = CreateProvider();
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.OpenTelemetry");
-        Assert.Equal("OpenTelemetry", module.DisplayName);
-        Assert.StartsWith("/_content/Elsa.Studio.Diagnostics.OpenTelemetry/studio/modules/open-telemetry/module.js", module.Entry, StringComparison.Ordinal);
-        Assert.Contains($"v={module.Version}", module.Entry);
-        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Diagnostics.OpenTelemetry/studio/modules/open-telemetry/module.css", StringComparison.Ordinal));
-        Assert.Contains("navigation", module.Capabilities);
-        Assert.Contains("routes", module.Capabilities);
-        Assert.Contains("http", module.Capabilities);
-        Assert.Contains("diagnostics", module.Capabilities);
-        Assert.Contains("otel", module.Capabilities);
-        Assert.Contains("traces", module.Capabilities);
-        Assert.Contains("metrics", module.Capabilities);
-        Assert.Contains("logs", module.Capabilities);
+        if (expected.AssetPath is not null)
+        {
+            Assert.StartsWith(expected.AssetPath + "module.js", module.Entry, StringComparison.Ordinal);
+            Assert.Contains($"v={module.Version}", module.Entry);
+            Assert.Contains(module.Styles, style => style.StartsWith(expected.AssetPath + "module.css", StringComparison.Ordinal));
+            Assert.All(module.Styles, style => Assert.Contains($"v={module.Version}", style));
+        }
     }
 
     [Fact]
@@ -184,13 +114,11 @@ public sealed class StudioModuleManifestProviderTests
     {
         // Vite cssCodeSplit builds emit module.css, module2.css, … — the manifest must link them all,
         // in emission order, and ignore unrelated assets.
-        var provider = CreateProvider(webAssets: new Dictionary<string, string[]>
+        var response = await GetModulesAsync(webAssets: new Dictionary<string, string[]>
         {
             ["_content/Elsa.Studio.Workflows/studio/modules/workflows"] =
                 ["module3.css", "module.css", "module10.css", "module2.css", "module.js", "chunk-abc.js", "styles.txt"]
         });
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
 
         var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Equal(
@@ -206,9 +134,7 @@ public sealed class StudioModuleManifestProviderTests
     public async Task GetModules_FallsBackToConventionalStylesheetWhenAssetsCannotBeEnumerated()
     {
         // A web host environment is registered but the module's asset directory is not served from it.
-        var provider = CreateProvider(webAssets: new Dictionary<string, string[]>());
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+        var response = await GetModulesAsync(webAssets: new Dictionary<string, string[]>());
 
         var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Equal([$"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.css?v={module.Version}"], module.Styles);
@@ -217,9 +143,7 @@ public sealed class StudioModuleManifestProviderTests
     [Fact]
     public async Task GetModules_OmitsStylesForModulesWithoutStylesheets()
     {
-        var provider = CreateProvider(extraFeatureTypes: [typeof(StylelessStudioFeature)]);
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+        var response = await GetModulesAsync(extraFeatureTypes: [typeof(StylelessStudioFeature)]);
 
         var module = Assert.Single(response.Modules, x => x.Id == typeof(StylelessStudioFeature).Assembly.GetName().Name);
         Assert.Empty(module.Styles);
@@ -228,94 +152,32 @@ public sealed class StudioModuleManifestProviderTests
     [StudioModule("tests/styleless", "Styleless", "1.0.0", HasStyles = false)]
     private sealed class StylelessStudioFeature;
 
-    [Fact]
-    public async Task GetModules_FiltersDisabledModulesAndReportsDiagnostic()
+    [Theory]
+    [InlineData("Elsa.Studio.Samples.WeatherForecast")]
+    [InlineData("Elsa.Studio.ConsoleStream")]
+    [InlineData("Elsa.Studio.Diagnostics.StructuredLogs")]
+    [InlineData("Elsa.Studio.Diagnostics.OpenTelemetry")]
+    public async Task GetModules_FiltersDisabledModuleAndReportsDiagnostic(string moduleId)
     {
-        var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Samples.WeatherForecast"));
+        var response = await GetModulesAsync(options => options.DisabledModuleIds.Add(moduleId));
 
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
-        Assert.Contains(response.Diagnostics, x =>
-            x.ModuleId == "Elsa.Studio.Samples.WeatherForecast" &&
-            x.Status == StudioModuleDiagnosticStatuses.Disabled);
-    }
-
-    [Fact]
-    public async Task GetModules_FiltersConsoleStreamModuleAndReportsDiagnostic()
-    {
-        using var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.ConsoleStream"));
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.ConsoleStream");
-        Assert.Contains(response.Diagnostics, x =>
-            x.ModuleId == "Elsa.Studio.ConsoleStream" &&
-            x.Status == StudioModuleDiagnosticStatuses.Disabled);
-    }
-
-    [Fact]
-    public async Task GetModules_FiltersStructuredLogsModuleAndReportsDiagnostic()
-    {
-        using var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Diagnostics.StructuredLogs"));
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.StructuredLogs");
-        Assert.Contains(response.Diagnostics, x =>
-            x.ModuleId == "Elsa.Studio.Diagnostics.StructuredLogs" &&
-            x.Status == StudioModuleDiagnosticStatuses.Disabled);
-    }
-
-    [Fact]
-    public async Task GetModules_FiltersOpenTelemetryModuleAndReportsDiagnostic()
-    {
-        using var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Diagnostics.OpenTelemetry"));
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.OpenTelemetry");
-        Assert.Contains(response.Diagnostics, x =>
-            x.ModuleId == "Elsa.Studio.Diagnostics.OpenTelemetry" &&
-            x.Status == StudioModuleDiagnosticStatuses.Disabled);
+        Assert.DoesNotContain(response.Modules, x => x.Id == moduleId);
+        AssertDisabled(response.Diagnostics, moduleId);
     }
 
     [Fact]
     public async Task GetModules_FiltersModulesOwnedByInactiveShellFeatures()
     {
-        using var provider = CreateProvider(
-            shellFeatures:
-            [
-                "ConsoleStream",
-                "FeatureManagement",
-                "DashboardStudio",
-                "StudioApi"
-            ]);
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+        var response = await GetModulesAsync(shellFeatures: ["ConsoleStream", "FeatureManagement", "DashboardStudio", "StudioApi"]);
 
         Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
-        Assert.Contains(response.Diagnostics, x =>
-            x.ModuleId == "Elsa.Studio.Samples.WeatherForecast" &&
-            x.Status == StudioModuleDiagnosticStatuses.Disabled);
-    }
-
-    [Fact]
-    public async Task GetModules_CanCollectMultipleContributors()
-    {
-        var provider = CreateProvider();
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        Assert.True(response.Modules.Count >= 2);
+        AssertDisabled(response.Diagnostics, "Elsa.Studio.Samples.WeatherForecast");
     }
 
     [Fact]
     public async Task GetModuleRegistry_ReturnsBackendAwareModuleMetadata()
     {
-        var provider = CreateProvider();
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(CancellationToken.None);
+        var response = await GetRegistryAsync();
 
         var featureManagement = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
         Assert.Equal("full-stack", featureManagement.Scope);
@@ -333,15 +195,30 @@ public sealed class StudioModuleManifestProviderTests
     [Fact]
     public async Task GetModuleRegistry_IncludesDisabledModulesForInspection()
     {
-        var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Samples.WeatherForecast"));
-
-        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(CancellationToken.None);
+        var response = await GetRegistryAsync(options => options.DisabledModuleIds.Add("Elsa.Studio.Samples.WeatherForecast"));
 
         var weather = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
         Assert.Equal(StudioModuleDiagnosticStatuses.Disabled, weather.Status);
-        Assert.Contains(weather.Diagnostics, x =>
-            x.ModuleId == "Elsa.Studio.Samples.WeatherForecast" &&
-            x.Status == StudioModuleDiagnosticStatuses.Disabled);
+        AssertDisabled(weather.Diagnostics, "Elsa.Studio.Samples.WeatherForecast");
+    }
+
+    private static void AssertDisabled(IEnumerable<StudioModuleDiagnostic> diagnostics, string moduleId) =>
+        Assert.Contains(diagnostics, x => x.ModuleId == moduleId && x.Status == StudioModuleDiagnosticStatuses.Disabled);
+
+    private static async Task<StudioModulesResponse> GetModulesAsync(
+        Action<StudioApiOptions>? configure = null,
+        IReadOnlyList<string>? shellFeatures = null,
+        IReadOnlyDictionary<string, string[]>? webAssets = null,
+        Type[]? extraFeatureTypes = null)
+    {
+        await using var provider = CreateProvider(configure, shellFeatures, webAssets, extraFeatureTypes);
+        return await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+    }
+
+    private static async Task<StudioModuleRegistryResponse> GetRegistryAsync(Action<StudioApiOptions>? configure = null)
+    {
+        await using var provider = CreateProvider(configure);
+        return await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(CancellationToken.None);
     }
 
     private static ServiceProvider CreateProvider(
@@ -393,6 +270,15 @@ public sealed class StudioModuleManifestProviderTests
 
         return services.BuildServiceProvider();
     }
+
+    /// <summary>Expected projection of a single module manifest. <paramref name="AssetPath"/> is null for backend-only modules that ship no frontend bundle.</summary>
+    public sealed record ModuleExpectation(
+        string Id,
+        string DisplayName,
+        string[] Capabilities,
+        string? AssetPath = null,
+        string? ShellFeatureName = null,
+        string? Version = null);
 
     /// <summary>
     /// Returns a snapshot whose feature descriptors carry the <see cref="ShellFeatureDescriptor.StartupType"/>

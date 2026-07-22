@@ -12,6 +12,9 @@ public sealed class StudioRuntimeScriptTests
 {
     private const string ManagementKey = "s3cr3t-management-key";
 
+    // Rendered from the fully-configured surface (management key included) shared by the leak/surface guards below.
+    private readonly string _script = StudioRuntimeScript.Render(BuildConfiguration());
+
     private static IConfiguration BuildConfiguration() =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -33,39 +36,33 @@ public sealed class StudioRuntimeScriptTests
     [Fact]
     public void RuntimeScriptDoesNotContainTheManagementKeyValueEvenWhenConfigured()
     {
-        var script = StudioRuntimeScript.Render(BuildConfiguration());
-
-        Assert.DoesNotContain(ManagementKey, script);
+        Assert.DoesNotContain(ManagementKey, _script);
     }
 
     [Fact]
     public void RuntimeScriptDoesNotContainTheManagementKeyFieldEvenWhenConfigured()
     {
-        var script = StudioRuntimeScript.Render(BuildConfiguration());
-
         // The legacy browser-visible field is gone: neither the field name nor the underlying config key ride along.
-        Assert.DoesNotContain("backendModuleManagementApiKey", script, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("ManagementApiKey", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("backendModuleManagementApiKey", _script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ManagementApiKey", _script, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void RuntimeScriptStillEmitsTheNonSecretConfigurationSurface()
     {
         // The removal is surgical: the non-secret surface the shell depends on is unchanged.
-        var script = StudioRuntimeScript.Render(BuildConfiguration());
-
-        Assert.Contains(StudioRuntimeScript.GlobalName, script);
-        Assert.Contains("backendBaseUrl", script);
-        Assert.Contains("https://backend.example/", script);
-        Assert.DoesNotContain("http://elsa-server:8080", script);
-        Assert.Contains("\"enabled\":true", script);
-        Assert.Contains("activityDefinitions", script);
-        Assert.Contains("localRecovery", script);
-        Assert.Contains("\"ttlMinutes\":90", script);
-        Assert.Contains("\"hostId\":\"studio-primary\"", script);
-        Assert.Contains("\"defaultRefreshIntervalMs\":900000", script);
-        Assert.Contains("\"widgetTimeoutMs\":12000", script);
-        Assert.Contains("\"pinnedWidgetIds\":[\"attention.queue\"]", script);
+        Assert.Contains(StudioRuntimeScript.GlobalName, _script);
+        Assert.Contains("backendBaseUrl", _script);
+        Assert.Contains("https://backend.example/", _script);
+        Assert.DoesNotContain("http://elsa-server:8080", _script);
+        Assert.Contains("\"enabled\":true", _script);
+        Assert.Contains("activityDefinitions", _script);
+        Assert.Contains("localRecovery", _script);
+        Assert.Contains("\"ttlMinutes\":90", _script);
+        Assert.Contains("\"hostId\":\"studio-primary\"", _script);
+        Assert.Contains("\"defaultRefreshIntervalMs\":900000", _script);
+        Assert.Contains("\"widgetTimeoutMs\":12000", _script);
+        Assert.Contains("\"pinnedWidgetIds\":[\"attention.queue\"]", _script);
     }
 
     [Fact]

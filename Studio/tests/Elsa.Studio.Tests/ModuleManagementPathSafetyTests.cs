@@ -10,6 +10,7 @@ namespace Elsa.Studio.Tests;
 public sealed class ModuleManagementPathSafetyTests
 {
     private static readonly string Root = Path.Combine(Path.GetTempPath(), "elsa-drop-folder");
+    private static readonly string StaticAssetsRoot = Path.GetFullPath(Path.Combine(Root, "staticwebassets"));
 
     [Theory]
     [InlineData("../evil.nupkg")]
@@ -42,26 +43,22 @@ public sealed class ModuleManagementPathSafetyTests
     [InlineData("../staticwebassets-sibling/asset.css")]
     public void IsChildPathRejectsPathsOutsideParent(string relative)
     {
-        var parent = Path.Combine(Root, "staticwebassets");
-        var candidate = Path.GetFullPath(Path.Combine(parent, relative));
+        var candidate = Path.GetFullPath(Path.Combine(StaticAssetsRoot, relative));
 
-        Assert.False(NuplaneStaticWebAssetsEndpoint.IsChildPath(Path.GetFullPath(parent), candidate));
+        Assert.False(NuplaneStaticWebAssetsEndpoint.IsChildPath(StaticAssetsRoot, candidate));
     }
 
     [Fact]
     public void IsChildPathRejectsParentItself()
     {
-        var parent = Path.GetFullPath(Path.Combine(Root, "staticwebassets"));
-
-        Assert.False(NuplaneStaticWebAssetsEndpoint.IsChildPath(parent, parent));
+        Assert.False(NuplaneStaticWebAssetsEndpoint.IsChildPath(StaticAssetsRoot, StaticAssetsRoot));
     }
 
     [Fact]
     public void IsChildPathAllowsNestedAsset()
     {
-        var parent = Path.GetFullPath(Path.Combine(Root, "staticwebassets"));
-        var asset = Path.Combine(parent, "css", "site.css");
+        var asset = Path.Combine(StaticAssetsRoot, "css", "site.css");
 
-        Assert.True(NuplaneStaticWebAssetsEndpoint.IsChildPath(parent, asset));
+        Assert.True(NuplaneStaticWebAssetsEndpoint.IsChildPath(StaticAssetsRoot, asset));
     }
 }

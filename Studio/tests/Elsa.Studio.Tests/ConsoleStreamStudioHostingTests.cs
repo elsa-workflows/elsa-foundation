@@ -6,24 +6,16 @@ namespace Elsa.Studio.Tests;
 
 public sealed class ConsoleStreamStudioHostingTests
 {
-    [Fact]
-    public void RegistersConsoleLogStreamingHostWhenFeatureEnabled()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void HostsConsoleLogStreamingHostOnlyWhenFeatureEnabled(bool enabled)
     {
         var services = new ServiceCollection();
 
-        services.AddConsoleStreamStudioHostIfEnabled(BuildConfiguration(enabled: true));
+        services.AddConsoleStreamStudioHostIfEnabled(BuildConfiguration(enabled));
 
-        Assert.True(HasConsoleLogStreamingHost(services));
-    }
-
-    [Fact]
-    public void DoesNotRegisterConsoleLogStreamingHostWhenFeatureDisabled()
-    {
-        var services = new ServiceCollection();
-
-        services.AddConsoleStreamStudioHostIfEnabled(BuildConfiguration(enabled: false));
-
-        Assert.False(HasConsoleLogStreamingHost(services));
+        Assert.Equal(enabled, HasConsoleLogStreamingHost(services));
     }
 
     [Fact]

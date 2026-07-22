@@ -6,11 +6,18 @@ namespace Elsa.Studio.Tests;
 
 public sealed class ConsoleStreamHookInstallerTests : IDisposable
 {
+    private readonly List<DirectoryInfo> _tempDirs = [];
+
     public ConsoleStreamHookInstallerTests() =>
         ConsoleStreamHookInstaller.ResetConsoleStreamHookInstallStateForTests();
 
-    public void Dispose() =>
+    public void Dispose()
+    {
         ConsoleStreamHookInstaller.ResetConsoleStreamHookInstallStateForTests();
+
+        foreach (var dir in _tempDirs)
+            dir.Delete(recursive: true);
+    }
 
     [Fact]
     public void InstallsConsoleStreamHookOnlyWhenFeatureIsEnabled()
@@ -26,109 +33,45 @@ public sealed class ConsoleStreamHookInstallerTests : IDisposable
         Assert.Equal(1, installCount);
     }
 
-    [Fact]
-    public void DoesNotEnableConsoleStreamHookWhenFeatureIsMissingFromConfiguration()
+    // IsFeatureEnabled must recognize the feature across every shells.json shape CShells accepts
+    // (object/array, empty/named, with or without an explicit Enabled flag) and case-insensitively,
+    // while treating a missing entry, boolean false, or an explicit Enabled:false as disabled.
+    [Theory]
+    [MemberData(nameof(FeatureShapeCases))]
+    public void IsFeatureEnabledReflectsShellsJsonShape(string json, bool expected)
     {
-        var configuration = BuildConfiguration();
+        var configuration = BuildJsonConfiguration(json);
 
-        Assert.False(ConsoleStreamHookInstaller.IsFeatureEnabled(configuration));
+        Assert.Equal(expected, ConsoleStreamHookInstaller.IsFeatureEnabled(configuration));
     }
 
-    [Fact]
-    public void DetectsEnabledFeatureFromEmptyObjectJsonShape()
+    public static TheoryData<string, bool> FeatureShapeCases() => new()
     {
-        var configuration = BuildJsonConfiguration("""
-            {
-              "CShells": { "Shells": { "default": { "Features": { "ConsoleStream": {} } } } }
-            }
-            """);
-
-        Assert.True(ConsoleStreamHookInstaller.IsFeatureEnabled(configuration));
-    }
-
-    [Fact]
-    public void DoesNotEnableConsoleStreamHookWhenFeatureIsBooleanFalse()
-    {
-        var configuration = BuildJsonConfiguration("""
-            {
-              "CShells": { "Shells": { "default": { "Features": { "ConsoleStream": false } } } }
-            }
-            """);
-
-        Assert.False(ConsoleStreamHookInstaller.IsFeatureEnabled(configuration));
-    }
-
-    [Fact]
-    public void DoesNotEnableConsoleStreamHookWhenObjectFeatureIsDisabled()
-    {
-        var configuration = BuildJsonConfiguration("""
-            {
-              "CShells": { "Shells": { "default": { "Features": { "ConsoleStream": { "Enabled": false } } } } }
-            }
-            """);
-
-        Assert.False(ConsoleStreamHookInstaller.IsFeatureEnabled(configuration));
-    }
-
-    [Fact]
-    public void DetectsEnabledFeatureCaseInsensitively()
-    {
-        var configuration = BuildJsonConfiguration("""
-            {
-              "CShells": { "Shells": { "default": { "Features": { "consolestream": {} } } } }
-            }
-            """);
-
-        Assert.True(ConsoleStreamHookInstaller.IsFeatureEnabled(configuration));
-    }
-
-    [Fact]
-    public void DetectsEnabledFeatureFromArrayJsonShape()
-    {
-        var configuration = BuildJsonConfiguration("""
-            {
-              "CShells": { "Shells": { "default": { "Features": [ "ConsoleStream" ] } } }
-            }
-            """);
-
-        Assert.True(ConsoleStreamHookInstaller.IsFeatureEnabled(configuration));
-    }
-
-    [Fact]
-    public void DetectsEnabledFeatureFromArrayObjectJsonShape()
-    {
-        var configuration = BuildJsonConfiguration("""
-            {
-              "CShells": { "Shells": { "default": { "Features": [ { "Name": "ConsoleStream", "EndpointPrefix": "/console" } ] } } }
-            }
-            """);
-
-        Assert.True(ConsoleStreamHookInstaller.IsFeatureEnabled(configuration));
-    }
-
-    [Fact]
-    public void DoesNotEnableConsoleStreamHookWhenArrayObjectFeatureIsDisabled()
-    {
-        var configuration = BuildJsonConfiguration("""
-            {
-              "CShells": { "Shells": { "default": { "Features": [ { "Name": "ConsoleStream", "Enabled": false } ] } } }
-            }
-            """);
-
-        Assert.False(ConsoleStreamHookInstaller.IsFeatureEnabled(configuration));
-    }
+        // Missing from configuration.
+        { "{}", false },
+        // Object shapes.
+        { """{ "CShells": { "Shells": { "default": { "Features": { "ConsoleStream": {} } } } } }""", true },
+        { """{ "CShells": { "Shells": { "default": { "Features": { "ConsoleStream": false } } } } }""", false },
+        { """{ "CShells": { "Shells": { "default": { "Features": { "ConsoleStream": { "Enabled": false } } } } } }""", false },
+        // Case-insensitive feature name.
+        { """{ "CShells": { "Shells": { "default": { "Features": { "consolestream": {} } } } } }""", true },
+        // Array shapes.
+        { """{ "CShells": { "Shells": { "default": { "Features": [ "ConsoleStream" ] } } } }""", true },
+        { """{ "CShells": { "Shells": { "default": { "Features": [ { "Name": "ConsoleStream", "EndpointPrefix": "/console" } ] } } } }""", true },
+        { """{ "CShells": { "Shells": { "default": { "Features": [ { "Name": "ConsoleStream", "Enabled": false } ] } } } }""", false },
+    };
 
     [Fact]
     public void InstallsConsoleStreamHookFromContentRootBeforeBuilderCreation()
     {
         var installCount = 0;
-        var contentRoot = Directory.CreateTempSubdirectory();
+        var contentRoot = CreateTempDir();
+        var otherDirectory = CreateTempDir();
         var originalCurrentDirectory = Directory.GetCurrentDirectory();
-        var otherDirectory = Directory.CreateTempSubdirectory();
+        WriteEnabledShellsJson(contentRoot.FullName);
 
         try
         {
-            WriteEnabledShellsJson(contentRoot.FullName);
             Directory.SetCurrentDirectory(otherDirectory.FullName);
 
             ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(["--contentRoot", contentRoot.FullName], () => installCount++);
@@ -138,8 +81,6 @@ public sealed class ConsoleStreamHookInstallerTests : IDisposable
         finally
         {
             Directory.SetCurrentDirectory(originalCurrentDirectory);
-            contentRoot.Delete(recursive: true);
-            otherDirectory.Delete(recursive: true);
         }
     }
 
@@ -147,43 +88,35 @@ public sealed class ConsoleStreamHookInstallerTests : IDisposable
     public void DoesNotInstallConsoleStreamHookWhenCommandLineDisablesShellsJsonFeature()
     {
         var installCount = 0;
-        var contentRoot = Directory.CreateTempSubdirectory();
+        var contentRoot = CreateTempDir();
+        WriteEnabledShellsJson(contentRoot.FullName);
 
-        try
-        {
-            WriteEnabledShellsJson(contentRoot.FullName);
+        ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(
+            [
+                "--contentRoot", contentRoot.FullName,
+                "--CShells:Shells:default:Features:ConsoleStream=false"
+            ],
+            () => installCount++);
 
-            ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(
-                [
-                    "--contentRoot", contentRoot.FullName,
-                    "--CShells:Shells:default:Features:ConsoleStream=false"
-                ],
-                () => installCount++);
-
-            Assert.Equal(0, installCount);
-        }
-        finally
-        {
-            contentRoot.Delete(recursive: true);
-        }
+        Assert.Equal(0, installCount);
     }
 
     [Fact]
     public void DoesNotInstallConsoleStreamHookWhenShellsJsonIsMissing()
     {
         var installCount = 0;
-        var contentRoot = Directory.CreateTempSubdirectory();
+        var contentRoot = CreateTempDir();
 
-        try
-        {
-            ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(["--contentRoot", contentRoot.FullName], () => installCount++);
+        ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(["--contentRoot", contentRoot.FullName], () => installCount++);
 
-            Assert.Equal(0, installCount);
-        }
-        finally
-        {
-            contentRoot.Delete(recursive: true);
-        }
+        Assert.Equal(0, installCount);
+    }
+
+    private DirectoryInfo CreateTempDir()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        _tempDirs.Add(dir);
+        return dir;
     }
 
     private static void WriteEnabledShellsJson(string contentRoot) =>

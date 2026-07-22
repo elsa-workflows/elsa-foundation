@@ -33,8 +33,7 @@ public sealed class StudioShellFeatureConfigurationStoreTests : IDisposable
     [Fact]
     public async Task SaveAsync_WritesFeaturesAndRoundTrips()
     {
-        WriteShells(SeedWithFeatures(new JsonObject()));
-        var store = CreateStore(out _);
+        var store = SeededStore(out _);
 
         var initial = await store.LoadAsync();
         var updated = await store.SaveAsync(initial.Revision,
@@ -57,8 +56,7 @@ public sealed class StudioShellFeatureConfigurationStoreTests : IDisposable
     [Fact]
     public async Task SaveAsync_LeavesNoTempFilesBehind()
     {
-        WriteShells(SeedWithFeatures(new JsonObject()));
-        var store = CreateStore(out _);
+        var store = SeededStore(out _);
 
         var initial = await store.LoadAsync();
         await store.SaveAsync(initial.Revision, [Enabled("Elsa.Studio.Alpha")]);
@@ -72,8 +70,7 @@ public sealed class StudioShellFeatureConfigurationStoreTests : IDisposable
     [Fact]
     public async Task SaveAsync_ThrowsOnRevisionConflictAndLeavesFileIntact()
     {
-        WriteShells(SeedWithFeatures(new JsonObject()));
-        var store = CreateStore(out _);
+        var store = SeededStore(out _);
 
         var before = await File.ReadAllTextAsync(_shellsPath);
 
@@ -87,8 +84,7 @@ public sealed class StudioShellFeatureConfigurationStoreTests : IDisposable
     [Fact]
     public async Task SaveAsync_ReloadsConfigurationRootSoFreshValuesAreVisible()
     {
-        WriteShells(SeedWithFeatures(new JsonObject()));
-        var store = CreateStore(out var configuration);
+        var store = SeededStore(out var configuration);
 
         var initial = await store.LoadAsync();
         await store.SaveAsync(initial.Revision, [Enabled("Elsa.Studio.Alpha", new JsonObject { ["Level"] = "high" })]);
@@ -102,22 +98,7 @@ public sealed class StudioShellFeatureConfigurationStoreTests : IDisposable
     public async Task LoadAsync_CoercesUnexpectedScalarToEnabledAndWarns()
     {
         // A non-bool, non-object scalar is an authoring mistake but must not silently disable the feature.
-        WriteShells(new JsonObject
-        {
-            ["CShells"] = new JsonObject
-            {
-                ["Shells"] = new JsonObject
-                {
-                    ["Default"] = new JsonObject
-                    {
-                        ["Features"] = new JsonObject
-                        {
-                            ["Elsa.Studio.Weird"] = "oops"
-                        }
-                    }
-                }
-            }
-        });
+        WriteShells(SeedWithFeatures(new JsonObject { ["Elsa.Studio.Weird"] = "oops" }));
 
         var logger = new RecordingLogger<StudioShellFeatureConfigurationStore>();
         var store = CreateStore(out _, logger);
@@ -132,24 +113,12 @@ public sealed class StudioShellFeatureConfigurationStoreTests : IDisposable
     [Fact]
     public async Task LoadAsync_HonorsBoolPrecedence()
     {
-        WriteShells(new JsonObject
+        WriteShells(SeedWithFeatures(new JsonObject
         {
-            ["CShells"] = new JsonObject
-            {
-                ["Shells"] = new JsonObject
-                {
-                    ["Default"] = new JsonObject
-                    {
-                        ["Features"] = new JsonObject
-                        {
-                            ["Elsa.Studio.On"] = true,
-                            ["Elsa.Studio.Off"] = false,
-                            ["Elsa.Studio.Configured"] = new JsonObject { ["Size"] = 10 }
-                        }
-                    }
-                }
-            }
-        });
+            ["Elsa.Studio.On"] = true,
+            ["Elsa.Studio.Off"] = false,
+            ["Elsa.Studio.Configured"] = new JsonObject { ["Size"] = 10 }
+        }));
 
         var store = CreateStore(out _);
         var snapshot = await store.LoadAsync();
@@ -187,6 +156,15 @@ public sealed class StudioShellFeatureConfigurationStoreTests : IDisposable
                 }
             }
         };
+
+    // Writes an empty Features skeleton then builds the store over it — the common starting point for the SaveAsync tests.
+    private StudioShellFeatureConfigurationStore SeededStore(
+        out IConfigurationRoot configuration,
+        ILogger<StudioShellFeatureConfigurationStore>? logger = null)
+    {
+        WriteShells(SeedWithFeatures(new JsonObject()));
+        return CreateStore(out configuration, logger);
+    }
 
     private StudioShellFeatureConfigurationStore CreateStore(
         out IConfigurationRoot configuration,
