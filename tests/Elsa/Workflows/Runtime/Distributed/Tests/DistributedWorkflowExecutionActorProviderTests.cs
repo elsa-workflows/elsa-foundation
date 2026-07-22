@@ -116,6 +116,59 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
     }
 
     [Fact]
+    public async Task TerminalCommand_LocallyOwned_EvictsLocalMailbox_AndRedeliveryReactivatesSafely()
+    {
+        // #542 / spec 128 distributed parity: the distributed provider inherits the terminal-eviction trigger through
+        // its composed _localProvider.GetAgentAsync — a terminal drain on the owning node evicts the local mailbox, and a
+        // redelivered command re-claims placement (still owned by this node) and re-activates a fresh mailbox safely.
+        var store = new InMemoryExecutionPlacementStore();
+        var transport = new InMemoryExecutionCommandTransport();
+        var clock = new MutableTimeProvider(_now);
+        var terminalExecutor = new RecordingCommandExecutor(_ => WorkflowExecutionCommandProcessResult.Terminal);
+        var providerA = NewProvider(store, transport, clock, NodeA, terminalExecutor);
+
+        var actor = await providerA.GetAgentAsync(Activation());
+        var agentIdBeforeEviction = actor.Descriptor.AgentId;
+        var result = await actor.EnqueueAsync(Envelope("env-1"));
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
+        Assert.Equal("true", result.Metadata[InProcessWorkflowExecutionActorProvider.WorkflowTerminatedMetadataKey]);
+
+        // The local mailbox was evicted: re-activating mints a fresh actor (new activation id), and a redelivered
+        // terminal command still drains without error (bounded activate/passivate churn).
+        var reactivated = await providerA.GetAgentAsync(Activation());
+        Assert.NotEqual(agentIdBeforeEviction, reactivated.Descriptor.AgentId);
+        var redelivery = await reactivated.EnqueueAsync(Envelope("env-2"));
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, redelivery.Status);
+    }
+
+    [Fact]
+    public async Task TerminalExecution_ReaperPassivation_ReleasesPlacementLease_SoAnotherNodeCanClaim()
+    {
+        // The eager trigger drops only the local mailbox; the placement lease is released when the resumption reaper
+        // passivates the terminal execution through the distributed provider (its PassivateAsync owner-checks + releases).
+        var store = new InMemoryExecutionPlacementStore();
+        var transport = new InMemoryExecutionCommandTransport();
+        var clock = new MutableTimeProvider(_now);
+
+        var providerA = NewProvider(store, transport, clock, NodeA, new RecordingCommandExecutor(_ => WorkflowExecutionCommandProcessResult.Terminal));
+        var actorA = await providerA.GetAgentAsync(Activation());
+        await actorA.EnqueueAsync(Envelope("env-1"));
+
+        // Reaper path: passivate the terminal execution through the distributed provider (as RuntimeResumptionService does).
+        await providerA.PassivateAsync(Passivation());
+
+        // The lease is now released, so node B can own the execution and drain it locally.
+        var executorB = new RecordingCommandExecutor();
+        var providerB = NewProvider(store, transport, clock, NodeB, executorB);
+        var actorB = await providerB.GetAgentAsync(Activation());
+        var resultB = await actorB.EnqueueAsync(Envelope("env-2"));
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, resultB.Status);
+        Assert.Equal(new[] { "env-2" }, executorB.Processed);
+    }
+
+    [Fact]
     public void In_memory_capabilities_do_not_claim_provider_admitted_lease_fencing()
     {
         var provider = NewProvider(new InMemoryExecutionPlacementStore(), new InMemoryExecutionCommandTransport(), new MutableTimeProvider(_now), NodeA, new RecordingCommandExecutor());
