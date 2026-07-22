@@ -7,14 +7,17 @@
 **Extends**: [ADR 0031](../../docs/adr/0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md) (burst/locality), [ADR 0032](../../docs/adr/0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md) (R2 ReplaySafe claim relaxation, cadence), [ADR 0020](../../docs/adr/0020-runtime-checkpoint-commit-post-commit-work.md) (post-commit intents release only after durable commit)
 **Input**: ADR 0047 D1+D2 and the three ratification resolutions; the discrete handler chain, coalescing overlay, and fusion seam analysis in [research.md](./research.md); the spec-119 routing memo + inbound index; the spec-109 byte-identical guardrail + toggle pattern.
 
-> **Status 2026-07-22: D1 SHIPPED (increments A0→C green), D2 SEAM EXTRACTED (D-part-1), D2 DRIVER DEFERRED.**
-> Shipped: stage-core extraction (schedule/start/invoke-completion), `RuntimeReplaySafeFusionOptions` (default ON),
-> `RuntimeSchedulerDispatchDiagnostics` (dispatch + fused-span counters), the D1 `ReplaySafeFusionDriver` with
-> byte-identical guardrail + Groundwork crash-convergence suites, and the completion-commit seam
-> (`BuildCompletedCommitAsync`) D2 consumes. Deferred to a focused follow-up: the D2 inline single-predecessor
-> completion driver (blocked on a cross-assembly routing-successor probe + an inline overlay-pump whose
-> byte-identity/crash-convergence must be confirmed empirically). See [tasks.md](./tasks.md) Increment D status block
-> for the full design + the two concrete blockers. A/B (none vs D1) measured; D1+D2 A/B travels with the D2 follow-up.
+> **Status 2026-07-22: D1 + D2 SHIPPED (increments A0→E green; D2 driver landed by the follow-up session).**
+> Shipped: stage-core extraction (schedule/start/invoke-completion), `RuntimeReplaySafeFusionOptions` (default ON;
+> `FuseCompletionCascade` dial for the D1-only A/B column), `RuntimeSchedulerDispatchDiagnostics` (dispatch,
+> fused-span, inline-cascade, and join-fallback counters), the D1 `ReplaySafeFusionDriver`, and the **D2 inline
+> completion pump**: `IReplaySafeSuccessorRoutingProbe` (Runtime.Core) with Flowchart/Sequence implementations
+> resolves the cross-assembly single-predecessor check off the spec-119 memo, and the driver pumps the completion
+> cascade inline in drain-loop FIFO order via the coalescing session's peek/consume pair — join edges (resolution #1),
+> child-fault evaluations, non-ReplaySafe parents, and the workflow tail fall back to the discrete cascade. Guardrails
+> cover straight-line, suspend, External, D1-only, multi-outcome branch, and fan-in join (join fallback proven via
+> counters) byte-identical ON vs OFF; the Groundwork crash suite covers 8 kill points including the inline completion
+> pass and the D2→D1 recursion boundary. A/B (hot-loop×10, coalesced): dispatches 58 (none) → 36 (D1) → 5 (D1+D2).
 
 > **Ratification resolutions this unit implements verbatim** (ADR 0047 Follow-up, resolved 2026-07-20):
 > 1. **D2 fuses single-predecessor edges only** in the first iteration; every fan-in/join edge falls back to the discrete cascade.

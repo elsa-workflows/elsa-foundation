@@ -25,19 +25,31 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// a fused schedule→start→invoke span (after N buffered checkpoints, before the quiescence flush). Because the fused
 /// span's intermediate StartActivity/InvokeActivity items are never durably enqueued and the flush never landed, the
 /// durable scheduler backlog is intact and no partial checkpoint persisted. Generation 2 sweeps and converges to the
-/// crash-free control terminal, proving no fusion-specific crash-recovery gap.
+/// crash-free control terminal, proving no fusion-specific crash-recovery gap. With the D2 inline completion pump
+/// (spec 123 D2, default-ON) the kill points additionally land inside the inline parent-completion pass and on the
+/// D2→D1 recursion boundary (a fused successor's first commit) — the cascade's items live only in the coalescing
+/// overlay, so the same durable-backlog + fold-forward ladder covers them with no new recovery mechanism.
 /// </summary>
 public sealed class ReplaySafeFusionCrashConvergenceTests
 {
     private static readonly string[] ActivityExecutionIds =
         Enumerable.Range(0, 32).Select(index => $"actexec-{index}").ToArray();
 
-    // Kill points inside the fused burst: 2nd, 3rd and 4th buffered checkpoints land after the schedule/start commit
-    // staging and mid-body of the first fused spans, before any quiescence flush.
+    // Kill points inside the fused burst. With the D2 inline completion pump (default-ON), the 5-leaf chain runs
+    // schedule→start→invoke → completion cascade → successor schedule all inside the first drained dispatch, so the
+    // ordinals walk the whole D1+D2 surface: 2–4 land in the first fused span (D1); 7 and 9 land at the leaf's
+    // completion commit and inside the inline parent-completion pass (the pumped eval's child-scheduling commit);
+    // 10–12 land on and after a fused successor's ActivityScheduled — the D2→D1 recursion boundary — deeper in the
+    // pumped chain. Every kill point converges to the same crash-free terminal on redrive.
     [Theory]
     [InlineData(2)]
     [InlineData(3)]
     [InlineData(4)]
+    [InlineData(7)]
+    [InlineData(9)]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
     public async Task CrashInsideFusedSpan_RetainsDurableRedriveSource_ThenSweepConverges(int crashOnCommit)
     {
         var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
@@ -93,6 +105,13 @@ public sealed class ReplaySafeFusionCrashConvergenceTests
         await using var harness = BuildHarness(store, customize: null);
         var run = await harness.RunAsync(BuildReplaySafeFlowchart());
         Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+
+        // Non-vacuous: the shipped defaults (D1 fusion + D2 inline completion pump) actually engaged in the control
+        // run, so the kill points below land inside fused spans and the inline completion pass, not a discrete drain.
+        var diagnostics = harness.Services.GetRequiredService<Elsa.Workflows.Runtime.Core.Diagnostics.RuntimeSchedulerDispatchDiagnostics>();
+        Assert.True(diagnostics.FusedSpans > 0, "Control run did not engage D1 fusion.");
+        Assert.True(diagnostics.InlineCascadeDispatches > 0, "Control run did not engage the D2 inline completion pump.");
+
         return await SnapshotAsync(harness.Services);
     }
 
@@ -133,7 +152,7 @@ public sealed class ReplaySafeFusionCrashConvergenceTests
 
     private static WorkflowExecutable BuildReplaySafeFlowchart()
     {
-        var leaves = Enumerable.Range(0, 3)
+        var leaves = Enumerable.Range(0, 5)
             .Select(index => WorkflowExecutionHarness.NewReplaySafeProbeNode($"node-loop-{index}"))
             .ToArray();
         var connections = Enumerable.Range(0, leaves.Length - 1)

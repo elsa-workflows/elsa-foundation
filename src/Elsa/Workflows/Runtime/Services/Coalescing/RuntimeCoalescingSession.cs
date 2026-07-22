@@ -374,12 +374,14 @@ public sealed class RuntimeCoalescingSession
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        // Stable sort over the insertion-ordered working set: items recorded in the same burst tick (equal
+        // AvailableAt/RecordedAt — the common case inside a coalesced segment) deliver in causal recording order, not
+        // arbitrary id order. With strictly increasing timestamps this is byte-identical to ordering by RecordedAt.
         return _outboxOrder
             .Select(id => _outboxItems[id])
             .Where(item => IsDeliverable(item, query))
             .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
             .ThenBy(item => item.RecordedAt)
-            .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
             .Take(query.Limit)
             .ToArray();
     }
@@ -414,12 +416,12 @@ public sealed class RuntimeCoalescingSession
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // Same stable causal ordering as GetDeliverableOutbox: same-tick items claim in recording order.
         var claimable = _outboxOrder
             .Select(id => _outboxItems[id])
             .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
             .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
             .ThenBy(item => item.RecordedAt)
-            .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
             .Take(request.Limit)
             .ToArray();
         var claims = new RuntimePostCommitOutboxClaim[claimable.Length];
@@ -621,6 +623,37 @@ public sealed class RuntimeCoalescingSession
         var result = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
         _overlayClaims.TryRemove(claim, out _);
         return result;
+    }
+
+    // ---- Inline fused pump (spec 123 D2) ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns the FIFO-earliest overlay item not currently claimed in flight (spec 123 D2). The drain loop's claim on
+    /// the fused span's originating <c>ScheduleActivity</c> stays at the queue head for the whole span, so the inline
+    /// completion pump reads past live claims in true insertion order — the exact order the drain loop would claim
+    /// next. The item is not claimed: the session is single-writer and drain-confined, so the pump dispatches it inline
+    /// and then removes it with <see cref="ConsumePumpedOverlayItemAsync"/>. An item still in dispatch at a mid-drain
+    /// flush counts as remaining continuation (the durable crash backstop) exactly like any unclaimed overlay item.
+    /// </summary>
+    public async ValueTask<RuntimeSchedulerWorkItem?> PeekNextPumpableOverlayItemAsync(CancellationToken cancellationToken)
+    {
+        await EnsureQueueSeededAsync(cancellationToken);
+        var inFlight = _overlayClaims.Keys
+            .Select(claim => claim.Item.WorkItemId)
+            .ToHashSet(StringComparer.Ordinal);
+        return await _overlayQueue.PeekFirstAvailableAsync(WorkflowExecutionId, inFlight, cancellationToken);
+    }
+
+    /// <summary>
+    /// Removes an inline-pumped item from the overlay after its dispatch completed (spec 123 D2). Consumption is
+    /// FIFO-after-the-claimed-head, so the flush accounting in <see cref="AdvanceInnerQueueAsync"/> — which excludes
+    /// in-flight claims before counting the consumed seeded prefix — still sees a strict FIFO prefix consumed.
+    /// </summary>
+    public async ValueTask<bool> ConsumePumpedOverlayItemAsync(string workItemId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
+        await EnsureQueueSeededAsync(cancellationToken);
+        return await _overlayQueue.DeleteAsync(WorkflowExecutionId, workItemId, cancellationToken);
     }
 
     // ---- Flush -----------------------------------------------------------------------------------------------------
