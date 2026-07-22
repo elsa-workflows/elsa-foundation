@@ -5,6 +5,7 @@ using Elsa.Activities.Bpmn.Internal.Behaviors;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using static Elsa.Activities.Bpmn.Internal.BpmnStateMutator;
@@ -53,6 +54,19 @@ public sealed class BpmnExecutionEngine(
 
     /// <summary>The seam-A reason recorded on a compensation run's cancelled handler sub-tree when its coordinator throw token was cancelled mid-replay (spec 124).</summary>
     public const string CompensationRunCancelledReason = "bpmn.compensation.run-cancelled";
+
+    /// <summary>The reason recorded on the other live tokens a cancel end event stops when it begins cancelling a transaction scope (spec 125).</summary>
+    public const string TransactionCancelledStopReason = "bpmn.transaction.cancel-stopped-live-work";
+
+    /// <summary>The distinguishable outcome a cancelled transaction completes with (spec 125); the parent maps it to the attached cancel boundary, and a root transaction completes the workflow with it.</summary>
+    public const string CancelledOutcomeName = "Cancelled";
+
+    /// <summary>The deterministic fault code raised when a transaction child completes Cancelled but no cancel boundary is attached to route the cancellation (spec 125 D2b).</summary>
+    public const string TransactionCancelledUnhandledFaultCode = "bpmn.transaction.cancelled-unhandled";
+
+    /// <summary>An empty live-child map: a cancel end stops other live work logically only (in-flight children keep running and are absorbed on late completion — the terminate precedent), so no seam-A subtree cancellation is staged.</summary>
+    private static readonly IReadOnlyDictionary<(string NodeId, string? IterationId), string> NoLiveChildren =
+        new Dictionary<(string NodeId, string? IterationId), string>();
 
     /// <summary>The prefix of a multi-instance instance's minted iteration id (spec 121); the instance token id is Sequence-derived and unique across the process.</summary>
     public const string MultiInstanceIterationIdPrefix = "bpmn-mi:";
@@ -181,6 +195,17 @@ public sealed class BpmnExecutionEngine(
         {
             return ValueTask.FromResult(FinishEvaluation(context, HandleCompensationHandlerCompletion(
                 context, graph, state, token, compensationRun, completionContext.CompletedChildActivityExecutionId)));
+        }
+
+        // spec 125 D2b: a transaction child that completed with the Cancelled outcome is intercepted BEFORE normal
+        // behavior dispatch and BEFORE Case B compensable registration — a cancelled transaction is not
+        // successfully-completed work: it registers no compensable, routes no normal outbound, and instead fires
+        // its attached cancel boundary (or faults deterministically when none is attached).
+        if (graph.GetRequiredElement(token.AtElementId).IsTransaction
+            && completionContext.OutcomeNames.Contains(CancelledOutcomeName, StringComparer.Ordinal))
+        {
+            return ValueTask.FromResult(FinishEvaluation(context, HandleTransactionCancelled(
+                context, graph, state, token, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
         }
 
         // spec 119 D2/D3: if the completing token is a live event-based-gateway race member, it is the winner.
@@ -329,6 +354,53 @@ public sealed class BpmnExecutionEngine(
         };
 
         return FinishEvaluation(context, result);
+    }
+
+    /// <summary>
+    /// Handles a transaction child that completed with the <c>Cancelled</c> outcome (spec 125 D2b), in the parent
+    /// scope. A cancelled transaction is not successfully-completed work: it consumes the host token, registers
+    /// <b>no</b> compensable and routes <b>no</b> normal outbound flow, tears down the host's still-armed catch
+    /// listeners (the Case B teardown, reused), and mints an <c>Active</c> token at the attached cancel boundary
+    /// (the error-boundary minting pattern, inheriting the host token's iteration key) so the boundary routes the
+    /// cancellation path. When no cancel boundary is attached the parent faults deterministically
+    /// (<c>bpmn.transaction.cancelled-unhandled</c>) — cross-scope validation cannot see the nested cancel end
+    /// (isolation), so this is a runtime rule.
+    /// </summary>
+    private EvaluationResult HandleTransactionCancelled(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnToken hostToken,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
+        List<BpmnPendingSubtreeCancellation> pendingCancellations,
+        string completedActivityExecutionId)
+    {
+        var hostElement = graph.GetRequiredElement(hostToken.AtElementId);
+
+        // Tear down the host's still-armed catch listeners (reused Case B teardown), then consume the host token —
+        // no compensable is registered (the nested scope compensated itself) and no normal outbound is routed.
+        state = CancelHostListeners(graph, state, hostToken.TokenId, listenerTokenToSkip: null, BoundarySupersededByHostCompletionReason, liveChildAeiByNode, pendingCancellations);
+        state = UpdateToken(state, hostToken with { Status = BpmnTokenStatus.Consumed });
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TransactionCancelled, hostElement.ElementId, null, hostToken.TokenId,
+            $"BPMN transaction '{hostElement.ElementId}' completed with the '{CancelledOutcomeName}' outcome; routing the cancellation path.");
+
+        var cancelBoundary = graph.AttachedCancelBoundary(hostElement.ElementId);
+        if (cancelBoundary is null)
+        {
+            var message = $"BPMN transaction '{hostElement.ElementId}' completed with the '{CancelledOutcomeName}' outcome, but no cancel boundary event is attached to route the cancellation.";
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, hostElement.ElementId, null, hostToken.TokenId, message);
+            return new EvaluationResult(state, new ActivityFault(TransactionCancelledUnhandledFaultCode, message));
+        }
+
+        // Mint an Active token at the cancel boundary (error-boundary minting pattern), inheriting the host token's
+        // iteration key, and propagate — the boundary's behavior routes its outbound flows unconditionally.
+        var boundaryToken = NewToken(state, cancelBoundary.ElementId, flowId: null, parentTokenId: hostToken.TokenId, BpmnTokenStatus.Active, producingActivityExecutionId: completedActivityExecutionId, iterationKey: hostToken.IterationKey);
+        state = AddToken(state, boundaryToken);
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TokenEmitted, cancelBoundary.ElementId, null, boundaryToken.TokenId,
+            $"BPMN cancel boundary '{cancelBoundary.ElementId}' fired and emitted token '{boundaryToken.TokenId}' to route the cancellation path.");
+
+        var result = Propagate(context, graph, state, completedActivityExecutionId);
+        return result with { PendingSubtreeCancellations = pendingCancellations };
     }
 
     /// <summary>The multi-instance loop coordinator token id when <paramref name="token"/> is one of that loop's instance sub-tokens (spec 121); <c>null</c> for an ordinary (non-instance) token.</summary>
@@ -690,6 +762,12 @@ public sealed class BpmnExecutionEngine(
                     // is the sole command a compensate behavior emits, so the resolved result is returned directly.
                     return TriggerCompensation(context, graph, state, token, element, schedulingActivityExecutionId);
                 }
+                case BpmnBehaviorCommandKind.CancelTransaction:
+                {
+                    // spec 125: the cancel end token requests the transaction cancellation. CancelTransaction is the
+                    // sole command a cancel-end behavior emits, so the resolved result is returned directly.
+                    return CancelTransaction(context, graph, state, token, element, schedulingActivityExecutionId);
+                }
                 case BpmnBehaviorCommandKind.ScheduleChild:
                 {
                     if (element.ChildNodeId is not { } childNodeId)
@@ -836,6 +914,70 @@ public sealed class BpmnExecutionEngine(
     }
 
     /// <summary>
+    /// Handles a <c>CancelTransaction</c> command (spec 125 D2a): a cancel end event fired inside a transaction
+    /// scope. First it stops all OTHER live work logically — every live token except the cancel-end token is
+    /// cancelled through <see cref="CancelTokenAndChild"/> so the MI/race/compensation-run coordinator cascades
+    /// tear loops/races/replays down consistently — while in-flight children keep running and are absorbed on late
+    /// completion (the terminate precedent; logical-only, no seam-A staging). It records the <c>Cancelling</c>
+    /// verdict, then claims every <c>Registered</c> compensable (the whole scope) in reverse registration order and
+    /// opens a spec-124 <see cref="BpmnCompensationRun"/> coordinated by the cancel-end token, scheduling the first
+    /// handler. An empty claim consumes the cancel-end token immediately; <see cref="FinishEvaluation"/> then
+    /// completes the process with the <c>Cancelled</c> outcome once nothing is live.
+    /// </summary>
+    private EvaluationResult CancelTransaction(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnToken cancelEndToken,
+        BpmnElement cancelEndElement,
+        string schedulingActivityExecutionId)
+    {
+        // Step 1: stop all OTHER live work logically. The cancel-end token stays live as the coming replay's
+        // coordinator; every other live token is cancelled (cascading MI/race/compensation-run teardown). In-flight
+        // children keep running (empty live-child map → no seam-A staging), absorbed on late completion.
+        var stopScratch = new List<BpmnPendingSubtreeCancellation>();
+        var otherLiveTokenIds = state.Tokens
+            .Where(candidate => candidate.Status is BpmnTokenStatus.Active or BpmnTokenStatus.AwaitingChild or BpmnTokenStatus.WaitingAtJoin
+                                && !StringComparer.Ordinal.Equals(candidate.TokenId, cancelEndToken.TokenId))
+            .Select(candidate => candidate.TokenId)
+            .ToArray();
+        foreach (var liveTokenId in otherLiveTokenIds)
+            state = CancelTokenAndChild(state, liveTokenId, TransactionCancelledStopReason, NoLiveChildren, stopScratch,
+                (token, reason) => $"BPMN cancel end event '{cancelEndElement.ElementId}' stopped live token '{token.TokenId}' at '{token.AtElementId}' ({reason}).");
+
+        state = state with { Cancelling = true, Sequence = state.Sequence + 1 };
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TransactionCancelled, cancelEndElement.ElementId, null, cancelEndToken.TokenId,
+            $"BPMN cancel end event '{cancelEndElement.ElementId}' began cancelling the transaction (stopped {otherLiveTokenIds.Length} other live token(s)).");
+
+        // Step 2: claim every Registered compensable (the whole scope, reverse registration order) and open a
+        // compensation run coordinated by the cancel-end token. An empty claim skips straight to completion.
+        var claimed = state.Compensables
+            .Where(compensable => compensable.Status == BpmnCompensableStatus.Registered)
+            .Reverse()
+            .ToArray();
+
+        if (claimed.Length == 0)
+        {
+            state = UpdateToken(state, cancelEndToken with { Status = BpmnTokenStatus.Consumed });
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TransactionCancelled, cancelEndElement.ElementId, null, cancelEndToken.TokenId,
+                $"BPMN cancel end event '{cancelEndElement.ElementId}' had nothing to compensate; completing the transaction with the '{CancelledOutcomeName}' outcome.");
+            return new EvaluationResult(state);
+        }
+
+        foreach (var compensable in claimed)
+            state = UpdateCompensable(state, compensable with { Status = BpmnCompensableStatus.Claimed });
+
+        state = UpdateToken(state, cancelEndToken with { Status = BpmnTokenStatus.AwaitingChild });
+        var (stateWithRun, run) = AddCompensationRun(state, cancelEndToken.TokenId, claimed.Select(compensable => compensable.CompensableId).ToArray());
+        state = stateWithRun;
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.CompensationTriggered, cancelEndElement.ElementId, null, cancelEndToken.TokenId,
+            $"BPMN cancel end event '{cancelEndElement.ElementId}' opened run '{run.RunId}' claiming {claimed.Length} compensable(s) (reverse registration order).");
+
+        state = ScheduleNextCompensationHandler(context, graph, state, run);
+        return new EvaluationResult(state);
+    }
+
+    /// <summary>
     /// Schedules the head pending handler of a compensation run (spec 124 D2c): mints an <c>AwaitingChild</c>
     /// sub-token at the handler element (parented to the coordinating throw token, inheriting its iteration key)
     /// and schedules the handler element's bound child on it with the process's own aei (no iteration frame this
@@ -897,6 +1039,18 @@ public sealed class BpmnExecutionEngine(
         state = RemoveCompensationRun(state, run.RunId);
         var throwToken = GetRequiredToken(state, run.ThrowTokenId);
         var throwElement = graph.GetRequiredElement(throwToken.AtElementId);
+
+        // spec 125: a cancel-end coordinator does NOT route/consume like a compensate throw/end — it completes the
+        // whole process with the Cancelled outcome. Consume the cancel-end token; FinishEvaluation sees Cancelling
+        // set with nothing live and stages Complete("Cancelled").
+        if (BpmnElementFamilies.IsCancelEndEvent(throwElement))
+        {
+            state = UpdateToken(state, throwToken with { Status = BpmnTokenStatus.Consumed });
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TransactionCancelled, throwElement.ElementId, null, throwToken.TokenId,
+                $"BPMN cancel end event '{throwElement.ElementId}' finished replaying the transaction's compensables; completing with the '{CancelledOutcomeName}' outcome.");
+            return new EvaluationResult(state);
+        }
+
         var result = CompleteThrow(context, graph, state, throwToken, throwElement, completedActivityExecutionId);
         if (result is { Fault: null, Terminated: false })
             result = Propagate(context, graph, result.State, completedActivityExecutionId);
@@ -985,8 +1139,12 @@ public sealed class BpmnExecutionEngine(
         {
             // Clean completion — legal to stage the carried seam-A/seam-B teardown in this commit (spec 119 D3 / spec 120 D5).
             StagePendingSubtreeCancellations(context, result);
-            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Completed, null, null, null, "BPMN process completed because no live tokens remain.");
-            return persister.StageState(RuntimeStructuralContinuation.Complete(), state);
+            // spec 125: a cancelled transaction completes with the distinguishable Cancelled outcome (parent maps it
+            // to the cancel boundary; a root transaction completes the workflow with it) rather than Done.
+            var outcomeName = state.Cancelling ? CancelledOutcomeName : ActivityOutcomes.Done;
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Completed, null, null, null,
+                $"BPMN process completed with the '{outcomeName}' outcome because no live tokens remain.");
+            return persister.StageState(RuntimeStructuralContinuation.Complete(outcomeName), state);
         }
 
         // A parked join arrival with nothing live left to produce the missing arrivals can never fire

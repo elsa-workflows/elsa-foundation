@@ -19,6 +19,9 @@ public static class BpmnElementFamilies
 
     /// <summary>The compensate end event family (spec 124): triggers a compensation replay, then consumes its token (none-end semantics).</summary>
     public const string EndEventCompensation = "endEvent.compensation";
+
+    /// <summary>The cancel end event family (spec 125): cancels the enclosing transaction — stop other live work, replay the scope's compensables, then complete with the <c>Cancelled</c> outcome.</summary>
+    public const string EndEventCancel = "endEvent.cancel";
     public const string IntermediateCatchEvent = "intermediateCatchEvent.catch";
 
     /// <summary>The compensate intermediate throw event family (spec 124): triggers a compensation replay, then routes its outbound flows.</summary>
@@ -92,7 +95,8 @@ public static class BpmnElementFamilies
         BpmnEventDefinitionTypes.Message,
         BpmnEventDefinitionTypes.Signal,
         BpmnEventDefinitionTypes.Error,
-        BpmnEventDefinitionTypes.Compensation
+        BpmnEventDefinitionTypes.Compensation,
+        BpmnEventDefinitionTypes.Cancel
     };
 
     private static string ResolveBoundaryEvent(BpmnElement element)
@@ -104,7 +108,7 @@ public static class BpmnElementFamilies
         var definitionType = element.EventDefinitions.Single().Type;
         if (!SupportedBoundaryDefinitionTypes.Contains(definitionType))
             throw new BpmnExecutionException(
-                $"BPMN boundary event '{element.ElementId}' declares event definition type '{definitionType}'; only timer, message, signal, and error boundary events are supported by this engine slice.");
+                $"BPMN boundary event '{element.ElementId}' declares event definition type '{definitionType}'; only timer, message, signal, error, compensation, and cancel boundary events are supported by this engine slice.");
 
         return BoundaryEvent;
     }
@@ -125,6 +129,18 @@ public static class BpmnElementFamilies
     public static bool HasCompensateDefinition(BpmnElement element) =>
         element.EventDefinitions.Count == 1 &&
         StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Compensation);
+
+    /// <summary>True when an element is a cancel end event (spec 125): an <c>endEvent</c> whose single event definition is <see cref="BpmnEventDefinitionTypes.Cancel"/>.</summary>
+    public static bool IsCancelEndEvent(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Cancel);
+
+    /// <summary>True when a <c>boundaryEvent</c> is a cancel boundary (spec 125): dormant (no listener), fires on the transaction's <c>Cancelled</c> outcome and routes its outbound flows.</summary>
+    public static bool IsCancelBoundary(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Cancel);
 
     /// <summary>The host families a boundary event may attach to (spec 120 D2): the task family and embedded subprocesses.</summary>
     public static bool IsBoundaryHostFamily(BpmnElement element) =>
@@ -188,10 +204,12 @@ public static class BpmnElementFamilies
                 return EndEventTerminate;
             if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Compensation))
                 return EndEventCompensation;
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Cancel))
+                return EndEventCancel;
         }
 
         throw new BpmnExecutionException(
-            $"BPMN end event '{element.ElementId}' declares unsupported event definitions; only none, terminate, and compensate end events are supported by this engine slice.");
+            $"BPMN end event '{element.ElementId}' declares unsupported event definitions; only none, terminate, compensate, and cancel end events are supported by this engine slice.");
     }
 
     /// <summary>

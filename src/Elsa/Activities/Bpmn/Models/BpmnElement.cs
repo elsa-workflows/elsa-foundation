@@ -23,7 +23,8 @@ public sealed class BpmnElement
         bool cancelActivity = true,
         BpmnLoopCharacteristics? loopCharacteristics = null,
         bool isForCompensation = false,
-        string? compensationHandlerElementId = null)
+        string? compensationHandlerElementId = null,
+        bool isTransaction = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(elementId);
         ArgumentException.ThrowIfNullOrWhiteSpace(elementType);
@@ -41,6 +42,7 @@ public sealed class BpmnElement
         LoopCharacteristics = loopCharacteristics;
         IsForCompensation = isForCompensation;
         CompensationHandlerElementId = string.IsNullOrWhiteSpace(compensationHandlerElementId) ? null : compensationHandlerElementId.Trim();
+        IsTransaction = isTransaction;
     }
 
     [JsonPropertyName("elementId")]
@@ -108,6 +110,16 @@ public sealed class BpmnElement
     /// </summary>
     [JsonPropertyName("compensationHandlerElementId")]
     public string? CompensationHandlerElementId { get; }
+
+    /// <summary>
+    /// Marks a <b>transaction subprocess</b> (spec 125): a <c>subProcess</c> element that binds a nested
+    /// process which may be cancelled from within by a cancel end event. Valid only on a <c>subProcess</c>-family
+    /// element with a bound child; a transaction element may not carry loop characteristics. Independent of the
+    /// nested structure's own transaction flag (isolation): this element-side flag drives cancel-boundary
+    /// attachment validation and the parent-side Cancelled-outcome mapping. <c>false</c> on every ordinary element.
+    /// </summary>
+    [JsonPropertyName("isTransaction")]
+    public bool IsTransaction { get; }
 }
 
 /// <summary>

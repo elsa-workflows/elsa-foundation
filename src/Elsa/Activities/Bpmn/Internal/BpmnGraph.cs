@@ -30,10 +30,12 @@ public sealed class BpmnGraph
     private BpmnGraph(
         IReadOnlyCollection<BpmnElement> elements,
         IReadOnlyCollection<BpmnSequenceFlow> sequenceFlows,
-        IReadOnlyDictionary<string, ExecutableNode> childrenByNodeId)
+        IReadOnlyDictionary<string, ExecutableNode> childrenByNodeId,
+        bool isTransaction)
     {
         Elements = elements;
         SequenceFlows = sequenceFlows;
+        IsTransaction = isTransaction;
         _childrenByNodeId = childrenByNodeId;
         _elementsById = elements.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
         _flowsById = sequenceFlows.ToDictionary(flow => flow.FlowId, StringComparer.Ordinal);
@@ -55,6 +57,9 @@ public sealed class BpmnGraph
     public IReadOnlyCollection<BpmnSequenceFlow> SequenceFlows { get; }
     public IReadOnlyCollection<BpmnElement> StartEvents { get; }
 
+    /// <summary>Whether this process is a transaction (spec 125): its scope may be cancelled from within by a cancel end event.</summary>
+    public bool IsTransaction { get; }
+
     /// <summary>The loop-closing (backward) sequence flow ids (spec 122); a token that traverses one mints a fresh iteration key.</summary>
     public IReadOnlyCollection<string> BackwardFlowIds => _backwardFlowIds;
 
@@ -69,10 +74,11 @@ public sealed class BpmnGraph
         var elements = structure?.Elements ?? [];
         var flows = structure?.SequenceFlows ?? [];
         var variableNames = (structure?.Variables ?? []).Select(variable => variable.Name).ToHashSet(StringComparer.Ordinal);
+        var isTransaction = structure?.IsTransaction ?? false;
 
-        Validate(elements, flows, childrenByNodeId, variableNames);
+        Validate(elements, flows, childrenByNodeId, variableNames, isTransaction);
 
-        return new BpmnGraph(elements, flows, childrenByNodeId);
+        return new BpmnGraph(elements, flows, childrenByNodeId, isTransaction);
     }
 
     public BpmnElement GetRequiredElement(string elementId)
@@ -112,10 +118,10 @@ public sealed class BpmnGraph
     public IReadOnlyCollection<BpmnSequenceFlow> InboundFlows(string elementId) =>
         _inboundByTarget[elementId].ToArray();
 
-    /// <summary>The timer/message/signal catch boundary events attached to <paramref name="hostElementId"/> (spec 120); these arm a suspending listener child when the host is scheduled. Error and compensation boundaries arm nothing (spec 120/124).</summary>
+    /// <summary>The timer/message/signal catch boundary events attached to <paramref name="hostElementId"/> (spec 120); these arm a suspending listener child when the host is scheduled. Error, compensation, and cancel boundaries arm nothing (spec 120/124/125).</summary>
     public IReadOnlyCollection<BpmnElement> AttachedCatchBoundaries(string hostElementId) =>
         _boundariesByHost[hostElementId]
-            .Where(boundary => !BpmnElementFamilies.IsErrorBoundary(boundary) && !BpmnElementFamilies.IsCompensationBoundary(boundary))
+            .Where(boundary => !BpmnElementFamilies.IsErrorBoundary(boundary) && !BpmnElementFamilies.IsCompensationBoundary(boundary) && !BpmnElementFamilies.IsCancelBoundary(boundary))
             .ToArray();
 
     /// <summary>The single error boundary attached to <paramref name="hostElementId"/> (spec 120), or <c>null</c> when the host has none; validation caps a host at one error boundary.</summary>
@@ -125,6 +131,10 @@ public sealed class BpmnGraph
     /// <summary>The single compensation boundary attached to <paramref name="hostElementId"/> (spec 124), or <c>null</c> when the host has none; validation caps a host at one compensation boundary.</summary>
     public BpmnElement? AttachedCompensationBoundary(string hostElementId) =>
         _boundariesByHost[hostElementId].FirstOrDefault(BpmnElementFamilies.IsCompensationBoundary);
+
+    /// <summary>The single cancel boundary attached to <paramref name="hostElementId"/> (spec 125), or <c>null</c> when the transaction host has none; validation caps a transaction host at one cancel boundary.</summary>
+    public BpmnElement? AttachedCancelBoundary(string hostElementId) =>
+        _boundariesByHost[hostElementId].FirstOrDefault(BpmnElementFamilies.IsCancelBoundary);
 
     public BpmnSequenceFlow? GetDefaultFlow(BpmnElement element)
     {
@@ -250,7 +260,8 @@ public sealed class BpmnGraph
         IReadOnlyCollection<BpmnElement> elements,
         IReadOnlyCollection<BpmnSequenceFlow> flows,
         IReadOnlyDictionary<string, ExecutableNode> childrenByNodeId,
-        IReadOnlySet<string> declaredVariableNames)
+        IReadOnlySet<string> declaredVariableNames,
+        bool structureIsTransaction)
     {
         if (elements.Select(element => element.ElementId).Distinct(StringComparer.Ordinal).Count() != elements.Count)
             throw new BpmnExecutionException("BPMN structure contains duplicate element ids.");
@@ -349,6 +360,8 @@ public sealed class BpmnGraph
         ValidateBoundaryEvents(elements, outboundBySource, inboundByTarget);
 
         ValidateCompensation(elements, outboundBySource, inboundByTarget);
+
+        ValidateTransaction(elements, structureIsTransaction);
 
         ValidateMultiInstance(elements, declaredVariableNames);
 
@@ -462,6 +475,15 @@ public sealed class BpmnGraph
                 if (errorBoundaryCountByHost[hostId] > 1)
                     throw new BpmnExecutionException($"BPMN host '{hostId}' declares more than one error boundary event; without error-code matching a host may carry at most one.");
             }
+            else if (BpmnElementFamilies.IsCancelBoundary(boundary))
+            {
+                // spec 125: a cancel boundary is dormant (no listener child, like error/compensation) and routes its
+                // outbound flows (≥1, already enforced above) when the transaction completes Cancelled. CancelActivity
+                // is ignored (the host is already finished when it fires). The host-is-a-transaction and
+                // at-most-one-per-host rules live in ValidateTransaction.
+                if (boundary.ChildNodeId is not null)
+                    throw new BpmnExecutionException($"BPMN cancel boundary event '{boundary.ElementId}' cannot bind a child activity; it is dormant and fires on the transaction's Cancelled outcome.");
+            }
             else if (boundary.ChildNodeId is null)
             {
                 throw new BpmnExecutionException($"BPMN catch boundary event '{boundary.ElementId}' requires a bound suspending listener child (a Delay for timer, an Event for message/signal).");
@@ -559,6 +581,51 @@ public sealed class BpmnGraph
                 throw new BpmnExecutionException($"BPMN compensate event '{thrower.ElementId}' targets activityRef '{activityRef}', which does not exist in this process.");
             if (!compensationHosts.Contains(activityRef))
                 throw new BpmnExecutionException($"BPMN compensate event '{thrower.ElementId}' targets activityRef '{activityRef}', which has no attached compensation boundary.");
+        }
+    }
+
+    /// <summary>
+    /// Transaction rules (spec 125 D1). An <c>IsTransaction</c> element must be a <c>subProcess</c>-family element
+    /// with a bound child and must not carry loop characteristics (MI transactions are a stated cut). A cancel end
+    /// event is valid only inside a transaction structure. A cancel boundary may only attach to an
+    /// <c>IsTransaction</c> host, and a transaction host carries at most one cancel boundary. Each rule rejects
+    /// deterministically with the offending element named.
+    /// </summary>
+    private static void ValidateTransaction(IReadOnlyCollection<BpmnElement> elements, bool structureIsTransaction)
+    {
+        var elementsById = elements.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
+
+        // Rule 1 / Rule 4 — an IsTransaction element is a subProcess with a bound child and no loop characteristics.
+        foreach (var element in elements.Where(element => element.IsTransaction))
+        {
+            if (!StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.SubProcess))
+                throw new BpmnExecutionException($"BPMN element '{element.ElementId}' ({element.ElementType}) is marked as a transaction, but only a subprocess element may be a transaction.");
+            if (element.ChildNodeId is null)
+                throw new BpmnExecutionException($"BPMN transaction '{element.ElementId}' requires a bound child activity (the nested transaction process).");
+            if (element.LoopCharacteristics is not null)
+                throw new BpmnExecutionException($"BPMN transaction '{element.ElementId}' cannot carry multi-instance loop characteristics; multi-instance transactions are not supported by this slice.");
+        }
+
+        // Rule 2 — a cancel end event is valid only inside a transaction structure.
+        foreach (var cancelEnd in elements.Where(BpmnElementFamilies.IsCancelEndEvent))
+        {
+            if (!structureIsTransaction)
+                throw new BpmnExecutionException($"BPMN cancel end event '{cancelEnd.ElementId}' is only valid inside a transaction; this process is not a transaction.");
+        }
+
+        // Rule 2/3 — a cancel boundary attaches only to a transaction host, at most one per host.
+        var cancelBoundaryCountByHost = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var boundary in elements.Where(BpmnElementFamilies.IsCancelBoundary))
+        {
+            // ValidateBoundaryEvents already rejects a missing/unresolvable host, so a resolvable host is expected here.
+            if (boundary.AttachedToRef is not { } hostId || !elementsById.TryGetValue(hostId, out var host))
+                continue;
+            if (!host.IsTransaction)
+                throw new BpmnExecutionException($"BPMN cancel boundary event '{boundary.ElementId}' is attached to '{hostId}', which is not a transaction; a cancel boundary may only attach to a transaction.");
+
+            cancelBoundaryCountByHost[hostId] = (cancelBoundaryCountByHost.TryGetValue(hostId, out var count) ? count : 0) + 1;
+            if (cancelBoundaryCountByHost[hostId] > 1)
+                throw new BpmnExecutionException($"BPMN transaction '{hostId}' declares more than one cancel boundary event; a transaction host may carry at most one.");
         }
     }
 

@@ -34,6 +34,7 @@ public class ActivitiesBpmnFeature : IShellFeature
         services.AddSingleton<IBpmnElementBehavior, CatchEventBehavior>();
         services.AddSingleton<IBpmnElementBehavior, CompensationThrowEventBehavior>();
         services.AddSingleton<IBpmnElementBehavior, CompensationEndEventBehavior>();
+        services.AddSingleton<IBpmnElementBehavior, CancelEndEventBehavior>();
         services.AddSingleton<IBpmnElementBehavior, TaskBehavior>();
         services.AddSingleton<IBpmnElementBehavior, SubProcessBehavior>();
         services.AddSingleton<IBpmnElementBehavior, ExclusiveGatewayBehavior>();

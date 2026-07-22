@@ -60,4 +60,11 @@ public static class BpmnEventDefinitionTypes
     public const string Error = "error";
     public const string Escalation = "escalation";
     public const string Compensation = "compensation";
+
+    /// <summary>
+    /// A cancel event definition (spec 125): on an end event inside a transaction it triggers the transaction
+    /// cancellation (compensate the scope's registered work, then complete with the <c>Cancelled</c> outcome);
+    /// on a boundary event attached to a transaction host it routes the cancellation path in the parent scope.
+    /// </summary>
+    public const string Cancel = "cancel";
 }

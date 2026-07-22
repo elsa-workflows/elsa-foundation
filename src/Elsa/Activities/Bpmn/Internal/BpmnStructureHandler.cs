@@ -35,7 +35,8 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
             current.Pools,
             current.Lanes,
             current.Variables,
-            current.Diagram);
+            current.Diagram,
+            current.IsTransaction);
 
         return activity with
         {
@@ -54,7 +55,8 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
         var executableStructure = new BpmnStructure(
             authoredStructure.Elements,
             authoredStructure.SequenceFlows,
-            authoredStructure.Variables);
+            authoredStructure.Variables,
+            authoredStructure.IsTransaction);
 
         return new ActivityNodeStructure(
             BpmnProcessActivity.StructureKind,
