@@ -6,6 +6,7 @@ using Elsa.Activities.Bpmn.Interchange.Exceptions;
 using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 
@@ -94,6 +95,12 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         var childActivities = new List<ActivityNode>();
         var pendingBoundaries = new List<XElement>();
 
+        // spec 123 D3: the container's declared container-scoped variables gate collection-mode loop imports —
+        // an elsa:collection naming a variable declared here imports as a real collection loop; an undeclared or
+        // reserved name degrades. Collected before the element loop so the loop-resolution sees them.
+        var declaredVariables = ReadDeclaredVariables(container);
+        var declaredVariableNames = declaredVariables.Select(variable => variable.Name).ToHashSet(StringComparer.Ordinal);
+
         foreach (var child in container.Elements().Where(child => child.Name.Namespace == BpmnXmlNames.Model))
         {
             var localName = child.Name.LocalName;
@@ -152,7 +159,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     var nestedNodeId = $"node-{id}";
                     childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, context));
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
-                        loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, context)));
+                        loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context)));
                     break;
                 }
                 case "boundaryEvent":
@@ -201,7 +208,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                         // Tasks import unbound (no ChildNodeId until an Elsa activity is bound), so a
                         // multi-instance task is a childless host on import → degrade (validate-representable).
                         elements.Add(new BpmnElement(id, taskType, name: NameOf(child), defaultFlowId: DefaultOf(child),
-                            loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: false, context)));
+                            loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: false, declaredVariableNames, context)));
                         if (taskType != BpmnElementTypes.Task)
                             context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"{Capitalize(localName)} '{id}' imported unbound; bind an Elsa activity to execute it.", id));
                         break;
@@ -258,6 +265,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
             elements: elementsWithLanes,
             sequenceFlows: connectedFlows,
             lanes: lanes,
+            variables: declaredVariables,
             diagram: diagram);
 
         return new ActivityNode(
@@ -542,7 +550,31 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     /// <b>Degrade</b> (the element imports WITHOUT loop characteristics) with a finding, so the importer stays
     /// validate-representable (it never emits a loop the graph validator would reject).
     /// </summary>
-    private static BpmnLoopCharacteristics? ResolveLoopCharacteristics(XElement element, string id, bool hostBindsChild, ImportContext context)
+    /// <summary>
+    /// Reads a process/subprocess container's declared container-scoped variables (spec 123 D3) from its
+    /// elsa-namespaced <c>&lt;extensionElements&gt;&lt;elsa:variable name="…"/&gt;</c> declarations — the
+    /// vendor-extension representation for BPMN's out-of-band variable model, mirroring the exporter. Only the
+    /// name is load-bearing for the collection-loop guard and round-trip; the type is a neutral default.
+    /// </summary>
+    private static IReadOnlyCollection<VariableDefinition> ReadDeclaredVariables(XElement container)
+    {
+        var extensions = container.Element(BpmnXmlNames.Model + "extensionElements");
+        if (extensions is null)
+            return [];
+
+        var variables = new List<VariableDefinition>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var declaration in extensions.Elements(BpmnXmlNames.Elsa + "variable"))
+        {
+            if (((string?)declaration.Attribute("name"))?.Trim() is not { Length: > 0 } name || !seen.Add(name))
+                continue;
+            variables.Add(new VariableDefinition(name, name, new TypeReference("Object"), StorageDriverType: null, Default: null));
+        }
+
+        return variables;
+    }
+
+    private static BpmnLoopCharacteristics? ResolveLoopCharacteristics(XElement element, string id, bool hostBindsChild, IReadOnlySet<string> declaredVariableNames, ImportContext context)
     {
         if (element.Element(BpmnXmlNames.Model + "multiInstanceLoopCharacteristics") is not { } loop)
         {
@@ -560,10 +592,28 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
         var isSequential = (bool?)loop.Attribute("isSequential") ?? false;
 
+        // spec 123 D3: a collection multi-instance imports as a real collection-mode loop when the named variable
+        // is a declared container-scoped variable of this process and the item variable is not the reserved
+        // loopIndex key; an undeclared/empty name or a reserved item variable degrades (never emitting a loop the
+        // graph validator would reject).
         if (((string?)loop.Attribute(BpmnXmlNames.Elsa + "collection"))?.Trim() is { Length: > 0 } collection)
         {
-            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Element '{id}' declares a collection multi-instance ('{collection}'), which is not executable in this slice (collection mode arrives in a follow-up unit); it imported without loop characteristics.", id));
-            return null;
+            if (!declaredVariableNames.Contains(collection))
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Element '{id}' declares a collection multi-instance over '{collection}', which is not a declared container-scoped variable of the process; it imported without loop characteristics.", id));
+                return null;
+            }
+
+            var itemVariable = ((string?)loop.Attribute(BpmnXmlNames.Elsa + "itemVariable"))?.Trim() is { Length: > 0 } authoredItem
+                ? authoredItem
+                : BpmnLoopCharacteristics.DefaultItemVariable;
+            if (StringComparer.Ordinal.Equals(itemVariable, BpmnLoopCharacteristics.LoopIndexVariable))
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Element '{id}' declares a collection multi-instance whose item variable is the reserved '{BpmnLoopCharacteristics.LoopIndexVariable}' key; it imported without loop characteristics.", id));
+                return null;
+            }
+
+            return new BpmnLoopCharacteristics(isSequential: isSequential, collectionVariable: collection, itemVariable: itemVariable);
         }
 
         var cardinalityText = loop.Element(BpmnXmlNames.Model + "loopCardinality")?.Value.Trim();

@@ -40,13 +40,16 @@ Mapping rules for this slice:
   (validate-representable: the importer never emits a boundary the graph validator would reject; its
   sequence flows cascade-drop). `errorRef` is recorded verbatim into the element properties for future
   error-code matching (not read this slice).
-- **Multi-instance loops** (spec 121) on a task/subprocess host: a `<multiInstanceLoopCharacteristics
+- **Multi-instance loops** (spec 121/123) on a task/subprocess host: a `<multiInstanceLoopCharacteristics
   isSequential="…">` with an integer literal `<loopCardinality>` imports as a cardinality
-  `BpmnLoopCharacteristics` (`isSequential` absent → `false`). Collection mode (via the elsa-namespaced
-  `elsa:collection`/`elsa:itemVariable` attributes), a non-integer/missing cardinality, a
-  `standardLoopCharacteristics`, or a host that binds no child on import (a plain task) **degrade** to a
-  host WITHOUT loop characteristics with a finding (validate-representable — the importer never emits a loop
-  the graph validator would reject; collection mode is a stated cut in this slice).
+  `BpmnLoopCharacteristics` (`isSequential` absent → `false`). **Collection mode** (via the elsa-namespaced
+  `elsa:collection`/`elsa:itemVariable` attributes) imports as a real collection-mode loop **when
+  `elsa:collection` names a container-scoped variable declared on the process** (via an
+  `<extensionElements><elsa:variable name="…"/></extensionElements>` declaration) and the item variable is
+  not the reserved `loopIndex`; an undeclared/empty collection name, a reserved item variable, a
+  non-integer/missing cardinality, a `standardLoopCharacteristics`, or a host that binds no child on import (a
+  plain task) **degrade** to a host WITHOUT loop characteristics with a finding (validate-representable — the
+  importer never emits a loop the graph validator would reject).
 - Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes
   (call activities, event subprocesses, …) are dropped with an issue. **Cyclic graphs import clean** — a
   loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation
@@ -64,8 +67,10 @@ properties (start timers as `<timeCycle>`, catch/boundary timers as `<timeDurati
 emits `attachedToRef`, `cancelActivity="false"` only when non-interrupting (omitted when interrupting, since
 the importer defaults absent → true), and its `error`/`timer`/`message`/`signal` definition child. A
 multi-instance host emits a `<multiInstanceLoopCharacteristics isSequential="…">` with its
-`<loopCardinality>` (cardinality mode; collection mode emits the `elsa:collection`/`elsa:itemVariable`
-attributes, only reachable once the collection follow-up lands), round-tripping stably. Each
+`<loopCardinality>` (cardinality mode) or its `elsa:collection`/`elsa:itemVariable` attributes (collection
+mode; `elsa:itemVariable` is emitted explicitly even at its default), and the process's container-scoped
+variables emit as `<extensionElements><elsa:variable name="…"/></extensionElements>` so a collection loop's
+declared variable survives the round-trip. Each
 distinct message/signal
 name emits one deduped root `<message>`/`<signal>` declaration (deterministic id `message-{name}` /
 `signal-{name}`) that the element's `messageRef`/`signalRef` targets — a name that sanitizes to a

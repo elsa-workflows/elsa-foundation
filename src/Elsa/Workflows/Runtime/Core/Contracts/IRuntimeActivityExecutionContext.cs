@@ -50,6 +50,26 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     IReadOnlyCollection<RuntimeLiveChildActivity> GetLiveChildActivities();
 
     /// <summary>
+    /// Reads the committed value of a container-scoped variable visible to this activity (spec 123 D1),
+    /// populated by the runtime only for an activity implementing <c>IRuntimeScopedVariableReader</c> and only
+    /// during an invoke, child-completion/child-fault, or bookmark-resume evaluation.
+    /// </summary>
+    /// <remarks>
+    /// Resolution is by variable <paramref name="variableName"/> across this activity's own visible lexical
+    /// frame chain only — own iteration frame → own container frame → ancestors' container/iteration frames →
+    /// the workflow root frame — with the innermost scope winning for a shadowed name (the
+    /// <c>VariableScope.TryGetValueByName</c> precedent). It is read-only and spoof-proof: the chain is
+    /// projected from this activity's own committed <c>ActivityExecutionState</c> ancestry, so out-of-chain
+    /// scopes are unreachable by construction. It exposes <b>committed</b> values only — a value staged by an
+    /// intrinsic in this or a concurrent evaluation becomes visible only once committed, on a later
+    /// evaluation's basis. Returns <see langword="false"/> with <paramref name="envelope"/> <see langword="null"/>
+    /// when the name resolves to no visible declared variable, and <b>always</b> when the seam was not populated
+    /// (a non-marker activity, or a handler path that did not populate it) — it never throws on an unpopulated
+    /// seam, parallel to <see cref="GetLiveChildActivities"/> returning empty.
+    /// </remarks>
+    bool TryReadScopedVariableValue(string variableName, out ValueEnvelope? envelope);
+
+    /// <summary>
     /// Stages cancellation of one scheduled child's activity-execution subtree (spec 112). Only valid
     /// during a child-completion/child-fault evaluation with a <c>Defer</c> or <c>Complete</c>
     /// continuation; applied atomically in the same checkpoint commit as the continuation.

@@ -54,8 +54,13 @@ Known implementations:
   engine owns entirely — a coordinator token plus private per-instance sub-tokens, each scheduled through
   the runtime iteration-frame seam (`ScheduleChildActivity(..., iterationFrame)`) seeding `loopIndex`. The
   loop record `BpmnLoopState` and the instance-completion advance / last-completion routing / cascade
-  cancellation all live in `BpmnExecutionEngine`. Collection mode is validated as a stated cut (not
-  executable this slice).
+  cancellation all live in `BpmnExecutionEngine`. **Collection mode (spec 123)** resolves `N` from a declared
+  container-scoped collection variable read **once** at loop start through the runtime scoped-variable read
+  seam (`BpmnProcess : IRuntimeScopedVariableReader`; `context.TryReadScopedVariableValue`); the snapshot
+  persists on the additive `BpmnLoopState.Items` and each iteration frame also seeds the item under
+  `ItemVariable`. Null/absent → `N == 0` (immediate route); a non-array/external/unreadable value faults
+  deterministically (`bpmn.loop.collection-not-a-collection` / `-not-inline` / `-unreadable`). All of it lives
+  in the engine; behaviors stay semantics-unaware.
 - **Cyclic sequence flows (spec 122)** add no behavior: `BpmnGraph` precomputes the backward (loop-back)
   flow set (`IsBackwardFlow`, the standard DFS back edge from the ordinal-sorted start-event roots) and
   `BpmnToken` carries an additive `IterationKey`. The engine mints a fresh key
@@ -71,8 +76,9 @@ This module also exposes these activity-owned contracts:
 - `Bpmn.Activities` child slot
 - `elsa.bpmn.structure` structure payload with schema version `1.0.0`
 - `BpmnStructure.Elements` containing `BpmnElement[]` (each element optionally carries `AttachedToRef`/
-  `CancelActivity` for boundary events, spec 120, and `LoopCharacteristics` — `BpmnLoopCharacteristics` —
-  for multi-instance loops, spec 121; both additive, state schema stays version 1)
+  `CancelActivity` for boundary events, spec 120, and `LoopCharacteristics` — `BpmnLoopCharacteristics`,
+  cardinality XOR collection — for multi-instance loops, spec 121/123; all additive, state schema stays
+  version 1, including the collection-mode `BpmnLoopState.Items` snapshot)
 - `BpmnStructure.SequenceFlows` containing `BpmnSequenceFlow[]`
 - `BpmnAuthoredStructure.Pools` / `BpmnAuthoredStructure.Lanes` (authored/designer-side only)
 - `BpmnAuthoredStructure.Diagram` opaque BPMN-DI-shaped layout document (authored-side only,

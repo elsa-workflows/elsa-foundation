@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Activities.Bpmn.Models;
@@ -20,7 +21,8 @@ public sealed record BpmnLoopState
         bool isSequential,
         int totalCount,
         int nextIndex,
-        int completedCount)
+        int completedCount,
+        IReadOnlyList<JsonElement>? items = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(loopId);
         ArgumentException.ThrowIfNullOrWhiteSpace(tokenId);
@@ -33,6 +35,7 @@ public sealed record BpmnLoopState
         TotalCount = totalCount;
         NextIndex = nextIndex;
         CompletedCount = completedCount;
+        Items = items;
     }
 
     /// <summary>The loop record id (a pure function of <c>Sequence</c>).</summary>
@@ -55,4 +58,13 @@ public sealed record BpmnLoopState
 
     /// <summary>How many instances have completed; the loop finishes when this reaches <see cref="TotalCount"/>.</summary>
     public int CompletedCount { get; init; }
+
+    /// <summary>
+    /// The collection-mode per-instance items, snapshotted at loop start (spec 123 D2): <c>Items[k]</c> is the
+    /// value seeded under the host's <c>ItemVariable</c> for instance <c>k</c>. <c>null</c> in cardinality mode.
+    /// Persisted on the record because sequential mode seeds instance <c>k+1</c> in a later evaluation (instance
+    /// <c>k</c>'s completion) and the snapshot semantics forbid re-reading the variable; parallel mode reads the
+    /// same record for uniformity. Additive state growth (schema stays version 1).
+    /// </summary>
+    public IReadOnlyList<JsonElement>? Items { get; init; }
 }

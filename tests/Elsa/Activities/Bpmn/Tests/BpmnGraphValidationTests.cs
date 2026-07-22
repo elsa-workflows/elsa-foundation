@@ -542,14 +542,31 @@ public sealed class BpmnGraphValidationTests
     }
 
     [Fact]
-    public void MultiInstance_CollectionMode_DeclaredVariable_IsRejectedAsStatedCut()
+    public void MultiInstance_CollectionMode_DeclaredVariable_IsAccepted()
     {
+        // spec 123 D2/FR-3: the stated collection-mode cut (spec 121 D1 rule 5) is removed — a collection loop
+        // over a declared container-scoped variable validates cleanly.
         var node = NewMultiInstanceNode(
             new BpmnLoopCharacteristics(collectionVariable: "items"),
             variables: [new VariableDefinition("items", "items", new TypeReference("String", CollectionKind.List), null, null)]);
 
+        var graph = BpmnGraph.From(node);
+        var loop = graph.GetRequiredElement("mi").LoopCharacteristics;
+        Assert.NotNull(loop);
+        Assert.Equal("items", loop!.CollectionVariable);
+        Assert.Equal(BpmnLoopCharacteristics.DefaultItemVariable, loop.ItemVariable);
+    }
+
+    [Fact]
+    public void MultiInstance_CollectionMode_ReservedItemVariable_IsRejected()
+    {
+        // spec 123 D2/FR-3: the item key must not collide with the reserved zero-based loopIndex key.
+        var node = NewMultiInstanceNode(
+            new BpmnLoopCharacteristics(collectionVariable: "items", itemVariable: BpmnLoopCharacteristics.LoopIndexVariable),
+            variables: [new VariableDefinition("items", "items", new TypeReference("String", CollectionKind.List), null, null)]);
+
         var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("collection mode, which is not executable in this engine slice", exception.Message);
+        Assert.Contains("reserved for the zero-based iteration index", exception.Message);
     }
 
     [Fact]

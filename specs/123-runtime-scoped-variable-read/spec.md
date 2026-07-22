@@ -286,3 +286,37 @@ deterministic engine faults.
 - Validation: rule-5 removal + the new reserved-name rule covered in `BpmnGraphValidationTests`.
 - Full test projects green: BPMN, BPMN Interchange, Activities Runtime, Workflows Runtime,
   ControlFlow, Architecture. Full solution build clean.
+
+## Deviations from the ratified plan
+
+- **`BuildVisibleFramesAsync` gained an `includeOwnContainer` flag (own-container inclusion).** The leaf
+  input-binding path reads only the *ancestor* chain (a leaf owns no container frame), but a structural
+  scoped-variable reader must also see its **own** container frame as the innermost visible scope (the spec's
+  stated chain: own iteration → own container → ancestors → root). `BuildVisibleFramesAsync` therefore gained
+  an `includeOwnContainer` parameter (defaulted `false`, so the two existing callers are byte-identical);
+  `ProjectScopedVariablesForReaderAsync` passes it `true`. This is a projection extension, not a new seam or a
+  re-implemented name→key resolution (tripwire 4: the innermost-wins name mapping is derived from the existing
+  `ProjectDeclarations`/`ProjectVisibleVariables` machinery via a shared `EnumerateVisibleVariables` helper).
+- **Resume-path seam population is defensive, not independently reachable for `BpmnProcess`.** The seam is
+  populated on all three handlers via the one shared `RuntimeContainerScopeService.ProjectScopedVariablesForReaderAsync`
+  helper (unit-tested for marker gating, shadowing, visibility, and committed-write). A `BpmnProcess` never
+  suspends/resumes itself (only its children do), so a collection loop-start read fires end-to-end on the
+  **invoke** path (loop start at process start) and the **child-completion** path (loop start reached after a
+  preceding element completes) — both covered by dedicated BPMN execution tests. The resume-handler
+  population is exercised through the shared helper's unit tests rather than a resume-specific end-to-end BPMN
+  run, because no natural BPMN scenario resumes `BpmnProcess` structurally.
+- **Interchange variable representation (`elsa:variable`).** Spec D3 requires collection-mode import/round-trip
+  to key on the collection variable being declared in `BpmnStructure.Variables`, but the interchange
+  importer/exporter modeled no process variables at all. A minimal elsa-namespaced representation was
+  introduced — `<process><extensionElements><elsa:variable name="…"/></extensionElements>` — read into
+  `BpmnAuthoredStructure.Variables` as name-only `VariableDefinition`s (type defaulted to `Object`) and emitted
+  by the exporter. Interchange needs only name-level fidelity for the declared-variable guard and the
+  round-trip (it never executes); runtime execution uses the publish-compiler-lowered
+  `RuntimeVariableDeclaration`, not this interchange model.
+- **Tripwire outcomes.** (1) Item `ValueTypeDescriptor`: resolved to the canonical dynamic alias `Elsa.Any`
+  (ADR 0035), mirroring `ForEach`'s generic-item envelope — no stop-and-report. (2)
+  `Present`+`ExternalReference` collection payloads: the existing `Materialize` returns the reference object,
+  not a resolved `JsonElement`, so resolving needs new machinery — the `bpmn.loop.collection-not-inline`
+  deterministic fault (stated cut) is kept. (3) Resume handler: instantiating `RuntimeContainerScopeService`
+  was mechanical (same construction as the invoke/completion handlers). (5) No spec-vs-code contradiction was
+  found.

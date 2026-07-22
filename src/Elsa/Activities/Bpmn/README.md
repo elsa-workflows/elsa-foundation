@@ -74,10 +74,17 @@ children, and diagnostics.
   through seam A, and an error boundary on a multi-instance host absorbs a faulted instance through seam B
   while the remaining instances cascade-cancel. Catch boundaries arm **once** on the coordinator and tear
   down when the last instance completes. Behaviors stay multi-instance-unaware; the whole loop lifecycle
-  lives in the engine. **Collection mode** (run once per item of a container-scoped collection variable) is
-  authoring-modeled and validated as a stated cut but **not executable in this slice** — its per-instance
-  item read needs a container-variable read seam that structural evaluations do not yet expose; the graph
-  validator rejects it and the importer degrades it (follow-up unit).
+  lives in the engine. **Collection mode** (spec 123) runs the child once per item of a declared
+  container-scoped collection variable (`BpmnLoopCharacteristics.CollectionVariable` XOR `Cardinality`). The
+  engine reads the variable **once** at loop start (a documented snapshot) through the runtime
+  scoped-variable read seam (`IRuntimeScopedVariableReader` / `TryReadScopedVariableValue`, committed-state
+  backed); the snapshot persists on the additive `BpmnLoopState.Items` so sequential later instances never
+  re-read it. Each iteration frame seeds the item under `ItemVariable` (default `"item"`, must not be the
+  reserved `loopIndex`) alongside `loopIndex`. A null/absent collection is an empty loop (`N == 0`, routes
+  immediately); a present non-array value faults `bpmn.loop.collection-not-a-collection`, an externally-stored
+  payload faults `bpmn.loop.collection-not-inline`, and an unreadable variable faults
+  `bpmn.loop.collection-unreadable`. Everything else — sub-token model, sequential/parallel progression,
+  teardown, boundary interplay, determinism — is the cardinality machinery unchanged.
 - **Cyclic sequence flows** are executable (spec 122): a token carries an **iteration key** (`null` on the
   implicit first pass); traversing a **backward** (loop-back) sequence flow — the standard DFS back edge,
   precomputed once as `BpmnGraph.IsBackwardFlow` — mints a fresh key, and forward propagation inherits the
@@ -107,16 +114,17 @@ This module currently ships the Phase 1 core subset (see `specs/108-bpmn-contain
 the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`), event-start (see
 `specs/117-bpmn-event-start-events/`), event-based-gateway (see
 `specs/119-bpmn-event-based-gateway/`), boundary-events (see `specs/120-bpmn-boundary-events/`), and
-multi-instance (see `specs/121-bpmn-multi-instance/`), and cyclic-sequence-flow (see
-`specs/122-bpmn-cyclic-flows/`) slices: none/timer/message/signal start events, none/terminate end events,
-timer/message/signal intermediate catch events, timer/message/signal/error **boundary events**, cardinality
-**multi-instance** (sequential + parallel) loops, task family, embedded subprocess, and
-exclusive/parallel/inclusive/event-based gateways over **cyclic or acyclic** graphs — loop-back sequence
-flows are executable via token iteration keys (spec 122). The interchange importer/exporter round-trips
-timer/message/signal event definitions on event-defined start and intermediate catch events (see
-`specs/118-bpmn-interchange-event-definitions/`) and round-trips the event-based gateway, boundary event,
-and cardinality multi-instance elements, so these constructs can now be authored from XML; a cyclic document
-imports clean. Later units add collection-mode multi-instance (needs a container-variable read seam), a
+multi-instance (see `specs/121-bpmn-multi-instance/` and `specs/123-runtime-scoped-variable-read/`), and
+cyclic-sequence-flow (see `specs/122-bpmn-cyclic-flows/`) slices: none/timer/message/signal start events,
+none/terminate end events, timer/message/signal intermediate catch events, timer/message/signal/error
+**boundary events**, cardinality and collection **multi-instance** (sequential + parallel) loops, task
+family, embedded subprocess, and exclusive/parallel/inclusive/event-based gateways over **cyclic or acyclic**
+graphs — loop-back sequence flows are executable via token iteration keys (spec 122). The interchange
+importer/exporter round-trips timer/message/signal event definitions on event-defined start and intermediate
+catch events (see `specs/118-bpmn-interchange-event-definitions/`) and round-trips the event-based gateway,
+boundary event, and cardinality **and collection** multi-instance elements (collection variables carry as
+`elsa:collection`/`elsa:itemVariable` plus `elsa:variable` declarations), so these constructs can now be
+authored from XML; a cyclic document imports clean. Later units add a
 loop-iteration variable surface, escalation/compensation boundaries, event subprocesses, transactions, and
 call activities.
 

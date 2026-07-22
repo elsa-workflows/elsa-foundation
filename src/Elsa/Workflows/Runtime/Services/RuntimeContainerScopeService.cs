@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -20,6 +21,7 @@ public sealed class RuntimeContainerScopeService(
         string workflowExecutionId,
         ActivityExecutionState activityState,
         bool includeCurrentIteration = true,
+        bool includeOwnContainer = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -59,6 +61,14 @@ public sealed class RuntimeContainerScopeService(
         if (includeCurrentIteration && activityState.IterationVariableFrame is { } iteration)
             AddFrame(iteration, VariableFrameKind.Iteration, IterationActivationId(activityState), ordered);
 
+        // The self read (spec 123 D1): unlike the leaf input-binding path — which reads only the enclosing
+        // ancestor chain — a structural activity reading its OWN container-scoped variables must also see its own
+        // container frame as the innermost visible scope. Its lexical parent is the just-added own iteration
+        // frame when present, otherwise the last ancestor/root frame, so appending it here keeps the parent chain
+        // contiguous.
+        if (includeOwnContainer && activityState.VariableFrame is { } ownContainer)
+            AddFrame(ownContainer, VariableFrameKind.Container, activityState.InvocationId, ordered);
+
         return new RuntimeVisibleVariableFrames(ordered);
     }
 
@@ -88,7 +98,7 @@ public sealed class RuntimeContainerScopeService(
                 activityState.Execution.WorkflowExecutionId,
                 activityState,
                 includeCurrentIteration: false,
-                cancellationToken);
+                cancellationToken: cancellationToken);
             var existingParent = existingVisible.Frames[^1];
             if (activityState.IterationVariableFrame is { } existingIteration)
             {
@@ -112,7 +122,7 @@ public sealed class RuntimeContainerScopeService(
             activityState.Execution.WorkflowExecutionId,
             activityState,
             includeCurrentIteration: false,
-            cancellationToken);
+            cancellationToken: cancellationToken);
         var parent = visible.Frames.LastOrDefault()
             ?? throw new InvalidOperationException($"Activity '{activityState.InvocationId}' cannot activate a lexical frame without an active workflow root frame.");
 
@@ -237,16 +247,44 @@ public sealed class RuntimeContainerScopeService(
         WorkflowExecutable executable,
         RuntimeVisibleVariableFrames visibleFrames)
     {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        // Frames run root → innermost, so a later (inner) write of a shadowed name overwrites the outer one:
+        // innermost scope wins.
+        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames))
+            result[name] = Materialize(envelope);
+        return result;
+    }
+
+    /// <summary>
+    /// Projects the visible lexical frame chain into a name-keyed view of the raw committed
+    /// <see cref="ValueEnvelope"/>s (spec 123 D1), reusing the same declaration name mapping as
+    /// <see cref="ProjectVisibleVariables"/> — the innermost scope wins for a shadowed name. Used to populate the
+    /// runtime scoped-variable read seam without re-implementing envelope-unwrap or name→key resolution.
+    /// </summary>
+    public IReadOnlyDictionary<string, ValueEnvelope> ProjectVisibleVariableEnvelopes(
+        WorkflowExecutable executable,
+        RuntimeVisibleVariableFrames visibleFrames)
+    {
+        var result = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+        foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames))
+            result[name] = envelope;
+        return result;
+    }
+
+    private IEnumerable<(string Name, ValueEnvelope Envelope)> EnumerateVisibleVariables(
+        WorkflowExecutable executable,
+        RuntimeVisibleVariableFrames visibleFrames)
+    {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(visibleFrames);
 
-        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var frame in visibleFrames.Frames)
         {
             if (frame.Kind == VariableFrameKind.Iteration)
             {
+                // Iteration-frame keys are the exposed variable names directly (e.g. loopIndex / the item key).
                 foreach (var (key, value) in frame.Values)
-                    result[key] = Materialize(value);
+                    yield return (key, value);
                 continue;
             }
 
@@ -260,11 +298,38 @@ public sealed class RuntimeContainerScopeService(
             {
                 if (!declarations.TryGetValue(key, out var declaration))
                     throw new InvalidOperationException($"Variable frame '{frame.FrameId}' contains undeclared variable key '{key}'.");
-                result[declaration.Name] = Materialize(value);
+                yield return (declaration.Name, value);
             }
         }
+    }
 
-        return result;
+    /// <summary>
+    /// Builds the visible name→committed-envelope projection for a scoped-variable read seam consumer
+    /// (spec 123 D1), or returns <see langword="null"/> when <paramref name="activity"/> does not implement
+    /// <see cref="IRuntimeScopedVariableReader"/> so the seam stays unpopulated (every read returns false). The
+    /// projection includes the activity's own container frame and its full visible ancestor chain, built from
+    /// the already-committed state, so it is read-only and spoof-proof by construction.
+    /// </summary>
+    public async ValueTask<IReadOnlyDictionary<string, ValueEnvelope>?> ProjectScopedVariablesForReaderAsync(
+        IActivity activity,
+        WorkflowExecutable executable,
+        ActivityExecutionState activityState,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentNullException.ThrowIfNull(activityState);
+
+        if (activity is not IRuntimeScopedVariableReader)
+            return null;
+
+        var visible = await BuildVisibleFramesAsync(
+            activityState.Execution.WorkflowExecutionId,
+            activityState,
+            includeCurrentIteration: true,
+            includeOwnContainer: true,
+            cancellationToken);
+        return ProjectVisibleVariableEnvelopes(executable, visible);
     }
 
     private static object? Materialize(ValueEnvelope envelope) => envelope.Presence switch
