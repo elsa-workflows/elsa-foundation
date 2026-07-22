@@ -14,14 +14,14 @@ This is the repo-wide [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md) index's
 
 | Contract | Default impl | Override when |
 |---|---|---|
-| Named per-aggregate **read ports** (e.g. `IWorkflowDefinitionStore`, `IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionDraftStore`, `IWorkflowDefinitionVersionLayoutStore`, `IActivityDefinitionStore`, `IActivityDefinitionVersionStore`) *(defined per domain in `*.Design.Persistence.Core/Stores`)* | `EFCore<Aggregate>Store` adapters over the generic `EFCoreReadStore<TDbContext, TEntity>` (this assembly) | You want a different read strategy for one aggregate (caching layer, read replica, a non-EF/Groundwork store) while keeping the rest of the EF Core stack. This is the canonical *override* example: swap one read port, keep everything else. |
+| Named per-aggregate **read ports** (e.g. `IWorkflowDefinitionStore`, `IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionDraftStore`, `IWorkflowDefinitionVersionLayoutStore`, `IActivityDefinitionStore`, `IActivityDefinitionVersionStore`) *(defined per domain in `*.Design.Persistence.Core/Stores`)* | *(none shipped in this lane — the design read ports are Groundwork-implemented since spec 093; this assembly ships the generic `EFCoreReadStore<TDbContext, TEntity>` base an EF-backed adapter derives from)* | You want an EF-backed (or otherwise different) read strategy for one aggregate while keeping the rest of its stack. This is the canonical *override* example: swap one read port, keep everything else. |
 | `IUpsertCommandGenerator` | `UpsertCommandGenerator` | A provider needs different bulk-upsert SQL (dialect-specific `MERGE` / `ON CONFLICT`). |
 | `IElsaDbContextSchema` | *(none — optional)* | A deployment needs the Elsa tables under a custom schema name during migration. |
 
 ### Named read ports + `EFCoreReadStore<TDbContext, TEntity>` *(closed-query read surface)*
 - **Read contract:** each aggregate exposes a small, intent-revealing read port (in its domain `*.Design.Persistence.Core/Stores`) with closed methods (`GetAsync`, `FindBy…Async`, `ListBy…Async`, `ExistsAsync`, …). There is **no** `IQueryable`/LINQ surface — callers cannot express an arbitrary expression tree, so any provider can satisfy a port.
-- **Shared plumbing:** the EF default impls (`EFCore<Aggregate>Store`) derive from `EFCoreReadStore<TDbContext, TEntity>` (this assembly), which translates the closed, provider-neutral `Query<TEntity>` spec (`Elsa.Persistence.Core.Queries`) to LINQ via `EFCoreQueryTranslator`, applies `IgnoreQueryFilters()` for tenant-agnostic reads, and publishes `OnEntityLoading` for every materialised entity. Filters project onto the spec through their `ToQuery()` method.
-- **Replace:** register your own implementation of a specific read port (or a decorator) before/after the EF Core feature wires its default; or subclass `EFCoreReadStore` for cross-cutting read behaviour. Mutate-then-save commands that need change tracking do **not** go through the read ports (they use a tracked `DbContextFactory` context directly), so overriding a read port does not affect the write path.
+- **Shared plumbing:** `EFCoreReadStore<TDbContext, TEntity>` (this assembly) is the base an EF-backed port adapter derives from: it translates the closed, provider-neutral `Query<TEntity>` spec (`Elsa.Persistence.Core.Queries`) to LINQ via `EFCoreQueryTranslator`, applies `IgnoreQueryFilters()` for tenant-agnostic reads, and publishes `OnEntityLoading` for every materialised entity. Filters project onto the spec through their `ToQuery()` method. No `EFCore<Aggregate>Store` adapters ship in-repo (the design-domain ones were removed when design persistence moved to Groundwork, spec 093); the base remains for domain lanes that add an EF-backed queried read surface.
+- **Replace:** register your own implementation of a specific read port (or a decorator) — subclassing `EFCoreReadStore` when the replacement is EF-backed. Mutate-then-save commands that need change tracking do **not** go through the read ports (they use a tracked `DbContextFactory` context directly), so overriding a read port does not affect the write path.
 
 ### `IUpsertCommandGenerator` *(Feature contract — `Elsa.Persistence.EFCore`)*
 - **Signature:** `GeneratedCommand Generate<TDbContext, TEntity>(TDbContext dbContext, IList<TEntity> entities, Expression<Func<TEntity, string>> keySelector) where TDbContext : DbContext where TEntity : Entity;`
@@ -82,8 +82,12 @@ directions together**, so you can never wire one and forget the other.
   boundary, not via object-mappers. Register the factory implementations (which live in the domain
   `.Design.Persistence.Core`) in the feature's `OnBeforeConfiguring` / `OnAfterConfigured`.
 
-See the surviving EF Core lane features (diagnostics and identity persistence) for worked
-examples of overriding `EntityHandlerAssemblies` and registering entity factories.
+The surviving EF Core lane features (the two diagnostics lanes,
+`Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore` and
+`Elsa.Diagnostics.StructuredLogs.Persistence.EFCore`) show the derivation shape, but both disable
+`UseCommands`/`UseQueries` and register no entity handlers or factories — there is currently no
+in-repo worked example of overriding `EntityHandlerAssemblies` or registering entity factories
+(the design lanes that did were removed when design persistence moved to Groundwork, spec 093).
 
 ---
 

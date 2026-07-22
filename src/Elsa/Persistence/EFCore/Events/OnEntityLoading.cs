@@ -12,7 +12,8 @@ namespace Elsa.Persistence.EFCore.Events;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Publication sites: <c>EFCoreQueries</c> publishes it for every entity returned by the
+/// Publication sites: <see cref="Services.EFCoreReadStore{TDbContext,TEntity}"/>
+/// (<c>QueryAsync</c> / <c>FirstOrDefaultAsync</c>) publishes it for every entity returned by the
 /// read-only (<c>AsNoTracking</c>) query path; mutate-then-save commands that load through their
 /// own tracked context publish it themselves so the already-tracked instance is hydrated by the
 /// same context that will save it.
