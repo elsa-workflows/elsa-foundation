@@ -620,7 +620,7 @@ public sealed class ExecutableNodeCompiler(
                 // registering by their local attribute id — the resume resolver falls back to matching
                 // (ExecutableNodeId, LocalResumeTargetId), the same rescoped shape the template placer emits.
                 var localResumeTargetId = attribute.ResumeTargetId;
-                var resumeTargetId = $"{node.ExecutableNodeId}:{localResumeTargetId}";
+                var resumeTargetId = WorkflowExecutableResumeTarget.ComposeScopedId(node.ExecutableNodeId, localResumeTargetId);
                 if (resumeTargets.TryGetValue(resumeTargetId, out var existing))
                     throw new ArgumentException(
                         $"Resume target '{localResumeTargetId}' is declared more than once by executable node '{existing.ExecutableNodeId}'. A resume target id must be unique within one activity type.");

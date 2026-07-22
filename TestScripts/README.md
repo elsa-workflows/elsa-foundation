@@ -99,11 +99,12 @@ the Set faults with *"targets undeclared variable"*. `New-VariableDef` + `New-Se
 encode this.
 
 **Still open (branching + single-outcome):**
-- `While` — a real loop-variable-scope issue, NOT just missing effort. Two concrete blockers: (1) a JS value
-  expression can't read a container variable via `getX()`/`variables.X`/`X` (all fail to evaluate), so a counter
-  can't be incremented; (2) a body that `Set`s a boolean condition variable to `false` does **not** propagate to
-  the loop condition — the loop runs until `DrainCycleLimitExceededException` (64 cycles). Candidate bug (variable
-  mutation inside a loop body not visible to the loop condition) — needs a focused pass to confirm bug vs scoping.
+- `While` — one remaining blocker: a JS value expression can't read a container variable via
+  `getX()`/`variables.X`/`X` (all fail to evaluate), so a counter can't be incremented from JS (#984; only the
+  compiled `args.*` parameters exist in the Jint sandbox). The second blocker — a body `Set` of the condition
+  variable not propagating to the loop condition (ran to `DrainCycleLimitExceededException`) — was #977, fixed:
+  `While` now opts into per-pass input re-materialization (`IRuntimeRematerializeInputsOnChildCompletion`), so a
+  body-committed `Set` (container- or workflow-scoped) terminates the loop.
 - No Foundation 1:1 for classic `FlowSwitch` default/fail, implicit joins, or `Switch` MatchAny mode
   (Foundation removed the flow-activity model). Covered at the concept level via `If`/`Switch`/`Parallel`;
   these are architectural gaps, not bugs.
@@ -116,12 +117,11 @@ Enabling it (separate from the bug fixes below):
 - `src/Apps/Elsa.Server/shells.json` - features `ActivitiesDispatchWorkflowRuntime` + `ActivitiesDispatchWorkflowDesign`.
 - No `Program.cs` change needed: `.WithHostAssemblies()` discovers the referenced assemblies' shell features.
 
-**Known limitation:** `DispatchWorkflow` with `WaitForCompletion=true` currently **faults** - the waited dispatch
-poisons with `System.InvalidOperationException: A waited workflow dispatch must suspend with exactly one matching
-typed trigger registration` (`WorkflowInvokeActivitySchedulerWorkHandler.AssertSingleDispatchRegistration`). The
-fire-and-forget path (`WaitForCompletion=false`) works: the parent completes with outcome `Dispatched` and the
-child runs as an independent execution. The test uses fire-and-forget; the waited path is left as a finding
-(it lives deep in the runtime scheduler, not in these tests).
+Both dispatch modes work: fire-and-forget (`WaitForCompletion=false`, used by the test) completes the parent
+immediately with outcome `Dispatched` while the child runs independently; waited (`WaitForCompletion=true`)
+suspends the parent until the child completes, then resumes it with outcome `Completed`. (The waited path
+previously poisoned with a "exactly one matching typed trigger registration" fault - a resume-target id
+namespace mismatch filed as issue #976 and since fixed.)
 
 ## Server fixes made while building these tests
 

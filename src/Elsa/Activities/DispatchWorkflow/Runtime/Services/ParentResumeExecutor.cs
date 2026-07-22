@@ -128,7 +128,9 @@ public sealed class ParentResumeExecutor(
         if (!StringComparer.Ordinal.Equals(bookmark.BookmarkId, payload.BookmarkId) ||
             !StringComparer.Ordinal.Equals(bookmark.WorkflowExecutionId, payload.ParentWorkflowExecutionId) ||
             !StringComparer.Ordinal.Equals(bookmark.ActivityExecutionId, payload.ParentActivityExecutionId) ||
-            !StringComparer.Ordinal.Equals(bookmark.ResumeTargetId, DispatchWorkflowConstants.CompletionResumeTargetId) ||
+            !StringComparer.Ordinal.Equals(
+                bookmark.ResumeTargetId,
+                WorkflowExecutableResumeTarget.ComposeScopedId(bookmark.ExecutableNodeId, DispatchWorkflowConstants.CompletionResumeTargetId)) ||
             !StringComparer.Ordinal.Equals(bookmark.StimulusType, payload.StimulusType) ||
             !StringComparer.Ordinal.Equals(bookmark.StimulusHash, payload.StimulusHash))
         {

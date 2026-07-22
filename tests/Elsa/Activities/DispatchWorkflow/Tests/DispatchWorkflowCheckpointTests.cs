@@ -62,12 +62,16 @@ public sealed class DispatchWorkflowCheckpointTests
         Assert.Equal(ActivityExecutionStatus.Suspended, activity.Status);
         Assert.Equal(BookmarkSuspension.SuspendedSubStatus, activity.SubStatus);
         Assert.Equal([run.Identity.WaitBookmarkId], activity.BookmarkIds);
+        var registration = Assert.Single(activity.TriggerRegistrations!);
+        Assert.Equal("node-dispatch:resume-target:dispatch-workflow-completed", registration.ResumeTargetKey);
 
         var bookmark = Assert.Single(commit.StateChanges.Bookmarks).State;
         Assert.Equal(run.Identity.WaitBookmarkId, bookmark.BookmarkId);
         Assert.Equal(run.Identity.WaitStimulusHash, bookmark.StimulusHash);
         Assert.Equal(DispatchWorkflowConstants.WaitStimulusType, bookmark.StimulusType);
-        Assert.Equal(DispatchWorkflowConstants.CompletionResumeTargetId, bookmark.ResumeTargetId);
+        // The persisted bookmark must carry the node-scoped id (the projected registration's key), not the
+        // activity's raw local id — resume routing resolves it against the node-scoped resume-target map (#976).
+        Assert.Equal("node-dispatch:resume-target:dispatch-workflow-completed", bookmark.ResumeTargetId);
         Assert.Null(bookmark.ExpiresAt);
         Assert.Equal(run.Identity.WaitBookmarkId, (await fixture.FindBookmarkAsync(run.Start.WorkflowExecutionId, run.Identity.WaitBookmarkId))?.BookmarkId);
 

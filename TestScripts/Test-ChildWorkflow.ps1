@@ -11,9 +11,9 @@
     'ActivitiesDispatchWorkflowRuntime'/'ActivitiesDispatchWorkflowDesign' in shells.json).
 
     Uses WaitForCompletion=$false (fire-and-forget): the parent completes immediately with the child's
-    dispatch acknowledged (outcome 'Dispatched') and the child runs independently.
-    NOTE: WaitForCompletion=$true currently faults in the runtime (a waited dispatch fails an internal
-    "exactly one matching typed trigger registration" invariant) - see TestScripts/README.md.
+    dispatch acknowledged (outcome 'Dispatched') and the child runs independently. WaitForCompletion=$true
+    also works (issue #976 fixed): the parent suspends until the child completes, then resumes with
+    outcome 'Completed'.
 .EXAMPLE
     pwsh ./TestScripts/Test-ChildWorkflow.ps1
 #>
