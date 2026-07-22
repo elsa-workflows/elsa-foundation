@@ -32,7 +32,7 @@ public sealed class AddDefinitionCommandHandler(
             .ToArray();
 
         var result = await addCommand.Execute(
-            new DesignOperationKey(command.OperationKey),
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
             WorkflowDefinition.From(definition),
             draftEntity,
             layout,

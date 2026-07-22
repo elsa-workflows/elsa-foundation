@@ -18,7 +18,7 @@ public sealed class SubmitDefinitionCommandHandler(
         ArgumentNullException.ThrowIfNull(command.State);
 
         var submitted = await submitCommand.Execute(
-            new DesignOperationKey(command.OperationKey),
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
             command.Name,
             command.Description,
             command.State.ToState(),

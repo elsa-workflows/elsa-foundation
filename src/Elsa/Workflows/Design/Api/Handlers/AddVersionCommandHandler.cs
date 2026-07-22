@@ -16,7 +16,7 @@ public sealed class AddVersionCommandHandler(
 {
     public async Task<WorkflowDefinitionVersionDetailsView> Handle(AddVersion command, CancellationToken cancellationToken)
     {
-        var operationKey = new DesignOperationKey(command.OperationKey);
+        var operationKey = DesignOperationKey.CreateOrGenerate(command.OperationKey);
         var result = await addCommand.Execute(
             operationKey,
             command.DefinitionId,

@@ -33,7 +33,7 @@ public sealed class UpdateDefinitionCommandHandler(
             : command.Layout.Select(ToRecord).ToArray();
 
         await updateDraftCommand.Execute(
-            new DesignOperationKey(command.OperationKey),
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
             new UpdateDraftRequest(draft.Id, command.State.ToState(), layout),
             cancellationToken);
 
