@@ -77,8 +77,19 @@ Mapping rules for this slice:
   none end event (no flows to cascade). On a `boundaryEvent` attached to a **subprocess** host → escalation
   boundary (ref-less = code-less catch-all); attached to a **task-family** host (childless on import), a
   **colliding code**, or a **second catch-all** on one host → dropped with a finding (validate-representable).
+- **Event subprocesses** (spec 128, tier 1): a `<subProcess triggeredByEvent="true">` imports as a
+  `TriggeredByEvent` element bound to a nested body; the body's single event-start declares the trigger — an
+  `escalationEventDefinition` (with `escalationRef` resolving to a code = catch-all when ref-less) or an
+  `errorEventDefinition`, its `isInterrupting` (default `true`) mapped onto the body start event's flag. The
+  importer validates the body shape and per-scope uniqueness **before** emitting, so it never emits a
+  validator-rejected graph: **dropped** with a specific finding when the body has no/multiple start events, an
+  unsupported trigger (message/signal/timer/… → "tier 2 / unsupported"), a non-interrupting error start, a
+  colliding escalation code, or a second catch-all/error subprocess in one scope. **Export**:
+  `triggeredByEvent="true"` on the `<subProcess>` plus the body's event-start with its definition and
+  `isInterrupting="false"` only when non-interrupting; escalation codes dedupe through the root `<escalation>`
+  declarations. Round-trips hold for escalation (interrupting / non-interrupting / catch-all) and error.
 - Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes
-  (call activities, event subprocesses, …) are dropped with an issue. **Cyclic graphs import clean** — a
+  (call activities, …) are dropped with an issue. **Cyclic graphs import clean** — a
   loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation
   finding is gone; the graph validator's structural rules still constrain where a loop-back may land.
 - BPMNDI shapes/edges are preserved verbatim on the authored `diagram` payload.
@@ -108,8 +119,10 @@ emits `<boundaryEvent attachedToRef="…"><cancelEventDefinition/></boundaryEven
 event DI bounds (no association involved). An **escalation** throw/end/boundary emits an
 `<escalationEventDefinition>` with an `escalationRef` pointing at a deduped root `<escalation
 id="escalation-{code}" escalationCode="{code}" [name]>` declaration (message/signal precedent); a code-less
-catch-all boundary emits a ref-less `<escalationEventDefinition/>` and contributes no root declaration. Each
-distinct message/signal
+catch-all boundary emits a ref-less `<escalationEventDefinition/>` and contributes no root declaration. An
+**event subprocess** emits `<subProcess triggeredByEvent="true">` with its body content, and the body's
+event-start emits its `escalationEventDefinition`/`errorEventDefinition` plus `isInterrupting="false"` when
+non-interrupting. Each distinct message/signal
 name emits one deduped root `<message>`/`<signal>` declaration (deterministic id `message-{name}` /
 `signal-{name}`) that the element's `messageRef`/`signalRef` targets — a name that sanitizes to a
 colliding id shares a declaration. A catch event's bound `Delay`/`Event` child is engine detail and is not
@@ -130,6 +143,6 @@ three are pure conversions — nothing is persisted server-side:
 The Studio import/export UX; message/signal **payload and correlation** mapping (only the event `name`
 is mapped — the synthesized `Event` catch/boundary child leaves `CorrelationId` unset); absolute
 (`<timeDate>`) and non-recurring start timers; error-code (`errorRef`) matching on error boundaries;
-escalation boundaries and compensation/event subprocesses (still dropped); connector (sequence-flow and
+message/signal/timer-triggered event subprocesses (tier 2 — dropped); connector (sequence-flow and
 association) BPMNEdge DI; `extensionElements` preservation for third-party vendor attributes;
 collaboration/pool export; and the BPMN MIWG conformance corpus.

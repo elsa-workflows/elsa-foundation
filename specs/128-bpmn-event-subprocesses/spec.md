@@ -279,3 +279,62 @@ byte-identical (its full suite passes unmodified).
   composite-fault parity, and the spec-125 regression.
 - Full test projects green: BPMN, BPMN Interchange, Activities Runtime, Workflows Runtime,
   ControlFlow, Architecture. Full solution build clean.
+
+## Deviations from the ratified plan
+
+- **Interrupting flag modeled on the body start event's `CancelActivity`.** Rather than a new event-definition
+  property, the body start event's `isInterrupting` maps onto the existing `BpmnElement.CancelActivity` flag
+  (default `true` = interrupting), mirroring how a boundary's `CancelActivity` is modeled and matching the BPMN
+  default-true convention. `ValidateEventSubprocesses` and the catcher index read it directly.
+- **Escalation/error body starts get two `StartEventBehavior` families.** The body's escalation/error start event
+  was previously rejected by `ResolveStartEvent` (only none/timer/message/signal). Added
+  `StartEventEscalation`/`StartEventError` families (routing outbound like a none start, registered behaviors) and
+  excluded them from the publish-time start-trigger surface (`BpmnElementFamilies.IsExternalStartTrigger`); they
+  seed only via the D2 scheduled-start hint. Zero effect on any external start.
+- **Hint contamination guarded by scheduling cause, not by always-writing the key.** Child work items inherit the
+  parent's command metadata, so a body's `bpmn.startElementId` would otherwise leak to a grandchild nested process.
+  The third `StartAsync` seeding path reads the hint only when the work item's scheduling cause is the new
+  `EventSubprocessBodySchedulingCause` (which is per-schedule and overwrites the inherited value), so an inherited
+  hint is never honored by an ordinary nested process. No always-write of an empty key was needed; the no-hint
+  paths stay byte-identical.
+- **`ResolveTokenId` hardened for inline nested-body completions.** A nested `BpmnProcess` body that completes
+  **inline** surfaces its OWN last internal `bpmn.tokenId` on the completion work item (runtime metadata
+  inheritance), not the parent's activation token id. `ResolveTokenId` now trusts the metadata token only when the
+  completing node has no active children (the terminate/cancel late-completion case) or the token names one of the
+  node's active children; otherwise it falls to the by-node resolution. This is additive (all pre-existing cases
+  match) and was required for own-scope/notification event-subprocess body completions to resolve correctly.
+- **`StopOtherLiveWork` returns a stopped-count.** The extraction of spec-125's stop-others loop returns
+  `(State, StoppedCount)` so `CancelTransaction` can keep its exact "stopped {N} other live token(s)" diagnostic —
+  the transaction suite is byte-identical.
+- **Error trigger is model/validation/interchange/wiring complete but runtime-blocked (see tripwire #3).** The
+  error event subprocess absorbs the child fault via seam B (the incident resolves correctly) and then activates
+  its body — which is a scheduled child, so the fault evaluation **defers**. The runtime does not support a
+  deferred seam-B fault absorption: it redelivers/misattributes the original fault, faulting the composite. The
+  escalation trigger (own-scope + notification, interrupting + non-interrupting) is unaffected and fully works.
+
+## Tripwire outcomes
+
+1. **Command-metadata hint to `StartAsync` — CLEAR.** The child-schedule `request.Metadata` is merged into the
+   child work item's `commandMetadata` (`WorkflowInvokeActivitySchedulerWorkHandler.NewChildActivityScheduleWorkItems`),
+   so `BpmnProcess.StartAsync` reads `bpmn.startElementId` from `context.SchedulerWorkItem.CommandMetadata`. Verified
+   end-to-end (bad hint faults `bpmn.start.unresolved-hint`; body seeds at its event-start).
+2. **Own-scope activation within one evaluation — CLEAR.** `RaiseEscalation` returns the matched catcher; the
+   activation runs AFTER the throw's full decision (its companion `EmitTokens`/`ConsumeToken` runs first), so an
+   interrupting activation's `StopOtherLiveWork` also stops the throw's just-emitted successor. It rides the
+   `Propagate` loop, so the stop is logical-only (`NoLiveChildren`, the `CancelLiveWork`-logical-only invariant);
+   no continuation conflict.
+3. **TRIPPED — seam-B absorption from the error path defers, which the runtime does not support.** The boundary
+   error path routes a token (often completing); the error event subprocess must schedule its body (defers). A
+   deferred seam-B fault absorption resolves the named incident but the runtime then redelivers/misattributes the
+   original fault and faults the composite. Reproduced with the **shipped spec-120 error boundary routing to a
+   task** (which likewise defers) — it is a runtime seam-B gap, not a module one. Seam-A + a deferred child
+   schedule works (the escalation interrupting notification path completes cleanly). Reported; the runtime was not
+   patched (invariant: seams B/C consumed as shipped). The error trigger's model/validation/interchange/engine
+   wiring are delivered and tested; its end-to-end runtime completion awaits a runtime fix.
+4. **Body-structure validation at validation time — CLEAR.** `ValidateEventSubprocesses` reads each body child's
+   `ExecutableNode.Structure` (deserialized to `BpmnStructure`) the way MI validation reads `BpmnStructure.Variables`
+   — authoring-time knowledge, no runtime cross-scope reach.
+5. **Activation token `ParentTokenId` null — CLEAR.** The scope-level activation token (ParentTokenId null) broke
+   no existing lookup: teardown, `ResolveTokenId`, and join accounting all key on token id / node id, and the body
+   completion is intercepted before behavior dispatch.
+6. **Spec-vs-code contradiction — none** beyond the deviations recorded above.

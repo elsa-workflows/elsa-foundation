@@ -107,6 +107,12 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         var declaredVariables = ReadDeclaredVariables(container);
         var declaredVariableNames = declaredVariables.Select(variable => variable.Name).ToHashSet(StringComparer.Ordinal);
 
+        // spec 128 D7: per-scope event-subprocess trackers — distinct escalation codes with at most one code-less
+        // catch-all, and at most one error event subprocess; a collision drops the offending event subprocess.
+        var eventSubprocessEscalationCodes = new HashSet<string>(StringComparer.Ordinal);
+        var hasEventSubprocessEscalationCatchAll = false;
+        var hasErrorEventSubprocess = false;
+
         foreach (var child in container.Elements().Where(child => child.Name.Namespace == BpmnXmlNames.Model))
         {
             var localName = child.Name.LocalName;
@@ -118,6 +124,25 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 case "startEvent":
                 {
                     if (id is null) break;
+                    // spec 128 D7: an event-subprocess body start declares an escalation/error trigger + isInterrupting
+                    // (default true). It imports with its definition so the event-subprocess body-shape holds; a
+                    // ref-less escalation start is the code-less catch-all.
+                    if (child.Element(BpmnXmlNames.Model + "escalationEventDefinition") is { } startEscalationDefinition)
+                    {
+                        var code = ResolveEscalationRefCode(startEscalationDefinition, escalationDeclarations);
+                        var properties = code is null ? null : EscalationProperties(code, ResolveEscalationRefName(startEscalationDefinition, escalationDeclarations));
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.StartEvent, name: NameOf(child),
+                            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, properties)],
+                            cancelActivity: (bool?)child.Attribute("isInterrupting") ?? true));
+                        break;
+                    }
+                    if (child.Element(BpmnXmlNames.Model + "errorEventDefinition") is not null)
+                    {
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.StartEvent, name: NameOf(child),
+                            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Error)],
+                            cancelActivity: (bool?)child.Attribute("isInterrupting") ?? true));
+                        break;
+                    }
                     var startDefinitions = child.Elements().Where(IsEventDefinition).ToArray();
                     var startDefinition = startDefinitions.Length == 0
                         ? null
@@ -216,7 +241,20 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 {
                     if (id is null) break;
                     var nestedNodeId = $"node-{id}";
-                    childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, escalationDeclarations, context));
+                    var subProcessBodyNode = BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, escalationDeclarations, context);
+
+                    // spec 128 D7: an event subprocess (triggeredByEvent="true") — validate the body shape and per-scope
+                    // uniqueness BEFORE emitting the element, so the importer never emits a graph the validator rejects.
+                    if ((bool?)child.Attribute("triggeredByEvent") == true)
+                    {
+                        if (!TryResolveEventSubprocess(id, subProcessBodyNode, eventSubprocessEscalationCodes, ref hasEventSubprocessEscalationCatchAll, ref hasErrorEventSubprocess, context))
+                            break; // Dropped (finding added inside); its body node is not added, flows cascade-drop.
+                        childActivities.Add(subProcessBodyNode);
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, triggeredByEvent: true));
+                        break;
+                    }
+
+                    childActivities.Add(subProcessBodyNode);
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
                         loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context),
                         isForCompensation: IsForCompensationOf(child)));
@@ -361,7 +399,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
         var elementsWithLanes = elements
             .Select(element => context.LaneByElementId.TryGetValue(element.ElementId, out var laneId)
-                ? new BpmnElement(element.ElementId, element.ElementType, element.Name, element.ChildNodeId, laneId, element.DefaultFlowId, element.EventDefinitions, element.Properties, element.AttachedToRef, element.CancelActivity, element.LoopCharacteristics, element.IsForCompensation, element.CompensationHandlerElementId, element.IsTransaction)
+                ? new BpmnElement(element.ElementId, element.ElementType, element.Name, element.ChildNodeId, laneId, element.DefaultFlowId, element.EventDefinitions, element.Properties, element.AttachedToRef, element.CancelActivity, element.LoopCharacteristics, element.IsForCompensation, element.CompensationHandlerElementId, element.IsTransaction, element.TriggeredByEvent)
                 : element)
             .ToArray();
 
@@ -531,6 +569,82 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
         return new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(element),
             eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, EscalationProperties(code, ResolveEscalationRefName(definition, escalationDeclarations)))]);
+    }
+
+    /// <summary>
+    /// Validates an event subprocess's imported body shape and per-scope uniqueness (spec 128 D7). The body must
+    /// declare exactly one start event with exactly one supported trigger definition — escalation (with optional
+    /// code; code-less = catch-all) or error (interrupting only) — with per scope distinct escalation codes, at most
+    /// one code-less catch-all, and at most one error event subprocess. Any violation Drops the event subprocess with
+    /// a specific finding so the importer never emits a graph the validator rejects; a valid trigger updates the
+    /// scope trackers and returns <c>true</c>.
+    /// </summary>
+    private static bool TryResolveEventSubprocess(
+        string id,
+        ActivityNode bodyNode,
+        HashSet<string> escalationCodes,
+        ref bool hasEscalationCatchAll,
+        ref bool hasError,
+        ImportContext context)
+    {
+        var bodyStructure = bodyNode.Structure?.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions);
+        var starts = (bodyStructure?.Elements ?? [])
+            .Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.StartEvent))
+            .ToArray();
+        if (starts.Length != 1)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body must declare exactly one start event; it declares {starts.Length}. It was dropped.", id));
+            return false;
+        }
+
+        var start = starts[0];
+        if (start.EventDefinitions.Count != 1)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body start event must declare exactly one supported trigger definition (escalation or error); it declares {start.EventDefinitions.Count}. It was dropped.", id));
+            return false;
+        }
+
+        var definition = start.EventDefinitions.Single();
+        var interrupting = start.CancelActivity;
+        if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation))
+        {
+            var code = definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Code, out var codeValue) && !string.IsNullOrWhiteSpace(codeValue) ? codeValue.Trim() : null;
+            if (code is null)
+            {
+                if (hasEscalationCatchAll)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a second code-less catch-all escalation event subprocess in its scope, which may carry at most one; it was dropped.", id));
+                    return false;
+                }
+                hasEscalationCatchAll = true;
+            }
+            else if (!escalationCodes.Add(code))
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' declares escalation code '{code}', which another event subprocess in its scope already claims; it was dropped.", id));
+                return false;
+            }
+
+            return true;
+        }
+
+        if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Error))
+        {
+            if (!interrupting)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a non-interrupting error event subprocess, which is not meaningful; it was dropped.", id));
+                return false;
+            }
+            if (hasError)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a second error event subprocess in its scope, which may carry at most one; it was dropped.", id));
+                return false;
+            }
+            hasError = true;
+            return true;
+        }
+
+        context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body start event declares an unsupported trigger definition '{definition.Type}'; only escalation and error triggers are supported (tier 1). It was dropped.", id));
+        return false;
     }
 
     /// <summary>The display name an escalation ref resolves to (the declaration's <c>name</c>), or <c>null</c>.</summary>
@@ -876,7 +990,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         elements[index] = new BpmnElement(handler.ElementId, handler.ElementType, handler.Name, handler.ChildNodeId, handler.LaneId,
             handler.DefaultFlowId, handler.EventDefinitions, handler.Properties, handler.AttachedToRef, handler.CancelActivity,
             handler.LoopCharacteristics, isForCompensation: true, compensationHandlerElementId: handler.CompensationHandlerElementId,
-            isTransaction: handler.IsTransaction);
+            isTransaction: handler.IsTransaction, triggeredByEvent: handler.TriggeredByEvent);
     }
 
     /// <summary>

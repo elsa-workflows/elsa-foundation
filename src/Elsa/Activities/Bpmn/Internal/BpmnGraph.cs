@@ -26,17 +26,20 @@ public sealed class BpmnGraph
     private readonly ILookup<string, BpmnSequenceFlow> _inboundByTarget;
     private readonly ILookup<string, BpmnElement> _boundariesByHost;
     private readonly IReadOnlySet<string> _backwardFlowIds;
+    private readonly IReadOnlyList<BpmnEventSubprocessCatcher> _eventSubprocesses;
 
     private BpmnGraph(
         IReadOnlyCollection<BpmnElement> elements,
         IReadOnlyCollection<BpmnSequenceFlow> sequenceFlows,
         IReadOnlyDictionary<string, ExecutableNode> childrenByNodeId,
-        bool isTransaction)
+        bool isTransaction,
+        IReadOnlyList<BpmnEventSubprocessCatcher> eventSubprocesses)
     {
         Elements = elements;
         SequenceFlows = sequenceFlows;
         IsTransaction = isTransaction;
         _childrenByNodeId = childrenByNodeId;
+        _eventSubprocesses = eventSubprocesses;
         _elementsById = elements.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
         _flowsById = sequenceFlows.ToDictionary(flow => flow.FlowId, StringComparer.Ordinal);
         _elementsByChildNodeId = elements
@@ -76,9 +79,9 @@ public sealed class BpmnGraph
         var variableNames = (structure?.Variables ?? []).Select(variable => variable.Name).ToHashSet(StringComparer.Ordinal);
         var isTransaction = structure?.IsTransaction ?? false;
 
-        Validate(elements, flows, childrenByNodeId, variableNames, isTransaction);
+        var eventSubprocesses = Validate(elements, flows, childrenByNodeId, variableNames, isTransaction);
 
-        return new BpmnGraph(elements, flows, childrenByNodeId, isTransaction);
+        return new BpmnGraph(elements, flows, childrenByNodeId, isTransaction, eventSubprocesses);
     }
 
     public BpmnElement GetRequiredElement(string elementId)
@@ -141,6 +144,28 @@ public sealed class BpmnGraph
     /// <summary>The single cancel boundary attached to <paramref name="hostElementId"/> (spec 125), or <c>null</c> when the transaction host has none; validation caps a transaction host at one cancel boundary.</summary>
     public BpmnElement? AttachedCancelBoundary(string hostElementId) =>
         _boundariesByHost[hostElementId].FirstOrDefault(BpmnElementFamilies.IsCancelBoundary);
+
+    /// <summary>The event subprocesses of this scope (spec 128): flow-less <c>TriggeredByEvent</c> subprocesses indexed by their body start-event trigger (kind + code), graph-derived and dormant.</summary>
+    public IReadOnlyList<BpmnEventSubprocessCatcher> EventSubprocesses => _eventSubprocesses;
+
+    /// <summary>The escalation event subprocess matching <paramref name="escalationCode"/> (spec 128): an exact code match wins; else the code-less catch-all; else <c>null</c>.</summary>
+    public BpmnEventSubprocessCatcher? EscalationEventSubprocess(string escalationCode) =>
+        EscalationEventSubprocessExact(escalationCode) ?? EscalationCatchAllEventSubprocess();
+
+    /// <summary>The escalation event subprocess with the exact code <paramref name="escalationCode"/> (spec 128), or <c>null</c>.</summary>
+    public BpmnEventSubprocessCatcher? EscalationEventSubprocessExact(string escalationCode) =>
+        _eventSubprocesses.FirstOrDefault(catcher =>
+            catcher.TriggerKind == BpmnEventSubprocessTriggerKind.Escalation &&
+            catcher.Code is not null && StringComparer.Ordinal.Equals(catcher.Code, escalationCode));
+
+    /// <summary>The code-less catch-all escalation event subprocess (spec 128), or <c>null</c>.</summary>
+    public BpmnEventSubprocessCatcher? EscalationCatchAllEventSubprocess() =>
+        _eventSubprocesses.FirstOrDefault(catcher =>
+            catcher.TriggerKind == BpmnEventSubprocessTriggerKind.Escalation && catcher.Code is null);
+
+    /// <summary>The scope's single error event subprocess (spec 128), or <c>null</c> when it has none; validation caps a scope at one.</summary>
+    public BpmnEventSubprocessCatcher? ErrorEventSubprocess() =>
+        _eventSubprocesses.FirstOrDefault(catcher => catcher.TriggerKind == BpmnEventSubprocessTriggerKind.Error);
 
     public BpmnSequenceFlow? GetDefaultFlow(BpmnElement element)
     {
@@ -262,7 +287,7 @@ public sealed class BpmnGraph
         }
     }
 
-    private static void Validate(
+    private static IReadOnlyList<BpmnEventSubprocessCatcher> Validate(
         IReadOnlyCollection<BpmnElement> elements,
         IReadOnlyCollection<BpmnSequenceFlow> flows,
         IReadOnlyDictionary<string, ExecutableNode> childrenByNodeId,
@@ -304,6 +329,8 @@ public sealed class BpmnGraph
                 case BpmnElementFamilies.StartEventTimer:
                 case BpmnElementFamilies.StartEventMessage:
                 case BpmnElementFamilies.StartEventSignal:
+                case BpmnElementFamilies.StartEventEscalation:
+                case BpmnElementFamilies.StartEventError:
                 case BpmnElementFamilies.EndEventNone:
                 case BpmnElementFamilies.EndEventTerminate:
                 case BpmnElementFamilies.ParallelGateway:
@@ -373,10 +400,128 @@ public sealed class BpmnGraph
 
         ValidateMultiInstance(elements, declaredVariableNames);
 
+        var eventSubprocesses = ValidateEventSubprocesses(elements, flows, childrenByNodeId);
+
         // Cyclic sequence flows are executable (spec 122): loop-back edges become loop-iteration keys. The
         // structural rules above still constrain where a loop-back may land — a loop-back into a start event
         // (no inbound), a boundary event (no inbound), or an event-gateway-armed catch (exactly-one-inbound)
         // is rejected by those rules — so no acyclicity check remains.
+
+        return eventSubprocesses;
+    }
+
+    /// <summary>
+    /// Event subprocess rules (spec 128 D1). A <c>TriggeredByEvent</c> element is a flow-less <c>subProcess</c>
+    /// binding a body: it participates in no sequence flows, carries no loop characteristics, hosts no attached
+    /// boundary, is not a compensation handler, not referenced as one, and is neither a compensation handler nor a
+    /// transaction (the compensation-handler rule family, mirrored). Its body must declare exactly one start event
+    /// carrying exactly one supported trigger definition — escalation (with optional code; code-less = catch-all)
+    /// or error (catch-all only) — with no nested <c>TriggeredByEvent</c> inside the body (rejected this slice).
+    /// The body start event's interrupting flag (its <see cref="BpmnElement.CancelActivity"/>, the BPMN
+    /// <c>isInterrupting</c> default-true convention) must be interrupting for an error trigger. Per scope:
+    /// escalation codes are distinct with at most one code-less catch-all, and at most one error event subprocess.
+    /// The body structure is read the way MI validation reads <c>BpmnStructure.Variables</c> — authoring-time
+    /// knowledge, no runtime cross-scope reach. Returns the graph-derived catcher index.
+    /// </summary>
+    private static IReadOnlyList<BpmnEventSubprocessCatcher> ValidateEventSubprocesses(
+        IReadOnlyCollection<BpmnElement> elements,
+        IReadOnlyCollection<BpmnSequenceFlow> flows,
+        IReadOnlyDictionary<string, ExecutableNode> childrenByNodeId)
+    {
+        var triggered = elements.Where(element => element.TriggeredByEvent).ToArray();
+        if (triggered.Length == 0)
+            return [];
+
+        var inboundByTarget = flows.ToLookup(flow => flow.TargetRef, StringComparer.Ordinal);
+        var outboundBySource = flows.ToLookup(flow => flow.SourceRef, StringComparer.Ordinal);
+        var boundaryHosts = elements
+            .Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) && element.AttachedToRef is not null)
+            .Select(element => element.AttachedToRef!)
+            .ToHashSet(StringComparer.Ordinal);
+        var compensationHandlerRefs = elements
+            .Where(element => element.CompensationHandlerElementId is not null)
+            .Select(element => element.CompensationHandlerElementId!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var catchers = new List<BpmnEventSubprocessCatcher>();
+        var escalationCodes = new HashSet<string>(StringComparer.Ordinal);
+        var hasEscalationCatchAll = false;
+        var hasError = false;
+
+        foreach (var element in triggered)
+        {
+            // Rule 1 — element-level shape (the compensation-handler rule family, mirrored).
+            if (!StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.SubProcess))
+                throw new BpmnExecutionException($"BPMN element '{element.ElementId}' ({element.ElementType}) is marked as an event subprocess, but only a subprocess element may be an event subprocess.");
+            if (element.ChildNodeId is null)
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' requires a bound child activity (the nested event-subprocess body).");
+            if (inboundByTarget[element.ElementId].Any() || outboundBySource[element.ElementId].Any())
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' cannot participate in sequence flows; it is activated by its body start-event trigger, not by token flow.");
+            if (element.LoopCharacteristics is not null)
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' cannot carry multi-instance loop characteristics.");
+            if (boundaryHosts.Contains(element.ElementId))
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' cannot host attached boundary events.");
+            if (element.IsForCompensation)
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' cannot also be a compensation handler.");
+            if (compensationHandlerRefs.Contains(element.ElementId))
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' cannot be referenced as a compensation handler.");
+            if (element.IsTransaction)
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' cannot also be a transaction.");
+
+            // Rule 2 — body structure: exactly one start event with one supported trigger definition; no nested
+            // event subprocess. The body structure is read like BpmnStructure.Variables in MI validation.
+            var bodyStructure = childrenByNodeId.TryGetValue(element.ChildNodeId, out var bodyNode) ? ReadStructure(bodyNode) : null;
+            if (bodyStructure is null)
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' body must be a nested BPMN process (its bound child carries no BPMN structure).");
+            if (bodyStructure.Elements.Any(bodyElement => bodyElement.TriggeredByEvent))
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' body declares a nested event subprocess; nested event subprocesses are not supported by this slice.");
+
+            var bodyStarts = bodyStructure.Elements
+                .Where(bodyElement => StringComparer.Ordinal.Equals(bodyElement.ElementType, BpmnElementTypes.StartEvent))
+                .ToArray();
+            if (bodyStarts.Length != 1)
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' body must declare exactly one start event; it declares {bodyStarts.Length}.");
+            var bodyStart = bodyStarts[0];
+            if (bodyStart.EventDefinitions.Count != 1)
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' body start event '{bodyStart.ElementId}' must declare exactly one event definition of a supported trigger (escalation or error); it declares {bodyStart.EventDefinitions.Count}.");
+
+            // Rule 3 — interrupting flag from the body start event's CancelActivity (isInterrupting, default true).
+            var interrupting = bodyStart.CancelActivity;
+            var definitionType = bodyStart.EventDefinitions.Single().Type;
+
+            if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Escalation))
+            {
+                var code = ReadEscalationCode(bodyStart);
+                if (code is null)
+                {
+                    if (hasEscalationCatchAll)
+                        throw new BpmnExecutionException($"BPMN scope declares more than one code-less catch-all escalation event subprocess (at '{element.ElementId}'); a scope may carry at most one.");
+                    hasEscalationCatchAll = true;
+                }
+                else if (!escalationCodes.Add(code))
+                {
+                    throw new BpmnExecutionException($"BPMN scope declares more than one escalation event subprocess for code '{code}' (at '{element.ElementId}'); escalation event-subprocess codes in one scope must be distinct.");
+                }
+
+                catchers.Add(new BpmnEventSubprocessCatcher(element.ElementId, element.ChildNodeId, bodyStart.ElementId, BpmnEventSubprocessTriggerKind.Escalation, code, interrupting));
+            }
+            else if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Error))
+            {
+                // Rule 3 — an error event subprocess must be interrupting (per BPMN); Rule 4 — at most one per scope.
+                if (!interrupting)
+                    throw new BpmnExecutionException($"BPMN error event subprocess '{element.ElementId}' must be interrupting; a non-interrupting error start is not meaningful.");
+                if (hasError)
+                    throw new BpmnExecutionException($"BPMN scope declares more than one error event subprocess (at '{element.ElementId}'); a scope may carry at most one.");
+                hasError = true;
+                catchers.Add(new BpmnEventSubprocessCatcher(element.ElementId, element.ChildNodeId, bodyStart.ElementId, BpmnEventSubprocessTriggerKind.Error, null, interrupting));
+            }
+            else
+            {
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' body start event '{bodyStart.ElementId}' declares an unsupported trigger definition '{definitionType}'; only escalation and error triggers are supported by this slice.");
+            }
+        }
+
+        return catchers;
     }
 
     /// <summary>
@@ -745,3 +890,27 @@ public sealed class BpmnGraph
     }
 
 }
+
+/// <summary>The trigger kind of an event subprocess (spec 128 tier 1): the two dormant-catcher triggers this slice ships.</summary>
+public enum BpmnEventSubprocessTriggerKind
+{
+    /// <summary>An escalation-triggered event subprocess (interrupting or non-interrupting), matched by code (exact beats code-less catch-all).</summary>
+    Escalation,
+
+    /// <summary>An error-triggered event subprocess (interrupting only, per BPMN), catch-all (no error-code matching this slice).</summary>
+    Error
+}
+
+/// <summary>
+/// A graph-derived, dormant event-subprocess catcher (spec 128): a scope's <c>TriggeredByEvent</c> subprocess
+/// indexed by its body start-event trigger. No state records, no arming — it is resolved from the graph when its
+/// trigger occurs. <see cref="BodyStartElementId"/> is the single event-start element the body is seeded from via
+/// the scheduled-start hint; <see cref="Interrupting"/> is the body start event's <c>isInterrupting</c> flag.
+/// </summary>
+public sealed record BpmnEventSubprocessCatcher(
+    string ElementId,
+    string ChildNodeId,
+    string BodyStartElementId,
+    BpmnEventSubprocessTriggerKind TriggerKind,
+    string? Code,
+    bool Interrupting);
