@@ -148,6 +148,37 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
     private static string StableHash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
+    /// <summary>
+    /// Returns the FIFO-earliest queued item whose id is not in <paramref name="skipWorkItemIds"/>, without claiming
+    /// it — true insertion order, the same order <see cref="ClaimAsync"/> serves the head. Not part of
+    /// <see cref="IWorkflowSchedulerWorkQueue"/>: it exists for the coalescing session's single-writer inline fused
+    /// pump (spec 123 D2), which reads past the drain loop's live head claim and removes dispatched items with
+    /// <see cref="DeleteAsync"/>. The strict-FIFO claim contract for concurrent drainers is unaffected.
+    /// </summary>
+    public ValueTask<RuntimeSchedulerWorkItem?> PeekFirstAvailableAsync(
+        string workflowExecutionId,
+        IReadOnlySet<string> skipWorkItemIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(skipWorkItemIds);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            if (!_queuesByWorkflowExecutionId.TryGetValue(workflowExecutionId, out var queue))
+                return new ValueTask<RuntimeSchedulerWorkItem?>((RuntimeSchedulerWorkItem?)null);
+
+            foreach (var item in queue)
+            {
+                if (!skipWorkItemIds.Contains(item.WorkItemId))
+                    return new ValueTask<RuntimeSchedulerWorkItem?>(item);
+            }
+
+            return new ValueTask<RuntimeSchedulerWorkItem?>((RuntimeSchedulerWorkItem?)null);
+        }
+    }
+
     public ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(
         RuntimeSchedulerWorkClaimRequest request,
         CancellationToken cancellationToken = default)

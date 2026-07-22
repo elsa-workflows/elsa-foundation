@@ -4,7 +4,9 @@ using Elsa.Activities.Flowchart.Internal;
 using Elsa.Activities.Flowchart.Internal.Policies;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Activities.Flowchart;
 
@@ -36,5 +38,8 @@ public class ActivitiesFlowchartFeature : IShellFeature
         services.AddSingleton<IFlowchartPolicy, FirstWinsFlowchartPolicy>();
         services.AddSingleton<IFlowchartPolicy, MergeFlowchartPolicy>();
         services.AddSingleton<IFlowchartPolicyRegistry, FlowchartPolicyRegistry>();
+        // spec 123 D2 (ADR 0047 resolution #1): lets the ReplaySafe fused completion pump prove a flowchart
+        // successor edge single-predecessor via the spec-119 routing memo; fan-in/join edges keep the discrete cascade.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IReplaySafeSuccessorRoutingProbe, FlowchartReplaySafeSuccessorRoutingProbe>());
     }
 }

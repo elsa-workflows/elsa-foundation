@@ -16,4 +16,16 @@ public sealed class RuntimeReplaySafeFusionOptions
 {
     /// <summary>When true (default), ReplaySafe hop fusion engages inside a live coalescing burst.</summary>
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// When true (default) and <see cref="Enabled"/> holds, a fused span also pumps its completion cascade inline
+    /// (ADR 0047 D2): the <c>CompleteActivity</c> → parent-completion-evaluation → successor <c>ScheduleActivity</c>
+    /// items are claimed from the coalescing overlay and dispatched through the same handlers in the same FIFO order
+    /// the drain loop would use, eliding only the per-item drain hop. A fusable successor re-enters the D1 fused pass;
+    /// join (fan-in) edges, child-fault evaluations, non-ReplaySafe parents, and the workflow tail
+    /// (<c>ContinuationScheduling</c>/<c>Checkpoint</c>) always fall back to the discrete drain loop. Setting this to
+    /// <see langword="false"/> keeps D1 (fused schedule → start → invoke) with the discrete cascade — the benchmark's
+    /// D1-only column — and MUST also commit byte-identical durable state.
+    /// </summary>
+    public bool FuseCompletionCascade { get; set; } = true;
 }

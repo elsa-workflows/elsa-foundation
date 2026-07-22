@@ -50,6 +50,82 @@ public sealed class ReplaySafeFusionGuardrailTests
         Assert.Equal(0, disabled.FusedSpans);
         Assert.True(enabled.Dispatches < disabled.Dispatches,
             $"Expected ON dispatches ({enabled.Dispatches}) < OFF dispatches ({disabled.Dispatches}).");
+
+        // D2 engaged too: the completion cascade between fused spans was pumped inline, not drained per item.
+        Assert.True(enabled.InlineCascadeDispatches > 0,
+            $"Expected the D2 pump to dispatch cascade items inline in the ON run, saw {enabled.InlineCascadeDispatches}.");
+        Assert.Equal(0, disabled.InlineCascadeDispatches);
+    }
+
+    // D1-only variant: the completion-cascade dial OFF (D1 fused schedule→start→invoke, discrete cascade) must also be
+    // byte-identical to no-fusion — the benchmark's middle column is a correctness point, not just a measurement.
+    [Fact]
+    public async Task StraightLineReplaySafeHotLoop_D1OnlyVersusDisabled_IsByteIdentical()
+    {
+        var d1Only = await DriveAsync(BuildReplaySafeHotLoop, new RuntimeReplaySafeFusionOptions { Enabled = true, FuseCompletionCascade = false });
+        var disabled = await DriveAsync(BuildReplaySafeHotLoop, fusionEnabled: false);
+
+        Assert.True(d1Only.Completed);
+        Assert.Equal(disabled.CommitFingerprint, d1Only.CommitFingerprint);
+        Assert.Equal(disabled.StateFingerprint, d1Only.StateFingerprint);
+        Assert.True(d1Only.FusedSpans >= HotLoopLength);
+        Assert.Equal(0, d1Only.InlineCascadeDispatches);
+    }
+
+    // Shape (b): a multi-outcome branch — one ReplaySafe node forking to two single-predecessor ReplaySafe tails.
+    // Every successor edge is provably single-predecessor, so the D2 pump carries both branches inline (FIFO, exactly
+    // the discrete order) and no edge is treated as a join.
+    [Fact]
+    public async Task MultiOutcomeBranch_EnabledVersusDisabled_IsByteIdentical_AndCascadePumpsInline()
+    {
+        var enabled = await DriveAsync(BuildReplaySafeBranchShape, fusionEnabled: true);
+        var disabled = await DriveAsync(BuildReplaySafeBranchShape, fusionEnabled: false);
+
+        Assert.True(enabled.Completed);
+        Assert.True(disabled.Completed);
+        Assert.Equal(disabled.CommitFingerprint, enabled.CommitFingerprint);
+        Assert.Equal(disabled.StateFingerprint, enabled.StateFingerprint);
+        Assert.NotEqual(string.Empty, enabled.CommitFingerprint);
+
+        // Non-vacuous: the fork node, both branch tails, and the composite all fused, and the cascade pumped inline;
+        // no branch successor was mistaken for a join.
+        Assert.True(enabled.FusedSpans >= 4,
+            $"Expected the fork, both tails and the composite to fuse, saw {enabled.FusedSpans} fused spans.");
+        Assert.True(enabled.InlineCascadeDispatches > 0,
+            $"Expected the D2 pump to dispatch cascade items inline, saw {enabled.InlineCascadeDispatches}.");
+        Assert.Equal(0, enabled.CascadeJoinFallbacks);
+        Assert.Equal(0, disabled.FusedSpans);
+        Assert.Equal(0, disabled.InlineCascadeDispatches);
+        Assert.True(enabled.Dispatches < disabled.Dispatches,
+            $"Expected ON dispatches ({enabled.Dispatches}) < OFF dispatches ({disabled.Dispatches}).");
+    }
+
+    // Shape (c): a fan-in join (diamond). The join node's ScheduleActivity has two inbound edges, so the D2 pump MUST
+    // hand it back to the discrete cascade (ADR 0047 resolution #1) — proven via the join-fallback counter — and the
+    // committed durable state must still be byte-identical.
+    [Fact]
+    public async Task FanInJoin_EnabledVersusDisabled_IsByteIdentical_AndJoinEdgeFallsBackToDiscreteCascade()
+    {
+        var enabled = await DriveAsync(BuildReplaySafeDiamondShape, fusionEnabled: true);
+        var disabled = await DriveAsync(BuildReplaySafeDiamondShape, fusionEnabled: false);
+
+        Assert.True(enabled.Completed);
+        Assert.True(disabled.Completed);
+        Assert.Equal(disabled.CommitFingerprint, enabled.CommitFingerprint);
+        Assert.Equal(disabled.StateFingerprint, enabled.StateFingerprint);
+        Assert.NotEqual(string.Empty, enabled.CommitFingerprint);
+
+        // Non-vacuous: fusion + the inline cascade engaged on the branches, AND the join edge demonstrably fell back
+        // to the discrete drain loop instead of being dispatched inline.
+        Assert.True(enabled.FusedSpans >= 3,
+            $"Expected the fork and both branches to fuse, saw {enabled.FusedSpans} fused spans.");
+        Assert.True(enabled.InlineCascadeDispatches > 0,
+            $"Expected the D2 pump to dispatch cascade items inline, saw {enabled.InlineCascadeDispatches}.");
+        Assert.True(enabled.CascadeJoinFallbacks >= 1,
+            $"Expected the join edge to fall back to the discrete cascade, saw {enabled.CascadeJoinFallbacks} join fallbacks.");
+        Assert.Equal(0, disabled.FusedSpans);
+        Assert.Equal(0, disabled.InlineCascadeDispatches);
+        Assert.Equal(0, disabled.CascadeJoinFallbacks);
     }
 
     // Shape (d): a ReplaySafe leaf whose body suspends on a bookmark — the fused span exits mid-way at the suspension
@@ -102,7 +178,10 @@ public sealed class ReplaySafeFusionGuardrailTests
         Assert.Equal(first.StateFingerprint, second.StateFingerprint);
     }
 
-    private static async Task<RunFingerprint> DriveAsync(Func<WorkflowExecutable> buildExecutable, bool fusionEnabled)
+    private static Task<RunFingerprint> DriveAsync(Func<WorkflowExecutable> buildExecutable, bool fusionEnabled) =>
+        DriveAsync(buildExecutable, new RuntimeReplaySafeFusionOptions { Enabled = fusionEnabled });
+
+    private static async Task<RunFingerprint> DriveAsync(Func<WorkflowExecutable> buildExecutable, RuntimeReplaySafeFusionOptions fusionOptions)
     {
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
@@ -111,12 +190,12 @@ public sealed class ReplaySafeFusionGuardrailTests
             {
                 // AddSingleton (not TryAdd) supersedes the runtime's default registration for GetService resolution —
                 // the same A/B lever the spec-109 fast-path guardrail uses.
-                services.AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = fusionEnabled });
+                services.AddSingleton(fusionOptions);
                 services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new FixedTimeProvider(FixedNow)));
             })
             .Build(ActivityExecutionIds);
 
-        Assert.Equal(fusionEnabled, harness.Services.GetRequiredService<RuntimeReplaySafeFusionOptions>().Enabled);
+        Assert.Equal(fusionOptions.Enabled, harness.Services.GetRequiredService<RuntimeReplaySafeFusionOptions>().Enabled);
 
         var run = await harness.RunAsync(buildExecutable());
 
@@ -128,7 +207,9 @@ public sealed class ReplaySafeFusionGuardrailTests
             CommitFingerprint: FingerprintCommits(commitStore.ListCommits()),
             StateFingerprint: FingerprintStates(run),
             FusedSpans: diagnostics.FusedSpans,
-            Dispatches: diagnostics.Dispatches);
+            Dispatches: diagnostics.Dispatches,
+            InlineCascadeDispatches: diagnostics.InlineCascadeDispatches,
+            CascadeJoinFallbacks: diagnostics.CascadeJoinFallbacks);
     }
 
     private static string FingerprintCommits(IReadOnlyCollection<RuntimeCheckpointCommitRecord> commits) =>
@@ -173,6 +254,39 @@ public sealed class ReplaySafeFusionGuardrailTests
         return BuildStraightLine([probe, waiting], waitingNodeId: "node-wait");
     }
 
+    // Shape (b): node-fork branches to two independent single-predecessor tails (no reconvergence).
+    private static WorkflowExecutable BuildReplaySafeBranchShape()
+    {
+        var fork = WorkflowExecutionHarness.NewReplaySafeProbeNode("node-fork");
+        var left = WorkflowExecutionHarness.NewReplaySafeProbeNode("node-left");
+        var right = WorkflowExecutionHarness.NewReplaySafeProbeNode("node-right");
+        return BuildFlowchart(
+            [fork, left, right],
+            [
+                new FlowchartConnection(new FlowchartEndpoint("node-fork"), new FlowchartEndpoint("node-left")),
+                new FlowchartConnection(new FlowchartEndpoint("node-fork"), new FlowchartEndpoint("node-right"))
+            ],
+            startNodeId: "node-fork");
+    }
+
+    // Shape (c): diamond — node-fork branches to two tails that reconverge on node-join (two inbound edges).
+    private static WorkflowExecutable BuildReplaySafeDiamondShape()
+    {
+        var fork = WorkflowExecutionHarness.NewReplaySafeProbeNode("node-fork");
+        var left = WorkflowExecutionHarness.NewReplaySafeProbeNode("node-left");
+        var right = WorkflowExecutionHarness.NewReplaySafeProbeNode("node-right");
+        var join = WorkflowExecutionHarness.NewReplaySafeProbeNode("node-join");
+        return BuildFlowchart(
+            [fork, left, right, join],
+            [
+                new FlowchartConnection(new FlowchartEndpoint("node-fork"), new FlowchartEndpoint("node-left")),
+                new FlowchartConnection(new FlowchartEndpoint("node-fork"), new FlowchartEndpoint("node-right")),
+                new FlowchartConnection(new FlowchartEndpoint("node-left"), new FlowchartEndpoint("node-join")),
+                new FlowchartConnection(new FlowchartEndpoint("node-right"), new FlowchartEndpoint("node-join"))
+            ],
+            startNodeId: "node-fork");
+    }
+
     private static WorkflowExecutable BuildStraightLine(ExecutableNode[] leaves, string? waitingNodeId = null)
     {
         var connections = Enumerable.Range(0, leaves.Length - 1)
@@ -181,6 +295,15 @@ public sealed class ReplaySafeFusionGuardrailTests
                 new FlowchartEndpoint(leaves[index + 1].ExecutableNodeId)))
             .ToArray();
 
+        return BuildFlowchart(leaves, connections, leaves[0].ExecutableNodeId, waitingNodeId);
+    }
+
+    private static WorkflowExecutable BuildFlowchart(
+        ExecutableNode[] leaves,
+        FlowchartConnection[] connections,
+        string startNodeId,
+        string? waitingNodeId = null)
+    {
         var root = new ExecutableNode(
             executableNodeId: "node-flowchart",
             authoredActivityId: "authored-flowchart",
@@ -195,7 +318,7 @@ public sealed class ReplaySafeFusionGuardrailTests
                 FlowchartActivity.StructureKind,
                 FlowchartActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(
-                    new FlowchartStructure(connections: connections, startNodeId: leaves[0].ExecutableNodeId))));
+                    new FlowchartStructure(connections: connections, startNodeId: startNodeId))));
 
         var resumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
         if (waitingNodeId is not null)
@@ -233,7 +356,9 @@ public sealed class ReplaySafeFusionGuardrailTests
         string CommitFingerprint,
         string StateFingerprint,
         long FusedSpans,
-        long Dispatches);
+        long Dispatches,
+        long InlineCascadeDispatches,
+        long CascadeJoinFallbacks);
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
