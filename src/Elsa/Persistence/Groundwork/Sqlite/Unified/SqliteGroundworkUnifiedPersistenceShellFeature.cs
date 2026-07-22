@@ -41,9 +41,16 @@ public sealed class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeatu
         Category = "Persistence")]
     public bool AutoApplySchemaOnStartup { get; set; } = true;
 
+    [ManifestSetting(
+        DisplayName = "Skip schema inspection when the plan is unchanged",
+        Description = "When enabled, startup records an applied-plan fingerprint and skips the full schema inspection/validation walk on later boots whose composed plan is unchanged, cutting warm-boot admission from a full re-validation to a single fingerprint read. Off by default: the fingerprint proves the plan is current but cannot detect schema changed out-of-band while the host was down. Leave disabled to keep per-boot drift re-validation.",
+        Category = "Persistence")]
+    public bool SkipSchemaInspectionWhenPlanUnchanged { get; set; }
+
     public void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
-        services.AddGroundworkSqliteUnifiedPersistence(connectionString, _context, AutoApplySchemaOnStartup);
+        services.AddGroundworkSqliteUnifiedPersistence(
+            connectionString, _context, AutoApplySchemaOnStartup, SkipSchemaInspectionWhenPlanUnchanged);
     }
 }

@@ -11,9 +11,11 @@ using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using System.Collections.Concurrent;
 using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
@@ -69,10 +71,50 @@ public sealed class GroundworkShellSchemaActivationTests
         Assert.Contains("admission failed", message, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static ServiceProvider BuildRoot(string connectionString, bool includeIdentity)
+    [Fact]
+    public async Task Skip_if_current_stamps_the_first_activation_and_skips_the_walk_on_the_second()
+    {
+        await using var database = new TemporarySqliteDatabase();
+
+        // First activation against a fresh database: auto-apply admits and records the applied-plan stamp.
+        var firstLog = new CapturingLoggerProvider();
+        await using (var first = BuildRoot(
+            database.ConnectionString, includeIdentity: false,
+            autoApply: true, skipInspection: true, loggerProvider: firstLog))
+        {
+            var shell = await first.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+            await using var scope = shell.BeginScope();
+            Assert.NotNull(scope.ServiceProvider.GetRequiredService<IDocumentStore>());
+        }
+        Assert.DoesNotContain(firstLog.Messages, m => m.Contains("skipped the inspection walk"));
+
+        // Second activation against the same, now-current database: the stamp covers the plan, so the full
+        // inspection walk is skipped and activation still yields a working document store.
+        var secondLog = new CapturingLoggerProvider();
+        await using (var second = BuildRoot(
+            database.ConnectionString, includeIdentity: false,
+            autoApply: true, skipInspection: true, loggerProvider: secondLog))
+        {
+            var shell = await second.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+            await using var scope = shell.BeginScope();
+            Assert.NotNull(scope.ServiceProvider.GetRequiredService<IDocumentStore>());
+        }
+        Assert.Contains(secondLog.Messages, m => m.Contains("skipped the inspection walk"));
+    }
+
+    private static ServiceProvider BuildRoot(
+        string connectionString,
+        bool includeIdentity,
+        bool autoApply = false,
+        bool skipInspection = false,
+        ILoggerProvider? loggerProvider = null)
     {
         var services = new ServiceCollection()
-            .AddLogging()
+            .AddLogging(builder =>
+            {
+                if (loggerProvider is not null)
+                    builder.AddProvider(loggerProvider);
+            })
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>()
             .AddSingleton(TimeProvider.System)
@@ -92,7 +134,8 @@ public sealed class GroundworkShellSchemaActivationTests
                         .WithFeature<SqliteGroundworkUnifiedPersistenceShellFeature>(feature =>
                         {
                             feature.ConnectionString = connectionString;
-                            feature.AutoApplySchemaOnStartup = false;
+                            feature.AutoApplySchemaOnStartup = autoApply;
+                            feature.SkipSchemaInspectionWhenPlanUnchanged = skipInspection;
                         });
                     if (includeIdentity)
                         shell.WithFeature<AspNetCoreIdentityGroundworkFeature>();
@@ -121,6 +164,24 @@ public sealed class GroundworkShellSchemaActivationTests
         for (var current = exception; current is not null; current = current.InnerException)
             messages.Add(current.Message);
         return string.Join(" | ", messages);
+    }
+
+    private sealed class CapturingLoggerProvider : ILoggerProvider
+    {
+        public ConcurrentQueue<string> Messages { get; } = new();
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(Messages);
+        public void Dispose() { }
+
+        private sealed class CapturingLogger(ConcurrentQueue<string> messages) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter) =>
+                messages.Enqueue(formatter(state, exception));
+        }
     }
 
     private sealed class TenantAccessContextAccessor : IPersistenceAccessContextAccessor

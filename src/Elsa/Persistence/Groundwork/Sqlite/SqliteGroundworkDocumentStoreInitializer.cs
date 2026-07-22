@@ -33,9 +33,11 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
     IServiceScopeFactory scopeFactory,
     GroundworkStoreSessionSource sessionSource,
     ILogger<SqliteGroundworkDocumentStoreInitializer> logger,
-    GroundworkProviderCapabilityAdmission? capabilityAdmission = null) : IHostedService, IShellInitializer
+    GroundworkProviderCapabilityAdmission? capabilityAdmission = null,
+    bool skipInspectionWhenPlanUnchanged = false) : IHostedService, IShellInitializer
 {
     private readonly SemaphoreSlim initializationLock = new(1, 1);
+    private readonly SqliteGroundworkAdmissionStampStore stampStore = new();
     private bool initialized;
 
     public Task InitializeAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
@@ -77,18 +79,54 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             // mode: journal_mode is a persistent per-database property, and this initializer's connections are
             // the first to touch the file.
             await using var inspectionConnection = SqliteConnectionFactory.Create(connectionString);
-            var admission = await source.InspectRuntimeAdmissionAsync(
-                new SqlitePhysicalSchemaExecutor(inspectionConnection),
-                new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = autoApplyOnStartup },
-                entry => logger.Log(
-                    entry.Level == GroundworkRuntimeSchemaAdmissionLogLevel.Information
-                        ? LogLevel.Information
-                        : LogLevel.Warning,
-                    "{AdmissionMessage}",
-                    entry.Message),
-                cancellationToken);
-            if (!admission.IsReady)
-                throw new ElsaAdmissionException(admission);
+
+            // Skip-if-current fast path (spec 133): a matching applied-plan stamp proves the composed plan
+            // is byte-for-byte the last successfully admitted plan, so the full inspection/validation walk
+            // (a re-read plus per-route PRAGMA re-validation of every storage unit) can be skipped for a
+            // single indexed scalar read. Opt-in, because the stamp covers the plan but not live provider
+            // state, so it cannot detect drift introduced out-of-band while the host was down.
+            var currentStamp = GroundworkAdmissionSkipStamp.ForSource(source);
+            var manifestId = source.PhysicalTarget.ManifestIdentity.Value;
+            var providerName = source.PhysicalTarget.Provider.Name;
+
+            var skipped = false;
+            if (skipInspectionWhenPlanUnchanged)
+            {
+                var persistedStamp = await stampStore.TryReadAsync(
+                    inspectionConnection, manifestId, providerName, cancellationToken);
+                if (persistedStamp is not null && persistedStamp.Covers(currentStamp))
+                {
+                    skipped = true;
+                    logger.LogInformation(
+                        "Groundwork runtime schema admission skipped the inspection walk for target '{TargetFingerprint}' on provider '{Provider}': the persisted applied-plan stamp is current.",
+                        currentStamp.TargetFingerprint,
+                        providerName);
+                }
+            }
+
+            if (!skipped)
+            {
+                var admission = await source.InspectRuntimeAdmissionAsync(
+                    new SqlitePhysicalSchemaExecutor(inspectionConnection),
+                    new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = autoApplyOnStartup },
+                    entry => logger.Log(
+                        entry.Level == GroundworkRuntimeSchemaAdmissionLogLevel.Information
+                            ? LogLevel.Information
+                            : LogLevel.Warning,
+                        "{AdmissionMessage}",
+                        entry.Message),
+                    cancellationToken);
+                if (!admission.IsReady)
+                    throw new ElsaAdmissionException(admission);
+
+                // Record the stamp only after the walk (and any apply) has durably committed and reported
+                // ready. A crash before this line leaves no stamp, so the next boot re-walks and re-admits
+                // idempotently — the stamp is an optimization, never a correctness gate. Only stamp when the
+                // fast path is enabled; there is nothing to skip otherwise.
+                if (skipInspectionWhenPlanUnchanged)
+                    await stampStore.WriteAsync(
+                        inspectionConnection, manifestId, providerName, currentStamp, cancellationToken);
+            }
 
             if (!sessionSource.IsInitialized)
             {
