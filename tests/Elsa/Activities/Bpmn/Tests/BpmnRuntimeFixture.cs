@@ -110,12 +110,13 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
         IReadOnlyCollection<BpmnElement> elements,
         IReadOnlyCollection<BpmnSequenceFlow> sequenceFlows,
         IReadOnlyCollection<WorkflowExecutableResumeTarget>? resumeTargets = null,
-        IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null)
+        IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null,
+        bool isTransaction = false)
     {
         // The runtime reads the container's declared variables as RuntimeVariableDeclaration; BpmnStructure carries
         // authored VariableDefinition, so a spec-123 collection variable is injected as the runtime shape here (the
         // real publish compiler does the VariableDefinition→RuntimeVariableDeclaration lowering).
-        var structurePayload = JsonSerializer.SerializeToNode(new BpmnStructure(elements, sequenceFlows), WebOptions)!.AsObject();
+        var structurePayload = JsonSerializer.SerializeToNode(new BpmnStructure(elements, sequenceFlows, isTransaction: isTransaction), WebOptions)!.AsObject();
         if (variables is { Count: > 0 })
             structurePayload["variables"] = JsonSerializer.SerializeToNode(variables, WebOptions);
 
@@ -255,6 +256,18 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     /// <summary>A compensation handler (spec 124): a task-family element that binds a child, participates in no sequence flows, and runs only during a compensation replay.</summary>
     public static BpmnElement CompensationHandler(string elementId, string childNodeId) =>
         new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, isForCompensation: true);
+
+    /// <summary>A transaction subprocess element (spec 125): a <c>subProcess</c> host marked <c>IsTransaction</c> that binds a nested transaction process.</summary>
+    public static BpmnElement TransactionSubProcess(string elementId, string childNodeId, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.SubProcess, childNodeId: childNodeId, defaultFlowId: defaultFlowId, isTransaction: true);
+
+    /// <summary>A cancel end event (spec 125); valid only inside a transaction, it cancels the transaction scope and completes it with the <c>Cancelled</c> outcome.</summary>
+    public static BpmnElement CancelEnd(string elementId = "cancel-end") =>
+        new(elementId, BpmnElementTypes.EndEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Cancel)]);
+
+    /// <summary>A cancel boundary event (spec 125) attached to a transaction host; dormant (no listener), it fires on the transaction's <c>Cancelled</c> outcome and routes its outbound flows.</summary>
+    public static BpmnElement CancelBoundary(string elementId, string attachedToRef) =>
+        new(elementId, BpmnElementTypes.BoundaryEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Cancel)], attachedToRef: attachedToRef);
 
     /// <summary>A compensate intermediate throw event (spec 124); an optional <paramref name="activityRef"/> targets only that host's registrations.</summary>
     public static BpmnElement CompensateThrow(string elementId, string? activityRef = null) =>
