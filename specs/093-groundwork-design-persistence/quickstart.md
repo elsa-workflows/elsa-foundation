@@ -594,6 +594,27 @@ MongoDB 59/59, legacy EF oracle 38 passed + 13 intentional N/A skips, shared sui
 intentional skip; unified hosts 45/45 (SQLite base incl. deployment-shape lane exclusion)
 and 6/6 on PostgreSQL, SQL Server, and MongoDB.
 
+### T078 US4 full-gate reconciliation (2026-07-22)
+
+At candidate `40b8bd9ce` (+ the doc-reference cleanup committed with this section):
+
+- Full `Elsa.Server.slnx` Release build: 0 errors. `dotnet pack`: 145 packages, 0 errors
+  (pre-release dependency warnings only).
+- Design EF dependency audit: zero `EntityFrameworkCore`/`EFCore` tokens in workflow/activity
+  design source (the only survivors were stale doc-comment references to deleted types, now
+  reworded); zero direct or transitive EF packages in either design Groundwork project
+  (`dotnet list package --include-transitive`); the regenerated shrink-only ratchet baseline
+  carries zero design entries and the scanner asserts every design source project (incl. Api,
+  Validations, JavaScript) as an EF-free boundary.
+- Architecture 282/282. Focused suites: workflows-design 307/307 (EF-free, rehosted Groundwork
+  test host), activities-design 465/465, Groundwork querying 105, shared conformance 96+1,
+  SQLite leaf 57/57, base unified host 45/45.
+- Provider matrix post-deletion: PostgreSQL 62/62, SQL Server 62/62, MongoDB 59/59; unified
+  hosts 6/6 each.
+- Elsa.Server composes design persistence exclusively through
+  `GroundworkUnifiedPersistenceSqlite` (all four shells files; no design EF feature remains
+  anywhere).
+
 ### Phase 2 bounded-query substrate evidence (T019)
 
 On 2026-07-20, the canonical in-memory Groundwork test substrate was updated to

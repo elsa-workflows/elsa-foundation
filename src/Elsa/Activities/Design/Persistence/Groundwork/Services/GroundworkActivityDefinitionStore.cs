@@ -13,7 +13,7 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
 /// <summary>
 /// Groundwork (document) implementation of <see cref="IActivityDefinitionStore"/>, the document-store
-/// counterpart of <c>EFCoreActivityDefinitionStore</c>. It binds each closed
+/// implementation of the definition-store contract. It binds each closed
 /// <see cref="Query{TEntity}"/> shape to an explicitly admitted Groundwork route and executes it through one
 /// access-bound store session, without collection enumeration or client-side filtering.
 /// </summary>
