@@ -40,15 +40,6 @@ public sealed class BpmnEventSubprocessInterchangeTests
               <sequenceFlow id="ee1" sourceRef="es-esc-start" targetRef="es-esc-task" />
               <sequenceFlow id="ee2" sourceRef="es-esc-task" targetRef="es-esc-end" />
             </subProcess>
-            <subProcess id="es-err" triggeredByEvent="true">
-              <startEvent id="es-err-start">
-                <errorEventDefinition />
-              </startEvent>
-              <task id="es-err-task" />
-              <endEvent id="es-err-end" />
-              <sequenceFlow id="er1" sourceRef="es-err-start" targetRef="es-err-task" />
-              <sequenceFlow id="er2" sourceRef="es-err-task" targetRef="es-err-end" />
-            </subProcess>
             <sequenceFlow id="f1" sourceRef="start" targetRef="work" />
             <sequenceFlow id="f2" sourceRef="work" targetRef="end" />
           </process>
@@ -63,23 +54,18 @@ public sealed class BpmnEventSubprocessInterchangeTests
         var esc = structure.Elements.Single(element => element.ElementId == "es-esc");
         Assert.True(esc.TriggeredByEvent);
         Assert.Null(esc.EventDefinitions.SingleOrDefault()); // the trigger lives on the body start, not the element
-        var err = structure.Elements.Single(element => element.ElementId == "es-err");
-        Assert.True(err.TriggeredByEvent);
 
-        // The escalation body start carries the resolved code + non-interrupting flag; the error body start is interrupting.
+        // The escalation body start carries the resolved code + non-interrupting flag.
         var escStart = ReadNested(structure, esc.ChildNodeId!).Elements.Single(element => element.ElementId == "es-esc-start");
         Assert.Equal(BpmnEventDefinitionTypes.Escalation, escStart.EventDefinitions.Single().Type);
         Assert.Equal("E1", escStart.EventDefinitions.Single().Properties[BpmnEventDefinitionProperties.Code]);
         Assert.False(escStart.CancelActivity); // isInterrupting="false"
-        var errStart = ReadNested(structure, err.ChildNodeId!).Elements.Single(element => element.ElementId == "es-err-start");
-        Assert.Equal(BpmnEventDefinitionTypes.Error, errStart.EventDefinitions.Single().Type);
-        Assert.True(errStart.CancelActivity); // interrupting by default
 
-        // Validate-representable: the imported graph builds and indexes both catchers.
+        // Validate-representable: the imported graph builds and indexes the escalation catcher.
         var graph = BpmnGraph.From(BridgeToExecutableNode(structure));
-        Assert.Equal(2, graph.EventSubprocesses.Count);
+        var catcher = Assert.Single(graph.EventSubprocesses);
+        Assert.Equal(BpmnEventSubprocessTriggerKind.Escalation, catcher.TriggerKind);
         Assert.NotNull(graph.EscalationEventSubprocess("E1"));
-        Assert.NotNull(graph.ErrorEventSubprocess());
     }
 
     [Fact]
@@ -90,12 +76,10 @@ public sealed class BpmnEventSubprocessInterchangeTests
 
         Assert.Contains("triggeredByEvent=\"true\"", xml, StringComparison.Ordinal);
         Assert.Contains("<escalationEventDefinition", xml, StringComparison.Ordinal);
-        Assert.Contains("<errorEventDefinition", xml, StringComparison.Ordinal);
         Assert.Contains("isInterrupting=\"false\"", xml, StringComparison.Ordinal);
 
         var reimported = Import(xml);
         Assert.True(reimported.Elements.Single(element => element.ElementId == "es-esc").TriggeredByEvent);
-        Assert.True(reimported.Elements.Single(element => element.ElementId == "es-err").TriggeredByEvent);
         var escStart = ReadNested(reimported, reimported.Elements.Single(element => element.ElementId == "es-esc").ChildNodeId!).Elements.Single(element => element.ElementId == "es-esc-start");
         Assert.Equal("E1", escStart.EventDefinitions.Single().Properties[BpmnEventDefinitionProperties.Code]);
         Assert.False(escStart.CancelActivity);
@@ -115,10 +99,12 @@ public sealed class BpmnEventSubprocessInterchangeTests
             "es", "unsupported trigger definition");
 
     [Fact]
-    public void NonInterruptingError_Drops() =>
+    public void ErrorTrigger_DegradesAsStatedCut() =>
+        // spec 128 stated cut: an error-triggered event subprocess is not executable this slice, so it degrades
+        // (dropped with a finding) rather than importing — the importer never emits a validator-rejected graph.
         AssertDrops(
-            EventSubprocessDoc("es", body: "<startEvent id=\"s\" isInterrupting=\"false\"><errorEventDefinition /></startEvent>"),
-            "es", "non-interrupting error event subprocess");
+            EventSubprocessDoc("es", body: "<startEvent id=\"s\"><errorEventDefinition /></startEvent>"),
+            "es", "error-triggered event subprocesses are not executable in this slice");
 
     [Fact]
     public void DuplicateEscalationCode_Drops()

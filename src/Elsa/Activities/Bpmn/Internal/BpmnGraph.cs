@@ -446,7 +446,6 @@ public sealed class BpmnGraph
         var catchers = new List<BpmnEventSubprocessCatcher>();
         var escalationCodes = new HashSet<string>(StringComparer.Ordinal);
         var hasEscalationCatchAll = false;
-        var hasError = false;
 
         foreach (var element in triggered)
         {
@@ -507,13 +506,12 @@ public sealed class BpmnGraph
             }
             else if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Error))
             {
-                // Rule 3 — an error event subprocess must be interrupting (per BPMN); Rule 4 — at most one per scope.
-                if (!interrupting)
-                    throw new BpmnExecutionException($"BPMN error event subprocess '{element.ElementId}' must be interrupting; a non-interrupting error start is not meaningful.");
-                if (hasError)
-                    throw new BpmnExecutionException($"BPMN scope declares more than one error event subprocess (at '{element.ElementId}'); a scope may carry at most one.");
-                hasError = true;
-                catchers.Add(new BpmnEventSubprocessCatcher(element.ElementId, element.ChildNodeId, bodyStart.ElementId, BpmnEventSubprocessTriggerKind.Error, null, interrupting));
+                // Stated cut (spec 128): an error-triggered event subprocess absorbs the child fault via seam B and
+                // then schedules its body — a deferred seam-B fault absorption, which the runtime does not yet support
+                // (it redelivers the fault, faulting the composite). Rejected deterministically, naming the element,
+                // until the follow-up unit lands the runtime deferred-seam-B capability and removes this rule. The
+                // error-trigger engine wiring stays in place, inert (never reached — no error catcher is ever built).
+                throw new BpmnExecutionException($"BPMN error event subprocess '{element.ElementId}' is not executable in this slice; an error-triggered event subprocess needs a runtime deferred fault-absorption capability that is not yet available (a follow-up unit removes this restriction).");
             }
             else
             {

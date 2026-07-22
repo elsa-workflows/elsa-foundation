@@ -306,11 +306,19 @@ byte-identical (its full suite passes unmodified).
 - **`StopOtherLiveWork` returns a stopped-count.** The extraction of spec-125's stop-others loop returns
   `(State, StoppedCount)` so `CancelTransaction` can keep its exact "stopped {N} other live token(s)" diagnostic —
   the transaction suite is byte-identical.
-- **Error trigger is model/validation/interchange/wiring complete but runtime-blocked (see tripwire #3).** The
-  error event subprocess absorbs the child fault via seam B (the incident resolves correctly) and then activates
-  its body — which is a scheduled child, so the fault evaluation **defers**. The runtime does not support a
-  deferred seam-B fault absorption: it redelivers/misattributes the original fault, faulting the composite. The
-  escalation trigger (own-scope + notification, interrupting + non-interrupting) is unaffected and fully works.
+- **Error trigger is a validated STATED CUT this slice (control-room gate ruling).** The error-trigger engine
+  wiring (seam-B absorption + interrupting activation), model, and exporter emission are all in place but are made
+  **author-unreachable**, following the spec-121 stated-cut pattern, because the runtime cannot yet complete it (see
+  tripwire #3). `ValidateEventSubprocesses` rejects an error-triggered event subprocess deterministically, naming
+  the element: *"BPMN error event subprocess '<id>' is not executable in this slice; an error-triggered event
+  subprocess needs a runtime deferred fault-absorption capability that is not yet available (a follow-up unit
+  removes this restriction)."* The importer **degrades** an error-triggered `<subProcess triggeredByEvent="true">`
+  (Dropped + finding *"error-triggered event subprocesses are not executable in this slice (a follow-up unit adds
+  them)"*) so it never emits a validator-rejected graph. `BpmnGraph.ErrorEventSubprocess()` therefore always returns
+  `null` and the error engine paths (`AbsorbChildFaultThroughErrorEventSubprocess`, the `OnChildFaultedAsync` error
+  branch) are inert and unreachable. **The follow-up unit that lands the runtime deferred-seam-B fix removes exactly
+  the one validation rule and the one importer drop** — the wiring is already there. The escalation trigger
+  (own-scope + notification, interrupting + non-interrupting) is unaffected and fully works end-to-end.
 
 ## Tripwire outcomes
 

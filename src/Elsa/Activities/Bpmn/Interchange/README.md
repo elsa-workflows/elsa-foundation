@@ -83,11 +83,13 @@ Mapping rules for this slice:
   `errorEventDefinition`, its `isInterrupting` (default `true`) mapped onto the body start event's flag. The
   importer validates the body shape and per-scope uniqueness **before** emitting, so it never emits a
   validator-rejected graph: **dropped** with a specific finding when the body has no/multiple start events, an
-  unsupported trigger (message/signal/timer/… → "tier 2 / unsupported"), a non-interrupting error start, a
-  colliding escalation code, or a second catch-all/error subprocess in one scope. **Export**:
-  `triggeredByEvent="true"` on the `<subProcess>` plus the body's event-start with its definition and
-  `isInterrupting="false"` only when non-interrupting; escalation codes dedupe through the root `<escalation>`
-  declarations. Round-trips hold for escalation (interrupting / non-interrupting / catch-all) and error.
+  unsupported trigger (message/signal/timer/… → "tier 2 / unsupported"), a colliding escalation code, or a second
+  catch-all in one scope. An **error**-triggered event subprocess is a **stated cut** this slice (its runtime
+  completion is blocked, see the module README) — it degrades (Dropped + finding), so only escalation event
+  subprocesses import. **Export**: `triggeredByEvent="true"` on the `<subProcess>` plus the body's event-start with
+  its definition and `isInterrupting="false"` only when non-interrupting; escalation codes dedupe through the root
+  `<escalation>` declarations (the exporter's error emission stays, unreachable this slice). Round-trips hold for
+  escalation (interrupting / non-interrupting / catch-all); error degrades.
 - Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes
   (call activities, …) are dropped with an issue. **Cyclic graphs import clean** — a
   loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation

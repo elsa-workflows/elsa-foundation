@@ -108,10 +108,9 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         var declaredVariableNames = declaredVariables.Select(variable => variable.Name).ToHashSet(StringComparer.Ordinal);
 
         // spec 128 D7: per-scope event-subprocess trackers — distinct escalation codes with at most one code-less
-        // catch-all, and at most one error event subprocess; a collision drops the offending event subprocess.
+        // catch-all; an error-triggered event subprocess is a stated cut this slice (dropped in TryResolveEventSubprocess).
         var eventSubprocessEscalationCodes = new HashSet<string>(StringComparer.Ordinal);
         var hasEventSubprocessEscalationCatchAll = false;
-        var hasErrorEventSubprocess = false;
 
         foreach (var child in container.Elements().Where(child => child.Name.Namespace == BpmnXmlNames.Model))
         {
@@ -247,7 +246,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     // uniqueness BEFORE emitting the element, so the importer never emits a graph the validator rejects.
                     if ((bool?)child.Attribute("triggeredByEvent") == true)
                     {
-                        if (!TryResolveEventSubprocess(id, subProcessBodyNode, eventSubprocessEscalationCodes, ref hasEventSubprocessEscalationCatchAll, ref hasErrorEventSubprocess, context))
+                        if (!TryResolveEventSubprocess(id, subProcessBodyNode, eventSubprocessEscalationCodes, ref hasEventSubprocessEscalationCatchAll, context))
                             break; // Dropped (finding added inside); its body node is not added, flows cascade-drop.
                         childActivities.Add(subProcessBodyNode);
                         elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, triggeredByEvent: true));
@@ -584,7 +583,6 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         ActivityNode bodyNode,
         HashSet<string> escalationCodes,
         ref bool hasEscalationCatchAll,
-        ref bool hasError,
         ImportContext context)
     {
         var bodyStructure = bodyNode.Structure?.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions);
@@ -629,18 +627,11 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
         if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Error))
         {
-            if (!interrupting)
-            {
-                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a non-interrupting error event subprocess, which is not meaningful; it was dropped.", id));
-                return false;
-            }
-            if (hasError)
-            {
-                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a second error event subprocess in its scope, which may carry at most one; it was dropped.", id));
-                return false;
-            }
-            hasError = true;
-            return true;
+            // Stated cut (spec 128): an error-triggered event subprocess is not executable in this slice (it would need
+            // a runtime deferred seam-B fault absorption). It degrades — dropped with a finding — so the importer never
+            // emits a graph the validator rejects.
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is error-triggered; error-triggered event subprocesses are not executable in this slice (a follow-up unit adds them) and it was dropped.", id));
+            return false;
         }
 
         context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body start event declares an unsupported trigger definition '{definition.Type}'; only escalation and error triggers are supported (tier 1). It was dropped.", id));

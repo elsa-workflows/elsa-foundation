@@ -154,8 +154,8 @@ children, and diagnostics.
   events remain a stated cut (not a BPMN construct — boundary/event-subprocess only).
 - **Event subprocesses** (spec 128, tier 1) let a scope contain a flow-less `subProcess` marked
   `triggeredByEvent` whose **body** activates when its **start-event trigger** fires while the enclosing scope
-  is active. This slice ships the two **dormant-catcher** triggers — **escalation** (interrupting or
-  non-interrupting) and **error** (interrupting only). Catchers are **graph-derived** on `BpmnGraph`
+  is active. This slice ships the **escalation** dormant-catcher trigger (interrupting or non-interrupting); the
+  **error** trigger is wired but is a **validated stated cut** this slice (see the end of this entry). Catchers are **graph-derived** on `BpmnGraph`
   (`EventSubprocesses`, indexed by trigger kind + code); no state record, no arming. Validation
   (`ValidateEventSubprocesses`, the compensation-handler rule family mirrored): the element takes no flows, no
   loop, hosts no boundary, is not a compensation handler nor a transaction; its body declares **exactly one**
@@ -180,11 +180,16 @@ children, and diagnostics.
   a body fault rides the ordinary composite-fault path (no self-catching). Message/signal/timer-triggered event
   subprocesses (they need a scope-listener token shape + completion-liveness rework), compensation/conditional
   triggers, error-code matching, nested event subprocesses inside a body, and Studio authoring are stated cuts.
-  **Known runtime limitation**: the **error** trigger absorbs the child fault via seam B correctly (the incident
-  resolves), but its body is a scheduled child, so the fault evaluation **defers** — and the runtime does not yet
-  support a deferred seam-B fault absorption (it redelivers the original fault, faulting the composite). This
-  reproduces with the shipped spec-120 error boundary routing to a task; it is a runtime seam-B gap, not a
-  module one (seam-A + a deferred child schedule works — the escalation interrupting path completes cleanly).
+  **Error trigger is a validated stated cut this slice.** Its engine wiring (seam-B absorption + interrupting
+  activation) is in place but author-unreachable: `ValidateEventSubprocesses` rejects an error-triggered event
+  subprocess deterministically ("not executable in this slice") and the importer degrades one (Dropped + finding),
+  so `BpmnGraph.ErrorEventSubprocess()` is always `null` and the error paths are inert. The reason is a **runtime
+  seam-B gap**: the error trigger absorbs the child fault via seam B correctly (the incident resolves), but its
+  body is a scheduled child, so the fault evaluation **defers** — and the runtime does not yet support a deferred
+  seam-B fault absorption (it redelivers the original fault, faulting the composite; this reproduces with the
+  shipped spec-120 error boundary routing to a task, so it is a runtime gap, not a module one — seam-A + a deferred
+  child schedule works, the escalation interrupting path completes cleanly). A follow-up unit that lands the
+  runtime fix removes exactly the one validation rule and the one importer drop.
 - **Cyclic sequence flows** are executable (spec 122): a token carries an **iteration key** (`null` on the
   implicit first pass); traversing a **backward** (loop-back) sequence flow — the standard DFS back edge,
   precomputed once as `BpmnGraph.IsBackwardFlow` — mints a fresh key, and forward propagation inherits the
