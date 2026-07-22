@@ -248,6 +248,27 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static BpmnElement BoundaryEvent(string elementId, string attachedToRef, string definitionType, string? childNodeId = null, bool cancelActivity = true) =>
         new(elementId, BpmnElementTypes.BoundaryEvent, childNodeId: childNodeId, eventDefinitions: [new BpmnEventDefinition(definitionType)], attachedToRef: attachedToRef, cancelActivity: cancelActivity);
 
+    /// <summary>A compensation boundary event (spec 124) attached to <paramref name="attachedToRef"/>, referencing its handler via association (no listener child, no outbound flows).</summary>
+    public static BpmnElement CompensationBoundary(string elementId, string attachedToRef, string handlerElementId) =>
+        new(elementId, BpmnElementTypes.BoundaryEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation)], attachedToRef: attachedToRef, compensationHandlerElementId: handlerElementId);
+
+    /// <summary>A compensation handler (spec 124): a task-family element that binds a child, participates in no sequence flows, and runs only during a compensation replay.</summary>
+    public static BpmnElement CompensationHandler(string elementId, string childNodeId) =>
+        new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, isForCompensation: true);
+
+    /// <summary>A compensate intermediate throw event (spec 124); an optional <paramref name="activityRef"/> targets only that host's registrations.</summary>
+    public static BpmnElement CompensateThrow(string elementId, string? activityRef = null) =>
+        new(elementId, BpmnElementTypes.IntermediateThrowEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation, CompensationProperties(activityRef))]);
+
+    /// <summary>A compensate end event (spec 124); an optional <paramref name="activityRef"/> targets only that host's registrations.</summary>
+    public static BpmnElement CompensateEnd(string elementId, string? activityRef = null) =>
+        new(elementId, BpmnElementTypes.EndEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation, CompensationProperties(activityRef))]);
+
+    private static IReadOnlyDictionary<string, string>? CompensationProperties(string? activityRef) =>
+        string.IsNullOrWhiteSpace(activityRef)
+            ? null
+            : new Dictionary<string, string> { [BpmnEventDefinitionProperties.ActivityRef] = activityRef };
+
     public static BpmnSequenceFlow Flow(string flowId, string sourceRef, string targetRef, string? conditionOutcome = null, bool isDefault = false) =>
         new(flowId, sourceRef, targetRef, conditionOutcome: conditionOutcome, isDefault: isDefault);
 

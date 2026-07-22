@@ -328,3 +328,34 @@ a graph the validator rejects.
   association, orphan `isForCompensation`, unresolvable `activityRef`.
 - Full test projects green: BPMN, BPMN Interchange, Activities Runtime, Workflows Runtime,
   ControlFlow, Architecture. Full solution build clean.
+
+## Deviations from the ratified plan
+
+- **D2d run-coordinator cascade is implemented but not reachable in-slice; teardown is covered by the
+  terminate path instead.** The generalization of `CancelTokenAndChild` (a run-owning throw token cascades
+  to its live handler sub-token, drops the run, and releases its unrun `Claimed` compensables back to
+  `Registered`) is implemented exactly as specified. However, within this slice's element set there is no
+  in-process construct that routes an interrupt *to a bare compensate-throw run-coordinator token*:
+  `CancelTokenAndChild` only ever receives event-based-gateway race members (catch-event tokens), boundary
+  host tokens, boundary listener tokens, and (recursively) multi-instance instance / boundary-listener
+  sub-tokens — a compensate-throw token is none of these, and compensation is intra-process (the only
+  "enclosing construct", an embedded `subProcess`, is a separate engine whose inner state is torn down by the
+  runtime, never by the inner `CancelTokenAndChild`). Terminate/fault mid-replay reach the throw only through
+  the logical-only `CancelLiveWork`, which by design does **not** cascade. The mid-replay teardown success
+  criterion is therefore covered by a **terminate-mid-replay** test asserting the spec's stated logical-only
+  behavior (the run record and its `Claimed` compensable are retained, never released) rather than by an
+  interrupting-boundary test; the cascade code remains as correct, defensive parity for the transactions unit
+  that rides `Compensables` next (where a transaction subprocess's cancel *does* drive `CancelTokenAndChild`
+  on a throw-equivalent coordinator). This is a coverage deviation, not a behavior deviation.
+- **Association DI edges are skipped (documented tripwire outcome).** Export tripwire D4: the exporter emits
+  **no** BPMNEdge DI for any connector — not even for sequence flows (`BuildDiagram` emits only `BPMNShape`
+  per element). There is therefore no flow-edge machinery to reuse, so association DI is skipped and noted as
+  a limitation in the Interchange README, exactly as the tripwire instructs. Compensation boundary/throw/end
+  shapes ride the existing 36×36 event DI bounds.
+- **Compensation handlers must bind a child to import (subProcess handlers).** A bare `<task
+  isForCompensation="true">` imports childless (tasks always import unbound), which the graph validator
+  rejects (rule 2 requires a bound child). To stay validate-representable, the importer resolves a compensation
+  boundary's handler only when the associated element binds a child — in practice a `<subProcess
+  isForCompensation="true">` (which binds its nested `BpmnProcess`); a compensation boundary whose association
+  target binds no child is dropped with a finding. The runtime/validation model itself accepts any
+  task-family or subProcess handler that binds a child.

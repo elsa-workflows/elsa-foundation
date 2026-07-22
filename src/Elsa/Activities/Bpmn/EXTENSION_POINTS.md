@@ -49,6 +49,25 @@ Known implementations:
   outbound flows when it fires (a catch listener's completion or an error boundary's engine-minted token);
   the interrupt/absorption semantics — host/listener teardown via seam A and error-fault absorption via
   seam B — are owned by `BpmnExecutionEngine`, not this behavior)*
+- `CompensationThrowEventBehavior` / `CompensationEndEventBehavior` *(intra-domain — default; compensation,
+  spec 124 — a compensate intermediate throw / compensate end event emits a single `TriggerCompensation`
+  command and nothing else; target selection, atomic claiming, sequential handler replay, run-coordinator
+  cascade, and the throw's route/consume on completion are all owned by `BpmnExecutionEngine`, not these
+  behaviors)*
+- **Compensation (spec 124)** adds one command kind — `BpmnBehaviorCommandKind.TriggerCompensation` — and no
+  new token status or state-schema break. A **compensation boundary** (`BpmnEventDefinitionTypes.Compensation`
+  on a `boundaryEvent`, dormant like an error boundary) names its handler via
+  `BpmnElement.CompensationHandlerElementId`; a **handler** is a task-family/`subProcess` element marked
+  `BpmnElement.IsForCompensation` that takes no flows. The engine registers a successful host completion in
+  the additive reverse-order log `BpmnExecutionState.Compensables` (`BpmnCompensable`, `comp:N`) inside
+  `ApplyBoundaryCompletionSemantics` Case B; on `TriggerCompensation` it claims the target `Registered`
+  compensables (all, or an `activityRef` host's) newest-first, opens a `BpmnExecutionState.CompensationRuns`
+  record (`BpmnCompensationRun`, `comprun:N`) on the throw token (`AwaitingChild` coordinator), and replays
+  handlers one sub-token at a time — each handler completion is intercepted before behavior dispatch. The
+  run-coordinator cascade in `CancelTokenAndChild` (reason `bpmn.compensation.run-cancelled`) cancels a live
+  handler sub-token, drops the run, and releases its unrun `Claimed` compensables back to `Registered`.
+  Compensables are never pruned (parallel to `Canceled` tokens). All of it lives in the engine; behaviors stay
+  semantics-unaware.
 - **Multi-instance loops (spec 121)** add no behavior: a `BpmnElement.LoopCharacteristics`
   (`BpmnLoopCharacteristics`) turns a task/subprocess host's `ScheduleChild` decision into a loop the
   engine owns entirely — a coordinator token plus private per-instance sub-tokens, each scheduled through

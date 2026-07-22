@@ -50,6 +50,17 @@ Mapping rules for this slice:
   non-integer/missing cardinality, a `standardLoopCharacteristics`, or a host that binds no child on import (a
   plain task) **degrade** to a host WITHOUT loop characteristics with a finding (validate-representable — the
   importer never emits a loop the graph validator would reject).
+- **Compensation** (spec 124): a `boundaryEvent` with a `compensateEventDefinition` resolves its handler via a
+  container-level `<association>` (either direction) to an importable task-family/`subProcess` that binds a
+  child, setting `CompensationHandlerElementId` and marking the handler `IsForCompensation` (its
+  `isForCompensation="true"` attribute is also honored); `cancelActivity` is imported but ignored. A
+  compensation boundary with no resolvable association is dropped with a finding (no flow cascade — it has no
+  flows), and an `isForCompensation` activity referenced by no compensation boundary is dropped with a finding
+  (it cannot ride normal flow). An `intermediateThrowEvent`/`endEvent` with a `compensateEventDefinition` imports
+  as a compensate throw/end (carrying the optional `activityRef` property); an unresolvable `activityRef` (naming
+  no element with an attached compensation boundary) drops the throw with a finding (its flows cascade-drop) and
+  degrades the end to a plain none end event with a finding, so the importer never emits a graph the validator
+  rejects. An `intermediateThrowEvent` with any other (or no) definition stays dropped.
 - Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes
   (call activities, event subprocesses, …) are dropped with an issue. **Cyclic graphs import clean** — a
   loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation
@@ -70,7 +81,12 @@ multi-instance host emits a `<multiInstanceLoopCharacteristics isSequential="…
 `<loopCardinality>` (cardinality mode) or its `elsa:collection`/`elsa:itemVariable` attributes (collection
 mode; `elsa:itemVariable` is emitted explicitly even at its default), and the process's container-scoped
 variables emit as `<extensionElements><elsa:variable name="…"/></extensionElements>` so a collection loop's
-declared variable survives the round-trip. Each
+declared variable survives the round-trip. A **compensation** boundary emits a `compensateEventDefinition`
+plus a container-level `<association>` derived from its handler reference; the handler emits with
+`isForCompensation="true"`; a compensate throw/end emits its `compensateEventDefinition` (with the optional
+`activityRef`). Compensation boundary/throw/end shapes ride the existing 36×36 event DI bounds; the association
+emits no BPMNEdge (this exporter emits no DI edges for connectors at all — a documented limitation, not
+compensation-specific). Each
 distinct message/signal
 name emits one deduped root `<message>`/`<signal>` declaration (deterministic id `message-{name}` /
 `signal-{name}`) that the element's `messageRef`/`signalRef` targets — a name that sanitizes to a
@@ -92,5 +108,6 @@ three are pure conversions — nothing is persisted server-side:
 The Studio import/export UX; message/signal **payload and correlation** mapping (only the event `name`
 is mapped — the synthesized `Event` catch/boundary child leaves `CorrelationId` unset); absolute
 (`<timeDate>`) and non-recurring start timers; error-code (`errorRef`) matching on error boundaries;
-escalation/compensation boundaries and event subprocesses (still dropped); `extensionElements` preservation
-for third-party vendor attributes; collaboration/pool export; and the BPMN MIWG conformance corpus.
+escalation boundaries and compensation/event subprocesses (still dropped); connector (sequence-flow and
+association) BPMNEdge DI; `extensionElements` preservation for third-party vendor attributes;
+collaboration/pool export; and the BPMN MIWG conformance corpus.

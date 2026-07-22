@@ -85,6 +85,25 @@ children, and diagnostics.
   payload faults `bpmn.loop.collection-not-inline`, and an unreadable variable faults
   `bpmn.loop.collection-unreadable`. Everything else — sub-token model, sequential/parallel progression,
   teardown, boundary interplay, determinism — is the cardinality machinery unchanged.
+- **Compensation** (spec 124) lets a process undo completed work. A **compensation boundary** attaches a
+  compensation **handler** activity (an `isForCompensation` task-family/`subProcess` element that binds a
+  child, takes no sequence flows, and is reached by association — never by token flow) to a host. When the
+  host's bound child completes successfully, the engine appends a **Registered** entry to a durable
+  reverse-order **compensation log** (`BpmnExecutionState.Compensables`, `comp:N`), per completion (a host
+  completed on multiple loop passes registers once per pass). A **compensate intermediate throw event** or
+  **compensate end event** emits a single `TriggerCompensation` command; the engine claims the target
+  `Registered` compensables atomically (all, or only an `activityRef` host's) in reverse registration order —
+  newest-first — flipping them **Claimed** so concurrent throws claim disjoint targets. An empty selection
+  completes the throw immediately (route/consume, no fault). Otherwise the throw token becomes an
+  `AwaitingChild` **run coordinator** (`CompensationRuns`, `comprun:N`) that replays the handlers **one at a
+  time**: each handler runs on a minted sub-token; its completion is intercepted before behavior dispatch
+  (the multi-instance precedent), the compensable flips **Compensated**, and the next handler is scheduled or
+  the run drops and the throw routes outbound (intermediate) / consumes (end). A handler fault rides the
+  ordinary `bpmn.child.faulted` composite path (handlers host no boundary). Compensables are **never pruned**;
+  the log is intra-process (the transactions unit rides it next). Behaviors stay semantics-unaware — the
+  throw behaviors emit `TriggerCompensation` and nothing else; registration, ordering, claiming, and replay
+  are engine-owned. Compensation on a multi-instance host, nested-process cascade, escalation, and
+  compensation event subprocesses are stated cuts.
 - **Cyclic sequence flows** are executable (spec 122): a token carries an **iteration key** (`null` on the
   implicit first pass); traversing a **backward** (loop-back) sequence flow — the standard DFS back edge,
   precomputed once as `BpmnGraph.IsBackwardFlow` — mints a fresh key, and forward propagation inherits the
@@ -114,19 +133,22 @@ This module currently ships the Phase 1 core subset (see `specs/108-bpmn-contain
 the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`), event-start (see
 `specs/117-bpmn-event-start-events/`), event-based-gateway (see
 `specs/119-bpmn-event-based-gateway/`), boundary-events (see `specs/120-bpmn-boundary-events/`), and
-multi-instance (see `specs/121-bpmn-multi-instance/` and `specs/123-runtime-scoped-variable-read/`), and
-cyclic-sequence-flow (see `specs/122-bpmn-cyclic-flows/`) slices: none/timer/message/signal start events,
-none/terminate end events, timer/message/signal intermediate catch events, timer/message/signal/error
-**boundary events**, cardinality and collection **multi-instance** (sequential + parallel) loops, task
+multi-instance (see `specs/121-bpmn-multi-instance/` and `specs/123-runtime-scoped-variable-read/`),
+cyclic-sequence-flow (see `specs/122-bpmn-cyclic-flows/`), and compensation (see
+`specs/124-bpmn-compensation/`) slices: none/timer/message/signal start events,
+none/terminate/**compensate** end events, timer/message/signal intermediate catch events, **compensate
+intermediate throw events**, timer/message/signal/error/**compensation** **boundary events**, compensation
+**handler** activities, cardinality and collection **multi-instance** (sequential + parallel) loops, task
 family, embedded subprocess, and exclusive/parallel/inclusive/event-based gateways over **cyclic or acyclic**
 graphs — loop-back sequence flows are executable via token iteration keys (spec 122). The interchange
 importer/exporter round-trips timer/message/signal event definitions on event-defined start and intermediate
 catch events (see `specs/118-bpmn-interchange-event-definitions/`) and round-trips the event-based gateway,
-boundary event, and cardinality **and collection** multi-instance elements (collection variables carry as
-`elsa:collection`/`elsa:itemVariable` plus `elsa:variable` declarations), so these constructs can now be
-authored from XML; a cyclic document imports clean. Later units add a
-loop-iteration variable surface, escalation/compensation boundaries, event subprocesses, transactions, and
-call activities.
+boundary event, cardinality **and collection** multi-instance elements (collection variables carry as
+`elsa:collection`/`elsa:itemVariable` plus `elsa:variable` declarations), and **compensation** (boundary +
+`compensateEventDefinition` + `<association>` to an `isForCompensation` handler; compensate throw/end with an
+optional `activityRef`), so these constructs can now be authored from XML; a cyclic document imports clean.
+Later units add a loop-iteration variable surface, escalation boundaries, compensation event subprocesses,
+transactions, and call activities.
 
 ## Expression-driven gateway conditions
 
