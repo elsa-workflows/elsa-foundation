@@ -15,9 +15,14 @@ Locate classes by name where the `Core/Services` vs `Services` folder split vari
 > - **Inline reads already overlay through the coalescing session** (§8.3) — no new read plumbing.
 > - **Two harness prerequisites gate the guardrail** (§8.4) — now **Increment A0**, the true first step.
 
-## Increment A0 — test-harness prerequisites (MUST precede the guardrail; without these C's guardrail is vacuous)
+## Increment A0 — test-harness prerequisites (MUST precede the guardrail; without these C's guardrail is vacuous) — DONE 2026-07-22
 
-- [ ] **A0.1** Add a **coalesced-mode path to `WorkflowExecutionHarness`**
+Landed: `WithCoalescing(maxSegmentCheckpoints?)` builder + `NewReplaySafeProbeNode` + `ReplaySafeProbeActivity`
+(`[ActivitySideEffectProfile(ReplaySafe)]`). Gate green: Activities.Runtime.Tests **198** (was 196, +2 smoke),
+Workflows.Runtime.Tests **1378**, Flowchart.Tests **74**. Smoke test `ReplaySafeFusionHarnessPrerequisiteTests`
+proves coalesced folds (coalesced commits < immediate) and ReplaySafe probe resolves ReplaySafe / Probe stays External.
+
+- [x] **A0.1** Add a **coalesced-mode path to `WorkflowExecutionHarness`**
   (`tests/Elsa/Activities/Testing/WorkflowExecutionHarness.cs`): a `WithCoalescing(maxSegmentCheckpoints)`
   builder that registers `IRuntimeCoalescingDrainScopeFactory`, `CoalescingRuntimeCheckpointPersistenceOptions`,
   the coalescing store decorators (`CoalescingRuntimeStateStores` etc.), and a cadence resolver, so the
