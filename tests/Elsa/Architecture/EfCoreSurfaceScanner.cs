@@ -89,28 +89,6 @@ internal static class PersistenceProviderNeutralityBoundary
         value.Contains("/MongoDb/", StringComparison.OrdinalIgnoreCase);
 }
 
-/// <summary>
-/// One test-only EF oracle admitted by Spec 093 T025 while the design EF lane still exists.
-/// Remove this exact-path exclusion with T071-T076; no production or shared Groundwork project is exempt.
-/// </summary>
-internal static class TemporaryDesignEfOracle
-{
-    public const string RelativeProjectPath =
-        "tests/Elsa/Persistence/Groundwork/DesignConformance/EFCore/Tests/Elsa.Persistence.Groundwork.DesignConformance.EFCore.Tests.csproj";
-
-    /// <summary>
-    /// The spec 093 T067 benchmark harness measures the same-provider EF oracle and is deleted
-    /// together with the oracle by T072-T074; like the oracle test project it is an exact,
-    /// frozen exclusion rather than a baseline expansion.
-    /// </summary>
-    public const string RelativeBenchmarkProjectPath =
-        "benchmarks/Elsa.DesignPersistence.Benchmarks/Elsa.DesignPersistence.Benchmarks.csproj";
-
-    public static bool IsExcludedProject(string relativePath) =>
-        string.Equals(relativePath, RelativeProjectPath, StringComparison.Ordinal) ||
-        string.Equals(relativePath, RelativeBenchmarkProjectPath, StringComparison.Ordinal);
-}
-
 internal static class EfCoreSurfaceBaseline
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -238,9 +216,7 @@ internal sealed class EfCoreSurfaceScanner
     public EfCoreSurfaceSnapshot Scan()
     {
         var projects = LoadProjects();
-        var inventoryProjects = projects
-            .Where(project => !TemporaryDesignEfOracle.IsExcludedProject(project.RelativePath))
-            .ToArray();
+        var inventoryProjects = projects;
         var projectsByPath = projects.ToDictionary(x => x.FullPath, PathComparer);
         var efProjects = inventoryProjects.Where(IsEfProject).ToArray();
         var efProjectPaths = projects.Where(IsEfProject).Select(x => x.FullPath).ToHashSet(PathComparer);
@@ -324,7 +300,6 @@ internal sealed class EfCoreSurfaceScanner
 
     public IReadOnlyList<string> EfFreeBoundaryProjectNames() =>
         LoadProjects()
-            .Where(project => !TemporaryDesignEfOracle.IsExcludedProject(project.RelativePath))
             .Where(IsEfFreeBoundary)
             .Select(project => project.Name)
             .Distinct(StringComparer.Ordinal)
@@ -808,7 +783,20 @@ internal sealed class EfCoreSurfaceScanner
         project.RelativePath.Contains("/Abstractions/", StringComparison.OrdinalIgnoreCase) ||
         project.RelativePath.Contains("/Contracts/", StringComparison.OrdinalIgnoreCase) ||
         project.RelativePath.Contains("/Groundwork/", StringComparison.OrdinalIgnoreCase) ||
-        project.RelativePath.Contains("/Persistence/Groundwork/", StringComparison.OrdinalIgnoreCase);
+        project.RelativePath.Contains("/Persistence/Groundwork/", StringComparison.OrdinalIgnoreCase) ||
+        IsDesignLaneSourceProject(project);
+
+    /// <summary>
+    /// Spec 093 T075: the workflow and activity design lanes ship only Groundwork persistence, so every
+    /// design source project (including the provider-neutral <c>.Api</c>, <c>.Validations</c>,
+    /// <c>.JavaScript</c> and reconciliation projects, not just <c>.Core</c>/<c>.Groundwork</c>) must stay
+    /// EF-free, direct and transitive. Scoped to <c>src/</c> so design test projects that keep the
+    /// preserved base-EF lane are not swept in.
+    /// </summary>
+    private static bool IsDesignLaneSourceProject(ProjectInfo project) =>
+        project.RelativePath.StartsWith("src/", StringComparison.OrdinalIgnoreCase) &&
+        (project.RelativePath.Contains("/Workflows/Design/", StringComparison.OrdinalIgnoreCase) ||
+         project.RelativePath.Contains("/Activities/Design/", StringComparison.OrdinalIgnoreCase));
 
     private static string ExecutableCSharp(string source)
     {

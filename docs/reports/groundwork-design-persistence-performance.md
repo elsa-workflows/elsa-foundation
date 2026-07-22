@@ -275,3 +275,13 @@ Pure primary-key identity lookups (`*.identity.get`, `wf.identity.version-exact`
 Gates 1–4 and 7–9 are tracked outside this performance report (correctness parity, provider conformance,
 native plans, atomicity/retry/scope/restart, reference composition, dependency audit, architecture guard).
 This report closes the T069 performance/form-selection obligation.
+
+
+## Committed evidence artifacts
+
+The aggregate comparison files, gate verdicts, and orchestration logs are committed under
+[`docs/reports/evidence/093-design-benchmarks/`](evidence/093-design-benchmarks/) (including the
+pre-remediation 100K comparison for the contamination disclosure). The raw per-operation sample
+files (~3.6 GB per generation) remain local benchmark outputs; every aggregate in this report is
+recomputable from them via the harness `compare` command, and the committed comparisons embed the
+per-run medians, percentiles, and bootstrap intervals used by the gates.

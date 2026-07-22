@@ -1,7 +1,4 @@
 <Solution>
-  <Folder Name="/benchmarks/">
-    <Project Path="benchmarks/Elsa.DesignPersistence.Benchmarks/Elsa.DesignPersistence.Benchmarks.csproj" />
-  </Folder>
   <Folder Name="/benchmarks/Elsa/Activities/Runtime/">
     <Project Path="benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj" />
   </Folder>
@@ -52,10 +49,6 @@
   <Folder Name="/src/Elsa/Activities/Design/Persistence/">
     <Project Path="src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj" />
     <Project Path="src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Activities/Design/Persistence/EFCore/">
-    <Project Path="src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj" />
-    <Project Path="src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Design/Reconciliation/">
     <Project Path="src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
@@ -257,10 +250,6 @@
     <Project Path="src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Workflows/Design/Persistence/EFCore/">
-    <Project Path="src/Elsa/Workflows/Design/Persistence/EFCore/Elsa.Workflows.Design.Persistence.EFCore.csproj" />
-    <Project Path="src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj" />
-  </Folder>
   <Folder Name="/src/Elsa/Workflows/Design/Reconciliation/">
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Core/Elsa.Workflows.Design.Reconciliation.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj" />
@@ -440,9 +429,6 @@
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/">
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/EFCore/">
-    <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/EFCore/Tests/Elsa.Persistence.Groundwork.DesignConformance.EFCore.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/">
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj" />

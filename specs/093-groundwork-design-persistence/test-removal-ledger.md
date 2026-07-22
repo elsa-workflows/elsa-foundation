@@ -163,3 +163,51 @@ time. The excluded files below are direct-EF support code with no test identitie
 `ActivitiesDesignTestHost`, `WorkflowsDesignTestHost`, and `StubActivityCatalog` have
 no test identities. They are EF test infrastructure and remain until the approved
 ledger decisions allow their dependent tests to move or be removed.
+
+## T072 addendum — inventory-gap disclosure and dispositions (delegated program session, fable, 2026-07-22)
+
+**Inventory gap.** The T003 intake scan matched only files containing a literal
+`EntityFrameworkCore`/`EFCore`/`DbContext` token. It therefore missed every workflow-design
+test that reaches Entity Framework **only through the shared `WorkflowsDesignTestHost` /
+`UpdateDraftTestKit` abstraction** (the tests never name an EF type directly). Removing that
+EF-only test host — authorized as "EF test infrastructure" above — would have broken these
+un-dispositioned tests. Two further EF-token files (`CheckpointCadenceDraftRoundTripTests`,
+`WorkflowDesignMutationOracleCommandTests`) were added by this unit's own hardening commit
+`855ca3c9a` after the `d1548991f` baseline was frozen, so they are outside the 90-row intake set.
+The 14 affected files are dispositioned below. Architect: delegated program session (fable, 2026-07-22).
+
+**Resolution (option a).** `WorkflowsDesignTestHost` + `UpdateDraftTestKit` were **rehosted onto the
+production SQLite Groundwork unified persistence** (schema applied in-process via
+`autoApplyOnStartup`, real store/command registrations, default persistence scope, the existing
+`CapturingEventPublisher`/`InMemoryDistributedLockProvider`). Raw EF `CreateContext()` reads were
+replaced by `GetDraftAsync`/`GetVersionAsync` over the public read stores (which hydrate `State`
+identically). The whole `tests/Elsa/Workflows/Design/Tests` project is now EF-free and green
+(307/307). Two genuine Groundwork semantics surfaced and were handled without altering any assertion:
+the operation key is a caller-supplied idempotency token, so `UpdateDraftTestKit` now mints a fresh
+key per distinct authoring operation (reusing one constant made a second update replay/conflict);
+and the provider's session source is `IAsyncDisposable`, so the host disposes through the async path.
+
+| Test identity | Disposition | Note |
+|---|---|---|
+| `Workflows/Unit/UpdateDraftCommand/ActivityIoDiffTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | Host-free (`DraftStateDiffEngine` builders); the rehost keeps the shared kit compiling. |
+| `Workflows/Unit/UpdateDraftCommand/IdentityMatchTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | Host-free diff test. |
+| `Workflows/Unit/UpdateDraftCommand/LayoutDiffTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | Host-free diff test. |
+| `Workflows/Unit/UpdateDraftCommand/VariableDiffTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | Host-free diff test. |
+| `Workflows/Unit/UpdateDraftCommand/WorkflowIoDiffTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | Host-free diff test. |
+| `Workflows/Unit/UpdateDraftCommand/NoOpDiffTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | Validation-gate-on-no-op now runs a genuine op via the fresh-key kit. |
+| `Workflows/Unit/UpdateDraftCommand/DraftStateDiffContractTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | T070 conversion; compile-depends on the kit, drives the Core diff engine. |
+| `Workflows/Unit/UpdateDraftCommand/RegistrationTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | Resolves `IUpdateDraftCommand`/absence of `IDraftStateDiffEngine` over the Groundwork composition. |
+| `Workflows/Unit/DraftMutationCommandTests/ValidationDerivationTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | Validation derivation is publisher-side (`CapturingEventPublisher`), provider-independent; draft loads via the Groundwork store. |
+| `Workflows/Unit/ValidationLifecycleTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | Real `VariableUniquenessValidator` round-trip over the Groundwork target. |
+| `Workflows/Unit/EventSurfaceTests/EventPreservationTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | Event-surface reflection + `IUpdateDraftCommand`-emits-no-lifecycle over the Groundwork command. |
+| `Workflows/Unit/CheckpointCadenceDraftRoundTripTests` (all methods) | Rehosted on Groundwork test host — objective preserved verbatim | ADR 0032 R5 checkpoint-cadence round-trip; reads hydrated `State` from the Groundwork draft/version stores. Post-baseline addition. |
+| `Workflows/Unit/Persistence/WorkflowDefinitionListProjectionStoreTests` (`Ef_core_projects_current_draft_latest_version_and_count_for_the_definition_batch`) | Approved — remove: projection semantics covered on the Groundwork target | Current-draft / `LatestVersionId` / `LatestVersion` / `VersionCount` / empty-definition projection is covered by `DesignQueryScaleContractSuite` (T039) `ListByDefinitionIdsAsync` on the Groundwork target. Faithful rehost is blocked because the Groundwork draft document record (`GroundworkWorkflowDefinitionDraftDocument`) is `internal` to the design Groundwork assembly, so the two-draft/two-version controlled seeding cannot be reproduced from the test assembly. Deviation from "rehost" reported. |
+| `Workflows/Unit/WorkflowDesignMutationOracleCommandTests` (`AddVersion_allocates_successive_major_versions_under_the_definition_lock`, `Materialize_commands_preserve_source_supplied_identities`) | Approved — remove: self-described temporary EF behavioural oracle | File doc-comment: "Locks down the temporary EF Core behavioral oracle for the literal design commands." Successive-major-version allocation and source-supplied-identity materialization are covered by `ActivityDesignContractSuite`/`WorkflowDesignContractSuite` (version identity + semver precedence) and the atomicity suites on the Groundwork target. Post-baseline addition. |
+
+**LegacyEfOracle profile removal.** `DesignPersistenceContractProfiles.LegacyEfOracle` existed only to
+drive the temporary EF behavioural-oracle leaf (`DesignConformance/EFCore/Tests`, T025) and the T067
+benchmark harness. Both were removed with the EF lane, so the profile was removed together with its
+shared shape-test pin (`DesignContractSuiteShapeTests.Contract_profiles_pin_...` now pins only the
+`Target` profile) and the harness skip-mechanism test (`DesignContractSuiteHarnessTests`) was repointed
+to a local test-only non-applicable profile so the "N/A row skips before fixture creation" coverage is
+retained. The `Target` profile is now the sole shipped conformance profile.
