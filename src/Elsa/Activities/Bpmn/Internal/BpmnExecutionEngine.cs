@@ -54,7 +54,7 @@ public sealed class BpmnExecutionEngine(
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var graph = BpmnGraph.From(context.ExecutableNode);
+        var graph = context.ExecutableNode.GetOrAddRoutingStructure(BpmnGraph.From);
         if (graph.Elements.Count == 0)
             return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
 
@@ -126,7 +126,7 @@ public sealed class BpmnExecutionEngine(
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(completionContext);
 
-        var graph = BpmnGraph.From(context.ExecutableNode);
+        var graph = context.ExecutableNode.GetOrAddRoutingStructure(BpmnGraph.From);
         var state = BpmnStatePersister.LoadState(context.ActivityExecutionState) ?? BpmnStatePersister.CreateInitialState();
 
         var tokenId = ResolveTokenId(context, state, completionContext.CompletedChildExecutableNodeId, completionContext.CompletedChildIterationId);

@@ -11,6 +11,12 @@ public sealed class FlowchartGraph
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly IReadOnlyDictionary<string, ExecutableNode> _nodesById;
     private readonly IReadOnlyCollection<FlowchartConnection> _connections;
+    // ADR 0047 D3: publish-time routing indexes. The outcome→successor relation is precomputed at graph
+    // materialization so per-completion routing is a dictionary lookup on the source node id rather than a linear
+    // scan of every connection. Each group preserves connection declaration order (the scan's order), so the
+    // index is byte-for-byte equivalent to the retained SelectOutboundConnectionsByScan reference walk.
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<FlowchartConnection>> _outboundBySource;
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<FlowchartConnection>> _inboundByTarget;
     private readonly IReadOnlyDictionary<string, FlowchartNodeMetadata> _nodeMetadata;
     private readonly IReadOnlyDictionary<string, FlowchartConnectionMetadata> _connectionMetadata;
     private readonly string? _startNodeId;
@@ -27,10 +33,35 @@ public sealed class FlowchartGraph
         Children = children;
         _nodesById = nodesById;
         _connections = connections;
+        _outboundBySource = BuildConnectionIndex(connections, connection => connection.Source.NodeId);
+        _inboundByTarget = BuildConnectionIndex(connections, connection => connection.Target.NodeId);
         _startNodeId = startNodeId;
         _nodeMetadata = nodeMetadata;
         _connectionMetadata = connectionMetadata;
         _backwardEdges = ComputeBackwardEdges();
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<FlowchartConnection>> BuildConnectionIndex(
+        IReadOnlyCollection<FlowchartConnection> connections,
+        Func<FlowchartConnection, string> keySelector)
+    {
+        var index = new Dictionary<string, List<FlowchartConnection>>(StringComparer.Ordinal);
+        foreach (var connection in connections)
+        {
+            var key = keySelector(connection);
+            if (!index.TryGetValue(key, out var list))
+            {
+                list = [];
+                index[key] = list;
+            }
+
+            list.Add(connection);
+        }
+
+        return index.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<FlowchartConnection>)pair.Value,
+            StringComparer.Ordinal);
     }
 
     public IReadOnlyList<ExecutableNode> Children { get; }
@@ -80,16 +111,7 @@ public sealed class FlowchartGraph
 
     public IReadOnlyCollection<ExecutableNode> SelectTargets(string completedChildExecutableNodeId, IReadOnlyCollection<string> outcomeNames)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(completedChildExecutableNodeId);
-        ArgumentNullException.ThrowIfNull(outcomeNames);
-
-        if (!_nodesById.ContainsKey(completedChildExecutableNodeId))
-            throw new FlowchartExecutionException($"Completed child executable node '{completedChildExecutableNodeId}' does not exist in child slot '{FlowchartActivity.ActivitiesSlotName}'.");
-
-        var outcomes = NormalizeOutcomes(outcomeNames);
-        var targetIds = _connections
-            .Where(connection => StringComparer.Ordinal.Equals(connection.Source.NodeId, completedChildExecutableNodeId))
-            .Where(connection => outcomes.Contains(connection.Source.Port))
+        var targetIds = SelectOutboundConnections(completedChildExecutableNodeId, outcomeNames)
             .Select(connection => connection.Target.NodeId)
             .ToArray();
 
@@ -109,7 +131,35 @@ public sealed class FlowchartGraph
         throw new FlowchartExecutionException($"Flowchart child executable node '{executableNodeId}' does not exist in child slot '{FlowchartActivity.ActivitiesSlotName}'.");
     }
 
+    /// <summary>
+    /// ADR 0047 D3: routes a completed child's outcomes to its outbound connections by an O(1) lookup on the
+    /// precomputed <c>source node id → outbound connections</c> index, then filtering to the matching outcome
+    /// ports. Order is the connection declaration order (the index preserves it), identical to
+    /// <see cref="SelectOutboundConnectionsByScan"/>.
+    /// </summary>
     public IReadOnlyCollection<FlowchartConnection> SelectOutboundConnections(string sourceNodeId, IReadOnlyCollection<string> outcomeNames)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceNodeId);
+        ArgumentNullException.ThrowIfNull(outcomeNames);
+
+        if (!_nodesById.ContainsKey(sourceNodeId))
+            throw new FlowchartExecutionException($"Completed child executable node '{sourceNodeId}' does not exist in child slot '{FlowchartActivity.ActivitiesSlotName}'.");
+
+        var outcomes = NormalizeOutcomes(outcomeNames);
+        if (!_outboundBySource.TryGetValue(sourceNodeId, out var outbound))
+            return [];
+
+        return outbound
+            .Where(connection => outcomes.Contains(connection.Source.Port))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// ADR 0047 D3 differential-guardrail reference: the pre-D3 linear scan over the full connection set,
+    /// retained callable so the index-backed <see cref="SelectOutboundConnections"/> can be proven byte-for-byte
+    /// equivalent (same connections, same order) across a representative corpus. Not used on the hot path.
+    /// </summary>
+    public IReadOnlyCollection<FlowchartConnection> SelectOutboundConnectionsByScan(string sourceNodeId, IReadOnlyCollection<string> outcomeNames)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceNodeId);
         ArgumentNullException.ThrowIfNull(outcomeNames);
@@ -125,6 +175,18 @@ public sealed class FlowchartGraph
     }
 
     public IReadOnlyCollection<FlowchartConnection> GetInboundConnections(string targetNodeId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetNodeId);
+        return _inboundByTarget.TryGetValue(targetNodeId, out var inbound)
+            ? inbound.ToArray()
+            : [];
+    }
+
+    /// <summary>
+    /// ADR 0047 D3 differential-guardrail reference: the pre-D3 linear scan for inbound connections, retained
+    /// callable so <see cref="GetInboundConnections"/>'s index path can be proven equivalent.
+    /// </summary>
+    public IReadOnlyCollection<FlowchartConnection> GetInboundConnectionsByScan(string targetNodeId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetNodeId);
         return _connections
@@ -184,9 +246,10 @@ public sealed class FlowchartGraph
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
-            foreach (var next in _connections
-                         .Where(connection => StringComparer.Ordinal.Equals(connection.Source.NodeId, current))
-                         .Select(connection => connection.Target.NodeId))
+            var outbound = _outboundBySource.TryGetValue(current, out var connections)
+                ? connections
+                : [];
+            foreach (var next in outbound.Select(connection => connection.Target.NodeId))
             {
                 if (StringComparer.Ordinal.Equals(next, targetNodeId))
                     return true;
