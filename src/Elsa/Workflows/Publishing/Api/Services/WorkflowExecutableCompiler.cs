@@ -127,6 +127,7 @@ public sealed class WorkflowExecutableCompiler(
             // compilation, replacing the former double ProjectChildren traversal.
             var projection = activityTreeProjector.Project(rootActivity);
             ActivityTreeProjector.Validate(projection.Nodes);
+            executableNodeCompiler.ValidateIntrinsicVariableTargets(state, projection.Nodes);
 
             var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
             var placedActivities = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);

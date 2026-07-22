@@ -11,6 +11,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -550,6 +551,43 @@ public sealed class ExecutableNodeCompiler(
             structure.Kind,
             structure.SchemaVersion,
             JsonSerializer.SerializeToElement(payload, DescriptorSerializerOptions));
+    }
+
+    /// <summary>
+    /// Publish-time backstop for the <c>IntrinsicVariableTargetValidator</c> draft guard (#972, PR #971
+    /// two-guard pattern): every variable-writing intrinsic must target a variable visible from its scope
+    /// (workflow-scope <c>state.Variables</c> or a visible ancestor container's declarations, ADR 0027).
+    /// Compiling an invisible target would publish an executable that poisons at runtime
+    /// ("Set intrinsic ... targets undeclared variable"); publication is refused instead.
+    /// </summary>
+    public void ValidateIntrinsicVariableTargets(
+        WorkflowDefinitionState state,
+        IReadOnlyCollection<ActivityNode> nodes,
+        int maxDepth = 100)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(nodes);
+
+        var intrinsicTargets = nodes
+            .Where(node => node.Intrinsic?.Variable is not null)
+            .ToArray();
+        if (intrinsicTargets.Length == 0)
+            return;
+
+        var visibility = new ScopedVariableResolver(activityStructureService)
+            .Resolve(state.Variables, state.RootActivity, maxDepth);
+        foreach (var node in intrinsicTargets)
+        {
+            var reference = node.Intrinsic!.Variable!;
+            if (visibility.IsReferenceVisible(node.NodeId, reference))
+                continue;
+
+            var scopeId = reference.IsWorkflowScope ? VariableReference.WorkflowScopeId : reference.DeclaringScopeId;
+            throw new ArgumentException(
+                $"Workflow {node.Intrinsic.Kind} intrinsic node '{node.NodeId}' targets variable '{reference.ReferenceKey}' in scope '{scopeId}', " +
+                "which is not visible from this node's scope. Declare the variable on the workflow or on a visible ancestor container before publishing; " +
+                "compiling it would publish an executable that fails at execution time.");
+        }
     }
 
     /// <summary>
