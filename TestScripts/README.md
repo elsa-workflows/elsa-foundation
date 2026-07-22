@@ -99,11 +99,12 @@ the Set faults with *"targets undeclared variable"*. `New-VariableDef` + `New-Se
 encode this.
 
 **Still open (branching + single-outcome):**
-- `While` — a real loop-variable-scope issue, NOT just missing effort. Two concrete blockers: (1) a JS value
-  expression can't read a container variable via `getX()`/`variables.X`/`X` (all fail to evaluate), so a counter
-  can't be incremented; (2) a body that `Set`s a boolean condition variable to `false` does **not** propagate to
-  the loop condition — the loop runs until `DrainCycleLimitExceededException` (64 cycles). Candidate bug (variable
-  mutation inside a loop body not visible to the loop condition) — needs a focused pass to confirm bug vs scoping.
+- `While` — one remaining blocker: a JS value expression can't read a container variable via
+  `getX()`/`variables.X`/`X` (all fail to evaluate), so a counter can't be incremented from JS (#984; only the
+  compiled `args.*` parameters exist in the Jint sandbox). The second blocker — a body `Set` of the condition
+  variable not propagating to the loop condition (ran to `DrainCycleLimitExceededException`) — was #977, fixed:
+  `While` now opts into per-pass input re-materialization (`IRuntimeRematerializeInputsOnChildCompletion`), so a
+  body-committed `Set` (container- or workflow-scoped) terminates the loop.
 - No Foundation 1:1 for classic `FlowSwitch` default/fail, implicit joins, or `Switch` MatchAny mode
   (Foundation removed the flow-activity model). Covered at the concept level via `If`/`Switch`/`Parallel`;
   these are architectural gaps, not bugs.

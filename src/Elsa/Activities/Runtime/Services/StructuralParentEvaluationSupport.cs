@@ -26,13 +26,22 @@ internal static class StructuralParentEvaluationSupport
     /// <summary>
     /// Reactivates the structural activity for <paramref name="state"/> from its pinned executable node and
     /// committed input snapshot, returning the lease the caller must dispose. Used by every parent-evaluation
-    /// handler before dispatching a structural callback.
+    /// handler before dispatching a structural callback. When the activity opts into
+    /// <see cref="IRuntimeRematerializeInputsOnChildCompletion"/> and the caller supplies
+    /// <paramref name="inputRematerializer"/> (the child-completion evaluation does; the notification and
+    /// bookmark-resume evaluations do not), the inputs are re-materialized from live committed variable
+    /// frames and the activity is re-activated on the fresh snapshot, so a loop condition observes state the
+    /// completed child mutated (issue #977). The fresh snapshot is transient — the pinned
+    /// <c>state.InputSnapshot</c> is never rewritten (ADR 0045).
     /// </summary>
     public static async ValueTask<ConstructedActivity> ConstructActivityAsync(
         IServiceProvider serviceProvider,
         ExecutableNode executableNode,
         ActivityExecutionState state,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RuntimeActivityInputSnapshotMaterializer? inputRematerializer = null,
+        WorkflowExecutable? executable = null,
+        DateTimeOffset? materializedAt = null)
     {
         var contract = executableNode.ActivityContract
             ?? throw new InvalidOperationException($"VF-ACT-001: Executable CLR activity node '{executableNode.ExecutableNodeId}' has no pinned activity contract.");
@@ -40,10 +49,41 @@ internal static class StructuralParentEvaluationSupport
         var snapshot = RequireCommittedSnapshot(state, contract);
         var attempt = state.Attempts?.LastOrDefault(item => item.EndedAt is null)
             ?? throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no open committed attempt.");
-        var activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
+        var activator = serviceProvider.GetRequiredService<IActivityActivator>();
+        var activationLease = await activator.ActivateAsync(
             new ActivityActivationRequest(contract, snapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
             cancellationToken);
-        return new ConstructedActivity(activationLease.Activity, snapshot, activationLease);
+
+        if (inputRematerializer is null || executable is null || activationLease.Activity is not IRuntimeRematerializeInputsOnChildCompletion)
+            return new ConstructedActivity(activationLease.Activity, snapshot, activationLease);
+
+        // Issue #977: re-read the opt-in composite's inputs from live committed frames. Materialization runs
+        // while the probe lease is still open; a fault disposes it before propagating (no lease leak) and is
+        // handled by the caller exactly like any other construction fault.
+        ActivityInputSnapshot freshSnapshot;
+        try
+        {
+            freshSnapshot = await inputRematerializer.MaterializeAsync(
+                executable,
+                executableNode,
+                state,
+                serviceProvider,
+                materializedAt ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a materialization timestamp to re-materialize its inputs."),
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            if (disposalException is not null)
+                throw ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+            throw;
+        }
+
+        await activationLease.DisposeAsync();
+        var freshLease = await activator.ActivateAsync(
+            new ActivityActivationRequest(contract, freshSnapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
+            cancellationToken);
+        return new ConstructedActivity(freshLease.Activity, freshSnapshot, freshLease);
     }
 
     public static ActivityInputSnapshot RequireCommittedSnapshot(ActivityExecutionState state, ActivityContract contract)
