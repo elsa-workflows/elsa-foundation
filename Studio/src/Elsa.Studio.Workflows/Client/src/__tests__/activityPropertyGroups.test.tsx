@@ -238,6 +238,24 @@ describe("activity property organization", () => {
     expect(container.querySelector(".wf-property-row > .wf-syntax-picker:not(.inline)")).toBeNull();
   });
 
+  it("uses inline syntax chrome for URI inputs and a compact toolbar for dictionaries", () => {
+    const container = renderPanel([
+      input("Url", { typeName: "System.Uri", isWrapped: true }),
+      input("RequestHeaders", { collectionKind: "Dictionary", isWrapped: true })
+    ], {
+      activity: activity({
+        url: { typeName: "System.Uri", expression: { type: "Literal", value: "https://example.com" } },
+        requestHeaders: { typeName: "System.String", expression: { type: "Literal", value: {} } }
+      })
+    });
+
+    const rows = [...container.querySelectorAll<HTMLElement>(".wf-property-row")];
+    expect(rows[0]?.querySelector(".wf-expression-field .wf-syntax-picker.inline")).not.toBeNull();
+    expect(rows[0]?.querySelector(":scope > .wf-syntax-picker:not(.inline)")).toBeNull();
+    expect(rows[1]?.querySelector(".wf-dictionary-expression-toolbar .wf-syntax-picker.inline")).not.toBeNull();
+    expect(rows[1]?.querySelector(":scope > .wf-syntax-picker:not(.inline)")).toBeNull();
+  });
+
   it("uses normal inline chrome for non-literal Boolean expressions", () => {
     const checkboxEditor: StudioActivityPropertyEditorContribution = {
       id: "studio.property.checkbox",
