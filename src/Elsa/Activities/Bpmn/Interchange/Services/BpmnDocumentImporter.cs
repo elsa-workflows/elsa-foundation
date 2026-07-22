@@ -263,9 +263,15 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         // Second pass: boundary events resolve against the now-complete host set (spec 120 D6 / spec 124 D4).
         var elementsById = elements.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
         var referencedHandlerIds = new HashSet<string>(StringComparer.Ordinal);
+        // spec 124: an element that participates in any sequence flow can never be a compensation handler
+        // (handlers are flow-less by rule); excluding flow participants here keeps the importer
+        // validate-representable — the boundary drops and the element stays an ordinary flow element.
+        var flowParticipantIds = flows
+            .SelectMany(flow => new[] { flow.SourceRef, flow.TargetRef })
+            .ToHashSet(StringComparer.Ordinal);
         foreach (var boundaryXml in pendingBoundaries)
         {
-            var resolved = ResolveBoundaryEvent(boundaryXml, elementsById, messageSignalNames, associations, context);
+            var resolved = ResolveBoundaryEvent(boundaryXml, elementsById, messageSignalNames, associations, flowParticipantIds, context);
             if (resolved is not { } boundaryImport)
                 continue; // Dropped (finding added inside); its sequence flows cascade-drop as unresolved refs.
             if (boundaryImport.Child is not null)
@@ -509,6 +515,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         IReadOnlyDictionary<string, BpmnElement> elementsById,
         IReadOnlyDictionary<string, string> messageSignalNames,
         IReadOnlyList<(string Source, string Target)> associations,
+        IReadOnlySet<string> flowParticipantIds,
         ImportContext context)
     {
         var id = IdOf(element)!;
@@ -556,10 +563,10 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 // (either direction). No resolvable association, or a handler that is not an importable
                 // task-family/subprocess binding a child, drops the boundary (validate-representable). cancelActivity
                 // is imported as authored but ignored, so it is not read here.
-                var handlerId = ResolveCompensationHandler(id, associations, elementsById);
+                var handlerId = ResolveCompensationHandler(id, associations, elementsById, flowParticipantIds);
                 if (handlerId is null)
                 {
-                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Compensation boundary event '{id}' has no association to an importable compensation handler activity and was dropped.", id));
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Compensation boundary event '{id}' has no association to an importable, flow-less compensation handler activity and was dropped.", id));
                     return null;
                 }
 
@@ -627,20 +634,23 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     /// <summary>
     /// Resolves a compensation boundary's handler element id via a boundary↔activity association (spec 124 D4):
     /// an association with one endpoint at the boundary and the other at an importable task-family/subprocess that
-    /// binds a child (a childless task cannot host a handler). Either association direction is accepted; <c>null</c>
-    /// when no such association/handler exists.
+    /// binds a child (a childless task cannot host a handler) and participates in no sequence flow (a handler is
+    /// flow-less by rule — a flow participant stays an ordinary flow element so the importer never emits a graph
+    /// the validator rejects). Either association direction is accepted; <c>null</c> when no such
+    /// association/handler exists.
     /// </summary>
     private static string? ResolveCompensationHandler(
         string boundaryId,
         IReadOnlyList<(string Source, string Target)> associations,
-        IReadOnlyDictionary<string, BpmnElement> elementsById)
+        IReadOnlyDictionary<string, BpmnElement> elementsById,
+        IReadOnlySet<string> flowParticipantIds)
     {
         foreach (var (source, target) in associations)
         {
             var other = StringComparer.Ordinal.Equals(source, boundaryId) ? target
                 : StringComparer.Ordinal.Equals(target, boundaryId) ? source
                 : null;
-            if (other is null || !elementsById.TryGetValue(other, out var candidate))
+            if (other is null || !elementsById.TryGetValue(other, out var candidate) || flowParticipantIds.Contains(other))
                 continue;
             var isTaskFamily = BpmnXmlNames.TaskLocalNamesToElementTypes.Values.Contains(candidate.ElementType, StringComparer.Ordinal);
             var isSubProcess = StringComparer.Ordinal.Equals(candidate.ElementType, BpmnElementTypes.SubProcess);

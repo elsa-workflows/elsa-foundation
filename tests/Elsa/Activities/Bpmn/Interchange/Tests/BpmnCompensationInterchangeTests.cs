@@ -181,6 +181,48 @@ public sealed class BpmnCompensationInterchangeTests
     }
 
     [Fact]
+    public void AssociationTarget_ParticipatingInSequenceFlows_IsNotAHandler_BoundaryDrops()
+    {
+        // A handler is flow-less by rule; an association target that rides sequence flows must stay an ordinary
+        // flow element (never marked isForCompensation), and the boundary drops — the importer never emits a
+        // graph the validator rejects.
+        const string document = """
+            <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="https://example.org">
+              <process id="p" isExecutable="true">
+                <startEvent id="start" />
+                <subProcess id="host">
+                  <startEvent id="hs" /><endEvent id="he" />
+                  <sequenceFlow id="hf" sourceRef="hs" targetRef="he" />
+                </subProcess>
+                <subProcess id="flowed">
+                  <startEvent id="cs" /><endEvent id="ce" />
+                  <sequenceFlow id="cf" sourceRef="cs" targetRef="ce" />
+                </subProcess>
+                <boundaryEvent id="cb" attachedToRef="host">
+                  <compensateEventDefinition />
+                </boundaryEvent>
+                <association id="assoc" sourceRef="cb" targetRef="flowed" />
+                <endEvent id="end" />
+                <sequenceFlow id="f1" sourceRef="start" targetRef="host" />
+                <sequenceFlow id="f2" sourceRef="host" targetRef="flowed" />
+                <sequenceFlow id="f3" sourceRef="flowed" targetRef="end" />
+              </process>
+            </definitions>
+            """;
+
+        var result = _importer.Import(document);
+        var structure = result.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+
+        Assert.DoesNotContain(structure.Elements, element => element.ElementId == "cb");
+        var flowed = Assert.Single(structure.Elements, element => element.ElementId == "flowed");
+        Assert.False(flowed.IsForCompensation); // stays an ordinary flow element.
+        Assert.Contains(structure.SequenceFlows, flow => flow.FlowId == "f2");
+        Assert.Contains(result.Analysis.Issues, issue =>
+            issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId == "cb" && issue.Message.Contains("flow-less", StringComparison.Ordinal));
+        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+    }
+
+    [Fact]
     public void CompensateThrow_WithUnresolvableActivityRef_IsDropped_WithFlowCascade()
     {
         const string document = """
