@@ -60,6 +60,7 @@ const inlineSyntaxEditorIds = new Set([
   "studio.property.text-fallback",
   "studio.property.checkbox"
 ]);
+const inlineTextTypeNames = new Set(["string", "system.string", "text", "uri", "system.uri"]);
 export interface ActivityPropertiesPanelProps {
   context?: StudioEndpointContext;
   workflowState?: WorkflowDefinitionState;
@@ -259,11 +260,12 @@ function PropertyRow({
   const inlineDiagnostics = inlineDiagnosticProvider && inlineExpressionContext
     ? getExpressionEditorDiagnostics(inlineDiagnosticProvider, inlineExpressionContext, value)
     : [];
-  // A collection renders a multi-row repeater, not a single-line field, so the inline text chrome (the
+  // A collection repeater renders multiple rows, not a single-line field, so the inline text chrome (the
   // overlaid syntax picker + expand button, positioned top:4/bottom:4 of the field) must not wrap it —
-  // it would stretch down the whole list and cover the per-row reorder controls. Such inputs still get a
-  // syntax picker, but the block one above the list. `uiHint: "singleline"` is common on list inputs, so
-  // gating on the collection itself (not the hint) is what keeps the two features from colliding.
+  // it would stretch down the whole list and cover the per-row reorder controls. Repeaters still get a
+  // block picker above the list, while dictionaries use a separate toolbar that keeps the picker clear
+  // of their table. `uiHint: "singleline"` is common on list inputs, so gating on the collection itself
+  // (not the hint) is what keeps the two features from colliding.
   const structuredCollectionType = editingMode === "structured" && admittedExpressionEditor && !isRepeaterOptOut(effectiveInput)
     ? describeCollectionForInput(effectiveInput)
     : null;
@@ -271,6 +273,7 @@ function PropertyRow({
   const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && (
     editingMode === "text" || editingMode === "structured" || isSingleLineTextInput(input, editor?.id)
   ));
+  const useDictionarySyntaxPicker = Boolean(wrapped && dictionaryType != null);
   const useToggleLayout = editor?.id === "studio.property.checkbox" && editingMode === "literal";
   const canExpandEditor = Boolean(wrapped && (
     dictionaryType != null ||
@@ -474,7 +477,7 @@ function PropertyRow({
         </div>
       </div>
       {input.description ? <p>{input.description}</p> : null}
-      {wrapped && !useInlineSyntaxPicker ? (
+      {wrapped && !useInlineSyntaxPicker && !useDictionarySyntaxPicker ? (
         <SyntaxPicker
           label={`${input.displayName || input.name} expression syntax`}
           value={syntax}
@@ -510,6 +513,22 @@ function PropertyRow({
               <Maximize2 size={13} />
             </button>
           ) : null}
+        </div>
+      ) : useDictionarySyntaxPicker ? (
+        <div className="wf-dictionary-expression">
+          <div className="wf-dictionary-expression-toolbar">
+            <SyntaxPicker
+              label={`${input.displayName || input.name} expression syntax`}
+              value={syntax}
+              descriptors={expressionDescriptors}
+              getUnavailableReason={getUnavailableReason}
+              disabled={readOnly}
+              variant="inline"
+              onChange={setSyntax}
+            />
+          </div>
+          {valueEditor}
+          {renderExpressionDiagnostics(inlineDiagnostics)}
         </div>
       ) : (
         <>
@@ -1315,8 +1334,8 @@ function isSingleLineTextInput(input: StudioActivityInputDescriptor, editorId: s
   if (editorId && !inlineSyntaxEditorIds.has(editorId)) return false;
   if (editorId === "studio.property.checkbox") return true;
 
-  const normalizedType = input.typeName.toLowerCase();
-  return ["string", "system.string", "text"].includes(normalizedType) || input.uiHint?.toLowerCase() === "singleline";
+  const normalizedType = input.typeName.split(",", 1)[0]?.trim().toLowerCase();
+  return inlineTextTypeNames.has(normalizedType) || input.uiHint?.toLowerCase() === "singleline";
 }
 
 function isExpandableTextInput(input: StudioActivityInputDescriptor, editorId: string | undefined) {
@@ -1324,8 +1343,8 @@ function isExpandableTextInput(input: StudioActivityInputDescriptor, editorId: s
   if (uiHint === "checkbox" || uiHint === "dropdown") return false;
   if (editorId && !inlineSyntaxEditorIds.has(editorId) && uiHint !== "multiline") return false;
 
-  const normalizedType = input.typeName.toLowerCase();
-  return ["string", "system.string", "text"].includes(normalizedType) ||
+  const normalizedType = input.typeName.split(",", 1)[0]?.trim().toLowerCase();
+  return inlineTextTypeNames.has(normalizedType) ||
     uiHint === "singleline" ||
     uiHint === "multiline";
 }

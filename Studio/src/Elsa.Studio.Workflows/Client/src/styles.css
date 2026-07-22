@@ -4771,6 +4771,24 @@ button.wf-reference-select {
   outline: none;
 }
 
+.wf-dictionary-expression {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.wf-dictionary-expression-toolbar {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.wf-dictionary-expression-toolbar .wf-syntax-picker.inline {
+  position: relative;
+  inset: auto;
+}
+
 .wf-property-expand-row {
   display: inline-flex;
   width: fit-content;
