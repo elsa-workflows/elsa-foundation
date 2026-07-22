@@ -39,8 +39,7 @@ public sealed class PacedConsoleLogProviderTests : IAsyncDisposable
     {
         await _inner.PublishAsync(Line("first"));
 
-        Assert.True(await _subscription.MoveNextAsync().AsTask().WaitAsync(RealTimeout));
-        Assert.Equal("first", _subscription.Current.Line!.Text);
+        await AssertNextLineAsync("first");
     }
 
     [Fact]
@@ -57,7 +56,7 @@ public sealed class PacedConsoleLogProviderTests : IAsyncDisposable
 
         _time.Advance(ReleaseInterval);
         Assert.True(await WaitDrivingFakeTimeAsync(next));
-        Assert.Equal("second", _subscription.Current.Line!.Text);
+        Assert.Equal("second", CurrentText);
     }
 
     [Fact]
@@ -74,13 +73,11 @@ public sealed class PacedConsoleLogProviderTests : IAsyncDisposable
 
         _time.Advance(ReleaseInterval);
         Assert.True(await WaitDrivingFakeTimeAsync(next));
-        Assert.Equal("second", _subscription.Current.Line!.Text);
+        Assert.Equal("second", CurrentText);
 
         // The rest of the batch drains on real time alone: no further clock advancement.
-        Assert.True(await _subscription.MoveNextAsync().AsTask().WaitAsync(RealTimeout));
-        Assert.Equal("third", _subscription.Current.Line!.Text);
-        Assert.True(await _subscription.MoveNextAsync().AsTask().WaitAsync(RealTimeout));
-        Assert.Equal("fourth", _subscription.Current.Line!.Text);
+        await AssertNextLineAsync("third");
+        await AssertNextLineAsync("fourth");
     }
 
     [Fact]
@@ -89,10 +86,8 @@ public sealed class PacedConsoleLogProviderTests : IAsyncDisposable
         await _inner.PublishAsync(Line("first"));
         await _inner.PublishAsync(Line("second"));
 
-        Assert.True(await _subscription.MoveNextAsync().AsTask().WaitAsync(RealTimeout));
-        Assert.Equal("first", _subscription.Current.Line!.Text);
-        Assert.True(await _subscription.MoveNextAsync().AsTask().WaitAsync(RealTimeout));
-        Assert.Equal("second", _subscription.Current.Line!.Text);
+        await AssertNextLineAsync("first");
+        await AssertNextLineAsync("second");
     }
 
     [Fact]
@@ -104,6 +99,14 @@ public sealed class PacedConsoleLogProviderTests : IAsyncDisposable
         ((IConsoleLogDroppedLineReporter)paced).ReportDropped(summary);
 
         Assert.Same(summary, Assert.Single(_inner.DroppedReports));
+    }
+
+    private string? CurrentText => _subscription.Current.Line!.Text;
+
+    private async Task AssertNextLineAsync(string expected)
+    {
+        Assert.True(await _subscription.MoveNextAsync().AsTask().WaitAsync(RealTimeout));
+        Assert.Equal(expected, CurrentText);
     }
 
     private async Task ReceiveFirstLineAsync()

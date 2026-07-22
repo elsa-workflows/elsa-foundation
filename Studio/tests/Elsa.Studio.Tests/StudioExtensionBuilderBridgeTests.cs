@@ -41,8 +41,20 @@ public sealed class StudioExtensionBuilderBridgeTests : IAsyncDisposable
     private WebApplication? _app;
 
     public static TheoryData<string> AllOperationNames() => OperationNames(_ => true);
-    public static TheoryData<string> ReadOperationNames() => OperationNames(op => op.Access == StudioExtensionBuilderBridge.BridgeAccess.Read);
-    public static TheoryData<string> MutationOperationNames() => OperationNames(op => op.Access == StudioExtensionBuilderBridge.BridgeAccess.Manage);
+
+    // Per-operation (bearer, allowed) cases for the permission gates. Read relays are satisfied by the read permission
+    // AND by manage (which implies read), but never by module-management permissions (the surfaces gate independently).
+    public static TheoryData<string, string, bool> ReadOperationBearerCases() => BearerCases(
+        op => op.Access == StudioExtensionBuilderBridge.BridgeAccess.Read,
+        (ExtensionBuilderReadBearer, true),
+        (ExtensionBuilderManageBearer, true),
+        (ModuleReadBearer, false));
+
+    // Mutation relays require manage; a read-only holder is forbidden.
+    public static TheoryData<string, string, bool> MutationOperationBearerCases() => BearerCases(
+        op => op.Access == StudioExtensionBuilderBridge.BridgeAccess.Manage,
+        (ExtensionBuilderManageBearer, true),
+        (ExtensionBuilderReadBearer, false));
 
     [Fact]
     public void OperationTableHasUniqueOperationNames()
@@ -127,122 +139,90 @@ public sealed class StudioExtensionBuilderBridgeTests : IAsyncDisposable
     }
 
     [Theory]
-    [MemberData(nameof(ReadOperationNames))]
-    public async Task AllowsExtensionBuilderReadHolderOnReadOperationWhenStudioAuthEnabled(string operationName)
+    [MemberData(nameof(ReadOperationBearerCases))]
+    public async Task GatesReadOperationByExtensionBuilderPermissionWhenStudioAuthEnabled(string operationName, string bearer, bool allowed)
     {
-        var op = Op(operationName);
-        var (response, backend) = await SendWithBearerAsync(op, ExtensionBuilderReadBearer);
+        var (response, backend) = await SendWithBearerAsync(Op(operationName), bearer);
 
-        Assert.True(response.IsSuccessStatusCode);
-        Assert.Single(backend.ManagementRequests);
+        if (allowed)
+        {
+            Assert.True(response.IsSuccessStatusCode);
+            Assert.Single(backend.ManagementRequests);
+        }
+        else
+        {
+            // A forbidden holder gets 403 with zero outbound management calls.
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Empty(backend.ManagementRequests);
+        }
     }
 
     [Theory]
-    [MemberData(nameof(ReadOperationNames))]
-    public async Task AllowsExtensionBuilderManageHolderOnReadOperationWhenStudioAuthEnabled(string operationName)
-    {
-        // manage implies read: a manage-only holder satisfies the read relays (expanded locally by the read policy).
-        var op = Op(operationName);
-        var (response, backend) = await SendWithBearerAsync(op, ExtensionBuilderManageBearer);
-
-        Assert.True(response.IsSuccessStatusCode);
-        Assert.Single(backend.ManagementRequests);
-    }
-
-    [Theory]
-    [MemberData(nameof(ReadOperationNames))]
-    public async Task ForbidsModuleManagementHolderOnReadOperationWhenStudioAuthEnabled(string operationName)
-    {
-        // module-management permissions must NOT satisfy the Extension Builder relays — the surfaces are gated
-        // independently, so a module-only holder is forbidden (403) with zero outbound management calls.
-        var op = Op(operationName);
-        var (response, backend) = await SendWithBearerAsync(op, ModuleReadBearer);
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Empty(backend.ManagementRequests);
-    }
-
-    [Theory]
-    [MemberData(nameof(MutationOperationNames))]
-    public async Task ForwardsMutationWithManageHolderWhenStudioAuthEnabled(string operationName)
-    {
-        // A manage holder's mutation forwards exactly once with full fidelity: method, path suffix, management key,
-        // no browser Authorization, and (for bodied operations) the request body + Content-Type byte-identical.
-        var op = Op(operationName);
-        var (response, backend) = await SendWithBearerAsync(op, ExtensionBuilderManageBearer);
-
-        Assert.True(response.IsSuccessStatusCode);
-        var recorded = Assert.Single(backend.ManagementRequests);
-        Assert.Equal(op.Method, recorded.Method);
-        Assert.Equal("/_elsa/extension-builder" + SampleSuffix(op), recorded.PathAndQuery);
-        Assert.Equal(ManagementKey, recorded.ManagementKey);
-        Assert.False(recorded.HasAuthorization);
-        AssertRequestBodyRelayed(op, recorded);
-    }
-
-    [Theory]
-    [MemberData(nameof(MutationOperationNames))]
-    public async Task ForbidsReadOnlyHolderOnMutationWhenStudioAuthEnabled(string operationName)
+    [MemberData(nameof(MutationOperationBearerCases))]
+    public async Task GatesMutationByExtensionBuilderManagePermissionWhenStudioAuthEnabled(string operationName, string bearer, bool allowed)
     {
         var op = Op(operationName);
-        var (response, backend) = await SendWithBearerAsync(op, ExtensionBuilderReadBearer);
+        var (response, backend) = await SendWithBearerAsync(op, bearer);
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Empty(backend.ManagementRequests);
+        if (allowed)
+        {
+            // A manage holder's mutation forwards exactly once with full fidelity: method, path suffix, management key,
+            // no browser Authorization, and (for bodied operations) the request body + Content-Type byte-identical.
+            Assert.True(response.IsSuccessStatusCode);
+            var recorded = Assert.Single(backend.ManagementRequests);
+            Assert.Equal(op.Method, recorded.Method);
+            Assert.Equal("/_elsa/extension-builder" + SampleSuffix(op), recorded.PathAndQuery);
+            Assert.Equal(ManagementKey, recorded.ManagementKey);
+            Assert.False(recorded.HasAuthorization);
+            AssertRequestBodyRelayed(op, recorded);
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Empty(backend.ManagementRequests);
+        }
     }
 
     // ---- Status mapping (two planes), on representative read and mutation operations --------------------------------
 
+    // Plane A: bare (bodyless) backend statuses map to a Studio 503 with a management status. 401/403 are key
+    // rejection; a bare non-JSON 404 is the backend hiding its management surface when it has no key configured (both
+    // → unauthorized: the operator must reconcile the key on one side); a 500 is a degraded backend.
     [Theory]
-    [InlineData(HttpStatusCode.Unauthorized)]
-    [InlineData(HttpStatusCode.Forbidden)]
-    public async Task MapsBackendKeyRejectionToUnauthorized503(HttpStatusCode backendStatus)
+    [InlineData(HttpStatusCode.Unauthorized, StudioBackendManagementStatus.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden, StudioBackendManagementStatus.Unauthorized)]
+    [InlineData(HttpStatusCode.NotFound, StudioBackendManagementStatus.Unauthorized)]
+    [InlineData(HttpStatusCode.InternalServerError, StudioBackendManagementStatus.Degraded)]
+    public async Task MapsBareBackendStatusToManagement503(HttpStatusCode backendStatus, string expected)
     {
         var backend = RecordingBackend.RespondingWith(_ => new HttpResponseMessage(backendStatus));
         var response = await SendThroughBridgeAsync(backend, "list-workspaces");
         var error = await ReadErrorAsync(response);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.Equal(StudioBackendManagementStatus.Unauthorized, error.Management?.Status);
+        Assert.Equal(expected, error.Management?.Status);
     }
 
-    [Fact]
-    public async Task MapsBareBackend404ToUnauthorized503()
-    {
-        // The backend hides its management surface with a bare (non-JSON) 404 when it has no key configured; from
-        // Studio's side that maps to unauthorized — the operator must reconcile the key on one side.
-        var backend = RecordingBackend.RespondingWith(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
-        var response = await SendThroughBridgeAsync(backend, "list-workspaces");
-        var error = await ReadErrorAsync(response);
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.Equal(StudioBackendManagementStatus.Unauthorized, error.Management?.Status);
-    }
-
+    // Plane B: the relay echoes a backend JSON response verbatim — status code, Content-Type, and body untouched — so
+    // the SPA (not Studio) interprets it. This holds for read and mutation operations alike: 400/404/409 domain errors;
+    // a commit the backend refuses (409, e.g. nothing staged); a promotion it evaluates and rejects (still a 200 domain
+    // answer with an outcome body); and array payloads (the relay's JSON check is a content-type sniff, not the probe's
+    // JSON-object guard, so arrays relay untouched).
     [Theory]
-    [InlineData(HttpStatusCode.BadRequest, """{ "error": "invalid-request" }""")]
-    [InlineData(HttpStatusCode.NotFound, """{ "error": "workspace-not-found" }""")]
-    [InlineData(HttpStatusCode.Conflict, """{ "error": "workspace-busy" }""")]
-    public async Task RelaysBackendDomainErrorWithJsonBodyVerbatim(HttpStatusCode backendStatus, string domainErrorJson)
+    [InlineData("list-workspaces", HttpStatusCode.BadRequest, """{ "error": "invalid-request" }""")]
+    [InlineData("list-workspaces", HttpStatusCode.NotFound, """{ "error": "workspace-not-found" }""")]
+    [InlineData("list-workspaces", HttpStatusCode.Conflict, """{ "error": "workspace-busy" }""")]
+    [InlineData("list-workspaces", HttpStatusCode.OK, """[{"id":"ws-1"},{"id":"ws-2"}]""")]
+    [InlineData("commit", HttpStatusCode.Conflict, """{ "error": "nothing-to-commit" }""")]
+    [InlineData("promote-build", HttpStatusCode.OK, """{ "status": "rejected", "reason": "artifact failed validation" }""")]
+    public async Task RelaysBackendJsonResponseVerbatim(string operationName, HttpStatusCode backendStatus, string json)
     {
-        // Plane B: 400/404/409 WITH JSON bodies are Extension Builder domain answers the SPA must see verbatim.
-        var backend = RecordingBackend.RespondingWith(_ => Json(backendStatus, domainErrorJson));
-        var response = await SendThroughBridgeAsync(backend, "list-workspaces");
+        var backend = RecordingBackend.RespondingWith(_ => Json(backendStatus, json));
+        var response = await SendThroughBridgeAsync(backend, operationName);
 
         Assert.Equal(backendStatus, response.StatusCode);
         Assert.StartsWith("application/json", response.Content.Headers.ContentType!.ToString());
-        Assert.Equal(domainErrorJson, await response.Content.ReadAsStringAsync());
-    }
-
-    [Fact]
-    public async Task MapsBackendServerErrorToDegraded503()
-    {
-        var backend = RecordingBackend.RespondingWith(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
-        var response = await SendThroughBridgeAsync(backend, "list-workspaces");
-        var error = await ReadErrorAsync(response);
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.Equal(StudioBackendManagementStatus.Degraded, error.Management?.Status);
+        Assert.Equal(json, await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -257,36 +237,6 @@ public sealed class StudioExtensionBuilderBridgeTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal(StudioBackendManagementStatus.Degraded, error.Management?.Status);
         Assert.DoesNotContain("not the surface", error.Detail);
-    }
-
-    [Fact]
-    public async Task RelaysCommitConflictWithJsonBodyVerbatim()
-    {
-        // Plane B on a mutation: a commit the backend refuses (e.g. nothing staged) is a domain 409 the SPA must see
-        // verbatim — status code, Content-Type, and body untouched.
-        const string conflict = """{ "error": "nothing-to-commit" }""";
-        var backend = RecordingBackend.RespondingWith(_ => Json(HttpStatusCode.Conflict, conflict));
-
-        var response = await SendThroughBridgeAsync(backend, "commit");
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.StartsWith("application/json", response.Content.Headers.ContentType!.ToString());
-        Assert.Equal(conflict, await response.Content.ReadAsStringAsync());
-    }
-
-    [Fact]
-    public async Task RelaysRejectedPromotionOutcomeVerbatim()
-    {
-        // A promotion the backend evaluates and rejects is still a 200 domain answer with an outcome body — relayed
-        // untouched so the SPA (not Studio) interprets the rejection.
-        const string rejected = """{ "status": "rejected", "reason": "artifact failed validation" }""";
-        var backend = RecordingBackend.RespondingWith(_ => JsonOk(rejected));
-
-        var response = await SendThroughBridgeAsync(backend, "promote-build");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.StartsWith("application/json", response.Content.Headers.ContentType!.ToString());
-        Assert.Equal(rejected, await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -428,22 +378,6 @@ public sealed class StudioExtensionBuilderBridgeTests : IAsyncDisposable
         Assert.Equal(artifactBytes, await response.Content.ReadAsByteArrayAsync());
     }
 
-    [Fact]
-    public async Task RelaysJsonArrayPayloadVerbatim()
-    {
-        // Regression against reusing the probe's JSON-object guard: the relay's JSON check is a content-type sniff
-        // only, so array payloads relay untouched.
-        const string workspaces = """[{"id":"ws-1"},{"id":"ws-2"}]""";
-        var backend = RecordingBackend.RespondingWith(_ => JsonOk(workspaces));
-        var client = await StartBridgeHostAsync(backend);
-
-        var response = await SendAsync(client, Op("list-workspaces"));
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.StartsWith("application/json", response.Content.Headers.ContentType!.ToString());
-        Assert.Equal(workspaces, await response.Content.ReadAsStringAsync());
-    }
-
     // ---- Harness -----------------------------------------------------------------------------------------------------
 
     private static StudioExtensionBuilderBridge.BridgeOperation Op(string name) =>
@@ -454,6 +388,19 @@ public sealed class StudioExtensionBuilderBridgeTests : IAsyncDisposable
         var data = new TheoryData<string>();
         foreach (var op in StudioExtensionBuilderBridge.Operations.Where(predicate))
             data.Add(op.Name);
+        return data;
+    }
+
+    // The cross product of the operations matching the predicate with a set of (bearer, allowed) expectations — one
+    // theory row per operation per bearer, so every table row is gated against every relevant permission holder.
+    private static TheoryData<string, string, bool> BearerCases(
+        Func<StudioExtensionBuilderBridge.BridgeOperation, bool> predicate,
+        params (string Bearer, bool Allowed)[] bearers)
+    {
+        var data = new TheoryData<string, string, bool>();
+        foreach (var op in StudioExtensionBuilderBridge.Operations.Where(predicate))
+            foreach (var (bearer, allowed) in bearers)
+                data.Add(op.Name, bearer, allowed);
         return data;
     }
 

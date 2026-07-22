@@ -17,13 +17,13 @@ public sealed class StudioRuntimeFeatureCatalogRefresherTests
             new Dictionary<string, ShellFeatureDescriptor>(),
             DateTimeOffset.UtcNow);
 
+    private static StudioRuntimeFeatureCatalogRefresher CreateRefresher(RuntimeFeatureCatalogSnapshot snapshot) =>
+        new(new FakeRuntimeFeatureCatalog(snapshot), NullLogger<StudioRuntimeFeatureCatalogRefresher>.Instance);
+
     [Fact]
     public async Task RefreshAsyncMapsSnapshotGenerationAndFeatureCount()
     {
-        var snapshot = Snapshot(7, "A", "B");
-        var refresher = new StudioRuntimeFeatureCatalogRefresher(new FakeRuntimeFeatureCatalog(snapshot), NullLogger<StudioRuntimeFeatureCatalogRefresher>.Instance);
-
-        var result = await refresher.RefreshAsync();
+        var result = await CreateRefresher(Snapshot(7, "A", "B")).RefreshAsync();
 
         Assert.Equal(7, result.Generation);
         Assert.Equal(2, result.FeatureCount);
@@ -32,10 +32,7 @@ public sealed class StudioRuntimeFeatureCatalogRefresherTests
     [Fact]
     public async Task GetFeatureDescriptorsAsyncReturnsSnapshotDescriptors()
     {
-        var snapshot = Snapshot(1, "A", "B", "C");
-        var refresher = new StudioRuntimeFeatureCatalogRefresher(new FakeRuntimeFeatureCatalog(snapshot), NullLogger<StudioRuntimeFeatureCatalogRefresher>.Instance);
-
-        var descriptors = await refresher.GetFeatureDescriptorsAsync();
+        var descriptors = await CreateRefresher(Snapshot(1, "A", "B", "C")).GetFeatureDescriptorsAsync();
 
         Assert.Equal(["A", "B", "C"], descriptors.Select(descriptor => descriptor.Id));
     }
