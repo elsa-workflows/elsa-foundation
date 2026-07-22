@@ -615,7 +615,8 @@ The burst-coalescing persistence policy is an **opt-in** durability/throughput t
 **not** registered by default: the default runtime keeps `ImmediateRuntimeCheckpointPersistencePolicy` and
 the contracts/decorators below are absent, so the default path is byte-identical. When enabled, it swaps the
 policy to `CoalescingRuntimeCheckpointPersistencePolicy` and layers ambient-session decorators over the
-checkpoint commit store, scheduler queue, post-commit outbox, and state stores. See
+checkpoint commit store, scheduler queue, post-commit outbox, and state stores (including a durable-baseline
+read memo over the inspection store — spec 131). See
 [`docs/runtime-durable-resumption.md`](../../../../docs/runtime-durable-resumption.md#coalescing-checkpoint-persistence--the-deferred-flush-window-e3-6--rt-10)
 and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-2026-07/w9-checkpoint-coalescing-benchmark.md).
 

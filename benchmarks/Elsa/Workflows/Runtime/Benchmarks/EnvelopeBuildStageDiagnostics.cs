@@ -34,8 +34,9 @@ namespace Elsa.Workflows.Runtime.Benchmarks;
 ///   (a) <c>BuildProjectionAsync</c> wall + count via a timing decorator on
 ///       <see cref="IRuntimeActivityExecutionInspectionAccumulator"/> (registered last so both paths resolve it), of
 ///       which the durable <c>FindAsync</c> store-read share via a decorator on
-///       <see cref="IActivityExecutionInspectionStore"/> — the projection build is a per-hop async store read because
-///       the coalescing overlay does NOT cover the inspection store;
+///       <see cref="IActivityExecutionInspectionStore"/> — with inspection-read coalescing OFF (the control row) the
+///       projection build is a per-hop durable store read; with it ON the coalescing memo absorbs the intermediate
+///       builds' reads, leaving one durable read per distinct activity execution per coalesced window;
 ///   (b) the inter-commit gap (wall between successive committer -> store calls in one drain) = an upper bound on the
 ///       per-hop envelope build, since construction happens between commits;
 ///   (c) allocations via process-wide <c>GC.GetTotalAllocatedBytes()</c> across the run plus per-hop
@@ -57,9 +58,10 @@ public sealed class EnvelopeBuildStageDiagnostics(ITestOutputHelper output)
     private const int SegmentCap = 256;
 
     [Theory]
-    [InlineData(false, "hotloop10 Immediate")]
-    [InlineData(true, "hotloop10 Coalesced(cap256)")]
-    public async Task StageBreakdown(bool coalesce, string label)
+    [InlineData(false, true, "hotloop10 Immediate")]
+    [InlineData(true, true, "hotloop10 Coalesced(cap256)")]
+    [InlineData(true, false, "hotloop10 Coalesced(cap256) inspection-read-coalescing OFF (control)")]
+    public async Task StageBreakdown(bool coalesce, bool coalesceInspectionReads, string label)
     {
         var metrics = new EnvelopeMetrics();
         var databasePath = Path.Combine(Path.GetTempPath(), $"envelope-stage-{Guid.NewGuid():N}.db");
@@ -91,7 +93,13 @@ public sealed class EnvelopeBuildStageDiagnostics(ITestOutputHelper output)
                 DecorateAccumulator(services, inner => new TimingInspectionAccumulator(inner, metrics));
 
                 if (coalesce)
-                    services.AddCoalescingRuntimeCheckpointPersistence(o => o.MaxSegmentCheckpoints = SegmentCap);
+                {
+                    services.AddCoalescingRuntimeCheckpointPersistence(o =>
+                    {
+                        o.MaxSegmentCheckpoints = SegmentCap;
+                        o.CoalesceInspectionReads = coalesceInspectionReads;
+                    });
+                }
 
                 // (b) OUTER committer-facing decorator: after coalescing, so the committer resolves THIS one. Records
                 // the wall GAP between the end of the previous committer store call and the start of this one = the
@@ -146,8 +154,8 @@ public sealed class EnvelopeBuildStageDiagnostics(ITestOutputHelper output)
                          $"per-hop={PerHopUs(metrics.FindMs, metrics.FindCount):F2} µs  " +
                          $"({(metrics.BuildProjectionMs <= 0 ? 0 : metrics.FindMs / metrics.BuildProjectionMs * 100.0):F1}% of build)");
         output.WriteLine($"        FindAsync returned null (miss): {metrics.FindNullCount}/{metrics.FindCount}  |  distinct activity executions={metrics.DistinctActivityExecutions}  " +
-                         $"=> fold ratio {metrics.FindCount}builds:{metrics.DistinctActivityExecutions}activities " +
-                         $"({(metrics.DistinctActivityExecutions == 0 ? 0 : (double)metrics.FindCount / metrics.DistinctActivityExecutions):F2}× builds/activity, intermediates folded away)");
+                         $"=> fold ratio {metrics.BuildProjectionCount}builds:{metrics.DistinctActivityExecutions}activities " +
+                         $"({(metrics.DistinctActivityExecutions == 0 ? 0 : (double)metrics.BuildProjectionCount / metrics.DistinctActivityExecutions):F2}× builds/activity, intermediates folded away)");
         output.WriteLine($"      of which pure object CONSTRUCTION (build − find = items 1/4 metadata+ctor, NO I/O): " +
                          $"{constructionMs:F3} ms  per-hop={PerHopUs(constructionMs, metrics.BuildProjectionCount):F2} µs  ({constructionShare:F2}% of in-memory CPU)");
         output.WriteLine($"      per-hop projection-build allocations (thread-affine, best-effort — includes FindAsync deserialize): " +
@@ -178,10 +186,22 @@ public sealed class EnvelopeBuildStageDiagnostics(ITestOutputHelper output)
         foreach (var p in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             try { File.Delete(p); } catch (IOException) { }
 
-        // Deterministic guardrail: the projection build is a per-hop store read (no coalescing overlay on the
-        // inspection store), so FindAsync is called once per BuildProjectionAsync regardless of cadence.
+        // Deterministic guardrail. Without the coalescing inspection-read memo (Immediate cadence, or the OFF control)
+        // the projection build is a per-hop durable store read: FindAsync fires once per BuildProjectionAsync. With
+        // the memo ON, a coalesced window pays exactly one durable read per distinct activity execution — the
+        // intermediate builds the fold discards no longer read the store (this run flushes a single segment, so no
+        // mid-run invalidation refreshes the memo).
         Assert.True(metrics.BuildProjectionCount > 0, "Expected the hot loop to build inspection projections.");
-        Assert.Equal(metrics.BuildProjectionCount, metrics.FindCount);
+        if (coalesce && coalesceInspectionReads)
+        {
+            Assert.Equal(metrics.DistinctActivityExecutions, metrics.FindCount);
+            Assert.True(metrics.BuildProjectionCount > metrics.FindCount,
+                "Expected the memo to absorb the intermediate builds' durable reads.");
+        }
+        else
+        {
+            Assert.Equal(metrics.BuildProjectionCount, metrics.FindCount);
+        }
     }
 
     // ---- DI decoration helpers --------------------------------------------------------------------------------------

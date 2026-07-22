@@ -52,6 +52,7 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         services.DecorateWithCoalescing<IActivityExecutionStateStore, CoalescingActivityExecutionStateStore>();
         services.DecorateWithCoalescing<IDurableValueStateStore, CoalescingDurableValueStateStore>();
         services.DecorateWithCoalescing<ISchedulerStateStore, CoalescingSchedulerStateStore>();
+        services.DecorateWithCoalescing<IActivityExecutionInspectionStore, CoalescingActivityExecutionInspectionStore>();
 
         // The drain scope factory presence is what makes the coordinator select its coalescing constructor.
         services.TryAddSingleton<IRuntimeCoalescingDrainScopeFactory, RuntimeCoalescingDrainScopeFactory>();
