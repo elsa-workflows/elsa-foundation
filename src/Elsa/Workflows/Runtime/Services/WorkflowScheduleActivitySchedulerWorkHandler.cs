@@ -17,6 +17,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutableReader? _executableReader;
+    private readonly ReplaySafeFusionDriver? _fusionDriver;
 
     public WorkflowScheduleActivitySchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
@@ -25,7 +26,8 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         RuntimeCheckpointCommitter? checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider,
-        IWorkflowExecutableReader? executableReader = null)
+        IWorkflowExecutableReader? executableReader = null,
+        ReplaySafeFusionDriver? fusionDriver = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -39,6 +41,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         _inspectionAccumulator = inspectionAccumulator;
         _timeProvider = timeProvider;
         _executableReader = executableReader;
+        _fusionDriver = fusionDriver;
     }
 
     public string Name => HandlerName;
@@ -105,6 +108,19 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         {
             await _activityExecutionStateStore.SaveAsync(state, cancellationToken);
             await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
+            return null;
+        }
+
+        // spec 123 D1: when this fresh schedule targets a ReplaySafe leaf inside a live coalescing burst, fuse the
+        // schedule → start → invoke stages into this one dispatch. Commit the intent-free ActivityScheduled checkpoint
+        // and run the remaining stages inline, so the span's StartActivity/InvokeActivity work items are never enqueued.
+        // Return null so neither dispatch path commits anything further; the invoke stage's terminal commit carries the
+        // completion cascade continuation via the normal overlay outbox. Every other case takes the discrete chain.
+        if (_fusionDriver is { } driver && driver.ShouldFuse(workItem.WorkflowExecutionId, executableNode))
+        {
+            var core = await BuildScheduledCommitAsync(workItem, schedulePayload, state, cancellationToken);
+            await _checkpointCommitter.CommitAsync(core.Commit, cancellationToken);
+            await driver.ContinueFusedSpanAsync(core.StartWorkItem, cancellationToken);
             return null;
         }
 

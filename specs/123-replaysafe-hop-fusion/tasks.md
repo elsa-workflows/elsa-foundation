@@ -85,9 +85,31 @@ Gate green: build + Workflows.Runtime.Tests **1378**.
 - [ ] **B4 GATE**: build + FULL `Elsa.Workflows.Runtime.Tests`. Commit:
   `feat(runtime): ReplaySafe fusion toggle (default on) + per-run dispatch counter`.
 
-## Increment C — D1 fused schedule→start→invoke
+## Increment C — D1 fused schedule→start→invoke — DONE 2026-07-22
 
-- [ ] **C1** Add the fused-span driver, invoked from the schedule handler's terminal continuation point,
+Landed `ReplaySafeFusionDriver` (RuntimeCore), invoked from `WorkflowScheduleActivitySchedulerWorkHandler`'s fresh-schedule
+branch when `ShouldFuse` holds (toggle on + active coalescing session applies + node is a ReplaySafe non-intrinsic
+contract). The schedule handler commits the intent-free ActivityScheduled via `BuildScheduledCommitAsync`, then
+`driver.ContinueFusedSpanAsync` runs `WorkflowStartActivitySchedulerWorkHandler.ExecuteFusedStartAsync` inline (commits
+intent-free ActivityStarted) and dispatches the retained InvokeActivity through the unchanged invoke handler inline
+(resolved custom-before-fallback, mirroring the drainer). Fallback: if the start stage declines (not a fresh Scheduled
+ReplaySafe leaf) the StartActivity item is enqueued to the overlay — never dropped, never enqueued on the fused path.
+Registered `WorkflowStartActivitySchedulerWorkHandler` (concrete) + `ReplaySafeFusionDriver` (scoped) in RuntimeCore.
+
+**Finding:** fusion also engages on the ReplaySafe **Flowchart composite** itself (FR-001 gates on the contract, not
+leaf-ness) — its schedule→start→invoke fuse and the child-scheduling continuation flows via the overlay outbox (research
+§4 composite-children case). Byte-identical, confirmed by the guardrail.
+
+**Gate (all green):** guardrail `ReplaySafeFusionGuardrailTests` (4 tests: straight-line + suspend + External
+byte-identical ON vs OFF, determinism self-check; fusion proven to engage via `RuntimeSchedulerDispatchDiagnostics`) —
+straight-line ON FusedSpans≥5 & dispatches ON<OFF, External leaves never fuse, OFF FusedSpans=0.
+`ReplaySafeFusionCrashConvergenceTests` (Groundwork, 3 kill points inside a fused span: commit #2/#3/#4 →
+OperationCanceledException; durable redrive source survives + gen-2 sweep converges to the crash-free terminal).
+Suites: Workflows.Runtime **1378**, Activities.Runtime **202**, Flowchart **74**, Groundwork **657**, Sequence **16**,
+ControlFlow **196**, Bpmn **107**, Publishing.Api **401**; full `dotnet build Elsa.Server.slnx` **0 errors**.
+(One Flowchart run flaked a single test under load avg ~96; passed 3×/3 once load dropped — suspected load flake, not fusion.)
+
+- [x] **C1** Add the fused-span driver, invoked from the schedule handler's terminal continuation point,
   gated by: `RuntimeReplaySafeFusionOptions.Enabled` AND an active coalescing session
   (`IRuntimeCoalescingSessionAccessor.Current?.AppliesTo(executionId)`) AND
   `executableNode.ActivityContract?.SideEffectProfile == ReplaySafe` AND not a mutating intrinsic.
