@@ -183,12 +183,13 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt)
     {
-        if (payload.SeedVariables.Count == 0 && payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId) && payload.SeedTriggerMetadata.Count == 0)
+        // SeedVariables are NOT written to the durable-value channel (#972): caller-supplied variable
+        // values overlay the root variable frame in CreateRootVariableFrame, the single runtime truth.
+        if (payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId) && payload.SeedTriggerMetadata.Count == 0)
             return [];
 
         return RuntimeWorkflowStateSeed.BuildSeedChanges(
             workItem.WorkflowExecutionId,
-            payload.SeedVariables.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal),
             payload.SeedInputs.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal),
             occurredAt,
             stimulusInput: payload.SeedStimulusInput,

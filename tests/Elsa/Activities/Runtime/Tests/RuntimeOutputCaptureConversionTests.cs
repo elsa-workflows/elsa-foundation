@@ -77,7 +77,7 @@ public sealed class RuntimeOutputCaptureConversionTests
             completion,
             DateTimeOffset.UnixEpoch);
 
-        var state = Assert.Single(changes).State!;
+        var state = Assert.Single(changes.DurableValues).State!;
         Assert.Equal("Int64", state.Type.Kind);
         Assert.Equal(7U, state.InlineValue!.Value.GetUInt32());
     }
@@ -192,7 +192,7 @@ public sealed class RuntimeOutputCaptureConversionTests
                 completion,
                 DateTimeOffset.UnixEpoch);
 
-        var state = Assert.Single(changes).State!;
+        var state = Assert.Single(changes.DurableValues).State!;
         Assert.Equal("variable-count", state.ValueId);
         Assert.Equal(7U, state.InlineValue!.Value.GetUInt32());
     }
@@ -301,7 +301,7 @@ public sealed class RuntimeOutputCaptureConversionTests
             completion,
             DateTimeOffset.UnixEpoch);
 
-        return Assert.Single(changes).State!;
+        return Assert.Single(changes.DurableValues).State!;
     }
 
     private static (ExecutableNode Node, ActivityTransition Transition, ActivityCompletionProjection Completion) NewCaptureScenario(

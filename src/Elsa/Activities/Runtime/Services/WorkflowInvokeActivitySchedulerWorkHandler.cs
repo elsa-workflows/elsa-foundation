@@ -156,6 +156,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyDictionary<string, object?> activityOutputValues;
         IReadOnlyCollection<DurableValueState> persistedDurableValues = [];
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
+        IReadOnlyDictionary<string, RuntimeDurableValueEncoding> workflowVariableWrites =
+            RuntimeOutputCaptureProjection.Empty.WorkflowVariableWrites;
 
         // Carrier identity (ADR 0030: correlation id / instance name) is projected from the IdentityName-tagged durable
         // values this invocation already re-lists (spec 083 review), so a plain activity populates the carrier without
@@ -513,7 +515,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 returnedTransition,
                 _timeProvider.GetUtcNow(),
                 cancellationToken);
-            var outputCaptureChanges = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
+            var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId,
                 invokePayload.ActivityExecutionId,
                 executableNode,
@@ -521,7 +523,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 valueFlowCompletion,
                 _timeProvider.GetUtcNow(),
                 cancellationToken);
-            durableValueChanges = MergeDurableValueChanges(durableValueChanges, outputCaptureChanges);
+            durableValueChanges = MergeDurableValueChanges(durableValueChanges, captureProjection.DurableValues);
+            workflowVariableWrites = captureProjection.WorkflowVariableWrites;
             return valueFlowCompletion.Projections
                 .Where(item => item.Value.Presence != ValuePresence.Absent && item.Value.Policy.Storage != DurableValueStorage.External)
                 .Select(item => new RecordedActivityOutput(
@@ -608,6 +611,20 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
         var occurredAt = _timeProvider.GetUtcNow();
 
+        // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
+        // completion (#972), mirroring how the Set intrinsic commits its changed frame.
+        var workflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+            serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+            workItem.WorkflowExecutionId,
+            invokePayload.ExecutableNodeId,
+            workflowVariableWrites,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+                [RuntimeMetadataKeys.CheckpointReason] = invokePayload.Reason
+            },
+            cancellationToken);
+
         await CommitCompletedActivityAsync(
             checkpointCommitter,
             inspectionAccumulator,
@@ -617,6 +634,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             ReadCompletionOutcomeNames(completedState),
             valueSnapshots,
             durableValueChanges,
+            workflowVariableWriteBack,
             stagedWorkflowDispatch,
             occurredAt,
             cancellationToken);
@@ -1077,6 +1095,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<string> outcomeNames,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
@@ -1089,6 +1108,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             outcomeNames,
             valueSnapshots,
             durableValueChanges,
+            workflowVariableWriteBack,
             workflowDispatch,
             occurredAt,
             cancellationToken);
@@ -1120,6 +1140,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<string> outcomeNames,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
@@ -1168,7 +1189,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 ActivityExecutionIds: [invokePayload.ActivityExecutionId],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
+                workflowExecution: workflowVariableWriteBack,
                 scheduler: null,
                 activityExecutions:
                 [

@@ -20,26 +20,6 @@ public static class RuntimeInputBindingStateProjection
         ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.OutputName);
 
     /// <summary>
-    /// Builds the workflow-variable snapshot (variable name → value) from the durable values captured for a
-    /// workflow execution, mirroring <see cref="ProjectActivityOutputValues"/>. Variables are tagged with the
-    /// <see cref="RuntimeMetadataKeys.VariableName"/> metadata key when seeded. When several captures share a
-    /// variable name the most recently captured value wins. Feeds <c>variables.*</c> at materialization time.
-    /// </summary>
-    public static IReadOnlyDictionary<string, object?> ProjectWorkflowVariables(IEnumerable<DurableValueState> durableValues) =>
-        ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.VariableName);
-
-    /// <summary>
-    /// Canonical workflow-variable projection retaining payload location and protection policy. The key is the
-    /// stable workflow-scope variable key used by the current authored/runtime bridge.
-    /// </summary>
-    public static IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope> ProjectWorkflowVariableEnvelopes(
-        IEnumerable<DurableValueState> durableValues) =>
-        ProjectEnvelopesByMetadataKey(durableValues, RuntimeMetadataKeys.VariableName)
-            .ToDictionary(
-                item => new RuntimeVariableValueAddress(VariableReference.WorkflowScopeId, item.Key),
-                item => item.Value);
-
-    /// <summary>
     /// Builds the workflow-input snapshot (input name → value) from the durable values captured for a workflow
     /// execution, mirroring <see cref="ProjectActivityOutputValues"/>. Inputs are tagged with the
     /// <see cref="RuntimeMetadataKeys.InputName"/> metadata key when seeded. When several captures share an
@@ -87,11 +67,13 @@ public static class RuntimeInputBindingStateProjection
             : null;
 
     /// <summary>
-    /// Projects the workflow identity (correlation id / instance name), workflow-input, workflow-variable, and
+    /// Projects the workflow identity (correlation id / instance name), workflow-input, and
     /// prior-activity-output snapshots in one call. Every scheduler work handler needs all of these from the same
     /// durable-value list before building its resolution context and execution-time expression carrier, so this
     /// collapses the repeated projection block. Identity (spec 083 review) is projected from the same list, so a
     /// <c>Correlate</c>/<c>SetName</c> is visible to a concurrent sibling branch without a workflow-execution-state read.
+    /// Workflow variables are NOT projected here (#972): the canonical root variable frame is their single
+    /// runtime read surface.
     /// </summary>
     public static RuntimeInputBindingStateProjectionSet ProjectAll(IEnumerable<DurableValueState> durableValues)
     {
@@ -101,10 +83,8 @@ public static class RuntimeInputBindingStateProjection
         var identity = RuntimeIdentityStateProjection.Project(materialized);
         return new RuntimeInputBindingStateProjectionSet(
             WorkflowInputs: ProjectWorkflowInputs(materialized),
-            WorkflowVariables: ProjectWorkflowVariables(materialized),
             ActivityOutputValues: ProjectActivityOutputValues(materialized),
             WorkflowInputEnvelopes: ProjectWorkflowInputEnvelopes(materialized),
-            VariableEnvelopes: ProjectWorkflowVariableEnvelopes(materialized),
             CorrelationId: identity.CorrelationId,
             InstanceName: identity.InstanceName,
             StimulusInput: ProjectStimulusInput(materialized),
@@ -128,7 +108,6 @@ public static class RuntimeInputBindingStateProjection
         var identity = RuntimeIdentityStateProjection.Project(materialized);
         return new RuntimeInputBindingStateProjectionSet(
             WorkflowInputs: await ProjectByMetadataKeyAsync(materialized, RuntimeMetadataKeys.InputName, storageDrivers, cancellationToken),
-            WorkflowVariables: await ProjectByMetadataKeyAsync(materialized, RuntimeMetadataKeys.VariableName, storageDrivers, cancellationToken),
             ActivityOutputValues: await ProjectByMetadataKeyAsync(materialized, RuntimeMetadataKeys.OutputName, storageDrivers, cancellationToken),
             CorrelationId: identity.CorrelationId,
             InstanceName: identity.InstanceName,
@@ -226,15 +205,14 @@ public static class RuntimeInputBindingStateProjection
 }
 
 /// <summary>
-/// The workflow identity plus the workflow-input, workflow-variable, and prior-activity-output snapshots projected
-/// together from a single durable-value list (see <see cref="RuntimeInputBindingStateProjection.ProjectAll"/>).
+/// The workflow identity plus the workflow-input and prior-activity-output snapshots projected together
+/// from a single durable-value list (see <see cref="RuntimeInputBindingStateProjection.ProjectAll"/>).
+/// Workflow variables live in the canonical root variable frame, not this projection (#972).
 /// </summary>
 public readonly record struct RuntimeInputBindingStateProjectionSet(
     IReadOnlyDictionary<string, object?> WorkflowInputs,
-    IReadOnlyDictionary<string, object?> WorkflowVariables,
     IReadOnlyDictionary<string, object?> ActivityOutputValues,
     IReadOnlyDictionary<string, ValueEnvelope> WorkflowInputEnvelopes,
-    IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope> VariableEnvelopes,
     string? CorrelationId,
     string? InstanceName,
     object? StimulusInput,
@@ -244,7 +222,6 @@ public readonly record struct RuntimeInputBindingStateProjectionSet(
     /// <summary>Compatibility constructor for execution-time carriers that consume only object projections.</summary>
     public RuntimeInputBindingStateProjectionSet(
         IReadOnlyDictionary<string, object?> WorkflowInputs,
-        IReadOnlyDictionary<string, object?> WorkflowVariables,
         IReadOnlyDictionary<string, object?> ActivityOutputValues,
         string? CorrelationId,
         string? InstanceName,
@@ -253,10 +230,8 @@ public readonly record struct RuntimeInputBindingStateProjectionSet(
         IReadOnlyDictionary<string, string>? TriggerMetadata = null)
         : this(
             WorkflowInputs,
-            WorkflowVariables,
             ActivityOutputValues,
             new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal),
-            new Dictionary<RuntimeVariableValueAddress, ValueEnvelope>(),
             CorrelationId,
             InstanceName,
             StimulusInput,

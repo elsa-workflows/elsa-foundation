@@ -9,7 +9,10 @@ namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
 /// Projects selected atomic activity-result values into their published durable targets.
-/// The returned changes are committed in the same checkpoint as activity completion.
+/// The returned changes are committed in the same checkpoint as activity completion. Captures that
+/// target a workflow-scope variable (#972) are routed to the canonical root variable frame — the
+/// single runtime truth for workflow variables — instead of the retired <c>variable:*</c>
+/// durable-value channel; the handler folds the returned frame writes into the same commit.
 /// </summary>
 public sealed class RuntimeOutputCaptureProjector
 {
@@ -32,7 +35,7 @@ public sealed class RuntimeOutputCaptureProjector
         _valueConversionExecutor = valueConversionExecutor;
     }
 
-    public async ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> ProjectAsync(
+    public async ValueTask<RuntimeOutputCaptureProjection> ProjectAsync(
         string workflowExecutionId,
         string activityExecutionId,
         ExecutableNode node,
@@ -48,10 +51,11 @@ public sealed class RuntimeOutputCaptureProjector
         ArgumentNullException.ThrowIfNull(completion);
 
         if (node.OutputCaptures.Count == 0)
-            return [];
+            return RuntimeOutputCaptureProjection.Empty;
         var contract = node.ActivityContract
             ?? throw new InvalidOperationException($"Executable node '{node.ExecutableNodeId}' has output captures but no pinned activity contract.");
         var changes = new List<RuntimeStateChange<DurableValueState>>();
+        var workflowVariableWrites = new Dictionary<string, RuntimeDurableValueEncoding>(StringComparer.Ordinal);
         foreach (var capture in node.OutputCaptures.Values
                      .Where(item => item.CaptureOnSuccessfulCompletion)
                      .OrderBy(item => item.OutputName, StringComparer.Ordinal))
@@ -79,6 +83,21 @@ public sealed class RuntimeOutputCaptureProjector
                     $"Output capture '{capture.OutputName}' declares storage '{capture.Storage}', but driver '{capture.StorageDriverKey}' produced '{encoding.Storage}'.");
             }
 
+            // A workflow-variable capture writes the canonical root variable frame (#972), not a durable
+            // value row — the frame is the one runtime truth for workflow-scope variables.
+            if (capture.ValueId.StartsWith(RuntimeWorkflowStateSeed.VariableValueIdPrefix, StringComparison.Ordinal))
+            {
+                if (!capture.Metadata.TryGetValue(RuntimeMetadataKeys.TargetVariableReferenceKey, out var variableKey) ||
+                    string.IsNullOrWhiteSpace(variableKey))
+                {
+                    throw new InvalidOperationException(
+                        $"Output capture '{capture.OutputName}' on executable node '{node.ExecutableNodeId}' targets a workflow variable but carries no '{RuntimeMetadataKeys.TargetVariableReferenceKey}' metadata.");
+                }
+
+                workflowVariableWrites[variableKey] = encoding;
+                continue;
+            }
+
             var durableValueId = $"durable-{capture.ValueId}";
             var metadata = capture.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
             metadata[RuntimeMetadataKeys.StorageDriverKey] = capture.StorageDriverKey;
@@ -102,7 +121,7 @@ public sealed class RuntimeOutputCaptureProjector
                 state.Metadata));
         }
 
-        return changes;
+        return new RuntimeOutputCaptureProjection(changes, workflowVariableWrites);
     }
 
     private static void ValidateDurableCaptureBoundary(RuntimeOutputCapture capture, ValueEnvelope projected)
@@ -130,12 +149,6 @@ public sealed class RuntimeOutputCaptureProjector
             metadata.TryAdd(
                 RuntimeMetadataKeys.OutputName,
                 capture.OutputName);
-        }
-        else if (capture.ValueId.StartsWith(RuntimeWorkflowStateSeed.VariableValueIdPrefix, StringComparison.Ordinal))
-        {
-            metadata.TryAdd(
-                RuntimeMetadataKeys.VariableName,
-                capture.ValueId[RuntimeWorkflowStateSeed.VariableValueIdPrefix.Length..]);
         }
     }
 
