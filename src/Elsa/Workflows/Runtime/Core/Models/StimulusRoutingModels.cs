@@ -96,8 +96,11 @@ public sealed class StimulusDispatchRequest
     /// supplied on a start-routing request the router reuses this set instead of issuing its own identical
     /// <c>ListAllByStimulusAsync(type, hash)</c> traversal — one bounded traversal per request instead of two.
     /// Null means the router fetches the set itself (the default for callers that do not pre-resolve it). The
-    /// set must be the complete match for <see cref="StimulusType"/>/<see cref="StimulusHash"/>; a partial set
-    /// would silently under-start.
+    /// set must be the complete match for <see cref="StimulusType"/>/<see cref="StimulusHash"/> <b>within the
+    /// caller's routing scope</b>: for an externally-delivered stimulus that scope is every artifact (a partial
+    /// set would silently under-start), while an owner-scoped dispatcher (the recurring-trigger pump, whose
+    /// schedule is owned by exactly one trigger binding) deliberately supplies only the owning binding so a
+    /// shared hash never fans a pump-internal fire out to other artifacts.
     /// </summary>
     public IReadOnlyCollection<WorkflowTriggerBinding>? MatchedTriggerBindings { get; }
 

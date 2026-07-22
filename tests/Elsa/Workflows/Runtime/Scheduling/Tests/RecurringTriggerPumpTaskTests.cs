@@ -11,11 +11,13 @@ public sealed class RecurringTriggerPumpTaskTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
 
+    private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
+
     [Fact]
     public async Task Sweep_FiresDueSchedule_StartOnly_WithExpectedRequestShape()
     {
         var store = new InMemoryRecurringTriggerScheduleStore();
-        await store.SaveAsync(Schedule("s1", Now.AddMinutes(-1)));
+        await SeedAsync(store, Schedule("s1", Now.AddMinutes(-1)));
         var router = new FakeRouter();
         var (pump, _) = CreatePump(store, router);
 
@@ -28,6 +30,24 @@ public sealed class RecurringTriggerPumpTaskTests
         Assert.Equal("runtime.recurring-trigger", request.RequestedBy);
         // Idempotency key is scoped to the claimed occurrence so a duplicate delivery cannot double-start it.
         Assert.Equal($"recurring:s1:{Now.AddMinutes(-1).UtcTicks}", request.IdempotencyKey);
+        // Owner scoping: the fire pre-matches the schedule's own binding so the router never hash-broadcasts it.
+        Assert.Equal("node-s1", Assert.Single(request.MatchedTriggerBindings!).ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task Sweep_DropsOccurrence_WhenOwningBindingIsMissing()
+    {
+        // Index drift (e.g. mid-republish): the claimed occurrence is dropped rather than hash-broadcast to
+        // whatever other artifacts share the stimulus hash; the cursor stays advanced (at-most-once).
+        var store = new InMemoryRecurringTriggerScheduleStore();
+        await store.SaveAsync(Schedule("s1", Now.AddMinutes(-1), expression: "PT1M"));
+        var router = new FakeRouter();
+        var (pump, _) = CreatePump(store, router);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.Empty(router.Requests);
+        Assert.Equal(Now.AddMinutes(1), (await store.FindAsync("s1"))!.NextOccurrence);
     }
 
     [Fact]
@@ -35,7 +55,7 @@ public sealed class RecurringTriggerPumpTaskTests
     {
         var store = new InMemoryRecurringTriggerScheduleStore();
         // Due 10 minutes ago on a 1-minute interval: a naive previous+interval walk would fire ~10 times.
-        await store.SaveAsync(Schedule("s1", Now.AddMinutes(-10), expression: "PT1M"));
+        await SeedAsync(store, Schedule("s1", Now.AddMinutes(-10), expression: "PT1M"));
         var router = new FakeRouter();
         var (pump, _) = CreatePump(store, router);
 
@@ -97,7 +117,7 @@ public sealed class RecurringTriggerPumpTaskTests
     public async Task Sweep_NeverThrows_WhenRouterThrows_ButCursorAlreadyAdvanced()
     {
         var store = new InMemoryRecurringTriggerScheduleStore();
-        await store.SaveAsync(Schedule("s1", Now.AddMinutes(-1), expression: "PT1M"));
+        await SeedAsync(store, Schedule("s1", Now.AddMinutes(-1), expression: "PT1M"));
         var router = new FakeRouter { Throw = new InvalidOperationException("boom") };
         var (pump, _) = CreatePump(store, router);
 
@@ -130,7 +150,7 @@ public sealed class RecurringTriggerPumpTaskTests
     {
         var store = new InMemoryRecurringTriggerScheduleStore();
         for (var i = 0; i < 5; i++)
-            await store.SaveAsync(Schedule($"s{i}", Now.AddMinutes(-1)));
+            await SeedAsync(store, Schedule($"s{i}", Now.AddMinutes(-1)));
         var router = new FakeRouter();
         var (pump, _) = CreatePump(store, router, maxSchedulesPerTick: 2);
 
@@ -161,7 +181,7 @@ public sealed class RecurringTriggerPumpTaskTests
         Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).PublicationId);
     }
 
-    private static (RecurringTriggerPumpTask Pump, MutableTimeProvider Clock) CreatePump(
+    private (RecurringTriggerPumpTask Pump, MutableTimeProvider Clock) CreatePump(
         IRecurringTriggerScheduleStore store,
         FakeRouter router,
         int maxSchedulesPerTick = 100)
@@ -174,8 +194,29 @@ public sealed class RecurringTriggerPumpTaskTests
             MaxSchedulesPerTick = maxSchedulesPerTick
         });
         var pump = new RecurringTriggerPumpTask(
-            store, router, new RecurringScheduleCalculator(), options, clock, NullLogger<RecurringTriggerPumpTask>.Instance);
+            store, _bindingStore, router, new RecurringScheduleCalculator(), options, clock, NullLogger<RecurringTriggerPumpTask>.Instance);
         return (pump, clock);
+    }
+
+    // Saves the schedule together with the trigger binding it owns — a fire only dispatches when its owning
+    // binding exists in the index.
+    private async Task SeedAsync(IRecurringTriggerScheduleStore store, RecurringTriggerSchedule schedule)
+    {
+        await store.SaveAsync(schedule);
+        await _bindingStore.SaveAsync(new WorkflowTriggerBinding(
+            TriggerBindingId: WorkflowTriggerBinding.BuildId(schedule.ArtifactId, schedule.ExecutableNodeId, schedule.StimulusHash),
+            ArtifactId: schedule.ArtifactId,
+            DefinitionId: "definition-1",
+            ArtifactVersion: "1.0.0",
+            ArtifactHash: "sha256:artifact",
+            ExecutableNodeId: schedule.ExecutableNodeId,
+            StimulusType: schedule.StimulusType,
+            StimulusHash: schedule.StimulusHash,
+            CorrelationScope: null,
+            Metadata: new Dictionary<string, string>(),
+            CreatedAt: Now,
+            PublicationId: schedule.PublicationId,
+            SlotId: schedule.SlotId));
     }
 
     private static RecurringTriggerSchedule Schedule(
@@ -185,6 +226,7 @@ public sealed class RecurringTriggerPumpTaskTests
         string expression = "PT5M") => new(
         ScheduleId: id,
         ArtifactId: "artifact-1",
+        ExecutableNodeId: $"node-{id}",
         StimulusType: "Timer",
         StimulusHash: $"hash-{id}",
         Kind: kind,

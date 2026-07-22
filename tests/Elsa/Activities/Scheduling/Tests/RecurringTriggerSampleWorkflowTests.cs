@@ -40,13 +40,14 @@ public sealed class RecurringTriggerSampleWorkflowTests
         await indexer.IndexAsync(Workflow("artifact-timer", TimerNode("PT5M")));
 
         // Before the first occurrence nothing is due.
+        var bindingStore = await BindingStoreAsync("artifact-timer", TimerStimulus.StimulusType, TimerStimulus.Hash("PT5M"));
         var router = new RecordingRouter();
-        var pump = Pump(store, router, calculator, new FixedClock(Now.AddMinutes(1)));
+        var pump = Pump(store, bindingStore, router, calculator, new FixedClock(Now.AddMinutes(1)));
         await pump.ExecuteAsync(CancellationToken.None);
         Assert.Empty(router.Requests);
 
         // After the first occurrence a single start-only stimulus fires with the Timer identity.
-        pump = Pump(store, router, calculator, new FixedClock(Now.AddMinutes(6)));
+        pump = Pump(store, bindingStore, router, calculator, new FixedClock(Now.AddMinutes(6)));
         await pump.ExecuteAsync(CancellationToken.None);
 
         var request = Assert.Single(router.Requests);
@@ -68,8 +69,9 @@ public sealed class RecurringTriggerSampleWorkflowTests
         // Every hour on the hour; published at 12:00 the first occurrence is 13:00.
         await indexer.IndexAsync(Workflow("artifact-cron", CronNode("0 * * * *")));
 
+        var bindingStore = await BindingStoreAsync("artifact-cron", CronStimulus.StimulusType, CronStimulus.Hash("0 * * * *"));
         var router = new RecordingRouter();
-        var pump = Pump(store, router, calculator, new FixedClock(Now.AddHours(1).AddMinutes(1)));
+        var pump = Pump(store, bindingStore, router, calculator, new FixedClock(Now.AddHours(1).AddMinutes(1)));
         await pump.ExecuteAsync(CancellationToken.None);
 
         var request = Assert.Single(router.Requests);
@@ -98,12 +100,33 @@ public sealed class RecurringTriggerSampleWorkflowTests
 
     private static RecurringTriggerPumpTask Pump(
         IRecurringTriggerScheduleStore store,
+        IWorkflowTriggerBindingStore bindingStore,
         RecordingRouter router,
         IRecurringScheduleCalculator calculator,
         TimeProvider clock) =>
-        new(store, router, calculator,
+        new(store, bindingStore, router, calculator,
             Microsoft.Extensions.Options.Options.Create(new RecurringTriggerPumpOptions()),
             clock, NullLogger<RecurringTriggerPumpTask>.Instance);
+
+    // The trigger binding the publish would have indexed for the same node — the pump only dispatches a fire
+    // through the binding its schedule owns.
+    private static async Task<InMemoryWorkflowTriggerBindingStore> BindingStoreAsync(string artifactId, string stimulusType, string stimulusHash)
+    {
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(new WorkflowTriggerBinding(
+            TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, "node-trigger", stimulusHash),
+            ArtifactId: artifactId,
+            DefinitionId: "definition-1",
+            ArtifactVersion: "1.0.0",
+            ArtifactHash: "sha256:v1",
+            ExecutableNodeId: "node-trigger",
+            StimulusType: stimulusType,
+            StimulusHash: stimulusHash,
+            CorrelationScope: null,
+            Metadata: new Dictionary<string, string>(),
+            CreatedAt: Now));
+        return bindingStore;
+    }
 
     private static WorkflowExecutable Workflow(string artifactId, ExecutableNode trigger) =>
         new(

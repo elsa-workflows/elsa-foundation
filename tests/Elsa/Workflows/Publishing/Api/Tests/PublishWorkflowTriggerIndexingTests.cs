@@ -176,6 +176,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             seededSchedule = new RecurringTriggerSchedule(
                 RecurringTriggerSchedule.BuildId(invalidExecutable.Identity.ArtifactId, "trigger-node"),
                 invalidExecutable.Identity.ArtifactId,
+                "trigger-node",
                 scenario.StimulusType,
                 "seeded-stimulus",
                 RecurringScheduleKind.Interval,

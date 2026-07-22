@@ -4,6 +4,7 @@
   "schedule": {
     "artifactId": "artifact-1",
     "createdAt": "1970-01-01T00:00:00\u002B00:00",
+    "executableNodeId": "node-1",
     "expression": "PT5M",
     "isActive": true,
     "kind": 0,

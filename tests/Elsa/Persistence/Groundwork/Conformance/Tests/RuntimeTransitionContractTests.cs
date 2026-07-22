@@ -105,6 +105,7 @@ public sealed class RuntimeTransitionContractTests
         var schedule = await first.SaveAsync(new RecurringTriggerSchedule(
             "schedule-1",
             "artifact-1",
+            "node-1",
             "Timer",
             "schedule-hash",
             RecurringScheduleKind.Interval,
@@ -357,6 +358,7 @@ public sealed class RuntimeTransitionContractTests
         new(
             RecurringTriggerSchedule.BuildId(publicationId, artifactId, nodeId),
             artifactId,
+            nodeId,
             "Timer",
             "hash-transition",
             RecurringScheduleKind.Interval,
