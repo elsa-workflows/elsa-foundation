@@ -135,6 +135,64 @@ ControlFlow **196**, Bpmn **107**, Publishing.Api **401**; full `dotnet build El
 
 ## Increment D — D2 inline single-predecessor completion
 
+> **STATUS 2026-07-22 (finishing session): D-part-1 DONE; D-part-2 (D2 driver) DEFERRED at a genuine correctness/scope boundary — see below.**
+>
+> **D-part-1 (DONE, committed `8d6941533`):** behavior-preserving completion-seam extraction.
+> `WorkflowInvokeActivitySchedulerWorkHandler.CommitCompletedActivityAsync` split into a
+> `BuildCompletedCommitAsync` core (intent-free `ActivityCompleted` commit + derived `CompleteActivity`
+> work item + `occurredAt`; any staged workflow-dispatch start intent stays on the commit) plus a thin
+> adapter that re-attaches the `CompleteActivity` continuation intent AHEAD of the workflow-dispatch start
+> intent, reproducing today's commit byte-for-byte. Mirrors the schedule/start `Build*CommitAsync` pattern.
+> Gate green, unchanged: `Elsa.Activities.Runtime.Tests` **202**, `Elsa.Workflows.Runtime.Tests` **1378**.
+>
+> **§3 ReplaySafe-contract verification (was an open research question):** BOTH `Flowchart`
+> (`src/Elsa/Activities/Flowchart/Activities/Flowchart.cs:31`) and `Sequence`
+> (`src/Elsa/Activities/Sequence/Activities/Sequence.cs:18`) carry
+> `[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]`. No force-marking needed; the D2 parent gate
+> (`parent.ActivityContract.SideEffectProfile == ReplaySafe`) is sound for both composites.
+>
+> **D-part-2 (D2 driver) DEFERRED — the two concrete blockers discovered while designing it (recorded so the
+> next session starts ahead, same way research §8 recorded C's findings):**
+>
+> 1. **Cross-assembly routing-probe boundary.** The single-predecessor check needs
+>    `FlowchartGraph.GetInboundConnections(successorNodeId).Count == 1` (spec-119 memo), but `FlowchartGraph`
+>    lives in `Elsa.Activities.Flowchart`, which depends on `Elsa.Workflows.Runtime.Core` (where the fusion
+>    driver + `WorkflowScheduleActivitySchedulerWorkHandler` live) — the driver cannot reference it (circular).
+>    Routing is emitted by the Flowchart activity itself via `OnChildCompletedAsync` (structural callback), not
+>    a Runtime.Core abstraction, and `Elsa.Activities.Runtime` does NOT reference Flowchart either. **Clean fix
+>    for next session:** define `IReplaySafeSuccessorRoutingProbe` (or similar) in Runtime.Core, implement it in
+>    the Flowchart assembly (`FlowchartGraph.From(composite).GetInboundConnections(successor).Count`) + a
+>    Sequence impl (intrinsically single-successor), register from `ActivitiesFlowchartFeature`, inject
+>    `optional` into `ReplaySafeFusionDriver`; when absent → cannot prove single-predecessor → fall back. Also
+>    needs per-successor parent-composite resolution (the successor `ScheduleActivity`'s
+>    `SchedulingProvenance.ParentActivityExecutionId` → parent activity state → `ExecutableNodeId` → composite
+>    node).
+> 2. **Inline completion-cascade pump vs coalescing-session invariants.** The completion cascade
+>    (`CompleteActivity`→`ParentCompletionEvaluation`→`ContinuationScheduling`→`Checkpoint`→successor
+>    `ScheduleActivity`) is a 3-handler, ~2900-line machine (parent reconstruction, `OnChildCompletedAsync`,
+>    structural continuations, subtree cancellation, fault absorption, checkpoint participants) that advances by
+>    **enqueuing to the coalescing overlay queue + delivering post-commit intents through the outbox**. Fusing it
+>    inline means an **iterative inline pump** in the driver (re-entrancy-guarded so a re-entered
+>    `ContinueFusedSpanAsync` does D1-only and the top pump owns the loop; iterative to avoid O(chain-length)
+>    recursion / stack overflow on long hot loops): deliver this execution's outbox inline
+>    (`IRuntimePostCommitOutboxProcessor.ProcessAsync`), then claim+dispatch overlay items inline (via
+>    `handler.HandleAsync` directly, bypassing `WorkflowSchedulerDrainer.DispatchAsync`'s `RecordDispatch` — the
+>    hop-count win), STOPPING (leaving the item in the overlay for the outer loop = fallback) at a
+>    `ScheduleActivity` whose successor is not single-predecessor+ReplaySafe. **De-risk that makes this tractable
+>    and was validated on the D1 path:** the guardrail commit fingerprint sorts by `CommitId`
+>    (`ReplaySafeFusionGuardrailTests.FingerprintCommits`, order-INDEPENDENT), so byte-identity is robust to the
+>    pump's interleaving as long as the commit SET is identical (it is — same handlers, deterministic ids); and
+>    only the original `ScheduleActivity` is ever durably queued (all cascade items are overlay/inline, discarded
+>    on crash, folded at flush), so crash-convergence holds exactly as D1 (research §5). **Residual risk to
+>    validate empirically (why it was not landed blind this session):** the pump interleaves outbox delivery +
+>    overlay claim/dispatch WHILE the outer drainer holds the original item's claim — the
+>    `RuntimeCoalescingSession` seeded-item / in-flight-claim (`AdvanceInnerQueueAsync(consumeInFlightClaims)`) /
+>    outbox-reconciliation invariants must be proven undisturbed against the crash suite + the 8-project battery.
+>    Design reasoning says they hold (pump only touches transient overlay/outbox with the exact same code the
+>    outer loop runs); the strict gates must confirm it. Estimated as one focused session on top of D-part-1.
+>
+> The tasks below (D1 probe, D2 driver, D3/D4 guardrails+crash) remain the plan for that session.
+
 - [ ] **D1** Add the single-predecessor probe on the routing memo:
   `ExecutableNode.GetOrAddRoutingStructure<FlowchartGraph>(FlowchartGraph.From).GetInboundConnections(successorNodeId).Count == 1`
   (Sequence is intrinsically single-successor). No graph walk, no second cache.
@@ -149,6 +207,30 @@ ControlFlow **196**, Bpmn **107**, Publishing.Api **401**; full `dotnet build El
   `feat(runtime): D2 inline single-predecessor completion propagation for ReplaySafe composites`.
 
 ## Increment E — amendments + A/B benchmark + final QA
+
+> **STATUS 2026-07-22 (finishing session): DONE, scoped to what shipped (D1). E1 + E2 doc amendments verified
+> in place (landed with the spec-authoring/groundwork commits); ADR 0047 Follow-up finalized to D1-implemented /
+> D2-driver-deferred; A/B benchmark added measuring none vs D1 (D1+D2 travels with the deferred D2 follow-up).**
+>
+> - **E1 (verified):** the FR-004 amendment is present in `specs/095-runtime-intent-handlers/spec.md` (the FR-004
+>   home) and is correctly worded ("MAY", scoped to a live coalescing burst, byte-identical guarantee). It already
+>   covers the D2 single-predecessor completion cascade as a capability, so no wording change was needed when D2 was
+>   deferred. Mirroring into `specs/095-value-flow-redesign` was **not** done (deferred — FR-004 lives in
+>   runtime-intent-handlers; a mirror adds no contract).
+> - **E2 (verified + finalized):** the ADR 0031 cross-reference note is present (`docs/adr/0031-*.md` line 14,
+>   pointing at ADR 0047 D1+D2 / spec 123). The ADR 0047 Follow-up (`docs/adr/0047-*.md`) was updated to state
+>   D1 implemented + D2 seam extracted / D2 driver deferred with the honest reason, replacing the pre-implementation
+>   plan wording.
+> - **E3 (done, D1-only):** added `DurableRoundTripDiagnostics.ReplaySafeFusionDispatchAb` — ReplaySafe hot-loop×10
+>   coalesced, fusion OFF vs ON, durable (Groundwork/Sqlite) + in-memory, run-order-swapped walls.
+>   **Measured (single fleet-loaded run, counters are the evidence, walls indicative):**
+>   durable OFF dispatches=58 fused=0 commits=1 reads=1; durable ON dispatches=36 fused=11 commits=1 reads=1;
+>   in-mem OFF dispatches=58 fused=0 commits=2; in-mem ON dispatches=36 fused=11 commits=2. D1 fuses 11 spans
+>   (10 leaves + the ReplaySafe Flowchart composite) and cuts dispatches 58→36; commits are already folded to 1
+>   by coalescing (D1 does not change commit count — the completion cascade still dispatches per stage until D2
+>   folds it, which is exactly why ON here is labelled D1-only). The **D1+D2** third column lands with the D2
+>   follow-up.
+> - **E4 (done):** full 8-project battery + `dotnet build Elsa.Server.slnx` — results recorded in the report.
 
 - [ ] **E1** Spec-095 FR amendment: in `specs/095-runtime-intent-handlers/spec.md` add an amendment note to
   FR-004 (delivery ordering/queueing) — fusion collapses intermediate stage work items within a burst

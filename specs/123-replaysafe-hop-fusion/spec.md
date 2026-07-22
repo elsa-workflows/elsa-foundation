@@ -7,6 +7,15 @@
 **Extends**: [ADR 0031](../../docs/adr/0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md) (burst/locality), [ADR 0032](../../docs/adr/0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md) (R2 ReplaySafe claim relaxation, cadence), [ADR 0020](../../docs/adr/0020-runtime-checkpoint-commit-post-commit-work.md) (post-commit intents release only after durable commit)
 **Input**: ADR 0047 D1+D2 and the three ratification resolutions; the discrete handler chain, coalescing overlay, and fusion seam analysis in [research.md](./research.md); the spec-119 routing memo + inbound index; the spec-109 byte-identical guardrail + toggle pattern.
 
+> **Status 2026-07-22: D1 SHIPPED (increments A0→C green), D2 SEAM EXTRACTED (D-part-1), D2 DRIVER DEFERRED.**
+> Shipped: stage-core extraction (schedule/start/invoke-completion), `RuntimeReplaySafeFusionOptions` (default ON),
+> `RuntimeSchedulerDispatchDiagnostics` (dispatch + fused-span counters), the D1 `ReplaySafeFusionDriver` with
+> byte-identical guardrail + Groundwork crash-convergence suites, and the completion-commit seam
+> (`BuildCompletedCommitAsync`) D2 consumes. Deferred to a focused follow-up: the D2 inline single-predecessor
+> completion driver (blocked on a cross-assembly routing-successor probe + an inline overlay-pump whose
+> byte-identity/crash-convergence must be confirmed empirically). See [tasks.md](./tasks.md) Increment D status block
+> for the full design + the two concrete blockers. A/B (none vs D1) measured; D1+D2 A/B travels with the D2 follow-up.
+
 > **Ratification resolutions this unit implements verbatim** (ADR 0047 Follow-up, resolved 2026-07-20):
 > 1. **D2 fuses single-predecessor edges only** in the first iteration; every fan-in/join edge falls back to the discrete cascade.
 > 2. **D3 routing tables are recomputed on materialization** (already shipped by spec 119; this unit consumes the memo, adds no schema/hash change).
