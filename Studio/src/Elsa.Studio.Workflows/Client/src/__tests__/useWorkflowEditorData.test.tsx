@@ -233,6 +233,108 @@ describe("useWorkflowEditorData expression descriptor contract", () => {
       .toBe("write-line-v1:-,invoice-v10:10.0.0,invoice-v2:2.0.0");
   });
 
+  it("keeps built-in engine intrinsics in the palette when the backend advertises recommendations", async () => {
+    // Live regression (#929): with the recommendation relation advertised, the palette is projected from
+    // the recommendation set. Built-in intrinsics (Set Variable / Set Output) have no persisted catalog row
+    // and therefore no recommendation, so the projection dropped them even though the catalog GET returns
+    // them. This drives the full hook path: listActivities (real normalization) → projectRecommendedPalette.
+    const intrinsic = (activityVersionId: string, activityTypeKey: string, displayName: string, intrinsicBlock: unknown) => ({
+      activityVersionId,
+      activityTypeKey,
+      version: "1",
+      displayName,
+      category: "Primitives",
+      description: `${displayName} intrinsic`,
+      executionType: "Action",
+      available: true,
+      availabilityReason: null,
+      // Raw backend shape: inputs carry `type` (not `typeName`); authoringTemplate.inputs is a dictionary.
+      inputs: [{ referenceKey: "value", name: "Value", type: "Elsa.Any", displayName: "Value", order: 1, isBrowsable: true, isRequired: true, isNullable: true, uiHint: "single-line" }],
+      outputs: [],
+      ports: [{ name: "Done", displayName: "Done", type: null, isBrowsable: true }],
+      containerStructure: null,
+      authoringTemplate: { nodeId: "intrinsic", activityVersionId, inputs: {}, outputs: {}, structure: null },
+      intrinsic: intrinsicBlock
+    });
+    const api = createApi([[]], {
+      activities: [
+        {
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.WriteLine",
+          version: "1.0.0",
+          displayName: "Write Line",
+          category: "Primitives",
+          executionType: "Action",
+          available: true,
+          inputs: [],
+          outputs: [],
+          ports: [],
+          containerStructure: null,
+          authoringTemplate: { nodeId: "activity", activityVersionId: "write-line-v1", inputs: {}, outputs: {}, structure: null }
+        },
+        intrinsic("elsa.intrinsic.set@1", "Elsa.SetVariable", "Set Variable", { kind: "Set", valueInputKey: "value", variableInputKey: "variable", outputNameInputKey: null }),
+        intrinsic("elsa.intrinsic.set-output@1", "Elsa.SetOutput", "Set Output", { kind: "SetOutput", valueInputKey: "value", variableInputKey: null, outputNameInputKey: "name" })
+      ],
+      // The backend recommends the reconciled CLR catalog row but not the row-less intrinsics.
+      recommended: [{
+        definitionId: "write-line-definition",
+        activityTypeKey: "Elsa.WriteLine",
+        category: "Primitives",
+        displayName: "Write Line",
+        versionId: "write-line-v1",
+        version: "1.0.0",
+        isAvailable: true
+      }]
+    });
+    const container = render(api.context);
+
+    await waitFor(() => expect(container.querySelector("[data-testid='palette']")?.textContent).toContain("write-line-v1"));
+    const palette = container.querySelector("[data-testid='palette']")!.textContent!.split(",");
+    expect(palette).toContain("elsa.intrinsic.set@1");
+    expect(palette).toContain("elsa.intrinsic.set-output@1");
+  });
+
+  it("re-appends only row-less intrinsics the recommendation projection omits, once, in catalog order", () => {
+    const catalogItem = (activityVersionId: string, activityTypeKey: string, extra: Record<string, unknown> = {}) => ({
+      activityVersionId,
+      activityTypeKey,
+      version: "1",
+      displayName: activityTypeKey,
+      category: "Primitives",
+      executionType: "Action",
+      available: true,
+      inputs: [],
+      outputs: [],
+      ports: [],
+      containerStructure: null,
+      authoringTemplate: { nodeId: "activity", activityVersionId, inputs: [], outputs: [], structure: null },
+      ...extra
+    });
+    const setVariable = catalogItem("elsa.intrinsic.set@1", "Elsa.SetVariable", {
+      intrinsic: { kind: "Set", valueInputKey: "value", variableInputKey: "variable", outputNameInputKey: null }
+    });
+    const catalog = [
+      catalogItem("write-line-v1", "Elsa.WriteLine"),
+      setVariable
+    ];
+    const recommendation = {
+      definitionId: "write-line-definition",
+      activityTypeKey: "Elsa.WriteLine",
+      category: "Primitives",
+      displayName: "Write Line",
+      versionId: "write-line-v1",
+      version: "1.0.0",
+      isAvailable: true
+    };
+
+    // The intrinsic is appended after the projected recommendation, exactly once.
+    expect(projectRecommendedPalette(catalog, [recommendation]).map(activity => activity.activityVersionId))
+      .toEqual(["write-line-v1", "elsa.intrinsic.set@1"]);
+    // No recommendations at all: still surfaces the intrinsic (never silently empty for a row-less item).
+    expect(projectRecommendedPalette(catalog, []).map(activity => activity.activityVersionId))
+      .toEqual(["elsa.intrinsic.set@1"]);
+  });
+
   it("removes a cleared recommendation and rejects retired, stale, or type-mismatched rows", () => {
     const catalog = [{
       activityVersionId: "invoice-v2",

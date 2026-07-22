@@ -7,6 +7,7 @@ import { ApiCapabilityUnavailableError } from "../api/capabilities";
 import type { RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import { listExpressionDescriptors } from "../api/expressions";
 import { observeReusableActivity } from "../reusableActivityObservability";
+import { isIntrinsicCatalogItem } from "../intrinsicActivities";
 import type { WorkflowErrorInput } from "./editorTypes";
 import { describeWorkflowError } from "./editorHelpers";
 
@@ -137,7 +138,7 @@ export function projectRecommendedPalette(
   recommendations: RecommendedActivityDefinition[]
 ): ActivityCatalogItem[] {
   const catalogByVersion = new Map(catalog.map(activity => [activity.activityVersionId, activity]));
-  return recommendations.reduce<ActivityCatalogItem[]>((result, recommendation) => {
+  const projected = recommendations.reduce<ActivityCatalogItem[]>((result, recommendation) => {
     if (!recommendation.isAvailable) return result;
     const activity = catalogByVersion.get(recommendation.versionId);
     if (!activity || activity.activityTypeKey !== recommendation.activityTypeKey) return result;
@@ -149,6 +150,20 @@ export function projectRecommendedPalette(
     });
     return result;
   }, []);
+
+  // Built-in engine intrinsics (Set Variable / Set Output, foundation #929) are code-owned and always
+  // addable: they have no persisted catalog row, so the recommendation listing never references them and
+  // the projection above would silently drop them from the palette. Re-append any intrinsic the projection
+  // omitted, preserving catalog order, so the recommendation-advertising path shows them just like the
+  // full-catalog fallback path does.
+  const projectedVersions = new Set(projected.map(activity => activity.activityVersionId));
+  for (const activity of catalog) {
+    if (isIntrinsicCatalogItem(activity) && !projectedVersions.has(activity.activityVersionId)) {
+      projected.push(activity);
+    }
+  }
+
+  return projected;
 }
 
 export function decorateReusableCatalog(
