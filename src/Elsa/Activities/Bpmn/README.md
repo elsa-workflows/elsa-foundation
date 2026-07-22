@@ -129,6 +129,29 @@ children, and diagnostics.
   fault mid-cancel rides the ordinary `bpmn.child.faulted` composite path (no `Cancelled` completion).
   Multi-instance transactions, auto-compensation when a transaction is interrupted from outside, escalation,
   transaction hazards, and nested-transaction cross-scope cascades are stated cuts.
+- **Escalation** (spec 127) lets a nested process **signal upward**, riding **runtime seam C** (spec 126, the
+  first consumer). An **escalation throw event** (intermediate) or **escalation end event** carries a required
+  `code` and emits a single `RaiseEscalation` command (companion to `EmitTokens`/`ConsumeToken`); the engine
+  reads the code from the element and, when the process has a committed parent, stages
+  `RequestParentNotification("bpmn.escalation", { code, name? })` on the process's own Defer/Complete commit —
+  at a **root** process it is a no-op with an `EscalationUnhandled` diagnostic (an escalation nobody can catch
+  is a signal, not an error). `BpmnProcess` implements `IRuntimeActivityChildNotificationHandler`;
+  `OnChildNotifiedAsync` resolves the notifying child to its **host element** (graph-derived from the child's
+  node id, robust to the late case), matches the payload code against the host's attached **escalation
+  boundaries** — exact code beats the code-less **catch-all** — and fires. A **non-interrupting** match
+  (`CancelActivity = false`) mints an `Active` boundary token alongside the untouched host and routes (repeated
+  notifications fire repeatedly); an **interrupting** match cancels the host token through the existing
+  `CancelTokenAndChild` cascade (nested subtree torn down via seam A, MI coordinator cascade honored, reason
+  `bpmn.escalation.host-interrupted`) before minting the boundary token. An **unmatched** escalation **bubbles**
+  — re-staged verbatim to the grandparent when this process itself has a parent (consumer-side recursion, one
+  hop per level), else a root `EscalationUnhandled` no-op. **Late races** are deterministic and never fault:
+  once the host terminalized, a non-interrupting boundary **still fires** (additive) while an interrupting one
+  **no-ops** with an `EscalationLate` diagnostic. Escalation boundaries are dormant (no listener child), attach
+  only to a `subProcess` host, honor `CancelActivity`, and per host carry **distinct codes** with **≤1**
+  catch-all. Any non-escalation seam-C code is a forward-compatible diagnostic pass-through. No new BPMN state
+  record or token status is introduced; the notification evaluation rides `FinishEvaluation`'s existing exits,
+  and the bubble/seam-A staging happens only at the clean Defer/Complete exit. Escalation event subprocesses,
+  escalation start events, and escalation intermediate catch events are stated cuts.
 - **Cyclic sequence flows** are executable (spec 122): a token carries an **iteration key** (`null` on the
   implicit first pass); traversing a **backward** (loop-back) sequence flow — the standard DFS back edge,
   precomputed once as `BpmnGraph.IsBackwardFlow` — mints a fresh key, and forward propagation inherits the

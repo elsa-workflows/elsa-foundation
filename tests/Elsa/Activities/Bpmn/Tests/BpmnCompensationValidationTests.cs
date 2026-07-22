@@ -135,7 +135,7 @@ public sealed class BpmnCompensationValidationTests
     public void ThrowEvent_WithNonCompensationDefinition_IsRejected() =>
         AssertRejects(
             MinimalElements(throwEvent: new BpmnElement("throw", BpmnElementTypes.IntermediateThrowEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Signal)])),
-            "only compensate throw events are supported");
+            "only compensate and escalation throw events are supported");
 
     [Fact]
     public void ThrowEvent_BindingChild_IsRejected() =>
