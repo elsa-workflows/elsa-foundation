@@ -1,7 +1,9 @@
 using Elsa.Persistence.EFCore.Options;
+using Elsa.Persistence.EFCore.Services;
 using Elsa.Persistence.EFCore.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -25,12 +27,14 @@ public sealed class RunMigrationsStartupTaskTests : IDisposable
         _factory = new(connectionString);
     }
 
+    private static MigrationsLockReclaimer Reclaimer => new(NullLogger<MigrationsLockReclaimer>.Instance);
+
     public void Dispose() => _rootConnection.Dispose();
 
     [Fact]
     public async Task ExecuteAsync_DisposesTheDbContextItCreates()
     {
-        var task = new RunMigrationsStartupTask<TrackingDbContext>(_factory, OptionsFor(runMigrations: true));
+        var task = new RunMigrationsStartupTask<TrackingDbContext>(_factory, Reclaimer, OptionsFor(runMigrations: true));
 
         await task.ExecuteAsync(CancellationToken.None);
 
@@ -41,7 +45,7 @@ public sealed class RunMigrationsStartupTaskTests : IDisposable
     [Fact]
     public async Task ExecuteAsync_CreatesNoDbContextWhenMigrationsAreDisabled()
     {
-        var task = new RunMigrationsStartupTask<TrackingDbContext>(_factory, OptionsFor(runMigrations: false));
+        var task = new RunMigrationsStartupTask<TrackingDbContext>(_factory, Reclaimer, OptionsFor(runMigrations: false));
 
         await task.ExecuteAsync(CancellationToken.None);
 

@@ -71,6 +71,14 @@ public sealed class ShellScopedActivityIoTypeRegistrationTests
         Assert.Equal(typeof(ShellExtensionPayload), payload);
         Assert.True(wellKnownTypes.TryGetType(typeof(ShellExtensionMode).FullName!, out var mode));
         Assert.Equal(typeof(ShellExtensionMode), mode);
+
+        // (4) A Nullable<T> input over a reserved primitive (TimeSpan?) resolves via its "T?" companion alias
+        //     instead of being skipped with a ReservedAliasNamespaceException (issue #949): the startup pass
+        //     unwraps Nullable<T>, registers the underlying reserved primitive, and the registry derives "TimeSpan?".
+        Assert.True(wellKnownTypes.TryGetType("TimeSpan?", out var nullableDelay));
+        Assert.Equal(typeof(TimeSpan?), nullableDelay);
+        Assert.True(wellKnownTypes.TryGetAlias(typeof(TimeSpan?), out var nullableDelayAlias));
+        Assert.Equal("TimeSpan?", nullableDelayAlias);
     }
 
     private sealed class RecordingFeatureAssemblyProvider(params Assembly[] assemblies) : IFeatureAssemblyProvider
@@ -117,6 +125,9 @@ public sealed class ShellExtensionActivity : Activity<ActivityUnit>
 
     [ActivityInput]
     public ShellExtensionMode Mode { get; set; }
+
+    [ActivityInput]
+    public TimeSpan? Delay { get; set; }
 
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
