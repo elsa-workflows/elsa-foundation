@@ -775,7 +775,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             bookmarkMetadata[RuntimeMetadataKeys.Reason] = RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason;
             var activityMetadata = suspendedState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
             activityMetadata[RuntimeMetadataKeys.BookmarkId] = waitBookmark.BookmarkId;
-            activityMetadata[RuntimeMetadataKeys.ResumeTargetId] = waitBookmark.ResumeTargetId;
+            activityMetadata[RuntimeMetadataKeys.ResumeTargetId] = registration.ResumeTargetKey;
             activityMetadata[RuntimeMetadataKeys.SuspendReason] = RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason;
             suspendedState = suspendedState with
             {
@@ -791,7 +791,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     invokeWorkItem.WorkflowExecutionId,
                     invokePayload.ActivityExecutionId,
                     invokePayload.ExecutableNodeId,
-                    waitBookmark.ResumeTargetId,
+                    registration.ResumeTargetKey,
                     waitBookmark.StimulusType,
                     waitBookmark.StimulusHash,
                     waitBookmark.Payload,
@@ -1239,9 +1239,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState suspendedState,
         ActivityBookmarkRequest bookmark)
     {
+        // The registration's ResumeTargetKey is the node-scoped id resolved by the suspension projector;
+        // the staged wait bookmark still carries the activity's local id, so match on the wait identity
+        // (stimulus type + hash) and let the registration supply the authoritative resume-target id.
         var matches = (suspendedState.TriggerRegistrations ?? [])
             .Where(registration =>
-                StringComparer.Ordinal.Equals(registration.ResumeTargetKey, bookmark.ResumeTargetId) &&
                 StringComparer.Ordinal.Equals(registration.StimulusType, bookmark.StimulusType) &&
                 StringComparer.Ordinal.Equals(registration.StimulusHash, bookmark.StimulusHash))
             .ToArray();

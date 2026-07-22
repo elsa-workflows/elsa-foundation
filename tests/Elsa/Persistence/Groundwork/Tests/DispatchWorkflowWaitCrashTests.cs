@@ -745,14 +745,7 @@ public sealed class DispatchWorkflowWaitCrashTests
         return new WorkflowExecutable(
             ParentExecutableIdentity,
             node,
-            new Dictionary<string, WorkflowExecutableResumeTarget>
-            {
-                [DispatchWorkflowConstants.CompletionResumeTargetId] = new(
-                    DispatchWorkflowConstants.CompletionResumeTargetId,
-                    node.ExecutableNodeId,
-                    "OnChildCompletedAsync",
-                    new Dictionary<string, string>())
-            },
+            NodeScopedResumeTargets(node.ExecutableNodeId),
             Now,
             new Dictionary<string, string>(),
             inputContract: null,
@@ -763,6 +756,24 @@ public sealed class DispatchWorkflowWaitCrashTests
                     ChildExecutableIdentity.ArtifactHash,
                     [node.ExecutableNodeId])
             ]);
+    }
+
+    // Mirrors the node-scoped map the production ExecutableNodeCompiler emits: scoped key/id + local id,
+    // so resolution exercises the (ExecutableNodeId, LocalResumeTargetId) fallback the runtime relies on.
+    private static Dictionary<string, WorkflowExecutableResumeTarget> NodeScopedResumeTargets(string executableNodeId)
+    {
+        var scopedId = WorkflowExecutableResumeTarget.ComposeScopedId(
+            executableNodeId,
+            DispatchWorkflowConstants.CompletionResumeTargetId);
+        return new Dictionary<string, WorkflowExecutableResumeTarget>
+        {
+            [scopedId] = new(
+                scopedId,
+                executableNodeId,
+                "OnChildCompletedAsync",
+                new Dictionary<string, string>(),
+                DispatchWorkflowConstants.CompletionResumeTargetId)
+        };
     }
 
     private static RuntimeInputBinding LiteralBinding(string name, object value, Type type)
