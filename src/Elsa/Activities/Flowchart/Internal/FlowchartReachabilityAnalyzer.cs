@@ -8,7 +8,7 @@ public sealed class FlowchartReachabilityAnalyzer
         graph.CanReach(sourceNodeId, targetNodeId);
 
     public bool IsBackwardEdge(FlowchartGraph graph, string sourceNodeId, string targetNodeId) =>
-        graph.CanReach(targetNodeId, sourceNodeId);
+        graph.IsBackwardEdge(sourceNodeId, targetNodeId);
 
     public void ValidateNoAmbiguousLoopbacks(FlowchartGraph graph)
     {

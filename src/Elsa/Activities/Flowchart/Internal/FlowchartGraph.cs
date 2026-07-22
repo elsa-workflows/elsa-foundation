@@ -14,6 +14,7 @@ public sealed class FlowchartGraph
     private readonly IReadOnlyDictionary<string, FlowchartNodeMetadata> _nodeMetadata;
     private readonly IReadOnlyDictionary<string, FlowchartConnectionMetadata> _connectionMetadata;
     private readonly string? _startNodeId;
+    private readonly IReadOnlySet<(string Source, string Target)> _backwardEdges;
 
     private FlowchartGraph(
         IReadOnlyList<ExecutableNode> children,
@@ -29,6 +30,7 @@ public sealed class FlowchartGraph
         _startNodeId = startNodeId;
         _nodeMetadata = nodeMetadata;
         _connectionMetadata = connectionMetadata;
+        _backwardEdges = ComputeBackwardEdges();
     }
 
     public IReadOnlyList<ExecutableNode> Children { get; }
@@ -195,6 +197,69 @@ public sealed class FlowchartGraph
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether the connection <paramref name="sourceNodeId"/> → <paramref name="targetNodeId"/> is a backward
+    /// (loop-closing) edge: a token that traverses it opens a fresh loop-iteration scope/key rather than
+    /// inheriting the emitting path's (see <see cref="Internal.FlowchartScopeResolver.ResolveTargetScope"/>).
+    /// The set is precomputed once at construction (<see cref="ComputeBackwardEdges"/>) as the standard
+    /// depth-first back-edge set, so it marks exactly the loop-closing edge of each cycle — never a
+    /// forward/cross edge — and is a deterministic function of the node/connection/start-node sets.
+    /// </summary>
+    public bool IsBackwardEdge(string sourceNodeId, string targetNodeId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetNodeId);
+        return _backwardEdges.Contains((sourceNodeId, targetNodeId));
+    }
+
+    /// <summary>
+    /// Classifies the graph's backward (loop-closing) edges once at construction. A backward edge is the
+    /// standard compiler back edge: during a depth-first traversal from the start node (then any remaining
+    /// unvisited nodes), an edge <c>u → v</c> is backward iff <c>v</c> is GRAY — on the current DFS stack, an
+    /// ancestor of <c>u</c> — when the edge is examined. This marks exactly the loop-closing edge of each loop
+    /// and never a forward/cross edge of the cycle, unlike the naive "target can reach source" rule, which
+    /// marks every edge of a cycle as backward (so a fork/join inside a loop body would split its branches
+    /// into divergent iteration scopes that never reconverge). Roots are the start node first, then every
+    /// remaining node ordinal-sorted; each node's outbound connections are ordinal-sorted by connection id, so
+    /// the result is stable regardless of authoring order. Mirrors <c>BpmnGraph.ComputeBackwardFlowIds</c>
+    /// (spec 122).
+    /// </summary>
+    private IReadOnlySet<(string Source, string Target)> ComputeBackwardEdges()
+    {
+        const int gray = 1;
+        const int black = 2;
+
+        var backward = new HashSet<(string Source, string Target)>();
+        var color = new Dictionary<string, int>(StringComparer.Ordinal);
+        var outboundBySource = _connections.ToLookup(connection => connection.Source.NodeId, StringComparer.Ordinal);
+
+        var roots = (SelectStartNode() is { } startNode ? new[] { startNode.ExecutableNodeId } : [])
+            .Concat(_nodesById.Keys.OrderBy(id => id, StringComparer.Ordinal))
+            .Distinct(StringComparer.Ordinal);
+
+        foreach (var root in roots)
+            Visit(root);
+
+        return backward;
+
+        void Visit(string nodeId)
+        {
+            color[nodeId] = gray;
+
+            foreach (var connection in outboundBySource[nodeId].OrderBy(GetConnectionId, StringComparer.Ordinal))
+            {
+                var target = connection.Target.NodeId;
+                var known = color.TryGetValue(target, out var state) ? state : 0;
+                if (known == gray)
+                    backward.Add((nodeId, target)); // target is on the current DFS stack — a loop-closing edge.
+                else if (known != black)
+                    Visit(target);
+            }
+
+            color[nodeId] = black;
+        }
     }
 
     private static FlowchartStructure? ReadStructure(ExecutableNode executableNode)
