@@ -35,6 +35,7 @@ public sealed class RuntimeCoalescingSession
     private readonly Dictionary<string, DurableValueState> _durableValueUpserts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durableValueTombstones = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ActivityExecutionInspectionProjection> _inspectionUpserts = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ActivityExecutionInspectionProjection?> _inspectionBaselines = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WorkflowDispatchRecord> _workflowDispatchUpserts = new(StringComparer.Ordinal);
 
     private readonly List<string> _outboxOrder = [];
@@ -247,6 +248,27 @@ public sealed class RuntimeCoalescingSession
         _outboxItems.Add(item.OutboxItemId, item);
         _outboxOrder.Add(item.OutboxItemId);
     }
+
+    // ---- Inspection durable-baseline memo --------------------------------------------------------------------------
+    // Store-read coalescing for IActivityExecutionInspectionStore.FindAsync (spec-110 family): the memo holds what the
+    // durable store returned (a cached null records a durable miss), never the buffered overlay state, so a memoized
+    // read is byte-identical to a fresh durable read. Validity rests on the single-writer ownership lease: while the
+    // session is active, the only path that can change durable inspection rows is this session's own flush, and every
+    // flush invalidates the memo via InvalidateInspectionBaselines.
+
+    /// <summary>Returns a memoized durable-baseline inspection read. A hit may carry <see langword="null"/> (a cached durable miss).</summary>
+    public bool TryGetInspectionBaseline(string activityExecutionId, out ActivityExecutionInspectionProjection? projection) =>
+        _inspectionBaselines.TryGetValue(activityExecutionId, out projection);
+
+    /// <summary>Memoizes the result of a durable inspection read (including a null miss) until the next durable flush.</summary>
+    public void CacheInspectionBaseline(string activityExecutionId, ActivityExecutionInspectionProjection? projection)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
+        _inspectionBaselines[activityExecutionId] = projection;
+    }
+
+    /// <summary>Drops all memoized baselines. Must be called whenever a durable checkpoint commit lands for this session.</summary>
+    public void InvalidateInspectionBaselines() => _inspectionBaselines.Clear();
 
     // ---- State overlay reads ---------------------------------------------------------------------------------------
 

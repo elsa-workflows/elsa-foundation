@@ -196,6 +196,12 @@ store as today, and the single folded flush still goes through `RuntimeCheckpoin
 ownership fencing gates the coalesced flush exactly as it gates an immediate commit — a stale writer is rejected
 before anything persists.
 
+**Inspection reads are memoized, not overlaid** (spec 131). The per-hop inspection-projection build reads
+`IActivityExecutionInspectionStore.FindAsync` to pick its merge branch; under coalescing the overlay serves a
+per-drain memo of the **durable baseline** (never the buffered state, which would change the flushed projection
+bytes), invalidated at every durable flush. `CoalescingRuntimeCheckpointPersistenceOptions.CoalesceInspectionReads`
+(default on) disables it back to per-hop durable reads.
+
 **Flush boundaries — mandatory checkpoints are never coalesced away.** The policy forces an immediate flush at
 every durability-critical boundary: `WorkflowSuspended`, `WorkflowCompleted`, `WorkflowFaulted`,
 `WorkflowCancelled`, `IncidentRecorded`, `ActivitySuspended`, `ActivityCancelled`, and `BookmarkCreated`. A
