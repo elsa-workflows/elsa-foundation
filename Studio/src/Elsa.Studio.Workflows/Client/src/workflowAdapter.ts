@@ -3,6 +3,7 @@ import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, 
 import { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
 import { bpmnStructureKind } from "./bpmn/bpmnTypes";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
+import { formatActivitySummary } from "./activitySummary";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
 export { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
@@ -14,6 +15,9 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   activityTypeKey?: string;
   category?: string;
   executionType?: string;
+  // Per-instance preview of the activity's primary authored input (e.g. Write Line's text), shown as
+  // the node subtitle in place of the static `category · kind`. Undefined when nothing is authored yet.
+  summary?: string;
   activityDefinitionVersion?: string;
   icon?: WorkflowNodeIcon;
   childSlots: ChildSlot[];
@@ -821,6 +825,7 @@ function createWorkflowNode(
       activityTypeKey: catalogItem?.activityTypeKey,
       category: catalogItem?.category,
       executionType: catalogItem?.executionType,
+      summary: catalogItem ? formatActivitySummary(activity, catalogItem) : undefined,
       activityDefinitionVersion: catalogItem?.activityDefinitionVersion,
       icon: resolveActivityIcon(catalogItem),
       childSlots: getChildSlots(activity, catalogItem),

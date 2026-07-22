@@ -4,7 +4,7 @@ import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { getActivityDisplay, type ChildSlot, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
-import { formatActivityVersion, renderActivityIcon } from "../workflowFormatting";
+import { formatActivityVersion, renderActivityIcon, truncate } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowSlotNavigationContext } from "./contexts";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
@@ -43,7 +43,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(nodeData.icon)}</span>
         <span className="wf-node-copy">
           <strong>{nodeData.label}</strong>
-          {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle ? <small>{subtitle}</small> : null}
+          {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle.text ? <small title={subtitle.title}>{subtitle.text}</small> : null}
           {version ? <small className="wf-node-version" title={`Exact version ${version.full}`}>v{version.short}</small> : null}
         </span>
       </div>
@@ -88,11 +88,21 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   );
 }
 
-function formatNodeSubtitle(nodeData: WorkflowNodeData) {
-  const category = nodeData.category?.trim();
-  const executionType = nodeData.executionType?.trim();
-  const parts = [category, executionType].filter((part): part is string => !!part);
-  return parts.join(" · ");
+/**
+ * The node subtitle. Prefers a per-instance summary of the primary authored input (what this node
+ * actually does) over the static `category · kind`, which duplicates the palette grouping and never
+ * varies between instances. Falls back to the bare kind when nothing is authored yet. The full summary
+ * and the type metadata are preserved in `title` so a hover still surfaces them.
+ */
+function formatNodeSubtitle(nodeData: WorkflowNodeData): { text: string; title?: string } {
+  const summary = nodeData.summary?.trim();
+  const typeMeta = [nodeData.category?.trim(), nodeData.executionType?.trim()]
+    .filter((part): part is string => !!part)
+    .join(" · ");
+  if (summary) {
+    return { text: truncate(summary, 40), title: [summary, typeMeta].filter(Boolean).join(" — ") };
+  }
+  return { text: nodeData.executionType?.trim() ?? "", title: typeMeta || undefined };
 }
 
 export function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {

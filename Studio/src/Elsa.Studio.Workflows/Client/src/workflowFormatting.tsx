@@ -33,6 +33,17 @@ export function shortTypeName(key: string | null | undefined) {
 }
 
 /**
+ * Trims `text` and, when it exceeds `max` characters, clips it to a single-character ellipsis so long
+ * node summaries / expressions never blow out a node's width. The full string is expected to remain
+ * available elsewhere (e.g. a tooltip), so the clip is purely presentational.
+ */
+export function truncate(text: string, max = 40) {
+  const value = text.trim();
+  if (value.length <= max) return value;
+  return `${value.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+/**
  * Splits an activity-definition version string into a compact label and its full exact form.
  * CLR activities carry a behavioral-hash build suffix (e.g. `1.0.0+892535311ec5…`); the short form
  * drops that suffix so version chips stay compact and never crowd out the activity name, while the

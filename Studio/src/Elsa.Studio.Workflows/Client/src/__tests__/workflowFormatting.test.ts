@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatActivityDefinitionDate, humanizeTypeName, resolveActivityDefinitionTitle } from "../workflowFormatting";
+import { formatActivityDefinitionDate, humanizeTypeName, resolveActivityDefinitionTitle, truncate } from "../workflowFormatting";
 
 describe("workflow formatting helpers", () => {
   it("humanizes the last CLR/type-key segment", () => {
@@ -37,5 +37,13 @@ describe("workflow formatting helpers", () => {
     const rendered = formatActivityDefinitionDate("2026-07-17T10:00:00Z");
     expect(rendered).not.toBe("—");
     expect(rendered).toBe(new Date("2026-07-17T10:00:00Z").toLocaleDateString());
+  });
+
+  it("truncates only when over the limit, with a single ellipsis", () => {
+    expect(truncate("short")).toBe("short");
+    expect(truncate("  padded  ")).toBe("padded");
+    expect(truncate("0123456789", 5)).toBe("0123…");
+    expect(truncate("0123 6789", 6)).toBe("0123…");
+    expect(truncate("exactly-ten", 11)).toBe("exactly-ten");
   });
 });
