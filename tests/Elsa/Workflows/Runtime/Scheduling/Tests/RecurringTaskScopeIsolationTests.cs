@@ -36,8 +36,11 @@ public sealed class RecurringTaskScopeIsolationTests
         services.RemoveAll<IRecurringTriggerScheduleStore>();
         services.AddScoped<IRecurringTriggerScheduleStore>(sp => new RecurringScheduleStoreProbe(observations, CurrentScope(sp)));
         services.AddScoped<IStimulusRouter>(_ => new StimulusRouterProbe(observations));
+        // In real composition the WorkflowsRuntimeTriggers dependency registers the binding store the pump's
+        // owner-scoped dispatch resolves per worker scope.
+        services.AddScoped<IWorkflowTriggerBindingStore>(_ => new TriggerBindingStoreProbe(observations));
 
-        await AssertTwoFreshTicksAsync<RecurringTriggerPumpTask>(services, observations, expectedWorkersPerTick: 4);
+        await AssertTwoFreshTicksAsync<RecurringTriggerPumpTask>(services, observations, expectedWorkersPerTick: 6);
     }
 
     [Fact]
@@ -153,6 +156,17 @@ public sealed class RecurringTaskScopeIsolationTests
             _observations.Disposed.Add(_id);
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class TriggerBindingStoreProbe(ScopeObservations observations) : IWorkflowTriggerBindingStore
+    {
+        private readonly Guid _id = Record(observations);
+
+        public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTriggerBindingPage> ListByArtifactAsync(WorkflowTriggerBindingArtifactPageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class StimulusRouterProbe(ScopeObservations observations) : IStimulusRouter

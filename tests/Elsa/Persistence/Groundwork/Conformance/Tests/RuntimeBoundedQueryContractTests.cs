@@ -731,6 +731,7 @@ public sealed class RuntimeBoundedQueryContractTests
         new(
             id,
             "artifact-due-contract",
+            $"node-{id}",
             "Timer",
             $"sha256:{id}",
             RecurringScheduleKind.Interval,

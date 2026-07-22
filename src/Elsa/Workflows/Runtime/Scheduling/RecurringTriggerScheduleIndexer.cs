@@ -139,6 +139,7 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
                 schedules.Add(new RecurringTriggerSchedule(
                     ScheduleId: BuildScheduleId(publicationId, artifactId, node.ExecutableNodeId, descriptor.StimulusHash, fanOut),
                     ArtifactId: artifactId,
+                    ExecutableNodeId: node.ExecutableNodeId,
                     StimulusType: descriptor.StimulusType,
                     StimulusHash: descriptor.StimulusHash,
                     Kind: descriptor.Kind,

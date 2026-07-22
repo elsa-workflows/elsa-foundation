@@ -254,6 +254,7 @@ public sealed class PublicationProjectionReconcilerTests
             var schedule = new RecurringTriggerSchedule(
                 RecurringTriggerSchedule.BuildId(publicationId, executable.Identity.ArtifactId, "node-root"),
                 executable.Identity.ArtifactId,
+                "node-root",
                 "Event",
                 "orders",
                 RecurringScheduleKind.Interval,
