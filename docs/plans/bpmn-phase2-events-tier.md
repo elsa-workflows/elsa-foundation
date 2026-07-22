@@ -30,6 +30,7 @@ The events-tier runtime scope is COMPLETE with spec 122.
 |---|---|---|---|
 | Runtime scoped-variable read seam + collection-mode multi-instance (marker `IRuntimeScopedVariableReader` + `TryReadScopedVariableValue`, committed-basis, all three handler paths; spec 121 rule-5 cut removed; `BpmnLoopState.Items` snapshot; interchange `elsa:variable` declarations + collection round-trip) | `specs/123-runtime-scoped-variable-read` | #965 | merged |
 | Compensation (reverse-order `BpmnCompensable` log registered at host completion; compensation boundary events with first-class flow-less handlers via association; compensate intermediate throw + end events with `activityRef`; claim-then-sequential-replay `BpmnCompensationRun`; interchange association parsing; zero runtime changes) | `specs/124-bpmn-compensation` | #966 | merged |
+| Transactions + cancel events (`IsTransaction` on element + structure; cancel end = `CancelTransaction` command → stop-live-work → claim-all → spec-124 replay → `Complete("Cancelled")`; structure-dependent `Cancelled` outcome via `ExecutableNodeCompiler.ResolveOutcomes` Switch-pattern branch; parent maps the outcome to a dormant cancel boundary before Case B; `<transaction>`/`cancelEventDefinition` interchange) | `specs/125-bpmn-transactions` | #970 | merged |
 
 Remaining queued follow-ups (not part of
 the tier's runtime scope): **Flowchart backward-edge
