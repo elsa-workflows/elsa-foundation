@@ -54,6 +54,10 @@ Known implementations:
   command and nothing else; target selection, atomic claiming, sequential handler replay, run-coordinator
   cascade, and the throw's route/consume on completion are all owned by `BpmnExecutionEngine`, not these
   behaviors)*
+- `CancelEndEventBehavior` *(intra-domain — default; transactions, spec 125 — a cancel end event emits a
+  single `CancelTransaction` command and nothing else; stopping other live work, claiming the scope's
+  compensables, the spec-124 replay, and the `Cancelled` completion are all owned by `BpmnExecutionEngine`,
+  not this behavior)*
 - **Compensation (spec 124)** adds one command kind — `BpmnBehaviorCommandKind.TriggerCompensation` — and no
   new token status or state-schema break. A **compensation boundary** (`BpmnEventDefinitionTypes.Compensation`
   on a `boundaryEvent`, dormant like an error boundary) names its handler via
@@ -68,6 +72,23 @@ Known implementations:
   handler sub-token, drops the run, and releases its unrun `Claimed` compensables back to `Registered`.
   Compensables are never pruned (parallel to `Canceled` tokens). All of it lives in the engine; behaviors stay
   semantics-unaware.
+- **Transactions (spec 125)** add one command kind — `BpmnBehaviorCommandKind.CancelTransaction` — one
+  additive state flag `BpmnExecutionState.Cancelling` (parallel to `Terminated`), and **no** new token status
+  or state-record type (the spec-124 `BpmnCompensationRun` is reused). `BpmnElement.IsTransaction` marks a
+  transaction `subProcess`; `BpmnStructure.IsTransaction` marks the nested process. `BpmnEventDefinitionTypes.
+  Cancel` on an `endEvent` inside a transaction is the **cancel end** (family `EndEventCancel`); on a
+  `boundaryEvent` attached to a transaction host it is a **cancel boundary** (dormant, no listener, ≥1
+  outbound). On `CancelTransaction` the engine stops all other live work through `CancelTokenAndChild`
+  (logical-only, reason `bpmn.transaction.cancel-stopped-live-work`), sets `Cancelling`, claims every
+  `Registered` compensable and opens a `BpmnCompensationRun` coordinated by the cancel-end token, then
+  completes with the `Cancelled` outcome (`FinishEvaluation` stages `Complete("Cancelled")` when `Cancelling`
+  is set and nothing is live; `HandleCompensationHandlerCompletion` grows a third tail branch for a cancel-end
+  coordinator). In the parent scope, a transaction child completing `Cancelled` is intercepted in
+  `OnChildCompletedAsync` before Case B / behavior dispatch — the host token is consumed, no compensable
+  registers, no normal outbound routes, catch listeners tear down, and an `Active` token is minted at the
+  attached cancel boundary (error-boundary minting pattern); no cancel boundary faults
+  `bpmn.transaction.cancelled-unhandled`. All of it lives in the engine; behaviors stay semantics-unaware.
+  The one touch outside the module is the structure-dependent `Cancelled` outcome declaration (see below).
 - **Multi-instance loops (spec 121)** add no behavior: a `BpmnElement.LoopCharacteristics`
   (`BpmnLoopCharacteristics`) turns a task/subprocess host's `ScheduleChild` decision into a loop the
   engine owns entirely — a coordinator token plus private per-instance sub-tokens, each scheduled through
@@ -95,9 +116,13 @@ This module also exposes these activity-owned contracts:
 - `Bpmn.Activities` child slot
 - `elsa.bpmn.structure` structure payload with schema version `1.0.0`
 - `BpmnStructure.Elements` containing `BpmnElement[]` (each element optionally carries `AttachedToRef`/
-  `CancelActivity` for boundary events, spec 120, and `LoopCharacteristics` — `BpmnLoopCharacteristics`,
-  cardinality XOR collection — for multi-instance loops, spec 121/123; all additive, state schema stays
-  version 1, including the collection-mode `BpmnLoopState.Items` snapshot)
+  `CancelActivity` for boundary events, spec 120; `LoopCharacteristics` — `BpmnLoopCharacteristics`,
+  cardinality XOR collection — for multi-instance loops, spec 121/123; `IsForCompensation`/
+  `CompensationHandlerElementId` for compensation, spec 124; and `IsTransaction` for a transaction
+  subprocess, spec 125; all additive, state schema stays version 1, including the collection-mode
+  `BpmnLoopState.Items` snapshot)
+- `BpmnStructure.IsTransaction` (spec 125) — marks the nested process a transaction; drives cancel-end
+  validation and the structure-dependent `Cancelled` outcome declaration (see below). Additive.
 - `BpmnStructure.SequenceFlows` containing `BpmnSequenceFlow[]`
 - `BpmnAuthoredStructure.Pools` / `BpmnAuthoredStructure.Lanes` (authored/designer-side only)
 - `BpmnAuthoredStructure.Diagram` opaque BPMN-DI-shaped layout document (authored-side only,
@@ -167,4 +192,18 @@ invocation seeds every none start. Fault codes: `bpmn.start.unresolved-trigger`,
 - `BpmnStructureHandler` implements `IActivityStructureHandler` (`Elsa.Workflows.Design.Core`) with
   `SupportsScopedVariables = true` and `ProjectScopedVariables` — a `BpmnProcess` is a container
   scope that can own container-scoped variables visible to its descendant activities, using the same
-  generic scope semantics as `Sequence` and `Flowchart` (ADR 0027).
+  generic scope semantics as `Sequence` and `Flowchart` (ADR 0027). It carries the authored
+  `BpmnAuthoredStructure.IsTransaction` flag onto the compiled executable `BpmnStructure.IsTransaction`.
+
+## Structure-dependent `Cancelled` outcome (spec 125)
+
+`BpmnProcess` statically declares `[ActivityOutcome(Done)]`. A **transaction** process (its compiled
+`elsa.bpmn.structure` payload has `isTransaction: true`) additionally declares the `Cancelled` outcome so a
+cancel end event's `Complete("Cancelled")` passes VF-ACT-006 and the parent can map it to a cancel boundary.
+There is no per-activity outcome-projection surface on `IActivityStructureHandler`, so this rides the same
+mechanism as Switch case labels: **`ExecutableNodeCompiler.ResolveOutcomes`** (in
+`Elsa.Workflows.Publishing.Api`) reads the compiled structure and adds `Cancelled` when the BPMN structure is
+a transaction — a one-branch additive extension mirroring the existing `elsa.switch.structure` special case.
+This is the single touch outside the BPMN module; the outcome channel (`Complete(outcomeName)`,
+contract-declared outcomes, parent `OutcomeNames`) is otherwise unchanged. (The test harness's
+`WorkflowExecutionHarness.ResolveOutcomes` carries the same one-branch mirror for hand-built graphs.)

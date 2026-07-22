@@ -61,6 +61,14 @@ Mapping rules for this slice:
   no element with an attached compensation boundary) drops the throw with a finding (its flows cascade-drop) and
   degrades the end to a plain none end event with a finding, so the importer never emits a graph the validator
   rejects. An `intermediateThrowEvent` with any other (or no) definition stays dropped.
+- **Transactions** (spec 125): a `<transaction>` imports exactly like a `<subProcess>` (a nested `BpmnProcess`
+  activity node bound by the element) plus `IsTransaction = true` on **both** the element and the nested
+  authored structure. A `cancelEventDefinition` on an `endEvent` **inside** a transaction imports as a cancel
+  end event; **outside** a transaction it degrades to a none end event with a finding (the validator would
+  reject it). A `cancelEventDefinition` on a `boundaryEvent` attached to a transaction host imports as a cancel
+  boundary; attached to a non-transaction host, or a second one on the same transaction, it drops with a
+  finding (its flows cascade-drop). Inner spec-124 compensation constructs inside a transaction resolve as
+  usual (the transaction is imported recursively).
 - Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes
   (call activities, event subprocesses, …) are dropped with an issue. **Cyclic graphs import clean** — a
   loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation
@@ -86,7 +94,10 @@ plus a container-level `<association>` derived from its handler reference; the h
 `isForCompensation="true"`; a compensate throw/end emits its `compensateEventDefinition` (with the optional
 `activityRef`). Compensation boundary/throw/end shapes ride the existing 36×36 event DI bounds; the association
 emits no BPMNEdge (this exporter emits no DI edges for connectors at all — a documented limitation, not
-compensation-specific). Each
+compensation-specific). A **transaction** element emits `<transaction>` (everything else identical to a
+subprocess); a cancel end event emits `<endEvent><cancelEventDefinition/></endEvent>` and a cancel boundary
+emits `<boundaryEvent attachedToRef="…"><cancelEventDefinition/></boundaryEvent>`, both riding the existing
+event DI bounds (no association involved). Each
 distinct message/signal
 name emits one deduped root `<message>`/`<signal>` declaration (deterministic id `message-{name}` /
 `signal-{name}`) that the element's `messageRef`/`signalRef` targets — a name that sanitizes to a

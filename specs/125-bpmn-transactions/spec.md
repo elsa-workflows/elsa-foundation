@@ -280,3 +280,39 @@ at clean exits, `CancelLiveWork` logical-only.
   cancel boundary).
 - Full test projects green: BPMN, BPMN Interchange, Activities Runtime, Workflows Runtime,
   ControlFlow, Architecture. Full solution build clean.
+
+## Deviations from the ratified plan
+
+- **Tripwire 1 outcome — the structure-dependent `Cancelled` outcome is declared in
+  `ExecutableNodeCompiler.ResolveOutcomes`, not in `BpmnStructureHandler`.** The spec's mental model was that
+  `BpmnStructureHandler` "projects the authored structure into the published contract" and declares the
+  outcome there. In the actual code there is **no** outcome-projection surface on `IActivityStructureHandler`
+  (it projects children, child-contract-member usage, and scoped variables only). Structure-dependent outcomes
+  are resolved by **`ExecutableNodeCompiler.ResolveOutcomes`** (`Elsa.Workflows.Publishing.Api`), which reads
+  the compiled executable structure — the exact mechanism the Switch activity uses, hardcoded there as a
+  special case for `elsa.switch.structure`. The implementation therefore: (1) carries the new
+  `BpmnStructure.IsTransaction` flag onto the compiled executable structure via
+  `BpmnStructureHandler.CompileExecutableStructure`, and (2) adds **one additive branch** in
+  `ResolveOutcomes` — when the structure kind is `elsa.bpmn.structure` and `isTransaction: true`, add
+  `"Cancelled"` — byte-for-byte parallel to the existing `elsa.switch.structure` branch. This is the single
+  touch outside the BPMN module. A non-transaction `BpmnProcess` is unaffected (its contract keeps exactly
+  `Done`, FR-2). VF-ACT-006 is enforced end-to-end (the completion projector rejects an undeclared outcome),
+  so this declaration is load-bearing, not cosmetic: the test harness's parallel outcome resolver
+  (`WorkflowExecutionHarness.ResolveOutcomes`, which already mirrored the Switch special case for hand-built
+  graphs) needed the same one-branch mirror or every `Complete("Cancelled")` faults with VF-ACT-006. No
+  runtime-model type, seam, or token status changed; the outcome channel itself was untouched.
+- **Tripwire 2/3 — clear.** `Complete("Cancelled")` is accepted end-to-end once the outcome is declared (the
+  completion payload carries `structuralContinuation.OutcomeName` → the parent's `OutcomeNames`), and the
+  parent-side interception distinguishes the transaction host's completion by testing
+  `completionContext.OutcomeNames.Contains("Cancelled")` — the payload does carry the outcome name.
+- **Tripwire 4 — clear.** Keeping the cancel-end token live as the compensation-run coordinator (with an active
+  handler child) never trips the deadlock detector or the liveness accounting: while replaying there is always
+  an active child, and on the empty-log / last-handler path the cancel-end token is consumed so the clean
+  liveTokens==0 branch fires (now outcome-aware).
+- **Interrupting-catch-on-transaction cut — covered by the unchanged spec-120 semantics, not a bespoke test.**
+  A transaction host is byte-identically a `subProcess` host for catch/error boundaries (only cancel boundaries
+  are transaction-specific in validation); an interrupting catch/error boundary firing mid-transaction tears
+  the nested process down through the existing seam-A cascade with no compensation — this is spec-120 code
+  exercised unchanged. Rather than construct a suspending-nested-transaction fixture that mostly re-tests spec
+  120, the no-compensation-on-interrupt cut is documented (D2c / README) and the interplay is left to the
+  existing boundary suite. This is a coverage decision, not a behavior deviation.
