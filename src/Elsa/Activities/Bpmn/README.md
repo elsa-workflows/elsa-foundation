@@ -61,6 +61,24 @@ children, and diagnostics.
   `BoundaryEventBehavior` only routes outbound flows when a boundary fires. Boundaries are validated (host
   is a task-family/subprocess element with a bound child; no inbound flows; ≥1 outbound; catch boundaries
   bind a listener child, error boundaries bind none and must be interrupting; ≤1 error boundary per host).
+- **Multi-instance activities** (spec 121) run a host's bound child N times — **sequentially** (one
+  instance at a time) or in **parallel** (N concurrent instances of the *same* child node). Loop
+  characteristics (`BpmnLoopCharacteristics`: `IsSequential` + a positive `Cardinality`) are authored on a
+  task-family or `subProcess` host that binds a child. When a token reaches the host it becomes a **loop
+  coordinator** (stays `AwaitingChild`); the engine schedules the child on private per-instance sub-tokens,
+  each carrying an iteration frame that seeds a zero-based `loopIndex`, and routes the host's outbound flows
+  through its normal behavior only after the **last** instance completes. This is the module's first user of
+  the runtime iteration-frame seam and the first activity anywhere to schedule concurrent same-node
+  children. It composes with boundary/error teardown: cancelling a multi-instance host (an interrupting
+  boundary, an error-boundary absorption, or an event-gateway loser) cancels **all** its live instances
+  through seam A, and an error boundary on a multi-instance host absorbs a faulted instance through seam B
+  while the remaining instances cascade-cancel. Catch boundaries arm **once** on the coordinator and tear
+  down when the last instance completes. Behaviors stay multi-instance-unaware; the whole loop lifecycle
+  lives in the engine. **Collection mode** (run once per item of a container-scoped collection variable) is
+  authoring-modeled and validated as a stated cut but **not executable in this slice** — its per-instance
+  item read needs a container-variable read seam that structural evaluations do not yet expose; the graph
+  validator rejects it and the importer degrades it (follow-up unit). Cyclic sequence flows and token
+  iteration keys for join accounting stay out of scope.
 - Multi-inbound parallel joins wait for one arrival per inbound flow. Multi-inbound inclusive joins
   are activation-aware: they wait only while a live token or running child can still reach an
   un-arrived inbound flow. Everything else is an implicit XOR merge.
@@ -80,15 +98,17 @@ children, and diagnostics.
 This module currently ships the Phase 1 core subset (see `specs/108-bpmn-container-activity/`) plus
 the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`), event-start (see
 `specs/117-bpmn-event-start-events/`), event-based-gateway (see
-`specs/119-bpmn-event-based-gateway/`), and boundary-events (see `specs/120-bpmn-boundary-events/`)
-slices: none/timer/message/signal start events, none/terminate end events, timer/message/signal
-intermediate catch events, timer/message/signal/error **boundary events**, task family, embedded
+`specs/119-bpmn-event-based-gateway/`), boundary-events (see `specs/120-bpmn-boundary-events/`), and
+multi-instance (see `specs/121-bpmn-multi-instance/`) slices: none/timer/message/signal start events,
+none/terminate end events, timer/message/signal intermediate catch events, timer/message/signal/error
+**boundary events**, cardinality **multi-instance** (sequential + parallel) loops, task family, embedded
 subprocess, and exclusive/parallel/inclusive/event-based gateways over **acyclic** graphs. Cyclic graphs
 are rejected at validation. The interchange importer/exporter round-trips timer/message/signal event
 definitions on event-defined start and intermediate catch events (see
-`specs/118-bpmn-interchange-event-definitions/`) and round-trips the event-based gateway and boundary event
-elements, so these constructs can now be authored from XML. Later units add escalation/compensation
-boundaries, event subprocesses, multi-instance, transactions, and call activities.
+`specs/118-bpmn-interchange-event-definitions/`) and round-trips the event-based gateway, boundary event,
+and cardinality multi-instance elements, so these constructs can now be authored from XML. Later units add
+collection-mode multi-instance (needs a container-variable read seam), cyclic sequence flows,
+escalation/compensation boundaries, event subprocesses, transactions, and call activities.
 
 ## Expression-driven gateway conditions
 

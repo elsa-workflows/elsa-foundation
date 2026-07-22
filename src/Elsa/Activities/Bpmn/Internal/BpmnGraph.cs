@@ -61,8 +61,9 @@ public sealed class BpmnGraph
         var structure = ReadStructure(executableNode);
         var elements = structure?.Elements ?? [];
         var flows = structure?.SequenceFlows ?? [];
+        var variableNames = (structure?.Variables ?? []).Select(variable => variable.Name).ToHashSet(StringComparer.Ordinal);
 
-        Validate(elements, flows, childrenByNodeId);
+        Validate(elements, flows, childrenByNodeId, variableNames);
 
         return new BpmnGraph(elements, flows, childrenByNodeId);
     }
@@ -175,7 +176,8 @@ public sealed class BpmnGraph
     private static void Validate(
         IReadOnlyCollection<BpmnElement> elements,
         IReadOnlyCollection<BpmnSequenceFlow> flows,
-        IReadOnlyDictionary<string, ExecutableNode> childrenByNodeId)
+        IReadOnlyDictionary<string, ExecutableNode> childrenByNodeId,
+        IReadOnlySet<string> declaredVariableNames)
     {
         if (elements.Select(element => element.ElementId).Distinct(StringComparer.Ordinal).Count() != elements.Count)
             throw new BpmnExecutionException("BPMN structure contains duplicate element ids.");
@@ -273,7 +275,44 @@ public sealed class BpmnGraph
 
         ValidateBoundaryEvents(elements, outboundBySource, inboundByTarget);
 
+        ValidateMultiInstance(elements, declaredVariableNames);
+
         ValidateAcyclic(elements, outboundBySource);
+    }
+
+    /// <summary>
+    /// Multi-instance loop rules (spec 121 D1): loop characteristics are valid only on a task-family or
+    /// <c>subProcess</c> host that binds a child; exactly one of cardinality (≥ 1) XOR collection variable is
+    /// set; a collection variable must name a declared container-scoped variable. Collection mode is a stated
+    /// cut in this slice (not executable) and is rejected — the follow-up unit that adds the container-variable
+    /// read seam removes this rule.
+    /// </summary>
+    private static void ValidateMultiInstance(IReadOnlyCollection<BpmnElement> elements, IReadOnlySet<string> declaredVariableNames)
+    {
+        foreach (var element in elements)
+        {
+            if (element.LoopCharacteristics is not { } loop)
+                continue;
+
+            if (!BpmnElementFamilies.IsBoundaryHostFamily(element) || element.ChildNodeId is null)
+                throw new BpmnExecutionException($"BPMN element '{element.ElementId}' ({element.ElementType}) declares multi-instance loop characteristics but is not a task-family or subprocess host with a bound child.");
+
+            var hasCardinality = loop.Cardinality is not null;
+            var hasCollection = loop.CollectionVariable is not null;
+            if (hasCardinality == hasCollection)
+                throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' must declare exactly one of a positive cardinality or a collection variable.");
+
+            if (hasCardinality && loop.Cardinality < 1)
+                throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' declares a cardinality of {loop.Cardinality}; the cardinality must be a positive integer.");
+
+            if (hasCollection)
+            {
+                if (!declaredVariableNames.Contains(loop.CollectionVariable!))
+                    throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' names collection variable '{loop.CollectionVariable}', which is not a declared container-scoped variable of the process.");
+
+                throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' uses collection mode, which is not executable in this engine slice (the container-variable read arrives in a follow-up unit); use a cardinality multi-instance instead.");
+            }
+        }
     }
 
     /// <summary>

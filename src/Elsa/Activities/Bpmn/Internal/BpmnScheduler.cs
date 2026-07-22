@@ -19,7 +19,9 @@ internal static class BpmnScheduler
         string elementId,
         string tokenId,
         string schedulingActivityExecutionId,
-        string schedulingCause)
+        string schedulingCause,
+        LoopIterationScopeRequest? iterationFrame = null,
+        string? iterationId = null)
     {
         context.ScheduleChildActivity(
             childNodeId,
@@ -37,7 +39,7 @@ internal static class BpmnScheduler
                 context.ActivityExecutionState.Execution.ActivityExecutionId,
                 schedulingActivityExecutionId,
                 branchId: context.ActivityExecutionState.BranchId,
-                iterationId: null,
+                iterationId: iterationId,
                 executionPathId: tokenId,
                 executionScopeId: null,
                 schedulingCause: schedulingCause,
@@ -45,9 +47,10 @@ internal static class BpmnScheduler
                 {
                     [BpmnExecutionEngine.TargetNodeIdMetadataKey] = childNodeId,
                     [BpmnExecutionEngine.ElementIdMetadataKey] = elementId
-                }));
+                }),
+            iterationFrame);
 
-        var activeChild = new BpmnActiveChild(childNodeId, elementId, tokenId, schedulingCause);
+        var activeChild = new BpmnActiveChild(childNodeId, elementId, tokenId, schedulingCause, iterationId);
         return BpmnStateMutator.AddActiveChild(state, activeChild);
     }
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Xml.Linq;
 using Elsa.Activities.Bpmn.Interchange.Contracts;
@@ -78,6 +79,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             xmlElement.SetAttributeValue("id", element.ElementId);
             if (element.Name is not null) xmlElement.SetAttributeValue("name", element.Name);
             if (element.DefaultFlowId is not null) xmlElement.SetAttributeValue("default", element.DefaultFlowId);
+            AppendLoopCharacteristics(xmlElement, element);
             container.Add(xmlElement);
         }
 
@@ -96,6 +98,32 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
 
             container.Add(flowElement);
         }
+    }
+
+    /// <summary>
+    /// Emits a <c>&lt;multiInstanceLoopCharacteristics&gt;</c> child (spec 121 D4) for a task/subprocess host
+    /// that carries loop characteristics: <c>isSequential</c> + a literal <c>&lt;loopCardinality&gt;</c>
+    /// (cardinality mode), or the elsa-namespaced <c>elsa:collection</c>/<c>elsa:itemVariable</c> attributes
+    /// (collection mode — only reachable once the collection follow-up unit lands). Prepended so it precedes any
+    /// subprocess content, and round-trips through this importer regardless of order.
+    /// </summary>
+    private static void AppendLoopCharacteristics(XElement host, BpmnElement element)
+    {
+        if (element.LoopCharacteristics is not { } loop)
+            return;
+
+        var multiInstance = new XElement(BpmnXmlNames.Model + "multiInstanceLoopCharacteristics",
+            new XAttribute("isSequential", loop.IsSequential ? "true" : "false"));
+
+        if (loop.Cardinality is { } cardinality)
+            multiInstance.Add(new XElement(BpmnXmlNames.Model + "loopCardinality", cardinality.ToString(CultureInfo.InvariantCulture)));
+        else if (loop.CollectionVariable is { } collection)
+        {
+            multiInstance.SetAttributeValue(BpmnXmlNames.Elsa + "collection", collection);
+            multiInstance.SetAttributeValue(BpmnXmlNames.Elsa + "itemVariable", loop.ItemVariable);
+        }
+
+        host.AddFirst(multiInstance);
     }
 
     private static XElement BuildEndEvent(BpmnElement element)

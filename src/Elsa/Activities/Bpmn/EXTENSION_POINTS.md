@@ -49,6 +49,13 @@ Known implementations:
   outbound flows when it fires (a catch listener's completion or an error boundary's engine-minted token);
   the interrupt/absorption semantics — host/listener teardown via seam A and error-fault absorption via
   seam B — are owned by `BpmnExecutionEngine`, not this behavior)*
+- **Multi-instance loops (spec 121)** add no behavior: a `BpmnElement.LoopCharacteristics`
+  (`BpmnLoopCharacteristics`) turns a task/subprocess host's `ScheduleChild` decision into a loop the
+  engine owns entirely — a coordinator token plus private per-instance sub-tokens, each scheduled through
+  the runtime iteration-frame seam (`ScheduleChildActivity(..., iterationFrame)`) seeding `loopIndex`. The
+  loop record `BpmnLoopState` and the instance-completion advance / last-completion routing / cascade
+  cancellation all live in `BpmnExecutionEngine`. Collection mode is validated as a stated cut (not
+  executable this slice).
 
 ## Activity-owned structure contracts
 
@@ -56,7 +63,9 @@ This module also exposes these activity-owned contracts:
 
 - `Bpmn.Activities` child slot
 - `elsa.bpmn.structure` structure payload with schema version `1.0.0`
-- `BpmnStructure.Elements` containing `BpmnElement[]`
+- `BpmnStructure.Elements` containing `BpmnElement[]` (each element optionally carries `AttachedToRef`/
+  `CancelActivity` for boundary events, spec 120, and `LoopCharacteristics` — `BpmnLoopCharacteristics` —
+  for multi-instance loops, spec 121; both additive, state schema stays version 1)
 - `BpmnStructure.SequenceFlows` containing `BpmnSequenceFlow[]`
 - `BpmnAuthoredStructure.Pools` / `BpmnAuthoredStructure.Lanes` (authored/designer-side only)
 - `BpmnAuthoredStructure.Diagram` opaque BPMN-DI-shaped layout document (authored-side only,
@@ -81,12 +90,19 @@ This module also exposes these activity-owned contracts:
   `IRuntimeActivityExecutionContext.GetLiveChildActivities()` for the child-completion/child-fault
   callback. `BpmnExecutionEngine` uses it to resolve a subtree's node id to its live child
   activity-execution id before staging that subtree's seam-A cancellation
-  (`RequestChildSubtreeCancellation`, spec 112) — for a losing event-based-gateway catch (spec 119) and for
-  a boundary event's torn-down host/listener subtrees (spec 120). Cancellation reasons:
+  (`RequestChildSubtreeCancellation`, spec 112) — for a losing event-based-gateway catch (spec 119), for
+  a boundary event's torn-down host/listener subtrees (spec 120), and for a multi-instance host's live
+  instances (spec 121). The lookup is keyed by `(executable node id, iteration id)` so N concurrent
+  same-node multi-instance instances resolve distinctly (`RuntimeLiveChildActivity.IterationId`); ordinary
+  single-run children key under a `null` iteration id. Cancellation reasons:
   `bpmn.event-based-gateway.superseded-by-first-catch`, `bpmn.boundary.superseded-by-host-completion`,
-  `bpmn.boundary.host-interrupted`; the seam-B error-boundary absorption reason is
-  `bpmn.boundary.error-absorbed`. Seam-A cancellations and the seam-B absorption are staged only on a clean
-  (`Defer`/`Complete`) continuation.
+  `bpmn.boundary.host-interrupted` (also used for a multi-instance coordinator's cascade); the seam-B
+  error-boundary absorption reason is `bpmn.boundary.error-absorbed`. Seam-A cancellations and the seam-B
+  absorption are staged only on a clean (`Defer`/`Complete`) continuation.
+- **Iteration-frame seam (spec 121)** — `BpmnScheduler.ScheduleChild` passes a `LoopIterationScopeRequest`
+  on `ScheduleChildActivity` for multi-instance instances (owner = the `BpmnProcess` node, iteration id
+  minted deterministically from the Sequence-based instance token id, `loopIndex` value), scheduling with
+  the process's own aei so the runtime iteration-frame ownership guard holds.
 
 ## Publish-time start-trigger surface (spec 117)
 

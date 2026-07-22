@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Xml.Linq;
 using Elsa.Activities.Bpmn.Interchange.Contracts;
@@ -150,7 +151,8 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     if (id is null) break;
                     var nestedNodeId = $"node-{id}";
                     childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, context));
-                    elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child)));
+                    elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
+                        loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, context)));
                     break;
                 }
                 case "boundaryEvent":
@@ -196,7 +198,10 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     if (BpmnXmlNames.TaskLocalNamesToElementTypes.TryGetValue(localName, out var taskType))
                     {
                         if (id is null) break;
-                        elements.Add(new BpmnElement(id, taskType, name: NameOf(child), defaultFlowId: DefaultOf(child)));
+                        // Tasks import unbound (no ChildNodeId until an Elsa activity is bound), so a
+                        // multi-instance task is a childless host on import → degrade (validate-representable).
+                        elements.Add(new BpmnElement(id, taskType, name: NameOf(child), defaultFlowId: DefaultOf(child),
+                            loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: false, context)));
                         if (taskType != BpmnElementTypes.Task)
                             context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"{Capitalize(localName)} '{id}' imported unbound; bind an Elsa activity to execute it.", id));
                         break;
@@ -232,7 +237,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
         var elementsWithLanes = elements
             .Select(element => context.LaneByElementId.TryGetValue(element.ElementId, out var laneId)
-                ? new BpmnElement(element.ElementId, element.ElementType, element.Name, element.ChildNodeId, laneId, element.DefaultFlowId, element.EventDefinitions, element.Properties)
+                ? new BpmnElement(element.ElementId, element.ElementType, element.Name, element.ChildNodeId, laneId, element.DefaultFlowId, element.EventDefinitions, element.Properties, element.AttachedToRef, element.CancelActivity, element.LoopCharacteristics)
                 : element)
             .ToArray();
 
@@ -543,6 +548,51 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' declares an unsupported '{definition.Name.LocalName}'; only timer/message/signal/error boundary events are supported, so it was dropped.", id));
                 return null;
         }
+    }
+
+    /// <summary>
+    /// Resolves a task/subprocess element's <c>&lt;multiInstanceLoopCharacteristics&gt;</c> (spec 121 D4):
+    /// <c>isSequential</c> + an integer literal <c>&lt;loopCardinality&gt;</c> → a cardinality
+    /// <see cref="BpmnLoopCharacteristics"/>. Collection mode (via the elsa-namespaced
+    /// <c>elsa:collection</c>/<c>elsa:itemVariable</c> attributes), a non-integer/missing cardinality, a
+    /// standard-loop/completion/data-input form, or a host that binds no child on import all
+    /// <b>Degrade</b> (the element imports WITHOUT loop characteristics) with a finding, so the importer stays
+    /// validate-representable (it never emits a loop the graph validator would reject).
+    /// </summary>
+    private static BpmnLoopCharacteristics? ResolveLoopCharacteristics(XElement element, string id, bool hostBindsChild, ImportContext context)
+    {
+        if (element.Element(BpmnXmlNames.Model + "multiInstanceLoopCharacteristics") is not { } loop)
+        {
+            // Standard (while/until) loops are a stated cut; report them so the drop is visible.
+            if (element.Element(BpmnXmlNames.Model + "standardLoopCharacteristics") is not null)
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Element '{id}' declares standardLoopCharacteristics, which is not supported by this slice; it imported without loop characteristics.", id));
+            return null;
+        }
+
+        if (!hostBindsChild)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Element '{id}' declares multi-instance loop characteristics but binds no child on import (only a bound subprocess can host a loop); it imported without loop characteristics.", id));
+            return null;
+        }
+
+        var isSequential = (bool?)loop.Attribute("isSequential") ?? false;
+
+        if (((string?)loop.Attribute(BpmnXmlNames.Elsa + "collection"))?.Trim() is { Length: > 0 } collection)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Element '{id}' declares a collection multi-instance ('{collection}'), which is not executable in this slice (collection mode arrives in a follow-up unit); it imported without loop characteristics.", id));
+            return null;
+        }
+
+        var cardinalityText = loop.Element(BpmnXmlNames.Model + "loopCardinality")?.Value.Trim();
+        if (string.IsNullOrWhiteSpace(cardinalityText) ||
+            !int.TryParse(cardinalityText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cardinality) ||
+            cardinality < 1)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Element '{id}' declares multi-instance loop characteristics without a positive integer <loopCardinality>; only a literal cardinality is executable in this slice, so it imported without loop characteristics.", id));
+            return null;
+        }
+
+        return new BpmnLoopCharacteristics(isSequential: isSequential, cardinality: cardinality);
     }
 
     /// <summary>Resolves a message/signal event name through the root-declaration index; <c>null</c> when the ref is missing, unresolvable, or names a blank declaration.</summary>
