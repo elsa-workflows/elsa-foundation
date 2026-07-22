@@ -1052,8 +1052,60 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         return metadata;
     }
 
+    /// <summary>
+    /// Discrete completion commit (spec 123 D2 seam): builds the intent-free <c>ActivityCompleted</c> commit core and
+    /// re-attaches the <c>CompleteActivity</c> continuation post-commit intent (ahead of any staged workflow-dispatch
+    /// start intent, preserving today's ordering), reproducing the commit byte-for-byte. The commit builder and the
+    /// derived <c>CompleteActivity</c> work item are extracted into <see cref="BuildCompletedCommitAsync"/> so a future
+    /// fused-completion driver (D2) can commit the same stage without the completion enqueue intent and run the parent
+    /// completion cascade inline instead of enqueuing it. This is the only invoke-handler surgery in spec 123 and is
+    /// strictly behavior-preserving.
+    /// </summary>
     private async ValueTask CommitCompletedActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        RuntimeSchedulerWorkItem invokeWorkItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        ActivityExecutionState completedState,
+        IReadOnlyCollection<string> outcomeNames,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        WorkflowDispatchCheckpointRequest? workflowDispatch,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        var core = await BuildCompletedCommitAsync(
+            inspectionAccumulator,
+            invokeWorkItem,
+            invokePayload,
+            completedState,
+            outcomeNames,
+            valueSnapshots,
+            durableValueChanges,
+            workflowDispatch,
+            occurredAt,
+            cancellationToken);
+
+        var completionIntent = SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
+            invokeWorkItem, invokePayload.ActivityExecutionId, core.CompletionWorkItem, occurredAt);
+        var commit = core.Commit with
+        {
+            PostCommitIntents = [completionIntent, .. core.Commit.PostCommitIntents]
+        };
+
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    /// <summary>
+    /// The <c>ActivityCompleted</c> stage core (spec 123 D2 seam): produces the <c>ActivityCompleted</c> checkpoint
+    /// commit <b>without</b> its <c>CompleteActivity</c> continuation post-commit intent, alongside the derived
+    /// <c>CompleteActivity</c> work item and the checkpoint's occurrence time. Any staged workflow-dispatch start intent
+    /// remains on the commit (it is a separate dispatch, not the completion cascade). The discrete handler re-attaches
+    /// the completion intent (<see cref="CommitCompletedActivityAsync"/>); a fused-completion driver commits the
+    /// intent-free commit and runs the parent completion cascade inline. Reused by both — never re-implemented — so the
+    /// two paths stay byte-identical by construction.
+    /// </summary>
+    private async ValueTask<CompletedCommitCore> BuildCompletedCommitAsync(
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         RuntimeSchedulerWorkItem invokeWorkItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
@@ -1135,16 +1187,21 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                             Metadata: metadata)
                     ]),
             PostCommitIntents: workflowDispatch is null
-                ? [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt)]
-                :
-                [
-                    SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt),
-                    workflowDispatch.StartIntent
-                ],
+                ? []
+                : [workflowDispatch.StartIntent],
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+        return new CompletedCommitCore(commit, completionWorkItem, occurredAt);
     }
+
+    /// <summary>
+    /// The intent-free <c>ActivityCompleted</c> commit plus the derived <c>CompleteActivity</c> continuation work item
+    /// and the checkpoint's occurrence time (spec 123 D2 seam).
+    /// </summary>
+    private readonly record struct CompletedCommitCore(
+        RuntimeCheckpointCommit Commit,
+        RuntimeSchedulerWorkItem CompletionWorkItem,
+        DateTimeOffset OccurredAt);
 
     private static Elsa.Workflows.Runtime.Core.Models.ActivityTriggerRegistration AssertSingleDispatchRegistration(
         ActivityExecutionState suspendedState,
