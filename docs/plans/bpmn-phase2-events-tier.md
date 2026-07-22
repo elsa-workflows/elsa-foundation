@@ -29,6 +29,7 @@ The events-tier runtime scope is COMPLETE with spec 122.
 | Unit | Spec | PR | State |
 |---|---|---|---|
 | Runtime scoped-variable read seam + collection-mode multi-instance (marker `IRuntimeScopedVariableReader` + `TryReadScopedVariableValue`, committed-basis, all three handler paths; spec 121 rule-5 cut removed; `BpmnLoopState.Items` snapshot; interchange `elsa:variable` declarations + collection round-trip) | `specs/123-runtime-scoped-variable-read` | #965 | merged |
+| Compensation (reverse-order `BpmnCompensable` log registered at host completion; compensation boundary events with first-class flow-less handlers via association; compensate intermediate throw + end events with `activityRef`; claim-then-sequential-replay `BpmnCompensationRun`; interchange association parsing; zero runtime changes) | `specs/124-bpmn-compensation` | #966 | merged |
 
 Remaining queued follow-ups (not part of
 the tier's runtime scope): **Flowchart backward-edge

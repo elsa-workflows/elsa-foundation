@@ -112,13 +112,19 @@ public sealed class BpmnGraph
     public IReadOnlyCollection<BpmnSequenceFlow> InboundFlows(string elementId) =>
         _inboundByTarget[elementId].ToArray();
 
-    /// <summary>The timer/message/signal catch boundary events attached to <paramref name="hostElementId"/> (spec 120); these arm a suspending listener child when the host is scheduled.</summary>
+    /// <summary>The timer/message/signal catch boundary events attached to <paramref name="hostElementId"/> (spec 120); these arm a suspending listener child when the host is scheduled. Error and compensation boundaries arm nothing (spec 120/124).</summary>
     public IReadOnlyCollection<BpmnElement> AttachedCatchBoundaries(string hostElementId) =>
-        _boundariesByHost[hostElementId].Where(boundary => !BpmnElementFamilies.IsErrorBoundary(boundary)).ToArray();
+        _boundariesByHost[hostElementId]
+            .Where(boundary => !BpmnElementFamilies.IsErrorBoundary(boundary) && !BpmnElementFamilies.IsCompensationBoundary(boundary))
+            .ToArray();
 
     /// <summary>The single error boundary attached to <paramref name="hostElementId"/> (spec 120), or <c>null</c> when the host has none; validation caps a host at one error boundary.</summary>
     public BpmnElement? AttachedErrorBoundary(string hostElementId) =>
         _boundariesByHost[hostElementId].FirstOrDefault(BpmnElementFamilies.IsErrorBoundary);
+
+    /// <summary>The single compensation boundary attached to <paramref name="hostElementId"/> (spec 124), or <c>null</c> when the host has none; validation caps a host at one compensation boundary.</summary>
+    public BpmnElement? AttachedCompensationBoundary(string hostElementId) =>
+        _boundariesByHost[hostElementId].FirstOrDefault(BpmnElementFamilies.IsCompensationBoundary);
 
     public BpmnSequenceFlow? GetDefaultFlow(BpmnElement element)
     {
@@ -342,6 +348,8 @@ public sealed class BpmnGraph
 
         ValidateBoundaryEvents(elements, outboundBySource, inboundByTarget);
 
+        ValidateCompensation(elements, outboundBySource, inboundByTarget);
+
         ValidateMultiInstance(elements, declaredVariableNames);
 
         // Cyclic sequence flows are executable (spec 122): loop-back edges become loop-iteration keys. The
@@ -417,13 +425,33 @@ public sealed class BpmnGraph
             if (inboundByTarget[boundary.ElementId].Any())
                 throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' cannot have inbound sequence flows; it is entered by its host's activation.");
 
-            if (!outboundBySource[boundary.ElementId].Any())
+            // spec 124: a compensation boundary inverts the outbound rule — it has zero outbound flows (its
+            // "outbound" is the association to its handler); every other boundary needs at least one.
+            var isCompensationBoundary = BpmnElementFamilies.IsCompensationBoundary(boundary);
+            if (isCompensationBoundary)
+            {
+                if (outboundBySource[boundary.ElementId].Any())
+                    throw new BpmnExecutionException($"BPMN compensation boundary event '{boundary.ElementId}' cannot have outbound sequence flows; its handler is reached by association, not by token flow.");
+            }
+            else if (!outboundBySource[boundary.ElementId].Any())
+            {
                 throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' must have at least one outbound sequence flow.");
+            }
 
             if (boundary.DefaultFlowId is not null || outboundBySource[boundary.ElementId].Any(flow => flow.IsDefault))
                 throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' cannot declare a default sequence flow; its outbound is taken unconditionally when it fires.");
 
-            if (BpmnElementFamilies.IsErrorBoundary(boundary))
+            if (isCompensationBoundary)
+            {
+                // spec 124 rule 1: a compensation boundary binds no listener child (CancelActivity is ignored);
+                // its host must not carry loop characteristics (multi-instance host compensation is a stated cut).
+                // The handler reference is validated in ValidateCompensation.
+                if (boundary.ChildNodeId is not null)
+                    throw new BpmnExecutionException($"BPMN compensation boundary event '{boundary.ElementId}' cannot bind a child activity; it has no listener and fires after its host completes.");
+                if (host.LoopCharacteristics is not null)
+                    throw new BpmnExecutionException($"BPMN compensation boundary event '{boundary.ElementId}' is attached to multi-instance host '{hostId}'; compensation on a multi-instance host is not supported by this slice.");
+            }
+            else if (BpmnElementFamilies.IsErrorBoundary(boundary))
             {
                 if (boundary.ChildNodeId is not null)
                     throw new BpmnExecutionException($"BPMN error boundary event '{boundary.ElementId}' cannot bind a child activity; it absorbs the host's child fault and has no listener.");
@@ -440,6 +468,104 @@ public sealed class BpmnGraph
             }
         }
     }
+
+    /// <summary>
+    /// Compensation rules (spec 124 D1). Compensation boundaries reference an existing handler; handlers are
+    /// task-family/subProcess elements that bind a child, take zero sequence flows, carry no loop characteristics,
+    /// host no boundary, and are referenced by exactly one compensation boundary (orphans rejected); compensate
+    /// throw events bind no child; an <c>activityRef</c> on a compensate throw/end names an existing element with
+    /// an attached compensation boundary; and handlers never sit at a start/boundary-host/throw slot. Each rule
+    /// rejects deterministically with the offending element named.
+    /// </summary>
+    private static void ValidateCompensation(
+        IReadOnlyCollection<BpmnElement> elements,
+        ILookup<string, BpmnSequenceFlow> outboundBySource,
+        ILookup<string, BpmnSequenceFlow> inboundByTarget)
+    {
+        var elementsById = elements.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
+        var boundariesByHandler = elements
+            .Where(BpmnElementFamilies.IsCompensationBoundary)
+            .Where(boundary => boundary.CompensationHandlerElementId is not null)
+            .ToLookup(boundary => boundary.CompensationHandlerElementId!, StringComparer.Ordinal);
+        var attachedByHost = elements
+            .Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) && element.AttachedToRef is not null)
+            .ToLookup(element => element.AttachedToRef!, StringComparer.Ordinal);
+
+        // Rule 1 — a compensation boundary references an existing handler.
+        foreach (var boundary in elements.Where(BpmnElementFamilies.IsCompensationBoundary))
+        {
+            if (boundary.CompensationHandlerElementId is not { } handlerId)
+                throw new BpmnExecutionException($"BPMN compensation boundary event '{boundary.ElementId}' must reference a compensation handler via its compensation-handler element id.");
+            if (!elementsById.TryGetValue(handlerId, out var referenced))
+                throw new BpmnExecutionException($"BPMN compensation boundary event '{boundary.ElementId}' references handler '{handlerId}', which does not exist.");
+            if (!referenced.IsForCompensation)
+                throw new BpmnExecutionException($"BPMN compensation boundary event '{boundary.ElementId}' references '{handlerId}', which is not a compensation handler element (isForCompensation).");
+        }
+
+        // Rule 2 — handler shape (task-family/subProcess, binds child, zero flows, no loop characteristics, hosts
+        // no boundary, referenced by exactly one compensation boundary; orphans rejected).
+        foreach (var handler in elements.Where(element => element.IsForCompensation))
+        {
+            if (!BpmnElementFamilies.IsBoundaryHostFamily(handler))
+                throw new BpmnExecutionException($"BPMN compensation handler '{handler.ElementId}' ({handler.ElementType}) must be a task-family or subprocess element.");
+            if (handler.ChildNodeId is null)
+                throw new BpmnExecutionException($"BPMN compensation handler '{handler.ElementId}' must bind a child activity.");
+            if (inboundByTarget[handler.ElementId].Any() || outboundBySource[handler.ElementId].Any())
+                throw new BpmnExecutionException($"BPMN compensation handler '{handler.ElementId}' cannot participate in sequence flows; it is invoked only by the compensation replay.");
+            if (handler.LoopCharacteristics is not null)
+                throw new BpmnExecutionException($"BPMN compensation handler '{handler.ElementId}' cannot carry loop characteristics.");
+            if (attachedByHost[handler.ElementId].Any())
+                throw new BpmnExecutionException($"BPMN compensation handler '{handler.ElementId}' cannot host attached boundary events.");
+
+            var references = boundariesByHandler[handler.ElementId].Count();
+            if (references == 0)
+                throw new BpmnExecutionException($"BPMN compensation handler '{handler.ElementId}' is referenced by no compensation boundary (orphan handler); it cannot ride normal flow.");
+            if (references > 1)
+                throw new BpmnExecutionException($"BPMN compensation handler '{handler.ElementId}' is referenced by more than one compensation boundary; a handler binds exactly one boundary.");
+        }
+
+        // Rule 3 — a handler never sits at a start-event slot (its zero-flows rule already blocks it from
+        // gateway targets and boundary-host slots, which are reached/entered by flows or activation).
+        foreach (var start in elements.Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.StartEvent) && element.IsForCompensation))
+            throw new BpmnExecutionException($"BPMN start event '{start.ElementId}' cannot be a compensation handler.");
+
+        // Rule 4 — a compensation-handler reference belongs only on a compensation boundary, and a compensate
+        // throw event binds no child.
+        foreach (var element in elements.Where(element => element.CompensationHandlerElementId is not null && !BpmnElementFamilies.IsCompensationBoundary(element)))
+            throw new BpmnExecutionException($"BPMN element '{element.ElementId}' declares a compensation-handler reference but is not a compensation boundary event.");
+
+        foreach (var throwEvent in elements.Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateThrowEvent)))
+        {
+            if (throwEvent.ChildNodeId is not null)
+                throw new BpmnExecutionException($"BPMN compensate throw event '{throwEvent.ElementId}' cannot bind a child activity.");
+        }
+
+        // Rule 5 — an activityRef on a compensate throw/end names an existing element with an attached
+        // compensation boundary in this process.
+        var compensationHosts = elements
+            .Where(BpmnElementFamilies.IsCompensationBoundary)
+            .Where(boundary => boundary.AttachedToRef is not null)
+            .Select(boundary => boundary.AttachedToRef!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var thrower in elements.Where(IsCompensateThrowOrEnd))
+        {
+            var activityRef = thrower.EventDefinitions.Single().Properties.TryGetValue(BpmnEventDefinitionProperties.ActivityRef, out var value) && !string.IsNullOrWhiteSpace(value)
+                ? value.Trim()
+                : null;
+            if (activityRef is null)
+                continue;
+            if (!elementsById.ContainsKey(activityRef))
+                throw new BpmnExecutionException($"BPMN compensate event '{thrower.ElementId}' targets activityRef '{activityRef}', which does not exist in this process.");
+            if (!compensationHosts.Contains(activityRef))
+                throw new BpmnExecutionException($"BPMN compensate event '{thrower.ElementId}' targets activityRef '{activityRef}', which has no attached compensation boundary.");
+        }
+    }
+
+    private static bool IsCompensateThrowOrEnd(BpmnElement element) =>
+        (StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateThrowEvent) ||
+         StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent)) &&
+        BpmnElementFamilies.HasCompensateDefinition(element);
 
     /// <summary>
     /// Event-based gateway rules (spec 119 D1): at least two outbound flows; every outbound flow targets an

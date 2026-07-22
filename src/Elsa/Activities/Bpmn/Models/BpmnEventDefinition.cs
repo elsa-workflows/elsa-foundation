@@ -42,6 +42,13 @@ public static class BpmnEventDefinitionProperties
 
     /// <summary>A cron expression for a timer start's recurring schedule (mutually exclusive with <see cref="Interval"/>).</summary>
     public const string Cron = "cron";
+
+    /// <summary>
+    /// The element id a compensate throw/end event targets (spec 124): compensate only that element's
+    /// registrations. Absent → compensate everything registered in this process. Set on a
+    /// <see cref="BpmnEventDefinitionTypes.Compensation"/> definition of a throw/end event.
+    /// </summary>
+    public const string ActivityRef = "activityRef";
 }
 
 public static class BpmnEventDefinitionTypes

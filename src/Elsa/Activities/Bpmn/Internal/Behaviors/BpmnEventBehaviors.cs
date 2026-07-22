@@ -67,6 +67,41 @@ public sealed class CatchEventBehavior : IBpmnElementBehavior
     }
 }
 
+/// <summary>
+/// Compensate intermediate throw event (spec 124): on token arrival, emit the single
+/// <see cref="BpmnBehaviorCommandKind.TriggerCompensation"/> command and nothing else. The engine owns target
+/// selection, claiming, and the sequential handler replay; when the replay finishes it routes the throw token's
+/// outbound flows through normal task-flow selection. The behavior stays semantics-unaware.
+/// </summary>
+public sealed class CompensationThrowEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.IntermediateThrowEventCompensation;
+    public string DisplayName => "Compensate Throw Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.TriggerCompensation());
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
+        throw new BpmnExecutionException($"BPMN compensate throw event '{context.Element.ElementId}' cannot own a child activity.");
+}
+
+/// <summary>
+/// Compensate end event (spec 124): on token arrival, emit the single
+/// <see cref="BpmnBehaviorCommandKind.TriggerCompensation"/> command; when the replay finishes the engine
+/// consumes the token (none-end semantics). The behavior stays semantics-unaware.
+/// </summary>
+public sealed class CompensationEndEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.EndEventCompensation;
+    public string DisplayName => "Compensate End Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.TriggerCompensation());
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
+        throw new BpmnExecutionException($"BPMN compensate end event '{context.Element.ElementId}' cannot own a child activity.");
+}
+
 /// <summary>Terminate end event: consume every live token and complete the process immediately.</summary>
 public sealed class TerminateEndEventBehavior : IBpmnElementBehavior
 {

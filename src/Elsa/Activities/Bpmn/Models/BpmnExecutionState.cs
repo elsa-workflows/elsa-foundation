@@ -18,7 +18,9 @@ public sealed record BpmnExecutionState
         bool terminated = false,
         BpmnPendingFault? pendingFault = null,
         IReadOnlyCollection<BpmnEventRace>? races = null,
-        IReadOnlyCollection<BpmnLoopState>? loops = null)
+        IReadOnlyCollection<BpmnLoopState>? loops = null,
+        IReadOnlyCollection<BpmnCompensable>? compensables = null,
+        IReadOnlyCollection<BpmnCompensationRun>? compensationRuns = null)
     {
         Tokens = tokens ?? [];
         ActiveChildren = activeChildren ?? [];
@@ -28,6 +30,8 @@ public sealed record BpmnExecutionState
         PendingFault = pendingFault;
         Races = races ?? [];
         Loops = loops ?? [];
+        Compensables = compensables ?? [];
+        CompensationRuns = compensationRuns ?? [];
     }
 
     public IReadOnlyCollection<BpmnToken> Tokens { get; init; }
@@ -40,6 +44,12 @@ public sealed record BpmnExecutionState
 
     /// <summary>The live multi-instance loops (spec 121); each is a coordinator token with private per-instance sub-tokens. Additive, schema stays v1.</summary>
     public IReadOnlyCollection<BpmnLoopState> Loops { get; init; }
+
+    /// <summary>The durable reverse-order compensation log (spec 124); each host completion carrying an attached compensation boundary is registered here. Never pruned. Additive, schema stays v1.</summary>
+    public IReadOnlyCollection<BpmnCompensable> Compensables { get; init; }
+
+    /// <summary>The in-flight compensation replay runs (spec 124); each is a compensate throw/end coordinator token replaying its claimed handlers sequentially. Additive, schema stays v1.</summary>
+    public IReadOnlyCollection<BpmnCompensationRun> CompensationRuns { get; init; }
 
     /// <summary>Set when a terminate end event ended the process; late child completions are ignored.</summary>
     public bool Terminated { get; init; }

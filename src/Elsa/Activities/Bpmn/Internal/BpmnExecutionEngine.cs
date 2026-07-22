@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Contracts;
 using Elsa.Activities.Bpmn.Exceptions;
+using Elsa.Activities.Bpmn.Internal.Behaviors;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
@@ -46,6 +47,12 @@ public sealed class BpmnExecutionEngine(
 
     /// <summary>The scheduling cause recorded on a multi-instance loop's instance child schedule (spec 121).</summary>
     public const string MultiInstanceSchedulingCause = "multi-instance";
+
+    /// <summary>The scheduling cause recorded on a compensation handler's bound child schedule (spec 124).</summary>
+    public const string CompensationSchedulingCause = "compensation";
+
+    /// <summary>The seam-A reason recorded on a compensation run's cancelled handler sub-tree when its coordinator throw token was cancelled mid-replay (spec 124).</summary>
+    public const string CompensationRunCancelledReason = "bpmn.compensation.run-cancelled";
 
     /// <summary>The prefix of a multi-instance instance's minted iteration id (spec 121); the instance token id is Sequence-derived and unique across the process.</summary>
     public const string MultiInstanceIterationIdPrefix = "bpmn-mi:";
@@ -163,6 +170,17 @@ public sealed class BpmnExecutionEngine(
         {
             return ValueTask.FromResult(FinishEvaluation(context, HandleMultiInstanceInstanceCompletion(
                 context, graph, state, token, loop, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
+        }
+
+        // spec 124: a compensation handler sub-token completed — intercept BEFORE behavior dispatch (the MI-instance
+        // interception precedent). Consume the sub-token, mark its compensable Compensated, and advance the run:
+        // schedule the next claimed handler, or drop the run and complete the coordinating throw token.
+        if (token.ParentTokenId is { } handlerParentTokenId
+            && FindCompensationRun(state, handlerParentTokenId) is { } compensationRun
+            && graph.GetRequiredElement(token.AtElementId).IsForCompensation)
+        {
+            return ValueTask.FromResult(FinishEvaluation(context, HandleCompensationHandlerCompletion(
+                context, graph, state, token, compensationRun, completionContext.CompletedChildActivityExecutionId)));
         }
 
         // spec 119 D2/D3: if the completing token is a live event-based-gateway race member, it is the winner.
@@ -659,36 +677,18 @@ public sealed class BpmnExecutionEngine(
                     var isEventBasedGateway = StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EventBasedGateway);
                     var memberTokenIds = isEventBasedGateway ? new List<string>(command.FlowIds.Count) : null;
 
-                    foreach (var flowId in command.FlowIds)
-                    {
-                        var flow = graph.GetRequiredFlow(flowId);
-                        if (!StringComparer.Ordinal.Equals(flow.SourceRef, element.ElementId))
-                            throw new BpmnExecutionException($"BPMN behavior for element '{element.ElementId}' emitted a token on flow '{flowId}', which does not originate from it.");
-
-                        var status = BpmnTokenCoordinator.ShouldWaitAtJoin(graph, flow.TargetRef) ? BpmnTokenStatus.WaitingAtJoin : BpmnTokenStatus.Active;
-                        // spec 122: a backward (loop-back) edge starts a new iteration — mint a fresh key;
-                        // a forward edge inherits the emitting token's key so an iteration's sibling tokens stay grouped.
-                        var iterationKey = graph.IsBackwardFlow(flow.FlowId)
-                            ? NewIterationKey(state, flow.TargetRef)
-                            : token.IterationKey;
-                        var emitted = NewToken(state, flow.TargetRef, flow.FlowId, token.TokenId, status, schedulingActivityExecutionId, iterationKey);
-                        state = AddToken(state, emitted);
-                        memberTokenIds?.Add(emitted.TokenId);
-                        state = BpmnDiagnosticAccumulator.Add(
-                            state,
-                            status == BpmnTokenStatus.WaitingAtJoin ? BpmnDiagnosticKind.Waiting : BpmnDiagnosticKind.TokenEmitted,
-                            flow.TargetRef,
-                            flow.FlowId,
-                            emitted.TokenId,
-                            status == BpmnTokenStatus.WaitingAtJoin
-                                ? $"BPMN token '{emitted.TokenId}' is waiting at join '{flow.TargetRef}'."
-                                : $"BPMN token '{emitted.TokenId}' arrived at element '{flow.TargetRef}' via flow '{flow.FlowId}'.");
-                    }
+                    state = EmitFlowTokens(state, graph, element, token, command.FlowIds, schedulingActivityExecutionId, memberTokenIds);
 
                     if (memberTokenIds is { Count: > 0 })
                         state = AddRace(state, element.ElementId, memberTokenIds);
 
                     break;
+                }
+                case BpmnBehaviorCommandKind.TriggerCompensation:
+                {
+                    // spec 124: the compensate throw/end token requests a compensation replay. TriggerCompensation
+                    // is the sole command a compensate behavior emits, so the resolved result is returned directly.
+                    return TriggerCompensation(context, graph, state, token, element, schedulingActivityExecutionId);
                 }
                 case BpmnBehaviorCommandKind.ScheduleChild:
                 {
@@ -742,6 +742,211 @@ public sealed class BpmnExecutionEngine(
 
         return new EvaluationResult(state);
     }
+
+    /// <summary>
+    /// Mints one token per listed outbound flow from <paramref name="element"/> (spec 119/122): a join target
+    /// parks the token <c>WaitingAtJoin</c>, a backward (loop-back) edge mints a fresh iteration key, and every
+    /// other edge inherits the emitting token's key. Shared by the <c>EmitTokens</c> command (which additionally
+    /// collects the minted ids into <paramref name="memberTokenIds"/> for an event-based-gateway race) and the
+    /// spec 124 compensate throw's outbound routing (<paramref name="memberTokenIds"/> null — a throw is never a
+    /// gateway). The caller consumes the emitting token.
+    /// </summary>
+    private static BpmnExecutionState EmitFlowTokens(
+        BpmnExecutionState state,
+        BpmnGraph graph,
+        BpmnElement element,
+        BpmnToken token,
+        IReadOnlyCollection<string> flowIds,
+        string schedulingActivityExecutionId,
+        List<string>? memberTokenIds)
+    {
+        foreach (var flowId in flowIds)
+        {
+            var flow = graph.GetRequiredFlow(flowId);
+            if (!StringComparer.Ordinal.Equals(flow.SourceRef, element.ElementId))
+                throw new BpmnExecutionException($"BPMN behavior for element '{element.ElementId}' emitted a token on flow '{flowId}', which does not originate from it.");
+
+            var status = BpmnTokenCoordinator.ShouldWaitAtJoin(graph, flow.TargetRef) ? BpmnTokenStatus.WaitingAtJoin : BpmnTokenStatus.Active;
+            var iterationKey = graph.IsBackwardFlow(flow.FlowId)
+                ? NewIterationKey(state, flow.TargetRef)
+                : token.IterationKey;
+            var emitted = NewToken(state, flow.TargetRef, flow.FlowId, token.TokenId, status, schedulingActivityExecutionId, iterationKey);
+            state = AddToken(state, emitted);
+            memberTokenIds?.Add(emitted.TokenId);
+            state = BpmnDiagnosticAccumulator.Add(
+                state,
+                status == BpmnTokenStatus.WaitingAtJoin ? BpmnDiagnosticKind.Waiting : BpmnDiagnosticKind.TokenEmitted,
+                flow.TargetRef,
+                flow.FlowId,
+                emitted.TokenId,
+                status == BpmnTokenStatus.WaitingAtJoin
+                    ? $"BPMN token '{emitted.TokenId}' is waiting at join '{flow.TargetRef}'."
+                    : $"BPMN token '{emitted.TokenId}' arrived at element '{flow.TargetRef}' via flow '{flow.FlowId}'.");
+        }
+
+        return state;
+    }
+
+    /// <summary>
+    /// Handles a <c>TriggerCompensation</c> command (spec 124 D2b): selects the target <c>Registered</c>
+    /// compensables (all of them, or only the <c>activityRef</c> host's) in reverse registration order and claims
+    /// them atomically in this evaluation. An empty selection completes the throw immediately (route/consume — no
+    /// fault, no run). A non-empty selection parks the throw token as the run coordinator (<c>AwaitingChild</c>),
+    /// writes the run record, and schedules the first handler; the remaining handlers run one at a time, driven by
+    /// each handler completion's interception.
+    /// </summary>
+    private EvaluationResult TriggerCompensation(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnToken throwToken,
+        BpmnElement throwElement,
+        string schedulingActivityExecutionId)
+    {
+        var activityRef = ReadCompensationActivityRef(throwElement);
+
+        // Reverse registration order = reverse completion order (newest-first). Compensables are appended in
+        // registration order, so reversing the Registered subset yields the replay order; the claim flips are
+        // committed within this one evaluation (a concurrent parallel-branch throw sees only still-Registered
+        // records, so no compensable is ever claimed twice).
+        var claimed = state.Compensables
+            .Where(compensable => compensable.Status == BpmnCompensableStatus.Registered
+                                  && (activityRef is null || StringComparer.Ordinal.Equals(compensable.HostElementId, activityRef)))
+            .Reverse()
+            .ToArray();
+
+        if (claimed.Length == 0)
+        {
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.CompensationTriggered, throwElement.ElementId, null, throwToken.TokenId,
+                $"BPMN compensate event '{throwElement.ElementId}' had nothing to compensate{(activityRef is null ? "" : $" for '{activityRef}'")}; completing immediately.");
+            return CompleteThrow(context, graph, state, throwToken, throwElement, schedulingActivityExecutionId);
+        }
+
+        foreach (var compensable in claimed)
+            state = UpdateCompensable(state, compensable with { Status = BpmnCompensableStatus.Claimed });
+
+        state = UpdateToken(state, throwToken with { Status = BpmnTokenStatus.AwaitingChild });
+        var (stateWithRun, run) = AddCompensationRun(state, throwToken.TokenId, claimed.Select(compensable => compensable.CompensableId).ToArray());
+        state = stateWithRun;
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.CompensationTriggered, throwElement.ElementId, null, throwToken.TokenId,
+            $"BPMN compensate event '{throwElement.ElementId}' opened run '{run.RunId}' claiming {claimed.Length} compensable(s) (reverse registration order).");
+
+        state = ScheduleNextCompensationHandler(context, graph, state, run);
+        return new EvaluationResult(state);
+    }
+
+    /// <summary>
+    /// Schedules the head pending handler of a compensation run (spec 124 D2c): mints an <c>AwaitingChild</c>
+    /// sub-token at the handler element (parented to the coordinating throw token, inheriting its iteration key)
+    /// and schedules the handler element's bound child on it with the process's own aei (no iteration frame this
+    /// slice). One sub-token + one child schedule per handler; the run replays sequentially.
+    /// </summary>
+    private static BpmnExecutionState ScheduleNextCompensationHandler(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnCompensationRun run)
+    {
+        var headCompensableId = run.PendingCompensableIds[0];
+        var compensable = state.Compensables.First(candidate => StringComparer.Ordinal.Equals(candidate.CompensableId, headCompensableId));
+        var handlerElement = graph.GetRequiredElement(compensable.HandlerElementId);
+        var throwToken = GetRequiredToken(state, run.ThrowTokenId);
+        var ownerActivityExecutionId = context.ActivityExecutionState.Execution.ActivityExecutionId;
+
+        var handlerToken = NewToken(state, handlerElement.ElementId, flowId: null, parentTokenId: run.ThrowTokenId, BpmnTokenStatus.AwaitingChild,
+            producingActivityExecutionId: ownerActivityExecutionId, iterationKey: throwToken.IterationKey);
+        state = AddToken(state, handlerToken);
+        state = BpmnScheduler.ScheduleChild(context, state, handlerElement.ChildNodeId!, handlerElement.ElementId, handlerToken.TokenId, ownerActivityExecutionId, CompensationSchedulingCause);
+        return BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Scheduled, handlerElement.ElementId, null, handlerToken.TokenId,
+            $"BPMN compensation run '{run.RunId}' scheduled handler '{handlerElement.ElementId}' (child '{handlerElement.ChildNodeId}') for compensable '{headCompensableId}'.");
+    }
+
+    /// <summary>
+    /// Advances a compensation run when its head handler's sub-token completes (spec 124 D2c). Consumes the
+    /// sub-token, flips the head compensable to <c>Compensated</c>, then either schedules the next pending handler
+    /// or — when none remain — drops the run record and completes the coordinating throw (route outbound for an
+    /// intermediate throw, consume for a compensate end). The handler completion was intercepted before behavior
+    /// dispatch, so the sub-token never routes boundary/host semantics.
+    /// </summary>
+    private EvaluationResult HandleCompensationHandlerCompletion(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnToken handlerToken,
+        BpmnCompensationRun run,
+        string completedActivityExecutionId)
+    {
+        state = UpdateToken(state, handlerToken with { Status = BpmnTokenStatus.Consumed });
+
+        var headCompensableId = run.PendingCompensableIds[0];
+        var compensable = state.Compensables.First(candidate => StringComparer.Ordinal.Equals(candidate.CompensableId, headCompensableId));
+        state = UpdateCompensable(state, compensable with { Status = BpmnCompensableStatus.Compensated });
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Compensated, handlerToken.AtElementId, null, handlerToken.TokenId,
+            $"BPMN compensation run '{run.RunId}' compensated '{headCompensableId}' (handler '{handlerToken.AtElementId}').");
+
+        var remaining = run.PendingCompensableIds.Skip(1).ToArray();
+        if (remaining.Length > 0)
+        {
+            state = UpdateCompensationRun(state, run with { PendingCompensableIds = remaining });
+            var advanced = FindCompensationRun(state, run.ThrowTokenId)!;
+            state = ScheduleNextCompensationHandler(context, graph, state, advanced);
+            return new EvaluationResult(state);
+        }
+
+        // Last handler: drop the run and complete the coordinating throw.
+        state = RemoveCompensationRun(state, run.RunId);
+        var throwToken = GetRequiredToken(state, run.ThrowTokenId);
+        var throwElement = graph.GetRequiredElement(throwToken.AtElementId);
+        var result = CompleteThrow(context, graph, state, throwToken, throwElement, completedActivityExecutionId);
+        if (result is { Fault: null, Terminated: false })
+            result = Propagate(context, graph, result.State, completedActivityExecutionId);
+        return result;
+    }
+
+    /// <summary>
+    /// Completes a compensate throw/end token once its replay finished or found nothing to claim (spec 124 D2b):
+    /// a compensate end consumes its token (none-end semantics); a compensate intermediate throw routes its
+    /// outbound flows through normal task-flow selection (<c>bpmn.flow.none-taken</c> applies as usual).
+    /// </summary>
+    private EvaluationResult CompleteThrow(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnToken throwToken,
+        BpmnElement throwElement,
+        string schedulingActivityExecutionId)
+    {
+        if (StringComparer.Ordinal.Equals(throwElement.ElementType, BpmnElementTypes.EndEvent))
+        {
+            state = UpdateToken(state, throwToken with { Status = BpmnTokenStatus.Consumed });
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Consumed, throwElement.ElementId, null, throwToken.TokenId,
+                $"BPMN compensate end event '{throwElement.ElementId}' consumed token '{throwToken.TokenId}' after the compensation replay.");
+            return new EvaluationResult(state);
+        }
+
+        var behaviorContext = new BpmnBehaviorContext(
+            BpmnBehaviorTrigger.ChildCompleted, throwElement, throwToken,
+            graph.OutboundFlows(throwElement.ElementId), graph.InboundFlows(throwElement.ElementId), [], state);
+        var flows = BpmnFlowSelector.SelectTaskFlows(behaviorContext);
+        if (flows.Count == 0 && behaviorContext.OutboundFlows.Count > 0)
+        {
+            var message = $"BPMN compensate throw event '{throwElement.ElementId}' completed its replay but no outbound sequence flow matched and no default flow is declared.";
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, throwElement.ElementId, null, throwToken.TokenId, message);
+            return new EvaluationResult(state, new ActivityFault("bpmn.flow.none-taken", message));
+        }
+
+        state = UpdateToken(state, throwToken with { Status = BpmnTokenStatus.Consumed });
+        state = EmitFlowTokens(state, graph, throwElement, throwToken, BpmnFlowSelector.FlowIds(flows), schedulingActivityExecutionId, memberTokenIds: null);
+        return new EvaluationResult(state);
+    }
+
+    /// <summary>The <c>activityRef</c> a compensate throw/end targets (spec 124), or <c>null</c> when it compensates every registration.</summary>
+    private static string? ReadCompensationActivityRef(BpmnElement element) =>
+        element.EventDefinitions.SingleOrDefault() is { } definition
+        && definition.Properties.TryGetValue(BpmnEventDefinitionProperties.ActivityRef, out var value)
+        && !string.IsNullOrWhiteSpace(value)
+            ? value.Trim()
+            : null;
 
     /// <summary>
     /// Stages the state and picks the continuation. The runtime forbids a terminal decision
@@ -855,7 +1060,19 @@ public sealed class BpmnExecutionEngine(
             return CancelHostListeners(graph, state, hostTokenId, listenerTokenToSkip: completingToken.TokenId, BoundaryHostInterruptedReason, liveChildAeiByNode, pendingCancellations);
         }
 
-        // Case B — the completing token is a boundary host: tear down its still-armed catch listeners.
+        // Case B — the completing token is a boundary host.
+        // spec 124: a successful host completion carrying an attached compensation boundary registers one
+        // Registered compensable (per completion — a host completed on multiple loop passes registers once per
+        // pass, each compensated independently in reverse completion order). Only successful completions reach
+        // Case B; the fault/cancel paths never do.
+        if (graph.AttachedCompensationBoundary(completingElement.ElementId) is { CompensationHandlerElementId: { } handlerElementId })
+        {
+            var (registeredState, compensable) = AddCompensable(state, completingElement.ElementId, handlerElementId);
+            state = BpmnDiagnosticAccumulator.Add(registeredState, BpmnDiagnosticKind.CompensationRegistered, completingElement.ElementId, null, completingToken.TokenId,
+                $"BPMN host '{completingElement.ElementId}' completed and registered compensable '{compensable.CompensableId}' (handler '{handlerElementId}').");
+        }
+
+        // Tear down the host's still-armed catch listeners.
         if (graph.AttachedCatchBoundaries(completingElement.ElementId).Count == 0)
             return state;
 
@@ -944,6 +1161,22 @@ public sealed class BpmnExecutionEngine(
             token = GetRequiredToken(state, tokenId);
         }
 
+        // spec 124: cascade a compensation run coordinator's cancellation to its live handler sub-token, then drop
+        // the run and release its unrun Claimed compensables back to Registered (they were never run; a later
+        // throw may re-claim them). Mirrors the MI coordinator cascade.
+        if (FindCompensationRun(state, tokenId) is { } compensationRun)
+        {
+            foreach (var handlerTokenId in CompensationHandlerTokenIds(state, tokenId))
+                state = CancelTokenAndChild(state, handlerTokenId, reason, liveChildAeiByNode, pendingCancellations, diagnosticMessage);
+
+            foreach (var compensableId in compensationRun.PendingCompensableIds)
+                if (state.Compensables.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.CompensableId, compensableId)) is { Status: BpmnCompensableStatus.Claimed } claimed)
+                    state = UpdateCompensable(state, claimed with { Status = BpmnCompensableStatus.Registered });
+
+            state = RemoveCompensationRun(state, compensationRun.RunId);
+            token = GetRequiredToken(state, tokenId);
+        }
+
         var child = state.ActiveChildren.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.TokenId, tokenId));
         state = UpdateToken(state, token with { Status = BpmnTokenStatus.Canceled });
         if (child is not null)
@@ -962,6 +1195,15 @@ public sealed class BpmnExecutionEngine(
             .Where(candidate =>
                 candidate.ParentTokenId is { } parent && StringComparer.Ordinal.Equals(parent, loop.TokenId) &&
                 StringComparer.Ordinal.Equals(candidate.AtElementId, loop.ElementId))
+            .Select(candidate => candidate.TokenId)
+            .ToArray();
+
+    /// <summary>The live handler sub-token ids of a compensation run (spec 124): live tokens parented to the coordinating throw token (its handler sub-tokens sit at handler elements; ordinary emitted successors are consumed, so this resolves the in-flight handler).</summary>
+    private static IReadOnlyCollection<string> CompensationHandlerTokenIds(BpmnExecutionState state, string throwTokenId) =>
+        state.Tokens
+            .Where(candidate =>
+                candidate.ParentTokenId is { } parent && StringComparer.Ordinal.Equals(parent, throwTokenId) &&
+                candidate.Status is BpmnTokenStatus.Active or BpmnTokenStatus.AwaitingChild or BpmnTokenStatus.WaitingAtJoin)
             .Select(candidate => candidate.TokenId)
             .ToArray();
 

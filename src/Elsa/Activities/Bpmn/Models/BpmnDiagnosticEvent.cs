@@ -46,5 +46,14 @@ public enum BpmnDiagnosticKind
     Terminated,
     BehaviorFailure,
     Completed,
-    Faulted
+    Faulted,
+
+    /// <summary>A host completion carrying an attached compensation boundary registered a compensable (spec 124).</summary>
+    CompensationRegistered,
+
+    /// <summary>A compensate throw/end event triggered a compensation replay (spec 124).</summary>
+    CompensationTriggered,
+
+    /// <summary>A compensation handler ran to completion for one registered compensable (spec 124).</summary>
+    Compensated
 }

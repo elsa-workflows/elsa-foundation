@@ -80,6 +80,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             {
                 BpmnElementTypes.StartEvent => BuildEventElement("startEvent", element, isCatch: false),
                 BpmnElementTypes.IntermediateCatchEvent => BuildEventElement("intermediateCatchEvent", element, isCatch: true),
+                BpmnElementTypes.IntermediateThrowEvent => BuildThrowEvent(element),
                 BpmnElementTypes.EndEvent => BuildEndEvent(element),
                 BpmnElementTypes.SubProcess => BuildSubProcess(element, childrenByNodeId),
                 BpmnElementTypes.BoundaryEvent => BuildBoundaryEvent(element),
@@ -89,6 +90,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             xmlElement.SetAttributeValue("id", element.ElementId);
             if (element.Name is not null) xmlElement.SetAttributeValue("name", element.Name);
             if (element.DefaultFlowId is not null) xmlElement.SetAttributeValue("default", element.DefaultFlowId);
+            // spec 124: a compensation handler carries isForCompensation="true".
+            if (element.IsForCompensation) xmlElement.SetAttributeValue("isForCompensation", "true");
             AppendLoopCharacteristics(xmlElement, element);
             container.Add(xmlElement);
         }
@@ -108,6 +111,15 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
 
             container.Add(flowElement);
         }
+
+        // spec 124: a compensation boundary→handler link exports as an <association> (derived from the boundary's
+        // handler reference; the importer reads it back to re-resolve the handler).
+        foreach (var boundary in structure.Elements.Where(element => element.CompensationHandlerElementId is not null))
+            container.Add(new XElement(BpmnXmlNames.Model + "association",
+                new XAttribute("id", $"{boundary.ElementId}-assoc"),
+                new XAttribute("associationDirection", "One"),
+                new XAttribute("sourceRef", boundary.ElementId),
+                new XAttribute("targetRef", boundary.CompensationHandlerElementId!)));
     }
 
     /// <summary>
@@ -142,7 +154,27 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         var endEvent = new XElement(BpmnXmlNames.Model + "endEvent");
         if (element.EventDefinitions.Any(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Terminate)))
             endEvent.Add(new XElement(BpmnXmlNames.Model + "terminateEventDefinition"));
+        // spec 124: a compensate end event emits a compensateEventDefinition (+ optional activityRef).
+        else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Compensation)) is { } compensation)
+            endEvent.Add(BuildCompensateEventDefinition(compensation));
         return endEvent;
+    }
+
+    /// <summary>Builds a compensate intermediate throw event (spec 124): <c>&lt;intermediateThrowEvent&gt;</c> + <c>&lt;compensateEventDefinition&gt;</c> (+ optional <c>activityRef</c>).</summary>
+    private static XElement BuildThrowEvent(BpmnElement element)
+    {
+        var throwEvent = new XElement(BpmnXmlNames.Model + "intermediateThrowEvent");
+        if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Compensation)) is { } compensation)
+            throwEvent.Add(BuildCompensateEventDefinition(compensation));
+        return throwEvent;
+    }
+
+    private static XElement BuildCompensateEventDefinition(BpmnEventDefinition definition)
+    {
+        var compensate = new XElement(BpmnXmlNames.Model + "compensateEventDefinition");
+        if (definition.Properties.TryGetValue(BpmnEventDefinitionProperties.ActivityRef, out var activityRef) && !string.IsNullOrWhiteSpace(activityRef))
+            compensate.SetAttributeValue("activityRef", activityRef.Trim());
+        return compensate;
     }
 
     /// <summary>
@@ -177,6 +209,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         {
             if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Error))
                 boundary.Add(new XElement(BpmnXmlNames.Model + "errorEventDefinition"));
+            else if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Compensation))
+                boundary.Add(new XElement(BpmnXmlNames.Model + "compensateEventDefinition"));
             else
                 AppendEventDefinition(boundary, definition, isCatch: true);
         }
@@ -326,6 +360,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         var isEvent = StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.StartEvent)
                       || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent)
                       || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateCatchEvent)
+                      || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateThrowEvent)
                       || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent);
         var isGateway = element.ElementType.EndsWith("Gateway", StringComparison.Ordinal);
         var (width, height) = isEvent ? (36d, 36d) : isGateway ? (50d, 50d) : (100d, 80d);
