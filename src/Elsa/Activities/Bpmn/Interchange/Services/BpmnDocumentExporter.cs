@@ -217,7 +217,24 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     {
         var xmlElement = new XElement(BpmnXmlNames.Model + localName);
         if (element.EventDefinitions.FirstOrDefault() is { } definition)
-            AppendEventDefinition(xmlElement, definition, isCatch);
+        {
+            // spec 128 D7: an event-subprocess body start declares an escalation/error trigger + isInterrupting="false"
+            // when non-interrupting (the default-true convention omits it when interrupting).
+            if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation))
+            {
+                xmlElement.Add(BuildEscalationEventDefinition(definition));
+                if (!element.CancelActivity) xmlElement.SetAttributeValue("isInterrupting", "false");
+            }
+            else if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Error))
+            {
+                xmlElement.Add(new XElement(BpmnXmlNames.Model + "errorEventDefinition"));
+                if (!element.CancelActivity) xmlElement.SetAttributeValue("isInterrupting", "false");
+            }
+            else
+            {
+                AppendEventDefinition(xmlElement, definition, isCatch);
+            }
+        }
         return xmlElement;
     }
 
@@ -346,6 +363,10 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     {
         // spec 125: a transaction subprocess exports as <transaction>; everything else is identical to a subprocess.
         var subProcess = new XElement(BpmnXmlNames.Model + (element.IsTransaction ? "transaction" : "subProcess"));
+
+        // spec 128 D7: an event subprocess exports triggeredByEvent="true"; its body start event carries the trigger.
+        if (element.TriggeredByEvent)
+            subProcess.SetAttributeValue("triggeredByEvent", "true");
 
         // A nested BpmnProcess child inlines as subprocess content; any other bound activity has no
         // BPMN representation for its internals, so the subprocess exports empty (the binding is an

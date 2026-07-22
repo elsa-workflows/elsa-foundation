@@ -70,5 +70,11 @@ public enum BpmnDiagnosticKind
     EscalationUnhandled,
 
     /// <summary>An interrupting escalation boundary matched a notification whose host had already terminalized (spec 127); a no-op, never a fault.</summary>
-    EscalationLate
+    EscalationLate,
+
+    /// <summary>An event subprocess was activated by its start-event trigger (escalation or error) (spec 128): an activation token was minted and its body scheduled.</summary>
+    EventSubprocessActivated,
+
+    /// <summary>An event subprocess body ran to completion (spec 128): the activation token is consumed and nothing is routed (the element has no flows).</summary>
+    EventSubprocessCompleted
 }

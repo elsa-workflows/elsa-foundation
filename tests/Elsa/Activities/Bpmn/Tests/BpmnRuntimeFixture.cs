@@ -286,6 +286,22 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
         return properties;
     }
 
+    /// <summary>An event subprocess (spec 128): a flow-less <c>triggeredByEvent</c> subprocess binding a nested body whose event-start trigger activates it.</summary>
+    public static BpmnElement EventSubprocess(string elementId, string childNodeId) =>
+        new(elementId, BpmnElementTypes.SubProcess, childNodeId: childNodeId, triggeredByEvent: true);
+
+    /// <summary>An escalation event-subprocess body start (spec 128); a <c>null</c> <paramref name="code"/> is the code-less catch-all, and <paramref name="interrupting"/> models the start event's <c>isInterrupting</c> flag.</summary>
+    public static BpmnElement EventSubprocessEscalationStart(string elementId, string? code = null, bool interrupting = true) =>
+        new(elementId, BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, code is null ? null : EscalationProperties(code, null))],
+            cancelActivity: interrupting);
+
+    /// <summary>An error event-subprocess body start (spec 128): catch-all, always interrupting (per BPMN).</summary>
+    public static BpmnElement EventSubprocessErrorStart(string elementId, bool interrupting = true) =>
+        new(elementId, BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Error)],
+            cancelActivity: interrupting);
+
     /// <summary>
     /// Builds a nested <c>BpmnProcess</c> executable node (spec 127 escalation scenarios): its own element graph
     /// plus a child slot of inner activity nodes (probes/waiters/further nested processes). Mirrors how the publish

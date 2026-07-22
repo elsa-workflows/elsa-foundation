@@ -29,6 +29,8 @@ public class ActivitiesBpmnFeature : IShellFeature
         services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Timer());
         services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Message());
         services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Signal());
+        services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Escalation());
+        services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Error());
         services.AddSingleton<IBpmnElementBehavior, NoneEndEventBehavior>();
         services.AddSingleton<IBpmnElementBehavior, TerminateEndEventBehavior>();
         services.AddSingleton<IBpmnElementBehavior, CatchEventBehavior>();
