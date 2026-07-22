@@ -4,7 +4,7 @@ Status: Phase 1 shipped 2026-07-20. This document is the handover brief for the 
 implements Phase 2. The full original program design lives in the session plan (mirrored below where
 it matters); the Phase-1 scope record is `specs/108-bpmn-container-activity/spec.md`.
 
-## Phase 2 progress (updated 2026-07-22, spec 121)
+## Phase 2 progress (updated 2026-07-22, spec 122 — events-tier runtime scope COMPLETE)
 
 Spec numbers drifted from this document's suggestions: 109–111 and 113–114 were claimed by the
 engine-perf program. Shipped so far:
@@ -20,19 +20,20 @@ engine-perf program. Shipped so far:
 | Event-based gateway (first-catch-wins race: additive `BpmnEventRace` state, engine-owned resolution, seam-A loser teardown — first BPMN seam-A consumer; `IRuntimeLiveChildActivityConsumer` + `GetLiveChildActivities()` runtime seam closes the node-id→aei gap) | `specs/119-bpmn-event-based-gateway` | #948 | merged |
 | Boundary events (listener-child catch boundaries armed engine-side; interrupting/non-interrupting semantics; error boundaries absorb via seam B — first BPMN seam-B consumer; spec-119 carry generalized to `PendingSubtreeCancellations`; interchange attachedToRef/cancelActivity round-trip) | `specs/120-bpmn-boundary-events` | #950 | merged |
 | Multi-instance (cardinality mode, sequential + parallel; uniform sub-token model; first-ever concurrent same-node scheduling; `RuntimeLiveChildActivity.IterationId` + `(NodeId, IterationId)` teardown keying; collection mode authoring-modeled but deferred — needs a container-variable read seam) | `specs/121-bpmn-multi-instance` | #954 | merged |
+| Cyclic sequence flows (token `IterationKey`; DFS back-edge classification — NOT Flowchart's naive CanReach, chip filed to check Flowchart; join accounting grouped by (element, iteration key); `ValidateAcyclic` removed; importer cycle degradation lifted) | `specs/122-bpmn-cyclic-flows` | #956 | merged |
 
-Head of the remaining queue: **cyclic sequence flows** (the closing Phase 2 unit, split from
-multi-instance during spec 121 planning: lift `BpmnGraph.ValidateAcyclic` by giving tokens loop-
-iteration keys and adding an iteration dimension to `BpmnTokenCoordinator` join accounting — the
-Flowchart #382 model; the importer's cycle degradation then lifts too). Also queued: **collection-mode
-multi-instance execution** (spec 121 authoring-modeled it; needs a runtime seam exposing a container
-variable's current value to structural evaluations — `VariableScope` is threaded null into every
-structural evaluation today). Studio authoring UX (event definitions, boundary attachment, loop
-markers; separate repo) remains unpaired — pull it in only if the owner asks. Terminate/fault paths
-still cancel logically only (`CancelLiveWork`); routing them through seam A is a noted follow-up.
-Boundary cuts deferred: escalation/compensation boundaries, error-code matching, non-interrupting
-timer repetition, event subprocesses. MI cuts deferred: completionCondition, output aggregation,
-standardLoopCharacteristics.
+The events-tier runtime scope is COMPLETE with spec 122. Remaining queued follow-ups (not part of
+the tier's runtime scope): **collection-mode multi-instance execution** (spec 121 authoring-modeled it;
+needs a runtime seam exposing a container variable's current value to structural evaluations —
+`VariableScope` is threaded null into every structural evaluation today); **Flowchart backward-edge
+classification check** (chip filed during spec 122 — Flowchart's `IsBackwardEdge` looks naive);
+Studio authoring UX (event definitions, boundary attachment, loop markers; separate repo) — pull in
+only if the owner asks. Terminate/fault paths still cancel logically only (`CancelLiveWork`); routing
+them through seam A is a noted follow-up. Deferred construct cuts: escalation/compensation boundaries,
+error-code matching, non-interrupting timer repetition, event subprocesses, completionCondition,
+output aggregation, standardLoopCharacteristics, loopCounter frame exposure, unbounded-loop
+guardrails. Phase 3 afterward per the original program design: compensation, transactions/cancel
+events, escalation, event subprocesses, call activity, executable collaborations.
 
 Start-events slice notes (spec 117, 2026-07-21): the matched trigger binding's `Metadata` now flows
 end-to-end into `IRuntimeActivityExecutionContext.TriggerNodeId`/`TriggerMetadata` (reserved
