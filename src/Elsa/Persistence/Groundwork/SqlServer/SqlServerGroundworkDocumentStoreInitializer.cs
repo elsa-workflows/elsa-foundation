@@ -93,11 +93,11 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
                         manifest,
                         admission.PhysicalTarget.Routes,
                         access);
-                    var boundedStore = new GroundworkBoundedDocumentStoreRouter(
+                    var boundedStore = GroundworkBoundedDocumentStoreRouter.CreateLazy(
                         admission.PhysicalTarget.Routes.Select(route =>
-                            KeyValuePair.Create<string, IBoundedDocumentStore>(
+                            KeyValuePair.Create<string, Func<IBoundedDocumentStore>>(
                                 route.StorageUnit.Value,
-                                SqlServerPhysicalQueryRuntime.Create(
+                                () => SqlServerPhysicalQueryRuntime.Create(
                                     store,
                                     manifest,
                                     route,

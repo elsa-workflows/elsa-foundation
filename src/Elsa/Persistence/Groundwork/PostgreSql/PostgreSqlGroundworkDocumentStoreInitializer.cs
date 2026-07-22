@@ -90,11 +90,11 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
                         manifest,
                         source.PhysicalTarget.Routes,
                         access);
-                    var boundedStore = new GroundworkBoundedDocumentStoreRouter(
+                    var boundedStore = GroundworkBoundedDocumentStoreRouter.CreateLazy(
                         source.PhysicalTarget.Routes.Select(route =>
-                            KeyValuePair.Create<string, IBoundedDocumentStore>(
+                            KeyValuePair.Create<string, Func<IBoundedDocumentStore>>(
                                 route.StorageUnit.Value,
-                                PostgreSqlPhysicalQueryRuntime.Create(
+                                () => PostgreSqlPhysicalQueryRuntime.Create(
                                     store,
                                     manifest,
                                     route,
