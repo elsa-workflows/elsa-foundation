@@ -37,7 +37,7 @@ public sealed class ReplaceDraftCommandHandler(
             ? current.Layout
             : command.Layout.Select(ToRecord).ToArray();
         await updateDraftCommand.Execute(
-            new DesignOperationKey(command.OperationKey),
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
             new UpdateDraftRequest(command.DraftId, command.State.ToState(), layout),
             cancellationToken);
         var updated = await draftStore.FindWithLayoutByIdAsync(command.DraftId, cancellationToken)
@@ -57,7 +57,7 @@ public sealed class PromoteDraftCommandHandler(
     public async Task<WorkflowDefinitionVersionDetailsView> Handle(PromoteDraft command, CancellationToken cancellationToken)
     {
         var versionId = await promoteCommand.Execute(
-            new DesignOperationKey(command.OperationKey),
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
             command.DraftId,
             cancellationToken);
         return await requestSender.Send(new GetVersion(versionId), cancellationToken);
@@ -70,7 +70,7 @@ public sealed class DiscardDraftCommandHandler(IDiscardDraftCommand discardComma
     public async Task<Unit> Handle(DiscardDraft command, CancellationToken cancellationToken)
     {
         await discardCommand.Execute(
-            new DesignOperationKey(command.OperationKey),
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
             command.DraftId,
             cancellationToken);
         return Unit.Instance;
@@ -103,7 +103,7 @@ public sealed class UpdateDefinitionMetadataCommandHandler(
             };
         }
         await saveCommand.Execute(
-            new DesignOperationKey(command.OperationKey),
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
             definition,
             cancellationToken);
         return await requestSender.Send(new GetDefinition(command.DefinitionId), cancellationToken);
@@ -124,7 +124,7 @@ public sealed class SoftDeleteDefinitionCommandHandler(
             definition.DeletedAt = timeProvider.GetUtcNow();
             definition.DeletedReason = command.Reason;
             await saveCommand.Execute(
-                new DesignOperationKey(command.OperationKey),
+                DesignOperationKey.CreateOrGenerate(command.OperationKey),
                 definition,
                 cancellationToken);
         }
@@ -145,7 +145,7 @@ public sealed class RestoreDefinitionCommandHandler(
             definition.DeletedAt = null;
             definition.DeletedReason = null;
             await saveCommand.Execute(
-                new DesignOperationKey(command.OperationKey),
+                DesignOperationKey.CreateOrGenerate(command.OperationKey),
                 definition,
                 cancellationToken);
         }
@@ -160,7 +160,7 @@ public sealed class DeleteDefinitionPermanentlyCommandHandler(
     public async Task<Unit> Handle(DeleteDefinitionPermanently command, CancellationToken cancellationToken)
     {
         await deleteCommand.Execute(
-            new DesignOperationKey(command.OperationKey),
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
             command.DefinitionId,
             cancellationToken);
         return Unit.Instance;

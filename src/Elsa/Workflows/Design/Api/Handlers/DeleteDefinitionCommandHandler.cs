@@ -16,7 +16,7 @@ public sealed class DeleteDefinitionCommandHandler(IDeleteWorkflowDefinitionPerm
     public async Task<Unit> Handle(DeleteDefinition command, CancellationToken cancellationToken)
     {
         await deleteCommand.Execute(
-            new DesignOperationKey(command.OperationKey),
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
             command.Id,
             cancellationToken);
         return Unit.Instance;

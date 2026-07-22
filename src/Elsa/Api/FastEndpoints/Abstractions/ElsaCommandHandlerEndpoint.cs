@@ -21,6 +21,11 @@ public abstract class ElsaCommandHandlerEndpoint<TCommand, TResponse>(ICommandSe
         }
         catch (ArgumentException e)
         {
+            // A 400 here can be a genuine bad request OR a server-side invariant that a request happened to
+            // trip (e.g. a required-but-unsupplied value): the exception is otherwise folded into
+            // ProblemDetails with no trace, making such regressions undiagnosable. Log at Debug so the stack
+            // is available when investigating without spamming Error for ordinary client input faults.
+            logger.LogDebug(e, "Request '{type}' rejected with 400 ({message})", typeof(TCommand), e.Message);
             ThrowError(e, 400);
         }
         catch (OperationCanceledException)
@@ -52,6 +57,7 @@ public abstract class ElsaCommandHandlerEndpoint<TCommand>(ICommandSender comman
         }
         catch (ArgumentException e)
         {
+            logger.LogDebug(e, "Request '{type}' rejected with 400 ({message})", typeof(TCommand), e.Message);
             ThrowError(e, 400);
         }
         catch (OperationCanceledException)
