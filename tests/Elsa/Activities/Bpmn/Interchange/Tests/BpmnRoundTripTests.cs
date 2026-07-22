@@ -68,6 +68,38 @@ public sealed class BpmnRoundTripTests
     }
 
     [Fact]
+    public void CyclicProcess_ImportsClean_AndRoundTrips()
+    {
+        // spec 122: a loop-back sequence flow (gw --again--> body) is executable, so a cyclic document
+        // imports with NO cycle degradation finding and round-trips through export → import unchanged.
+        var authored = new BpmnAuthoredStructure(
+            elements:
+            [
+                new BpmnElement("start", BpmnElementTypes.StartEvent),
+                new BpmnElement("body", BpmnElementTypes.Task),
+                new BpmnElement("gw", BpmnElementTypes.ExclusiveGateway, defaultFlowId: "exit"),
+                new BpmnElement("end", BpmnElementTypes.EndEvent)
+            ],
+            sequenceFlows:
+            [
+                new BpmnSequenceFlow("flow-1", "start", "body"),
+                new BpmnSequenceFlow("flow-2", "body", "gw"),
+                new BpmnSequenceFlow("again", "gw", "body", conditionOutcome: "Retry"),
+                new BpmnSequenceFlow("exit", "gw", "end")
+            ]);
+
+        var xml = _exporter.Export(ProcessNode(authored));
+        var result = _importer.Import(xml);
+        var reimported = result.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+
+        Assert.DoesNotContain(result.Analysis.Issues, issue =>
+            issue.Message.Contains("cycle", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(
+            authored.SequenceFlows.Select(flow => (flow.FlowId, flow.SourceRef, flow.TargetRef)),
+            reimported.SequenceFlows.Select(flow => (flow.FlowId, flow.SourceRef, flow.TargetRef)));
+    }
+
+    [Fact]
     public void Export_SynthesizesDiagramWhenAbsent_AndPreservesAuthoredShapes()
     {
         var diagram = JsonSerializer.SerializeToElement(new

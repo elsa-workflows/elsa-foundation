@@ -13,8 +13,10 @@ namespace Elsa.Activities.Bpmn.Tests;
 public sealed class BpmnGraphValidationTests
 {
     [Fact]
-    public void CyclicGraph_IsRejected()
+    public void CyclicGraph_IsAccepted_AndClassifiesTheLoopBackFlow()
     {
+        // spec 122: a loop-back sequence flow is executable. The graph builds, and only the loop-closing
+        // edge (task-b → task-a) is classified backward — the cycle's forward edge (task-a → task-b) is not.
         var node = NewExecutableNode(
             elements:
             [
@@ -31,8 +33,13 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-4", "task-b", "end")
             ]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("cycle", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var graph = BpmnGraph.From(node);
+
+        Assert.True(graph.IsBackwardFlow("flow-3"));
+        Assert.False(graph.IsBackwardFlow("flow-1"));
+        Assert.False(graph.IsBackwardFlow("flow-2"));
+        Assert.False(graph.IsBackwardFlow("flow-4"));
+        Assert.Equal(["flow-3"], graph.BackwardFlowIds.OrderBy(id => id, StringComparer.Ordinal));
     }
 
     [Fact]

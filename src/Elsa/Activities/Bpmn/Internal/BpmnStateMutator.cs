@@ -19,8 +19,19 @@ internal static class BpmnStateMutator
         string? flowId,
         string? parentTokenId,
         BpmnTokenStatus status,
-        string? producingActivityExecutionId) =>
-        new(NewId(state, "token"), atElementId, flowId, parentTokenId, status, producingActivityExecutionId);
+        string? producingActivityExecutionId,
+        string? iterationKey = null) =>
+        new(NewId(state, "token"), atElementId, flowId, parentTokenId, status, producingActivityExecutionId, iterationKey);
+
+    /// <summary>
+    /// The loop-iteration key minted when a token traverses a backward (loop-back) sequence flow (spec 122):
+    /// <c>"{loopEntryElementId}#{Sequence+1}"</c>. It is a pure function of mutation order — <see cref="NewId"/>
+    /// derives the loop-entry token's id from the same <c>Sequence+1</c>, so the key number and its token id
+    /// number coincide — globally unique across the process (<see cref="BpmnExecutionState.Sequence"/> is
+    /// monotonic and never reused), and needs no per-owner counter record.
+    /// </summary>
+    public static string NewIterationKey(BpmnExecutionState state, string loopEntryElementId) =>
+        $"{loopEntryElementId}#{state.Sequence + 1}";
 
     public static BpmnExecutionState AddToken(BpmnExecutionState state, BpmnToken token) =>
         state with { Tokens = state.Tokens.Append(token).ToArray(), Sequence = state.Sequence + 1 };

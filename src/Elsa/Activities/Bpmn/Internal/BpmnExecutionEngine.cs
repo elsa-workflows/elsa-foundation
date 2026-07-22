@@ -287,8 +287,10 @@ public sealed class BpmnExecutionEngine(
             (token, reason) => $"BPMN error boundary '{errorBoundary.ElementId}' absorbed a child fault of host '{faultedToken.AtElementId}' and cancelled token '{token.TokenId}' at '{token.AtElementId}' ({reason}).");
         state = CancelHostListeners(graph, state, interruptTokenId, listenerTokenToSkip: null, BoundaryHostInterruptedReason, liveChildAeiByNode, pendingCancellations);
 
-        // Mint an active token at the error boundary so its behavior routes the error path.
-        var errorToken = NewToken(state, errorBoundary.ElementId, flowId: null, parentTokenId: interruptTokenId, BpmnTokenStatus.Active, producingActivityExecutionId: faultedChildActivityExecutionId);
+        // Mint an active token at the error boundary so its behavior routes the error path; it inherits the
+        // interrupt target (host/coordinator) token's loop-iteration key (spec 122).
+        var interruptIterationKey = state.Tokens.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.TokenId, interruptTokenId))?.IterationKey;
+        var errorToken = NewToken(state, errorBoundary.ElementId, flowId: null, parentTokenId: interruptTokenId, BpmnTokenStatus.Active, producingActivityExecutionId: faultedChildActivityExecutionId, iterationKey: interruptIterationKey);
         state = AddToken(state, errorToken);
         state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TokenEmitted, errorBoundary.ElementId, null, errorToken.TokenId,
             $"BPMN error boundary '{errorBoundary.ElementId}' fired and emitted token '{errorToken.TokenId}' to route the error path.");
@@ -371,7 +373,10 @@ public sealed class BpmnExecutionEngine(
         int index)
     {
         var ownerActivityExecutionId = context.ActivityExecutionState.Execution.ActivityExecutionId;
-        var instanceToken = NewToken(state, element.ElementId, flowId: null, parentTokenId: coordinatorTokenId, BpmnTokenStatus.AwaitingChild, producingActivityExecutionId: ownerActivityExecutionId);
+        // spec 122: an instance sub-token inherits the coordinator token's loop-iteration key, so a
+        // multi-instance host revisited across loop passes keeps each pass's instances in their own iteration.
+        var coordinatorIterationKey = GetRequiredToken(state, coordinatorTokenId).IterationKey;
+        var instanceToken = NewToken(state, element.ElementId, flowId: null, parentTokenId: coordinatorTokenId, BpmnTokenStatus.AwaitingChild, producingActivityExecutionId: ownerActivityExecutionId, iterationKey: coordinatorIterationKey);
         state = AddToken(state, instanceToken);
 
         var iterationId = MultiInstanceIterationIdPrefix + instanceToken.TokenId;
@@ -574,7 +579,12 @@ public sealed class BpmnExecutionEngine(
                             throw new BpmnExecutionException($"BPMN behavior for element '{element.ElementId}' emitted a token on flow '{flowId}', which does not originate from it.");
 
                         var status = BpmnTokenCoordinator.ShouldWaitAtJoin(graph, flow.TargetRef) ? BpmnTokenStatus.WaitingAtJoin : BpmnTokenStatus.Active;
-                        var emitted = NewToken(state, flow.TargetRef, flow.FlowId, token.TokenId, status, schedulingActivityExecutionId);
+                        // spec 122: a backward (loop-back) edge starts a new iteration — mint a fresh key;
+                        // a forward edge inherits the emitting token's key so an iteration's sibling tokens stay grouped.
+                        var iterationKey = graph.IsBackwardFlow(flow.FlowId)
+                            ? NewIterationKey(state, flow.TargetRef)
+                            : token.IterationKey;
+                        var emitted = NewToken(state, flow.TargetRef, flow.FlowId, token.TokenId, status, schedulingActivityExecutionId, iterationKey);
                         state = AddToken(state, emitted);
                         memberTokenIds?.Add(emitted.TokenId);
                         state = BpmnDiagnosticAccumulator.Add(
@@ -689,7 +699,9 @@ public sealed class BpmnExecutionEngine(
 
         // A parked join arrival with nothing live left to produce the missing arrivals can never fire
         // (e.g. a parallel join downstream of an exclusive decision). Fault deterministically instead of
-        // leaving the process Running forever.
+        // leaving the process Running forever. spec 122: iteration-key join grouping does not weaken this —
+        // "all live tokens WaitingAtJoin, no active children" means nothing can propagate a new arrival for
+        // ANY iteration group, so it is a true deadlock regardless of how arrivals are grouped.
         if (state.ActiveChildren.Count == 0 && liveTokens.All(token => token.Status == BpmnTokenStatus.WaitingAtJoin))
         {
             var joinElementIds = string.Join(", ", liveTokens.Select(token => token.AtElementId).Distinct(StringComparer.Ordinal));
@@ -772,12 +784,15 @@ public sealed class BpmnExecutionEngine(
         string hostTokenId,
         string schedulingActivityExecutionId)
     {
+        // spec 122: listeners inherit the host token's loop-iteration key, so a boundary host revisited across
+        // loop passes arms a fresh listener per pass under the pass's iteration.
+        var hostIterationKey = state.Tokens.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.TokenId, hostTokenId))?.IterationKey;
         foreach (var boundary in graph.AttachedCatchBoundaries(hostElement.ElementId))
         {
             if (boundary.ChildNodeId is not { } listenerNodeId)
                 continue; // validation guarantees a catch boundary binds a listener; defensive.
 
-            var listenerToken = NewToken(state, boundary.ElementId, flowId: null, parentTokenId: hostTokenId, BpmnTokenStatus.AwaitingChild, producingActivityExecutionId: schedulingActivityExecutionId);
+            var listenerToken = NewToken(state, boundary.ElementId, flowId: null, parentTokenId: hostTokenId, BpmnTokenStatus.AwaitingChild, producingActivityExecutionId: schedulingActivityExecutionId, iterationKey: hostIterationKey);
             state = AddToken(state, listenerToken);
             state = BpmnScheduler.ScheduleChild(context, state, listenerNodeId, boundary.ElementId, listenerToken.TokenId, schedulingActivityExecutionId, "boundary:catch");
             state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Scheduled, boundary.ElementId, null, listenerToken.TokenId,

@@ -17,7 +17,8 @@ public sealed record BpmnToken
         string? flowId = null,
         string? parentTokenId = null,
         BpmnTokenStatus status = BpmnTokenStatus.Active,
-        string? producingActivityExecutionId = null)
+        string? producingActivityExecutionId = null,
+        string? iterationKey = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tokenId);
         ArgumentException.ThrowIfNullOrWhiteSpace(atElementId);
@@ -28,6 +29,7 @@ public sealed record BpmnToken
         ParentTokenId = parentTokenId;
         Status = status;
         ProducingActivityExecutionId = producingActivityExecutionId;
+        IterationKey = iterationKey;
     }
 
     public string TokenId { get; init; }
@@ -41,6 +43,15 @@ public sealed record BpmnToken
 
     /// <summary>The activity execution whose completion produced this token, when known.</summary>
     public string? ProducingActivityExecutionId { get; init; }
+
+    /// <summary>
+    /// The loop-iteration key (spec 122; the token analog of the Flowchart #382 loop-iteration scope). It is
+    /// <c>null</c> for the implicit first pass ("iteration 0") and is minted fresh only when a token traverses
+    /// a backward (loop-back) sequence flow (<see cref="Elsa.Activities.Bpmn.Internal.BpmnGraph.IsBackwardFlow"/>);
+    /// every other minting site inherits its source/parent/group token's key. Join accounting groups arrivals
+    /// by <c>(element, iteration key)</c> so a revisited join never conflates one iteration with the next.
+    /// </summary>
+    public string? IterationKey { get; init; }
 }
 
 public enum BpmnTokenStatus

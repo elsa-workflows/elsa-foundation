@@ -56,6 +56,13 @@ Known implementations:
   loop record `BpmnLoopState` and the instance-completion advance / last-completion routing / cascade
   cancellation all live in `BpmnExecutionEngine`. Collection mode is validated as a stated cut (not
   executable this slice).
+- **Cyclic sequence flows (spec 122)** add no behavior: `BpmnGraph` precomputes the backward (loop-back)
+  flow set (`IsBackwardFlow`, the standard DFS back edge from the ordinal-sorted start-event roots) and
+  `BpmnToken` carries an additive `IterationKey`. The engine mints a fresh key
+  (`BpmnStateMutator.NewIterationKey`) only when `EmitTokens` traverses a backward flow; every other
+  minting site inherits its source/parent/group token's key. `BpmnTokenCoordinator` groups
+  `WaitingAtJoin` arrivals by `(element, iteration key)`. `ValidateAcyclic` is removed; the remaining
+  structural rules constrain where a loop-back may land. State schema stays version 1 (additive).
 
 ## Activity-owned structure contracts
 
