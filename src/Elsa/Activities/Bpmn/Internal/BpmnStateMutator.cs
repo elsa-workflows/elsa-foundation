@@ -61,6 +61,39 @@ internal static class BpmnStateMutator
             Sequence = state.Sequence + 1
         };
 
+    public static (BpmnExecutionState State, BpmnLoopState Loop) AddLoop(
+        BpmnExecutionState state,
+        string coordinatorTokenId,
+        string elementId,
+        bool isSequential,
+        int totalCount)
+    {
+        var loop = new BpmnLoopState(NewId(state, "loop"), coordinatorTokenId, elementId, isSequential, totalCount, nextIndex: 0, completedCount: 0);
+        return (state with { Loops = state.Loops.Append(loop).ToArray(), Sequence = state.Sequence + 1 }, loop);
+    }
+
+    public static BpmnExecutionState UpdateLoop(BpmnExecutionState state, BpmnLoopState loop) =>
+        state with
+        {
+            Loops = state.Loops
+                .Select(existing => StringComparer.Ordinal.Equals(existing.LoopId, loop.LoopId) ? loop : existing)
+                .ToArray(),
+            Sequence = state.Sequence + 1
+        };
+
+    public static BpmnExecutionState RemoveLoop(BpmnExecutionState state, string loopId) =>
+        state with
+        {
+            Loops = state.Loops
+                .Where(loop => !StringComparer.Ordinal.Equals(loop.LoopId, loopId))
+                .ToArray(),
+            Sequence = state.Sequence + 1
+        };
+
+    /// <summary>The live multi-instance loop coordinated by <paramref name="coordinatorTokenId"/>, or <c>null</c> when that token is not a coordinator.</summary>
+    public static BpmnLoopState? FindLoopByCoordinator(BpmnExecutionState state, string coordinatorTokenId) =>
+        state.Loops.FirstOrDefault(loop => StringComparer.Ordinal.Equals(loop.TokenId, coordinatorTokenId));
+
     public static BpmnToken GetRequiredToken(BpmnExecutionState state, string tokenId) =>
         state.Tokens.FirstOrDefault(token => StringComparer.Ordinal.Equals(token.TokenId, tokenId))
         ?? throw new Exceptions.BpmnExecutionException($"BPMN token '{tokenId}' was not found on the execution state.");

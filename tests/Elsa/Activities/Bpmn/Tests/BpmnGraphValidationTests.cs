@@ -2,6 +2,8 @@ using System.Text.Json;
 using Elsa.Activities.Bpmn.Exceptions;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
@@ -459,6 +461,122 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-2", "catch-1", "end")
             ],
             children: catchElement.ChildNodeId is null ? [] : [WorkflowChild(catchElement.ChildNodeId)]);
+
+    // ---- spec 121: multi-instance loop-characteristics validation ----
+
+    [Fact]
+    public void MultiInstance_OnChildlessHost_IsRejected()
+    {
+        var node = NewExecutableNode(
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                new BpmnElement("mi", BpmnElementTypes.Task, loopCharacteristics: new BpmnLoopCharacteristics(cardinality: 3)),
+                BpmnRuntimeFixture.EndEvent()
+            ],
+            flows: [BpmnRuntimeFixture.Flow("flow-1", "start", "mi"), BpmnRuntimeFixture.Flow("flow-2", "mi", "end")]);
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("not a task-family or subprocess host with a bound child", exception.Message);
+    }
+
+    [Fact]
+    public void MultiInstance_OnGateway_IsRejected()
+    {
+        var node = NewExecutableNode(
+            children: [WorkflowChild("node-a")],
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                new BpmnElement("fork", BpmnElementTypes.ParallelGateway, loopCharacteristics: new BpmnLoopCharacteristics(cardinality: 2)),
+                BpmnRuntimeFixture.Task("t", childNodeId: "node-a"),
+                BpmnRuntimeFixture.EndEvent()
+            ],
+            flows: [BpmnRuntimeFixture.Flow("flow-1", "start", "fork"), BpmnRuntimeFixture.Flow("flow-2", "fork", "t"), BpmnRuntimeFixture.Flow("flow-3", "t", "end")]);
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("not a task-family or subprocess host", exception.Message);
+    }
+
+    [Fact]
+    public void MultiInstance_BothCardinalityAndCollection_IsRejected()
+    {
+        var node = NewMultiInstanceNode(new BpmnLoopCharacteristics(cardinality: 3, collectionVariable: "items"));
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("exactly one of a positive cardinality or a collection variable", exception.Message);
+    }
+
+    [Fact]
+    public void MultiInstance_NeitherCardinalityNorCollection_IsRejected()
+    {
+        var node = NewMultiInstanceNode(new BpmnLoopCharacteristics(isSequential: true));
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("exactly one of a positive cardinality or a collection variable", exception.Message);
+    }
+
+    [Fact]
+    public void MultiInstance_NonPositiveCardinality_IsRejected()
+    {
+        var node = NewMultiInstanceNode(new BpmnLoopCharacteristics(cardinality: 0));
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("must be a positive integer", exception.Message);
+    }
+
+    [Fact]
+    public void MultiInstance_CollectionMode_UndeclaredVariable_IsRejected()
+    {
+        var node = NewMultiInstanceNode(new BpmnLoopCharacteristics(collectionVariable: "missing"));
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("not a declared container-scoped variable", exception.Message);
+    }
+
+    [Fact]
+    public void MultiInstance_CollectionMode_DeclaredVariable_IsRejectedAsStatedCut()
+    {
+        var node = NewMultiInstanceNode(
+            new BpmnLoopCharacteristics(collectionVariable: "items"),
+            variables: [new VariableDefinition("items", "items", new TypeReference("String", CollectionKind.List), null, null)]);
+
+        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Contains("collection mode, which is not executable in this engine slice", exception.Message);
+    }
+
+    [Fact]
+    public void MultiInstance_CardinalityHost_IsAccepted()
+    {
+        var node = NewMultiInstanceNode(new BpmnLoopCharacteristics(isSequential: false, cardinality: 3));
+
+        var graph = BpmnGraph.From(node);
+        Assert.NotNull(graph.GetRequiredElement("mi").LoopCharacteristics);
+    }
+
+    private static ExecutableNode NewMultiInstanceNode(BpmnLoopCharacteristics loop, IReadOnlyCollection<VariableDefinition>? variables = null) =>
+        new(
+            executableNodeId: "node-bpmn",
+            authoredActivityId: "authored-bpmn",
+            activityType: typeof(BpmnProcessActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: "BpmnDescriptor",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(BpmnProcessActivity.ActivitiesSlotName, [WorkflowChild("node-a")])],
+            structure: new ExecutableActivityStructure(
+                BpmnProcessActivity.StructureKind,
+                BpmnProcessActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new BpmnStructure(
+                    elements:
+                    [
+                        BpmnRuntimeFixture.StartEvent(),
+                        new BpmnElement("mi", BpmnElementTypes.Task, childNodeId: "node-a", loopCharacteristics: loop),
+                        BpmnRuntimeFixture.EndEvent()
+                    ],
+                    sequenceFlows: [BpmnRuntimeFixture.Flow("flow-1", "start", "mi"), BpmnRuntimeFixture.Flow("flow-2", "mi", "end")],
+                    variables: variables))));
 
     private static ExecutableNode WorkflowChild(string nodeId) =>
         Elsa.Activities.Testing.WorkflowExecutionHarness.NewProbeNode(nodeId);

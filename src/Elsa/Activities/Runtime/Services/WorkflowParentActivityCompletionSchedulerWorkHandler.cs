@@ -627,7 +627,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 ActivityExecutionStatus.Faulted or
                 ActivityExecutionStatus.Cancelled or
                 ActivityExecutionStatus.Recovered))
-            .Select(child => new RuntimeLiveChildActivity(child.Execution.ActivityExecutionId, child.Execution.ExecutableNodeId, child.Status))
+            .Select(child => new RuntimeLiveChildActivity(child.Execution.ActivityExecutionId, child.Execution.ExecutableNodeId, child.Status, child.IterationId))
             .ToArray();
     }
 

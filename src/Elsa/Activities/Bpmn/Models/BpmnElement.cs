@@ -20,7 +20,8 @@ public sealed class BpmnElement
         IReadOnlyCollection<BpmnEventDefinition>? eventDefinitions = null,
         IReadOnlyDictionary<string, string>? properties = null,
         string? attachedToRef = null,
-        bool cancelActivity = true)
+        bool cancelActivity = true,
+        BpmnLoopCharacteristics? loopCharacteristics = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(elementId);
         ArgumentException.ThrowIfNullOrWhiteSpace(elementType);
@@ -35,6 +36,7 @@ public sealed class BpmnElement
         Properties = properties ?? new Dictionary<string, string>();
         AttachedToRef = string.IsNullOrWhiteSpace(attachedToRef) ? null : attachedToRef.Trim();
         CancelActivity = cancelActivity;
+        LoopCharacteristics = loopCharacteristics;
     }
 
     [JsonPropertyName("elementId")]
@@ -78,6 +80,13 @@ public sealed class BpmnElement
     /// </summary>
     [JsonPropertyName("cancelActivity")]
     public bool CancelActivity { get; }
+
+    /// <summary>
+    /// The multi-instance loop characteristics of this element (spec 121); <c>null</c> on every
+    /// non-multi-instance element. Valid only on a task-family or <c>subProcess</c> host that binds a child.
+    /// </summary>
+    [JsonPropertyName("loopCharacteristics")]
+    public BpmnLoopCharacteristics? LoopCharacteristics { get; }
 }
 
 /// <summary>

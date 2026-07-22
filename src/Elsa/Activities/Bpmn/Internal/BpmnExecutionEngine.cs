@@ -1,7 +1,9 @@
+using System.Text.Json;
 using Elsa.Activities.Bpmn.Contracts;
 using Elsa.Activities.Bpmn.Exceptions;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using static Elsa.Activities.Bpmn.Internal.BpmnStateMutator;
@@ -41,6 +43,12 @@ public sealed class BpmnExecutionEngine(
 
     /// <summary>The seam-B fault-absorption reason recorded on the resolved incident when an error boundary absorbed the host's child fault (spec 120).</summary>
     public const string ErrorBoundaryAbsorptionReason = "bpmn.boundary.error-absorbed";
+
+    /// <summary>The scheduling cause recorded on a multi-instance loop's instance child schedule (spec 121).</summary>
+    public const string MultiInstanceSchedulingCause = "multi-instance";
+
+    /// <summary>The prefix of a multi-instance instance's minted iteration id (spec 121); the instance token id is Sequence-derived and unique across the process.</summary>
+    public const string MultiInstanceIterationIdPrefix = "bpmn-mi:";
 
     public ValueTask<RuntimeStructuralContinuation> StartAsync(IRuntimeActivityExecutionContext context)
     {
@@ -121,7 +129,7 @@ public sealed class BpmnExecutionEngine(
         var graph = BpmnGraph.From(context.ExecutableNode);
         var state = BpmnStatePersister.LoadState(context.ActivityExecutionState) ?? BpmnStatePersister.CreateInitialState();
 
-        var tokenId = ResolveTokenId(context, state, completionContext.CompletedChildExecutableNodeId);
+        var tokenId = ResolveTokenId(context, state, completionContext.CompletedChildExecutableNodeId, completionContext.CompletedChildIterationId);
         state = RemoveActiveChild(state, tokenId);
         var token = GetRequiredToken(state, tokenId);
 
@@ -134,6 +142,19 @@ public sealed class BpmnExecutionEngine(
         // The seam-A subtree cancellations this evaluation carries (staged only on a clean continuation).
         var pendingCancellations = new List<BpmnPendingSubtreeCancellation>();
         var liveChildAeiByNode = BuildLiveChildAeiByNode(context);
+
+        // spec 121: a multi-instance instance child completed — advance the loop (schedule the next instance
+        // in sequential mode) or, on the last instance, tear down the host's listeners and route the host's
+        // outbound flows through its normal behavior. Instances never route per-completion, so this short-
+        // circuits the normal behavior dispatch below (the instance token is not a race member and its parent
+        // coordinator, not the instance, owns any boundary listeners).
+        if (token.ParentTokenId is { } instanceParentTokenId
+            && FindLoopByCoordinator(state, instanceParentTokenId) is { } loop
+            && StringComparer.Ordinal.Equals(token.AtElementId, loop.ElementId))
+        {
+            return ValueTask.FromResult(FinishEvaluation(context, HandleMultiInstanceInstanceCompletion(
+                context, graph, state, token, loop, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
+        }
 
         // spec 119 D2/D3: if the completing token is a live event-based-gateway race member, it is the winner.
         // Resolve the race logically first (cancel losing member tokens, drop their active children), and carry
@@ -194,6 +215,22 @@ public sealed class BpmnExecutionEngine(
             ? state.ActiveChildren.FirstOrDefault(child => StringComparer.Ordinal.Equals(child.TokenId, faultedTokenId))
             : state.ActiveChildren.FirstOrDefault(child => StringComparer.Ordinal.Equals(child.NodeId, faultedNodeId));
 
+        // spec 121: a late fault of a child whose token was already cancelled (e.g. a sibling multi-instance
+        // instance torn down by an error-boundary absorption or a boundary interrupt) — or after the process
+        // terminated — is absorbed by the token-status guard: the subtree reclaim already rode the interrupting
+        // evaluation, so the process must not fault a second time (mirrors the completion-path canceled guard).
+        var faultedToken = faultedTokenId is not null
+            ? state.Tokens.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.TokenId, faultedTokenId))
+            : null;
+        if (state.Terminated || faultedToken is { Status: BpmnTokenStatus.Consumed or BpmnTokenStatus.Canceled })
+        {
+            if (faultedChild is not null)
+                state = RemoveActiveChild(state, faultedChild.TokenId);
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Canceled, faultedChild?.ElementId, null, faultedToken?.TokenId,
+                $"BPMN ignored a late fault of child node '{faultedNodeId}' whose token was already cancelled or the process ended.");
+            return ValueTask.FromResult(FinishEvaluation(context, new EvaluationResult(state)));
+        }
+
         // spec 120 D5: absorb the fault through an error boundary attached to the faulted child's host.
         if (faultedChild is not null
             && faultContext.IncidentId is { } incidentId
@@ -217,17 +254,19 @@ public sealed class BpmnExecutionEngine(
     /// <summary>
     /// Absorbs the host's child fault through its error boundary (spec 120 D5): drops the faulted child's
     /// active-child record (its subtree reclaim rides the seam-B absorption plan, so no seam-A cancellation is
-    /// staged for it), flips the host token to <c>Canceled</c>, cancels the host's sibling catch listeners
-    /// (seam-A carry), mints an <c>Active</c> token at the error boundary to route its outbound flows, and
-    /// finishes through the shared quiescence machinery. The absorption request and the sibling-listener
-    /// cancellations are staged only at the clean (Defer/Complete) exit — never on a routing fault.
+    /// staged for it), cancels the interrupt target (seam-A carry) and its sibling catch listeners, mints an
+    /// <c>Active</c> token at the error boundary to route its outbound flows, and finishes through the shared
+    /// quiescence machinery. When the faulted child belongs to a multi-instance instance (spec 121), the
+    /// interrupt target is the loop coordinator, so cancelling it cascade-cancels every remaining live instance
+    /// (the faulted instance's own subtree rides seam B). The absorption request and the seam-A cancellations
+    /// are staged only at the clean (Defer/Complete) exit — never on a routing fault.
     /// </summary>
     private RuntimeStructuralContinuation AbsorbChildFaultThroughErrorBoundary(
         IRuntimeActivityExecutionContext context,
         BpmnGraph graph,
         BpmnExecutionState state,
         BpmnActiveChild faultedChild,
-        BpmnToken hostToken,
+        BpmnToken faultedToken,
         BpmnElement errorBoundary,
         string incidentId,
         string faultedChildActivityExecutionId)
@@ -235,17 +274,21 @@ public sealed class BpmnExecutionEngine(
         var pendingCancellations = new List<BpmnPendingSubtreeCancellation>();
         var liveChildAeiByNode = BuildLiveChildAeiByNode(context);
 
+        // The interrupt target is the multi-instance loop coordinator when the faulted child is an instance,
+        // otherwise the faulted child's own host token.
+        var interruptTokenId = ResolveMultiInstanceCoordinatorTokenId(state, faultedToken) ?? faultedToken.TokenId;
+
         // The faulted child's own subtree is reclaimed by the seam-B absorption plan; only drop its record.
         state = RemoveActiveChild(state, faultedChild.TokenId);
-        state = UpdateToken(state, hostToken with { Status = BpmnTokenStatus.Canceled });
-        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Canceled, hostToken.AtElementId, hostToken.FlowId, hostToken.TokenId,
-            $"BPMN error boundary '{errorBoundary.ElementId}' absorbed a fault of host '{hostToken.AtElementId}'; the host token was cancelled.");
 
-        // Cancel the host's still-armed sibling catch listeners (their late completions are absorbed).
-        state = CancelHostListeners(graph, state, hostToken.TokenId, listenerTokenToSkip: null, BoundaryHostInterruptedReason, liveChildAeiByNode, pendingCancellations);
+        // Cancel the interrupt target (coordinator → cascades all live instances; host → its bound child was
+        // already dropped, so this is a pure token flip) and its still-armed sibling catch listeners.
+        state = CancelTokenAndChild(state, interruptTokenId, BoundaryHostInterruptedReason, liveChildAeiByNode, pendingCancellations,
+            (token, reason) => $"BPMN error boundary '{errorBoundary.ElementId}' absorbed a child fault of host '{faultedToken.AtElementId}' and cancelled token '{token.TokenId}' at '{token.AtElementId}' ({reason}).");
+        state = CancelHostListeners(graph, state, interruptTokenId, listenerTokenToSkip: null, BoundaryHostInterruptedReason, liveChildAeiByNode, pendingCancellations);
 
         // Mint an active token at the error boundary so its behavior routes the error path.
-        var errorToken = NewToken(state, errorBoundary.ElementId, flowId: null, parentTokenId: hostToken.TokenId, BpmnTokenStatus.Active, producingActivityExecutionId: faultedChildActivityExecutionId);
+        var errorToken = NewToken(state, errorBoundary.ElementId, flowId: null, parentTokenId: interruptTokenId, BpmnTokenStatus.Active, producingActivityExecutionId: faultedChildActivityExecutionId);
         state = AddToken(state, errorToken);
         state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TokenEmitted, errorBoundary.ElementId, null, errorToken.TokenId,
             $"BPMN error boundary '{errorBoundary.ElementId}' fired and emitted token '{errorToken.TokenId}' to route the error path.");
@@ -257,6 +300,172 @@ public sealed class BpmnExecutionEngine(
         };
 
         return FinishEvaluation(context, result);
+    }
+
+    /// <summary>The multi-instance loop coordinator token id when <paramref name="token"/> is one of that loop's instance sub-tokens (spec 121); <c>null</c> for an ordinary (non-instance) token.</summary>
+    private static string? ResolveMultiInstanceCoordinatorTokenId(BpmnExecutionState state, BpmnToken token) =>
+        token.ParentTokenId is { } parent
+        && FindLoopByCoordinator(state, parent) is { } loop
+        && StringComparer.Ordinal.Equals(token.AtElementId, loop.ElementId)
+            ? parent
+            : null;
+
+    /// <summary>
+    /// Starts a multi-instance loop (spec 121 D2a): the arriving token becomes the loop coordinator (stays
+    /// <c>AwaitingChild</c>), a <see cref="BpmnLoopState"/> record is written, the host's catch boundaries arm
+    /// once (parented to the coordinator, D2e), and the bound child is scheduled on private per-instance
+    /// sub-tokens — one at a time in sequential mode, all up front in parallel mode. An empty loop
+    /// (<c>total == 0</c>, unreachable via a validated cardinality ≥ 1) routes the host's outbound flows
+    /// immediately.
+    /// </summary>
+    private EvaluationResult StartMultiInstanceLoop(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnElement element,
+        BpmnToken coordinatorToken,
+        string childNodeId,
+        string schedulingActivityExecutionId)
+    {
+        var loopCharacteristics = element.LoopCharacteristics!;
+
+        // Cardinality mode is the only executable multi-instance shape this slice (collection mode is a
+        // validated cut, so a null cardinality here would be a graph the validator should already have rejected).
+        var total = loopCharacteristics.Cardinality
+            ?? throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' resolved no instance count; collection mode is not executable in this engine slice.");
+
+        if (total <= 0)
+            return RouteMultiInstanceCoordinatorOutbound(context, graph, state, element, coordinatorToken, schedulingActivityExecutionId);
+
+        state = UpdateToken(state, coordinatorToken with { Status = BpmnTokenStatus.AwaitingChild });
+        var (stateWithLoop, loop) = AddLoop(state, coordinatorToken.TokenId, element.ElementId, loopCharacteristics.IsSequential, total);
+        state = stateWithLoop;
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Scheduled, element.ElementId, null, coordinatorToken.TokenId,
+            $"BPMN multi-instance element '{element.ElementId}' started a {(loopCharacteristics.IsSequential ? "sequential" : "parallel")} loop of {total} instance(s).");
+
+        // spec 120/121 D2e: arm the host's catch boundaries once, parented to the coordinator token.
+        state = ArmCatchBoundaries(context, graph, state, element, coordinatorToken.TokenId, schedulingActivityExecutionId);
+
+        var instanceCount = loopCharacteristics.IsSequential ? 1 : total;
+        for (var index = 0; index < instanceCount; index++)
+            state = ScheduleMultiInstanceInstance(context, state, element, coordinatorToken.TokenId, childNodeId, index);
+
+        state = UpdateLoop(state, loop with { NextIndex = instanceCount });
+        return new EvaluationResult(state);
+    }
+
+    /// <summary>
+    /// Schedules one multi-instance instance (spec 121 D2b): mints an <c>AwaitingChild</c> instance sub-token
+    /// (parented to the coordinator, at the host element) and schedules the bound child on it with a
+    /// per-iteration frame seeding <c>loopIndex</c>. The child is scheduled with the process's OWN aei so the
+    /// iteration-frame ownership guard holds (<c>SchedulingActivityExecutionId == ParentActivityExecutionId ==
+    /// owner-node aei</c>), and its deterministically minted iteration id (derived from the Sequence-based
+    /// instance token id) is carried on the provenance and the active-child record.
+    /// </summary>
+    private static BpmnExecutionState ScheduleMultiInstanceInstance(
+        IRuntimeActivityExecutionContext context,
+        BpmnExecutionState state,
+        BpmnElement element,
+        string coordinatorTokenId,
+        string childNodeId,
+        int index)
+    {
+        var ownerActivityExecutionId = context.ActivityExecutionState.Execution.ActivityExecutionId;
+        var instanceToken = NewToken(state, element.ElementId, flowId: null, parentTokenId: coordinatorTokenId, BpmnTokenStatus.AwaitingChild, producingActivityExecutionId: ownerActivityExecutionId);
+        state = AddToken(state, instanceToken);
+
+        var iterationId = MultiInstanceIterationIdPrefix + instanceToken.TokenId;
+        var frame = BuildMultiInstanceIterationFrame(context, iterationId, index);
+        state = BpmnScheduler.ScheduleChild(context, state, childNodeId, element.ElementId, instanceToken.TokenId, ownerActivityExecutionId, MultiInstanceSchedulingCause, frame, iterationId);
+
+        return BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Scheduled, element.ElementId, null, instanceToken.TokenId,
+            $"BPMN multi-instance element '{element.ElementId}' scheduled instance {index} (child '{childNodeId}').");
+    }
+
+    /// <summary>Builds a per-instance iteration frame owned by the <c>BpmnProcess</c> node (spec 121 D2b), seeding a durable zero-based <c>loopIndex</c>.</summary>
+    private static LoopIterationScopeRequest BuildMultiInstanceIterationFrame(IRuntimeActivityExecutionContext context, string iterationId, int index)
+    {
+        var values = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal)
+        {
+            [BpmnLoopCharacteristics.LoopIndexVariable] = ValueEnvelope.Inline(
+                new ValueTypeDescriptor("Int32"),
+                JsonSerializer.SerializeToElement(index),
+                ValueProtectionPolicy.InstanceInline)
+        };
+        // Collection mode would add the current item under ItemVariable here (deferred this slice).
+        return new LoopIterationScopeRequest(context.ExecutableNode.ExecutableNodeId, iterationId, values);
+    }
+
+    /// <summary>
+    /// Handles a multi-instance instance completion (spec 121 D2c): consumes the instance sub-token and advances
+    /// the loop. While instances remain, sequential mode schedules the next instance and parallel mode simply
+    /// records the completion. On the LAST instance the loop record is dropped, the coordinator's still-armed
+    /// catch listeners are torn down (spec 120 host-completion semantics), and the coordinator routes the host
+    /// element's outbound flows through its normal behavior — so a multi-instance host routes exactly once.
+    /// </summary>
+    private EvaluationResult HandleMultiInstanceInstanceCompletion(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnToken instanceToken,
+        BpmnLoopState loop,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
+        List<BpmnPendingSubtreeCancellation> pendingCancellations,
+        string completedActivityExecutionId)
+    {
+        state = UpdateToken(state, instanceToken with { Status = BpmnTokenStatus.Consumed });
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Consumed, loop.ElementId, null, instanceToken.TokenId,
+            $"BPMN multi-instance element '{loop.ElementId}' instance token '{instanceToken.TokenId}' completed.");
+
+        var completedCount = loop.CompletedCount + 1;
+        if (completedCount < loop.TotalCount)
+        {
+            if (loop.IsSequential && loop.NextIndex < loop.TotalCount)
+            {
+                var hostElement = graph.GetRequiredElement(loop.ElementId);
+                state = ScheduleMultiInstanceInstance(context, state, hostElement, loop.TokenId, hostElement.ChildNodeId!, loop.NextIndex);
+                state = UpdateLoop(state, loop with { NextIndex = loop.NextIndex + 1, CompletedCount = completedCount });
+            }
+            else
+            {
+                state = UpdateLoop(state, loop with { CompletedCount = completedCount });
+            }
+
+            return new EvaluationResult(state, PendingSubtreeCancellations: pendingCancellations);
+        }
+
+        // Last instance: the loop is done — the coordinator "completes" and routes.
+        state = RemoveLoop(state, loop.LoopId);
+        var coordinator = GetRequiredToken(state, loop.TokenId);
+        state = ApplyBoundaryCompletionSemantics(graph, state, coordinator, liveChildAeiByNode, pendingCancellations);
+
+        var result = RouteMultiInstanceCoordinatorOutbound(context, graph, state, graph.GetRequiredElement(loop.ElementId), coordinator, completedActivityExecutionId);
+        return result with { PendingSubtreeCancellations = pendingCancellations };
+    }
+
+    /// <summary>Routes a multi-instance coordinator's outbound flows through the host element's normal behavior (spec 121 D2c/D2a): task-flow selection with no outcome names, faulting <c>bpmn.flow.none-taken</c> when nothing matches, exactly as a single-run host.</summary>
+    private EvaluationResult RouteMultiInstanceCoordinatorOutbound(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnElement element,
+        BpmnToken coordinatorToken,
+        string schedulingActivityExecutionId)
+    {
+        var behavior = behaviorRegistry.GetRequired(BpmnElementFamilies.Resolve(element));
+        var behaviorContext = new BpmnBehaviorContext(
+            BpmnBehaviorTrigger.ChildCompleted,
+            element,
+            coordinatorToken,
+            graph.OutboundFlows(element.ElementId),
+            graph.InboundFlows(element.ElementId),
+            [],
+            state);
+
+        var result = ApplyDecision(context, graph, state, coordinatorToken, element, Execute(behavior, behaviorContext, element), schedulingActivityExecutionId);
+        if (result is { Fault: null, Terminated: false })
+            result = Propagate(context, graph, result.State, schedulingActivityExecutionId);
+        return result;
     }
 
     private sealed record EvaluationResult(
@@ -390,6 +599,14 @@ public sealed class BpmnExecutionEngine(
                         throw new BpmnExecutionException($"BPMN behavior for element '{element.ElementId}' requested a child schedule, but the element binds no child activity.");
 
                     graph.GetRequiredChildNode(childNodeId);
+
+                    // spec 121: a multi-instance host does not schedule its bound child on the arriving token —
+                    // the token becomes a loop coordinator and the engine runs the child N times on private
+                    // per-instance sub-tokens. This is the only command a task/subprocess behavior emits, so
+                    // the loop-start result is returned directly.
+                    if (element.LoopCharacteristics is not null)
+                        return StartMultiInstanceLoop(context, graph, state, element, token, childNodeId, schedulingActivityExecutionId);
+
                     state = UpdateToken(state, token with { Status = BpmnTokenStatus.AwaitingChild });
                     state = BpmnScheduler.ScheduleChild(context, state, childNodeId, element.ElementId, token.TokenId, schedulingActivityExecutionId, $"element:{element.ElementType}");
                     state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Scheduled, element.ElementId, null, token.TokenId, $"BPMN element '{element.ElementId}' scheduled child activity '{childNodeId}'.");
@@ -497,7 +714,7 @@ public sealed class BpmnExecutionEngine(
         BpmnExecutionState state,
         BpmnEventRace race,
         string winnerTokenId,
-        IReadOnlyDictionary<string, string> liveChildAeiByNode,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
         List<BpmnPendingSubtreeCancellation> pendingCancellations)
     {
         foreach (var loserTokenId in race.MemberTokenIds.Where(id => !StringComparer.Ordinal.Equals(id, winnerTokenId)))
@@ -518,7 +735,7 @@ public sealed class BpmnExecutionEngine(
         BpmnGraph graph,
         BpmnExecutionState state,
         BpmnToken completingToken,
-        IReadOnlyDictionary<string, string> liveChildAeiByNode,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
         List<BpmnPendingSubtreeCancellation> pendingCancellations)
     {
         var completingElement = graph.GetRequiredElement(completingToken.AtElementId);
@@ -577,7 +794,7 @@ public sealed class BpmnExecutionEngine(
         string hostTokenId,
         string? listenerTokenToSkip,
         string reason,
-        IReadOnlyDictionary<string, string> liveChildAeiByNode,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
         List<BpmnPendingSubtreeCancellation> pendingCancellations)
     {
         var listenerTokenIds = state.Tokens
@@ -598,14 +815,17 @@ public sealed class BpmnExecutionEngine(
     /// <summary>
     /// Flips one live token to <c>Canceled</c>, drops its active-child record, and — when its armed child is a
     /// live direct child of the process — appends a seam-A subtree cancellation with <paramref name="reason"/>.
-    /// A token that is already terminal, or whose child is not live, is a benign skip. Shared by the spec 119
-    /// race and the spec 120 boundary teardown.
+    /// A token that is already terminal, or whose child is not live, is a benign skip. When the token is a
+    /// multi-instance loop coordinator (spec 121), its live instance sub-tokens cascade-cancel first (their
+    /// children resolved by <c>(NodeId, IterationId)</c>) and the loop record is dropped, so cancelling a
+    /// multi-instance host cancels all of its live instances. Shared by the spec 119 race and the spec 120
+    /// boundary teardown.
     /// </summary>
     private static BpmnExecutionState CancelTokenAndChild(
         BpmnExecutionState state,
         string tokenId,
         string reason,
-        IReadOnlyDictionary<string, string> liveChildAeiByNode,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
         List<BpmnPendingSubtreeCancellation> pendingCancellations,
         Func<BpmnToken, string, string> diagnosticMessage)
     {
@@ -613,24 +833,47 @@ public sealed class BpmnExecutionEngine(
         if (token is null || token.Status is BpmnTokenStatus.Consumed or BpmnTokenStatus.Canceled)
             return state;
 
+        // spec 121: cascade a multi-instance coordinator's cancellation to its live instance sub-tokens.
+        if (FindLoopByCoordinator(state, tokenId) is { } loop)
+        {
+            foreach (var instanceTokenId in InstanceTokenIds(state, loop))
+                state = CancelTokenAndChild(state, instanceTokenId, reason, liveChildAeiByNode, pendingCancellations, diagnosticMessage);
+            state = RemoveLoop(state, loop.LoopId);
+            token = GetRequiredToken(state, tokenId);
+        }
+
         var child = state.ActiveChildren.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.TokenId, tokenId));
         state = UpdateToken(state, token with { Status = BpmnTokenStatus.Canceled });
         if (child is not null)
         {
             state = RemoveActiveChild(state, tokenId);
-            if (liveChildAeiByNode.TryGetValue(child.NodeId, out var activityExecutionId))
+            if (liveChildAeiByNode.TryGetValue((child.NodeId, child.IterationId), out var activityExecutionId))
                 pendingCancellations.Add(new BpmnPendingSubtreeCancellation(activityExecutionId, token.AtElementId, reason));
         }
 
         return BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Canceled, token.AtElementId, token.FlowId, token.TokenId, diagnosticMessage(token, reason));
     }
 
-    /// <summary>The live direct child executions of this process keyed by executable node id (spec 119 D4); node ids are unique among a process's live direct children (validation-enforced).</summary>
-    private static IReadOnlyDictionary<string, string> BuildLiveChildAeiByNode(IRuntimeActivityExecutionContext context)
+    /// <summary>The instance sub-token ids of a live multi-instance loop (spec 121): tokens parented to the coordinator and sitting at the host element.</summary>
+    private static IReadOnlyCollection<string> InstanceTokenIds(BpmnExecutionState state, BpmnLoopState loop) =>
+        state.Tokens
+            .Where(candidate =>
+                candidate.ParentTokenId is { } parent && StringComparer.Ordinal.Equals(parent, loop.TokenId) &&
+                StringComparer.Ordinal.Equals(candidate.AtElementId, loop.ElementId))
+            .Select(candidate => candidate.TokenId)
+            .ToArray();
+
+    /// <summary>
+    /// The live direct child executions of this process keyed by <c>(executable node id, iteration id)</c>
+    /// (spec 119 D4 + spec 121). Ordinary single-run children key under a <c>null</c> iteration id (preserving
+    /// the pre-multi-instance lookup); N concurrent same-node multi-instance children key under their distinct
+    /// iteration ids so a teardown resolves the right instance's activity-execution id.
+    /// </summary>
+    private static IReadOnlyDictionary<(string NodeId, string? IterationId), string> BuildLiveChildAeiByNode(IRuntimeActivityExecutionContext context)
     {
-        var liveChildAeiByNode = new Dictionary<string, string>(StringComparer.Ordinal);
+        var liveChildAeiByNode = new Dictionary<(string NodeId, string? IterationId), string>();
         foreach (var live in context.GetLiveChildActivities())
-            liveChildAeiByNode[live.ExecutableNodeId] = live.ActivityExecutionId;
+            liveChildAeiByNode[(live.ExecutableNodeId, live.IterationId)] = live.ActivityExecutionId;
         return liveChildAeiByNode;
     }
 
@@ -656,8 +899,9 @@ public sealed class BpmnExecutionEngine(
         return state with { ActiveChildren = [], Sequence = state.Sequence + 1 };
     }
 
-    private static string ResolveTokenId(IRuntimeActivityExecutionContext context, BpmnExecutionState state, string completedNodeId)
+    private static string ResolveTokenId(IRuntimeActivityExecutionContext context, BpmnExecutionState state, string completedNodeId, string? completedIterationId)
     {
+        // The primary path: engine-scheduled children carry the bpmn.tokenId command metadata on inline completion.
         if (context.SchedulerWorkItem.CommandMetadata.TryGetValue(TokenIdMetadataKey, out var metadataTokenId) && !string.IsNullOrWhiteSpace(metadataTokenId))
             return metadataTokenId;
 
@@ -665,9 +909,16 @@ public sealed class BpmnExecutionEngine(
             .Where(child => StringComparer.Ordinal.Equals(child.NodeId, completedNodeId))
             .ToArray();
 
+        // A resumed child's completion does not carry the bpmn.tokenId metadata. For N concurrent same-node
+        // multi-instance instances (spec 121) the completing child's iteration id disambiguates them; a single
+        // candidate resolves unambiguously (the pre-multi-instance by-node fallback).
+        if (completedIterationId is not null &&
+            candidates.FirstOrDefault(child => StringComparer.Ordinal.Equals(child.IterationId, completedIterationId)) is { } iterationMatch)
+            return iterationMatch.TokenId;
+
         if (candidates.Length == 1)
             return candidates[0].TokenId;
 
-        throw new BpmnExecutionException($"Unable to resolve the BPMN token for completed child node '{completedNodeId}'.");
+        throw new BpmnExecutionException($"Unable to resolve the BPMN token for completed child node '{completedNodeId}' (iteration '{completedIterationId ?? "none"}').");
     }
 }

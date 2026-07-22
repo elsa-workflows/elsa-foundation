@@ -17,7 +17,8 @@ public sealed record BpmnExecutionState
         int sequence = 0,
         bool terminated = false,
         BpmnPendingFault? pendingFault = null,
-        IReadOnlyCollection<BpmnEventRace>? races = null)
+        IReadOnlyCollection<BpmnEventRace>? races = null,
+        IReadOnlyCollection<BpmnLoopState>? loops = null)
     {
         Tokens = tokens ?? [];
         ActiveChildren = activeChildren ?? [];
@@ -26,6 +27,7 @@ public sealed record BpmnExecutionState
         Terminated = terminated;
         PendingFault = pendingFault;
         Races = races ?? [];
+        Loops = loops ?? [];
     }
 
     public IReadOnlyCollection<BpmnToken> Tokens { get; init; }
@@ -35,6 +37,9 @@ public sealed record BpmnExecutionState
 
     /// <summary>The open/resolved first-catch-wins races opened by event-based gateways (spec 119); additive, schema stays v1.</summary>
     public IReadOnlyCollection<BpmnEventRace> Races { get; init; }
+
+    /// <summary>The live multi-instance loops (spec 121); each is a coordinator token with private per-instance sub-tokens. Additive, schema stays v1.</summary>
+    public IReadOnlyCollection<BpmnLoopState> Loops { get; init; }
 
     /// <summary>Set when a terminate end event ended the process; late child completions are ignored.</summary>
     public bool Terminated { get; init; }
