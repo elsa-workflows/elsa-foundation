@@ -50,7 +50,7 @@ public sealed class ProviderNativePlanTests
             declared.SequenceEqual(covered, StringComparer.Ordinal),
             $"Missing native route scenarios: {string.Join(", ", declared.Except(covered, StringComparer.Ordinal))}. " +
             $"Unexpected native route scenarios: {string.Join(", ", covered.Except(declared, StringComparer.Ordinal))}.");
-        Assert.Equal(65, declared.Length);
+        Assert.Equal(66, declared.Length);
         Assert.DoesNotContain(
             RouteKey(SecretsStorageManifest.SecretDocumentKind, SecretsStorageManifest.SearchFilteredQuery),
             declared);
@@ -113,7 +113,7 @@ public sealed class ProviderNativePlanTests
                     {
                         Assert.Equal(
                             ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex,
-                            plan.IndexName?.Identifier);
+                            plan.LogicalIndexIdentity);
                     }
                     var request = NativePlanRequest(
                         scenario,
@@ -185,7 +185,7 @@ public sealed class ProviderNativePlanTests
                 }
             }
 
-            Assert.Equal(55, results.Count);
+            Assert.Equal(56, results.Count);
             Assert.Equal(
                 results.Count,
                 results.Select(result => RouteKey(
@@ -474,6 +474,8 @@ public sealed class ProviderNativePlanTests
                 GroundworkNativeRouteProjectedValue.String(field, value),
             QueryComparisonOperator.StartsWith =>
                 GroundworkNativeRouteProjectedValue.String(field, $"{value}target", "nonmatching"),
+            QueryComparisonOperator.LessThanOrEqual =>
+                GroundworkNativeRouteProjectedValue.String(field, value, $"{value}~"),
             QueryComparisonOperator.NotEqual =>
                 GroundworkNativeRouteProjectedValue.String(
                     field,
@@ -869,6 +871,15 @@ public sealed class ProviderNativePlanTests
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableTimerDueTimeField),
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableTimerIdField)
                 ]),
+            Documents(
+                ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
+                ElsaRuntimeStorageManifest.ClaimDueDurableTimersQuery,
+                [
+                    LessThanOrEqual(
+                        ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField,
+                        $"{Now.UtcTicks:D19}.~")
+                ],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.DurableTimerClaimOrderKeyField)]),
             Documents(
                 ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
                 ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery,
