@@ -29,124 +29,25 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
-    public void Temporary_design_ef_oracle_exclusion_is_exact_test_only_and_frozen()
+    public void Workflow_and_activity_design_source_projects_are_ef_free_boundaries()
     {
-        var projectPath = Path.Combine(
-            RepoRoot,
-            TemporaryDesignEfOracle.RelativeProjectPath.Replace('/', Path.DirectorySeparatorChar));
-        Assert.True(File.Exists(projectPath), $"Temporary EF oracle is missing: {projectPath}");
-        Assert.False(TemporaryDesignEfOracle.IsExcludedProject(
-            TemporaryDesignEfOracle.RelativeProjectPath.Replace("/EFCore/Tests/", "/EFCore/Other/")));
+        // Spec 093 T075: design persistence ships only Groundwork, so the whole design source lane —
+        // including the provider-neutral projects the .Core/.Groundwork rules do not already cover — is a
+        // guarded EF-free boundary. Reintroducing EF anywhere they can reach (direct or transitive) fails
+        // Core_and_groundwork_projects_are_ef_free_now above.
+        var boundaries = new EfCoreSurfaceScanner(RepoRoot).EfFreeBoundaryProjectNames();
 
-        var project = System.Xml.Linq.XDocument.Load(projectPath);
-        Assert.Equal(
-            "true",
-            project.Descendants("IsTestProject").Single().Value,
-            ignoreCase: true);
-        Assert.Equal(
-            "false",
-            project.Descendants("IsPackable").Single().Value,
-            ignoreCase: true);
+        string[] designProjectsBeyondCoreAndGroundwork =
+        [
+            "Elsa.Workflows.Design.Api",
+            "Elsa.Workflows.Design.Validations",
+            "Elsa.Workflows.Design.JavaScript",
+            "Elsa.Activities.Design.Api"
+        ];
 
-        var efPackages = project.Descendants("PackageReference")
-            .Select(reference => reference.Attribute("Include")?.Value)
-            .OfType<string>()
-            .Where(package => package.Contains("EntityFrameworkCore", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-        Assert.Equal(
-            new string[]
-            {
-                "Microsoft.EntityFrameworkCore",
-                "Microsoft.EntityFrameworkCore.Sqlite"
-            },
-            efPackages);
-
-        var projectDirectory = Path.GetDirectoryName(projectPath)!;
-        var efProjects = project.Descendants("ProjectReference")
-            .Select(reference => reference.Attribute("Include")?.Value)
-            .OfType<string>()
-            .Select(reference => reference
-                .Replace('\\', Path.DirectorySeparatorChar)
-                .Replace('/', Path.DirectorySeparatorChar))
-            .Select(reference => Path.GetFullPath(Path.Combine(projectDirectory, reference)))
-            .Select(reference => Path.GetRelativePath(RepoRoot, reference).Replace('\\', '/'))
-            .Where(reference =>
-                reference.Contains("/EFCore/", StringComparison.OrdinalIgnoreCase) ||
-                reference.Contains("/EntityFrameworkCore/", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-        Assert.Equal(
-            new string[]
-            {
-                "src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj",
-                "src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj",
-                "src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj",
-                "src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj",
-                "src/Elsa/Workflows/Design/Persistence/EFCore/Elsa.Workflows.Design.Persistence.EFCore.csproj",
-                "src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj"
-            },
-            efProjects);
-    }
-
-    [Fact]
-    public void Scanner_excludes_only_the_exact_temporary_design_ef_oracle_path()
-    {
-        using var fixture = new TemporaryRepository();
-        fixture.Write(TemporaryDesignEfOracle.RelativeProjectPath, """
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup>
-              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" /></ItemGroup>
-            </Project>
-            """);
-        const string otherProject =
-            "tests/Elsa/Persistence/Groundwork/DesignConformance/EFCore/Tests/Elsa.Other.EFCore.Tests.csproj";
-        fixture.Write(otherProject, """
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup>
-              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" /></ItemGroup>
-            </Project>
-            """);
-
-        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
-
-        Assert.DoesNotContain(TemporaryDesignEfOracle.RelativeProjectPath, snapshot.EfProjects);
-        Assert.Contains(otherProject, snapshot.EfProjects);
-        Assert.DoesNotContain(
-            snapshot.DirectPackageReferences,
-            entry => entry.StartsWith(TemporaryDesignEfOracle.RelativeProjectPath, StringComparison.Ordinal));
-        Assert.Contains(
-            $"{otherProject} -> Microsoft.EntityFrameworkCore",
-            snapshot.DirectPackageReferences);
-    }
-
-    [Fact]
-    public void Scanner_keeps_the_temporary_oracle_traversable_for_inbound_boundary_checks()
-    {
-        using var fixture = new TemporaryRepository();
-        fixture.Write(TemporaryDesignEfOracle.RelativeProjectPath, """
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup>
-              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" /></ItemGroup>
-            </Project>
-            """);
-        fixture.Write("src/Core/Elsa.Workflows.Runtime.Core.csproj", $"""
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup><AssemblyName>Elsa.Workflows.Runtime.Core</AssemblyName></PropertyGroup>
-              <ItemGroup>
-                <ProjectReference Include="../../{TemporaryDesignEfOracle.RelativeProjectPath}" />
-              </ItemGroup>
-            </Project>
-            """);
-
-        var violations = new EfCoreSurfaceScanner(fixture.Path)
-            .FindProtectedProviderNeutralityViolations();
-
-        Assert.Contains(
-            violations,
-            violation => violation.Contains(
-                $"reaches concrete provider project {TemporaryDesignEfOracle.RelativeProjectPath}",
-                StringComparison.Ordinal));
+        Assert.All(
+            designProjectsBeyondCoreAndGroundwork,
+            project => Assert.Contains(project, boundaries));
     }
 
     [Fact]

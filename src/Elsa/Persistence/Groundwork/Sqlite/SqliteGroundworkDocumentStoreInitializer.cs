@@ -7,6 +7,7 @@ using Groundwork.Core.Transactions;
 using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Relational.Documents;
 using Groundwork.Sqlite;
 using Groundwork.Sqlite.Documents;
 using Groundwork.Sqlite.PhysicalStorage;
@@ -92,6 +93,17 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             if (!sessionSource.IsInitialized)
             {
                 var manifest = source.CreateManifest();
+                var routes = source.PhysicalTarget.Routes;
+                var provider = source.PhysicalTarget.Provider;
+                // Compile each route's connection-independent plan set at most once for the whole process.
+                // The Lazy is captured by the admitted session factory, so it is shared across every session
+                // open: unused routes never compile, and used routes compile exactly once. Each session then
+                // only pays a cheap Bind against its own connection-bound store.
+                var planSets = routes.ToDictionary(
+                    route => route.StorageUnit.Value,
+                    route => new Lazy<RelationalPhysicalQueryPlanSet>(
+                        () => SqlitePhysicalQueryRuntime.CompilePlanSet(manifest, route, provider)),
+                    StringComparer.Ordinal);
                 if (sessionSource.TrySetAdmitted(async (access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
@@ -105,17 +117,13 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                         var store = new SqlitePhysicalDocumentStore(
                             connection,
                             manifest,
-                            source.PhysicalTarget.Routes,
+                            routes,
                             access);
-                        var boundedStore = new GroundworkBoundedDocumentStoreRouter(
-                            source.PhysicalTarget.Routes.Select(route =>
-                                KeyValuePair.Create<string, IBoundedDocumentStore>(
+                        var boundedStore = GroundworkBoundedDocumentStoreRouter.CreateLazy(
+                            routes.Select(route =>
+                                KeyValuePair.Create<string, Func<IBoundedDocumentStore>>(
                                     route.StorageUnit.Value,
-                                    SqlitePhysicalQueryRuntime.Create(
-                                        store,
-                                        manifest,
-                                        route,
-                                        source.PhysicalTarget.Provider))));
+                                    () => planSets[route.StorageUnit.Value].Value.Bind(store))));
                         return new GroundworkStoreSessionResources(store, boundedStore, connection);
                     }
                     catch (OperationCanceledException)

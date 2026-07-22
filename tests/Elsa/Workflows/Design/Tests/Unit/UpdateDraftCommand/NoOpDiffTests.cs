@@ -26,7 +26,7 @@ public sealed class NoOpDiffTests
     [Fact]
     public async Task No_op_resubmission_still_runs_the_validation_gate()
     {
-        using var host = WorkflowsDesignTestHost.Create();
+        using var host = await WorkflowsDesignTestHost.CreateAsync();
         var draftId = await SeedEmptyDraft(host);
 
         // Establish a non-trivial stored state.

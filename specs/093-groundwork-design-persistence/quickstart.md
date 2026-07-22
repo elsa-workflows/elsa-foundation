@@ -594,6 +594,61 @@ MongoDB 59/59, legacy EF oracle 38 passed + 13 intentional N/A skips, shared sui
 intentional skip; unified hosts 45/45 (SQLite base incl. deployment-shape lane exclusion)
 and 6/6 on PostgreSQL, SQL Server, and MongoDB.
 
+### T078 US4 full-gate reconciliation (2026-07-22)
+
+At candidate `40b8bd9ce` (+ the doc-reference cleanup committed with this section):
+
+- Full `Elsa.Server.slnx` Release build: 0 errors. `dotnet pack`: 145 packages, 0 errors
+  (pre-release dependency warnings only).
+- Design EF dependency audit: zero `EntityFrameworkCore`/`EFCore` tokens in workflow/activity
+  design source (the only survivors were stale doc-comment references to deleted types, now
+  reworded); zero direct or transitive EF packages in either design Groundwork project
+  (`dotnet list package --include-transitive`); the regenerated shrink-only ratchet baseline
+  carries zero design entries and the scanner asserts every design source project (incl. Api,
+  Validations, JavaScript) as an EF-free boundary.
+- Architecture 282/282. Focused suites: workflows-design 307/307 (EF-free, rehosted Groundwork
+  test host), activities-design 465/465, Groundwork querying 105, shared conformance 96+1,
+  SQLite leaf 57/57, base unified host 45/45.
+- Provider matrix post-deletion: PostgreSQL 62/62, SQL Server 62/62, MongoDB 59/59; unified
+  hosts 6/6 each.
+- Elsa.Server composes design persistence exclusively through
+  `GroundworkUnifiedPersistenceSqlite` (all four shells files; no design EF feature remains
+  anywhere).
+
+### T079 US4 independent review and disposition (2026-07-22)
+
+**Reviewed range:** `1ff3139bd..1194a39a6` (the 9 US4 commits) by three independent read-only
+reviewers on distinct axes. **All PASS, zero blockers.**
+
+- **Performance-gate legitimacy — PASS.** Contract items 1–4/6–9 verified byte-identical across
+  the amendment; the 19/19 budget verdict independently recomputed from the committed evidence;
+  the contamination disclosure verified against the committed pre-remediation comparison; no
+  gerrymandered thresholds (round budgets, real headroom, loud unclassified-route failure). The
+  reviewer's strongest adversarial angle — budgets authored after the failing data — is disclosed
+  by design: the program owner ratified the amendment with the failing measurements in hand, and
+  the pre-remediation Groundwork numbers would have failed even the amended budgets, so the code
+  fixes, not the amendment, produced the pass. Upstream provenance verified after a stale-clone
+  false alarm: groundwork PR #124 merge `ad8ac47c7`, PR #125 merge `b7a31055a`.
+- **Test-objective preservation — PASS.** 90 ledger rows + addendum reconciled method-for-method
+  against the 93 deletions; all 22 converted tests verified to assert their stated objectives;
+  no assertion weakened in the 12 rehosted files; the fresh-operation-key deviation proven
+  required (identical resubmission must re-fire the validation gate) with replay covered by the
+  atomicity suite; count arithmetic (364→307, 502→465) verified from the diffs.
+- **Deletion completeness & core independence — PASS.** Zero design-EF surface at source,
+  project, package, and transitive levels; ratchet baseline shrank 484→377 lines with zero design
+  entries; the design-lane boundary covers all 19 design source projects with real
+  direct-and-transitive teeth; Elsa.Server composes design persistence via Groundwork only;
+  preserved EF lanes verified un-orphaned; spec-094 ledger rotations mechanically sound.
+
+**Advisory dispositions (this commit):** actual review verdicts recorded in place of the
+pre-written validation claims; the report's reproduction instructions now cite the harness
+checkout commit `30ec15491` and the verified upstream merge SHAs; benchmark output directories
+gitignored; the docker compose persistence note and the EF extension-point worked-example
+reference no longer cite deleted features; ledger addendum attribution made precise. **Deferred
+to #899 (its T080–T083 charter):** regeneration of `docs/maps/*` (which still lists the deleted
+design EF projects) and the remaining stale extension-point cross-references — recorded here so
+the Phase 7 docs audit inherits them explicitly.
+
 ### Phase 2 bounded-query substrate evidence (T019)
 
 On 2026-07-20, the canonical in-memory Groundwork test substrate was updated to

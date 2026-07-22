@@ -454,3 +454,6 @@ FodyWeavers.xsd
 **/.elsa/copilot/session-state/
 
 *.lock
+bench-out*/
+bench-*.sh
+bench-out-runner.sh

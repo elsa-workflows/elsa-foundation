@@ -1,0 +1,411 @@
+{
+  "BudgetGatePassed": true,
+  "FormSelectionGatePassed": true,
+  "BudgetRows": [
+    {
+      "Operation": "act.catalog.filter-page",
+      "Class": "catalog page/count",
+      "P95Ms": 52.992625,
+      "P95BudgetMs": 400,
+      "P95Pass": true,
+      "P99Ms": 56.22458999999999,
+      "P99BudgetMs": 800,
+      "P99Pass": true,
+      "ThroughputPerSecond": 19.723792343263128,
+      "ThroughputFloor": 4,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.catalog.versions-batch",
+      "Class": "batch/projection",
+      "P95Ms": 2.776569999999991,
+      "P95BudgetMs": 5,
+      "P95Pass": true,
+      "P99Ms": 12.302065000000002,
+      "P99BudgetMs": 20,
+      "P99Pass": true,
+      "ThroughputPerSecond": 509.38129721670384,
+      "ThroughputFloor": 200,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.identity.get",
+      "Class": "point-read",
+      "P95Ms": 0.3122,
+      "P95BudgetMs": 0.8,
+      "P95Pass": true,
+      "P99Ms": 1.026945999999999,
+      "P99BudgetMs": 2.5,
+      "P99Pass": true,
+      "ThroughputPerSecond": 3335.3116538075833,
+      "ThroughputFloor": 2000,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.identity.version-exact",
+      "Class": "point-read",
+      "P95Ms": 0.5082,
+      "P95BudgetMs": 0.8,
+      "P95Pass": true,
+      "P99Ms": 1.2485479999999893,
+      "P99BudgetMs": 2.5,
+      "P99Pass": true,
+      "ThroughputPerSecond": 2158.859225798535,
+      "ThroughputFloor": 2000,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.lifecycle.add-version@c1",
+      "Class": "write@c1",
+      "P95Ms": 2.10854,
+      "P95BudgetMs": 3,
+      "P95Pass": true,
+      "P99Ms": 14.215661,
+      "P99BudgetMs": 25,
+      "P99Pass": true,
+      "ThroughputPerSecond": 731.2274932630871,
+      "ThroughputFloor": 400,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.lifecycle.add-version@c16",
+      "Class": "write@c16",
+      "P95Ms": 59.93907999999992,
+      "P95BudgetMs": 100,
+      "P95Pass": true,
+      "P99Ms": 244.13382399999992,
+      "P99BudgetMs": 500,
+      "P99Pass": true,
+      "ThroughputPerSecond": 1113.9374634371388,
+      "ThroughputFloor": 731.2274932630871,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.lifecycle.create@c1",
+      "Class": "write@c1",
+      "P95Ms": 2.262139999999998,
+      "P95BudgetMs": 3,
+      "P95Pass": true,
+      "P99Ms": 12.943689999999997,
+      "P99BudgetMs": 25,
+      "P99Pass": true,
+      "ThroughputPerSecond": 650.7656319493119,
+      "ThroughputFloor": 400,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "act.lifecycle.create@c16",
+      "Class": "write@c16",
+      "P95Ms": 88.50885,
+      "P95BudgetMs": 100,
+      "P95Pass": true,
+      "P99Ms": 351.4367260000002,
+      "P99BudgetMs": 500,
+      "P99Pass": true,
+      "ThroughputPerSecond": 759.7283337602006,
+      "ThroughputFloor": 650.7656319493119,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.catalog.count",
+      "Class": "catalog page/count",
+      "P95Ms": 208.49649499999992,
+      "P95BudgetMs": 400,
+      "P95Pass": true,
+      "P99Ms": 461.04902799999445,
+      "P99BudgetMs": 800,
+      "P99Pass": true,
+      "ThroughputPerSecond": 5.391671162055703,
+      "ThroughputFloor": 4,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.catalog.filter-page",
+      "Class": "catalog page/count",
+      "P95Ms": 178.29043000000001,
+      "P95BudgetMs": 400,
+      "P95Pass": true,
+      "P99Ms": 210.52519800000084,
+      "P99BudgetMs": 800,
+      "P99Pass": true,
+      "ThroughputPerSecond": 5.790957323623207,
+      "ThroughputFloor": 4,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.catalog.projection",
+      "Class": "batch/projection",
+      "P95Ms": 2.94305,
+      "P95BudgetMs": 5,
+      "P95Pass": true,
+      "P99Ms": 6.094292000000003,
+      "P99BudgetMs": 20,
+      "P99Pass": true,
+      "ThroughputPerSecond": 468.2670183930045,
+      "ThroughputFloor": 200,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.identity.get",
+      "Class": "point-read",
+      "P95Ms": 0.302,
+      "P95BudgetMs": 0.8,
+      "P95Pass": true,
+      "P99Ms": 0.928,
+      "P99BudgetMs": 2.5,
+      "P99Pass": true,
+      "ThroughputPerSecond": 3417.498590094752,
+      "ThroughputFloor": 2000,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.identity.version-exact",
+      "Class": "point-read",
+      "P95Ms": 0.45100999999999913,
+      "P95BudgetMs": 0.8,
+      "P95Pass": true,
+      "P99Ms": 1.329270000000001,
+      "P99BudgetMs": 2.5,
+      "P99Pass": true,
+      "ThroughputPerSecond": 2471.216662336757,
+      "ThroughputFloor": 2000,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.identity.version-latest",
+      "Class": "point-read",
+      "P95Ms": 0.4471,
+      "P95BudgetMs": 0.8,
+      "P95Pass": true,
+      "P99Ms": 1.672385000000002,
+      "P99BudgetMs": 2.5,
+      "P99Pass": true,
+      "ThroughputPerSecond": 2330.786636823282,
+      "ThroughputFloor": 2000,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.lifecycle.create@c1",
+      "Class": "write@c1",
+      "P95Ms": 1.7025899999999994,
+      "P95BudgetMs": 3,
+      "P95Pass": true,
+      "P99Ms": 13.81134,
+      "P99BudgetMs": 25,
+      "P99Pass": true,
+      "ThroughputPerSecond": 956.0181007782609,
+      "ThroughputFloor": 400,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.lifecycle.create@c16",
+      "Class": "write@c16",
+      "P95Ms": 39.02943499999997,
+      "P95BudgetMs": 100,
+      "P95Pass": true,
+      "P99Ms": 185.58393099999995,
+      "P99BudgetMs": 500,
+      "P99Pass": true,
+      "ThroughputPerSecond": 1344.1518130637908,
+      "ThroughputFloor": 956.0181007782609,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.lifecycle.materialize@c1",
+      "Class": "write@c1",
+      "P95Ms": 1.5836199999999996,
+      "P95BudgetMs": 3,
+      "P95Pass": true,
+      "P99Ms": 11.899884000000021,
+      "P99BudgetMs": 25,
+      "P99Pass": true,
+      "ThroughputPerSecond": 1285.8813161444764,
+      "ThroughputFloor": 400,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.lifecycle.materialize@c16",
+      "Class": "write@c16",
+      "P95Ms": 35.84079999999999,
+      "P95BudgetMs": 100,
+      "P95Pass": true,
+      "P99Ms": 133.74436300000002,
+      "P99BudgetMs": 500,
+      "P99Pass": true,
+      "ThroughputPerSecond": 1919.7866702896106,
+      "ThroughputFloor": 1285.8813161444764,
+      "ThroughputPass": true,
+      "Pass": true
+    },
+    {
+      "Operation": "wf.version.exists",
+      "Class": "point-read",
+      "P95Ms": 0.661364999999998,
+      "P95BudgetMs": 0.8,
+      "P95Pass": true,
+      "P99Ms": 1.6642419999999998,
+      "P99BudgetMs": 2.5,
+      "P99Pass": true,
+      "ThroughputPerSecond": 2167.3722070637314,
+      "ThroughputFloor": 2000,
+      "ThroughputPass": true,
+      "Pass": true
+    }
+  ],
+  "EfRatioEvidence": {
+    "Note": "Recorded evidence only, NOT a gate (ratified amendment 2026-07-22): EF oracle runs bare SaveChanges while Groundwork runs ledger/replay/scope/atomic-staging per op; its LegacyEfOracle profile declares those scenarios N/A.",
+    "AllRowsWouldPass": false
+  },
+  "FormRows": [
+    {
+      "Operation": "act.catalog.filter-page",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "act.catalog.filter-page",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "act.catalog.versions-batch",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "act.catalog.versions-batch",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "act.identity.get",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": false,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "act.identity.get",
+      "Alternative": "groundwork.shared",
+      "Discriminating": false,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "act.identity.version-exact",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "act.identity.version-exact",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.catalog.count",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.catalog.count",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.catalog.filter-page",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.catalog.filter-page",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.catalog.projection",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.catalog.projection",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.identity.get",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": false,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.identity.get",
+      "Alternative": "groundwork.shared",
+      "Discriminating": false,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.identity.version-exact",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": false,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.identity.version-exact",
+      "Alternative": "groundwork.shared",
+      "Discriminating": false,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.identity.version-latest",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.identity.version-latest",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.version.exists",
+      "Alternative": "groundwork.dedicated",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    },
+    {
+      "Operation": "wf.version.exists",
+      "Alternative": "groundwork.shared",
+      "Discriminating": true,
+      "PassesAt100KAnd1M": true
+    }
+  ],
+  "Note": "Gate 5 = absolute 100K budget rows; gate 6 = form selection at 100K \u0026 1M. Correctness must be green in every comparison before timing is trusted."
+}

@@ -7,6 +7,7 @@ using Groundwork.Core.Transactions;
 using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Relational.Documents;
 using Groundwork.SqlServer;
 using Groundwork.SqlServer.Documents;
 using Groundwork.SqlServer.PhysicalStorage;
@@ -85,23 +86,30 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
             if (!_sessionSource.IsInitialized)
             {
                 var manifest = schemaSource.CreateManifest();
+                var routes = admission.PhysicalTarget.Routes;
+                var provider = admission.PhysicalTarget.Provider;
+                // Compile each route's connection-independent plan set at most once for the whole process.
+                // The Lazy is captured by the admitted session factory, so it is shared across every session
+                // open: unused routes never compile, and used routes compile exactly once. Each session then
+                // only pays a cheap Bind against its own connection-bound store.
+                var planSets = routes.ToDictionary(
+                    route => route.StorageUnit.Value,
+                    route => new Lazy<RelationalPhysicalQueryPlanSet>(
+                        () => SqlServerPhysicalQueryRuntime.CompilePlanSet(manifest, route, provider)),
+                    StringComparer.Ordinal);
                 if (_sessionSource.TrySetAdmitted((access, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
                     var store = new SqlServerPhysicalDocumentStore(
                         _connectionString,
                         manifest,
-                        admission.PhysicalTarget.Routes,
+                        routes,
                         access);
-                    var boundedStore = new GroundworkBoundedDocumentStoreRouter(
-                        admission.PhysicalTarget.Routes.Select(route =>
-                            KeyValuePair.Create<string, IBoundedDocumentStore>(
+                    var boundedStore = GroundworkBoundedDocumentStoreRouter.CreateLazy(
+                        routes.Select(route =>
+                            KeyValuePair.Create<string, Func<IBoundedDocumentStore>>(
                                 route.StorageUnit.Value,
-                                SqlServerPhysicalQueryRuntime.Create(
-                                    store,
-                                    manifest,
-                                    route,
-                                    admission.PhysicalTarget.Provider))));
+                                () => planSets[route.StorageUnit.Value].Value.Bind(store))));
                     return ValueTask.FromResult(new GroundworkStoreSessionResources(store, boundedStore));
                 }, TransactionBoundary.CrossUnitAtomic))
                 {
