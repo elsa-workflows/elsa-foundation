@@ -455,12 +455,12 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     [Fact]
     public void Describe_ExplicitNullLiteralOption_IsTreatedAsUnauthored_AndDoesNotThrow()
     {
-        // A JSON-null literal (Source.Literal, LiteralValue kind Null) is likewise "no value authored" and must apply
-        // the default rather than throw.
+        // An explicit-null literal (Source.Literal, ExplicitNull envelope -> LiteralValue kind Null) is likewise
+        // "no value authored" and must apply the default rather than throw.
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
         {
             [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook"),
-            [nameof(HttpEndpoint.Policy)] = RawLiteralBinding(nameof(HttpEndpoint.Policy), "null")
+            [nameof(HttpEndpoint.Policy)] = ExplicitNullLiteralBinding(nameof(HttpEndpoint.Policy))
         };
 
         var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)).Descriptors);
@@ -565,6 +565,19 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Literal,
             literal: ValueEnvelope.Absent(type, ValueProtectionPolicy.InstanceInline));
+    }
+
+    // A Literal-source binding carrying an EXPLICIT null - the ExplicitNull envelope an authored null flows
+    // through in production (ValueEnvelope.Null), as opposed to an Inline envelope holding a JSON null.
+    private static RuntimeInputBinding ExplicitNullLiteralBinding(string name)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any");
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Null(type, ValueProtectionPolicy.InstanceInline));
     }
 
     private static RuntimeInputBinding CanonicalLiteral(string name, JsonElement value, string typeAlias)
