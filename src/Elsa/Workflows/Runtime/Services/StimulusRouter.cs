@@ -159,7 +159,11 @@ public sealed class StimulusRouter : IStimulusRouter
                 runKind: WorkflowRunKind.PublishedRun,
                 sourceSelection: binding.PublicationId is null && binding.SlotId is null
                     ? null
-                    : new WorkflowExecutableSourceSelection(publicationId: binding.PublicationId, slotId: binding.SlotId));
+                    : new WorkflowExecutableSourceSelection(publicationId: binding.PublicationId, slotId: binding.SlotId),
+                // Spec 117 D4: forward the matched binding's metadata (e.g. a BPMN start element id) on its own
+                // reserved channel so a structural trigger activity can read per-descriptor routing facets. Never
+                // the workflow-inputs bag (collision/spoof-proof), mirroring the trigger-node identity above.
+                triggerMetadata: binding.Metadata);
 
             // Forward the request-affine dispatch options (spec 089 FR-019) so an in-process inline drain of this
             // start can build activity execution contexts from the caller's ambient scope. Live reference only —

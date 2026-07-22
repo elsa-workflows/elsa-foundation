@@ -19,9 +19,9 @@ internal sealed class StubActivityCatalog : IActivityDefinitionLookup
 
     public StubActivityCatalog() => Add(ValidatorTestHelpers.RootActivityVersionId);
 
-    public StubActivityCatalog Add(string versionId, IEnumerable<InputDefinition>? inputs = null, IEnumerable<OutputDefinition>? outputs = null)
+    public StubActivityCatalog Add(string versionId, IEnumerable<InputDefinition>? inputs = null, IEnumerable<OutputDefinition>? outputs = null, IEnumerable<ActivityDesignFacet>? designFacets = null)
     {
-        _versions[versionId] = new StubVersion(versionId, inputs ?? [], outputs ?? []);
+        _versions[versionId] = new StubVersion(versionId, inputs ?? [], outputs ?? [], designFacets ?? []);
         return this;
     }
 
@@ -42,7 +42,7 @@ internal sealed class StubActivityCatalog : IActivityDefinitionLookup
     public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
         => throw new NotImplementedException();
 
-    private sealed class StubVersion(string id, IEnumerable<InputDefinition> inputs, IEnumerable<OutputDefinition> outputs) : IActivityDefinitionVersion
+    private sealed class StubVersion(string id, IEnumerable<InputDefinition> inputs, IEnumerable<OutputDefinition> outputs, IEnumerable<ActivityDesignFacet> designFacets) : IActivityDefinitionVersion
     {
         public string Id { get; } = id;
         public string Version => "1.0.0";
@@ -57,7 +57,7 @@ internal sealed class StubActivityCatalog : IActivityDefinitionLookup
         public IActivityDefinition Definition => null!;
         public IEnumerable<InputDefinition> Inputs { get; } = inputs;
         public IEnumerable<OutputDefinition> Outputs { get; } = outputs;
-        public IEnumerable<ActivityDesignFacet> DesignFacets => [];
+        public IEnumerable<ActivityDesignFacet> DesignFacets { get; } = designFacets;
         public ActivityExecutionType ExecutionType => default;
         public string Hash => "";
     }

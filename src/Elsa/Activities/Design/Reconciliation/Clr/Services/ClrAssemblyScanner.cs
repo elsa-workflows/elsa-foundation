@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Extensions;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
@@ -45,6 +46,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityStructureAttributeFullName = typeof(ActivityStructureAttribute).FullName!;
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
+    private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     public IReadOnlyList<ActivityVersionReconciliationModel> Scan(string folderPath)
@@ -142,9 +144,10 @@ public sealed class ClrAssemblyScanner(
                 Name: property.Name,
                 Type: ToTypeReference(property.PropertyType),
                 StorageDriverType: null,
-                DisplayName: property.Name,
+                DisplayName: metadata.DisplayName ?? property.Name.Humanize(),
                 Category: metadata.Category,
                 IsNullable: IsNullable(property),
+                Description: metadata.Description,
                 Order: metadata.Order,
                 UiHint: metadata.UiHint,
                 UISpecifications: metadata.UiSpecifications,
@@ -172,9 +175,10 @@ public sealed class ClrAssemblyScanner(
                     Name: property.Name,
                     Type: ToTypeReference(property.PropertyType),
                     StorageDriverType: null,
-                    DisplayName: property.Name,
+                    DisplayName: ReadNamedStringArgument(attribute, nameof(OutputAttribute.DisplayName)) ?? property.Name.Humanize(),
                     Category: null,
                     IsNullable: IsNullable(property),
+                    Description: ReadNamedStringArgument(attribute, nameof(OutputAttribute.Description)),
                     IsRequired: !HasNamedArgument(attribute, nameof(OutputAttribute.IsRequired)) ||
                                 ReadNamedBoolArgument(attribute, nameof(OutputAttribute.IsRequired)),
                     SourceRepresentation: sourceRepresentation));
@@ -185,7 +189,10 @@ public sealed class ClrAssemblyScanner(
             Id: null,
             Version: version,
             ActivityTypeKey: type.FullName!,
-            DisplayName: null,
+            // No CLR-side display-name attribute exists yet, so derive a friendly label from the simple type
+            // name (SendHttpRequest → "Send Http Request") instead of letting the catalog fall back to the raw
+            // dotted type key. A feature that adds an explicit activity display-name annotation overrides this.
+            DisplayName: type.Name.Humanize(),
             Category: category,
             Description: null,
             ProviderKey: ProviderKey,
@@ -244,11 +251,18 @@ public sealed class ClrAssemblyScanner(
     {
         var outcomes = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        CustomAttributeData? valueOutcomes = null;
 
         for (var current = (Type?)type; current is not null; current = current.BaseType)
         {
             foreach (var attribute in current.GetCustomAttributesData())
             {
+                if (attribute.AttributeType.FullName == ActivityValueOutcomesAttributeFullName)
+                {
+                    valueOutcomes ??= attribute;
+                    continue;
+                }
+
                 if (attribute.AttributeType.FullName != ActivityOutcomeAttributeFullName)
                     continue;
 
@@ -257,12 +271,36 @@ public sealed class ClrAssemblyScanner(
             }
         }
 
-        if (outcomes.Count == 0)
+        var dynamicOutcomes = BuildDynamicOutcomesDescriptor(valueOutcomes);
+        if (outcomes.Count == 0 && dynamicOutcomes is null)
             return null;
 
         var ports = outcomes.Select(name => new { name, type = "outcome" }).ToArray();
-        var payload = JsonSerializer.SerializeToElement(new { ports }, SerializerOptions);
+        var payload = dynamicOutcomes is null
+            ? JsonSerializer.SerializeToElement(new { ports }, SerializerOptions)
+            : JsonSerializer.SerializeToElement(new { ports, dynamicOutcomes }, SerializerOptions);
         return new ActivityDesignFacet("elsa.outcomes", "1", payload);
+    }
+
+    /// <summary>
+    /// Projects an <see cref="ActivityValueOutcomesAttribute"/> declaration into a portable descriptor the designer
+    /// consumes to render one outcome port per authored item of the source input, plus the unmatched catch-all port —
+    /// the design-time counterpart of the per-node outcomes the executable compiler pins from the same input (#926).
+    /// </summary>
+    private static object? BuildDynamicOutcomesDescriptor(CustomAttributeData? attribute)
+    {
+        if (attribute is null ||
+            attribute.ConstructorArguments is not [{ Value: string sourceInput }] ||
+            string.IsNullOrWhiteSpace(sourceInput))
+            return null;
+
+        var unmatched = ReadNamedStringArgument(attribute, nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome));
+        return new
+        {
+            kind = "valuePerItem",
+            source = sourceInput,
+            unmatched = string.IsNullOrWhiteSpace(unmatched) ? "Unmatched" : unmatched
+        };
     }
 
     private static ActivityChildSlotDesignDescriptor ToSlotDescriptor(CustomAttributeData attribute) =>
@@ -388,6 +426,8 @@ public sealed class ClrAssemblyScanner(
     {
         var attribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, ActivityInputAttributeFullName);
         var order = attribute is null ? 0 : ReadNamedSingleArgument(attribute, nameof(ActivityInputAttribute.Order)) ?? 0;
+        var displayName = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DisplayName));
+        var description = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.Description));
         var category = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.Category));
         var defaultValue = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultValue));
         var defaultSyntax = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultSyntax));
@@ -396,6 +436,8 @@ public sealed class ClrAssemblyScanner(
 
         return new ActivityInputMetadata(
             order,
+            string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim(),
+            string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
             string.IsNullOrWhiteSpace(category) ? null : category.Trim(),
             string.IsNullOrWhiteSpace(defaultValue) ? null : ParseDefaultValue(defaultValue, valueType),
             defaultSyntax,
@@ -742,6 +784,8 @@ public sealed class ClrAssemblyScanner(
 
     private sealed record ActivityInputMetadata(
         float Order,
+        string? DisplayName,
+        string? Description,
         string? Category,
         JsonElement? DefaultValue,
         string? DefaultSyntax,

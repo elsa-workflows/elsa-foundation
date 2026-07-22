@@ -17,6 +17,7 @@
 		<ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
 		<ProjectReference Include="..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
 		<ProjectReference Include="..\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+		<ProjectReference Include="..\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
 		<ProjectReference Include="..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
 	</ItemGroup>
 

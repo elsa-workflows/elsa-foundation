@@ -172,6 +172,57 @@ public sealed class ActivityDefinitionPublicationTests
     }
 
     [Fact]
+    public async Task Design_owned_contract_inputs_and_outputs_project_into_the_committed_catalog_version()
+    {
+        // #930: a design-owned (e.g. elsa.activity-graph) published version must surface its public
+        // contract inputs/outputs as canvas descriptors so the workflow editor exposes editable
+        // properties, exactly like CLR-scanned versions. The catalog projection previously left them empty.
+        var contract = new Elsa.Activities.Design.Core.Models.ActivityContract(
+            "1",
+            [new Elsa.Activities.Design.Core.Models.ActivityInputContract(
+                ReferenceKey: "Name",
+                Name: "Name",
+                Type: new("String"),
+                IsRequired: true,
+                IsNullable: false,
+                Default: new("Literal", Json("\"World\"")),
+                StorageDriverKey: "elsa.json",
+                DisplayName: "Person name",
+                Description: "The name to greet.")],
+            [new ActivityOutputContract(
+                ReferenceKey: "Greeting",
+                Name: "Greeting",
+                Type: new("String"),
+                IsRequired: false,
+                IsNullable: true,
+                StorageDriverKey: "elsa.json",
+                DisplayName: "Greeting text")],
+            []);
+        var harness = PublisherHarness.Create(contract: contract);
+
+        await harness.PublishAsync(Request("1.0.0"));
+
+        var catalog = harness.Commit.LastCommit!.Design.CatalogVersion;
+        var input = Assert.Single(catalog.Inputs);
+        Assert.Equal("Name", input.ReferenceKey);
+        Assert.Equal("Name", input.Name);
+        Assert.Equal("String", input.Type.Alias);
+        Assert.True(input.IsRequired);
+        Assert.False(input.IsNullable);
+        Assert.Equal("Person name", input.DisplayName);
+        Assert.Equal("The name to greet.", input.Description);
+        Assert.Equal("elsa.json", input.StorageDriverType);
+        Assert.Equal("Literal", input.DefaultSyntax);
+        Assert.Equal("World", input.DefaultValue!.Value.GetString());
+
+        var output = Assert.Single(catalog.Outputs);
+        Assert.Equal("Greeting", output.ReferenceKey);
+        Assert.Equal("String", output.Type.Alias);
+        Assert.False(output.IsRequired);
+        Assert.Equal("Greeting text", output.DisplayName);
+    }
+
+    [Fact]
     public async Task First_publication_returns_a_diff_against_the_explicit_definition_baseline()
     {
         var harness = PublisherHarness.Create(differ: new ActivityVersionDiffer());
@@ -1078,7 +1129,8 @@ public sealed class ActivityDefinitionPublicationTests
             string? rereadTenantId = null,
             bool runtimeReady = true,
             bool commitFails = false,
-            InMemoryActivityPublicationReceiptStore? receiptStore = null)
+            InMemoryActivityPublicationReceiptStore? receiptStore = null,
+            Elsa.Activities.Design.Core.Models.ActivityContract? contract = null)
         {
             var definition = new ActivityDefinition
             {
@@ -1095,7 +1147,7 @@ public sealed class ActivityDefinitionPublicationTests
                 Revision = 4,
                 Status = ActivityDefinitionDraftStatus.Active,
                 TenantId = resourceTenantId,
-                State = new(Contract(), Provider(), new Dictionary<string, string>())
+                State = new(contract ?? Contract(), Provider(), new Dictionary<string, string>())
             };
             var authoring = new ActivityDefinitionAuthoringState
             {

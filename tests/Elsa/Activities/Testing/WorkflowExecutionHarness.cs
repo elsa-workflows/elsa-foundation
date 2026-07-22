@@ -13,6 +13,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -107,6 +108,18 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         RunAsync(executable, allowPendingWorkOnTerminalCompletion: false, stimulusInput: stimulusInput, triggerNodeId: triggerNodeId);
 
     /// <summary>
+    /// Runs as a trigger-started run carrying the matched trigger binding's node id and metadata map on the start
+    /// command's reserved channels (spec 117 D4), mirroring how the stimulus router forwards <c>binding.Metadata</c>
+    /// so a structural trigger activity (e.g. <c>BpmnProcess</c>) can resolve which start element the delivery
+    /// targeted. Seed only the metadata a real binding would carry — it is spoof-proof state, not user input.
+    /// </summary>
+    public Task<WorkflowExecutionRun> RunAsTriggerDeliveryAsync(
+        WorkflowExecutable executable,
+        string triggerNodeId,
+        IReadOnlyDictionary<string, string> triggerMetadata) =>
+        RunAsync(executable, allowPendingWorkOnTerminalCompletion: false, triggerNodeId: triggerNodeId, triggerMetadata: triggerMetadata);
+
+    /// <summary>
     /// Saves the executable, starts the in-process agent, and drains the scheduler.
     /// </summary>
     /// <param name="allowPendingWorkOnTerminalCompletion">
@@ -120,7 +133,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         bool allowPendingWorkOnTerminalCompletion,
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
         JsonElement? stimulusInput = null,
-        string? triggerNodeId = null)
+        string? triggerNodeId = null,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
     {
         // Register the loaded activity CLR types into the well-known type registry now, not at Build() time.
         // The CLR construction descriptor resolves an activity's stable alias back to its type through this
@@ -139,7 +153,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest());
 
-        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs, stimulusInput, triggerNodeId));
+        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs, stimulusInput, triggerNodeId, triggerMetadata));
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
 
@@ -256,20 +270,34 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             compatibilityMetadata: new Dictionary<string, string>());
 
     /// <summary>Builds a leaf probe node that records execution and emits the given outcomes (default <c>Done</c>).</summary>
-    public static ExecutableNode NewProbeNode(string nodeId, IReadOnlyCollection<string>? outcomes = null)
+    public static ExecutableNode NewProbeNode(string nodeId, IReadOnlyCollection<string>? outcomes = null) =>
+        NewProbeNode(nodeId, typeof(ProbeActivity), nameof(ProbeActivity.Outcomes), outcomes);
+
+    /// <summary>
+    /// Builds a leaf probe node whose pinned contract declares <see cref="SideEffectProfile.ReplaySafe"/> (spec 123).
+    /// Behaviorally identical to <see cref="NewProbeNode(string, IReadOnlyCollection{string})"/>, but eligible for the
+    /// ReplaySafe hop-fusion pass so fusion guardrails can drive a shape whose leaves actually resolve ReplaySafe.
+    /// </summary>
+    public static ExecutableNode NewReplaySafeProbeNode(string nodeId, IReadOnlyCollection<string>? outcomes = null) =>
+        NewProbeNode(nodeId, typeof(ReplaySafeProbeActivity), nameof(ReplaySafeProbeActivity.Outcomes), outcomes);
+
+    private static ExecutableNode NewProbeNode(
+        string nodeId,
+        Type activityType,
+        string outcomesInputKey,
+        IReadOnlyCollection<string>? outcomes)
     {
         var selectedOutcomes = outcomes ?? [ActivityOutcomes.Done];
         if (selectedOutcomes.Count != 1)
             throw new ArgumentException("A probe invocation must complete with exactly one outcome.", nameof(outcomes));
 
-        var activityType = typeof(ProbeActivity);
         var descriptor = NewClrDescriptor(activityType);
         var inputType = NewValueType(typeof(IReadOnlyCollection<string>));
-        var binding = NewLiteralBinding(nameof(ProbeActivity.Outcomes), inputType, selectedOutcomes);
+        var binding = NewLiteralBinding(outcomesInputKey, inputType, selectedOutcomes);
         var contract = NewActivityContract(
             activityType,
             descriptor,
-            [new ActivityInputContract(nameof(ProbeActivity.Outcomes), nameof(ProbeActivity.Outcomes), inputType, true, false, false, null, ActivityValuePolicy.Default)],
+            [new ActivityInputContract(outcomesInputKey, outcomesInputKey, inputType, true, false, false, null, ActivityValuePolicy.Default)],
             selectedOutcomes);
 
         return new ExecutableNode(
@@ -487,6 +515,15 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                     outcomes.Add(value);
         }
 
+        // spec 125: a BPMN transaction subprocess declares the additional "Cancelled" outcome (structure-dependent,
+        // the same FlowSwitch/VF-ACT-006 pattern). Mirror ExecutableNodeCompiler.ResolveOutcomes for test graphs.
+        if (StringComparer.Ordinal.Equals(node.Structure?.Kind, "elsa.bpmn.structure") &&
+            node.Structure.Payload.TryGetProperty("isTransaction", out var isTransaction) &&
+            isTransaction.ValueKind == JsonValueKind.True)
+        {
+            outcomes.Add("Cancelled");
+        }
+
         if (outcomes.Count == 0)
             outcomes.Add(ActivityOutcomes.Done);
         return outcomes.ToArray();
@@ -571,9 +608,10 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         WorkflowExecutableIdentity pinnedExecutable,
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
         JsonElement? stimulusInput = null,
-        string? triggerNodeId = null)
+        string? triggerNodeId = null,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null)
     {
-        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs, stimulusInput: stimulusInput, triggerNodeId: triggerNodeId);
+        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs, stimulusInput: stimulusInput, triggerNodeId: triggerNodeId, triggerMetadata: triggerMetadata);
         var command = new WorkflowExecutionCommand(
             CommandId: "command-start",
             WorkflowExecutionId: _workflowExecutionId,
@@ -611,6 +649,23 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         public Builder WithFeature(Action<IServiceCollection> configureFeature)
         {
             _featureConfigurators.Add(configureFeature);
+            return this;
+        }
+
+        /// <summary>
+        /// Drives the harness under the opt-in burst-coalescing checkpoint persistence policy (ADR 0032 / spec 115)
+        /// instead of the default Immediate cadence, so intra-drain checkpoints fold into one atomic commit at
+        /// quiescence — the mode a ReplaySafe hop-fusion pass engages inside (spec 123 research §2). Applied after the
+        /// runtime feature registration (which the ctor seeds first), so the coalescing decorators capture the runtime
+        /// stores. Optionally caps the per-segment checkpoint count (models a mid-drain fold-and-flush).
+        /// </summary>
+        public Builder WithCoalescing(int? maxSegmentCheckpoints = null)
+        {
+            _featureConfigurators.Add(services => services.AddCoalescingRuntimeCheckpointPersistence(options =>
+            {
+                if (maxSegmentCheckpoints is { } cap)
+                    options.MaxSegmentCheckpoints = cap;
+            }));
             return this;
         }
 

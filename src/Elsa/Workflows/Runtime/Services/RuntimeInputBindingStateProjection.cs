@@ -75,6 +75,18 @@ public static class RuntimeInputBindingStateProjection
             : null;
 
     /// <summary>
+    /// Projects the matched trigger binding's metadata map (spec 117 D4) from its reserved single-slot channel
+    /// (<see cref="RuntimeMetadataKeys.TriggerMetadataName"/>). Null when the execution was not started by a
+    /// trigger carrying metadata. Deserialized from the JSON object the seed persisted; deliberately not part of
+    /// the workflow-input namespace.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string>? ProjectTriggerMetadata(IEnumerable<DurableValueState> durableValues) =>
+        ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.TriggerMetadataName)
+            .GetValueOrDefault(RuntimeWorkflowStateSeed.TriggerMetadataSlotName) is JsonElement { ValueKind: JsonValueKind.Object } inline
+            ? inline.Deserialize<Dictionary<string, string>>()
+            : null;
+
+    /// <summary>
     /// Projects the workflow identity (correlation id / instance name), workflow-input, workflow-variable, and
     /// prior-activity-output snapshots in one call. Every scheduler work handler needs all of these from the same
     /// durable-value list before building its resolution context and execution-time expression carrier, so this
@@ -96,7 +108,8 @@ public static class RuntimeInputBindingStateProjection
             CorrelationId: identity.CorrelationId,
             InstanceName: identity.InstanceName,
             StimulusInput: ProjectStimulusInput(materialized),
-            TriggerNodeId: ProjectTriggerNodeId(materialized));
+            TriggerNodeId: ProjectTriggerNodeId(materialized),
+            TriggerMetadata: ProjectTriggerMetadata(materialized));
     }
 
     /// <summary>
@@ -120,7 +133,8 @@ public static class RuntimeInputBindingStateProjection
             CorrelationId: identity.CorrelationId,
             InstanceName: identity.InstanceName,
             StimulusInput: ProjectStimulusInput(materialized),
-            TriggerNodeId: ProjectTriggerNodeId(materialized));
+            TriggerNodeId: ProjectTriggerNodeId(materialized),
+            TriggerMetadata: ProjectTriggerMetadata(materialized));
     }
 
     private static async ValueTask<IReadOnlyDictionary<string, object?>> ProjectByMetadataKeyAsync(
@@ -224,7 +238,8 @@ public readonly record struct RuntimeInputBindingStateProjectionSet(
     string? CorrelationId,
     string? InstanceName,
     object? StimulusInput,
-    string? TriggerNodeId)
+    string? TriggerNodeId,
+    IReadOnlyDictionary<string, string>? TriggerMetadata = null)
 {
     /// <summary>Compatibility constructor for execution-time carriers that consume only object projections.</summary>
     public RuntimeInputBindingStateProjectionSet(
@@ -234,7 +249,8 @@ public readonly record struct RuntimeInputBindingStateProjectionSet(
         string? CorrelationId,
         string? InstanceName,
         object? StimulusInput,
-        string? TriggerNodeId)
+        string? TriggerNodeId,
+        IReadOnlyDictionary<string, string>? TriggerMetadata = null)
         : this(
             WorkflowInputs,
             WorkflowVariables,
@@ -244,7 +260,8 @@ public readonly record struct RuntimeInputBindingStateProjectionSet(
             CorrelationId,
             InstanceName,
             StimulusInput,
-            TriggerNodeId)
+            TriggerNodeId,
+            TriggerMetadata)
     {
     }
 }

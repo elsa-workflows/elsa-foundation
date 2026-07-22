@@ -1,5 +1,8 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -187,6 +190,110 @@ public sealed class RuntimeContainerScopeServiceTests
 
         Assert.Equal(VariableFrameStatus.Closed, closed.VariableFrame!.Status);
         Assert.Equal(closed.VariableFrame, closedAgain.VariableFrame);
+    }
+
+    // ---- spec 123: runtime scoped-variable read seam ----
+
+    [Fact]
+    public void Scoped_variable_envelopes_project_by_name_innermost_scope_wins()
+    {
+        var factory = new VariableFrameFactory();
+        var root = factory.CreateRoot(WorkflowExecutionId, "workflow", Values(("g", "root-value")));
+        var iteration = factory.CreateIteration("loop", "parent", "0", root, Values(("item", "apple")));
+        var container = factory.CreateContainer("container", "parent", iteration, Values(("g2", "container-value")));
+        var containerNode = DeclNode("container", [], ("g2", "Shadowed"));
+        var rootNode = DeclNode("root", [new ExecutableChildSlot("children", [containerNode])], ("g", "Shadowed"));
+
+        var envelopes = Service().ProjectVisibleVariableEnvelopes(
+            Executable(rootNode),
+            new RuntimeVisibleVariableFrames([root, iteration, container]));
+
+        // Root, iteration, and container are all visible; the shadowed name resolves to the innermost (container) value.
+        Assert.Equal("apple", envelopes["item"].InlineValue!.Value.GetString());
+        Assert.Equal("container-value", envelopes["Shadowed"].InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Scoped_variable_reader_projection_is_marker_gated()
+    {
+        var root = new VariableFrameFactory().CreateRoot(WorkflowExecutionId, "workflow", Values(("g", "hello")));
+        await _workflows.SaveAsync(WorkflowState(root));
+        var rootNode = DeclNode("root", [], ("g", "Greeting"));
+        var executable = Executable(rootNode);
+        var state = State("marker", "root");
+
+        var populated = await Service().ProjectScopedVariablesForReaderAsync(new MarkerReaderActivity(), executable, state);
+        var unpopulated = await Service().ProjectScopedVariablesForReaderAsync(new PlainActivity(), executable, state);
+
+        Assert.Null(unpopulated);
+        Assert.NotNull(populated);
+        Assert.Equal("hello", populated!["Greeting"].InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Scoped_variable_reader_sees_committed_container_write_on_a_later_evaluation()
+    {
+        // A value committed into the reader's OWN container frame (as a mid-run intrinsic write would leave it) is
+        // visible on the next evaluation's projection through the own-container inclusion.
+        var factory = new VariableFrameFactory();
+        var root = factory.CreateRoot(WorkflowExecutionId, "workflow", Values(("r", "root-value")));
+        await _workflows.SaveAsync(WorkflowState(root));
+        var readerNode = DeclNode("reader", [], ("c", "Counter"));
+        var rootNode = DeclNode("root", [new ExecutableChildSlot("children", [readerNode])], ("r", "Root"));
+        var executable = Executable(rootNode);
+        await _activities.SaveAsync(State("root-exec", "root"));
+        var reader = State("reader-exec", "reader", "root-exec") with
+        {
+            VariableFrame = factory.CreateContainer("reader", "reader-exec", root, Values(("c", "committed-value")))
+        };
+        await _activities.SaveAsync(reader);
+
+        var populated = await Service().ProjectScopedVariablesForReaderAsync(new MarkerReaderActivity(), executable, reader);
+
+        Assert.NotNull(populated);
+        Assert.Equal("committed-value", populated!["Counter"].InlineValue!.Value.GetString());
+        Assert.Equal("root-value", populated["Root"]!.InlineValue!.Value.GetString());
+    }
+
+    private static WorkflowExecutable Executable(ExecutableNode rootNode) =>
+        new(
+            new WorkflowExecutableIdentity("artifact", "definition", "version", "1.0.0", "hash"),
+            rootNode,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            DateTimeOffset.UnixEpoch,
+            new Dictionary<string, string>());
+
+    private static ExecutableNode DeclNode(string id, IReadOnlyCollection<ExecutableChildSlot> childSlots, params (string Key, string Name)[] variables) =>
+        new(
+            executableNodeId: id,
+            authoredActivityId: $"authored-{id}",
+            activityType: "test/container",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test/descriptor",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: childSlots,
+            structure: new ExecutableActivityStructure(
+                "test.structure",
+                "1.0.0",
+                JsonSerializer.SerializeToElement(
+                    new { variables = variables.Select(item => Declaration(item.Key, item.Name)) },
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+
+    private static RuntimeVariableDeclaration Declaration(string key, string name) =>
+        new(key, name, StringType, ValueProtectionPolicy.InstanceInline,
+            new RuntimeInputBinding(key, StringType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+                literal: ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement("seed"), ValueProtectionPolicy.InstanceInline)));
+
+    private sealed class MarkerReaderActivity : IActivity, IRuntimeScopedVariableReader
+    {
+        public ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context) => throw new NotSupportedException();
+    }
+
+    private sealed class PlainActivity : IActivity
+    {
+        public ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context) => throw new NotSupportedException();
     }
 
     private RuntimeContainerScopeService Service() => new(_activities, _workflows);

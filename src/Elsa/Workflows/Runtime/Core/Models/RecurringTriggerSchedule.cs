@@ -29,6 +29,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </remarks>
 /// <param name="ScheduleId">Deterministic id built from (artifactId, executableNodeId).</param>
 /// <param name="ArtifactId">The published artifact that owns the trigger node; scopes replace-on-republish.</param>
+/// <param name="ExecutableNodeId">The trigger node that owns this schedule. Together with <see cref="ArtifactId"/>,
+/// <see cref="PublicationId"/>/<see cref="SlotId"/> and the stimulus identity it names the exact trigger binding a
+/// fire starts through, so the pump never hash-broadcasts a recurring start to other artifacts (or other nodes)
+/// that authored the same interval/cron literal.</param>
 /// <param name="StimulusType">The start stimulus type the pump dispatches (e.g. Timer, Cron).</param>
 /// <param name="StimulusHash">The start stimulus hash — matches the trigger binding the router indexed for the same node.</param>
 /// <param name="Kind">Whether <see cref="Expression"/> is an interval or a cron expression.</param>
@@ -38,6 +42,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed record RecurringTriggerSchedule(
     string ScheduleId,
     string ArtifactId,
+    string ExecutableNodeId,
     string StimulusType,
     string StimulusHash,
     RecurringScheduleKind Kind,
@@ -65,6 +70,24 @@ public sealed record RecurringTriggerSchedule(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
         return $"{Escape(publicationId)}:{BuildId(artifactId, executableNodeId)}";
+    }
+
+    /// <summary>
+    /// Builds a schedule id disambiguated by stimulus hash (spec 117), for a trigger node that fans out several
+    /// recurring schedules (a BPMN process with more than one timer start event). Single-schedule triggers keep
+    /// the plain <see cref="BuildId(string,string)"/> id so their schedule identity is unchanged.
+    /// </summary>
+    public static string BuildFanOutId(string artifactId, string executableNodeId, string stimulusHash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+        return $"{BuildId(artifactId, executableNodeId)}:{Escape(stimulusHash)}";
+    }
+
+    /// <summary>Publication-scoped, stimulus-hash-disambiguated schedule id (spec 117 fan-out).</summary>
+    public static string BuildFanOutId(string publicationId, string artifactId, string executableNodeId, string stimulusHash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        return $"{Escape(publicationId)}:{BuildFanOutId(artifactId, executableNodeId, stimulusHash)}";
     }
 
     private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");

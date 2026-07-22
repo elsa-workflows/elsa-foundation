@@ -189,8 +189,9 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         output.WriteLine("N | rep | order | OFF wall(ms) | ON wall(ms) | ON/OFF | OFF thr | ON thr | batchFlushes | batchedMembers | soloFlushes | degraded | aggCommits");
         const int repeats = 3;
         // Focus on the saturated regime where a single writer is contended (N=1 no-regression is a one-shot check
-        // below); each level is repeated with alternating order to average out the heavy ambient machine load.
-        int[] levels = [8, 32, 128];
+        // below); each level is repeated with alternating order to average out ambient machine load. Mid-N levels
+        // (16, 64) probe where along the curve batching starts to pay, which is what decides the default.
+        int[] levels = [8, 16, 32, 64, 128];
         var soloProbe = await MeasureSharedSqliteAsync(concurrency: 1, groupCommit: true, warmup: false);
         var soloBaseline = await MeasureSharedSqliteAsync(concurrency: 1, groupCommit: false, warmup: false);
         output.WriteLine($"N=1 solo no-regression check: OFF {soloBaseline.TotalWallMs:F1} ms vs ON {soloProbe.TotalWallMs:F1} ms (ON soloFlushes={soloProbe.SoloFlushes}, batchFlushes={soloProbe.BatchFlushes})");

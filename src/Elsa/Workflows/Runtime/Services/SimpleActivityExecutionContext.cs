@@ -25,7 +25,10 @@ public sealed class SimpleActivityExecutionContext(
     JsonElement? triggerPayload = null,
     string? triggerNodeId = null,
     string? invocationId = null,
-    string? executableNodeId = null)
+    string? executableNodeId = null,
+    IReadOnlyDictionary<string, string>? triggerMetadata = null,
+    IReadOnlyCollection<RuntimeLiveChildActivity>? liveChildActivities = null,
+    IReadOnlyDictionary<string, ValueEnvelope>? scopedVariableEnvelopes = null)
     : IRuntimeActivityExecutionContext
 {
     // The single construction path for a runtime activity context.
@@ -39,7 +42,10 @@ public sealed class SimpleActivityExecutionContext(
         ActivityExecutionState? activityExecutionState,
         VariableScope? variableScope,
         JsonElement? triggerPayload = null,
-        string? triggerNodeId = null)
+        string? triggerNodeId = null,
+        IReadOnlyDictionary<string, string>? triggerMetadata = null,
+        IReadOnlyCollection<RuntimeLiveChildActivity>? liveChildActivities = null,
+        IReadOnlyDictionary<string, ValueEnvelope>? scopedVariableEnvelopes = null)
     {
         ArgumentNullException.ThrowIfNull(activity);
         ArgumentNullException.ThrowIfNull(workflowExecutionId);
@@ -55,12 +61,16 @@ public sealed class SimpleActivityExecutionContext(
             activityExecutionState,
             variableScope,
             triggerPayload,
-            triggerNodeId);
+            triggerNodeId,
+            triggerMetadata: triggerMetadata,
+            liveChildActivities: liveChildActivities,
+            scopedVariableEnvelopes: scopedVariableEnvelopes);
     }
 
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
     private readonly List<RuntimeChildSubtreeCancellationRequest> _childSubtreeCancellationRequests = [];
     private readonly List<RuntimeChildFaultAbsorptionRequest> _childFaultAbsorptionRequests = [];
+    private readonly List<RuntimeParentNotificationRequest> _parentNotificationRequests = [];
 
     public IActivity Activity { get; } = activity;
     public CancellationToken CancellationToken { get; } = cancellationToken;
@@ -72,6 +82,7 @@ public sealed class SimpleActivityExecutionContext(
         .LastOrDefault(delivery => delivery.Status == ActivityTriggerDeliveryStatus.Consumed)?
         .Payload.InlineValue?.Clone();
     public string? TriggerNodeId { get; } = string.IsNullOrWhiteSpace(triggerNodeId) ? null : triggerNodeId;
+    public IReadOnlyDictionary<string, string>? TriggerMetadata { get; } = triggerMetadata is { Count: > 0 } ? triggerMetadata : null;
     public WorkflowExecutableIdentity PinnedExecutable => pinnedExecutable ?? throw MissingRuntimeValue(nameof(PinnedExecutable));
     public RuntimeSchedulerWorkItem SchedulerWorkItem => schedulerWorkItem ?? throw MissingRuntimeValue(nameof(SchedulerWorkItem));
     public ExecutableNode ExecutableNode => executableNode ?? throw MissingRuntimeValue(nameof(ExecutableNode));
@@ -94,6 +105,26 @@ public sealed class SimpleActivityExecutionContext(
 
     public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>
         _childActivityScheduleRequests.ToArray();
+
+    private readonly IReadOnlyCollection<RuntimeLiveChildActivity> _liveChildActivities = liveChildActivities ?? [];
+
+    public IReadOnlyCollection<RuntimeLiveChildActivity> GetLiveChildActivities() => _liveChildActivities;
+
+    // The visible name→committed-envelope projection the runtime built for an IRuntimeScopedVariableReader
+    // activity (spec 123 D1). Null for every non-marker activity and for any handler path that did not populate
+    // it, so a read there always returns false — no throw-on-unpopulated.
+    private readonly IReadOnlyDictionary<string, ValueEnvelope>? _scopedVariableEnvelopes = scopedVariableEnvelopes;
+
+    public bool TryReadScopedVariableValue(string variableName, out ValueEnvelope? envelope)
+    {
+        envelope = null;
+        if (_scopedVariableEnvelopes is null || string.IsNullOrEmpty(variableName))
+            return false;
+        if (!_scopedVariableEnvelopes.TryGetValue(variableName, out var committed))
+            return false;
+        envelope = committed;
+        return true;
+    }
 
     public void RequestChildSubtreeCancellation(
         string childActivityExecutionId,
@@ -119,6 +150,14 @@ public sealed class SimpleActivityExecutionContext(
 
     public IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> GetChildFaultAbsorptionRequests() =>
         _childFaultAbsorptionRequests.ToArray();
+
+    public void RequestParentNotification(string code, JsonElement? payload = null)
+    {
+        _parentNotificationRequests.Add(new RuntimeParentNotificationRequest(code, payload));
+    }
+
+    public IReadOnlyCollection<RuntimeParentNotificationRequest> GetParentNotificationRequests() =>
+        _parentNotificationRequests.ToArray();
 
     /// <summary>Projects the engine context to the deliberately smaller ordinary activity context.</summary>
     public ActivityExecutionContext ToActivityExecutionContext() =>

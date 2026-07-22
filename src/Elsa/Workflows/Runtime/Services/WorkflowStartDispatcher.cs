@@ -361,7 +361,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             authority: request.Authority,
             startAuthority: request.StartAuthority,
             dispatchNestingDepth: request.DispatchNestingDepth,
-            testScope: request.TestScope));
+            testScope: request.TestScope,
+            triggerMetadata: request.TriggerMetadata));
 
         var command = new WorkflowExecutionCommand(
             CommandId: retainedDispatch is null

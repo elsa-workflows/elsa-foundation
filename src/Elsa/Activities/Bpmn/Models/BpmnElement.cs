@@ -18,7 +18,13 @@ public sealed class BpmnElement
         string? laneId = null,
         string? defaultFlowId = null,
         IReadOnlyCollection<BpmnEventDefinition>? eventDefinitions = null,
-        IReadOnlyDictionary<string, string>? properties = null)
+        IReadOnlyDictionary<string, string>? properties = null,
+        string? attachedToRef = null,
+        bool cancelActivity = true,
+        BpmnLoopCharacteristics? loopCharacteristics = null,
+        bool isForCompensation = false,
+        string? compensationHandlerElementId = null,
+        bool isTransaction = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(elementId);
         ArgumentException.ThrowIfNullOrWhiteSpace(elementType);
@@ -31,6 +37,12 @@ public sealed class BpmnElement
         DefaultFlowId = string.IsNullOrWhiteSpace(defaultFlowId) ? null : defaultFlowId.Trim();
         EventDefinitions = eventDefinitions ?? [];
         Properties = properties ?? new Dictionary<string, string>();
+        AttachedToRef = string.IsNullOrWhiteSpace(attachedToRef) ? null : attachedToRef.Trim();
+        CancelActivity = cancelActivity;
+        LoopCharacteristics = loopCharacteristics;
+        IsForCompensation = isForCompensation;
+        CompensationHandlerElementId = string.IsNullOrWhiteSpace(compensationHandlerElementId) ? null : compensationHandlerElementId.Trim();
+        IsTransaction = isTransaction;
     }
 
     [JsonPropertyName("elementId")]
@@ -59,6 +71,55 @@ public sealed class BpmnElement
 
     [JsonPropertyName("properties")]
     public IReadOnlyDictionary<string, string> Properties { get; }
+
+    /// <summary>
+    /// The host element id a <c>boundaryEvent</c> is attached to (spec 120); <c>null</c> on every
+    /// non-boundary element. A boundary reacts to a stimulus while its host runs.
+    /// </summary>
+    [JsonPropertyName("attachedToRef")]
+    public string? AttachedToRef { get; }
+
+    /// <summary>
+    /// Whether a <c>boundaryEvent</c> interrupts its host when it fires (spec 120): <c>true</c> (the BPMN
+    /// default) tears the host down and routes the boundary path; <c>false</c> runs the boundary path
+    /// alongside the still-running host. Meaningful only on boundaries.
+    /// </summary>
+    [JsonPropertyName("cancelActivity")]
+    public bool CancelActivity { get; }
+
+    /// <summary>
+    /// The multi-instance loop characteristics of this element (spec 121); <c>null</c> on every
+    /// non-multi-instance element. Valid only on a task-family or <c>subProcess</c> host that binds a child.
+    /// </summary>
+    [JsonPropertyName("loopCharacteristics")]
+    public BpmnLoopCharacteristics? LoopCharacteristics { get; }
+
+    /// <summary>
+    /// Marks a <b>compensation handler</b> element (spec 124): a task-family or <c>subProcess</c> element that
+    /// binds a child, participates in <b>no</b> sequence flows, and is invoked only by the compensation replay
+    /// (never by normal token flow). <c>false</c> on every ordinary element.
+    /// </summary>
+    [JsonPropertyName("isForCompensation")]
+    public bool IsForCompensation { get; }
+
+    /// <summary>
+    /// Set only on a <b>compensation boundary event</b> (a <c>boundaryEvent</c> whose single event definition is
+    /// <see cref="BpmnEventDefinitionTypes.Compensation"/>): the element id of its
+    /// <see cref="IsForCompensation"/> handler (spec 124). This models the BPMN boundary→handler association;
+    /// <c>null</c> on every other element.
+    /// </summary>
+    [JsonPropertyName("compensationHandlerElementId")]
+    public string? CompensationHandlerElementId { get; }
+
+    /// <summary>
+    /// Marks a <b>transaction subprocess</b> (spec 125): a <c>subProcess</c> element that binds a nested
+    /// process which may be cancelled from within by a cancel end event. Valid only on a <c>subProcess</c>-family
+    /// element with a bound child; a transaction element may not carry loop characteristics. Independent of the
+    /// nested structure's own transaction flag (isolation): this element-side flag drives cancel-boundary
+    /// attachment validation and the parent-side Cancelled-outcome mapping. <c>false</c> on every ordinary element.
+    /// </summary>
+    [JsonPropertyName("isTransaction")]
+    public bool IsTransaction { get; }
 }
 
 /// <summary>
@@ -70,6 +131,9 @@ public static class BpmnElementTypes
     public const string StartEvent = "startEvent";
     public const string EndEvent = "endEvent";
     public const string IntermediateCatchEvent = "intermediateCatchEvent";
+
+    /// <summary>An intermediate throw event (spec 124); this slice wires it for the compensation definition only.</summary>
+    public const string IntermediateThrowEvent = "intermediateThrowEvent";
     public const string Task = "task";
     public const string UserTask = "userTask";
     public const string ServiceTask = "serviceTask";
@@ -82,4 +146,6 @@ public static class BpmnElementTypes
     public const string ExclusiveGateway = "exclusiveGateway";
     public const string ParallelGateway = "parallelGateway";
     public const string InclusiveGateway = "inclusiveGateway";
+    public const string EventBasedGateway = "eventBasedGateway";
+    public const string BoundaryEvent = "boundaryEvent";
 }

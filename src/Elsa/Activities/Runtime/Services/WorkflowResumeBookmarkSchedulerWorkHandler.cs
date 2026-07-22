@@ -226,6 +226,15 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 cancellationToken);
             activity = activationLease.Activity;
 
+            // spec 123 D1: populate the scoped-variable read seam for a marker consumer (the BpmnProcess) from
+            // committed frame state, so a bookmark-resume evaluation that reaches a collection-mode loop-start
+            // element reads the collection variable through the same committed-basis projection as the other paths.
+            var scopeService = new RuntimeContainerScopeService(
+                serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+            var scopedVariableEnvelopes = await scopeService.ProjectScopedVariablesForReaderAsync(
+                activity, executable, executionState, cancellationToken);
+
             context = SimpleActivityExecutionContext.ForExecution(
                 activity,
                 cancellationToken,
@@ -234,7 +243,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 workItem,
                 executableNode,
                 executionState,
-                variableScope: null);
+                variableScope: null,
+                scopedVariableEnvelopes: scopedVariableEnvelopes);
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
@@ -649,12 +659,12 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 durableValueChanges: []);
 
             yield return new RuntimeSchedulerWorkItem(
-                workItemId: $"{resumeWorkItem.WorkItemId}:create-bookmark:{registration.RegistrationId}",
+                workItemId: RuntimeChainId.Derive(resumeWorkItem.WorkItemId, $"create-bookmark:{registration.RegistrationId}"),
                 workflowExecutionId: resumeWorkItem.WorkflowExecutionId,
-                commandId: $"{resumeWorkItem.CommandId}:create-bookmark:{registration.RegistrationId}",
+                commandId: RuntimeChainId.Derive(resumeWorkItem.CommandId, $"create-bookmark:{registration.RegistrationId}"),
                 commandKind: WorkflowExecutionCommandKind.CreateBookmark,
                 envelopeId: resumeWorkItem.EnvelopeId,
-                idempotencyKey: $"{resumeWorkItem.IdempotencyKey}:create-bookmark:{registration.RegistrationId}",
+                idempotencyKey: RuntimeChainId.Derive(resumeWorkItem.IdempotencyKey, $"create-bookmark:{registration.RegistrationId}"),
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: resumeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
@@ -721,12 +731,12 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{resumeWorkItem.WorkItemId}:complete:{resumePayload.ActivityExecutionId}",
+            workItemId: RuntimeChainId.Derive(resumeWorkItem.WorkItemId, $"complete:{resumePayload.ActivityExecutionId}"),
             workflowExecutionId: resumeWorkItem.WorkflowExecutionId,
-            commandId: $"{resumeWorkItem.CommandId}:complete:{resumePayload.ActivityExecutionId}",
+            commandId: RuntimeChainId.Derive(resumeWorkItem.CommandId, $"complete:{resumePayload.ActivityExecutionId}"),
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             envelopeId: resumeWorkItem.EnvelopeId,
-            idempotencyKey: $"{resumeWorkItem.IdempotencyKey}:complete:{resumePayload.ActivityExecutionId}",
+            idempotencyKey: RuntimeChainId.Derive(resumeWorkItem.IdempotencyKey, $"complete:{resumePayload.ActivityExecutionId}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: resumeWorkItem.Sequence is { } sequence ? sequence + 1 : null,

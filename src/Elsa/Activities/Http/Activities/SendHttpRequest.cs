@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Options;
@@ -27,11 +28,13 @@ namespace Elsa.Activities.Http.Activities;
 /// cancellation of the workflow faults the activity.
 /// </para>
 /// <para>
-/// <b>Outcome mapping.</b> When <see cref="ExpectedStatusCodes"/> is supplied, a matching response branches on
-/// <see cref="HttpActivityOutcomes.Matched"/> and a non-matching response branches on
-/// <see cref="HttpActivityOutcomes.Unmatched"/>. When it is not supplied, a 2xx response branches on the
-/// default <c>Done</c> outcome and any other status branches on <see cref="HttpActivityOutcomes.Failed"/>
-/// (outputs are still captured in both cases).
+/// <b>Outcome mapping.</b> When <see cref="ExpectedStatusCodes"/> is supplied, each configured code becomes an
+/// outcome port named after the numeric status (e.g. <c>"200"</c>, <c>"404"</c>): a matching response branches on
+/// that port and a non-matching response branches on <see cref="HttpActivityOutcomes.UnmatchedStatusCode"/>. The
+/// per-status ports are derived from the authored value via <see cref="ActivityValueOutcomesAttribute"/> and pinned
+/// per node at publish time. When no expected codes are supplied, a 2xx response branches on the default <c>Done</c>
+/// outcome and any other status branches on <see cref="HttpActivityOutcomes.Failed"/> (outputs are still captured in
+/// every case).
 /// </para>
 /// <para>
 /// <b>Timeout.</b> The optional <see cref="Timeout"/> input (else <c>HttpActivityOptions.DefaultTimeout</c>)
@@ -40,11 +43,12 @@ namespace Elsa.Activities.Http.Activities;
 /// propagates as a normal cancellation.
 /// </para>
 /// </remarks>
+// Static base outcomes. When ExpectedStatusCodes is authored, the compiler adds one outcome per code plus
+// "Unmatched status code" (derived from the input via ActivityValueOutcomes); Done is the no-codes success branch.
 [ActivityOutcome(ActivityOutcomes.Done)]
-[ActivityOutcome(HttpActivityOutcomes.Matched)]
-[ActivityOutcome(HttpActivityOutcomes.Unmatched)]
 [ActivityOutcome(HttpActivityOutcomes.Failed)]
 [ActivityOutcome(HttpActivityOutcomes.Timeout)]
+[ActivityValueOutcomes(nameof(ExpectedStatusCodes), UnmatchedOutcome = HttpActivityOutcomes.UnmatchedStatusCode)]
 public sealed class SendHttpRequest(
     IHttpClientFactory httpClientFactory,
     IOptions<HttpActivityOptions> httpActivityOptions) : Activity<SendHttpRequestResult>
@@ -142,10 +146,13 @@ public sealed class SendHttpRequest(
 
     private string DetermineResponseOutcome(int status, bool isSuccess)
     {
+        // With expected codes authored, branch on the matched code's own outcome port (named after the numeric
+        // status) or the catch-all Unmatched-status-code port. These names match the per-node outcomes the compiler
+        // pins from ExpectedStatusCodes, so the emitted outcome is always a declared branch (#926).
         if (ExpectedStatusCodes is { Count: > 0 })
             return ExpectedStatusCodes.Contains(status)
-                ? HttpActivityOutcomes.Matched
-                : HttpActivityOutcomes.Unmatched;
+                ? status.ToString(CultureInfo.InvariantCulture)
+                : HttpActivityOutcomes.UnmatchedStatusCode;
 
         return isSuccess ? ActivityOutcomes.Done : HttpActivityOutcomes.Failed;
     }

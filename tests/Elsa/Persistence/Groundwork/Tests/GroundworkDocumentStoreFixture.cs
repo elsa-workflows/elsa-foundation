@@ -110,6 +110,10 @@ internal sealed class GroundworkDocumentStoreFixture(
     private sealed class LegacyBoundedQueryAdapter(IDocumentStore store, StorageManifest manifest)
         : IBoundedDocumentStore
     {
+        private const string ContinuationTokenPrefix = "groundwork-test";
+        private const string InvalidContinuationMessage =
+            "The Groundwork test continuation is invalid or belongs to another query.";
+
         public async Task<DocumentQueryResult> QueryAsync(
             DocumentQuery query,
             CancellationToken cancellationToken = default)
@@ -220,20 +224,15 @@ internal sealed class GroundworkDocumentStoreFixture(
                 .Where(candidate => candidate.OrderKey.StartsWith(prefix, StringComparison.Ordinal))
                 .OrderBy(candidate => candidate.OrderKey, StringComparer.Ordinal)
                 .ThenBy(candidate => candidate.Document.Id, StringComparer.Ordinal)
-                .Select(candidate => candidate.Document)
                 .ToArray();
-            var offset = DecodeContinuation(query);
-            IEnumerable<DocumentEnvelope> window = matches.Skip(offset + (query.Skip ?? 0));
-            if (query.Take is { } take)
-                window = window.Take(take);
-            var documents = window.ToArray();
-            var nextOffset = offset + (query.Skip ?? 0) + documents.Length;
-            return new DocumentQueryResult(
-                documents,
-                matches.Length,
-                query.Take is not null && nextOffset < matches.Length
-                    ? EncodeContinuation(query, nextOffset)
-                    : null);
+            return TestKeysetContinuations.Page(
+                query,
+                ContinuationTokenPrefix,
+                matches,
+                candidate => [candidate.OrderKey, candidate.Document.Id],
+                candidate => candidate.Document,
+                [PhysicalSortDirection.Ascending, PhysicalSortDirection.Ascending],
+                InvalidContinuationMessage);
         }
 
         private async Task<DocumentQueryResult> QueryPendingSchedulerExecutionsAsync(
@@ -259,44 +258,16 @@ internal sealed class GroundworkDocumentStoreFixture(
                 .Where(candidate => candidate.WorkflowExecutionId.StartsWith(prefix, StringComparison.Ordinal))
                 .OrderBy(candidate => candidate.WorkflowExecutionId, StringComparer.Ordinal)
                 .ThenBy(candidate => candidate.OrderKey, StringComparer.Ordinal)
-                .Select(candidate => candidate.Document)
+                .ThenBy(candidate => candidate.Document.Id, StringComparer.Ordinal)
                 .ToArray();
-            var offset = DecodeContinuation(query);
-            IEnumerable<DocumentEnvelope> window = matches.Skip(offset + (query.Skip ?? 0));
-            if (query.Take is { } take)
-                window = window.Take(take);
-            var documents = window.ToArray();
-            var nextOffset = offset + (query.Skip ?? 0) + documents.Length;
-            return new DocumentQueryResult(
-                documents,
-                matches.Length,
-                query.Take is not null && nextOffset < matches.Length
-                    ? EncodeContinuation(query, nextOffset)
-                    : null);
-        }
-
-        private static string EncodeContinuation(DocumentQuery query, int offset) =>
-            $"groundwork-test:{query.DocumentKind}:{query.QueryIdentity}:{offset.ToString(CultureInfo.InvariantCulture)}";
-
-        private static int DecodeContinuation(DocumentQuery query)
-        {
-            if (query.Continuation is null)
-                return 0;
-
-            var prefix = $"groundwork-test:{query.DocumentKind}:{query.QueryIdentity}:";
-            if (!query.Continuation.StartsWith(prefix, StringComparison.Ordinal) ||
-                !int.TryParse(
-                    query.Continuation[prefix.Length..],
-                    NumberStyles.None,
-                    CultureInfo.InvariantCulture,
-                    out var offset) ||
-                offset < 0)
-            {
-                throw new InvalidDocumentQueryContinuationException(
-                    "The Groundwork test continuation is invalid or belongs to another query.");
-            }
-
-            return offset;
+            return TestKeysetContinuations.Page(
+                query,
+                ContinuationTokenPrefix,
+                matches,
+                candidate => [candidate.WorkflowExecutionId, candidate.OrderKey, candidate.Document.Id],
+                candidate => candidate.Document,
+                [PhysicalSortDirection.Ascending, PhysicalSortDirection.Ascending, PhysicalSortDirection.Ascending],
+                InvalidContinuationMessage);
         }
 
         private static string ReadRequiredString(DocumentEnvelope envelope, string path)

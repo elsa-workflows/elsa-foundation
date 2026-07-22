@@ -176,6 +176,8 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
             Assert.Equal(
             [
                 "elsa-activities-design",
+                // The design families' shared atomic-operation ledger registers as its own manifest source.
+                "elsa-design-atomic-write",
                 "elsa-secrets",
                 "elsa-studio-preferences",
                 "elsa-workflows-design",

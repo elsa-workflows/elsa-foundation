@@ -116,34 +116,40 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
             var selection = Describe(artifactId, node);
             if (selection is null)
                 continue;
-            var (providerId, descriptor) = selection.Value;
+            var (providerId, descriptors) = selection.Value;
 
-            DateTimeOffset? next;
-            try
+            // A single-descriptor node (Timer/Cron) keeps the plain (artifact, node) schedule id so its identity is
+            // unchanged; a fan-out node (a BPMN process with several timer starts) disambiguates each schedule by
+            // the descriptor's stimulus hash so the rows do not collapse onto one id (spec 117 D3).
+            var fanOut = descriptors.Count > 1;
+            foreach (var descriptor in descriptors)
             {
-                next = _calculator.ComputeNext(descriptor.Kind, descriptor.Expression, now);
-            }
-            catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
-            {
-                throw Failure(artifactId, node, [providerId], "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' could not be materialized.", exception);
-            }
-            if (next is null)
-                throw Failure(artifactId, node, [providerId], "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' has no future occurrence.");
+                DateTimeOffset? next;
+                try
+                {
+                    next = _calculator.ComputeNext(descriptor.Kind, descriptor.Expression, now);
+                }
+                catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
+                {
+                    throw Failure(artifactId, node, [providerId], "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' could not be materialized.", exception);
+                }
+                if (next is null)
+                    throw Failure(artifactId, node, [providerId], "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' has no future occurrence.");
 
-            schedules.Add(new RecurringTriggerSchedule(
-                ScheduleId: publicationId is null
-                    ? RecurringTriggerSchedule.BuildId(artifactId, node.ExecutableNodeId)
-                    : RecurringTriggerSchedule.BuildId(publicationId, artifactId, node.ExecutableNodeId),
-                ArtifactId: artifactId,
-                StimulusType: descriptor.StimulusType,
-                StimulusHash: descriptor.StimulusHash,
-                Kind: descriptor.Kind,
-                Expression: descriptor.Expression,
-                NextOccurrence: next.Value,
-                CreatedAt: now,
-                PublicationId: publicationId,
-                SlotId: slotId,
-                IsActive: publicationId is null));
+                schedules.Add(new RecurringTriggerSchedule(
+                    ScheduleId: BuildScheduleId(publicationId, artifactId, node.ExecutableNodeId, descriptor.StimulusHash, fanOut),
+                    ArtifactId: artifactId,
+                    ExecutableNodeId: node.ExecutableNodeId,
+                    StimulusType: descriptor.StimulusType,
+                    StimulusHash: descriptor.StimulusHash,
+                    Kind: descriptor.Kind,
+                    Expression: descriptor.Expression,
+                    NextOccurrence: next.Value,
+                    CreatedAt: now,
+                    PublicationId: publicationId,
+                    SlotId: slotId,
+                    IsActive: publicationId is null));
+            }
         }
 
         return schedules;
@@ -152,18 +158,27 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
     private static WorkflowTriggerPreflightException Failure(string artifactId, ExecutableNode node, IReadOnlyCollection<string> providerIds, string facet, string message, Exception? innerException = null) =>
         new(artifactId, node.ExecutableNodeId, node.ActivityType, providerIds, facet, message, innerException);
 
-    private (string ProviderId, RecurringScheduleDescriptor Descriptor)? Describe(string artifactId, ExecutableNode node)
+    private static string BuildScheduleId(string? publicationId, string artifactId, string executableNodeId, string stimulusHash, bool fanOut) =>
+        (publicationId, fanOut) switch
+        {
+            (null, false) => RecurringTriggerSchedule.BuildId(artifactId, executableNodeId),
+            (null, true) => RecurringTriggerSchedule.BuildFanOutId(artifactId, executableNodeId, stimulusHash),
+            (not null, false) => RecurringTriggerSchedule.BuildId(publicationId, artifactId, executableNodeId),
+            (not null, true) => RecurringTriggerSchedule.BuildFanOutId(publicationId, artifactId, executableNodeId, stimulusHash)
+        };
+
+    private (string ProviderId, IReadOnlyCollection<RecurringScheduleDescriptor> Descriptors)? Describe(string artifactId, ExecutableNode node)
     {
-        var claims = new List<(string ProviderId, RecurringScheduleDescriptor Descriptor)>();
+        var claims = new List<(string ProviderId, IReadOnlyCollection<RecurringScheduleDescriptor> Descriptors)>();
 
         foreach (var provider in _providers)
         {
             var providerId = provider.ProviderId;
             var providerType = provider.GetType().FullName ?? provider.GetType().Name;
-            RecurringScheduleDescriptor? descriptor;
+            IReadOnlyCollection<RecurringScheduleDescriptor> descriptors;
             try
             {
-                descriptor = provider.Describe(node);
+                descriptors = provider.Describe(node);
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
             {
@@ -185,7 +200,7 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
                     exception);
             }
 
-            if (descriptor is not null)
+            if (descriptors.Count > 0)
             {
                 if (string.IsNullOrWhiteSpace(providerId))
                     throw Failure(
@@ -195,7 +210,7 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
                         "ProviderIdentity",
                         $"Recurring trigger provider type '{providerType}' recognizes node '{node.ExecutableNodeId}' but has a blank provider id.");
 
-                claims.Add((providerId, descriptor));
+                claims.Add((providerId, descriptors));
             }
         }
 

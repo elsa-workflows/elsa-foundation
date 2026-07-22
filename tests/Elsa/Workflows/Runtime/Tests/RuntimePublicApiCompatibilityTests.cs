@@ -16,26 +16,28 @@ public sealed class RuntimePublicApiCompatibilityTests
             typeof(WorkflowExecutableIdentity), typeof(ExecutableNode),
             typeof(IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>), typeof(DateTimeOffset),
             typeof(IReadOnlyDictionary<string, string>));
+        // spec 117 D4 extended these convenience constructors with a trailing optional trigger-metadata channel
+        // (pre-release, source-compatible for existing positional callers).
         AssertConstructor(
             typeof(WorkflowExecutionStartDispatchRequest),
             typeof(string), typeof(string), typeof(string), typeof(string),
             typeof(IReadOnlyDictionary<string, string>), typeof(IReadOnlyDictionary<string, object>),
             typeof(IReadOnlyDictionary<string, object>), typeof(JsonElement?), typeof(string),
             typeof(WorkflowRunKind), typeof(WorkflowExecutableSourceSelection),
-            typeof(WorkflowExecutableProvenanceRequirement));
+            typeof(WorkflowExecutableProvenanceRequirement), typeof(IReadOnlyDictionary<string, string>));
         AssertConstructor(
             typeof(WorkflowExecutionStartCommandPayload),
             typeof(WorkflowExecutableIdentity), typeof(string),
             typeof(IReadOnlyDictionary<string, JsonElement>), typeof(IReadOnlyDictionary<string, JsonElement>),
             typeof(JsonElement?), typeof(string), typeof(WorkflowRunKind),
-            typeof(WorkflowExecutableSourceProvenance));
+            typeof(WorkflowExecutableSourceProvenance), typeof(IReadOnlyDictionary<string, string>));
         AssertConstructor(
             typeof(RuntimeCheckpointCommandPayload),
             typeof(WorkflowExecutableIdentity), typeof(string), typeof(IReadOnlyCollection<string>), typeof(string),
             typeof(IReadOnlyCollection<RuntimePostCommitIntent>),
             typeof(IReadOnlyDictionary<string, JsonElement>), typeof(IReadOnlyDictionary<string, JsonElement>),
             typeof(JsonElement?), typeof(string), typeof(WorkflowRunKind),
-            typeof(WorkflowExecutableSourceProvenance));
+            typeof(WorkflowExecutableSourceProvenance), typeof(IReadOnlyDictionary<string, string>));
         AssertConstructor(
             typeof(RuntimeCheckpointStateChangeSet),
             typeof(RuntimeStateChange<WorkflowExecutionState>), typeof(RuntimeStateChange<SchedulerState>),

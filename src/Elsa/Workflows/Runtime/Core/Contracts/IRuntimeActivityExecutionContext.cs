@@ -14,6 +14,22 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     ExecutableNode ExecutableNode { get; }
     ActivityExecutionState ActivityExecutionState { get; }
 
+    /// <summary>
+    /// The executable node id of the matched trigger binding that started this run (spec 089 D / 117 D4),
+    /// populated from the committed workflow-started seed (spoof-proof, not user input). Null for direct
+    /// (non-stimulus) starts. A structural trigger activity (e.g. <c>BpmnProcess</c>) compares it to
+    /// <c>ExecutableNodeId</c> to tell whether it was the node that started this run.
+    /// </summary>
+    string? TriggerNodeId { get; }
+
+    /// <summary>
+    /// The matched trigger binding's free-form metadata map (spec 117 D4), carried verbatim from
+    /// <c>WorkflowTriggerBinding.Metadata</c> and seeded on its own reserved durable channel. Null for direct
+    /// starts and for stimulus starts whose binding carried no metadata. A structural trigger activity reads
+    /// per-descriptor routing facets from it (e.g. the BPMN start element id under <c>"bpmn.startElementId"</c>).
+    /// </summary>
+    IReadOnlyDictionary<string, string>? TriggerMetadata { get; }
+
     void ScheduleChildActivity(
         string executableNodeId,
         string? schedulingActivityExecutionId = null,
@@ -22,6 +38,36 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         LoopIterationScopeRequest? iterationFrame = null);
 
     IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests();
+
+    /// <summary>
+    /// The parent's direct, non-terminal child activity executions (spec 119 D4), populated by the runtime
+    /// only during a child-completion/child-fault evaluation and only when the parent activity implements
+    /// <c>IRuntimeLiveChildActivityConsumer</c>; empty otherwise. Read-only and spoof-proof (projected from
+    /// committed activity-execution state). A structural activity that races sibling children (the BPMN
+    /// event-based gateway) resolves a losing sibling's activity-execution id from it — keyed by executable
+    /// node id — to stage the sibling's subtree cancellation via <see cref="RequestChildSubtreeCancellation"/>.
+    /// </summary>
+    IReadOnlyCollection<RuntimeLiveChildActivity> GetLiveChildActivities();
+
+    /// <summary>
+    /// Reads the committed value of a container-scoped variable visible to this activity (spec 123 D1),
+    /// populated by the runtime only for an activity implementing <c>IRuntimeScopedVariableReader</c> and only
+    /// during an invoke, child-completion/child-fault, or bookmark-resume evaluation.
+    /// </summary>
+    /// <remarks>
+    /// Resolution is by variable <paramref name="variableName"/> across this activity's own visible lexical
+    /// frame chain only — own iteration frame → own container frame → ancestors' container/iteration frames →
+    /// the workflow root frame — with the innermost scope winning for a shadowed name (the
+    /// <c>VariableScope.TryGetValueByName</c> precedent). It is read-only and spoof-proof: the chain is
+    /// projected from this activity's own committed <c>ActivityExecutionState</c> ancestry, so out-of-chain
+    /// scopes are unreachable by construction. It exposes <b>committed</b> values only — a value staged by an
+    /// intrinsic in this or a concurrent evaluation becomes visible only once committed, on a later
+    /// evaluation's basis. Returns <see langword="false"/> with <paramref name="envelope"/> <see langword="null"/>
+    /// when the name resolves to no visible declared variable, and <b>always</b> when the seam was not populated
+    /// (a non-marker activity, or a handler path that did not populate it) — it never throws on an unpopulated
+    /// seam, parallel to <see cref="GetLiveChildActivities"/> returning empty.
+    /// </remarks>
+    bool TryReadScopedVariableValue(string variableName, out ValueEnvelope? envelope);
 
     /// <summary>
     /// Stages cancellation of one scheduled child's activity-execution subtree (spec 112). Only valid
@@ -47,6 +93,19 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         IReadOnlyDictionary<string, string>? metadata = null);
 
     IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> GetChildFaultAbsorptionRequests();
+
+    /// <summary>
+    /// Stages a non-terminal, coded notification from this still-running structural child to its own
+    /// committed parent (spec 126, seam C). The notification always and only reaches the notifying child's
+    /// committed parent — there is no target parameter (spoof-proofing). Valid during any of the child's own
+    /// evaluations that end in a <c>Defer</c> or <c>Complete</c> continuation; it commits atomically with that
+    /// state as a durable post-commit work item. Staging from a root activity (no committed parent) or
+    /// alongside a <c>Fault</c>/<c>Cancel</c> continuation faults the evaluation. Multiple notifications per
+    /// evaluation are allowed and preserve staging order.
+    /// </summary>
+    void RequestParentNotification(string code, System.Text.Json.JsonElement? payload = null);
+
+    IReadOnlyCollection<RuntimeParentNotificationRequest> GetParentNotificationRequests();
 }
 
 /// <summary>

@@ -181,6 +181,12 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
         if (elementType.IsGenericParameter || elementType.ContainsGenericParameters)
             return;
 
+        // A Nullable<T> element (e.g. TimeSpan?/long?) shares its underlying value type's identity for alias
+        // purposes. Register the underlying T so it resolves to its reserved/dotted canonical alias; the registry
+        // then derives the "T?" nullable companion. Registering Nullable<T> directly would yield a bare "<Alias>?"
+        // (e.g. "TimeSpan?") that the reserved-namespace guard rejects, leaving the nullable element unregistered.
+        elementType = Nullable.GetUnderlyingType(elementType) ?? elementType;
+
         var alias = TypeAliasConvention.CanonicalAlias(elementType);
 
         // Already mapped to this exact type (e.g. a primitive seeded earlier, or a re-run): nothing to do.

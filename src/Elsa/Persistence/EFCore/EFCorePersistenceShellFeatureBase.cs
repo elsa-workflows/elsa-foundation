@@ -1,5 +1,6 @@
 using CShells.Features;
 using Elsa.Events.Core.Contracts;
+using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Persistence.EFCore.Extensions;
@@ -112,6 +113,7 @@ public abstract class EFCorePersistenceShellFeatureBase<TDbContext> : IShellFeat
 
         // MIGRATION
         var runMigrations = RunMigrations ?? true;
+        services.TryAddSingleton<IMigrationsLockReclaimer, MigrationsLockReclaimer>();
         services.Configure<MigrationOptions>(options =>
             {
                 options.RunMigrations[$"{typeof(TDbContext).FullName}"] = runMigrations;

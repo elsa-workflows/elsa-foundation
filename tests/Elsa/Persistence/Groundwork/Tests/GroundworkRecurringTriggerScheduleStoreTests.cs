@@ -484,6 +484,7 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
             ? RecurringTriggerSchedule.BuildId(artifactId, executableNodeId)
             : RecurringTriggerSchedule.BuildId(publicationId, artifactId, executableNodeId),
         ArtifactId: artifactId,
+        ExecutableNodeId: executableNodeId,
         StimulusType: "Timer",
         StimulusHash: $"sha256:{executableNodeId}",
         Kind: RecurringScheduleKind.Interval,

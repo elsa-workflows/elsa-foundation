@@ -235,6 +235,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         .Append(valueFlowAttempt)
                         .ToArray()
                 };
+            // spec 123 D1: a structural activity that reads its enclosing container-scoped variable values (the
+            // BpmnProcess) gets a committed name→envelope projection of its own visible frame chain; marker-gated,
+            // so a non-consumer activity pays nothing and reads always return false.
+            var scopedVariableEnvelopes = await scopeService.ProjectScopedVariablesForReaderAsync(
+                activity, executable, executionContextState, cancellationToken);
+
             context = SimpleActivityExecutionContext.ForExecution(
                 activity,
                 cancellationToken,
@@ -245,7 +251,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 executionContextState,
                 variableScope: null,
                 triggerPayload: projections.StimulusInput is JsonElement stimulusInput ? stimulusInput : null,
-                triggerNodeId: projections.TriggerNodeId);
+                triggerNodeId: projections.TriggerNodeId,
+                triggerMetadata: projections.TriggerMetadata,
+                scopedVariableEnvelopes: scopedVariableEnvelopes);
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
@@ -276,6 +284,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         WorkflowDispatchCheckpointRequest? stagedWorkflowDispatch = null;
         ActivityFault? returnedFault = null;
         string? returnedCancellationReason = null;
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotificationWorkItems = [];
         var stagedState = state;
         try
         {
@@ -320,6 +329,20 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 throw new InvalidOperationException("An initial structural execution cannot cancel child subtrees; cancellation requests are only valid during a child-completion evaluation (spec 112).");
             if (context.GetChildFaultAbsorptionRequests().Count > 0)
                 throw new InvalidOperationException("An initial structural execution cannot absorb child faults; absorption requests are only valid during a child-fault evaluation (spec 115).");
+
+            // spec 126 seam C: a non-root structural child may notify its own parent during its initial
+            // structural execution. Harvest the staged notifications now so a root staging or a Fault/Cancel
+            // continuation with staged notifications faults the evaluation inside this callback boundary; the
+            // built work items ride the same Defer/Complete commit below.
+            parentNotificationWorkItems = await ParentNotificationEvaluation.BuildAsync(
+                activityExecutionStateStore,
+                _timeProvider,
+                workItem,
+                invokePayload.PinnedExecutable,
+                stagedState,
+                context.GetParentNotificationRequests(),
+                structuralContinuation ?? RuntimeStructuralContinuation.Defer,
+                cancellationToken);
 
             if (returnedTransition is IStatefulActivitySuspensionTransition statefulSuspension)
             {
@@ -586,6 +609,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 invokePayload,
                 state,
                 childScheduling.Requests,
+                parentNotificationWorkItems,
                 valueSnapshots,
                 durableValueChanges,
                 cancellationToken);
@@ -607,6 +631,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             invokePayload,
             completedState,
             ReadCompletionOutcomeNames(completedState),
+            parentNotificationWorkItems,
             valueSnapshots,
             durableValueChanges,
             stagedWorkflowDispatch,
@@ -875,12 +900,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 durableValueChanges: []);
 
             yield return new RuntimeSchedulerWorkItem(
-                workItemId: $"{invokeWorkItem.WorkItemId}:create-bookmark:{request.BookmarkId}",
+                workItemId: RuntimeChainId.Derive(invokeWorkItem.WorkItemId, $"create-bookmark:{request.BookmarkId}"),
                 workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
-                commandId: $"{invokeWorkItem.CommandId}:create-bookmark:{request.BookmarkId}",
+                commandId: RuntimeChainId.Derive(invokeWorkItem.CommandId, $"create-bookmark:{request.BookmarkId}"),
                 commandKind: WorkflowExecutionCommandKind.CreateBookmark,
                 envelopeId: invokeWorkItem.EnvelopeId,
-                idempotencyKey: $"{invokeWorkItem.IdempotencyKey}:create-bookmark:{request.BookmarkId}",
+                idempotencyKey: RuntimeChainId.Derive(invokeWorkItem.IdempotencyKey, $"create-bookmark:{request.BookmarkId}"),
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: invokeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
@@ -898,6 +923,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState state,
         IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotifications,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         CancellationToken cancellationToken)
@@ -959,6 +985,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 operational: [],
                 activityExecutionInspections: inspectionChanges),
             PostCommitIntents: childWorkItems
+                .Concat(parentNotifications)
                 .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
                 .ToArray(),
             Metadata: metadata);
@@ -1019,12 +1046,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             commandMetadata[RuntimeMetadataKeys.ChildExecutableNodeId] = request.ExecutableNodeId;
 
             var workItem = new RuntimeSchedulerWorkItem(
-                workItemId: $"{invokeWorkItem.WorkItemId}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                workItemId: RuntimeChainId.Derive(invokeWorkItem.WorkItemId, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
                 workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
-                commandId: $"{invokeWorkItem.CommandId}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                commandId: RuntimeChainId.Derive(invokeWorkItem.CommandId, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
                 commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
                 envelopeId: invokeWorkItem.EnvelopeId,
-                idempotencyKey: $"{invokeWorkItem.IdempotencyKey}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                idempotencyKey: RuntimeChainId.Derive(invokeWorkItem.IdempotencyKey, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: invokeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
@@ -1051,8 +1078,66 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         return metadata;
     }
 
+    /// <summary>
+    /// Discrete completion commit (spec 123 D2 seam): builds the intent-free <c>ActivityCompleted</c> commit core and
+    /// re-attaches the <c>CompleteActivity</c> continuation post-commit intent (ahead of any staged workflow-dispatch
+    /// start intent, preserving today's ordering), reproducing the commit byte-for-byte. The commit builder and the
+    /// derived <c>CompleteActivity</c> work item are extracted into <see cref="BuildCompletedCommitAsync"/> so a future
+    /// fused-completion driver (D2) can commit the same stage without the completion enqueue intent and run the parent
+    /// completion cascade inline instead of enqueuing it. This is the only invoke-handler surgery in spec 123 and is
+    /// strictly behavior-preserving.
+    /// </summary>
     private async ValueTask CommitCompletedActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        RuntimeSchedulerWorkItem invokeWorkItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        ActivityExecutionState completedState,
+        IReadOnlyCollection<string> outcomeNames,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotifications,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        WorkflowDispatchCheckpointRequest? workflowDispatch,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        var core = await BuildCompletedCommitAsync(
+            inspectionAccumulator,
+            invokeWorkItem,
+            invokePayload,
+            completedState,
+            outcomeNames,
+            valueSnapshots,
+            durableValueChanges,
+            workflowDispatch,
+            occurredAt,
+            cancellationToken);
+
+        var completionIntent = SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
+            invokeWorkItem, invokePayload.ActivityExecutionId, core.CompletionWorkItem, occurredAt);
+        // spec 126 seam C: a structural child completing on its initial execution may also notify its parent;
+        // the notification intents ride behind the completion cascade intent and ahead of any staged dispatch.
+        var notificationIntents = parentNotifications
+            .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
+            .ToArray();
+        var commit = core.Commit with
+        {
+            PostCommitIntents = [completionIntent, .. notificationIntents, .. core.Commit.PostCommitIntents]
+        };
+
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    /// <summary>
+    /// The <c>ActivityCompleted</c> stage core (spec 123 D2 seam): produces the <c>ActivityCompleted</c> checkpoint
+    /// commit <b>without</b> its <c>CompleteActivity</c> continuation post-commit intent, alongside the derived
+    /// <c>CompleteActivity</c> work item and the checkpoint's occurrence time. Any staged workflow-dispatch start intent
+    /// remains on the commit (it is a separate dispatch, not the completion cascade). The discrete handler re-attaches
+    /// the completion intent (<see cref="CommitCompletedActivityAsync"/>); a fused-completion driver commits the
+    /// intent-free commit and runs the parent completion cascade inline. Reused by both — never re-implemented — so the
+    /// two paths stay byte-identical by construction.
+    /// </summary>
+    private async ValueTask<CompletedCommitCore> BuildCompletedCommitAsync(
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         RuntimeSchedulerWorkItem invokeWorkItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
@@ -1134,16 +1219,21 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                             Metadata: metadata)
                     ]),
             PostCommitIntents: workflowDispatch is null
-                ? [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt)]
-                :
-                [
-                    SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt),
-                    workflowDispatch.StartIntent
-                ],
+                ? []
+                : [workflowDispatch.StartIntent],
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+        return new CompletedCommitCore(commit, completionWorkItem, occurredAt);
     }
+
+    /// <summary>
+    /// The intent-free <c>ActivityCompleted</c> commit plus the derived <c>CompleteActivity</c> continuation work item
+    /// and the checkpoint's occurrence time (spec 123 D2 seam).
+    /// </summary>
+    private readonly record struct CompletedCommitCore(
+        RuntimeCheckpointCommit Commit,
+        RuntimeSchedulerWorkItem CompletionWorkItem,
+        DateTimeOffset OccurredAt);
 
     private static Elsa.Workflows.Runtime.Core.Models.ActivityTriggerRegistration AssertSingleDispatchRegistration(
         ActivityExecutionState suspendedState,
@@ -1177,12 +1267,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{invokeWorkItem.WorkItemId}:complete:{invokePayload.ActivityExecutionId}",
+            workItemId: RuntimeChainId.Derive(invokeWorkItem.WorkItemId, $"complete:{invokePayload.ActivityExecutionId}"),
             workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
-            commandId: $"{invokeWorkItem.CommandId}:complete:{invokePayload.ActivityExecutionId}",
+            commandId: RuntimeChainId.Derive(invokeWorkItem.CommandId, $"complete:{invokePayload.ActivityExecutionId}"),
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             envelopeId: invokeWorkItem.EnvelopeId,
-            idempotencyKey: $"{invokeWorkItem.IdempotencyKey}:complete:{invokePayload.ActivityExecutionId}",
+            idempotencyKey: RuntimeChainId.Derive(invokeWorkItem.IdempotencyKey, $"complete:{invokePayload.ActivityExecutionId}"),
             enqueuedAt: now,
             recordedAt: now,
             sequence: invokeWorkItem.Sequence is { } sequence ? sequence + 1 : null,

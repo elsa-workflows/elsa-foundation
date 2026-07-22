@@ -20,7 +20,8 @@ public sealed class BpmnAuthoredStructure
         IReadOnlyCollection<BpmnPool>? pools = null,
         IReadOnlyCollection<BpmnLane>? lanes = null,
         IReadOnlyCollection<VariableDefinition>? variables = null,
-        JsonElement? diagram = null)
+        JsonElement? diagram = null,
+        bool isTransaction = false)
     {
         Activities = activities ?? [];
         Elements = elements ?? [];
@@ -29,6 +30,7 @@ public sealed class BpmnAuthoredStructure
         Lanes = lanes ?? [];
         Variables = variables ?? [];
         Diagram = diagram;
+        IsTransaction = isTransaction;
     }
 
     [JsonPropertyName("activities")]
@@ -55,4 +57,13 @@ public sealed class BpmnAuthoredStructure
 
     [JsonPropertyName("diagram")]
     public JsonElement? Diagram { get; }
+
+    /// <summary>
+    /// Whether this authored process is a <b>transaction</b> (spec 125). Set by the importer from a
+    /// <c>&lt;transaction&gt;</c> and by authoring; carried forward onto the compiled executable
+    /// <see cref="BpmnStructure.IsTransaction"/>, which drives cancel-end validation and the structure-dependent
+    /// <c>Cancelled</c> outcome declaration.
+    /// </summary>
+    [JsonPropertyName("isTransaction")]
+    public bool IsTransaction { get; }
 }

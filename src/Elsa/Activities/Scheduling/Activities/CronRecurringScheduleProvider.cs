@@ -15,18 +15,18 @@ public sealed class CronRecurringScheduleProvider : IRecurringTriggerSchedulePro
 
     private const string ExpressionInput = nameof(Cron.Expression);
 
-    public RecurringScheduleDescriptor? Describe(ExecutableNode node)
+    public IReadOnlyCollection<RecurringScheduleDescriptor> Describe(ExecutableNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
 
         if (!StringComparer.Ordinal.Equals(node.ActivityType, Cron.ActivityType))
-            return null;
+            return [];
 
         var expression = SchedulingNodeInputs.ReadLiteralString(node, ExpressionInput)
             ?? throw new ArgumentException(
                 $"Cron trigger node '{node.ExecutableNodeId}' has no literal '{ExpressionInput}'. A recurring " +
                 "start trigger's cron expression must be an authored literal so its schedule is fixed at publish time.");
 
-        return CronStimulus.DescribeSchedule(expression);
+        return [CronStimulus.DescribeSchedule(expression)];
     }
 }

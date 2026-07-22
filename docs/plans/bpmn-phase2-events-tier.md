@@ -4,7 +4,7 @@ Status: Phase 1 shipped 2026-07-20. This document is the handover brief for the 
 implements Phase 2. The full original program design lives in the session plan (mirrored below where
 it matters); the Phase-1 scope record is `specs/108-bpmn-container-activity/spec.md`.
 
-## Phase 2 progress (updated 2026-07-21)
+## Phase 2 progress (updated 2026-07-22, spec 122 — events-tier runtime scope COMPLETE)
 
 Spec numbers drifted from this document's suggestions: 109–111 and 113–114 were claimed by the
 engine-perf program. Shipped so far:
@@ -15,13 +15,43 @@ engine-perf program. Shipped so far:
 | Core seam B — handled child fault (absorption) | `specs/115-runtime-handled-child-fault` | #904 | merged |
 | Catch-events prerequisite — node-scoped resume targets (lifts the W8 one-instance limit) | — (documented W8 follow-up) | #911 | merged |
 | Timer/message/signal intermediate catch events (`CatchEventBehavior`; `Event` gains its mid-flow wait form + `CanStartWorkflow`) | `specs/116-bpmn-catch-events` | #917 | merged |
+| Event-defined start events (`BpmnProcess` becomes a `[TriggerActivity]` with per-start-element bindings; trigger-metadata runtime seam on `IRuntimeActivityExecutionContext`; `IRecurringTriggerScheduleProvider` goes fan-out) | `specs/117-bpmn-event-start-events` | #935 | merged |
+| Interchange eventDefinition wiring (root `message`/`signal` index → `name`; catch-event child synthesis `Delay`/`Event`; timer `timeCycle`/`timeDuration` mapping with `P`/`R` discriminator; export + publish-parity guard; no runtime changes) | `specs/118-bpmn-interchange-event-definitions` | #940 | merged |
+| Event-based gateway (first-catch-wins race: additive `BpmnEventRace` state, engine-owned resolution, seam-A loser teardown — first BPMN seam-A consumer; `IRuntimeLiveChildActivityConsumer` + `GetLiveChildActivities()` runtime seam closes the node-id→aei gap) | `specs/119-bpmn-event-based-gateway` | #948 | merged |
+| Boundary events (listener-child catch boundaries armed engine-side; interrupting/non-interrupting semantics; error boundaries absorb via seam B — first BPMN seam-B consumer; spec-119 carry generalized to `PendingSubtreeCancellations`; interchange attachedToRef/cancelActivity round-trip) | `specs/120-bpmn-boundary-events` | #950 | merged |
+| Multi-instance (cardinality mode, sequential + parallel; uniform sub-token model; first-ever concurrent same-node scheduling; `RuntimeLiveChildActivity.IterationId` + `(NodeId, IterationId)` teardown keying; collection mode authoring-modeled but deferred — needs a container-variable read seam) | `specs/121-bpmn-multi-instance` | #954 | merged |
+| Cyclic sequence flows (token `IterationKey`; DFS back-edge classification — NOT Flowchart's naive CanReach, chip filed to check Flowchart; join accounting grouped by (element, iteration key); `ValidateAcyclic` removed; importer cycle degradation lifted) | `specs/122-bpmn-cyclic-flows` | #956 | merged |
 
-Spec 116's stated cuts, now the head of the remaining queue alongside the original later units:
-**event-defined start events** (message/signal via a BpmnProcess `IActivityTriggerStimulusProvider`,
-timer via the recurring-schedule template; `BpmnElementFamilies.ResolveStartEvent` still throws for
-event-defined starts by design) and **interchange eventDefinition wiring** (importer still drops
-`intermediateCatchEvent`; pairs with Studio authoring UX). Then: event-based gateway (seam A),
-boundary events (seams A+B), multi-instance.
+The events-tier runtime scope is COMPLETE with spec 122.
+
+## Phase 3 progress (control room active 2026-07-22; program-goal bucket: `docs/program-goals/bpmn-engine.md`, PR #963)
+
+| Unit | Spec | PR | State |
+|---|---|---|---|
+| Runtime scoped-variable read seam + collection-mode multi-instance (marker `IRuntimeScopedVariableReader` + `TryReadScopedVariableValue`, committed-basis, all three handler paths; spec 121 rule-5 cut removed; `BpmnLoopState.Items` snapshot; interchange `elsa:variable` declarations + collection round-trip) | `specs/123-runtime-scoped-variable-read` | #965 | merged |
+| Compensation (reverse-order `BpmnCompensable` log registered at host completion; compensation boundary events with first-class flow-less handlers via association; compensate intermediate throw + end events with `activityRef`; claim-then-sequential-replay `BpmnCompensationRun`; interchange association parsing; zero runtime changes) | `specs/124-bpmn-compensation` | #966 | merged |
+| Transactions + cancel events (`IsTransaction` on element + structure; cancel end = `CancelTransaction` command → stop-live-work → claim-all → spec-124 replay → `Complete("Cancelled")`; structure-dependent `Cancelled` outcome via `ExecutableNodeCompiler.ResolveOutcomes` Switch-pattern branch; parent maps the outcome to a dormant cancel boundary before Case B; `<transaction>`/`cancelEventDefinition` interchange) | `specs/125-bpmn-transactions` | #970 | merged |
+| Runtime seam C — non-terminal child→parent structural notification (`NotifyParentActivity` command kind + dedicated handler; `RequestParentNotification(code, payload)` staged on the child's own Defer/Complete commits; `IRuntimeActivityChildNotificationHandler` opt-in delivery with late-delivery semantics + seam-A staging; prerequisite for escalation + event subprocesses; runtime-only) | `specs/126-runtime-child-parent-notification` | #974 | merged |
+
+Remaining queued follow-ups (not part of
+the tier's runtime scope): **Flowchart backward-edge
+classification check** — resolved: confirmed + fixed via PR #958 (2026-07-22);
+Studio authoring UX (event definitions, boundary attachment, loop markers; separate repo) — pull in
+only if the owner asks. Terminate/fault paths still cancel logically only (`CancelLiveWork`); routing
+them through seam A is a noted follow-up. Deferred construct cuts: escalation/compensation boundaries,
+error-code matching, non-interrupting timer repetition, event subprocesses, completionCondition,
+output aggregation, standardLoopCharacteristics, loopCounter frame exposure, unbounded-loop
+guardrails. Phase 3 afterward per the original program design: compensation, transactions/cancel
+events, escalation, event subprocesses, call activity, executable collaborations.
+
+Start-events slice notes (spec 117, 2026-07-21): the matched trigger binding's `Metadata` now flows
+end-to-end into `IRuntimeActivityExecutionContext.TriggerNodeId`/`TriggerMetadata` (reserved
+`trigger-meta:` durable slot — the seam any future container trigger reuses); message/signal starts
+share the named-event stimulus with `Event` (parity-pinned in-module duplicate), so one delivery can
+both start processes and resume catch events; a nested `BpmnProcess` opts out of the start surface via
+`CanStartWorkflow = false` (root position is not recoverable from the published node). Known
+pre-existing follow-up (chip filed): `Timer`'s interval-only stimulus hash lets two same-interval
+workflows cross-start each other.
 
 Seam facts for the remaining units: `RequestChildSubtreeCancellation` / `RequestChildFaultAbsorption`
 are staged on `IRuntimeActivityExecutionContext` during child-completion/child-fault evaluations and

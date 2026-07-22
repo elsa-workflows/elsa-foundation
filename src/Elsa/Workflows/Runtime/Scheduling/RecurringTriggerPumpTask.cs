@@ -18,6 +18,17 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// </summary>
 /// <remarks>
 /// <para>
+/// <b>Owner-scoped dispatch.</b> A stimulus hash is a pure function of the authored interval/cron literal, so two
+/// published workflows that authored the same literal share one (StimulusType, StimulusHash) pair. The router's
+/// start path intentionally fans an externally-sent stimulus out to every matching artifact — correct for events,
+/// but a recurring schedule is owned by exactly one trigger node: hash-broadcasting a fire would start every
+/// same-literal workflow on EVERY schedule's cadence (double-starts per cycle). The pump therefore resolves the
+/// binding the schedule owns — matching artifact, trigger node, and publication scope — and dispatches with that
+/// binding pre-matched (<see cref="StimulusDispatchRequest.MatchedTriggerBindings"/>), so a fire starts only the
+/// workflow whose publish wrote the schedule. A fire whose owning binding no longer exists (index drift between
+/// republish steps) is dropped with a warning rather than broadcast.
+/// </para>
+/// <para>
 /// <b>Missed-occurrence policy — fire at most once, then advance.</b> A schedule is due when its
 /// <see cref="RecurringTriggerSchedule.NextOccurrence"/> is at or before the wake instant. The pump does NOT
 /// replay the backlog of occurrences that elapsed while it was down: it advances the cursor to the first
@@ -43,6 +54,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
 
     private readonly IPersistenceScopeRunner? _scopeRunner;
     private readonly IRecurringTriggerScheduleStore? _store;
+    private readonly IWorkflowTriggerBindingStore? _bindingStore;
     private readonly IStimulusRouter? _router;
     private readonly IRecurringScheduleCalculator? _calculator;
     private readonly IOptions<RecurringTriggerPumpOptions> _options;
@@ -65,6 +77,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
     /// <summary>Direct-construction seam retained for focused pump tests and custom hosts.</summary>
     public RecurringTriggerPumpTask(
         IRecurringTriggerScheduleStore store,
+        IWorkflowTriggerBindingStore bindingStore,
         IStimulusRouter router,
         IRecurringScheduleCalculator calculator,
         IOptions<RecurringTriggerPumpOptions> options,
@@ -73,10 +86,12 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
         : this(options, timeProvider, logger)
     {
         ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(bindingStore);
         ArgumentNullException.ThrowIfNull(router);
         ArgumentNullException.ThrowIfNull(calculator);
 
         _store = store;
+        _bindingStore = bindingStore;
         _router = router;
         _calculator = calculator;
     }
@@ -107,7 +122,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
         {
             if (_scopeRunner is null)
             {
-                await SweepAsync(_store!, _router!, _calculator!, options, now, cancellationToken);
+                await SweepAsync(_store!, _bindingStore!, _router!, _calculator!, options, now, cancellationToken);
             }
             else
             {
@@ -115,6 +130,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
                 {
                     await SweepAsync(
                         operationScope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>(),
+                        operationScope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>(),
                         operationScope.ServiceProvider.GetRequiredService<IStimulusRouter>(),
                         operationScope.ServiceProvider.GetRequiredService<IRecurringScheduleCalculator>(),
                         options,
@@ -142,6 +158,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
 
     private async Task SweepAsync(
         IRecurringTriggerScheduleStore store,
+        IWorkflowTriggerBindingStore bindingStore,
         IStimulusRouter router,
         IRecurringScheduleCalculator calculator,
         RecurringTriggerPumpOptions options,
@@ -154,7 +171,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
         foreach (var schedule in due)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (await FireAsync(store, router, calculator, schedule, now, cancellationToken))
+            if (await FireAsync(store, bindingStore, router, calculator, schedule, now, cancellationToken))
                 fired++;
         }
 
@@ -172,6 +189,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
     // never escapes the sweep.
     private async Task<bool> FireAsync(
         IRecurringTriggerScheduleStore store,
+        IWorkflowTriggerBindingStore bindingStore,
         IStimulusRouter router,
         IRecurringScheduleCalculator calculator,
         RecurringTriggerSchedule schedule,
@@ -206,12 +224,28 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
 
         try
         {
+            // Owner scoping: the stimulus hash is shared by every workflow that authored the same literal, so the
+            // fire must carry the schedule's OWN binding rather than let the router hash-broadcast the start.
+            var ownedBindings = await ResolveOwnedBindingsAsync(bindingStore, schedule, cancellationToken);
+            if (ownedBindings.Count == 0)
+            {
+                // Index drift (e.g. mid-republish): the occurrence stays claimed by the at-most-once contract, and
+                // the next occurrence fires against the refreshed index.
+                _logger.LogWarning(
+                    "Recurring schedule '{ScheduleId}' fired but no trigger binding is owned by artifact '{ArtifactId}' node '{ExecutableNodeId}'; occurrence dropped",
+                    schedule.ScheduleId,
+                    schedule.ArtifactId,
+                    schedule.ExecutableNodeId);
+                return false;
+            }
+
             var request = new StimulusDispatchRequest(
                 stimulusType: schedule.StimulusType,
                 stimulusHash: schedule.StimulusHash,
                 mode: StimulusRoutingMode.StartOnly,
                 idempotencyKey: $"recurring:{schedule.ScheduleId}:{schedule.NextOccurrence.UtcTicks}",
-                requestedBy: PumpRequestedBy);
+                requestedBy: PumpRequestedBy,
+                matchedTriggerBindings: ownedBindings);
 
             await router.RouteAsync(request, cancellationToken);
             return true;
@@ -227,6 +261,24 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
             _logger.LogError(exception, "Recurring schedule '{ScheduleId}' start dispatch threw after claim; occurrence dropped", schedule.ScheduleId);
             return false;
         }
+    }
+
+    // The binding the schedule owns: same artifact, same trigger node, and same publication scope (named slots may
+    // share one artifact, so a publication-scoped schedule must not start through another slot's binding). The
+    // stimulus identity is already the query key. Normally exactly one binding survives the filter.
+    private static async Task<IReadOnlyList<WorkflowTriggerBinding>> ResolveOwnedBindingsAsync(
+        IWorkflowTriggerBindingStore bindingStore,
+        RecurringTriggerSchedule schedule,
+        CancellationToken cancellationToken)
+    {
+        var matches = await bindingStore.ListAllByStimulusAsync(schedule.StimulusType, schedule.StimulusHash, cancellationToken);
+        return matches
+            .Where(binding =>
+                StringComparer.Ordinal.Equals(binding.ArtifactId, schedule.ArtifactId) &&
+                StringComparer.Ordinal.Equals(binding.ExecutableNodeId, schedule.ExecutableNodeId) &&
+                StringComparer.Ordinal.Equals(binding.PublicationId, schedule.PublicationId) &&
+                StringComparer.Ordinal.Equals(binding.SlotId, schedule.SlotId))
+            .ToArray();
     }
 
     private TimeSpan ComputeInterval()

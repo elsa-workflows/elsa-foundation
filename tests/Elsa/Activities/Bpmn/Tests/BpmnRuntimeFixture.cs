@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -13,6 +14,8 @@ namespace Elsa.Activities.Bpmn.Tests;
 public sealed class BpmnRuntimeFixture : IAsyncDisposable
 {
     public const string ProcessNodeId = "node-bpmn";
+
+    private static readonly JsonSerializerOptions WebOptions = new(JsonSerializerDefaults.Web);
 
     private readonly WorkflowExecutionHarness _harness;
 
@@ -39,6 +42,17 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public ValueTask DisposeAsync() => _harness.DisposeAsync();
 
     public Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable) => _harness.RunAsync(executable);
+
+    /// <summary>
+    /// Runs the process as a trigger-started run (spec 117): the matched binding's node id is the process node and
+    /// its metadata names the event-defined start element to seed, mirroring how the stimulus router forwards
+    /// <c>binding.Metadata</c> onto the start dispatch. Only the targeted event-defined start seeds a token.
+    /// </summary>
+    public Task<WorkflowExecutionRun> RunAsTriggerAsync(WorkflowExecutable executable, string startElementId) =>
+        _harness.RunAsTriggerDeliveryAsync(
+            executable,
+            triggerNodeId: ProcessNodeId,
+            triggerMetadata: new Dictionary<string, string> { [BpmnStartTrigger.StartElementIdMetadataKey] = startElementId });
 
     /// <summary>Lists the run's live bookmark resume handles (spec 116 catch-event scenarios).</summary>
     public async Task<IReadOnlyCollection<BookmarkState>> BookmarksAsync() =>
@@ -95,8 +109,17 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
         IReadOnlyCollection<ExecutableNode> children,
         IReadOnlyCollection<BpmnElement> elements,
         IReadOnlyCollection<BpmnSequenceFlow> sequenceFlows,
-        IReadOnlyCollection<WorkflowExecutableResumeTarget>? resumeTargets = null)
+        IReadOnlyCollection<WorkflowExecutableResumeTarget>? resumeTargets = null,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null,
+        bool isTransaction = false)
     {
+        // The runtime reads the container's declared variables as RuntimeVariableDeclaration; BpmnStructure carries
+        // authored VariableDefinition, so a spec-123 collection variable is injected as the runtime shape here (the
+        // real publish compiler does the VariableDefinition→RuntimeVariableDeclaration lowering).
+        var structurePayload = JsonSerializer.SerializeToNode(new BpmnStructure(elements, sequenceFlows, isTransaction: isTransaction), WebOptions)!.AsObject();
+        if (variables is { Count: > 0 })
+            structurePayload["variables"] = JsonSerializer.SerializeToNode(variables, WebOptions);
+
         var root = new ExecutableNode(
             executableNodeId: ProcessNodeId,
             authoredActivityId: "authored-bpmn",
@@ -113,7 +136,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
             structure: new ExecutableActivityStructure(
                 BpmnProcessActivity.StructureKind,
                 BpmnProcessActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new BpmnStructure(elements, sequenceFlows))));
+                JsonSerializer.SerializeToElement(structurePayload)));
 
         var executable = WorkflowExecutionHarness.NewExecutable(root);
         if (resumeTargets is not { Count: > 0 })
@@ -156,11 +179,59 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static BpmnElement TerminateEndEvent(string elementId = "terminate") =>
         new(elementId, BpmnElementTypes.EndEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Terminate)]);
 
+    /// <summary>An event-defined start event (spec 117). Only the definition type matters at runtime; the token behaves like a none start.</summary>
+    public static BpmnElement EventStart(string elementId, string definitionType) =>
+        new(elementId, BpmnElementTypes.StartEvent, eventDefinitions: [new BpmnEventDefinition(definitionType)]);
+
     public static BpmnElement IntermediateCatchEvent(string elementId, string definitionType, string? childNodeId = null) =>
         new(elementId, BpmnElementTypes.IntermediateCatchEvent, childNodeId: childNodeId, eventDefinitions: [new BpmnEventDefinition(definitionType)]);
 
     public static BpmnElement Task(string elementId, string? childNodeId = null, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
+
+    /// <summary>A multi-instance task (spec 121): runs its bound child <paramref name="cardinality"/> times, sequentially or in parallel.</summary>
+    public static BpmnElement MultiInstanceTask(string elementId, string childNodeId, int cardinality, bool isSequential, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
+            loopCharacteristics: new BpmnLoopCharacteristics(isSequential: isSequential, cardinality: cardinality));
+
+    /// <summary>A collection-mode multi-instance task (spec 123): runs its bound child once per item of the declared <paramref name="collectionVariable"/>.</summary>
+    public static BpmnElement MultiInstanceCollectionTask(string elementId, string childNodeId, string collectionVariable, bool isSequential, string? itemVariable = null, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
+            loopCharacteristics: new BpmnLoopCharacteristics(isSequential: isSequential, collectionVariable: collectionVariable, itemVariable: itemVariable));
+
+    /// <summary>
+    /// A container-scoped variable declaration (spec 123) whose durable initial value is the given inline JSON,
+    /// in the runtime <see cref="RuntimeVariableDeclaration"/> shape the frame projector reads (a collection
+    /// variable seeds a JSON array). Typed as the canonical dynamic <c>Elsa.Any</c>.
+    /// </summary>
+    public static RuntimeVariableDeclaration InlineVariable(string name, JsonElement value)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any");
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeVariableDeclaration(name, name, type, policy, new RuntimeInputBinding(
+            inputKey: name,
+            targetType: type,
+            effectivePolicy: policy,
+            source: RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, value, policy)));
+    }
+
+    /// <summary>An <c>Elsa.Any</c> variable declaration seeded with a JSON array of the given string items.</summary>
+    public static RuntimeVariableDeclaration StringArrayVariable(string name, params string[] items) =>
+        InlineVariable(name, JsonSerializer.SerializeToElement(items));
+
+    /// <summary>An <c>Elsa.Any</c> variable declaration whose durable initial value is an explicit null (spec 123 empty-loop path).</summary>
+    public static RuntimeVariableDeclaration NullVariable(string name)
+    {
+        var type = new ValueTypeDescriptor("Elsa.Any");
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeVariableDeclaration(name, name, type, policy, new RuntimeInputBinding(
+            inputKey: name,
+            targetType: type,
+            effectivePolicy: policy,
+            source: RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Null(type, policy)));
+    }
 
     public static BpmnElement ExclusiveGateway(string elementId, string? childNodeId = null, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.ExclusiveGateway, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
@@ -168,8 +239,48 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static BpmnElement ParallelGateway(string elementId) =>
         new(elementId, BpmnElementTypes.ParallelGateway);
 
+    public static BpmnElement EventBasedGateway(string elementId) =>
+        new(elementId, BpmnElementTypes.EventBasedGateway);
+
     public static BpmnElement InclusiveGateway(string elementId, string? childNodeId = null, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.InclusiveGateway, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
+
+    /// <summary>A boundary event (spec 120) attached to <paramref name="attachedToRef"/>. Catch boundaries (timer/message/signal) bind a listener child; error boundaries bind none.</summary>
+    public static BpmnElement BoundaryEvent(string elementId, string attachedToRef, string definitionType, string? childNodeId = null, bool cancelActivity = true) =>
+        new(elementId, BpmnElementTypes.BoundaryEvent, childNodeId: childNodeId, eventDefinitions: [new BpmnEventDefinition(definitionType)], attachedToRef: attachedToRef, cancelActivity: cancelActivity);
+
+    /// <summary>A compensation boundary event (spec 124) attached to <paramref name="attachedToRef"/>, referencing its handler via association (no listener child, no outbound flows).</summary>
+    public static BpmnElement CompensationBoundary(string elementId, string attachedToRef, string handlerElementId) =>
+        new(elementId, BpmnElementTypes.BoundaryEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation)], attachedToRef: attachedToRef, compensationHandlerElementId: handlerElementId);
+
+    /// <summary>A compensation handler (spec 124): a task-family element that binds a child, participates in no sequence flows, and runs only during a compensation replay.</summary>
+    public static BpmnElement CompensationHandler(string elementId, string childNodeId) =>
+        new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, isForCompensation: true);
+
+    /// <summary>A transaction subprocess element (spec 125): a <c>subProcess</c> host marked <c>IsTransaction</c> that binds a nested transaction process.</summary>
+    public static BpmnElement TransactionSubProcess(string elementId, string childNodeId, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.SubProcess, childNodeId: childNodeId, defaultFlowId: defaultFlowId, isTransaction: true);
+
+    /// <summary>A cancel end event (spec 125); valid only inside a transaction, it cancels the transaction scope and completes it with the <c>Cancelled</c> outcome.</summary>
+    public static BpmnElement CancelEnd(string elementId = "cancel-end") =>
+        new(elementId, BpmnElementTypes.EndEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Cancel)]);
+
+    /// <summary>A cancel boundary event (spec 125) attached to a transaction host; dormant (no listener), it fires on the transaction's <c>Cancelled</c> outcome and routes its outbound flows.</summary>
+    public static BpmnElement CancelBoundary(string elementId, string attachedToRef) =>
+        new(elementId, BpmnElementTypes.BoundaryEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Cancel)], attachedToRef: attachedToRef);
+
+    /// <summary>A compensate intermediate throw event (spec 124); an optional <paramref name="activityRef"/> targets only that host's registrations.</summary>
+    public static BpmnElement CompensateThrow(string elementId, string? activityRef = null) =>
+        new(elementId, BpmnElementTypes.IntermediateThrowEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation, CompensationProperties(activityRef))]);
+
+    /// <summary>A compensate end event (spec 124); an optional <paramref name="activityRef"/> targets only that host's registrations.</summary>
+    public static BpmnElement CompensateEnd(string elementId, string? activityRef = null) =>
+        new(elementId, BpmnElementTypes.EndEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation, CompensationProperties(activityRef))]);
+
+    private static IReadOnlyDictionary<string, string>? CompensationProperties(string? activityRef) =>
+        string.IsNullOrWhiteSpace(activityRef)
+            ? null
+            : new Dictionary<string, string> { [BpmnEventDefinitionProperties.ActivityRef] = activityRef };
 
     public static BpmnSequenceFlow Flow(string flowId, string sourceRef, string targetRef, string? conditionOutcome = null, bool isDefault = false) =>
         new(flowId, sourceRef, targetRef, conditionOutcome: conditionOutcome, isDefault: isDefault);

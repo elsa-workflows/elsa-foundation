@@ -74,10 +74,28 @@ public sealed class ClrAssemblyScannerTests
             ("DELETE", "\"DELETE\""));
     }
 
+    [Fact]
+    public void CollectionTypedInputs_CarryElementAliasAndCollectionKind()
+    {
+        // Issue #924: a collection-typed input must report its element type alias plus collection kind so the
+        // authoring catalog can render a list editor instead of a scalar box. ExpectedStatusCodes (ICollection<int>)
+        // and SupportedMethods (ICollection<string>) both decompose to a List of their element alias.
+        using var httpFolder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+        var models = CreateScanner().Scan(httpFolder.Path);
+
+        var expectedStatusCodes = InputFor<SendHttpRequest>(models, nameof(SendHttpRequest.ExpectedStatusCodes));
+        Assert.Equal("Int32", expectedStatusCodes.Type.Alias);
+        Assert.Equal(CollectionKind.List, expectedStatusCodes.Type.CollectionKind);
+
+        var supportedMethods = InputFor<HttpEndpoint>(models, nameof(HttpEndpoint.SupportedMethods));
+        Assert.Equal("String", supportedMethods.Type.Alias);
+        Assert.Equal(CollectionKind.List, supportedMethods.Type.CollectionKind);
+    }
+
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
-        { typeof(TriggerFixtureActivity), "45A2C289FF070C8D4DFBB6D3384979D246479B44318D885844E00D24941F2E95" },
-        { typeof(HttpEndpoint), "9C7FF54497567D475F1C36089F883F2D5D861FD9FAB8C70D0B3A379CAF215386" }
+        { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
+        { typeof(HttpEndpoint), "E7E0CBCEC193A6377AD9102415555997268AC479B89FDDE58578244A5EBF7C88" }
     };
 
     [Theory]
@@ -198,6 +216,65 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(20, inputs[nameof(ComplexInputFixtureActivity.Payload)].Order);
         Assert.Null(inputs[nameof(ComplexInputFixtureActivity.Payload)].Category);
         Assert.Equal(30, inputs[nameof(ComplexInputFixtureActivity.Label)].Order);
+    }
+
+    [Fact]
+    public void InputDisplayName_IsHumanized_WhenNotExplicitlyAuthored()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(DisplayNameFixtureActivity).Assembly);
+
+        var input = InputFor<DisplayNameFixtureActivity>(
+            CreateScanner().Scan(folder.Path),
+            nameof(DisplayNameFixtureActivity.ExpectedStatusCodes));
+
+        Assert.Equal("Expected Status Codes", input.DisplayName);
+        Assert.Null(input.Description);
+    }
+
+    [Fact]
+    public void InputDisplayNameAndDescription_AreRespected_WhenAuthored()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(DisplayNameFixtureActivity).Assembly);
+
+        var input = InputFor<DisplayNameFixtureActivity>(
+            CreateScanner().Scan(folder.Path),
+            nameof(DisplayNameFixtureActivity.ContentType));
+
+        Assert.Equal("Custom Label", input.DisplayName);
+        Assert.Equal("A hand-authored description.", input.Description);
+    }
+
+    [Fact]
+    public void OutputDisplayName_IsHumanized_WhenNotExplicitlyAuthored()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(DisplayNameFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(DisplayNameFixtureActivity).FullName);
+        var output = model.Outputs.Single(o => o.Name == nameof(DisplayNameFixtureResult.ResponseStatusCode));
+
+        Assert.Equal("Response Status Code", output.DisplayName);
+    }
+
+    [Fact]
+    public void ActivityDisplayName_IsHumanizedTypeName()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(DisplayNameFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(DisplayNameFixtureActivity).FullName);
+
+        Assert.Equal("Display Name Fixture Activity", model.DisplayName);
+    }
+
+    [Fact]
+    public void Category_IsHumanized_FromAssemblySegment()
+    {
+        // The fixture assembly's last name segment ("ClrFixture") humanizes to "Clr Fixture", proving the
+        // category resolver spaces PascalCase segments instead of emitting the raw token.
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(DisplayNameFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(DisplayNameFixtureActivity).FullName);
+
+        Assert.Equal("Clr Fixture", model.Category);
     }
 
     [Fact]
@@ -525,7 +602,7 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
-    public void SendHttpRequest_OutcomeFacet_ContainsAllDeclaredOutcomes()
+    public void SendHttpRequest_OutcomeFacet_ContainsStaticOutcomesAndDynamicStatusCodeDescriptor()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
 
@@ -535,12 +612,17 @@ public sealed class ClrAssemblyScannerTests
             .Select(p => p.GetProperty("name").GetString())
             .ToHashSet(StringComparer.Ordinal);
 
+        // Static base ports (issue #926 replaced Matched/Unmatched with per-status dynamic outcomes).
         Assert.Contains("Done", portNames);
-        Assert.Contains("Matched", portNames);
-        Assert.Contains("Unmatched", portNames);
         Assert.Contains("Failed", portNames);
         Assert.Contains("Timeout", portNames);
-        Assert.Equal(5, portNames.Count);
+        Assert.Equal(3, portNames.Count);
+
+        // The dynamic-outcomes descriptor tells the designer to render one port per authored ExpectedStatusCodes item.
+        var dynamicOutcomes = facet.Payload.GetProperty("dynamicOutcomes");
+        Assert.Equal("valuePerItem", dynamicOutcomes.GetProperty("kind").GetString());
+        Assert.Equal(nameof(SendHttpRequest.ExpectedStatusCodes), dynamicOutcomes.GetProperty("source").GetString());
+        Assert.Equal("Unmatched status code", dynamicOutcomes.GetProperty("unmatched").GetString());
     }
 
     [Fact]
@@ -561,8 +643,9 @@ public sealed class ClrAssemblyScannerTests
 
         var models = CreateScanner().Scan(folder.Path);
 
-        // The fixture assembly is "Elsa.Activities.Design.Tests.ClrFixture" → category "ClrFixture".
-        Assert.All(models, m => Assert.Equal("ClrFixture", m.Category));
+        // The fixture assembly is "Elsa.Activities.Design.Tests.ClrFixture" → segment "ClrFixture",
+        // humanized to "Clr Fixture" for display (issue #928).
+        Assert.All(models, m => Assert.Equal("Clr Fixture", m.Category));
     }
 
     [Fact]

@@ -129,12 +129,12 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             schedulingProvenance: provenance);
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{startWorkItem.WorkItemId}:schedule:{rootActivityId}",
+            workItemId: RuntimeChainId.Derive(startWorkItem.WorkItemId, $"schedule:{rootActivityId}"),
             workflowExecutionId: startWorkItem.WorkflowExecutionId,
-            commandId: $"{startWorkItem.CommandId}:schedule:{rootActivityId}",
+            commandId: RuntimeChainId.Derive(startWorkItem.CommandId, $"schedule:{rootActivityId}"),
             commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
             envelopeId: startWorkItem.EnvelopeId,
-            idempotencyKey: $"{startWorkItem.IdempotencyKey}:schedule:{rootActivityId}",
+            idempotencyKey: RuntimeChainId.Derive(startWorkItem.IdempotencyKey, $"schedule:{rootActivityId}"),
             enqueuedAt: now,
             recordedAt: startWorkItem.RecordedAt,
             sequence: startWorkItem.Sequence is { } sequence ? sequence + 2 : null,
@@ -184,6 +184,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             seedInputs: startPayload.Inputs,
             seedStimulusInput: startPayload.StimulusInput,
             seedTriggerNodeId: startPayload.TriggerNodeId,
+            seedTriggerMetadata: startPayload.TriggerMetadata,
             runKind: startPayload.RunKind,
             pinnedSource: startPayload.PinnedSource,
             parentWorkflowExecutionId: startPayload.ParentWorkflowExecutionId,
@@ -195,12 +196,12 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             testScope: startPayload.TestScope);
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{startWorkItem.WorkItemId}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",
+            workItemId: RuntimeChainId.Derive(startWorkItem.WorkItemId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"),
             workflowExecutionId: startWorkItem.WorkflowExecutionId,
-            commandId: $"{startWorkItem.CommandId}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",
+            commandId: RuntimeChainId.Derive(startWorkItem.CommandId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"),
             commandKind: WorkflowExecutionCommandKind.Checkpoint,
             envelopeId: startWorkItem.EnvelopeId,
-            idempotencyKey: $"{startWorkItem.IdempotencyKey}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",
+            idempotencyKey: RuntimeChainId.Derive(startWorkItem.IdempotencyKey, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"),
             enqueuedAt: now,
             // The checkpoint is causally after the currently dispatched start item. A delayed outbox
             // redelivery may preserve an older semantic start time in `now`; using the source item's

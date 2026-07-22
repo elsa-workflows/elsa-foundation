@@ -101,3 +101,21 @@ public sealed class InclusiveGatewayBehavior : IBpmnElementBehavior
         return BpmnBehaviorDecision.Of(BpmnBehaviorCommand.EmitTokens(BpmnFlowSelector.FlowIds(flows)));
     }
 }
+
+/// <summary>
+/// Event-based gateway (spec 119). Split side only (it never joins): emit one token per outbound flow, exactly
+/// like a parallel split — each outbound targets an intermediate catch event that arms simultaneously. The
+/// first-catch-wins race (mark the winner, cancel every losing sibling token and its armed child subtree) is
+/// owned entirely by the engine; this behavior stays race-unaware. The gateway binds no child.
+/// </summary>
+public sealed class EventBasedGatewayBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.EventBasedGateway;
+    public string DisplayName => "Event-Based Gateway";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.EmitTokens(BpmnFlowSelector.FlowIds(context.OutboundFlows)));
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
+        throw new Exceptions.BpmnExecutionException($"BPMN event-based gateway '{context.Element.ElementId}' cannot own a child activity.");
+}

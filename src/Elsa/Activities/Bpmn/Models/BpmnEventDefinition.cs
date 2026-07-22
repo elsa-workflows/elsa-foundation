@@ -27,6 +27,30 @@ public sealed class BpmnEventDefinition
     public IReadOnlyDictionary<string, string> Properties { get; }
 }
 
+/// <summary>
+/// The <see cref="BpmnEventDefinition.Properties"/> keys this engine slice reads (spec 117). These establish the
+/// property-key convention an event-defined start element carries; a later interchange unit populates them from
+/// <c>messageRef</c>/<c>signalRef</c>/<c>timerEventDefinition</c>. No key existed before this slice.
+/// </summary>
+public static class BpmnEventDefinitionProperties
+{
+    /// <summary>The event name a message/signal start (or catch) resolves its stimulus from (drives <c>EventStimulus.Hash</c>).</summary>
+    public const string Name = "name";
+
+    /// <summary>An ISO-8601 duration for a timer start's recurring interval (mutually exclusive with <see cref="Cron"/>).</summary>
+    public const string Interval = "interval";
+
+    /// <summary>A cron expression for a timer start's recurring schedule (mutually exclusive with <see cref="Interval"/>).</summary>
+    public const string Cron = "cron";
+
+    /// <summary>
+    /// The element id a compensate throw/end event targets (spec 124): compensate only that element's
+    /// registrations. Absent → compensate everything registered in this process. Set on a
+    /// <see cref="BpmnEventDefinitionTypes.Compensation"/> definition of a throw/end event.
+    /// </summary>
+    public const string ActivityRef = "activityRef";
+}
+
 public static class BpmnEventDefinitionTypes
 {
     public const string Terminate = "terminate";
@@ -36,4 +60,11 @@ public static class BpmnEventDefinitionTypes
     public const string Error = "error";
     public const string Escalation = "escalation";
     public const string Compensation = "compensation";
+
+    /// <summary>
+    /// A cancel event definition (spec 125): on an end event inside a transaction it triggers the transaction
+    /// cancellation (compensate the scope's registered work, then complete with the <c>Cancelled</c> outcome);
+    /// on a boundary event attached to a transaction host it routes the cancellation path in the parent scope.
+    /// </summary>
+    public const string Cancel = "cancel";
 }

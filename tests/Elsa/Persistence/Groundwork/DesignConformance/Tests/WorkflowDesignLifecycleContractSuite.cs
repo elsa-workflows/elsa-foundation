@@ -122,6 +122,11 @@ public abstract class WorkflowDesignLifecycleContractSuite
         Assert.Equal(DesignPersistenceFixtureData.WorkflowDraftId, exception.DraftId);
         Assert.True(exception.ErrorCount > 0);
 
+        // Issue #927: the exception carries the full derived error list (not just the count) so the
+        // Promote endpoint can enrich the 409 ProblemDetails with the actual violations.
+        Assert.Equal(exception.ErrorCount, exception.Errors.Count);
+        Assert.Contains(exception.Errors, error => error.Type == "RootActivity/Missing");
+
         // The gate did not create a version.
         Assert.Empty(await services.GetRequiredService<IWorkflowDefinitionVersionStore>()
             .ListByDefinitionAsync(DesignPersistenceFixtureData.WorkflowDefinitionId));

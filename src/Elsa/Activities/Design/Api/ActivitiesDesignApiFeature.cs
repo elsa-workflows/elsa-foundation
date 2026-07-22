@@ -93,6 +93,7 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<ActivityVersionLifecycleService>();
         services.TryAddScoped<ActivityDefinitionRecommendationService>();
         services.TryAddSingleton<IActivityVersionSelectionPolicy, DefaultActivityVersionSelectionPolicy>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IBuiltInAuthoringDescriptorProvider, IntrinsicAuthoringDescriptorProvider>());
 
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);

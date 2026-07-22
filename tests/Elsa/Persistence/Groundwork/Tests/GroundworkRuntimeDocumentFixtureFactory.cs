@@ -710,6 +710,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private static RecurringTriggerSchedule Schedule() => new(
         ScheduleId: RecurringTriggerSchedule.BuildId("publication-1", "artifact-1", "node-1"),
         ArtifactId: "artifact-1",
+        ExecutableNodeId: "node-1",
         StimulusType: "Timer",
         StimulusHash: "schedule-hash-1",
         Kind: RecurringScheduleKind.Interval,

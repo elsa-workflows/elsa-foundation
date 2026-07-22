@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Constants;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using FluentValidation.Results;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Drafts;
@@ -27,7 +28,14 @@ internal sealed class Promote(ICommandSender commandSender, ILogger<Promote> log
         }
         catch (DraftHasValidationErrorsException exception)
         {
-            ThrowError(exception.Message, 409);
+            // Enrich the 409 with the full violation list so clients get the details inline. The
+            // summary message (and its embedded count) is preserved as a general error for
+            // backward compatibility; each violation is keyed by its R2 path with the R3 category
+            // as the error code.
+            AddError(exception.Message);
+            foreach (var error in exception.Errors)
+                AddError(new ValidationFailure(error.Path, error.Message) { ErrorCode = error.Type });
+            await Send.ErrorsAsync(409, cancellationToken);
         }
         catch (ArgumentException exception)
         {

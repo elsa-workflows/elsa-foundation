@@ -23,6 +23,7 @@
           "ActivitiesGraphDesign": {},
           "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
+          "ActivitiesBpmn": {},
           "ActivitiesControlFlow": {},
           "ActivitiesFlowchart": {},
           "ActivitiesHttp": {},

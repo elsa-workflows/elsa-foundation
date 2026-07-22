@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Primitives.Models;
@@ -72,6 +73,106 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Equal(new[] { "artifact-1", "artifact-2" }, all.Select(x => x.Identity.ArtifactId).OrderBy(x => x));
     }
 
+    // Regression for #920: an expression-bound input (RuntimeExpressionBinding) previously could not be
+    // deserialized because System.Text.Json requires the ctor parameter type to match the property type
+    // exactly, and the public ctor's 'JsonElement? options' did not match the 'JsonElement Options'
+    // property. Publishing such a workflow wrote a document the server could never read back, faulting every
+    // later publish/test-run. This proves the full persistence round-trip (serialize -> store -> deserialize)
+    // survives, including the LoadClosureAsync path that lists the whole store.
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ExpressionBoundInput_RoundTrips_Through_Persistence(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+
+        await store.SaveAsync(Executable("artifact-expr", childExpression: ExpressionBinding()));
+
+        var found = await store.FindAsync("artifact-expr");
+        Assert.NotNull(found);
+        var child = Assert.Single(Assert.Single(found!.RootActivity.ChildSlots).Activities);
+        var binding = child.InputBindings["text"];
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        var expression = binding.Expression!;
+        Assert.Equal("JavaScript", expression.Language);
+        Assert.Equal("return input.customerEmail;", expression.Expression);
+        Assert.Equal(JsonValueKind.Object, expression.Options.ValueKind);
+        Assert.True(expression.Options.GetProperty("strict").GetBoolean());
+        Assert.Equal(
+            "customerEmail",
+            Assert.IsType<WorkflowRequestExpressionParameterBinding>(expression.Parameters["customerEmail"]).MemberKey);
+
+        // The whole-store listing (LoadClosureAsync in the repro) must not fault on the expression document.
+        var all = await store.ListAllAsync();
+        Assert.Equal("artifact-expr", Assert.Single(all).Identity.ArtifactId);
+    }
+
+    [Fact]
+    public void RuntimeExpressionBinding_RoundTrips_Through_BridgeSerializer()
+    {
+        var serializer = GroundworkTestSerialization.Serializer;
+        var element = JsonDocument.Parse(serializer.SerializeForComparison(ExpressionBinding())).RootElement;
+
+        var roundTripped = serializer.DeserializeElement<RuntimeExpressionBinding>(element);
+
+        Assert.Equal("JavaScript", roundTripped.Language);
+        Assert.Equal("return input.customerEmail;", roundTripped.Expression);
+        Assert.Equal(JsonValueKind.Object, roundTripped.Options.ValueKind);
+        Assert.True(roundTripped.Options.GetProperty("strict").GetBoolean());
+        Assert.Equal("String", roundTripped.ResultType!.Kind);
+        Assert.Equal(
+            "customerEmail",
+            Assert.IsType<WorkflowRequestExpressionParameterBinding>(roundTripped.Parameters["customerEmail"]).MemberKey);
+    }
+
+    [Fact]
+    public void RuntimeInputBinding_WithExpression_RoundTrips_Through_BridgeSerializer()
+    {
+        var serializer = GroundworkTestSerialization.Serializer;
+        var original = new RuntimeInputBinding(
+            inputKey: "text",
+            targetType: new ValueTypeDescriptor("String"),
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
+            source: RuntimeInputBindingSource.Expression,
+            expression: ExpressionBinding());
+        var element = JsonDocument.Parse(serializer.SerializeForComparison(original)).RootElement;
+
+        var roundTripped = serializer.DeserializeElement<RuntimeInputBinding>(element);
+
+        Assert.Equal(RuntimeInputBindingSource.Expression, roundTripped.Source);
+        Assert.NotNull(roundTripped.Expression);
+        Assert.Equal("return input.customerEmail;", roundTripped.Expression!.Expression);
+        Assert.Equal(JsonValueKind.Object, roundTripped.Expression.Options.ValueKind);
+    }
+
+    // A single undeserializable ("poisoned") document must not take down the whole listing — otherwise one bad
+    // row breaks every later publish/test-run, per #920's blast radius. Reuse a healthy document's schema-version
+    // stamp so the failure is content-shaped like the real poison, then persist an executable whose payload
+    // cannot be deserialized and assert the healthy artifacts still list.
+    [Fact]
+    public async Task ListPage_Skips_Undeserializable_Documents()
+    {
+        await using var fixture = CreateStore("memory");
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+
+        await store.SaveAsync(Executable("artifact-1"));
+        await store.SaveAsync(Executable("artifact-2"));
+
+        var healthy = await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, "artifact-1");
+        var poison = await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+            "artifact-poison",
+            healthy!.SchemaVersion,
+            $$"""{ "collection": "{{ElsaRuntimeStorageManifest.WorkflowExecutableCollection}}", "executable": "not-an-object" }""",
+            ExpectedVersion: 0));
+        Assert.Equal(DocumentStoreWriteStatus.Saved, poison.Status);
+
+        var all = await store.ListAllAsync();
+        Assert.Equal(new[] { "artifact-1", "artifact-2" }, all.Select(x => x.Identity.ArtifactId).OrderBy(x => x));
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
@@ -88,6 +189,59 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         var found = await store.FindAsync("artifact-1");
         Assert.Equal("1", found!.Identity.ArtifactVersion);
         Assert.Single(await store.ListAllAsync());
+    }
+
+    // Regression for the N=128 EngineConcurrencyBenchmarks failure: the test bounded stores paged with an
+    // offset continuation, so artifacts inserted between pages (sorting before the boundary) shifted
+    // already-returned rows past the offset and the next page re-served them. The dependency-graph loader
+    // then correctly failed closed on the duplicate artifact id. Cursor pages must resume strictly after
+    // the last returned row (keyset), like the real providers, so concurrent inserts can never duplicate.
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ListPage_Continuation_DoesNotDuplicate_WhenInsertsLandBetweenPages(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        await AssertContinuationSurvivesConcurrentInsertsAsync(
+            new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer));
+    }
+
+    [Fact]
+    public async Task ListPage_Continuation_DoesNotDuplicate_OnInMemoryBoundedStore()
+    {
+        // The in-memory document store is its own bounded-query runtime (the fixture providers route
+        // ordered pages through RuntimeTestBoundedDocumentStore instead), so it needs its own coverage.
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        await AssertContinuationSurvivesConcurrentInsertsAsync(
+            new GroundworkWorkflowExecutableStore(documentStore, GroundworkTestSerialization.Serializer));
+    }
+
+    private static async Task AssertContinuationSurvivesConcurrentInsertsAsync(IWorkflowExecutableStore store)
+    {
+        foreach (var artifactId in new[] { "artifact-1", "artifact-3", "artifact-5", "artifact-7" })
+            await store.SaveAsync(Executable(artifactId));
+
+        var firstPage = await store.ListPageAsync(new RuntimeStorePageRequest(limit: 2));
+        Assert.Equal(new[] { "artifact-1", "artifact-3" }, firstPage.Items.Select(x => x.Identity.ArtifactId));
+        Assert.NotNull(firstPage.NextContinuationToken);
+
+        // A concurrent writer lands artifacts that sort before the page boundary.
+        await store.SaveAsync(Executable("artifact-0"));
+        await store.SaveAsync(Executable("artifact-2"));
+
+        var seen = firstPage.Items.Select(x => x.Identity.ArtifactId).ToList();
+        var continuationToken = firstPage.NextContinuationToken;
+        while (continuationToken is not null)
+        {
+            var page = await store.ListPageAsync(new RuntimeStorePageRequest(limit: 2, continuationToken: continuationToken));
+            seen.AddRange(page.Items.Select(x => x.Identity.ArtifactId));
+            continuationToken = page.NextContinuationToken;
+        }
+
+        // Rows already returned before the inserts must never be re-served; the traversal resumes
+        // strictly after the boundary and finishes with the untouched tail.
+        Assert.Equal(seen, seen.Distinct(StringComparer.Ordinal));
+        Assert.Equal(new[] { "artifact-1", "artifact-3", "artifact-5", "artifact-7" }, seen);
     }
 
     [Fact]
@@ -570,23 +724,33 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     private static WorkflowExecutable Executable(
         string artifactId,
         string artifactVersion = "1",
-        IReadOnlyCollection<WorkflowExecutable>? dependencies = null)
+        IReadOnlyCollection<WorkflowExecutable>? dependencies = null,
+        RuntimeExpressionBinding? childExpression = null)
     {
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            ["to"] = new(
+                inputKey: "to",
+                targetType: new ValueTypeDescriptor("String"),
+                effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                source: RuntimeInputBindingSource.WorkflowRequest,
+                workflowRequest: new RuntimeWorkflowRequestReference("customerEmail"))
+        };
+        if (childExpression is not null)
+            inputBindings["text"] = new(
+                inputKey: "text",
+                targetType: new ValueTypeDescriptor("String"),
+                effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                source: RuntimeInputBindingSource.Expression,
+                expression: childExpression);
+
         var child = new ExecutableNode(
             executableNodeId: "child",
             authoredActivityId: "authored-child",
             activityType: "Elsa.SendEmail",
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SendEmailDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("""{ "kind": "Send" }""")),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>
-            {
-                ["to"] = new(
-                    inputKey: "to",
-                    targetType: new ValueTypeDescriptor("String"),
-                    effectivePolicy: ValueProtectionPolicy.InstanceInline,
-                    source: RuntimeInputBindingSource.WorkflowRequest,
-                    workflowRequest: new RuntimeWorkflowRequestReference("customerEmail"))
-            },
+            inputBindings: inputBindings,
             metadata: new Dictionary<string, string> { ["role"] = "leaf" });
 
         var root = new ExecutableNode(
@@ -648,6 +812,18 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             query.Order,
             expiresAt => Assert.Equal(ElsaRuntimeStorageManifest.ExpiresAtField, expiresAt.Path),
             id => Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField, id.Path));
+
+    private static RuntimeExpressionBinding ExpressionBinding() =>
+        new(
+            language: "JavaScript",
+            expression: "return input.customerEmail;",
+            resultType: new RuntimeValueTypeDescriptor("String", null, null),
+            metadata: new Dictionary<string, string> { ["author"] = "qa" },
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["customerEmail"] = new WorkflowRequestExpressionParameterBinding("customerEmail")
+            },
+            options: Json("""{ "strict": true }"""));
 
     private static JsonElement Json(string json)
     {

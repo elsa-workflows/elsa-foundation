@@ -50,22 +50,29 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
                 return ValueTask.FromResult(
                     new RuntimeStorePage<RuntimeSchedulerWorkItem>(query, []));
 
-            var ordered = queue
-                .OrderBy(item => item.RecordedAt)
-                .ThenBy(item => item.Sequence ?? long.MaxValue)
-                .ThenBy(item => StableHash(item.WorkItemId), StringComparer.Ordinal)
+            var queryBinding = $"scheduler-work:workflow:{query.WorkflowExecutionId}";
+            var lastOrderKey = InMemoryRuntimeStoreContinuation.Decode(
+                query.ContinuationToken,
+                queryBinding,
+                nameof(query));
+            var remaining = queue
+                .Select(item => (Item: item, OrderKey: OrderKey(item)))
+                .Where(entry =>
+                    lastOrderKey is null ||
+                    StringComparer.Ordinal.Compare(entry.OrderKey, lastOrderKey) > 0)
+                .OrderBy(entry => entry.OrderKey, StringComparer.Ordinal)
+                .Take(query.Limit + 1)
                 .ToArray();
-            var offset = DecodeContinuation(query, ordered.Length);
-            var items = ordered
-                .Skip(offset)
-                .Take(query.Limit)
-                .ToArray();
-            var nextContinuation = offset + items.Length < ordered.Length
-                ? EncodeContinuation(query.WorkflowExecutionId, offset + items.Length)
+            var page = remaining.Take(query.Limit).ToArray();
+            var nextContinuation = remaining.Length > page.Length
+                ? InMemoryRuntimeStoreContinuation.Encode(queryBinding, page[^1].OrderKey)
                 : null;
 
             return ValueTask.FromResult(
-                new RuntimeStorePage<RuntimeSchedulerWorkItem>(query, items, nextContinuation));
+                new RuntimeStorePage<RuntimeSchedulerWorkItem>(
+                    query,
+                    page.Select(entry => entry.Item).ToArray(),
+                    nextContinuation));
         }
     }
 
@@ -131,37 +138,46 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         }
     }
 
-    private static int DecodeContinuation(RuntimeSchedulerWorkQuery query, int itemCount)
-    {
-        if (query.ContinuationToken is null)
-            return 0;
-
-        try
-        {
-            var value = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(query.ContinuationToken));
-            var parts = value.Split('\n');
-            if (parts.Length != 2 ||
-                !StringComparer.Ordinal.Equals(parts[0], query.WorkflowExecutionId) ||
-                !int.TryParse(parts[1], out var offset) ||
-                offset < 0 ||
-                offset > itemCount)
-            {
-                throw new ArgumentException("The scheduler work continuation token does not belong to this query.", nameof(query));
-            }
-
-            return offset;
-        }
-        catch (FormatException exception)
-        {
-            throw new ArgumentException("The scheduler work continuation token is invalid.", nameof(query), exception);
-        }
-    }
-
-    private static string EncodeContinuation(string workflowExecutionId, int offset) =>
-        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{workflowExecutionId}\n{offset}"));
+    // Keyset continuation order key: mirrors the queue ordering (RecordedAt, Sequence, hashed WorkItemId)
+    // as one ordinal-sortable string, so a continuation resumes strictly after the last returned row even
+    // when the queue mutates between pages; the hashed-id segment makes the key unique per item, so no
+    // separate tie-break is needed.
+    private static string OrderKey(RuntimeSchedulerWorkItem item) =>
+        $"{item.RecordedAt.UtcTicks:D19}.{item.Sequence ?? long.MaxValue:D20}.{StableHash(item.WorkItemId)}";
 
     private static string StableHash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    /// <summary>
+    /// Returns the FIFO-earliest queued item whose id is not in <paramref name="skipWorkItemIds"/>, without claiming
+    /// it — true insertion order, the same order <see cref="ClaimAsync"/> serves the head. Not part of
+    /// <see cref="IWorkflowSchedulerWorkQueue"/>: it exists for the coalescing session's single-writer inline fused
+    /// pump (spec 123 D2), which reads past the drain loop's live head claim and removes dispatched items with
+    /// <see cref="DeleteAsync"/>. The strict-FIFO claim contract for concurrent drainers is unaffected.
+    /// </summary>
+    public ValueTask<RuntimeSchedulerWorkItem?> PeekFirstAvailableAsync(
+        string workflowExecutionId,
+        IReadOnlySet<string> skipWorkItemIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(skipWorkItemIds);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            if (!_queuesByWorkflowExecutionId.TryGetValue(workflowExecutionId, out var queue))
+                return new ValueTask<RuntimeSchedulerWorkItem?>((RuntimeSchedulerWorkItem?)null);
+
+            foreach (var item in queue)
+            {
+                if (!skipWorkItemIds.Contains(item.WorkItemId))
+                    return new ValueTask<RuntimeSchedulerWorkItem?>(item);
+            }
+
+            return new ValueTask<RuntimeSchedulerWorkItem?>((RuntimeSchedulerWorkItem?)null);
+        }
+    }
 
     public ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(
         RuntimeSchedulerWorkClaimRequest request,

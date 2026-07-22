@@ -169,6 +169,47 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             $"Expected cache-on reads ({TypicalReads(twoNodeOn)}) < cache-off ({TypicalReads(twoNodeOff)}) for 2-node.");
     }
 
+    // ---- Routing-structure materialization collapse (ADR 0047 D3) ------------------------------------------
+
+    /// <summary>
+    /// ADR 0047 D3 evidence: counts how many times the Flowchart routing structure is actually materialized
+    /// (deserialized + re-indexed from the pinned executable) per run, via
+    /// <see cref="RoutingStructureMaterializationDiagnostics"/>. Before D3 the composite engine rebuilt the graph on
+    /// every completion hop; with the D3 memo riding on the spec-111 burst-cached executable instance, the structure
+    /// builds once per composite per burst. Reports the collapse for the hot-loop and 2-node shapes with the burst
+    /// cache ON vs OFF (OFF ⇒ a fresh executable instance per hop ⇒ the memo cannot span hops, matching pre-D3), and
+    /// soft-asserts ON &lt; OFF. This is the routing analog of the commits/run and executable-reads/run counters —
+    /// deterministic, not timing-based.
+    /// </summary>
+    [Fact]
+    public async Task RoutingStructureMaterializations_CollapseWithBurstCache()
+    {
+        var hotOn = await CountRoutingMaterializationsAsync(burstCache: true, () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        var hotOff = await CountRoutingMaterializationsAsync(burstCache: false, () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        var twoOn = await CountRoutingMaterializationsAsync(burstCache: true, BuildFlowchartWithWriteLine, AssertTwoNodeCompleted);
+        var twoOff = await CountRoutingMaterializationsAsync(burstCache: false, BuildFlowchartWithWriteLine, AssertTwoNodeCompleted);
+
+        output.WriteLine("=== ADR 0047 D3 routing-structure materializations/run ===");
+        output.WriteLine($"hot-loop×{HotLoopLength}: burst-cache ON={hotOn}  OFF={hotOff}");
+        output.WriteLine($"2-node:            burst-cache ON={twoOn}  OFF={twoOff}");
+        output.WriteLine("(ON = one materialization per composite per burst; OFF = one per completion hop, the pre-D3 cost.)");
+
+        Assert.True(hotOn < hotOff, $"Expected hot-loop materializations cache-ON ({hotOn}) < cache-OFF ({hotOff}).");
+        Assert.True(twoOn <= twoOff, $"Expected 2-node materializations cache-ON ({twoOn}) <= cache-OFF ({twoOff}).");
+    }
+
+    private static async Task<long> CountRoutingMaterializationsAsync(
+        bool burstCache,
+        Func<WorkflowExecutable> executableFactory,
+        Action<WorkflowExecutionRun> assert)
+    {
+        await using var lease = await NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap, burstCache: burstCache);
+        RoutingStructureMaterializationDiagnostics.Reset();
+        var run = await lease.Harness.RunAsync(executableFactory());
+        assert(run);
+        return RoutingStructureMaterializationDiagnostics.Count;
+    }
+
     // ---- Hot-loop A/B: Immediate vs Coalesced (durable), plus the External-leaf reference -------------------
 
     [Fact]

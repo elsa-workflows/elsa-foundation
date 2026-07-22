@@ -31,5 +31,6 @@ public enum WorkflowExecutionCommandKind
     InvokeActivity = 13,
     GeneratedEvent = 14,
     CancelActivityScope = 15,
-    RetryActivityBoundary = 16
+    RetryActivityBoundary = 16,
+    NotifyParentActivity = 17
 }

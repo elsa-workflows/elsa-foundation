@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Interchange.Services;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Xunit;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
@@ -64,6 +65,38 @@ public sealed class BpmnRoundTripTests
         // The elsa:conditionOutcome attribute round-trips cleanly — the paired human-readable
         // conditionExpression must not double-report as a degraded import.
         Assert.DoesNotContain(result.Analysis.Issues, issue => issue.ElementId == "flow-yes");
+    }
+
+    [Fact]
+    public void CyclicProcess_ImportsClean_AndRoundTrips()
+    {
+        // spec 122: a loop-back sequence flow (gw --again--> body) is executable, so a cyclic document
+        // imports with NO cycle degradation finding and round-trips through export → import unchanged.
+        var authored = new BpmnAuthoredStructure(
+            elements:
+            [
+                new BpmnElement("start", BpmnElementTypes.StartEvent),
+                new BpmnElement("body", BpmnElementTypes.Task),
+                new BpmnElement("gw", BpmnElementTypes.ExclusiveGateway, defaultFlowId: "exit"),
+                new BpmnElement("end", BpmnElementTypes.EndEvent)
+            ],
+            sequenceFlows:
+            [
+                new BpmnSequenceFlow("flow-1", "start", "body"),
+                new BpmnSequenceFlow("flow-2", "body", "gw"),
+                new BpmnSequenceFlow("again", "gw", "body", conditionOutcome: "Retry"),
+                new BpmnSequenceFlow("exit", "gw", "end")
+            ]);
+
+        var xml = _exporter.Export(ProcessNode(authored));
+        var result = _importer.Import(xml);
+        var reimported = result.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+
+        Assert.DoesNotContain(result.Analysis.Issues, issue =>
+            issue.Message.Contains("cycle", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(
+            authored.SequenceFlows.Select(flow => (flow.FlowId, flow.SourceRef, flow.TargetRef)),
+            reimported.SequenceFlows.Select(flow => (flow.FlowId, flow.SourceRef, flow.TargetRef)));
     }
 
     [Fact]
@@ -132,5 +165,97 @@ public sealed class BpmnRoundTripTests
         var child = Assert.Single(reimported.Activities);
         var childStructure = child.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
         Assert.Equal(["inner-start", "inner-end"], childStructure.Elements.Select(element => element.ElementId));
+    }
+
+    [Theory]
+    [InlineData(BpmnEventDefinitionTypes.Timer, BpmnEventDefinitionProperties.Cron, "0 * * * *")]
+    [InlineData(BpmnEventDefinitionTypes.Timer, BpmnEventDefinitionProperties.Interval, "PT5M")]
+    [InlineData(BpmnEventDefinitionTypes.Message, BpmnEventDefinitionProperties.Name, "order-placed")]
+    [InlineData(BpmnEventDefinitionTypes.Signal, BpmnEventDefinitionProperties.Name, "cancel-requested")]
+    public void EventDefinedStart_RoundTripsDefinitionAndProperties(string type, string propertyKey, string propertyValue)
+    {
+        var authored = new BpmnAuthoredStructure(
+            elements:
+            [
+                new BpmnElement("start-evt", BpmnElementTypes.StartEvent, eventDefinitions:
+                    [new BpmnEventDefinition(type, new Dictionary<string, string> { [propertyKey] = propertyValue })]),
+                new BpmnElement("end", BpmnElementTypes.EndEvent)
+            ],
+            sequenceFlows: [new BpmnSequenceFlow("flow-1", "start-evt", "end")]);
+
+        var reimported = ExportImport(authored);
+
+        var start = reimported.Elements.Single(element => element.ElementId == "start-evt");
+        Assert.Null(start.ChildNodeId); // pure element (spec 117)
+        var definition = Assert.Single(start.EventDefinitions);
+        Assert.Equal(type, definition.Type);
+        Assert.Equal(propertyValue, definition.Properties[propertyKey]);
+    }
+
+    [Fact]
+    public void TimerCatchEvent_RoundTripsDurationAndRegeneratesDelayChild()
+    {
+        var authored = CatchStructure(
+            new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = "PT5M" }),
+            new ActivityNode("node-catch", "Elsa.Delay",
+                [new ArgumentState("Duration", new ArgumentValue("PT5M", "Literal"), null, null, null, null)], []));
+
+        var reimported = ExportImport(authored);
+
+        var catchEvent = reimported.Elements.Single(element => element.ElementId == "catch");
+        Assert.Equal(BpmnElementTypes.IntermediateCatchEvent, catchEvent.ElementType);
+        Assert.Equal("node-catch", catchEvent.ChildNodeId);
+        Assert.Equal("PT5M", Assert.Single(catchEvent.EventDefinitions).Properties[BpmnEventDefinitionProperties.Interval]);
+        var child = Assert.Single(reimported.Activities);
+        Assert.Equal("Elsa.Delay", child.ActivityVersionId);
+        Assert.Equal("PT5M", LiteralString(child, "Duration"));
+    }
+
+    [Theory]
+    [InlineData(BpmnEventDefinitionTypes.Message)]
+    [InlineData(BpmnEventDefinitionTypes.Signal)]
+    public void MessageOrSignalCatchEvent_RoundTripsNameAndRegeneratesEventChild(string type)
+    {
+        var authored = CatchStructure(
+            new BpmnEventDefinition(type, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = "order-shipped" }),
+            new ActivityNode("node-catch", "Elsa.Event",
+                [new ArgumentState("EventName", new ArgumentValue("order-shipped", "Literal"), null, null, null, null)], []));
+
+        var reimported = ExportImport(authored);
+
+        var catchEvent = reimported.Elements.Single(element => element.ElementId == "catch");
+        Assert.Equal(type, Assert.Single(catchEvent.EventDefinitions).Type);
+        Assert.Equal("order-shipped", Assert.Single(catchEvent.EventDefinitions).Properties[BpmnEventDefinitionProperties.Name]);
+        var child = Assert.Single(reimported.Activities);
+        Assert.Equal("Elsa.Event", child.ActivityVersionId);
+        Assert.Equal("order-shipped", LiteralString(child, "EventName"));
+    }
+
+    // The structure payload is JSON, so a deserialized literal surfaces as a JsonElement string.
+    private static string? LiteralString(ActivityNode node, string key)
+    {
+        var value = Assert.Single(node.Inputs, argument => argument.ReferenceKey == key).Value.Value;
+        return value is JsonElement element ? element.GetString() : value?.ToString();
+    }
+
+    private static BpmnAuthoredStructure CatchStructure(BpmnEventDefinition definition, ActivityNode child) =>
+        new(
+            activities: [child],
+            elements:
+            [
+                new BpmnElement("start", BpmnElementTypes.StartEvent),
+                new BpmnElement("catch", BpmnElementTypes.IntermediateCatchEvent, childNodeId: child.NodeId, eventDefinitions: [definition]),
+                new BpmnElement("end", BpmnElementTypes.EndEvent)
+            ],
+            sequenceFlows:
+            [
+                new BpmnSequenceFlow("flow-1", "start", "catch"),
+                new BpmnSequenceFlow("flow-2", "catch", "end")
+            ]);
+
+    private BpmnAuthoredStructure ExportImport(BpmnAuthoredStructure authored)
+    {
+        var xml = _exporter.Export(ProcessNode(authored));
+        return _importer.Import(xml).ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
     }
 }

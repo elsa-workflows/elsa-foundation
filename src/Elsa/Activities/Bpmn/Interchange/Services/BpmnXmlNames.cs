@@ -31,6 +31,7 @@ internal static class BpmnXmlNames
     {
         ["exclusiveGateway"] = "exclusiveGateway",
         ["parallelGateway"] = "parallelGateway",
-        ["inclusiveGateway"] = "inclusiveGateway"
+        ["inclusiveGateway"] = "inclusiveGateway",
+        ["eventBasedGateway"] = "eventBasedGateway"
     };
 }

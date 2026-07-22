@@ -11,14 +11,30 @@ namespace Elsa.Activities.Bpmn.Internal;
 public static class BpmnElementFamilies
 {
     public const string StartEventNone = "startEvent.none";
+    public const string StartEventTimer = "startEvent.timer";
+    public const string StartEventMessage = "startEvent.message";
+    public const string StartEventSignal = "startEvent.signal";
     public const string EndEventNone = "endEvent.none";
     public const string EndEventTerminate = "endEvent.terminate";
+
+    /// <summary>The compensate end event family (spec 124): triggers a compensation replay, then consumes its token (none-end semantics).</summary>
+    public const string EndEventCompensation = "endEvent.compensation";
+
+    /// <summary>The cancel end event family (spec 125): cancels the enclosing transaction — stop other live work, replay the scope's compensables, then complete with the <c>Cancelled</c> outcome.</summary>
+    public const string EndEventCancel = "endEvent.cancel";
     public const string IntermediateCatchEvent = "intermediateCatchEvent.catch";
+
+    /// <summary>The compensate intermediate throw event family (spec 124): triggers a compensation replay, then routes its outbound flows.</summary>
+    public const string IntermediateThrowEventCompensation = "intermediateThrowEvent.compensation";
     public const string Task = "task";
     public const string SubProcess = "subProcess";
     public const string ExclusiveGateway = "exclusiveGateway";
     public const string ParallelGateway = "parallelGateway";
     public const string InclusiveGateway = "inclusiveGateway";
+    public const string EventBasedGateway = "eventBasedGateway";
+
+    /// <summary>The single behavior family for every boundary event (spec 120); catch vs error is a per-element definition detail, not a separate behavior.</summary>
+    public const string BoundaryEvent = "boundaryEvent";
 
     private static readonly HashSet<string> TaskElementTypes = new(StringComparer.Ordinal)
     {
@@ -44,10 +60,13 @@ public static class BpmnElementFamilies
             BpmnElementTypes.StartEvent => ResolveStartEvent(element),
             BpmnElementTypes.EndEvent => ResolveEndEvent(element),
             BpmnElementTypes.IntermediateCatchEvent => ResolveIntermediateCatchEvent(element),
+            BpmnElementTypes.IntermediateThrowEvent => ResolveIntermediateThrowEvent(element),
             BpmnElementTypes.SubProcess => SubProcess,
             BpmnElementTypes.ExclusiveGateway => ExclusiveGateway,
             BpmnElementTypes.ParallelGateway => ParallelGateway,
             BpmnElementTypes.InclusiveGateway => InclusiveGateway,
+            BpmnElementTypes.EventBasedGateway => EventBasedGateway,
+            BpmnElementTypes.BoundaryEvent => ResolveBoundaryEvent(element),
             _ => throw new BpmnExecutionException(
                 $"BPMN element '{element.ElementId}' has element type '{element.ElementType}', which this engine slice does not support.")
         };
@@ -65,6 +84,69 @@ public static class BpmnElementFamilies
         BpmnEventDefinitionTypes.Signal
     };
 
+    /// <summary>
+    /// The event-definition types a boundary event may declare (spec 120): the three listener kinds
+    /// (timer/message/signal, which arm a suspending child) plus error (which absorbs the host's child
+    /// fault). Escalation/compensation boundaries are a later unit.
+    /// </summary>
+    private static readonly HashSet<string> SupportedBoundaryDefinitionTypes = new(StringComparer.Ordinal)
+    {
+        BpmnEventDefinitionTypes.Timer,
+        BpmnEventDefinitionTypes.Message,
+        BpmnEventDefinitionTypes.Signal,
+        BpmnEventDefinitionTypes.Error,
+        BpmnEventDefinitionTypes.Compensation,
+        BpmnEventDefinitionTypes.Cancel
+    };
+
+    private static string ResolveBoundaryEvent(BpmnElement element)
+    {
+        if (element.EventDefinitions.Count != 1)
+            throw new BpmnExecutionException(
+                $"BPMN boundary event '{element.ElementId}' must declare exactly one event definition; it declares {element.EventDefinitions.Count}.");
+
+        var definitionType = element.EventDefinitions.Single().Type;
+        if (!SupportedBoundaryDefinitionTypes.Contains(definitionType))
+            throw new BpmnExecutionException(
+                $"BPMN boundary event '{element.ElementId}' declares event definition type '{definitionType}'; only timer, message, signal, error, compensation, and cancel boundary events are supported by this engine slice.");
+
+        return BoundaryEvent;
+    }
+
+    /// <summary>True when a <c>boundaryEvent</c> is an error boundary (absorbs the host's child fault, no listener child); false when it is a timer/message/signal catch boundary.</summary>
+    public static bool IsErrorBoundary(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Error);
+
+    /// <summary>True when a <c>boundaryEvent</c> is a compensation boundary (spec 124): it is dormant (no listener, no outbound flows) and its handler is reached by association, not by token flow.</summary>
+    public static bool IsCompensationBoundary(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Compensation);
+
+    /// <summary>True when an element carries a compensate event definition (spec 124): a compensate throw or a compensate end event.</summary>
+    public static bool HasCompensateDefinition(BpmnElement element) =>
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Compensation);
+
+    /// <summary>True when an element is a cancel end event (spec 125): an <c>endEvent</c> whose single event definition is <see cref="BpmnEventDefinitionTypes.Cancel"/>.</summary>
+    public static bool IsCancelEndEvent(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Cancel);
+
+    /// <summary>True when a <c>boundaryEvent</c> is a cancel boundary (spec 125): dormant (no listener), fires on the transaction's <c>Cancelled</c> outcome and routes its outbound flows.</summary>
+    public static bool IsCancelBoundary(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Cancel);
+
+    /// <summary>The host families a boundary event may attach to (spec 120 D2): the task family and embedded subprocesses.</summary>
+    public static bool IsBoundaryHostFamily(BpmnElement element) =>
+        TaskElementTypes.Contains(element.ElementType) ||
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.SubProcess);
+
     private static string ResolveIntermediateCatchEvent(BpmnElement element)
     {
         if (element.EventDefinitions.Count != 1)
@@ -79,13 +161,35 @@ public static class BpmnElementFamilies
         return IntermediateCatchEvent;
     }
 
+    /// <summary>
+    /// The event-defined start families (spec 117), keyed by event-definition type. A start event declaring
+    /// exactly one timer/message/signal definition registers a durable start trigger at publish time and seeds a
+    /// single token at runtime — the trigger machinery is entirely publish/dispatch-time; the runtime token
+    /// behavior equals a none start.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> EventStartFamiliesByDefinitionType =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [BpmnEventDefinitionTypes.Timer] = StartEventTimer,
+            [BpmnEventDefinitionTypes.Message] = StartEventMessage,
+            [BpmnEventDefinitionTypes.Signal] = StartEventSignal
+        };
+
+    /// <summary>The event-start families that seed at publish/dispatch time (all four route outbound like a none start).</summary>
+    public static readonly IReadOnlySet<string> StartEventFamilies =
+        new HashSet<string>(StringComparer.Ordinal) { StartEventNone, StartEventTimer, StartEventMessage, StartEventSignal };
+
     private static string ResolveStartEvent(BpmnElement element)
     {
-        if (element.EventDefinitions.Count > 0)
-            throw new BpmnExecutionException(
-                $"BPMN start event '{element.ElementId}' declares event definitions; only none start events are supported by this engine slice.");
+        if (element.EventDefinitions.Count == 0)
+            return StartEventNone;
 
-        return StartEventNone;
+        if (element.EventDefinitions.Count == 1 &&
+            EventStartFamiliesByDefinitionType.TryGetValue(element.EventDefinitions.Single().Type, out var family))
+            return family;
+
+        throw new BpmnExecutionException(
+            $"BPMN start event '{element.ElementId}' declares unsupported event definitions; only none, timer, message, and signal start events are supported by this engine slice (exactly one timer/message/signal definition).");
     }
 
     private static string ResolveEndEvent(BpmnElement element)
@@ -93,11 +197,37 @@ public static class BpmnElementFamilies
         if (element.EventDefinitions.Count == 0)
             return EndEventNone;
 
-        if (element.EventDefinitions.Count == 1 &&
-            StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Terminate))
-            return EndEventTerminate;
+        if (element.EventDefinitions.Count == 1)
+        {
+            var type = element.EventDefinitions.Single().Type;
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Terminate))
+                return EndEventTerminate;
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Compensation))
+                return EndEventCompensation;
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Cancel))
+                return EndEventCancel;
+        }
 
         throw new BpmnExecutionException(
-            $"BPMN end event '{element.ElementId}' declares unsupported event definitions; only none and terminate end events are supported by this engine slice.");
+            $"BPMN end event '{element.ElementId}' declares unsupported event definitions; only none, terminate, compensate, and cancel end events are supported by this engine slice.");
+    }
+
+    /// <summary>
+    /// Resolves an intermediate throw event (spec 124). This slice wires it for the compensation definition only:
+    /// exactly one <see cref="BpmnEventDefinitionTypes.Compensation"/> definition → the compensate throw family;
+    /// any other (or no) definition is rejected.
+    /// </summary>
+    private static string ResolveIntermediateThrowEvent(BpmnElement element)
+    {
+        if (element.EventDefinitions.Count != 1)
+            throw new BpmnExecutionException(
+                $"BPMN intermediate throw event '{element.ElementId}' must declare exactly one event definition; it declares {element.EventDefinitions.Count}.");
+
+        var definitionType = element.EventDefinitions.Single().Type;
+        if (!StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Compensation))
+            throw new BpmnExecutionException(
+                $"BPMN intermediate throw event '{element.ElementId}' declares event definition type '{definitionType}'; only compensate throw events are supported by this engine slice.");
+
+        return IntermediateThrowEventCompensation;
     }
 }

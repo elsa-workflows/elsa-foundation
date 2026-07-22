@@ -28,7 +28,7 @@ Per framework §2.22 — this README documents what the feature registers.
 
 ## Contributor interfaces registered
 
-All five implement `IDraftValidator` and are registered via DI
+All of the following implement `IDraftValidator` and are registered via DI
 (`services.AddScoped<IDraftValidator, X>()`). Each **returns** its `ValidationError` set from
 `Validate(...)`; the single `ExecuteValidations : IEventHandler<OnDraftValidating>` handler
 (registered here) resolves `IEnumerable<IDraftValidator>`, runs each, and adds every returned
@@ -39,10 +39,12 @@ persisted.
 | Validator | Scope | `(Path, Type)` emitted |
 |---|---|---|
 | `UnknownActivityVersionValidator` | Root + nested (recurses) | `{NodeId}` · `Graph/UnknownActivityVersion` |
+| `UnhandledActivityStructureValidator` | Root + nested (recurses) | `{NodeId}` · `Graph/UnhandledActivityStructure` |
 | `StartActivityValidator` | Root-level | `$workflow` · `RootActivity/Missing` |
 | `VariableUniquenessValidator` | Workflow-scope | `$workflow/variables/{Name}` · `Variables/Uniqueness` |
 | `RequiredInputOutputValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `InputOutput/MissingRequired` |
 | `VariableExpressionResolverValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `Expressions/UnresolvedVariable` |
+| `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (ConcurrentWrite, UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity) |
 
 Catalog-consulting validators resolve `ActivityVersionId`s through the scoped, memoizing
 `CatalogVersionResolver` (Internal), which translates the version store's throwing Get contract

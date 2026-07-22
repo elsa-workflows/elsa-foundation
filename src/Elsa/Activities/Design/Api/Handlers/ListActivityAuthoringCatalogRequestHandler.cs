@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Contracts;
@@ -14,7 +15,8 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
     IActivityDefinitionStore definitionStore,
     IActivityDefinitionVersionStore versionStore,
     IActivityAvailabilityEvaluator availabilityEvaluator,
-    IActivityAvailabilitySettingsStore settingsStore)
+    IActivityAvailabilitySettingsStore settingsStore,
+    IEnumerable<IBuiltInAuthoringDescriptorProvider> builtInDescriptorProviders)
     : IRequestHandler<ListActivityAuthoringCatalog, ActivityAuthoringCatalogView>
 {
     public async Task<ActivityAuthoringCatalogView> Handle(ListActivityAuthoringCatalog request, CancellationToken cancellationToken)
@@ -27,17 +29,23 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
             .Select(x => x.ActivityTypeKey)
             .ToHashSet(StringComparer.Ordinal);
 
-        var activities = versions
+        var persisted = versions
             .Where(version => definitionsById.ContainsKey(version.DefinitionId))
             .Select(version => (Version: version, Definition: definitionsById[version.DefinitionId]))
             .Where(item => request.Availability == ActivityCatalogAvailability.All || addableKeys.Contains(item.Definition.ActivityTypeKey))
             .OrderBy(item => item.Definition.Category, StringComparer.Ordinal)
             .ThenBy(item => item.Definition.DisplayName, StringComparer.Ordinal)
             .ThenBy(item => item.Version.Id, StringComparer.Ordinal)
-            .Select(item => ToView(item.Version, item.Definition, addableKeys.Contains(item.Definition.ActivityTypeKey)))
-            .ToArray();
+            .Select(item => ToView(item.Version, item.Definition, addableKeys.Contains(item.Definition.ActivityTypeKey)));
 
-        return new ActivityAuthoringCatalogView(activities);
+        // Built-in engine intrinsics (Set Variable, Set Output, …) are code-owned and always addable: they
+        // have no persisted catalog row and are never gated by the availability policy.
+        var builtIns = builtInDescriptorProviders
+            .SelectMany(provider => provider.GetDescriptors())
+            .OrderBy(descriptor => descriptor.Category, StringComparer.Ordinal)
+            .ThenBy(descriptor => descriptor.DisplayName, StringComparer.Ordinal);
+
+        return new ActivityAuthoringCatalogView(persisted.Concat(builtIns).ToArray());
     }
 
     private static ActivityAuthoringDescriptorView ToView(
@@ -77,6 +85,7 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
             input.ReferenceKey,
             input.Name,
             input.Type.Alias,
+            input.Type.CollectionKind,
             input.DisplayName,
             input.Description,
             input.Order,
@@ -93,6 +102,7 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
         new(
             output.Name,
             output.Type.Alias,
+            output.Type.CollectionKind,
             output.DisplayName,
             output.Description,
             output.Category,

@@ -8,6 +8,7 @@ using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
@@ -22,6 +23,7 @@ public sealed class GroundworkAddActivityDefinitionCommand(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IActivityDefinitionStore definitionStore,
     IDistributedLockProvider lockProvider,
+    ISystemClock clock,
     IDesignAtomicWriter atomicWrite)
     : IAddActivityDefinitionCommand
 {
@@ -36,6 +38,13 @@ public sealed class GroundworkAddActivityDefinitionCommand(
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(version);
         ArgumentNullException.ThrowIfNull(operationKey);
+
+        // Unlike the EF Core store (stamped by ElsaDbContextBase on save), the Groundwork document writer
+        // does not auto-stamp entity timestamps, so a Groundwork-backed create would otherwise persist
+        // CreatedAt/LastModifiedAt as DateTimeOffset.MinValue — the studio then renders "Updated 01/01/1".
+        var now = clock.UtcNow;
+        definition.CreatedAt = definition.LastModifiedAt = now;
+        version.CreatedAt = version.LastModifiedAt = now;
 
         var accessContext = accessContextAccessor.Current;
         accessContext.EnsureTenantScope(definition.TenantId);

@@ -98,6 +98,7 @@ public sealed class InMemoryRecurringTriggerScheduleStoreTests
     private static RecurringTriggerSchedule Schedule(string id, DateTimeOffset next, string artifactId = "artifact-1") => new(
         ScheduleId: id,
         ArtifactId: artifactId,
+        ExecutableNodeId: $"node-{id}",
         StimulusType: "Timer",
         StimulusHash: $"hash-{id}",
         Kind: RecurringScheduleKind.Interval,

@@ -194,7 +194,6 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         cancellationToken.ThrowIfCancellationRequested();
         var binding = ValidateQuery(query, expectedOperation);
         var fieldKinds = binding.FieldKinds;
-        _ = DecodeContinuation(query);
         Interlocked.Increment(ref _documentQueryCount);
 
         IEnumerable<DocumentEnvelope> matches = _docs.Values
@@ -231,17 +230,12 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         }
 
         var all = selected.ToArray();
-        var continuationOffset = DecodeContinuation(query);
-        var pageOffset = continuationOffset + (query.Skip ?? 0);
-        var window = all.Skip(pageOffset);
-        if (query.Take is { } take)
-            window = window.Take(take);
-        var page = window.ToArray();
-        var nextOffset = pageOffset + page.Length;
-        var nextContinuation = query.Take is not null && nextOffset < all.Length
-            ? EncodeContinuation(query, nextOffset)
-            : null;
-        return Task.FromResult(new DocumentQueryResult(page, all.Length, nextContinuation));
+        return Task.FromResult(TestKeysetContinuations.Page(
+            query,
+            "in-memory",
+            all,
+            (document, path) => Comparable(ReadField(document.ContentJson, path), fieldKinds[path]),
+            $"The continuation token is invalid for bounded query '{query.QueryIdentity}'."));
     }
 
     private QueryBinding ValidateQuery(
@@ -671,30 +665,6 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
                         : (char)('9' - (character - '0'));
                 }
             });
-    }
-
-    private static string EncodeContinuation(DocumentQuery query, int offset) =>
-        $"in-memory:{query.DocumentKind}:{query.QueryIdentity}:{offset}";
-
-    private static int DecodeContinuation(DocumentQuery query)
-    {
-        if (query.Continuation is null)
-            return 0;
-
-        var prefix = $"in-memory:{query.DocumentKind}:{query.QueryIdentity}:";
-        if (!query.Continuation.StartsWith(prefix, StringComparison.Ordinal) ||
-            !int.TryParse(
-                query.Continuation[prefix.Length..],
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out var offset) ||
-            offset < 0)
-        {
-            throw new InvalidDocumentQueryContinuationException(
-                $"The continuation token is invalid for bounded query '{query.QueryIdentity}'.");
-        }
-
-        return offset;
     }
 
     public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>

@@ -4,11 +4,21 @@ using Elsa.Activities.Bpmn.Models;
 
 namespace Elsa.Activities.Bpmn.Internal.Behaviors;
 
-/// <summary>None start event: pass the token straight onto every outbound sequence flow.</summary>
-public sealed class NoneStartEventBehavior : IBpmnElementBehavior
+/// <summary>
+/// Start event (none / timer / message / signal): pass the arriving token straight onto every outbound sequence
+/// flow. All four start families share this token behavior — an event-defined start (spec 117) differs only in
+/// how its instance is *started* (a publish-time trigger binding + dispatch seeds the token), never in how the
+/// seeded token routes. Registered once per start family so diagnostics keep the family's display name.
+/// </summary>
+public sealed class StartEventBehavior(string elementFamily, string displayName) : IBpmnElementBehavior
 {
-    public string ElementFamily => BpmnElementFamilies.StartEventNone;
-    public string DisplayName => "Start Event (None)";
+    public string ElementFamily { get; } = elementFamily;
+    public string DisplayName { get; } = displayName;
+
+    public static StartEventBehavior None() => new(BpmnElementFamilies.StartEventNone, "Start Event (None)");
+    public static StartEventBehavior Timer() => new(BpmnElementFamilies.StartEventTimer, "Start Event (Timer)");
+    public static StartEventBehavior Message() => new(BpmnElementFamilies.StartEventMessage, "Start Event (Message)");
+    public static StartEventBehavior Signal() => new(BpmnElementFamilies.StartEventSignal, "Start Event (Signal)");
 
     public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
         BpmnBehaviorDecision.Of(BpmnBehaviorCommand.EmitTokens(BpmnFlowSelector.FlowIds(context.OutboundFlows)));
@@ -55,6 +65,59 @@ public sealed class CatchEventBehavior : IBpmnElementBehavior
 
         return BpmnBehaviorDecision.Of(BpmnBehaviorCommand.EmitTokens(BpmnFlowSelector.FlowIds(flows)));
     }
+}
+
+/// <summary>
+/// Compensate intermediate throw event (spec 124): on token arrival, emit the single
+/// <see cref="BpmnBehaviorCommandKind.TriggerCompensation"/> command and nothing else. The engine owns target
+/// selection, claiming, and the sequential handler replay; when the replay finishes it routes the throw token's
+/// outbound flows through normal task-flow selection. The behavior stays semantics-unaware.
+/// </summary>
+public sealed class CompensationThrowEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.IntermediateThrowEventCompensation;
+    public string DisplayName => "Compensate Throw Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.TriggerCompensation());
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
+        throw new BpmnExecutionException($"BPMN compensate throw event '{context.Element.ElementId}' cannot own a child activity.");
+}
+
+/// <summary>
+/// Compensate end event (spec 124): on token arrival, emit the single
+/// <see cref="BpmnBehaviorCommandKind.TriggerCompensation"/> command; when the replay finishes the engine
+/// consumes the token (none-end semantics). The behavior stays semantics-unaware.
+/// </summary>
+public sealed class CompensationEndEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.EndEventCompensation;
+    public string DisplayName => "Compensate End Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.TriggerCompensation());
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
+        throw new BpmnExecutionException($"BPMN compensate end event '{context.Element.ElementId}' cannot own a child activity.");
+}
+
+/// <summary>
+/// Cancel end event (spec 125): on token arrival, emit the single
+/// <see cref="BpmnBehaviorCommandKind.CancelTransaction"/> command and nothing else. The engine owns the
+/// stop-then-claim-then-replay sequencing and the <c>Cancelled</c> completion; the behavior stays
+/// semantics-unaware. Valid only inside a transaction (enforced by graph validation).
+/// </summary>
+public sealed class CancelEndEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.EndEventCancel;
+    public string DisplayName => "Cancel End Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.CancelTransaction());
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
+        throw new BpmnExecutionException($"BPMN cancel end event '{context.Element.ElementId}' cannot own a child activity.");
 }
 
 /// <summary>Terminate end event: consume every live token and complete the process immediately.</summary>

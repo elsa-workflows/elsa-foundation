@@ -54,6 +54,10 @@ public sealed record BpmnBehaviorCommand
 
     public static BpmnBehaviorCommand Fault(string faultCode, string message) =>
         new(BpmnBehaviorCommandKind.Fault, faultCode: faultCode, message: message);
+
+    public static BpmnBehaviorCommand TriggerCompensation() => new(BpmnBehaviorCommandKind.TriggerCompensation);
+
+    public static BpmnBehaviorCommand CancelTransaction() => new(BpmnBehaviorCommandKind.CancelTransaction);
 }
 
 public enum BpmnBehaviorCommandKind
@@ -71,5 +75,20 @@ public enum BpmnBehaviorCommandKind
     TerminateProcess,
 
     /// <summary>Fault the composite deterministically.</summary>
-    Fault
+    Fault,
+
+    /// <summary>
+    /// Replay the compensation log (spec 124): a compensate throw/end token requests the engine to claim and
+    /// run the registered compensation handlers (reverse registration order), then route/consume when done.
+    /// The behavior stays decision-only — registration, ordering, claiming, and replay are engine-owned.
+    /// </summary>
+    TriggerCompensation,
+
+    /// <summary>
+    /// Cancel the enclosing transaction (spec 125): a cancel end event requests the engine to stop all other
+    /// live work in the scope, replay every registered compensable (reverse registration order), and then
+    /// complete the process with the <c>Cancelled</c> outcome. The behavior stays decision-only — stopping,
+    /// claiming, replay, and completion are engine-owned.
+    /// </summary>
+    CancelTransaction
 }

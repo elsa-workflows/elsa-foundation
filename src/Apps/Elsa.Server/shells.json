@@ -4,6 +4,7 @@
       "default": {
         "Name": "default",
         "Features": {
+          "ActivitiesBpmn": {},
           "ActivitiesControlFlow": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphDesign": {},
