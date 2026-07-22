@@ -18,7 +18,9 @@ public sealed class BpmnElement
         string? laneId = null,
         string? defaultFlowId = null,
         IReadOnlyCollection<BpmnEventDefinition>? eventDefinitions = null,
-        IReadOnlyDictionary<string, string>? properties = null)
+        IReadOnlyDictionary<string, string>? properties = null,
+        string? attachedToRef = null,
+        bool cancelActivity = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(elementId);
         ArgumentException.ThrowIfNullOrWhiteSpace(elementType);
@@ -31,6 +33,8 @@ public sealed class BpmnElement
         DefaultFlowId = string.IsNullOrWhiteSpace(defaultFlowId) ? null : defaultFlowId.Trim();
         EventDefinitions = eventDefinitions ?? [];
         Properties = properties ?? new Dictionary<string, string>();
+        AttachedToRef = string.IsNullOrWhiteSpace(attachedToRef) ? null : attachedToRef.Trim();
+        CancelActivity = cancelActivity;
     }
 
     [JsonPropertyName("elementId")]
@@ -59,6 +63,21 @@ public sealed class BpmnElement
 
     [JsonPropertyName("properties")]
     public IReadOnlyDictionary<string, string> Properties { get; }
+
+    /// <summary>
+    /// The host element id a <c>boundaryEvent</c> is attached to (spec 120); <c>null</c> on every
+    /// non-boundary element. A boundary reacts to a stimulus while its host runs.
+    /// </summary>
+    [JsonPropertyName("attachedToRef")]
+    public string? AttachedToRef { get; }
+
+    /// <summary>
+    /// Whether a <c>boundaryEvent</c> interrupts its host when it fires (spec 120): <c>true</c> (the BPMN
+    /// default) tears the host down and routes the boundary path; <c>false</c> runs the boundary path
+    /// alongside the still-running host. Meaningful only on boundaries.
+    /// </summary>
+    [JsonPropertyName("cancelActivity")]
+    public bool CancelActivity { get; }
 }
 
 /// <summary>
@@ -83,4 +102,5 @@ public static class BpmnElementTypes
     public const string ParallelGateway = "parallelGateway";
     public const string InclusiveGateway = "inclusiveGateway";
     public const string EventBasedGateway = "eventBasedGateway";
+    public const string BoundaryEvent = "boundaryEvent";
 }

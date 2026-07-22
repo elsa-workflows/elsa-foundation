@@ -45,14 +45,31 @@ children, and diagnostics.
   on a non-fault winner continuation; if the winner routing itself faults, or a terminate ends the process
   first, the losers are cancelled **logically only** (their runtime subtrees are left as-is, matching the
   terminate/pending-fault precedent).
+- **Boundary events** (spec 120) attach to a host element that runs a bound child (a task-family element
+  or an embedded `subProcess`). A **timer/message/signal** boundary arms a synthesized suspending listener
+  child (a `Delay` for timer, a mid-flow `Event` for message/signal) ALONGSIDE the host's bound child the
+  moment the host is scheduled: if the **host** completes first it routes normally and its still-armed
+  listeners are torn down (token cancelled + listener subtree reclaimed through seam A); if an
+  **interrupting** listener (`cancelActivity = true`, the default) fires first the host's bound child and
+  the sibling listeners are torn down through seam A and the boundary's outbound flows route; a
+  **non-interrupting** listener (`cancelActivity = false`) routes its outbound while the host keeps running
+  (single-shot — no re-arm). An **error** boundary has no listener: when the host's bound child faults, the
+  process **absorbs** the fault through the spec 115 seam-B `RequestChildFaultAbsorption` (the named
+  incident resolves, the faulted child's subtree is reclaimed), cancels the host token and sibling
+  listeners, and routes the error path — instead of faulting the composite. This is the module's first
+  seam-B consumer. Like the race, all interrupt/absorption semantics live in the engine; the
+  `BoundaryEventBehavior` only routes outbound flows when a boundary fires. Boundaries are validated (host
+  is a task-family/subprocess element with a bound child; no inbound flows; ≥1 outbound; catch boundaries
+  bind a listener child, error boundaries bind none and must be interrupting; ≤1 error boundary per host).
 - Multi-inbound parallel joins wait for one arrival per inbound flow. Multi-inbound inclusive joins
   are activation-aware: they wait only while a live token or running child can still reach an
   un-arrived inbound flow. Everything else is an implicit XOR merge.
 - A terminate end event consumes every live token and completes the composite; late completions of
   in-flight children are absorbed (Flowchart Break parity).
-- Branch faults are fault-aware (Flowchart #308 parity): a faulted child faults the composite
-  deterministically (`bpmn.child.faulted`) instead of leaving a join waiting forever. A parked join
-  arrival that can never be satisfied faults as `bpmn.join.deadlock` instead of hanging.
+- Branch faults are fault-aware (Flowchart #308 parity): a faulted child whose host has no error boundary
+  faults the composite deterministically (`bpmn.child.faulted`) instead of leaving a join waiting forever
+  (a host **with** an error boundary absorbs it instead, see above). A parked join arrival that can never
+  be satisfied faults as `bpmn.join.deadlock` instead of hanging.
 - The engine snapshot is one typed, versioned activity private-state envelope
   (`Elsa.Bpmn.ExecutionState`, schema version 1) with prune-on-persist (consumed tokens, capped
   diagnostics). Terminal decisions raised mid-evaluation defer until the evaluation is quiescent
@@ -62,14 +79,16 @@ children, and diagnostics.
 
 This module currently ships the Phase 1 core subset (see `specs/108-bpmn-container-activity/`) plus
 the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`), event-start (see
-`specs/117-bpmn-event-start-events/`), and event-based-gateway (see
-`specs/119-bpmn-event-based-gateway/`) slices: none/timer/message/signal start events, none/terminate
-end events, timer/message/signal intermediate catch events, task family, embedded subprocess, and
-exclusive/parallel/inclusive/**event-based** gateways over **acyclic** graphs. Cyclic graphs are rejected
-at validation. The interchange importer/exporter round-trips timer/message/signal event definitions on
-event-defined start and intermediate catch events (see `specs/118-bpmn-interchange-event-definitions/`)
-and round-trips the event-based gateway element, so these constructs can now be authored from XML. Later
-units add boundary events, multi-instance, compensation, transactions, and call activities.
+`specs/117-bpmn-event-start-events/`), event-based-gateway (see
+`specs/119-bpmn-event-based-gateway/`), and boundary-events (see `specs/120-bpmn-boundary-events/`)
+slices: none/timer/message/signal start events, none/terminate end events, timer/message/signal
+intermediate catch events, timer/message/signal/error **boundary events**, task family, embedded
+subprocess, and exclusive/parallel/inclusive/event-based gateways over **acyclic** graphs. Cyclic graphs
+are rejected at validation. The interchange importer/exporter round-trips timer/message/signal event
+definitions on event-defined start and intermediate catch events (see
+`specs/118-bpmn-interchange-event-definitions/`) and round-trips the event-based gateway and boundary event
+elements, so these constructs can now be authored from XML. Later units add escalation/compensation
+boundaries, event subprocesses, multi-instance, transactions, and call activities.
 
 ## Expression-driven gateway conditions
 

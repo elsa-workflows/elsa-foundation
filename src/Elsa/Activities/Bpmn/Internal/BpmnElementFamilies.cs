@@ -24,6 +24,9 @@ public static class BpmnElementFamilies
     public const string InclusiveGateway = "inclusiveGateway";
     public const string EventBasedGateway = "eventBasedGateway";
 
+    /// <summary>The single behavior family for every boundary event (spec 120); catch vs error is a per-element definition detail, not a separate behavior.</summary>
+    public const string BoundaryEvent = "boundaryEvent";
+
     private static readonly HashSet<string> TaskElementTypes = new(StringComparer.Ordinal)
     {
         BpmnElementTypes.Task,
@@ -53,6 +56,7 @@ public static class BpmnElementFamilies
             BpmnElementTypes.ParallelGateway => ParallelGateway,
             BpmnElementTypes.InclusiveGateway => InclusiveGateway,
             BpmnElementTypes.EventBasedGateway => EventBasedGateway,
+            BpmnElementTypes.BoundaryEvent => ResolveBoundaryEvent(element),
             _ => throw new BpmnExecutionException(
                 $"BPMN element '{element.ElementId}' has element type '{element.ElementType}', which this engine slice does not support.")
         };
@@ -69,6 +73,44 @@ public static class BpmnElementFamilies
         BpmnEventDefinitionTypes.Message,
         BpmnEventDefinitionTypes.Signal
     };
+
+    /// <summary>
+    /// The event-definition types a boundary event may declare (spec 120): the three listener kinds
+    /// (timer/message/signal, which arm a suspending child) plus error (which absorbs the host's child
+    /// fault). Escalation/compensation boundaries are a later unit.
+    /// </summary>
+    private static readonly HashSet<string> SupportedBoundaryDefinitionTypes = new(StringComparer.Ordinal)
+    {
+        BpmnEventDefinitionTypes.Timer,
+        BpmnEventDefinitionTypes.Message,
+        BpmnEventDefinitionTypes.Signal,
+        BpmnEventDefinitionTypes.Error
+    };
+
+    private static string ResolveBoundaryEvent(BpmnElement element)
+    {
+        if (element.EventDefinitions.Count != 1)
+            throw new BpmnExecutionException(
+                $"BPMN boundary event '{element.ElementId}' must declare exactly one event definition; it declares {element.EventDefinitions.Count}.");
+
+        var definitionType = element.EventDefinitions.Single().Type;
+        if (!SupportedBoundaryDefinitionTypes.Contains(definitionType))
+            throw new BpmnExecutionException(
+                $"BPMN boundary event '{element.ElementId}' declares event definition type '{definitionType}'; only timer, message, signal, and error boundary events are supported by this engine slice.");
+
+        return BoundaryEvent;
+    }
+
+    /// <summary>True when a <c>boundaryEvent</c> is an error boundary (absorbs the host's child fault, no listener child); false when it is a timer/message/signal catch boundary.</summary>
+    public static bool IsErrorBoundary(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Error);
+
+    /// <summary>The host families a boundary event may attach to (spec 120 D2): the task family and embedded subprocesses.</summary>
+    public static bool IsBoundaryHostFamily(BpmnElement element) =>
+        TaskElementTypes.Contains(element.ElementType) ||
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.SubProcess);
 
     private static string ResolveIntermediateCatchEvent(BpmnElement element)
     {

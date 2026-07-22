@@ -71,6 +71,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                 BpmnElementTypes.IntermediateCatchEvent => BuildEventElement("intermediateCatchEvent", element, isCatch: true),
                 BpmnElementTypes.EndEvent => BuildEndEvent(element),
                 BpmnElementTypes.SubProcess => BuildSubProcess(element, childrenByNodeId),
+                BpmnElementTypes.BoundaryEvent => BuildBoundaryEvent(element),
                 _ => new XElement(BpmnXmlNames.Model + element.ElementType)
             };
 
@@ -116,6 +117,32 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         if (element.EventDefinitions.FirstOrDefault() is { } definition)
             AppendEventDefinition(xmlElement, definition, isCatch);
         return xmlElement;
+    }
+
+    /// <summary>
+    /// Builds a boundary event (spec 120 D6): emits <c>attachedToRef</c>, <c>cancelActivity="false"</c> only
+    /// when non-interrupting (omitted when interrupting — the importer defaults absent → true), and the single
+    /// event definition (<c>error</c> → <c>errorEventDefinition</c>, timer → <c>timeDuration</c>,
+    /// message/signal → <c>messageRef</c>/<c>signalRef</c>). The boundary's bound <c>Delay</c>/<c>Event</c>
+    /// listener child is engine detail and is not exported (re-synthesized on import).
+    /// </summary>
+    private static XElement BuildBoundaryEvent(BpmnElement element)
+    {
+        var boundary = new XElement(BpmnXmlNames.Model + "boundaryEvent");
+        if (element.AttachedToRef is not null)
+            boundary.SetAttributeValue("attachedToRef", element.AttachedToRef);
+        if (!element.CancelActivity)
+            boundary.SetAttributeValue("cancelActivity", "false");
+
+        if (element.EventDefinitions.FirstOrDefault() is { } definition)
+        {
+            if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Error))
+                boundary.Add(new XElement(BpmnXmlNames.Model + "errorEventDefinition"));
+            else
+                AppendEventDefinition(boundary, definition, isCatch: true);
+        }
+
+        return boundary;
     }
 
     private static void AppendEventDefinition(XElement host, BpmnEventDefinition definition, bool isCatch)
@@ -259,7 +286,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     {
         var isEvent = StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.StartEvent)
                       || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent)
-                      || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateCatchEvent);
+                      || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateCatchEvent)
+                      || StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent);
         var isGateway = element.ElementType.EndsWith("Gateway", StringComparison.Ordinal);
         var (width, height) = isEvent ? (36d, 36d) : isGateway ? (50d, 50d) : (100d, 80d);
         return new ShapeBounds(100 + index * 180, 100, width, height);

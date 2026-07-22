@@ -189,6 +189,10 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static BpmnElement InclusiveGateway(string elementId, string? childNodeId = null, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.InclusiveGateway, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
 
+    /// <summary>A boundary event (spec 120) attached to <paramref name="attachedToRef"/>. Catch boundaries (timer/message/signal) bind a listener child; error boundaries bind none.</summary>
+    public static BpmnElement BoundaryEvent(string elementId, string attachedToRef, string definitionType, string? childNodeId = null, bool cancelActivity = true) =>
+        new(elementId, BpmnElementTypes.BoundaryEvent, childNodeId: childNodeId, eventDefinitions: [new BpmnEventDefinition(definitionType)], attachedToRef: attachedToRef, cancelActivity: cancelActivity);
+
     public static BpmnSequenceFlow Flow(string flowId, string sourceRef, string targetRef, string? conditionOutcome = null, bool isDefault = false) =>
         new(flowId, sourceRef, targetRef, conditionOutcome: conditionOutcome, isDefault: isDefault);
 

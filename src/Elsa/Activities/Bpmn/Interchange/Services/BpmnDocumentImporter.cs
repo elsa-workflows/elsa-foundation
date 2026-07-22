@@ -91,6 +91,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         var flows = new List<BpmnSequenceFlow>();
         var lanes = new List<BpmnLane>();
         var childActivities = new List<ActivityNode>();
+        var pendingBoundaries = new List<XElement>();
 
         foreach (var child in container.Elements().Where(child => child.Name.Namespace == BpmnXmlNames.Model))
         {
@@ -152,6 +153,13 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child)));
                     break;
                 }
+                case "boundaryEvent":
+                {
+                    if (id is null) break;
+                    // Resolved in a second pass (below) so attachment resolves regardless of document order.
+                    pendingBoundaries.Add(child);
+                    break;
+                }
                 case "sequenceFlow":
                 {
                     if (id is null) break;
@@ -208,6 +216,18 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     break;
                 }
             }
+        }
+
+        // Second pass: boundary events resolve against the now-complete host set (spec 120 D6).
+        var elementsById = elements.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
+        foreach (var boundaryXml in pendingBoundaries)
+        {
+            var resolved = ResolveBoundaryEvent(boundaryXml, elementsById, messageSignalNames, context);
+            if (resolved is not { } boundaryImport)
+                continue; // Dropped (finding added inside); its sequence flows cascade-drop as unresolved refs.
+            if (boundaryImport.Child is not null)
+                childActivities.Add(boundaryImport.Child);
+            elements.Add(boundaryImport.Boundary);
         }
 
         var elementsWithLanes = elements
@@ -415,6 +435,112 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
             }
             default:
                 context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Intermediate catch event '{id}' declares an unsupported '{definition.Name.LocalName}'; only timer/message/signal catch events are supported, so it was dropped.", id));
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Resolves a boundary event (spec 120 D6) into its element plus, for a catch boundary, a synthesized bound
+    /// listener child, or returns <c>null</c> and reports a <c>Dropped</c> finding when it cannot form a
+    /// validator-representable boundary (unresolvable/childless host, unsupported definition, non-interrupting
+    /// error boundary). Its sequence flows then cascade-drop as unresolved references.
+    /// </summary>
+    private static (BpmnElement Boundary, ActivityNode? Child)? ResolveBoundaryEvent(
+        XElement element,
+        IReadOnlyDictionary<string, BpmnElement> elementsById,
+        IReadOnlyDictionary<string, string> messageSignalNames,
+        ImportContext context)
+    {
+        var id = IdOf(element)!;
+        var attachedToRef = ((string?)element.Attribute("attachedToRef"))?.Trim();
+        if (string.IsNullOrWhiteSpace(attachedToRef))
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' declares no attachedToRef host and was dropped.", id));
+            return null;
+        }
+
+        if (!elementsById.TryGetValue(attachedToRef, out var host))
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' is attached to '{attachedToRef}', which is not an imported element, and was dropped.", id));
+            return null;
+        }
+
+        var hostIsTaskFamily = BpmnXmlNames.TaskLocalNamesToElementTypes.Values.Contains(host.ElementType, StringComparer.Ordinal);
+        if (!hostIsTaskFamily && !StringComparer.Ordinal.Equals(host.ElementType, BpmnElementTypes.SubProcess))
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' is attached to '{attachedToRef}' ({host.ElementType}), which is not a task-family or subprocess host, and was dropped.", id));
+            return null;
+        }
+
+        if (host.ChildNodeId is null)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' is attached to host '{attachedToRef}', which has no bound child activity to host a boundary, and was dropped.", id));
+            return null;
+        }
+
+        var definitions = element.Elements().Where(IsEventDefinition).ToArray();
+        if (definitions.Length != 1)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' declares {definitions.Length} event definitions; exactly one timer/message/signal/error definition is required, so it was dropped.", id));
+            return null;
+        }
+
+        var cancelActivity = (bool?)element.Attribute("cancelActivity") ?? true;
+        var definition = definitions[0];
+        var childNodeId = $"node-{id}";
+        switch (definition.Name.LocalName)
+        {
+            case "errorEventDefinition":
+            {
+                if (!cancelActivity)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' is a non-interrupting error boundary, which is not meaningful; it was dropped.", id));
+                    return null;
+                }
+
+                var properties = new Dictionary<string, string>(StringComparer.Ordinal);
+                if (((string?)definition.Attribute("errorRef"))?.Trim() is { Length: > 0 } errorRef)
+                    properties["bpmn.errorRef"] = errorRef; // recorded for future error-code matching; not read this slice.
+                var errorElement = new BpmnElement(id, BpmnElementTypes.BoundaryEvent, name: NameOf(element),
+                    eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Error)],
+                    properties: properties.Count == 0 ? null : properties,
+                    attachedToRef: attachedToRef, cancelActivity: true);
+                return (errorElement, null);
+            }
+            case "messageEventDefinition":
+            case "signalEventDefinition":
+            {
+                var type = definition.Name.LocalName == "messageEventDefinition" ? BpmnEventDefinitionTypes.Message : BpmnEventDefinitionTypes.Signal;
+                var name = ResolveMessageSignalName(definition, type, messageSignalNames);
+                if (name is null)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' declares a {type} event definition with no resolvable name (missing or unresolvable {type}Ref), so it was dropped.", id));
+                    return null;
+                }
+
+                var eventChild = BuildEventCatchChild(childNodeId, name);
+                var messageElement = new BpmnElement(id, BpmnElementTypes.BoundaryEvent, name: NameOf(element), childNodeId: childNodeId,
+                    eventDefinitions: [new BpmnEventDefinition(type, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })],
+                    attachedToRef: attachedToRef, cancelActivity: cancelActivity);
+                return (messageElement, eventChild);
+            }
+            case "timerEventDefinition":
+            {
+                var duration = ResolveCatchTimerDuration(definition);
+                if (duration is null)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' declares a timer event definition without a <timeDuration>; only a one-shot duration boundary timer is supported, so it was dropped.", id));
+                    return null;
+                }
+
+                var delayChild = BuildDelayCatchChild(childNodeId, duration);
+                var timerElement = new BpmnElement(id, BpmnElementTypes.BoundaryEvent, name: NameOf(element), childNodeId: childNodeId,
+                    eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = duration })],
+                    attachedToRef: attachedToRef, cancelActivity: cancelActivity);
+                return (timerElement, delayChild);
+            }
+            default:
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Boundary event '{id}' declares an unsupported '{definition.Name.LocalName}'; only timer/message/signal/error boundary events are supported, so it was dropped.", id));
                 return null;
         }
     }

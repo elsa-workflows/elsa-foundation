@@ -31,9 +31,18 @@ Mapping rules for this slice:
   timer, an `Event` (`EventName` literal + `CanStartWorkflow = false`) for a message/signal catch. A
   catch with zero/multiple/unsupported definitions, an unresolvable ref, or a recurring/absolute
   (`<timeCycle>`/`<timeDate>`) timer is dropped with an issue (its sequence flows cascade-drop).
+- **Boundary events** (spec 120) resolve in a second pass (after all hosts are known, so attachment is
+  document-order-independent): a timer `<timeDuration>` boundary synthesizes a bound `Delay` listener child,
+  a message/signal boundary an `Event` listener child, and an `errorEventDefinition` an error boundary (no
+  child). `cancelActivity` (absent → `true`) carries the interrupting flag; `attachedToRef` names the host.
+  A boundary attached to a missing element, a non-host family, or a **childless** host — or a
+  non-interrupting error boundary, or a `<timeCycle>`/`<timeDate>` boundary timer — is dropped with an issue
+  (validate-representable: the importer never emits a boundary the graph validator would reject; its
+  sequence flows cascade-drop). `errorRef` is recorded verbatim into the element properties for future
+  error-code matching (not read this slice).
 - Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes
-  (boundary events, event-based gateways, call activities, …) are dropped with an issue. Cyclic graphs
-  import but are flagged as not executable in this slice.
+  (call activities, event subprocesses, …) are dropped with an issue. Cyclic graphs import but are flagged
+  as not executable in this slice.
 - BPMNDI shapes/edges are preserved verbatim on the authored `diagram` payload.
 
 ## Export
@@ -43,7 +52,10 @@ standard BPMN representation, so they export as `elsa:conditionOutcome` attribut
 `https://elsa-workflows.io/schemas/bpmn`) that the importer reads back for lossless round-trips; a
 human-readable `conditionExpression` is emitted alongside for other modelers. Event-defined start and
 catch elements emit their `timer`/`message`/`signal` definitions from the populated `BpmnEventDefinition`
-properties (start timers as `<timeCycle>`, catch timers as `<timeDuration>`); each distinct message/signal
+properties (start timers as `<timeCycle>`, catch/boundary timers as `<timeDuration>`); a boundary event
+emits `attachedToRef`, `cancelActivity="false"` only when non-interrupting (omitted when interrupting, since
+the importer defaults absent → true), and its `error`/`timer`/`message`/`signal` definition child. Each
+distinct message/signal
 name emits one deduped root `<message>`/`<signal>` declaration (deterministic id `message-{name}` /
 `signal-{name}`) that the element's `messageRef`/`signalRef` targets — a name that sanitizes to a
 colliding id shares a declaration. A catch event's bound `Delay`/`Event` child is engine detail and is not
@@ -62,7 +74,7 @@ three are pure conversions — nothing is persisted server-side:
 ## Not yet in this slice
 
 The Studio import/export UX; message/signal **payload and correlation** mapping (only the event `name`
-is mapped — the synthesized `Event` catch child leaves `CorrelationId` unset); absolute (`<timeDate>`)
-and non-recurring start timers; boundary events, event-based gateways, and event subprocesses (still
-dropped); `extensionElements` preservation for third-party vendor attributes; collaboration/pool export;
-and the BPMN MIWG conformance corpus.
+is mapped — the synthesized `Event` catch/boundary child leaves `CorrelationId` unset); absolute
+(`<timeDate>`) and non-recurring start timers; error-code (`errorRef`) matching on error boundaries;
+escalation/compensation boundaries and event subprocesses (still dropped); `extensionElements` preservation
+for third-party vendor attributes; collaboration/pool export; and the BPMN MIWG conformance corpus.
