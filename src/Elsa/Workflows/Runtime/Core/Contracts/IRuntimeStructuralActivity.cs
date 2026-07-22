@@ -22,6 +22,19 @@ public interface IRuntimeActivityChildFaultHandler
 }
 
 /// <summary>
+/// Engine-only protocol for evaluating a structure when one of its still-running children raises a coded
+/// notification to it (spec 126, seam C). The child keeps running; only a parent that implements this
+/// interface receives the callback (opt-in, mirroring the completion/fault handlers) — a non-implementing
+/// parent silently acks the notification. The callback may return any continuation and, exactly as in a
+/// child-completion evaluation, may stage child schedules and seam-A subtree cancellations under the existing
+/// exclusion rules (so an interrupting consumer tears the notifying child down in the same commit).
+/// </summary>
+public interface IRuntimeActivityChildNotificationHandler
+{
+    ValueTask<RuntimeStructuralContinuation> OnChildNotifiedAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext notification);
+}
+
+/// <summary>
 /// Opt-in marker for a structural activity whose child-completion/child-fault callback needs the parent's
 /// direct, non-terminal child executions (spec 119 D4). Only a parent implementing this pays the extra
 /// parent-scoped read; the runtime then populates

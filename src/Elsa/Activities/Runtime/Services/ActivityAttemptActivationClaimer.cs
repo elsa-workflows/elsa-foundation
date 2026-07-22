@@ -41,7 +41,7 @@ internal static class ActivityAttemptActivationClaimer
         ActivityExecutionState state,
         Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile,
         CancellationToken cancellationToken) =>
-        ClaimAsync(
+        ClaimStructuralCallbackAsync(
             checkpointCommitter,
             timeProvider,
             workItem,
@@ -49,6 +49,34 @@ internal static class ActivityAttemptActivationClaimer
             payload.ExecutableNodeId,
             payload.ActivityExecutionId,
             payload.Reason,
+            state,
+            sideEffectProfile,
+            cancellationToken);
+
+    /// <summary>
+    /// Field-level overload of <see cref="ClaimStructuralCallbackAsync(RuntimeCheckpointCommitter, TimeProvider, RuntimeSchedulerWorkItem, RuntimeCompleteActivityCommandPayload, ActivityExecutionState, Elsa.Activities.Runtime.Core.Models.SideEffectProfile, CancellationToken)"/>
+    /// so a structural callback riding a non-completion command (spec 126 seam-C parent notifications) claims
+    /// the target parent's activation the same way, without funnelling through the completion payload.
+    /// </summary>
+    public static ValueTask<ActivityAttemptActivationClaim> ClaimStructuralCallbackAsync(
+        RuntimeCheckpointCommitter checkpointCommitter,
+        TimeProvider timeProvider,
+        RuntimeSchedulerWorkItem workItem,
+        WorkflowExecutableIdentity pinnedExecutable,
+        string executableNodeId,
+        string activityExecutionId,
+        string checkpointReason,
+        ActivityExecutionState state,
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile,
+        CancellationToken cancellationToken) =>
+        ClaimAsync(
+            checkpointCommitter,
+            timeProvider,
+            workItem,
+            pinnedExecutable,
+            executableNodeId,
+            activityExecutionId,
+            checkpointReason,
             state,
             sideEffectProfile,
             freshAttemptReason: ActivityAttemptReason.Resume,

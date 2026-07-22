@@ -284,6 +284,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         WorkflowDispatchCheckpointRequest? stagedWorkflowDispatch = null;
         ActivityFault? returnedFault = null;
         string? returnedCancellationReason = null;
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotificationWorkItems = [];
         var stagedState = state;
         try
         {
@@ -328,6 +329,20 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 throw new InvalidOperationException("An initial structural execution cannot cancel child subtrees; cancellation requests are only valid during a child-completion evaluation (spec 112).");
             if (context.GetChildFaultAbsorptionRequests().Count > 0)
                 throw new InvalidOperationException("An initial structural execution cannot absorb child faults; absorption requests are only valid during a child-fault evaluation (spec 115).");
+
+            // spec 126 seam C: a non-root structural child may notify its own parent during its initial
+            // structural execution. Harvest the staged notifications now so a root staging or a Fault/Cancel
+            // continuation with staged notifications faults the evaluation inside this callback boundary; the
+            // built work items ride the same Defer/Complete commit below.
+            parentNotificationWorkItems = await ParentNotificationEvaluation.BuildAsync(
+                activityExecutionStateStore,
+                _timeProvider,
+                workItem,
+                invokePayload.PinnedExecutable,
+                stagedState,
+                context.GetParentNotificationRequests(),
+                structuralContinuation ?? RuntimeStructuralContinuation.Defer,
+                cancellationToken);
 
             if (returnedTransition is IStatefulActivitySuspensionTransition statefulSuspension)
             {
@@ -594,6 +609,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 invokePayload,
                 state,
                 childScheduling.Requests,
+                parentNotificationWorkItems,
                 valueSnapshots,
                 durableValueChanges,
                 cancellationToken);
@@ -615,6 +631,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             invokePayload,
             completedState,
             ReadCompletionOutcomeNames(completedState),
+            parentNotificationWorkItems,
             valueSnapshots,
             durableValueChanges,
             stagedWorkflowDispatch,
@@ -906,6 +923,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState state,
         IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotifications,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         CancellationToken cancellationToken)
@@ -967,6 +985,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 operational: [],
                 activityExecutionInspections: inspectionChanges),
             PostCommitIntents: childWorkItems
+                .Concat(parentNotifications)
                 .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
                 .ToArray(),
             Metadata: metadata);
@@ -1075,6 +1094,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState completedState,
         IReadOnlyCollection<string> outcomeNames,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotifications,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
@@ -1095,9 +1115,14 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
         var completionIntent = SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
             invokeWorkItem, invokePayload.ActivityExecutionId, core.CompletionWorkItem, occurredAt);
+        // spec 126 seam C: a structural child completing on its initial execution may also notify its parent;
+        // the notification intents ride behind the completion cascade intent and ahead of any staged dispatch.
+        var notificationIntents = parentNotifications
+            .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
+            .ToArray();
         var commit = core.Commit with
         {
-            PostCommitIntents = [completionIntent, .. core.Commit.PostCommitIntents]
+            PostCommitIntents = [completionIntent, .. notificationIntents, .. core.Commit.PostCommitIntents]
         };
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);

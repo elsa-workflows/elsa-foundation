@@ -229,3 +229,33 @@ invariants, and suites are byte-identical for workflows that never stage a notif
 - Full test projects green: Activities Runtime, Workflows Runtime, BPMN (untouched, regression
   only), BPMN Interchange (untouched), ControlFlow, Architecture. Full solution build clean.
 - Runtime EXTENSION_POINTS documents the seam beside its siblings.
+
+## Deviations from the ratified plan
+
+- **Resume-handler harvest not wired (tripwire 1 outcome).** D1 lists bookmark-resume as one of the three
+  child-evaluation kinds that harvest staged notifications. On inspecting the code, the bookmark-resume path
+  (`WorkflowResumeBookmarkSchedulerWorkHandler`) has **no structural staging surface**: it hard-throws for any
+  activity that is not an `IStatefulActivity` (leaf stateful activities only), structural activities
+  (`IRuntimeStructuralActivity`, e.g. `BpmnProcess`) never suspend on bookmarks and so never reach it, and the
+  `SimpleActivityExecutionContext` it constructs is never passed to the resumed activity — so
+  `GetParentNotificationRequests()` there is unreachable and always empty. A structural child's evaluations
+  that *can* stage a notification therefore occur only in the invoke handler (its own `ExecuteStructureAsync`)
+  and the parent-completion handler (its `OnChildCompletedAsync`/`OnChildFaultedAsync` over its own children) —
+  both of which are wired. Wiring the resume handler would add dead, untestable code (no structural activity
+  resumes via bookmark; no way to stage there), so it was intentionally not added. The two live harvest points
+  fully cover the seam and the motivating BPMN-escalation consumer (which drives through structural
+  `BpmnProcess` evaluations only). The resume path is byte-identical (non-regression).
+- **Payload size bound.** D1 rule 2 bounds the payload "by the same limit policy as `RuntimeStructuralStateUpdate`
+  payloads", but `RuntimeStructuralStateUpdate` carries no explicit byte cap (only presence/policy checks). To
+  satisfy FR-1's "oversized payloads fault" requirement deterministically, `RuntimeParentNotificationRequest`
+  enforces a concrete cap of 8 KiB (UTF-8) on the serialized payload; the code cap is the ratified 128 UTF-16
+  code units. Both are validated at staging time (in the request constructor), so a violation surfaces as a
+  deterministic evaluation fault through the existing callback try/catch — the same effect the ratified plan
+  specifies, reached one layer earlier than plan time.
+- **Tripwires 2–5: none tripped.** `ClaimStructuralCallbackAsync` claims a notification evaluation cleanly via a
+  new field-level overload (the claim key shape is the parent's activity-execution id + a fresh attempt, which a
+  notification evaluation satisfies exactly like a completion evaluation). The shared subtree-cancellation
+  planner was invoked from the new handler without duplication (extracted into
+  `StructuralParentEvaluationSupport`, shared with the completion handler). Delivering to a parent whose
+  notifying child has terminalized tripped no guard (the child's status is never read at delivery; only the
+  parent's `Running` guard applies). No spec-vs-code contradiction required weakening any invariant.
