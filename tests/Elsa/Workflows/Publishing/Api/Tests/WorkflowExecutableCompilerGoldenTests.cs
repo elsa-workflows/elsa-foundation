@@ -613,6 +613,8 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) =>
             inner.CompileExecutableStructure(activity);
 
+        public bool HasHandler(ActivityNodeStructure structure) => inner.HasHandler(structure);
+
         public IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
             inner.ProjectScopedVariables(activity);
 

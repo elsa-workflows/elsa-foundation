@@ -150,6 +150,7 @@ public sealed class ExecutableNodeCompiler(
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
+        EnsureDeclaredStructureHasHandler(activity, activityVersion, catalogActivityType);
         var structure = CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity));
         var activityContract = clrActivityType is null
             ? null
@@ -492,6 +493,31 @@ public sealed class ExecutableNodeCompiler(
                 slot.Name,
                 slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities)).ToArray()))
             .ToArray();
+    }
+
+    /// <summary>
+    /// Publication guard against silently mis-compiling a composite. Spec 071 FR-008 keeps a
+    /// structure of UNKNOWN kind opaque (copied through, no children projected) — but a kind the
+    /// activity's own catalog design facets declare is not unknown: its handler ships with the
+    /// feature that provides the activity, so a missing handler means that feature is disabled or
+    /// absent from this shell. Compiling such a node opaquely publishes an executable whose
+    /// children were never lowered and that faults confusingly deep in runtime execution
+    /// (e.g. a BPMN process publishing while ActivitiesBpmn is disabled).
+    /// </summary>
+    private void EnsureDeclaredStructureHasHandler(ActivityNode activity, ActivityDefinitionVersion activityVersion, string activityTypeKey)
+    {
+        var structure = activity.Structure;
+        if (structure is null || activityStructureService.HasHandler(structure))
+            return;
+
+        var declaredFacet = activityVersion.DesignFacets.FirstOrDefault(facet => StringComparer.Ordinal.Equals(facet.Kind, structure.Kind));
+        if (declaredFacet is null)
+            return;
+
+        throw new ArgumentException(
+            $"Activity node '{activity.NodeId}' carries structure '{structure.Kind}@{structure.SchemaVersion}', which its activity type '{activityTypeKey}' declares as an owned structure contract (declared schema version '{declaredFacet.SchemaVersion}'), " +
+            "but no structure handler for that kind is registered in this shell. The feature that provides the activity is disabled or missing; enable it before publishing. " +
+            "Compiling the structure as opaque would publish an executable that fails at execution time.");
     }
 
     private ExecutableActivityStructure? CompileStructure(string nodeId, ActivityNodeStructure? structure)
