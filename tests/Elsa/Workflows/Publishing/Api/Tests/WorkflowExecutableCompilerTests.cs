@@ -325,6 +325,85 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Reusable_activity_nested_in_a_workflow_sequence_is_addressed_by_its_authored_node_id()
+    {
+        // #1007: consuming a reusable activity as one child inside a workflow's Sequence structure must place a
+        // boundary node whose ExecutableNodeId is the authored node id the Sequence structure addresses it by.
+        // Before the fix the boundary kept its content-addressed placement id, so the runtime SequenceNavigator
+        // faulted at execution with "structure references missing child 'use-reusable'".
+        var contract = new DesignActivityContract("1", [], [], []);
+        var boundaryRoot = new ExecutableNode(
+            "local-root", "local-root", "test.boundary", "1",
+            new("test.boundary", "1", JsonSerializer.SerializeToElement(new { plan = 1 })),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
+            [new ExecutableChildSlot("Graph.Entry", [new ExecutableNode(
+                "local-child", "local-child", "test.child", "1",
+                new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
+            activityContract: BoundaryRuntimeContract(hasValueInput: false));
+        var template = new ExecutableActivityTemplate(
+            "template-nested", "hash-nested", boundaryRoot, new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
+        var publication = new ActivityDefinitionVersionPublication
+        {
+            Id = "version-nested",
+            DefinitionVersionId = "version-nested",
+            DefinitionId = "definition-nested",
+            Version = "1.0.0",
+            ActivityTypeKey = "activity.nested",
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
+            Contract = contract,
+            Provider = new("test", "1", JsonSerializer.SerializeToElement(new { })),
+            TemplateId = template.TemplateId,
+            TemplateHash = template.TemplateHash,
+            SourceReferenceId = "source-nested",
+            ProviderFingerprint = "fingerprint",
+            DirectDependencyCount = 0,
+            ClosedTemplateCount = 0,
+            RuntimeRequirements = [],
+            Lifecycle = ActivityDefinitionVersionLifecycle.Active
+        };
+        var sourceReference = new WorkflowExecutableSourceReference(
+            "source-nested", template.TemplateId, "ActivityDefinitionVersion", publication.DefinitionVersionId,
+            publication.Version, publication.DefinitionId, publication.DefinitionVersionId, publication.Version,
+            DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, WorkflowExecutableReferenceScope.Published,
+            LayoutSidecar: new ExecutableLayoutSidecar([new(
+                "layout", ActivityInvocationOrigin.Empty, template.TemplateHash,
+                [new("local-root", "local-root", "local-root", 1, 2)], [])]));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(SequenceNode(
+                "root",
+                [
+                    new ActivityNode("use-reusable", publication.DefinitionVersionId, [], []),
+                    Node("after", Text("after"))
+                ]))),
+            new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create(),
+            new SinglePublicationStore(publication),
+            new ReusableTemplateReader(template),
+            new ReusableSourceReader(sourceReference),
+            new WorkflowExecutablePlacementSidecarContext());
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal("root", executable.RootActivity.ExecutableNodeId);
+        var slot = Assert.Single(executable.RootActivity.ChildSlots);
+        var placedChild = slot.Activities.Single(child => StringComparer.Ordinal.Equals(child.ActivityType, "activity.nested"));
+        Assert.Equal("use-reusable", placedChild.ExecutableNodeId);
+        Assert.Equal("use-reusable", placedChild.AuthoredActivityId);
+
+        // Every id the compiled Sequence structure references must resolve against a child in the slot — the exact
+        // invariant the runtime SequenceNavigator enforces before executing the container.
+        var orderedIds = executable.RootActivity.Structure!.Payload
+            .Deserialize<SequenceExecutableStructure>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!
+            .Activities.ToArray();
+        var childIds = slot.Activities.Select(child => child.ExecutableNodeId).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(["use-reusable", "after"], orderedIds);
+        Assert.All(orderedIds, id => Assert.Contains(id, childIds));
+    }
+
+    [Fact]
     public async Task Source_owned_flowchart_publication_compiles_authored_children_as_ordinary_structure()
     {
         var root = FlowchartNode("flowchart-0affb8fb", [Node("writeline-1a75fea9", Text("hello"))]);
