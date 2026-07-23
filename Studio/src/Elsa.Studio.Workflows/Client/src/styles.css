@@ -4113,6 +4113,90 @@ button.wf-node-slot-badge:focus-visible {
   font-size: 12px;
 }
 
+.wf-inspector-advanced {
+  margin: 0 0 16px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+}
+
+.wf-inspector-advanced summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--wf-text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  list-style-position: inside;
+  padding: 8px 10px;
+  border-radius: var(--wf-radius);
+}
+
+.wf-inspector-advanced summary:hover {
+  background: var(--wf-accent-soft);
+}
+
+.wf-inspector-advanced summary:focus-visible {
+  outline: none;
+  box-shadow: var(--wf-focus-ring);
+}
+
+.wf-inspector-advanced[open] summary {
+  border-bottom: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius) var(--wf-radius) 0 0;
+}
+
+.wf-inspector-advanced-body {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+/* The nested identity list drops the standalone-inspector bottom margin — it's inside a padded body. */
+.wf-inspector-advanced-body dl {
+  margin: 0;
+}
+
+.wf-outputs {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.wf-output-row {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  padding: 8px 10px;
+}
+
+.wf-output-row-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wf-output-name {
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.wf-output-type {
+  flex: none;
+  color: var(--wf-muted-text);
+  font-family: var(--studio-font-mono);
+  font-size: 11px;
+}
+
+.wf-output-description {
+  margin: 0;
+  color: var(--wf-muted-text);
+  font-size: 11px;
+}
+
 .wf-runtime-panel {
   display: grid;
   gap: 10px;

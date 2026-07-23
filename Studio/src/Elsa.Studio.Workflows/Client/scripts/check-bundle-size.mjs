@@ -22,12 +22,18 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // delayed fade-in styles in the shared stylesheet; the measured paths moved 362.31 → 364.16 kB and
 // 346.93 → 348.78 kB), and another 2 kB on top for the conversion-control progressive disclosure
 // (icon toggle + chip markup in the shared properties panel and their styles in the shared
-// stylesheet; the measured paths moved 364.16 → 365.48 kB and 348.78 → 349.99 kB).
+// stylesheet; the measured paths moved 364.16 → 365.48 kB and 348.78 → 349.99 kB). The landing
+// budgets were raised again for the simplified Inspector (the "Version & source" disclosure accordion
+// + the read-only Outputs section styles in the shared stylesheet). NOTE: CI's `pnpm install` links a
+// fuller workspace dependency dist than a local partial build, so CI measures higher than a local run
+// — the budgets below are sized against the CI-observed landing sizes (definitions 368.37 kB, upgrade
+// 356.31 kB; a local build reports ~366.70 kB and ~351.21 kB respectively). Definitions +2 kB, upgrade
+// +6 kB to clear the CI numbers with the usual ~2 kB margin.
 const budgets = {
   entryJavaScript: 125_000,
   stylesheet: 185_000,
-  definitionsLandingTotal: 368_000,
-  upgradeLandingTotal: 352_000,
+  definitionsLandingTotal: 370_000,
+  upgradeLandingTotal: 358_000,
   individualChunk: 500_000
 };
 

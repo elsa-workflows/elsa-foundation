@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { InspectorPanel } from "../workflow-editor/InspectorPanel";
 import type { ChildSlot } from "../workflowAdapter";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
@@ -251,5 +251,68 @@ describe("InspectorPanel slot actions", () => {
 
     expect(onReplaceSlotActivity).toHaveBeenCalledTimes(1);
     expect(onReplaceSlotActivity.mock.calls[0][1]).toBe(freshSlot);
+  });
+});
+
+function descriptor(overrides: Partial<StudioActivityDescriptor> = {}): StudioActivityDescriptor {
+  return {
+    typeName: "Elsa.Activities.ForEach.Activities.ForEach",
+    inputs: [],
+    outputs: [],
+    ports: [],
+    ...overrides
+  };
+}
+
+describe("InspectorPanel simplified layout", () => {
+  it("keeps Node ID and Activity type in the top identity list but not the Activity version", () => {
+    const container = render(panelElement([]));
+    const topList = container.querySelector<HTMLElement>(".wf-inspector-content > dl")!;
+
+    expect(topList.textContent).toContain("Node ID");
+    expect(topList.textContent).toContain("foreach-1");
+    expect(topList.textContent).toContain("Activity type");
+    expect(topList.textContent).toContain("Elsa.Activities.ForEach.Activities.ForEach");
+    expect(topList.textContent).not.toContain("Activity version");
+    expect(topList.textContent).not.toContain("activity-foreach-v1");
+  });
+
+  it("tucks the Activity version and reusable boundary into the Version & source disclosure", () => {
+    const container = render(panelElement([], {}, {
+      selectedReusableDefinitionId: "invoice-definition",
+      selectedReusableSemanticVersion: "2.0.0"
+    }));
+    const advanced = container.querySelector<HTMLDetailsElement>("details.wf-inspector-advanced")!;
+
+    expect(advanced.querySelector("summary")?.textContent).toContain("Version & source");
+    expect(advanced.textContent).toContain("Activity version");
+    expect(advanced.textContent).toContain("activity-foreach-v1");
+    expect(advanced.textContent).toContain("invoice-definition");
+    expect(advanced.textContent).toContain("Reusable boundary");
+    // The disclosure stays collapsed by default, hiding the metadata until expanded.
+    expect(advanced.open).toBe(false);
+  });
+
+  it("renders a read-only Outputs section for each browsable output", () => {
+    const container = render(panelElement([], {}, {
+      selectedDescriptor: descriptor({
+        outputs: [
+          { name: "Result", typeName: "System.String", description: "The line that was read." },
+          { name: "Hidden", typeName: "System.Int32", isBrowsable: false }
+        ]
+      })
+    }));
+    const outputs = container.querySelector<HTMLElement>(".wf-outputs")!;
+
+    expect(outputs).toBeTruthy();
+    expect(outputs.querySelectorAll(".wf-output-row").length).toBe(1);
+    expect(outputs.textContent).toContain("Result");
+    expect(outputs.textContent).toContain("The line that was read.");
+    expect(outputs.textContent).not.toContain("Hidden");
+  });
+
+  it("omits the Outputs section when the activity exposes no outputs", () => {
+    const container = render(panelElement([], {}, { selectedDescriptor: descriptor() }));
+    expect(container.querySelector(".wf-outputs")).toBeNull();
   });
 });

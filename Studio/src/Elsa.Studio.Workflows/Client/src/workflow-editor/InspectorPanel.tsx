@@ -7,6 +7,7 @@ import type { ScopedVariableAnalysis } from "../api/workflowDesign";
 import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
+import { ActivityOutputsPanel } from "../ActivityOutputsPanel";
 import { IntrinsicInspector } from "../IntrinsicInspector";
 import { readIntrinsicDescriptor } from "../intrinsicActivities";
 import { ScopedVariablesEditor } from "../WorkflowPropertiesView";
@@ -157,20 +158,27 @@ export function InspectorPanel({
         <dd>{selectedNode.nodeId}</dd>
         <dt>Activity type</dt>
         <dd>{selectedActivityType}</dd>
-        <dt>Activity version</dt>
-        <dd>{selectedNode.activityVersionId}</dd>
       </dl>
-      {selectedReusableDefinitionId ? (
-        <ReusableActivityIdentity
-          node={selectedNode}
-          definitionId={selectedReusableDefinitionId}
-          semanticVersion={selectedReusableSemanticVersion}
-          version={selectedReusableVersion}
-          status={selectedReusableVersionStatus}
-          recommendation={selectedRecommendedVersion}
-          onChangeVersion={onChangeReusableVersion}
-        />
-      ) : null}
+      <details className="wf-inspector-advanced">
+        <summary>Version &amp; source</summary>
+        <div className="wf-inspector-advanced-body">
+          <dl>
+            <dt>Activity version</dt>
+            <dd>{selectedNode.activityVersionId}</dd>
+          </dl>
+          {selectedReusableDefinitionId ? (
+            <ReusableActivityIdentity
+              node={selectedNode}
+              definitionId={selectedReusableDefinitionId}
+              semanticVersion={selectedReusableSemanticVersion}
+              version={selectedReusableVersion}
+              status={selectedReusableVersionStatus}
+              recommendation={selectedRecommendedVersion}
+              onChangeVersion={onChangeReusableVersion}
+            />
+          ) : null}
+        </div>
+      </details>
       {selectedNodeAvailability ? (
         <div className="wf-availability-notice">
           <AlertTriangle size={14} />
@@ -178,6 +186,7 @@ export function InspectorPanel({
         </div>
       ) : null}
       {propertiesPanel}
+      <ActivityOutputsPanel descriptor={selectedDescriptor} />
       {selectedSupportsScopedVariables ? (
         <div className="wf-container-variables">
           <ScopedVariablesEditor
