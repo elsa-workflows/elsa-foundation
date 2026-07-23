@@ -114,6 +114,28 @@ Known implementations:
   (`EscalationRaised`/`EscalationCaught`/`EscalationUnhandled`/`EscalationLate`). Escalation boundaries are
   validated (`ValidateEscalation`): dormant, subprocess host only, distinct codes + ≤1 catch-all per host. All
   of it lives in the engine; behaviors stay decision-only.
+- **Event subprocesses (spec 128, tier 1)** add **no** behavior, command kind, token status, or state record — a
+  flow-less `BpmnElement.TriggeredByEvent` subprocess is a **graph-derived, dormant** catcher indexed on
+  `BpmnGraph.EventSubprocesses` (a `BpmnEventSubprocessCatcher` per element: trigger kind + code + interrupting +
+  body start element id). `ValidateEventSubprocesses` reads each body's authored structure (the way MI reads
+  `BpmnStructure.Variables`) and enforces the D1 rules. Two additive `StartEventBehavior` families
+  (`StartEventEscalation`/`StartEventError`) route an event-subprocess body start like a none start; the publish
+  trigger provider skips them (`BpmnElementFamilies.IsExternalStartTrigger`). **Scheduled-start seeding** extends
+  `BpmnScheduler.ScheduleChild` with an optional `startElementId` forwarded as the command-metadata hint
+  `BpmnStartTrigger.StartElementIdMetadataKey`, gated in `BpmnProcess.StartAsync`'s third seeding path on the
+  `BpmnExecutionEngine.EventSubprocessBodySchedulingCause` so an inherited hint can never contaminate an ordinary
+  nested process (a bad hint faults `bpmn.start.unresolved-hint`). Activation is engine-owned
+  (`BpmnExecutionEngine.ActivateEventSubprocess`): mint a scope-level activation token, schedule the body with the
+  hint, and — when interrupting — stop all other live work through the shared
+  `BpmnExecutionEngine.StopOtherLiveWork` helper (extracted from the spec-125 cancel-transaction stop-others loop;
+  reason `BpmnExecutionEngine.EventSubprocessScopeInterruptedReason`). `RaiseEscalation` gains the own-scope check
+  (returns the matched catcher instead of staging upward); `OnChildNotifiedAsync` gains the specificity ladder
+  (`BpmnGraph.EscalationEventSubprocessExact`/`EscalationCatchAllEventSubprocess`); `OnChildFaultedAsync` gains
+  the scope error catcher (`BpmnGraph.ErrorEventSubprocess`, seam-B absorption then interrupting activation). Body
+  completion is intercepted before behavior dispatch (`TriggeredByEvent`); two additive diagnostic kinds
+  (`EventSubprocessActivated`/`EventSubprocessCompleted`). `ResolveTokenId` was hardened so a nested
+  BpmnProcess body's leaked inner `bpmn.tokenId` on an inline completion is not mistaken for the parent's
+  activation token. Behaviors stay decision-only. See the README for the error-trigger runtime seam-B limitation.
 - **Multi-instance loops (spec 121)** add no behavior: a `BpmnElement.LoopCharacteristics`
   (`BpmnLoopCharacteristics`) turns a task/subprocess host's `ScheduleChild` decision into a loop the
   engine owns entirely — a coordinator token plus private per-instance sub-tokens, each scheduled through

@@ -185,6 +185,25 @@ public sealed class ExpressionEvaluationRequest
         ExpressionDefinition definition,
         IReadOnlyDictionary<string, JsonElement> parameterValues,
         CancellationToken cancellationToken)
+        : this(definition, parameterValues, ambientVariables: null, cancellationToken)
+    {
+    }
+
+    /// <summary>
+    /// Builds an evaluation request that, in addition to the exactly-declared <paramref name="parameterValues"/>,
+    /// carries a host-pinned snapshot of the variables lexically visible to the expression
+    /// (<paramref name="ambientVariables"/>, name → value). These are provided to the isolated engine as an
+    /// additional read-only surface (<c>variables.X</c> / <c>getVariable('X')</c> / <c>get&lt;Name&gt;()</c>) rather
+    /// than as declared parameters. They are host-pinned data, exactly like the declared parameters: determinism is
+    /// preserved (the same visible-frame snapshot always yields the same result), the engine never discovers workflow
+    /// state on its own, and the binding-pure-v1 capability grant is unchanged. Pure binding expressions supply no
+    /// ambient variables and therefore see no <c>variables</c> surface at all.
+    /// </summary>
+    public ExpressionEvaluationRequest(
+        ExpressionDefinition definition,
+        IReadOnlyDictionary<string, JsonElement> parameterValues,
+        IReadOnlyDictionary<string, JsonElement>? ambientVariables,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(parameterValues);
@@ -202,11 +221,23 @@ public sealed class ExpressionEvaluationRequest
         ParameterValues = new ReadOnlyDictionary<string, JsonElement>(
             parameterValues.OrderBy(item => item.Key, StringComparer.Ordinal)
                 .ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal));
+        AmbientVariables = new ReadOnlyDictionary<string, JsonElement>(
+            (ambientVariables ?? new Dictionary<string, JsonElement>())
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal));
         CancellationToken = cancellationToken;
     }
 
     public ExpressionDefinition Definition { get; }
     public ExpressionEvaluationCapabilities Capabilities { get; }
     public IReadOnlyDictionary<string, JsonElement> ParameterValues { get; }
+
+    /// <summary>
+    /// Host-pinned name → value snapshot of the variables lexically visible to the expression. Empty for pure
+    /// binding expressions. Exposed to the isolated engine as <c>variables.X</c> / <c>getVariable('X')</c> /
+    /// <c>get&lt;Name&gt;()</c>; never merged into <see cref="ParameterValues"/> or the declared-parameter contract.
+    /// </summary>
+    public IReadOnlyDictionary<string, JsonElement> AmbientVariables { get; }
+
     public CancellationToken CancellationToken { get; }
 }
