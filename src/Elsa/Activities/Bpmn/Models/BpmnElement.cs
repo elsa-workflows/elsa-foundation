@@ -154,6 +154,14 @@ public static class BpmnElementTypes
     public const string BusinessRuleTask = "businessRuleTask";
     public const string SendTask = "sendTask";
     public const string ReceiveTask = "receiveTask";
+
+    /// <summary>
+    /// A call activity (spec 133): a task-family element that invokes a separately published Elsa workflow by
+    /// binding a <c>Elsa.DispatchWorkflow</c> child. Resolves to the task family (behaviors stay semantics-unaware);
+    /// its only behavioral distinction is the engine-side failure-outcome translation (spec 133 D3) and its
+    /// interchange fidelity (D5).
+    /// </summary>
+    public const string CallActivity = "callActivity";
     public const string SubProcess = "subProcess";
     public const string ExclusiveGateway = "exclusiveGateway";
     public const string ParallelGateway = "parallelGateway";

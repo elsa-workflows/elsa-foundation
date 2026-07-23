@@ -79,6 +79,31 @@ public sealed class BpmnExecutionEngine(
     /// <summary>The deterministic fault code raised when a transaction child completes Cancelled but no cancel boundary is attached to route the cancellation (spec 125 D2b).</summary>
     public const string TransactionCancelledUnhandledFaultCode = "bpmn.transaction.cancelled-unhandled";
 
+    /// <summary>The seam-A reason recorded on the host's (and sibling listeners') cancelled subtrees when a call activity's failure outcome routed a catcher or faulted (spec 133 D3).</summary>
+    public const string CallActivityFailureRoutedReason = "bpmn.call-activity.failure-routed";
+
+    /// <summary>The <c>Faulted</c> failure outcome of a call activity's bound <c>DispatchWorkflow</c> child (spec 133 D3). Mirrors <c>DispatchWorkflowOutcomes.Faulted</c> by convention; kept local so the module takes no runtime dependency.</summary>
+    public const string CallActivityFaultedOutcomeName = "Faulted";
+
+    /// <summary>The <c>DispatchFailed</c> failure outcome of a call activity's bound <c>DispatchWorkflow</c> child (spec 133 D3). Mirrors <c>DispatchWorkflowOutcomes.DispatchFailed</c> by convention.</summary>
+    public const string CallActivityDispatchFailedOutcomeName = "DispatchFailed";
+
+    /// <summary>The <c>Cancelled</c> failure outcome of a call activity's bound <c>DispatchWorkflow</c> child (spec 133 D3). Shares the value of <see cref="CancelledOutcomeName"/> by convention.</summary>
+    public const string CallActivityCancelledOutcomeName = "Cancelled";
+
+    /// <summary>The deterministic composite fault code raised when a call activity's <c>Faulted</c> outcome reaches no error catcher (spec 133 D3).</summary>
+    public const string CallActivityFaultedFaultCode = "bpmn.call-activity.faulted";
+
+    /// <summary>The deterministic composite fault code raised when a call activity's <c>DispatchFailed</c> outcome reaches no error catcher (spec 133 D3).</summary>
+    public const string CallActivityDispatchFailedFaultCode = "bpmn.call-activity.dispatch-failed";
+
+    /// <summary>The deterministic composite fault code raised when a call activity's <c>Cancelled</c> outcome reaches no error catcher (spec 133 D3).</summary>
+    public const string CallActivityCancelledFaultCode = "bpmn.call-activity.cancelled";
+
+    /// <summary>The call-activity failure outcomes the engine translates into BPMN error handling (spec 133 D3), in deterministic precedence order. <c>Completed</c>/<c>Dispatched</c> are untouched (normal task-flow routing).</summary>
+    private static readonly IReadOnlyList<string> CallActivityFailureOutcomes =
+        [CallActivityFaultedOutcomeName, CallActivityDispatchFailedOutcomeName, CallActivityCancelledOutcomeName];
+
     /// <summary>An empty live-child map: a cancel end stops other live work logically only (in-flight children keep running and are absorbed on late completion — the terminate precedent), so no seam-A subtree cancellation is staged.</summary>
     private static readonly IReadOnlyDictionary<(string NodeId, string? IterationId), string> NoLiveChildren =
         new Dictionary<(string NodeId, string? IterationId), string>();
@@ -234,6 +259,16 @@ public sealed class BpmnExecutionEngine(
             && FindLoopByCoordinator(state, instanceParentTokenId) is { } loop
             && StringComparer.Ordinal.Equals(token.AtElementId, loop.ElementId))
         {
+            // spec 133 D3 (MI composition): the instance interception context is entered first; when the instance is a
+            // call activity completing with a failure outcome, the D3 ladder routes here composed with the spec-121
+            // coordinator cascade (RouteCallActivityFailureOutcome resolves the interrupt target to the loop
+            // coordinator, so firing an error boundary / error event subprocess interrupts every remaining instance).
+            if (IsCallActivityFailureCompletion(graph, token, completionContext.OutcomeNames, out var instanceFailureOutcome))
+            {
+                return ValueTask.FromResult(FinishEvaluation(context, RouteCallActivityFailureOutcome(
+                    context, graph, state, token, instanceFailureOutcome, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
+            }
+
             return ValueTask.FromResult(FinishEvaluation(context, HandleMultiInstanceInstanceCompletion(
                 context, graph, state, token, loop, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
         }
@@ -266,6 +301,18 @@ public sealed class BpmnExecutionEngine(
         if (graph.GetRequiredElement(token.AtElementId).TriggeredByEvent)
         {
             return ValueTask.FromResult(FinishEvaluation(context, HandleEventSubprocessBodyCompletion(state, token)));
+        }
+
+        // spec 133 D3: a call activity's bound child (a DispatchWorkflow node) completed with a failure outcome
+        // (Faulted/DispatchFailed/Cancelled) — intercept BEFORE normal behavior dispatch (joining the MI/compensation/
+        // transaction/event-subprocess interception ladder). The completion never routes normal outbound; instead the
+        // engine routes the error-catcher ladder directly (host error boundary → scope error event subprocess →
+        // composite fault) with NO seam-B absorption (the child is already terminal; no incident exists). The MI-
+        // instance case is handled above, inside the instance interception, so the coordinator cascade composes first.
+        if (IsCallActivityFailureCompletion(graph, token, completionContext.OutcomeNames, out var callActivityFailureOutcome))
+        {
+            return ValueTask.FromResult(FinishEvaluation(context, RouteCallActivityFailureOutcome(
+                context, graph, state, token, callActivityFailureOutcome, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
         }
 
         // spec 119 D2/D3: if the completing token is a live event-based-gateway race member, it is the winner.
@@ -467,6 +514,102 @@ public sealed class BpmnExecutionEngine(
         };
 
         return FinishEvaluation(context, result);
+    }
+
+    /// <summary>
+    /// True when the completing token is a call activity whose bound child completed with a translated failure
+    /// outcome (spec 133 D3): <c>Faulted</c>/<c>DispatchFailed</c>/<c>Cancelled</c>. Yields the matched outcome
+    /// (deterministic precedence). <c>Completed</c>/<c>Dispatched</c> return <c>false</c> (normal task-flow routing).
+    /// </summary>
+    private static bool IsCallActivityFailureCompletion(
+        BpmnGraph graph,
+        BpmnToken token,
+        IReadOnlyCollection<string> outcomeNames,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? failureOutcome)
+    {
+        failureOutcome = null;
+        if (!BpmnElementFamilies.IsCallActivity(graph.GetRequiredElement(token.AtElementId)))
+            return false;
+
+        failureOutcome = CallActivityFailureOutcomes.FirstOrDefault(outcome => outcomeNames.Contains(outcome, StringComparer.Ordinal));
+        return failureOutcome is not null;
+    }
+
+    /// <summary>
+    /// Routes a call activity's translated failure outcome (spec 133 D3), the completion-path analog of the spec
+    /// 120/128 seam-B fault absorptions but WITHOUT any seam B: a faulted/cancelled/dispatch-failed called workflow
+    /// COMPLETES the DispatchWorkflow child with an outcome (it never faults, produces no incident), so there is
+    /// nothing to absorb — the host token is consumed and the error-catcher ladder is routed directly. The completing
+    /// child's active-child record was already dropped by the caller. The ladder: (1) a host-attached error boundary
+    /// mints an <c>Active</c> token at the boundary (inheriting the interrupt target's iteration key) and propagates;
+    /// (2) else the scope's error event subprocess activates interrupting (spec-128 activation); (3) else the process
+    /// faults deterministically with the per-outcome composite fault code. The interrupt target is the multi-instance
+    /// loop coordinator when the completing token is an instance (spec 121 cascade — firing a catcher interrupts every
+    /// remaining instance), otherwise the completing host token itself. NO seam-B request is staged on this path.
+    /// </summary>
+    private EvaluationResult RouteCallActivityFailureOutcome(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnToken completingToken,
+        string failureOutcome,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
+        List<BpmnPendingSubtreeCancellation> pendingCancellations,
+        string completedActivityExecutionId)
+    {
+        var element = graph.GetRequiredElement(completingToken.AtElementId);
+
+        // The interrupt target is the MI loop coordinator when the completing token is an instance (spec 121
+        // coordinator cascade), otherwise the completing host token itself.
+        var interruptTokenId = ResolveMultiInstanceCoordinatorTokenId(state, completingToken) ?? completingToken.TokenId;
+        var interruptIterationKey = state.Tokens.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.TokenId, interruptTokenId))?.IterationKey;
+
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.CallActivityFailureRouted, element.ElementId, null, completingToken.TokenId,
+            $"BPMN call activity '{element.ElementId}' completed with the '{failureOutcome}' outcome; routing the call-activity failure path.");
+
+        // Ladder tier 1: a host-attached error boundary (spec 120) fires — mint a token to route its outbound flows.
+        if (graph.AttachedErrorBoundary(element.ElementId) is { } errorBoundary)
+        {
+            state = CancelTokenAndChild(state, interruptTokenId, CallActivityFailureRoutedReason, liveChildAeiByNode, pendingCancellations,
+                (token, reason) => $"BPMN error boundary '{errorBoundary.ElementId}' routed a call-activity '{failureOutcome}' outcome of host '{element.ElementId}' and cancelled token '{token.TokenId}' at '{token.AtElementId}' ({reason}).");
+            state = CancelHostListeners(graph, state, interruptTokenId, listenerTokenToSkip: null, CallActivityFailureRoutedReason, liveChildAeiByNode, pendingCancellations);
+
+            var errorToken = NewToken(state, errorBoundary.ElementId, flowId: null, parentTokenId: interruptTokenId, BpmnTokenStatus.Active, producingActivityExecutionId: completedActivityExecutionId, iterationKey: interruptIterationKey);
+            state = AddToken(state, errorToken);
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TokenEmitted, errorBoundary.ElementId, null, errorToken.TokenId,
+                $"BPMN error boundary '{errorBoundary.ElementId}' fired and emitted token '{errorToken.TokenId}' to route the call-activity failure path.");
+
+            var boundaryResult = Propagate(context, graph, state, completedActivityExecutionId);
+            return boundaryResult with { PendingSubtreeCancellations = pendingCancellations };
+        }
+
+        // Ladder tier 2: the scope's error event subprocess (spec 128) activates interrupting — stop all other live
+        // work (which cancels the interrupt target and its listeners) and schedule the body.
+        if (graph.ErrorEventSubprocess() is { } errorEventSubprocess)
+        {
+            var activation = ActivateEventSubprocess(context, graph, state, errorEventSubprocess, interruptIterationKey,
+                liveChildAeiByNode, pendingCancellations, completedActivityExecutionId,
+                $"call-activity '{failureOutcome}' outcome of host '{element.ElementId}'");
+            var subprocessResult = Propagate(context, graph, activation.State, completedActivityExecutionId);
+            return subprocessResult with { PendingSubtreeCancellations = pendingCancellations };
+        }
+
+        // Ladder tier 3: no catcher — the process faults deterministically with the per-outcome composite fault code.
+        // Consume the interrupt target (coordinator cascade or host token) and its listeners; a fault continuation
+        // drops the carried seam-A cancellations (the whole process is faulting).
+        state = CancelTokenAndChild(state, interruptTokenId, CallActivityFailureRoutedReason, liveChildAeiByNode, pendingCancellations,
+            (token, reason) => $"BPMN call activity '{element.ElementId}' faulted and cancelled token '{token.TokenId}' at '{token.AtElementId}' ({reason}).");
+        state = CancelHostListeners(graph, state, interruptTokenId, listenerTokenToSkip: null, CallActivityFailureRoutedReason, liveChildAeiByNode, pendingCancellations);
+
+        var faultCode = failureOutcome switch
+        {
+            CallActivityFaultedOutcomeName => CallActivityFaultedFaultCode,
+            CallActivityDispatchFailedOutcomeName => CallActivityDispatchFailedFaultCode,
+            _ => CallActivityCancelledFaultCode
+        };
+        var message = $"BPMN call activity '{element.ElementId}' completed with the '{failureOutcome}' outcome, but no error boundary or error event subprocess is available to route it.";
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, element.ElementId, null, completingToken.TokenId, message);
+        return new EvaluationResult(state, new ActivityFault(faultCode, message));
     }
 
     /// <summary>

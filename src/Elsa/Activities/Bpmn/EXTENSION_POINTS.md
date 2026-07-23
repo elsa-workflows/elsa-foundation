@@ -137,6 +137,23 @@ Known implementations:
   (`EventSubprocessActivated`/`EventSubprocessCompleted`). `ResolveTokenId` was hardened so a nested
   BpmnProcess body's leaked inner `bpmn.tokenId` on an inline completion is not mistaken for the parent's
   activation token. Behaviors stay decision-only.
+- **Call activities (spec 133)** add **no** behavior, command kind, token status, or state record. A
+  `BpmnElementTypes.CallActivity` element resolves to the **task family** (added to `BpmnElementFamilies`'
+  task set, so it is boundary-host and multi-instance legal with no behavior change) and binds a
+  `Elsa.DispatchWorkflow` child whose waited path is the shipped dispatch machinery. The one new engine piece
+  is **failure-outcome translation**: `OnChildCompletedAsync` intercepts a `callActivity`-bound child completing
+  with `Faulted`/`DispatchFailed`/`Cancelled` (`BpmnExecutionEngine.CallActivityFailureOutcomes`) **before**
+  behavior dispatch (joining the MI/compensation/transaction/event-subprocess interception ladder; the MI-instance
+  case is handled inside the instance interception so the coordinator cascade composes first) and routes the
+  error-catcher ladder **directly, with no seam B** (`RouteCallActivityFailureOutcome`): host error boundary
+  (`BpmnGraph.AttachedErrorBoundary`, the spec-120 mint-and-propagate) → scope error event subprocess
+  (`BpmnGraph.ErrorEventSubprocess`, the spec-128 interrupting activation via `ActivateEventSubprocess`) → the
+  deterministic composite fault (`bpmn.call-activity.faulted` / `.dispatch-failed` / `.cancelled`). The interrupt
+  target is the completing host token, or the MI loop coordinator when the completing token is an instance
+  (`ResolveMultiInstanceCoordinatorTokenId`, so firing a catcher cascades every remaining instance). One additive
+  diagnostic kind (`CallActivityFailureRouted`) and one seam-A reason
+  (`BpmnExecutionEngine.CallActivityFailureRoutedReason`). `Completed`/`Dispatched` are untouched (normal task-flow
+  routing). No seam-B request is staged on this path. Behaviors stay decision-only.
 - **Multi-instance loops (spec 121)** add no behavior: a `BpmnElement.LoopCharacteristics`
   (`BpmnLoopCharacteristics`) turns a task/subprocess host's `ScheduleChild` decision into a loop the
   engine owns entirely — a coordinator token plus private per-instance sub-tokens, each scheduled through

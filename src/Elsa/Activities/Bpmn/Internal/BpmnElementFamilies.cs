@@ -57,7 +57,10 @@ public static class BpmnElementFamilies
         BpmnElementTypes.ManualTask,
         BpmnElementTypes.BusinessRuleTask,
         BpmnElementTypes.SendTask,
-        BpmnElementTypes.ReceiveTask
+        BpmnElementTypes.ReceiveTask,
+        // spec 133: a call activity resolves to the task family (TaskBehavior unchanged) and is a boundary-host /
+        // multi-instance-legal member; its call-activity distinction is the engine-side failure-outcome translation.
+        BpmnElementTypes.CallActivity
     };
 
     public static string Resolve(BpmnElement element)
@@ -167,6 +170,10 @@ public static class BpmnElementFamilies
         StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) &&
         element.EventDefinitions.Count == 1 &&
         StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Cancel);
+
+    /// <summary>True when an element is a call activity (spec 133): a task-family element whose bound <c>DispatchWorkflow</c> child's failure outcomes route through BPMN error handling (D3).</summary>
+    public static bool IsCallActivity(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.CallActivity);
 
     /// <summary>The host families a boundary event may attach to (spec 120 D2): the task family and embedded subprocesses.</summary>
     public static bool IsBoundaryHostFamily(BpmnElement element) =>

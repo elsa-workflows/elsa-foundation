@@ -91,8 +91,18 @@ Mapping rules for this slice:
   plus the body's event-start with its definition and `isInterrupting="false"` only when non-interrupting;
   escalation codes dedupe through the root `<escalation>` declarations. Round-trips hold for escalation
   (interrupting / non-interrupting / catch-all) and error (always interrupting, catch-all).
-- Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes
-  (call activities, …) are dropped with an issue. **Cyclic graphs import clean** — a
+- **Call activities** (spec 133): a `<callActivity>` carrying the Elsa extension attribute
+  `elsa:workflowDefinitionId` (our export convention) imports **bound** — a `DispatchWorkflow` child is
+  synthesized (`WorkflowDefinitionId` literal + `WaitForCompletion`, honoring `elsa:waitForCompletion="false"`
+  for fire-and-forget; the spec-118 synthesized-child pattern). A plain `<callActivity calledElement="…">` (a
+  foreign BPMN process id with no guaranteed Elsa definition mapping) imports **unbound** with an **Info** finding
+  ("imported unbound; bind a DispatchWorkflow activity to execute it" — the serviceTask precedent); the
+  `calledElement` is recorded as `Properties["bpmn.calledElement"]` (the `bpmn.errorRef` passthrough precedent) in
+  either case for authoring reference and lossless round-trip. The importer never emits a validator-rejected graph
+  (a call activity validates as a task-family element, bound or childless). Publish-time pinning means import never
+  needs to resolve the definition.
+- Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes are
+  dropped with an issue. **Cyclic graphs import clean** — a
   loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation
   finding is gone; the graph validator's structural rules still constrain where a loop-back may land.
 - BPMNDI shapes/edges are preserved verbatim on the authored `diagram` payload.
@@ -125,7 +135,12 @@ id="escalation-{code}" escalationCode="{code}" [name]>` declaration (message/sig
 catch-all boundary emits a ref-less `<escalationEventDefinition/>` and contributes no root declaration. An
 **event subprocess** emits `<subProcess triggeredByEvent="true">` with its body content, and the body's
 event-start emits its `escalationEventDefinition`/`errorEventDefinition` plus `isInterrupting="false"` when
-non-interrupting. Each distinct message/signal
+non-interrupting. A **call activity** emits `<callActivity>` with `calledElement` (the `bpmn.calledElement`
+passthrough when present, else the bound child's authored `WorkflowDefinitionId`), the
+`elsa:workflowDefinitionId` extension attribute when bound, and `elsa:waitForCompletion="false"` only when the
+bound child is authored fire-and-forget (the waited-by-default convention omits it); the bound `DispatchWorkflow`
+child node is an Elsa concern the importer re-establishes, so it is not inlined. Bound and unbound call activities
+both round-trip. Each distinct message/signal
 name emits one deduped root `<message>`/`<signal>` declaration (deterministic id `message-{name}` /
 `signal-{name}`) that the element's `messageRef`/`signalRef` targets — a name that sanitizes to a
 colliding id shares a declaration. A catch event's bound `Delay`/`Event` child is engine detail and is not

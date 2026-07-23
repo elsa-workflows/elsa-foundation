@@ -200,3 +200,34 @@ suites pass unmodified.
   ControlFlow, Architecture (+ the DispatchWorkflow tests project if the fixture reuse touches
   it). Full solution build clean.
 - The D6 cancellation-reach issue exists on GitHub with the verified analysis.
+
+## Deviations (implementation)
+
+- **Waited end-to-end test — dispatch-harness reuse TRIPWIRE taken (probe test double + no
+  DispatchWorkflow-project end-to-end).** Wiring the real dispatch machinery into `BpmnRuntimeFixture`
+  proved disproportionate: the two harnesses are structurally different. `BpmnRuntimeFixture` builds on
+  `WorkflowExecutionHarness` (no runtime-API feature, no actor provider, no dispatch stager,
+  resumption, or checkpoint-recording stores), whereas `DispatchWorkflowRuntimeTestFixture` stands up
+  its own `ServiceCollection` with `WorkflowsRuntimeApiFeature`, a `RecordingWorkflowExecutionActorProvider`
+  over `InProcessWorkflowExecutionActorProvider`, `DispatchWorkflowRuntimeFeature`, a resumption sweep, and
+  a recording commit store — a different composition root and dispatch lifecycle. Per the spec's stated
+  fallback, the D3 ladder is instead driven by a **probe leaf that emits the DispatchWorkflow outcome
+  names directly** (`Faulted`/`DispatchFailed`/`Cancelled`/`Completed`/`Dispatched`). This is a **faithful**
+  double at exactly the seam the new code reads: the engine's interception keys only on the completing
+  element being a `callActivity` and the completion's outcome names — it never inspects the child's
+  activity type. The DispatchWorkflow status→outcome mapping and the wait/resume path themselves are
+  already covered by the DispatchWorkflow test project. No true end-to-end was added there (composing the
+  BPMN feature + authoring a nested BPMN structure into that fixture is the same disproportionate
+  cross-wiring in the other direction). `BpmnCallActivityTests` covers FR-2/FR-3 (three-way ladder + the
+  three pinned fault codes)/FR-4/FR-5/FR-7; validation D1 is in `BpmnGraphValidationTests`; interchange D5
+  in `BpmnCallActivityInterchangeTests`.
+- **MI-vs-callActivity interception ordering TRIPWIRE — resolved per the spec's pin, not stopped.** The
+  spec pins the resolution ("instance interception context first, D3 ladder composed with the spec-121
+  coordinator cascade"), so this was not ambiguous enough to stop: the MI-instance interception is entered
+  first, and when the completing instance is a call activity with a failure outcome it calls the shared
+  `RouteCallActivityFailureOutcome`, whose interrupt target resolves to the loop coordinator
+  (`ResolveMultiInstanceCoordinatorTokenId`) — so firing a catcher cascades every remaining instance.
+  Pinned by `MultiInstanceCallActivity_InstanceFailure_FiresBoundary_InterruptsCoordinator`.
+- **Outcome-name constants defined locally** (`BpmnExecutionEngine.CallActivity*OutcomeName`) rather than
+  referencing `DispatchWorkflowOutcomes`, to keep the BPMN module's dependency envelope unchanged (no new
+  runtime dependency). They mirror `DispatchWorkflowOutcomes` by convention, documented on each constant.
