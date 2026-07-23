@@ -319,6 +319,16 @@ builder.Services.AddCShellsAspNetCore(shells =>
                 configuration.GetSection(RuntimeFaultCaptureOptions.SectionName).Bind(feature)));
 });
 
+// Opt-in eager shell activation (spec 132, First-Request/Cold-Start Readiness unit 4). Default OFF. When
+// Elsa:Boot:EagerShellActivation:Enabled is set, a host-level IHostedService activates the configured shell(s)
+// at boot through the same IShellRegistry.GetOrActivateAsync path the first request would (byte-identical shell
+// state, just earlier), so the activation cliff — and the mid-activation contention tail — is paid before the
+// first user request instead of during it. The trigger lives at the host level because CShells does not run
+// shell-scoped hosted services and the eager trigger must sit outside any shell (it activates the shells).
+// Registered only when the switch is on, so an unset host constructs nothing and pays nothing.
+if (EagerShellActivationOptions.IsEnabled(configuration))
+    builder.Services.AddHostedService<EagerShellActivationHostedService>();
+
 // Root authentication/authorization services. Registered after AddCShellsAspNetCore so the shell
 // delegating scheme/policy providers (WithAuthenticationAndAuthorization) stay in place — both
 // AddAuthentication and AddAuthorization use TryAdd semantics for those services.
