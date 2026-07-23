@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -53,10 +54,30 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 dependencyPolicy,
                 $"Portable expression input '{inputName}' on executable node '{nodeId}'");
 
+        // Issue #984: a JavaScript expression may read lexically visible variables through the ambient
+        // variables.X / getVariable('X') / get<Name>() surface. Resolve exactly which visible variables the source
+        // references (or all of them when it performs computed access we cannot resolve statically), then fold their
+        // protection policy into the effective policy up front so a sensitive variable read cannot silently detaint
+        // the result — mirroring how declared parameter policies propagate. Only these referenced variables are
+        // materialized and handed to the engine, so an unrelated variable never triggers an external-payload read.
+        var referencedAmbient = ExposesAmbientVariables(expression, resolutionContext)
+            ? ResolveReferencedAmbientVariables(expression.Expression, resolutionContext.VisibleVariablesByName)
+            : EmptyAmbientVariables;
+        foreach (var envelope in referencedAmbient.Values)
+        {
+            effectivePolicy = ValuePolicyCombiner.Combine(
+                effectivePolicy,
+                envelope.Policy,
+                $"Ambient variable read on portable expression input '{inputName}' on executable node '{nodeId}'");
+        }
+
         try
         {
             var parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken);
-            var request = new ExpressionEvaluationRequest(definition, parameters.Values, cancellationToken);
+            var ambientVariables = referencedAmbient.Count == 0
+                ? null
+                : await MaterializeAmbientVariableValuesAsync(referencedAmbient, cancellationToken);
+            var request = new ExpressionEvaluationRequest(definition, parameters.Values, ambientVariables, cancellationToken);
             return new PortableExpressionEvaluation(
                 await portableEvaluator.EvaluateAsync(request),
                 effectivePolicy);
@@ -159,6 +180,87 @@ internal sealed class RuntimePortableExpressionEvaluator(
 
         return new PortableExpressionParameters(values, dependencyPolicy);
     }
+
+    private static readonly IReadOnlyDictionary<string, ValueEnvelope> EmptyAmbientVariables =
+        new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+
+    // Only JavaScript expressions read the ambient variables.X / getVariable('X') / get<Name>() surface, and only
+    // when the host projected any visible variables. Liquid's portable handler ignores ambient variables, so it
+    // neither receives them nor takes their policy taint.
+    private static bool ExposesAmbientVariables(RuntimeExpressionBinding expression, RuntimeInputBindingResolutionContext context) =>
+        context.VisibleVariablesByName.Count > 0 &&
+        StringComparer.OrdinalIgnoreCase.Equals(expression.Language, "JavaScript");
+
+    /// <summary>
+    /// Selects the subset of visible variables the source actually reads (via <c>variables.X</c>,
+    /// <c>variables['X']</c>, <c>getVariable('X')</c>, or the <c>get&lt;Name&gt;()</c> accessor). When the source
+    /// performs computed ambient access whose target cannot be resolved statically, every visible variable is
+    /// selected so neither the exposed surface nor the policy taint is ever under-approximated.
+    /// </summary>
+    private static IReadOnlyDictionary<string, ValueEnvelope> ResolveReferencedAmbientVariables(
+        string source,
+        IReadOnlyDictionary<string, ValueEnvelope> visibleVariables)
+    {
+        if (visibleVariables.Count == 0 || HasComputedAmbientAccess(source))
+            return visibleVariables;
+
+        var referenced = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+        foreach (var (name, envelope) in visibleVariables)
+        {
+            if (IsAmbientVariableReferenced(source, name))
+                referenced[name] = envelope;
+        }
+
+        return referenced;
+    }
+
+    /// <summary>
+    /// Materializes the persistable value of each referenced ambient variable into the name → value snapshot the
+    /// isolated engine exposes. Transient (non-durable) variables cannot cross the expression boundary and are
+    /// omitted; an absent variable is omitted (it reads as <c>undefined</c>); an explicit null becomes JSON null.
+    /// An externally stored value is dereferenced when a payload reader is available, otherwise omitted.
+    /// </summary>
+    private async ValueTask<IReadOnlyDictionary<string, JsonElement>> MaterializeAmbientVariableValuesAsync(
+        IReadOnlyDictionary<string, ValueEnvelope> referencedVariables,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var (name, envelope) in referencedVariables)
+        {
+            if (envelope.Policy.Lifecycle == DurableValueLifecycle.None || envelope.Presence == ValuePresence.Absent)
+                continue;
+            if (envelope.Presence == ValuePresence.ExplicitNull)
+            {
+                result[name] = JsonSerializer.SerializeToElement<object?>(null);
+                continue;
+            }
+
+            if (envelope.InlineValue.HasValue)
+                result[name] = envelope.InlineValue.Value.Clone();
+            else if (envelope.ExternalReference is not null && externalPayloadStore is not null)
+                result[name] = await externalPayloadStore.ReadAsync(envelope.ExternalReference, cancellationToken);
+        }
+
+        return result;
+    }
+
+    private static bool IsAmbientVariableReferenced(string source, string name)
+    {
+        var escaped = Regex.Escape(name);
+        return Regex.IsMatch(source, $@"variables\s*\.\s*{escaped}(?![\w$])", RegexOptions.CultureInvariant) ||
+               Regex.IsMatch(source, $@"variables\s*\[\s*(['""]){escaped}\1", RegexOptions.CultureInvariant) ||
+               Regex.IsMatch(source, $@"getVariable\s*\(\s*(['""]){escaped}\1", RegexOptions.CultureInvariant) ||
+               Regex.IsMatch(source, $@"(?<![\w$.])get{Regex.Escape(ToPascalCase(name))}(?![\w$])", RegexOptions.CultureInvariant);
+    }
+
+    // A computed variables[...] index or a getVariable(...) whose argument is not a string literal cannot be
+    // resolved to a single variable name, so its referenced set is treated as "all visible variables".
+    private static bool HasComputedAmbientAccess(string source) =>
+        Regex.IsMatch(source, @"variables\s*\[\s*[^'""\]\s]", RegexOptions.CultureInvariant) ||
+        Regex.IsMatch(source, @"getVariable\s*\(\s*[^'"")\s]", RegexOptions.CultureInvariant);
+
+    private static string ToPascalCase(string name) =>
+        name.Length == 0 ? name : $"{char.ToUpperInvariant(name[0])}{name[1..]}";
 
     private PortableExpressionParameter ApplyParameterConversionPlan(
         RuntimeExpressionBinding expression,

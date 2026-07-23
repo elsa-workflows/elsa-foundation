@@ -98,13 +98,14 @@ enclosing **container's structure** (e.g. the Sequence's `variables`), not at wo
 the Set faults with *"targets undeclared variable"*. `New-VariableDef` + `New-SequenceStructure -Variables`
 encode this.
 
+**Resolved (`While`):** Both original blockers are fixed. (1) A JS value expression **can** now read a container
+variable via `getVariable('X')`/`variables.X`/`getX()` — the visible variable frames are projected into the isolated
+engine as a host-pinned read surface (issue #984), so a counter can be incremented from JS. (2) A body that `Set`s
+the loop-condition variable now propagates to the loop condition — `While` re-materializes its inputs per pass
+(issue #977 / PR #985) instead of reconstructing from a frozen snapshot, so the loop exits after the expected pass
+instead of faulting at the 64-cycle drain limit.
+
 **Still open (branching + single-outcome):**
-- `While` — one remaining blocker: a JS value expression can't read a container variable via
-  `getX()`/`variables.X`/`X` (all fail to evaluate), so a counter can't be incremented from JS (#984; only the
-  compiled `args.*` parameters exist in the Jint sandbox). The second blocker — a body `Set` of the condition
-  variable not propagating to the loop condition (ran to `DrainCycleLimitExceededException`) — was #977, fixed:
-  `While` now opts into per-pass input re-materialization (`IRuntimeRematerializeInputsOnChildCompletion`), so a
-  body-committed `Set` (container- or workflow-scoped) terminates the loop.
 - No Foundation 1:1 for classic `FlowSwitch` default/fail, implicit joins, or `Switch` MatchAny mode
   (Foundation removed the flow-activity model). Covered at the concept level via `If`/`Switch`/`Parallel`;
   these are architectural gaps, not bugs.
