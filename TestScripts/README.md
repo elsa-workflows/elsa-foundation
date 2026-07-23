@@ -33,6 +33,7 @@ everything the flow needs (design + publishing + runtime APIs, identity, `Ground
 | `javascript/Test-JavaScriptExpressions.ps1` | pure-ES JS in a Sync HTTP response body (array/object/json/optional-chaining/nullish/flat/replaceAll) |
 | `http/Test-HttpMethods.ps1` | one HttpEndpoint accepting GET/POST/PUT/DELETE, each returning a sync response |
 | `http/Test-HttpEcho.ps1` | capture request data (`ParsedContent`/`RouteData`/`Request`) into workflow variables and echo it back in a sync response (request-body, route-parameter, query-parameter, header; #972/#984) |
+| `bpmn/Test-BpmnCallActivity.ps1` | BPMN `callActivity` bound to a REAL waited `DispatchWorkflow` child (spec 133): child completes -> parent resumes via `Completed`; child faults -> the error boundary routes (no parent incident) |
 | `correlate/Test-Correlate.ps1` | `SetCorrelationId` intrinsic sets the instance correlation id; found by `?correlationId=` |
 | `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
 | `logging/Test-ValueCapture.ps1` | per-activity value snapshot: a WriteLine's `Text` input is captured (`DiagnosticSnapshot`) and its payload retrieved via the value-evidence endpoint |
@@ -177,13 +178,18 @@ Enabling it (separate from the bug fixes below):
 Fire-and-forget (`WaitForCompletion=false`, used by the test) works: the parent completes immediately with
 outcome `Dispatched` while the child runs independently.
 
-**Waited path (`WaitForCompletion=true`) is currently broken (regression).** Verified live on current main: the
-parent suspends at the dispatch node (`subStatus=TriggerWaiting`, no surfaced bookmark) and **never resumes**,
-even long after the child would have completed — the parent-after node never runs. `DispatchWorkflow` does
-register a wait bookmark + resume trigger (`DispatchWorkflow.cs:204-234`, resume target `CompletionResumeTargetId`),
-so the completion -> parent-resume delivery (`WorkflowDispatchCompletionEnricher` / `ParentResumeExecutor`) is not
-firing (or the child is not dispatched in waited mode). This contradicts the earlier "issue #976 fixed" note.
-Tracked as issue #1006; `Test-ChildWorkflow.ps1` therefore uses fire-and-forget only.
+**Waited path (`WaitForCompletion=true`) works again (re-verified 2026-07-23 @ `3dd732d07`).** The #1006
+hang is gone since the #982 node-scoped resume-target fix (`4c2386551`): the parent suspends at the dispatch
+node, the child runs, and the parent resumes with the child's terminal outcome (`Completed`/`Faulted`) —
+covered end-to-end by `bpmn/Test-BpmnCallActivity.ps1` (a BPMN `callActivity` is a waited `DispatchWorkflow`
+by convention). `Test-ChildWorkflow.ps1` still covers the fire-and-forget path.
+
+**Known defect (issue #1031):** a **faulted** dispatched child ends `Faulted` via a scheduler-poison path — its
+fault-recording checkpoint commit fails (`GroundworkRuntimeCheckpointWriterException`), so the child surfaces a
+`Critical`/`SchedulerWorkPoisoned` incident instead of the normal `ActivityReturnedFault` one and the faulted
+activity's state stays uncommitted (`Running`). Dispatched executions only; a directly-executed `Fault`
+workflow records its incident cleanly. Parent-side outcome delivery is unaffected (the waited parent still
+resumes with `Faulted`), which is why `bpmn/Test-BpmnCallActivity.ps1` scenario B passes despite it.
 
 ## Server fixes made while building these tests
 
