@@ -133,6 +133,14 @@ silently write variables. A nested scope's typed `Return` is the normal way it p
 value for its parent; an explicit `Set` of a visible ancestor variable remains a separately visible
 side effect.
 
+**Amendment (issue #1004): explicit output-capture edges.** A pinned activity output capture is a
+narrow second graph-visible variable-write form: it is an authored, inspectable engine-owned binding
+edge from a named projection of the activity's atomic result to a variable declaration, not an
+activity-code, expression, or ambient completion side effect. Workflow and container targets resolve
+and commit under [ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md).
+The capture's frame mutation participates in the producing completion checkpoint; unbound activity
+completion and activity transitions still cannot write variables.
+
 Potentially concurrent ordinary writes to the same variable fail validation unless an explicit,
 deterministic merge or reduction governs them. This refines ADR 0027's previously open concurrent
 write policy. Reads occur when the consumer invocation materializes its inputs, and a completed `Set`
@@ -397,7 +405,10 @@ bidirectional conversions through the runtime.
 - Framework §2.21.1 still applies: migration preserves existing test objectives, and planning records
   an explicit replacement/removal ledger for tests whose old memory-block subject disappears.
 - Specs 011, 060, and 061 remain useful implementation evidence but their active-output/capture model
-  must be reconciled with atomic invocation results and causal result projections.
+  must be reconciled with atomic invocation results and causal result projections. The
+  container-target output-capture subset is reconciled by
+  [ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md);
+  the independently writable output-slot and execution-local memory mechanisms remain superseded.
 - ADR 0027 remains the lexical-variable foundation, refined here with graph-visible writes and a
   deterministic concurrent-write rule.
 - ADR 0031 remains the locality optimization, constrained here so burst memory cannot become workflow
@@ -415,4 +426,5 @@ bidirectional conversions through the runtime.
   `ActivityArgument<T>`
 - Reconciliation of ADR 0030's ambient JavaScript write-back with the new pure-binding-expression
   contract
-- Reconciliation of specs 011/060/061 with invocation-owned atomic results
+- Reconciliation of specs 011/060/061 with invocation-owned atomic results; ADR 0048 resolves the
+  container-target output-capture subset, while the remaining superseded mechanisms stay excluded
