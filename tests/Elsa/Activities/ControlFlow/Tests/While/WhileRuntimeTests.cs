@@ -75,17 +75,17 @@ public sealed class WhileRuntimeTests
     [Fact]
     public async Task BodySetOfWorkflowScopedConditionVariable_TerminatesLoopAfterOnePass()
     {
-        // Same shape at workflow scope: the root Sequence's declaration seeds the canonical root variable
-        // frame, the body's Set commits back to it (#286 mid-run write-back), and the re-materialized
-        // condition observes the mutation on the next evaluation.
+        // Same shape at workflow scope (#972 unified model): the workflow-scope declaration lives on the
+        // EXECUTABLE (state.Variables), which seeds the canonical root variable frame — the root Sequence's
+        // structure variables are a separate container scope and no longer fold into "workflow". The body's
+        // Set commits back to the root frame, and the re-materialized condition observes the mutation.
         await using var harness = NewHarness("actexec-root", "actexec-while", "actexec-set-0");
 
         var root = NewSequenceNode(
             "node-root",
-            [NewVariableConditionWhileNode(VariableReference.WorkflowScopeId)],
-            variables: [BoolVariable("keepGoing", true)]);
+            [NewVariableConditionWhileNode(VariableReference.WorkflowScopeId)]);
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root));
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root, BoolVariable("keepGoing", true)));
 
         Assert.Single(run.States("node-set"));
         run.AssertOutcomes("node-while", ActivityOutcomes.Done);

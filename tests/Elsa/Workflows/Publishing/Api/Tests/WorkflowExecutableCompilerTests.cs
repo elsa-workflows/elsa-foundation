@@ -1327,6 +1327,51 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task CompilesWorkflowScopeVariablesOntoExecutableAndIntoBehavioralHash()
+    {
+        // #972: workflow-level state.Variables compile into WorkflowExecutable.WorkflowVariables — the
+        // declarations that seed the runtime's root variable frame. They are behavioral content: declaring
+        // a workflow variable is a distinct artifact identity, while a variable-less workflow hashes
+        // byte-identically to before the field existed.
+        var now = new DateTimeOffset(2026, 7, 22, 12, 0, 0, TimeSpan.Zero);
+        var node = Node("write-one", Text("hello"));
+        var message = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-message",
+            Name: "Message",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            Default: new ArgumentValue("hello", "Literal"));
+
+        var without = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
+        var with = await Compiler(WorkflowVersion(node, variables: [message])).CompileAsync(NewRequest(now));
+
+        Assert.Empty(without.WorkflowVariables);
+        var declaration = Assert.Single(with.WorkflowVariables);
+        Assert.Equal("var-message", declaration.VariableKey);
+        Assert.Equal("Message", declaration.Name);
+        Assert.Equal("String", declaration.Type.Alias);
+        Assert.Equal("hello", declaration.InitialBinding!.Literal!.InlineValue!.Value.GetString());
+        Assert.NotEqual(without.Identity.ArtifactHash, with.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Duplicate_workflow_variable_reference_key_fails_publication()
+    {
+        var duplicate = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-message",
+            Name: "Message",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            Default: null);
+        var compiler = Compiler(WorkflowVersion(Node("write-one", Text("hello")), variables: [duplicate, duplicate with { Name = "Other" }]));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("var-message", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task IndexesResumeTargetHandlerIntoExecutable()
     {
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);

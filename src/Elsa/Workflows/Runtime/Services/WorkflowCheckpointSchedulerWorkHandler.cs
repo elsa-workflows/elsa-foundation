@@ -391,9 +391,12 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         if (executable is null)
             throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' cannot activate its canonical root variable frame without the pinned executable.");
 
+        // The root frame declares exactly the workflow-scope variables (state.Variables compiled into the
+        // executable, #972). The root ACTIVITY's structure variables are a normal container scope owned by the
+        // root node itself — they are NOT folded into the workflow scope here.
         var projector = new RuntimeVariableDeclarationProjector();
-        var declarations = projector.ProjectDeclarations(executable.RootActivity);
-        var initial = projector.ProjectInitialValues(executable.RootActivity);
+        var declarations = projector.ProjectDeclarations(executable.WorkflowVariables);
+        var initial = projector.ProjectInitialValues(executable.WorkflowVariables);
         var values = new Dictionary<string, ValueEnvelope>(initial, StringComparer.Ordinal);
         foreach (var (referenceKey, declaration) in declarations)
         {

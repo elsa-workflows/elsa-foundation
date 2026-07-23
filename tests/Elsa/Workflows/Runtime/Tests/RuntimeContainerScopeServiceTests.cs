@@ -91,6 +91,27 @@ public sealed class RuntimeContainerScopeServiceTests
     }
 
     [Fact]
+    public async Task Root_node_with_declarations_activates_its_own_container_frame()
+    {
+        // #972: the root node is a normal declaring container — its structure variables live in its OWN
+        // container frame (scope id = its node id), parented on the workflow root frame; they are no longer
+        // folded into the "workflow" scope.
+        var root = new VariableFrameFactory().CreateRoot(WorkflowExecutionId, "workflow", Values(("wf", "workflow-value")));
+        await _workflows.SaveAsync(WorkflowState(root));
+        var rootNode = DeclNode("root", [], ("local", "Local"));
+        var executable = Executable(rootNode, Declaration("wf", "WorkflowVar"));
+        var state = State("root-exec", "root");
+
+        var activated = await Service().ActivateOwnedFramesAsync(executable, rootNode, state, iterationRequest: null);
+
+        Assert.NotNull(activated.VariableFrame);
+        Assert.Equal("root", activated.VariableFrame!.ScopeId);
+        Assert.Equal(VariableFrameKind.Container, activated.VariableFrame.Kind);
+        Assert.Equal(root.FrameId, activated.VariableFrame.ParentFrameId);
+        Assert.Equal("seed", activated.VariableFrame.Values["local"].InlineValue!.Value.GetString());
+    }
+
+    [Fact]
     public async Task Visible_frame_recovery_rejects_missing_ancestor()
     {
         await _workflows.SaveAsync(WorkflowState(new VariableFrameFactory().CreateRoot(WorkflowExecutionId, "workflow", Values(("root", "root")))));
@@ -202,10 +223,10 @@ public sealed class RuntimeContainerScopeServiceTests
         var iteration = factory.CreateIteration("loop", "parent", "0", root, Values(("item", "apple")));
         var container = factory.CreateContainer("container", "parent", iteration, Values(("g2", "container-value")));
         var containerNode = DeclNode("container", [], ("g2", "Shadowed"));
-        var rootNode = DeclNode("root", [new ExecutableChildSlot("children", [containerNode])], ("g", "Shadowed"));
+        var rootNode = DeclNode("root", [new ExecutableChildSlot("children", [containerNode])]);
 
         var envelopes = Service().ProjectVisibleVariableEnvelopes(
-            Executable(rootNode),
+            Executable(rootNode, Declaration("g", "Shadowed")),
             new RuntimeVisibleVariableFrames([root, iteration, container]));
 
         // Root, iteration, and container are all visible; the shadowed name resolves to the innermost (container) value.
@@ -218,8 +239,8 @@ public sealed class RuntimeContainerScopeServiceTests
     {
         var root = new VariableFrameFactory().CreateRoot(WorkflowExecutionId, "workflow", Values(("g", "hello")));
         await _workflows.SaveAsync(WorkflowState(root));
-        var rootNode = DeclNode("root", [], ("g", "Greeting"));
-        var executable = Executable(rootNode);
+        var rootNode = DeclNode("root", []);
+        var executable = Executable(rootNode, Declaration("g", "Greeting"));
         var state = State("marker", "root");
 
         var populated = await Service().ProjectScopedVariablesForReaderAsync(new MarkerReaderActivity(), executable, state);
@@ -239,8 +260,8 @@ public sealed class RuntimeContainerScopeServiceTests
         var root = factory.CreateRoot(WorkflowExecutionId, "workflow", Values(("r", "root-value")));
         await _workflows.SaveAsync(WorkflowState(root));
         var readerNode = DeclNode("reader", [], ("c", "Counter"));
-        var rootNode = DeclNode("root", [new ExecutableChildSlot("children", [readerNode])], ("r", "Root"));
-        var executable = Executable(rootNode);
+        var rootNode = DeclNode("root", [new ExecutableChildSlot("children", [readerNode])]);
+        var executable = Executable(rootNode, Declaration("r", "Root"));
         await _activities.SaveAsync(State("root-exec", "root"));
         var reader = State("reader-exec", "reader", "root-exec") with
         {
@@ -255,13 +276,19 @@ public sealed class RuntimeContainerScopeServiceTests
         Assert.Equal("root-value", populated["Root"]!.InlineValue!.Value.GetString());
     }
 
-    private static WorkflowExecutable Executable(ExecutableNode rootNode) =>
+    private static WorkflowExecutable Executable(ExecutableNode rootNode, params RuntimeVariableDeclaration[] workflowVariables) =>
         new(
             new WorkflowExecutableIdentity("artifact", "definition", "version", "1.0.0", "hash"),
             rootNode,
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             DateTimeOffset.UnixEpoch,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: null,
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            checkpointCadence: null,
+            workflowVariables: workflowVariables);
 
     private static ExecutableNode DeclNode(string id, IReadOnlyCollection<ExecutableChildSlot> childSlots, params (string Key, string Name)[] variables) =>
         new(
