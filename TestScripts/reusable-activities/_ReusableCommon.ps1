@@ -46,10 +46,13 @@ function Publish-ReusableDraft {
         [Parameter(Mandatory)] $Ctx,
         [Parameter(Mandatory)][string] $DraftId,
         [Parameter(Mandatory)][long] $Revision,
-        $HeadVersionId = $null   # untyped: a [string] param would coerce $null to "" and trip stale-head
+        $HeadVersionId = $null,   # untyped: a [string] param would coerce $null to "" and trip stale-head
+        $Version = $null
     )
     if ([string]::IsNullOrEmpty($HeadVersionId)) { $HeadVersionId = $null }
-    $pfBody = @{ expectedDraftRevision = $Revision; expectedDefinitionHeadVersionId = $HeadVersionId } | ConvertTo-Json
+    $pfRequest = @{ expectedDraftRevision = $Revision; expectedDefinitionHeadVersionId = $HeadVersionId }
+    if (-not [string]::IsNullOrEmpty($Version)) { $pfRequest.version = $Version }
+    $pfBody = $pfRequest | ConvertTo-Json
     $pf = Invoke-RestMethod "$($Ctx.BaseUrl)/design/activities/drafts/$DraftId/publication-preflight" -Method Post -WebSession $Ctx.Session -ContentType 'application/json' -Body $pfBody
     if (-not $pf.isPublishable) {
         $msg = ($pf.diagnostics | ForEach-Object { "$($_.severity):$($_.code)" }) -join "; "
@@ -58,7 +61,7 @@ function Publish-ReusableDraft {
     $pubBody = @{
         expectedDraftRevision           = $pf.draftRevision
         expectedDefinitionHeadVersionId = $pf.definitionHeadVersionId
-        version                         = $pf.minimumVersion
+        version                         = $pf.reviewedVersion
         reviewToken                     = $pf.reviewToken
         idempotencyKey                  = [guid]::NewGuid().ToString()
     } | ConvertTo-Json

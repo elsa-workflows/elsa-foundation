@@ -40,6 +40,7 @@ All scripts share `_ReusableCommon.ps1` and run against a from-source `Elsa.Serv
 
 - **"Workflows as activities"** → reusable **Activity Definition** graphs (there is no publish-a-workflow-as-an-activity bridge).
 - **"auto-publish consuming workflows = true → whole line updates"** → **no such flag**. Consumers pin to exact versions (`Test-ReusableActivityPinning`). Propagation is a deliberate, staged **upgrade-plan** API (`design/activities/upgrade-plans` — create → apply stage → publish handoff draft → refresh → repeat up the hierarchy), not automatic.
+- **Publishing successive reusable-activity versions** → supported through exact-version-bound publication preflight. `Test-ReusableActivityPinning` publishes C v1 and C v2 over REST, then verifies that consumer B remains pinned to C v1.
 - **"whole hierarchy in sync while in draft"** → **no draft-consumes-draft**; a parent draft binds only *published* child versions. Draft test-run compiles the draft under edit; nested children come from their published versions.
 - **"execute a draft"** → yes (`Test-DraftTestRun`, `Test-ActivityDraftTestRun`).
 - **"outcomes of workflows used as activities"** → Set Outcome + branch-routing works **inside a workflow** (`Control` + Flowchart, `Test-SetOutcome`); a reusable-activity **boundary** is limited to the single `done` outcome (`Test-ReusableActivityOutcomeLimit`), so a parent cannot branch on a *custom* outcome coming out of a reusable activity.
@@ -47,4 +48,3 @@ All scripts share `_ReusableCommon.ps1` and run against a from-source `Elsa.Serv
 ## Open blockers surfaced here
 
 - **Issue #1007** — reusable activity nested in a workflow `Sequence` faults at runtime; only root/Flowchart placement works. Tracked by `Test-ReusableSequenceNesting.ps1`.
-- **Second-version publish over REST** trips `activity.publication.review-stale`: after publishing v1, a v2 draft passes preflight (`isPublishable=true`) but the publish rejects the review token as stale (the token is a hash over draft+head+diff+validVersions+readiness; it diverges for a version bump). This **blocked exercising the full upgrade-plan cascade** end to end (which requires publishing successive versions). Needs deeper investigation before filing — noted here so the gap is explicit, not silently skipped.

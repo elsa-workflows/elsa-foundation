@@ -9,6 +9,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Activities.Graph.Runtime.Models;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -19,6 +20,7 @@ using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -51,7 +53,7 @@ public sealed class ActivityDefinitionPublicationTests
             Request("1.0.0+build.2")));
 
         Assert.Equal("activity.version.conflict", exception.ErrorCode);
-        Assert.Equal(2, harness.Compiler.CallCount);
+        Assert.Equal(1, harness.Compiler.CallCount);
         Assert.Equal(0, harness.Commit.CallCount);
     }
 
@@ -121,7 +123,7 @@ public sealed class ActivityDefinitionPublicationTests
 
         Assert.Equal("activity.publication.invalid", exception.ErrorCode);
         Assert.Contains(exception.Diagnostics, x => x.Code == "activity.version.bump-insufficient");
-        Assert.Equal(2, harness.Compiler.CallCount);
+        Assert.Equal(1, harness.Compiler.CallCount);
         Assert.Equal(0, harness.Commit.CallCount);
     }
 
@@ -286,10 +288,13 @@ public sealed class ActivityDefinitionPublicationTests
     }
 
     [Fact]
-    public async Task Reviewed_publish_accepts_any_unique_exact_semver_at_or_above_the_minimum()
+    public async Task Reviewed_publish_accepts_an_exact_semver_at_or_above_the_minimum()
     {
         var harness = PublisherHarness.Create(differ: new ActivityVersionDiffer());
-        var preflight = await harness.Publisher.PreflightAsync(new("draft-1", 4, null));
+        var preflight = await harness.Publisher.PreflightAsync(new("draft-1", 4, null)
+        {
+            Version = "7.3.2"
+        });
 
         var receipt = await harness.Publisher.PublishReviewedAsync(new(
             "draft-1",
@@ -302,6 +307,170 @@ public sealed class ActivityDefinitionPublicationTests
         Assert.Equal(ActivityPublicationReceiptStatus.Applied, receipt.Status);
         Assert.Equal("7.3.2", receipt.Outcome?.Version);
         Assert.Equal("7.3.2", harness.Commit.LastCommit?.Design.Publication.Version);
+    }
+
+    [Fact]
+    public async Task Graph_backed_default_preflight_publishes_its_echoed_minimum_version_across_first_and_second_publications()
+    {
+        var firstHarness = PublisherHarness.Create(compile: GraphBackedCompilation);
+
+        var firstPreflight = await firstHarness.Publisher.PreflightAsync(new("draft-1", 4, null));
+        var firstReceipt = await firstHarness.Publisher.PublishReviewedAsync(new(
+            "draft-1",
+            4,
+            null,
+            firstPreflight.ReviewedVersion,
+            firstPreflight.ReviewToken,
+            "graph-first-publication"));
+
+        Assert.Equal(firstPreflight.MinimumVersion, firstPreflight.ReviewedVersion);
+        Assert.Equal(ActivityPublicationReceiptStatus.Applied, firstReceipt.Status);
+        Assert.Equal(firstPreflight.ReviewedVersion, firstHarness.Commit.LastCommit!.ExecutableTemplate.Root.ActivityContract!.ContractVersion);
+
+        var firstPublication = firstHarness.Commit.LastCommit.Design.Publication;
+        var secondHarness = PublisherHarness.Create(
+            headVersionId: firstPublication.DefinitionVersionId,
+            existingPublications: [firstPublication],
+            requiredBump: ActivityVersionBump.Minor,
+            compile: GraphBackedCompilation);
+
+        var secondPreflight = await secondHarness.Publisher.PreflightAsync(new(
+            "draft-1",
+            4,
+            firstPublication.DefinitionVersionId));
+        var secondReceipt = await secondHarness.Publisher.PublishReviewedAsync(new(
+            "draft-1",
+            4,
+            firstPublication.DefinitionVersionId,
+            secondPreflight.ReviewedVersion,
+            secondPreflight.ReviewToken,
+            "graph-second-publication"));
+
+        Assert.Equal("1.1.0", secondPreflight.MinimumVersion);
+        Assert.Equal(secondPreflight.MinimumVersion, secondPreflight.ReviewedVersion);
+        Assert.Equal(ActivityPublicationReceiptStatus.Applied, secondReceipt.Status);
+        Assert.Equal(secondPreflight.ReviewedVersion, secondHarness.Commit.LastCommit!.ExecutableTemplate.Root.ActivityContract!.ContractVersion);
+    }
+
+    [Fact]
+    public async Task Graph_backed_preflight_binds_a_higher_exact_version_to_its_review_token()
+    {
+        var firstPublication = Publication("definition-1", "version-head", "test.activity", Template());
+        firstPublication = CopyPublication(firstPublication, "1.0.0");
+        var harness = PublisherHarness.Create(
+            headVersionId: firstPublication.DefinitionVersionId,
+            existingPublications: [firstPublication],
+            requiredBump: ActivityVersionBump.Minor,
+            compile: GraphBackedCompilation);
+
+        var preflight = await harness.Publisher.PreflightAsync(new(
+            "draft-1",
+            4,
+            firstPublication.DefinitionVersionId)
+        {
+            Version = "7.3.2"
+        });
+        var receipt = await harness.Publisher.PublishReviewedAsync(new(
+            "draft-1",
+            4,
+            firstPublication.DefinitionVersionId,
+            preflight.ReviewedVersion,
+            preflight.ReviewToken,
+            "graph-higher-version"));
+
+        Assert.Equal("1.1.0", preflight.MinimumVersion);
+        Assert.Equal("7.3.2", preflight.ReviewedVersion);
+        Assert.Equal(ActivityPublicationReceiptStatus.Applied, receipt.Status);
+        Assert.Equal("7.3.2", harness.Commit.LastCommit!.ExecutableTemplate.Root.ActivityContract!.ContractVersion);
+    }
+
+    [Fact]
+    public async Task Graph_backed_review_token_is_stale_when_the_published_version_differs_from_the_reviewed_version()
+    {
+        var harness = PublisherHarness.Create(compile: GraphBackedCompilation);
+        var preflight = await harness.Publisher.PreflightAsync(new("draft-1", 4, null)
+        {
+            Version = "7.3.2"
+        });
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            harness.Publisher.PublishReviewedAsync(new(
+                "draft-1",
+                4,
+                null,
+                "7.3.3",
+                preflight.ReviewToken,
+                "graph-version-mismatch")));
+
+        Assert.Equal("activity.publication.review-stale", exception.ErrorCode);
+        Assert.Equal(0, harness.Commit.CallCount);
+    }
+
+    [Fact]
+    public async Task Review_token_is_stale_for_a_different_exact_version_when_compilation_is_version_invariant()
+    {
+        var harness = PublisherHarness.Create();
+        var preflight = await harness.Publisher.PreflightAsync(new("draft-1", 4, null)
+        {
+            Version = "7.3.2"
+        });
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            harness.Publisher.PublishReviewedAsync(new(
+                "draft-1",
+                4,
+                null,
+                "7.3.3",
+                preflight.ReviewToken,
+                "version-invariant-mismatch")));
+
+        Assert.Equal("activity.publication.review-stale", exception.ErrorCode);
+        Assert.Equal(0, harness.Commit.CallCount);
+    }
+
+    [Fact]
+    public async Task Default_preflight_converges_on_a_version_sensitive_minimum_before_issuing_the_token()
+    {
+        var head = CopyPublication(
+            Publication("definition-1", "version-head", "test.activity", Template()),
+            "1.0.0");
+        var harness = PublisherHarness.Create(
+            headVersionId: head.DefinitionVersionId,
+            existingPublications: [head],
+            compile: GraphBackedCompilation,
+            differ: new RequiredBumpDiffer(request => request.To.Version switch
+            {
+                "1.0.1" => ActivityVersionBump.Minor,
+                _ => ActivityVersionBump.Major
+            }));
+
+        var preflight = await harness.Publisher.PreflightAsync(new(
+            "draft-1",
+            4,
+            head.DefinitionVersionId));
+
+        Assert.Equal("2.0.0", preflight.MinimumVersion);
+        Assert.Equal("2.0.0", preflight.ReviewedVersion);
+        Assert.Equal(3, harness.Compiler.CallCount);
+    }
+
+    [Fact]
+    public async Task Exact_preflight_rejects_a_build_metadata_precedence_collision()
+    {
+        var existing = CopyPublication(
+            Publication("definition-1", "version-existing", "test.activity", Template()),
+            "7.3.2+build.1");
+        var harness = PublisherHarness.Create(existingPublications: [existing]);
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
+            harness.Publisher.PreflightAsync(new("draft-1", 4, null)
+            {
+                Version = "7.3.2+build.2"
+            }));
+
+        Assert.Equal("activity.version.conflict", exception.ErrorCode);
+        Assert.Equal(1, harness.Compiler.CallCount);
+        Assert.Equal(0, harness.Commit.CallCount);
     }
 
     [Fact]
@@ -941,6 +1110,61 @@ public sealed class ActivityDefinitionPublicationTests
     private static ActivityTemplateCompilerResult SuccessfulCompilation(ExecutableActivityTemplate? template = null) =>
         new(template ?? Template(), Measurements(), [], []);
 
+    private static ActivityTemplateCompilerResult GraphBackedCompilation(ActivityTemplateCompilerRequest request)
+    {
+        var templateHash = $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"graph/{request.CandidateVersion}")))}";
+        var descriptor = new GraphActivityDescriptor(
+            request.Definition.Id,
+            request.CandidateDefinitionVersionId,
+            request.CandidateVersion,
+            templateHash,
+            "graph-entry",
+            "graph-entry",
+            [],
+            [],
+            [],
+            [],
+            [],
+            []);
+        var payload = JsonSerializer.SerializeToElement(descriptor, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var contract = new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+            request.Definition.ActivityTypeKey,
+            request.CandidateVersion,
+            WellKnownRuntimeActivityConsumers.GraphActivity,
+            payload,
+            [],
+            new(new ValueTypeDescriptor("Object"), true, ActivityValuePolicy.Default, []),
+            [],
+            new(
+                WellKnownRuntimeActivityConsumers.GraphActivity,
+                WellKnownRuntimeActivityConsumers.GraphActivity));
+        var root = new ExecutableNode(
+            "graph-boundary",
+            "graph-boundary",
+            request.Definition.ActivityTypeKey,
+            request.CandidateVersion,
+            new(
+                WellKnownRuntimeActivityConsumers.GraphActivity,
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                payload),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string> { ["graph.templateHash"] = templateHash },
+            activityContract: contract);
+        var template = new ExecutableActivityTemplate(
+            $"activity-template-{templateHash["sha256:".Length..]}",
+            templateHash,
+            root,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            [],
+            [],
+            [new(WellKnownRuntimeActivityConsumers.GraphActivity, RuntimeActivityDescriptor.InitialSchemaVersion)],
+            "graph-test/1",
+            new Dictionary<string, string>(),
+            DateTimeOffset.UnixEpoch);
+        return new(template, Measurements(), [], []);
+    }
+
     private static ActivityDefinitionVersionPublication CopyPublication(
         ActivityDefinitionVersionPublication source,
         string version,
@@ -1108,7 +1332,10 @@ public sealed class ActivityDefinitionPublicationTests
             var preflight = await Publisher.PreflightAsync(new(
                 request.DraftId,
                 request.ExpectedDraftRevision,
-                request.ExpectedDefinitionHeadVersionId));
+                request.ExpectedDefinitionHeadVersionId)
+            {
+                Version = request.Version
+            });
             return await Publisher.PublishReviewedAsync(request with
             {
                 ReviewToken = preflight.ReviewToken,
@@ -1123,6 +1350,7 @@ public sealed class ActivityDefinitionPublicationTests
             IReadOnlyList<ActivityDefinitionVersionPublication>? existingPublications = null,
             ActivityVersionBump requiredBump = ActivityVersionBump.None,
             ActivityTemplateCompilerResult? compileResult = null,
+            Func<ActivityTemplateCompilerRequest, ActivityTemplateCompilerResult>? compile = null,
             IActivityVersionDiffer? differ = null,
             string? resourceTenantId = null,
             string? authorizationTenantId = null,
@@ -1167,7 +1395,9 @@ public sealed class ActivityDefinitionPublicationTests
                 TenantId = rereadTenantId
             };
             var publications = new PublisherPublicationStore(existingPublications ?? []);
-            var compiler = new SpyTemplateCompiler(compileResult ?? SuccessfulCompilation());
+            var compiler = compile is null
+                ? new SpyTemplateCompiler(compileResult ?? SuccessfulCompilation())
+                : new SpyTemplateCompiler(compile);
             var drafts = new PublisherDraftStore(draft, rereadDraft);
             var receipts = receiptStore ?? new InMemoryActivityPublicationReceiptStore();
             var commit = new SpyPublicationCommit(receipts, commitFails);
@@ -1187,7 +1417,12 @@ public sealed class ActivityDefinitionPublicationTests
                 new SequentialIdentityGenerator(),
                 TimeProvider.System,
                 receipts,
-                runtimeReady ? [new ReadyActivityActivationStrategy()] : null);
+                runtimeReady
+                    ? [
+                        new ReadyActivityActivationStrategy(),
+                        new ReadyActivityActivationStrategy(WellKnownRuntimeActivityConsumers.GraphActivity)
+                    ]
+                    : null);
             return new(publisher, compiler, commit, drafts, receipts);
         }
 
@@ -1263,10 +1498,21 @@ public sealed class ActivityDefinitionPublicationTests
             ValueTask.FromResult(new ActivityDraftValidation(request.DraftId, request.Revision, true, DateTimeOffset.UnixEpoch, []));
     }
 
-    private sealed class RequiredBumpDiffer(ActivityVersionBump requiredBump) : IActivityVersionDiffer
+    private sealed class RequiredBumpDiffer : IActivityVersionDiffer
     {
-        public ValueTask<ActivityVersionDiff> DiffAsync(ActivityVersionDiffRequest request, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ActivityVersionDiff(
+        private readonly Func<ActivityVersionDiffRequest, ActivityVersionBump> _select;
+
+        public RequiredBumpDiffer(ActivityVersionBump requiredBump) : this(_ => requiredBump)
+        {
+        }
+
+        public RequiredBumpDiffer(Func<ActivityVersionDiffRequest, ActivityVersionBump> select) =>
+            _select = select;
+
+        public ValueTask<ActivityVersionDiff> DiffAsync(ActivityVersionDiffRequest request, CancellationToken cancellationToken = default)
+        {
+            var requiredBump = _select(request);
+            return ValueTask.FromResult(new ActivityVersionDiff(
                 request.From,
                 request.To,
                 requiredBump == ActivityVersionBump.None ? ActivityVersionCompatibility.Identical : ActivityVersionCompatibility.Breaking,
@@ -1276,6 +1522,7 @@ public sealed class ActivityDefinitionPublicationTests
                 new(requiredBump == ActivityVersionBump.Major ? 1 : 0, 0, 0, 0),
                 [],
                 []));
+        }
     }
 
     private sealed class CapturingDiffer(IActivityVersionDiffer inner) : IActivityVersionDiffer
@@ -1293,19 +1540,28 @@ public sealed class ActivityDefinitionPublicationTests
         }
     }
 
-    private sealed class SpyTemplateCompiler(ActivityTemplateCompilerResult result) : IActivityTemplateCompiler
+    private sealed class SpyTemplateCompiler : IActivityTemplateCompiler
     {
+        private readonly Func<ActivityTemplateCompilerRequest, ActivityTemplateCompilerResult> _compile;
+
+        public SpyTemplateCompiler(ActivityTemplateCompilerResult result) : this(_ => result)
+        {
+        }
+
+        public SpyTemplateCompiler(Func<ActivityTemplateCompilerRequest, ActivityTemplateCompilerResult> compile) =>
+            _compile = compile;
+
         public int CallCount { get; private set; }
         public ValueTask<ActivityTemplateCompilerResult> CompileAsync(ActivityTemplateCompilerRequest request, CancellationToken cancellationToken = default)
         {
             CallCount++;
-            return ValueTask.FromResult(result);
+            return ValueTask.FromResult(_compile(request));
         }
     }
 
-    private sealed class ReadyActivityActivationStrategy : IActivityActivationStrategy
+    private sealed class ReadyActivityActivationStrategy(string consumerKey = "test.consumer") : IActivityActivationStrategy
     {
-        public string ConsumerKey => "test.consumer";
+        public string ConsumerKey => consumerKey;
         public IReadOnlyCollection<string> SupportedSchemaVersions => ["1"];
         public bool RequiresInputHydration => false;
 
