@@ -77,6 +77,29 @@ public sealed class ActivityFaultIncidentRecorderTests
     }
 
     [Fact]
+    public void IncidentId_StaysWithinProjectionColumnBudget_ForDispatchedExecutionIdShapes()
+    {
+        // #1031: a dispatched child's work-item and activity-execution ids both embed 'dispatch:v1:<sha-256>'
+        // shapes, which pushed the raw-concatenation incident id past the 128-char 'by-incident-id' projection
+        // column (GW-PHYSICAL-037) and poisoned the fault-recording checkpoint. The derived id must stay
+        // bounded regardless of how long those source ids grow.
+        var activityExecutionId = $"dispatch:v1:{new string('a', 64)}:activity:root";
+        var workItemId = $"{new string('b', 16)}:invoke:{activityExecutionId}";
+
+        var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItemId, activityExecutionId, "ActivityReturnedFault");
+
+        Assert.True(incidentId.Length <= 128, $"Incident id length {incidentId.Length} exceeds the 128-char column budget.");
+        // Deterministic: pre-commit references (child-fault parent evaluation) and replays re-derive the same id.
+        Assert.Equal(incidentId, ActivityFaultIncidentRecorder.IncidentId(workItemId, activityExecutionId, "ActivityReturnedFault"));
+        // Discriminating: siblings and different fault kinds stay distinct.
+        Assert.NotEqual(incidentId, ActivityFaultIncidentRecorder.IncidentId(workItemId, activityExecutionId, "InputMaterializationFailed"));
+        Assert.NotEqual(incidentId, ActivityFaultIncidentRecorder.IncidentId(
+            workItemId,
+            $"dispatch:v1:{new string('c', 64)}:activity:root",
+            "ActivityReturnedFault"));
+    }
+
+    [Fact]
     public async Task CommitAsync_AppliesFaultCapturePolicyToInnerExceptionMetadata()
     {
         const string secret = "customer-secret-token";

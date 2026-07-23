@@ -11,10 +11,9 @@
     'ActivitiesDispatchWorkflowRuntime'/'ActivitiesDispatchWorkflowDesign' in shells.json).
 
     Uses WaitForCompletion=$false (fire-and-forget): the parent completes immediately with the child's
-    dispatch acknowledged (outcome 'Dispatched') and the child runs independently. NOTE: WaitForCompletion=$true
-    is currently BROKEN on main - the parent suspends at the dispatch node (subStatus 'TriggerWaiting') and never
-    resumes even after the child completes (see ../TestScripts/README.md; tracked as issue #1006). So this
-    test deliberately covers only the fire-and-forget path.
+    dispatch acknowledged (outcome 'Dispatched') and the child runs independently. The waited path
+    (WaitForCompletion=$true, formerly broken as issue #1006, fixed by #982) is covered end-to-end by
+    bpmn/Test-BpmnCallActivity.ps1.
 .EXAMPLE
     pwsh ./TestScripts/Test-ChildWorkflow.ps1
 #>

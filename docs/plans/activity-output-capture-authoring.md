@@ -1,6 +1,6 @@
 # Plan: Author-time activity output → variable capture
 
-**Status:** Draft for review
+**Status:** V1 delivered; container-target follow-up accepted, implementation pending
 **Date:** 2026-07-23
 **Scope:** elsa-foundation (backend) + elsa-foundation-studio (Inspector UI)
 **Related decisions:** [ADR 0045](../adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) · [ADR 0046](../adr/0046-output-binding-coercion-uses-pinned-value-representations.md)
@@ -57,9 +57,12 @@ to an input binding.
    the storage-driver requirement aggregation
    ([src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableCompiler.cs](../../src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableCompiler.cs) ~line 228, which already folds
    `OutputCaptures.Values`).
-4. **Validation (mirror the boundary rules).** Workflow-scope Variable target only (currently hard-required),
+4. **Validation (mirror the boundary rules).** Workflow-scope Variable target only for v1,
    `TransientResource` source rejection (`VF-ACT-005`), variable existence + type/coercion compatibility at
-   publish. **Open decision:** keep workflow-scope-only or allow container/nested-scope targets.
+   publish. **Resolved follow-up:** [ADR 0048](../adr/0048-container-output-captures-resolve-through-producer-visible-variable-frames.md)
+   accepts declaration-relative container/nested-scope targets resolved through the producer invocation's
+   visible runtime frames; implementation remains tracked by issue
+   [#1004](https://github.com/elsa-workflows/elsa-foundation/issues/1004).
 5. **Contract gate.** Ratify the output-capture slice of ADR-0046 (this branch amends its status). ADR-0045's
    reconciliation list flags the active-output/capture model (specs 060/061) as unfinished; keep the broader
    reconciliation separate from this slice.
@@ -111,8 +114,9 @@ an author opens it. Only workflow-scope variables appear until/unless the backen
 
 ## Open decisions
 
-1. **Capture-target scope** — workflow-scope-only (matches the current backend rule, simplest) vs. also
-   container/nested scopes (needs a backend validation change). Recommend **workflow-scope-only for v1**.
+1. **Capture-target scope — resolved after v1.** V1 remains workflow-scope-only. ADR 0048 accepts
+   container/nested targets through a first-class declaration-relative target and producer-visible runtime-frame
+   resolution; dropping the Studio filter waits for that backend contract and validation.
 2. **Interim read-only list** — the read-only Outputs list already merged on the studio
    `activity-details-ui-simplify` branch can stay as a stepping stone or be dropped. Recommend **keep it**;
    this feature upgrades it in place.
