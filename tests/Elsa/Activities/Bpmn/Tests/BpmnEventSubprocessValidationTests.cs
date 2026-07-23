@@ -120,10 +120,12 @@ public sealed class BpmnEventSubprocessValidationTests
 
     [Fact]
     public void EventSubprocess_BodyWithUnsupportedTrigger_IsRejected() =>
+        // spec 134: message/signal/timer joined escalation/error as supported ES triggers; a compensation-triggered
+        // body start remains an unsupported event-subprocess trigger.
         AssertRejects(
             DefaultElements(),
             DefaultFlows(),
-            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventStart("es-start", BpmnEventDefinitionTypes.Message))],
+            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventStart("es-start", BpmnEventDefinitionTypes.Compensation))],
             "unsupported trigger definition");
 
     [Fact]
@@ -215,6 +217,106 @@ public sealed class BpmnEventSubprocessValidationTests
                 Body("node-body-2", BpmnRuntimeFixture.EventSubprocessErrorStart("es2-start"))
             ],
             "at most one");
+
+    // ---- spec 134: message/signal/timer scope-listener validation ----------------------------------------------
+
+    [Theory]
+    [InlineData(BpmnEventDefinitionTypes.Message)]
+    [InlineData(BpmnEventDefinitionTypes.Signal)]
+    [InlineData(BpmnEventDefinitionTypes.Timer)]
+    public void ValidExternalTriggerEventSubprocess_BuildsCleanly_AndIndexesCatcher(string definitionType)
+    {
+        var graph = BpmnGraph.From(Node(
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
+                BpmnRuntimeFixture.EndEvent("end"),
+                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-es-listener")
+            ],
+            DefaultFlows(),
+            [WorkflowChild("node-work"), WorkflowChild("node-es-listener"), Body("node-body", ExternalStart("es-start", definitionType, interrupting: false))]));
+
+        var catcher = Assert.Single(graph.EventSubprocesses);
+        Assert.Equal("es", catcher.ElementId);
+        Assert.Equal("node-es-listener", catcher.ListenerNodeId);
+        Assert.True(catcher.IsExternalTrigger);
+        Assert.False(catcher.Interrupting);
+        Assert.Contains(catcher, graph.ExternalTriggerEventSubprocesses);
+    }
+
+    [Fact]
+    public void ExternalTriggerEventSubprocess_WithoutListenerNode_IsRejected() =>
+        AssertRejects(
+            DefaultElements(), // the "es" element binds no ListenerNodeId
+            DefaultFlows(),
+            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessMessageStart("es-start", "msg"))],
+            "requires a scope-listener node");
+
+    [Fact]
+    public void EscalationEventSubprocess_WithListenerNode_IsRejected() =>
+        AssertRejects(
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
+                BpmnRuntimeFixture.EndEvent("end"),
+                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-es-listener")
+            ],
+            DefaultFlows(),
+            [WorkflowChild("node-work"), WorkflowChild("node-es-listener"), Body("node-body", BpmnRuntimeFixture.EventSubprocessEscalationStart("es-start", "E1"))],
+            "dormant");
+
+    [Fact]
+    public void ListenerNode_BoundByTwoElements_IsRejected() =>
+        // The same node is bound as a scope listener AND as another element's child — the exactly-one-binding rule.
+        AssertRejects(
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.Task("work", childNodeId: "node-shared"),
+                BpmnRuntimeFixture.EndEvent("end"),
+                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-shared")
+            ],
+            DefaultFlows(),
+            [WorkflowChild("node-shared"), Body("node-body", BpmnRuntimeFixture.EventSubprocessMessageStart("es-start", "msg"))],
+            "bound by more than one element");
+
+    [Fact]
+    public void OrphanListenerNode_IsRejected() =>
+        AssertRejects(
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
+                BpmnRuntimeFixture.EndEvent("end"),
+                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-missing")
+            ],
+            DefaultFlows(),
+            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessMessageStart("es-start", "msg"))],
+            "does not exist");
+
+    [Fact]
+    public void TimerEventSubprocess_WithCron_IsRejected() =>
+        AssertRejects(
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
+                BpmnRuntimeFixture.EndEvent("end"),
+                BpmnRuntimeFixture.EventSubprocessWithListener("es", "node-body", "node-es-listener")
+            ],
+            DefaultFlows(),
+            [
+                WorkflowChild("node-work"),
+                WorkflowChild("node-es-listener"),
+                Body("node-body", new BpmnElement("es-start", BpmnElementTypes.StartEvent,
+                    eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Cron] = "0 0 * * *" })]))
+            ],
+            "cron/timeCycle timers are not supported");
+
+    /// <summary>A message/signal/timer event-subprocess body start with the stimulus facts populated (a name / a one-shot interval).</summary>
+    private static BpmnElement ExternalStart(string elementId, string definitionType, bool interrupting) =>
+        definitionType == BpmnEventDefinitionTypes.Timer
+            ? BpmnRuntimeFixture.EventSubprocessTimerStart(elementId, "PT5M", interrupting)
+            : definitionType == BpmnEventDefinitionTypes.Signal
+                ? BpmnRuntimeFixture.EventSubprocessSignalStart(elementId, "sig", interrupting)
+                : BpmnRuntimeFixture.EventSubprocessMessageStart(elementId, "msg", interrupting);
 
     private static BpmnElement[] DefaultElements() =>
     [

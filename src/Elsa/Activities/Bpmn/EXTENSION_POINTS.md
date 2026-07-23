@@ -137,6 +137,24 @@ Known implementations:
   (`EventSubprocessActivated`/`EventSubprocessCompleted`). `ResolveTokenId` was hardened so a nested
   BpmnProcess body's leaked inner `bpmn.tokenId` on an inline completion is not mistaken for the parent's
   activation token. Behaviors stay decision-only.
+- **Message/signal/timer event subprocesses (spec 134, tier 2)** add **no** behavior, command kind, or **token
+  status** — only two additive nullable model fields and three diagnostics. `BpmnToken.Kind`
+  (`BpmnTokenKind.Listener`|`Activation`) is a token **role** discriminator stamped at the listener/activation mints
+  and `null` elsewhere; `BpmnElement.ListenerNodeId` is a second bound-child channel (the synthesized `Delay`/`Event`
+  scope-listener node), folded into `BpmnGraph.Validate`'s exactly-one-binding accounting (a node binds as either a
+  `ChildNodeId` or a `ListenerNodeId`). `BpmnEventSubprocessTriggerKind` gains `Message`/`Signal`/`Timer`;
+  `BpmnEventSubprocessCatcher` gains `ListenerNodeId` + `IsExternalTrigger`; `BpmnGraph` gains
+  `ExternalTriggerEventSubprocesses`/`EventSubprocessByElementId`. Arming is engine-owned and two-phase: the listener
+  tokens are minted (`BpmnExecutionEngine.MintScopeListenerTokens`) before the seed propagates so an interrupting
+  activation drains them, and their children are scheduled (`ScheduleScopeListenerChildren`, cause
+  `BpmnExecutionEngine.ScopeListenerSchedulingCause`) after, only when real work remains; re-arm uses the combined
+  `ArmScopeListener`. Firing is intercepted in `OnChildCompletedAsync` before the tier-1 body-completion check,
+  discriminating on `Kind == Listener` (`HandleScopeListenerFired`): non-interrupting re-arms then activates,
+  interrupting activates and drains via `StopOtherLiveWork`. The liveness filter lives in **exactly** the two
+  `FinishEvaluation` predicates (completion + join-deadlock, computed over non-listener tokens/children); the
+  teardown-then-complete path cancels stranded listeners with reason
+  `BpmnExecutionEngine.EventSubprocessListenerSupersededByCompletionReason`. Diagnostics
+  `ScopeListenerArmed`/`ScopeListenerFired`/`ScopeListenerRetired`. Behaviors stay decision-only.
 - **Call activities (spec 133)** add **no** behavior, command kind, token status, or state record. A
   `BpmnElementTypes.CallActivity` element resolves to the **task family** (added to `BpmnElementFamilies`'
   task set, so it is boundary-host and multi-instance legal with no behavior change) and binds a

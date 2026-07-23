@@ -113,11 +113,92 @@ public sealed class BpmnEventSubprocessInterchangeTests
         AssertDrops(EventSubprocessDoc("es", body: "<task id=\"t\" />"), "es", "exactly one start event");
 
     [Fact]
-    public void UnsupportedTrigger_Drops() =>
-        // A timer start imports WITH a (timer) definition, so it reaches the unsupported-trigger check (tier 2).
+    public void TimeCycleTimer_Degrades() =>
+        // spec 134: a timer event subprocess needs a one-shot <timeDuration>; a recurring <timeCycle> (or cron) is a
+        // module-wide cut — the body start degrades to a none start and the event subprocess is dropped, so the
+        // importer never emits a validator-rejected graph.
         AssertDrops(
             EventSubprocessDoc("es", body: "<startEvent id=\"s\"><timerEventDefinition><timeCycle>PT1H</timeCycle></timerEventDefinition></startEvent>"),
-            "es", "unsupported trigger definition");
+            "es", "supported trigger definition");
+
+    [Fact]
+    public void CompensateTrigger_Drops() =>
+        // A compensate body start is not a supported event-subprocess trigger; it degrades to a none start and drops.
+        AssertDrops(
+            EventSubprocessDoc("es", body: "<startEvent id=\"s\"><compensateEventDefinition /></startEvent>"),
+            "es", "supported trigger definition");
+
+    [Theory]
+    [InlineData("message", true)]
+    [InlineData("message", false)]
+    [InlineData("signal", true)]
+    [InlineData("signal", false)]
+    [InlineData("timer", true)]
+    [InlineData("timer", false)]
+    public void ExternalTriggerEventSubprocess_RoundTripsWithSynthesizedListener(string kind, bool interrupting)
+    {
+        var document = ExternalTriggerDocument(kind, interrupting);
+        var structure = Import(document);
+
+        // The event-subprocess element binds a synthesized listener node (node-{id}-listener) not present in the XML.
+        var es = structure.Elements.Single(element => element.ElementId == "es");
+        Assert.True(es.TriggeredByEvent);
+        Assert.Equal("node-es-listener", es.ListenerNodeId);
+        Assert.Contains(structure.Activities, activity => activity.NodeId == "node-es-listener");
+
+        // The imported graph builds and indexes the external-trigger catcher with the listener bound.
+        var graph = BpmnGraph.From(BridgeToExecutableNode(structure));
+        var catcher = Assert.Single(graph.EventSubprocesses);
+        Assert.True(catcher.IsExternalTrigger);
+        Assert.Equal("node-es-listener", catcher.ListenerNodeId);
+        Assert.Equal(interrupting, catcher.Interrupting);
+
+        // Export: the body start's definition + isInterrupting round-trip; the listener node is NOT exported (synthesized).
+        var xml = _exporter.Export(_importer.Import(document).ProcessNode);
+        Assert.Contains("triggeredByEvent=\"true\"", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("node-es-listener", xml, StringComparison.Ordinal);
+        Assert.Equal(!interrupting, xml.Contains("isInterrupting=\"false\"", StringComparison.Ordinal));
+        if (kind == "timer")
+        {
+            Assert.Contains("<timeDuration", xml, StringComparison.Ordinal);
+            Assert.DoesNotContain("<timeCycle", xml, StringComparison.Ordinal);
+        }
+
+        // Re-import: fidelity preserved (still a valid external-trigger event subprocess with a listener).
+        var reimported = Import(xml);
+        var reEs = reimported.Elements.Single(element => element.ElementId == "es");
+        Assert.Equal("node-es-listener", reEs.ListenerNodeId);
+        var reGraph = BpmnGraph.From(BridgeToExecutableNode(reimported));
+        Assert.True(Assert.Single(reGraph.EventSubprocesses).IsExternalTrigger);
+    }
+
+    private static string ExternalTriggerDocument(string kind, bool interrupting)
+    {
+        var isInterrupting = interrupting ? "" : " isInterrupting=\"false\"";
+        var (declarations, definition) = kind switch
+        {
+            "message" => ("<message id=\"m1\" name=\"go\" />", "<messageEventDefinition messageRef=\"m1\" />"),
+            "signal" => ("<signal id=\"s1\" name=\"go\" />", "<signalEventDefinition signalRef=\"s1\" />"),
+            _ => ("", "<timerEventDefinition><timeDuration>PT5M</timeDuration></timerEventDefinition>")
+        };
+
+        return $"""
+            <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="https://example.org">
+              {declarations}
+              <process id="p" isExecutable="true">
+                <startEvent id="start" /><task id="work" /><endEvent id="end" />
+                <subProcess id="es" triggeredByEvent="true">
+                  <startEvent id="es-start"{isInterrupting}>{definition}</startEvent>
+                  <task id="es-task" /><endEvent id="es-end" />
+                  <sequenceFlow id="ee1" sourceRef="es-start" targetRef="es-task" />
+                  <sequenceFlow id="ee2" sourceRef="es-task" targetRef="es-end" />
+                </subProcess>
+                <sequenceFlow id="f1" sourceRef="start" targetRef="work" />
+                <sequenceFlow id="f2" sourceRef="work" targetRef="end" />
+              </process>
+            </definitions>
+            """;
+    }
 
     [Fact]
     public void ErrorEventSubprocess_RoundTripsThroughExportImport_WithFidelity()

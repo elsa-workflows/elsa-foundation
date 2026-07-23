@@ -94,7 +94,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         return BuildProcessNode(process, nodeId, diagram, messageSignalNames, escalationDeclarations, context);
     }
 
-    private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, IReadOnlyDictionary<string, string> messageSignalNames, IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations, ImportContext context, bool isTransaction = false)
+    private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, IReadOnlyDictionary<string, string> messageSignalNames, IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations, ImportContext context, bool isTransaction = false, bool isEventSubprocessBody = false)
     {
         var elements = new List<BpmnElement>();
         var flows = new List<BpmnSequenceFlow>();
@@ -146,6 +146,18 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     {
                         elements.Add(new BpmnElement(id, BpmnElementTypes.StartEvent, name: NameOf(child),
                             eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Error)],
+                            cancelActivity: (bool?)child.Attribute("isInterrupting") ?? true));
+                        break;
+                    }
+                    // spec 134 D4: a message/signal/timer event-subprocess body start declares its stimulus + isInterrupting
+                    // (default true) and imports with a one-shot <timeDuration> for timer (not the recurring <timeCycle> a
+                    // root timer start uses). A body start whose definition is unusable degrades to a none start; the outer
+                    // event-subprocess resolution then drops the whole subprocess (its body start has no supported trigger).
+                    if (isEventSubprocessBody)
+                    {
+                        var bodyStartDefinition = ResolveEventSubprocessBodyStartDefinition(id, child, messageSignalNames, context);
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.StartEvent, name: NameOf(child),
+                            eventDefinitions: bodyStartDefinition is null ? null : [bodyStartDefinition],
                             cancelActivity: (bool?)child.Attribute("isInterrupting") ?? true));
                         break;
                     }
@@ -247,16 +259,20 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 {
                     if (id is null) break;
                     var nestedNodeId = $"node-{id}";
-                    var subProcessBodyNode = BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, escalationDeclarations, context);
+                    var isEventSubprocess = (bool?)child.Attribute("triggeredByEvent") == true;
+                    var subProcessBodyNode = BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, escalationDeclarations, context, isEventSubprocessBody: isEventSubprocess);
 
-                    // spec 128 D7: an event subprocess (triggeredByEvent="true") — validate the body shape and per-scope
-                    // uniqueness BEFORE emitting the element, so the importer never emits a graph the validator rejects.
-                    if ((bool?)child.Attribute("triggeredByEvent") == true)
+                    // spec 128/134 D7: an event subprocess (triggeredByEvent="true") — validate the body shape and per-scope
+                    // uniqueness BEFORE emitting the element, so the importer never emits a graph the validator rejects. A
+                    // message/signal/timer body start additionally synthesizes an armed scope-listener child (spec 134).
+                    if (isEventSubprocess)
                     {
-                        if (!TryResolveEventSubprocess(id, subProcessBodyNode, eventSubprocessEscalationCodes, ref hasEventSubprocessEscalationCatchAll, ref hasEventSubprocessError, context))
+                        if (TryResolveEventSubprocess(id, subProcessBodyNode, eventSubprocessEscalationCodes, ref hasEventSubprocessEscalationCatchAll, ref hasEventSubprocessError, context) is not { } eventSubprocess)
                             break; // Dropped (finding added inside); its body node is not added, flows cascade-drop.
                         childActivities.Add(subProcessBodyNode);
-                        elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, triggeredByEvent: true));
+                        if (eventSubprocess.ListenerChild is { } listenerChild)
+                            childActivities.Add(listenerChild);
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, triggeredByEvent: true, listenerNodeId: eventSubprocess.ListenerNodeId));
                         break;
                     }
 
@@ -591,7 +607,10 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     /// a specific finding so the importer never emits a graph the validator rejects; a valid trigger updates the
     /// scope trackers and returns <c>true</c>.
     /// </summary>
-    private static bool TryResolveEventSubprocess(
+    /// <summary>The outcome of resolving an event subprocess (spec 128/134 D7): for a message/signal/timer trigger, the synthesized scope-listener node and its bound child; for escalation/error, both null.</summary>
+    private readonly record struct EventSubprocessImport(string? ListenerNodeId, ActivityNode? ListenerChild);
+
+    private static EventSubprocessImport? TryResolveEventSubprocess(
         string id,
         ActivityNode bodyNode,
         HashSet<string> escalationCodes,
@@ -606,14 +625,14 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         if (starts.Length != 1)
         {
             context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body must declare exactly one start event; it declares {starts.Length}. It was dropped.", id));
-            return false;
+            return null;
         }
 
         var start = starts[0];
         if (start.EventDefinitions.Count != 1)
         {
-            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body start event must declare exactly one supported trigger definition (escalation or error); it declares {start.EventDefinitions.Count}. It was dropped.", id));
-            return false;
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body start event must declare exactly one supported trigger definition (escalation, error, message, signal, or timer); it declares {start.EventDefinitions.Count}. It was dropped.", id));
+            return null;
         }
 
         var definition = start.EventDefinitions.Single();
@@ -626,17 +645,17 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 if (hasEscalationCatchAll)
                 {
                     context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a second code-less catch-all escalation event subprocess in its scope, which may carry at most one; it was dropped.", id));
-                    return false;
+                    return null;
                 }
                 hasEscalationCatchAll = true;
             }
             else if (!escalationCodes.Add(code))
             {
                 context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' declares escalation code '{code}', which another event subprocess in its scope already claims; it was dropped.", id));
-                return false;
+                return null;
             }
 
-            return true;
+            return new EventSubprocessImport(ListenerNodeId: null, ListenerChild: null);
         }
 
         if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Error))
@@ -648,19 +667,74 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
             if (!interrupting)
             {
                 context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a non-interrupting error event subprocess; error events are always interrupting per BPMN, so it was dropped.", id));
-                return false;
+                return null;
             }
             if (hasError)
             {
                 context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a second error-triggered event subprocess in its scope, which may carry at most one; it was dropped.", id));
-                return false;
+                return null;
             }
             hasError = true;
-            return true;
+            return new EventSubprocessImport(ListenerNodeId: null, ListenerChild: null);
         }
 
-        context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body start event declares an unsupported trigger definition '{definition.Type}'; only escalation and error triggers are supported (tier 1). It was dropped.", id));
-        return false;
+        // spec 134: a message/signal/timer event subprocess synthesizes an armed scope-listener node (node-{id}-listener):
+        // an Event wait for message/signal (name), a Delay for timer (one-shot interval). The body-start import already
+        // populated the stimulus facts; a body start whose facts were unresolvable degraded to a none start (0 event
+        // definitions), which was dropped above — so if we reach here the name/interval is present.
+        var listenerNodeId = $"node-{id}-listener";
+        if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Message) || StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Signal))
+        {
+            var name = definition.Properties[BpmnEventDefinitionProperties.Name];
+            return new EventSubprocessImport(listenerNodeId, BuildEventCatchChild(listenerNodeId, name));
+        }
+
+        if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Timer))
+        {
+            var interval = definition.Properties[BpmnEventDefinitionProperties.Interval];
+            return new EventSubprocessImport(listenerNodeId, BuildDelayCatchChild(listenerNodeId, interval));
+        }
+
+        context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body start event declares an unsupported trigger definition '{definition.Type}'; only escalation, error, message, signal, and timer triggers are supported. It was dropped.", id));
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves a message/signal/timer event-subprocess body start's event definition (spec 134 D4): message/signal
+    /// resolve their <c>name</c> (via <c>messageRef</c>/<c>signalRef</c>); a timer resolves a one-shot
+    /// <c>&lt;timeDuration&gt;</c> to an interval. A <c>&lt;timeCycle&gt;</c>/<c>&lt;timeDate&gt;</c>/cron timer or an
+    /// unresolvable name degrades to a none start (returns <c>null</c> + a finding), which the caller then drops.
+    /// </summary>
+    private static BpmnEventDefinition? ResolveEventSubprocessBodyStartDefinition(string id, XElement child, IReadOnlyDictionary<string, string> messageSignalNames, ImportContext context)
+    {
+        if (child.Element(BpmnXmlNames.Model + "messageEventDefinition") is { } messageDefinition)
+            return ResolveEventSubprocessMessageSignal(id, messageDefinition, BpmnEventDefinitionTypes.Message, messageSignalNames, context);
+        if (child.Element(BpmnXmlNames.Model + "signalEventDefinition") is { } signalDefinition)
+            return ResolveEventSubprocessMessageSignal(id, signalDefinition, BpmnEventDefinitionTypes.Signal, messageSignalNames, context);
+        if (child.Element(BpmnXmlNames.Model + "timerEventDefinition") is { } timerDefinition)
+        {
+            var duration = ResolveCatchTimerDuration(timerDefinition);
+            if (duration is null)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Event subprocess '{id}' body start declares a timer that is not a one-shot <timeDuration> (timeCycle/timeDate/cron event-subprocess timers are not supported); it imported as a none start and the event subprocess was dropped.", id));
+                return null;
+            }
+            return new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = duration });
+        }
+
+        return null;
+    }
+
+    private static BpmnEventDefinition? ResolveEventSubprocessMessageSignal(string id, XElement definition, string type, IReadOnlyDictionary<string, string> messageSignalNames, ImportContext context)
+    {
+        var name = ResolveMessageSignalName(definition, type, messageSignalNames);
+        if (name is null)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Event subprocess '{id}' body start declares a {type} event definition with no resolvable name; it imported as a none start and the event subprocess was dropped.", id));
+            return null;
+        }
+
+        return new BpmnEventDefinition(type, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name });
     }
 
     /// <summary>The display name an escalation ref resolves to (the declaration's <c>name</c>), or <c>null</c>.</summary>

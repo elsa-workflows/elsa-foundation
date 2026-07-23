@@ -226,3 +226,25 @@ validator-rejected graph.
   teardown-then-complete pin.
 - Full test projects green: BPMN, BPMN Interchange, Activities Runtime, Workflows Runtime,
   ControlFlow, Architecture. Full solution build clean.
+
+## Deviations from the ratified plan
+
+- **Arming is two-phase (tokens before propagate, children after), not a single arm-at-seeding.** D2 says "arm at
+  seeding … mint a Listener token and schedule its ListenerNodeId child" before the seed propagates. The runtime
+  forbids a terminal structural decision (Complete/Fault) in an evaluation that also scheduled children (verified:
+  a `start → end` scope with a listener faulted *"A terminal structural decision cannot also schedule child
+  activities in the same execution."*). Arming the child unconditionally before propagate therefore strands the
+  just-scheduled listener child against the same evaluation's completion whenever the seed's real work finishes
+  synchronously. The listener **tokens** are still minted BEFORE propagation (so an interrupting activation raised
+  by the seed's own propagation — an own-scope escalation — drains them as ordinary live tokens, the FR-7 interplay),
+  but their suspending **children** are scheduled AFTER propagation and only when real work remains (an active child
+  is pending). A scope whose seed completes synchronously completes with no listener child ever scheduled and the
+  listener token torn down (BPMN semantics: the listener never got a chance to fire); a pure synchronous
+  join-deadlock arms nothing so the deadlock surfaces cleanly. The re-arm path (`HandleScopeListenerFired`) arms
+  token+child together — it always then schedules the body and defers, so it is never a terminal evaluation.
+  Determinism is preserved (identical runs → identical ids and diagnostics order).
+- **`Terminate` tears down the listener token but not its durable child bookmark.** Terminate rides the unfiltered
+  logical-only `CancelLiveWork` (the tier-1 terminate precedent: in-flight/suspended children are absorbed on late
+  completion, not seam-A cancelled). So a terminated scope's listener token is Canceled (it can never fire — a late
+  resume is absorbed by the canceled-token guard) but its `Event`/`Delay` bookmark lingers, exactly as for any
+  terminated suspended child. Teardown-then-complete (the clean path) DOES reclaim the durable child via seam A.

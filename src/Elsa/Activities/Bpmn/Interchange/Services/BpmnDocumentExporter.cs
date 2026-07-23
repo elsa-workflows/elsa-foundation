@@ -74,7 +74,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         return new XDocument(new XDeclaration("1.0", "utf-8", null), definitions).ToString();
     }
 
-    private static void AppendContainerContent(XElement container, BpmnAuthoredStructure structure)
+    private static void AppendContainerContent(XElement container, BpmnAuthoredStructure structure, bool isEventSubprocessBody = false)
     {
         var childrenByNodeId = structure.Activities.ToDictionary(activity => activity.NodeId, StringComparer.Ordinal);
 
@@ -92,7 +92,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         {
             var xmlElement = element.ElementType switch
             {
-                BpmnElementTypes.StartEvent => BuildEventElement("startEvent", element, isCatch: false),
+                BpmnElementTypes.StartEvent => BuildEventElement("startEvent", element, isCatch: false, isEventSubprocessBodyStart: isEventSubprocessBody),
                 BpmnElementTypes.IntermediateCatchEvent => BuildEventElement("intermediateCatchEvent", element, isCatch: true),
                 BpmnElementTypes.IntermediateThrowEvent => BuildThrowEvent(element),
                 BpmnElementTypes.EndEvent => BuildEndEvent(element),
@@ -214,7 +214,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     /// definition from the populated <see cref="BpmnEventDefinition"/> properties (spec 118 D4). A catch
     /// event's bound child (<c>Delay</c>/<c>Event</c>) is engine detail and is not exported.
     /// </summary>
-    private static XElement BuildEventElement(string localName, BpmnElement element, bool isCatch)
+    private static XElement BuildEventElement(string localName, BpmnElement element, bool isCatch, bool isEventSubprocessBodyStart = false)
     {
         var xmlElement = new XElement(BpmnXmlNames.Model + localName);
         if (element.EventDefinitions.FirstOrDefault() is { } definition)
@@ -229,6 +229,14 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             else if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Error))
             {
                 xmlElement.Add(new XElement(BpmnXmlNames.Model + "errorEventDefinition"));
+                if (!element.CancelActivity) xmlElement.SetAttributeValue("isInterrupting", "false");
+            }
+            else if (isEventSubprocessBodyStart)
+            {
+                // spec 134 D4: a message/signal/timer event-subprocess body start exports its stimulus + isInterrupting.
+                // A timer body start is a one-shot <timeDuration> (isCatch shape), NOT the recurring <timeCycle> a root
+                // timer start uses. The synthesized scope-listener child is engine detail and is not exported.
+                AppendEventDefinition(xmlElement, definition, isCatch: true);
                 if (!element.CancelActivity) xmlElement.SetAttributeValue("isInterrupting", "false");
             }
             else
@@ -432,7 +440,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             && childrenByNodeId.TryGetValue(childNodeId, out var child)
             && StringComparer.Ordinal.Equals(child.Structure?.Kind, BpmnProcessActivity.StructureKind))
         {
-            AppendContainerContent(subProcess, ReadStructure(child));
+            AppendContainerContent(subProcess, ReadStructure(child), isEventSubprocessBody: element.TriggeredByEvent);
         }
 
         return subProcess;

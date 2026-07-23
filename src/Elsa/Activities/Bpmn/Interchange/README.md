@@ -83,14 +83,21 @@ Mapping rules for this slice:
   `errorEventDefinition`, its `isInterrupting` (default `true`) mapped onto the body start event's flag. The
   importer validates the body shape and per-scope uniqueness **before** emitting, so it never emits a
   validator-rejected graph: **dropped** with a specific finding when the body has no/multiple start events, an
-  unsupported trigger (message/signal/timer/… → "tier 2 / unsupported"), a colliding escalation code, a second
-  catch-all in one scope, or a second / non-interrupting error event subprocess. An **error**-triggered event
-  subprocess is **executable** since the runtime deferred-seam-B fix (#989, spec 132): it imports as an
+  unsupported trigger (compensation/conditional/… → not a supported event-subprocess trigger), a colliding escalation
+  code, a second catch-all in one scope, or a second / non-interrupting error event subprocess. An **error**-triggered
+  event subprocess is **executable** since the runtime deferred-seam-B fix (#989, spec 132): it imports as an
   (always-interrupting, catch-all) error trigger; a scope carries **≤1**, and a non-interrupting error start
-  degrades (Dropped + finding) as a malformed shape. **Export**: `triggeredByEvent="true"` on the `<subProcess>`
-  plus the body's event-start with its definition and `isInterrupting="false"` only when non-interrupting;
-  escalation codes dedupe through the root `<escalation>` declarations. Round-trips hold for escalation
-  (interrupting / non-interrupting / catch-all) and error (always interrupting, catch-all).
+  degrades (Dropped + finding) as a malformed shape. **Message/signal/timer** triggers (spec 134): a body start
+  carrying a `messageEventDefinition`/`signalEventDefinition` (root-index name resolution) or a `timerEventDefinition`
+  with a one-shot `<timeDuration>` imports **with a synthesized scope-listener node** (`node-{id}-listener`, an
+  `Event` wait for message/signal or a `Delay` for timer, reusing the spec-116/118 catch-child synthesis) and a
+  `ListenerNodeId` on the element; a `<timeCycle>`/`<timeDate>`/cron timer degrades (the body start becomes a none
+  start → the event subprocess drops). **Export**: `triggeredByEvent="true"` on the `<subProcess>` plus the body's
+  event-start with its definition and `isInterrupting="false"` only when non-interrupting (a timer body start exports
+  a `<timeDuration>`, not the recurring `<timeCycle>` a root timer start uses); the synthesized listener node is **not**
+  exported (re-synthesized on import); escalation codes dedupe through the root `<escalation>` declarations. Round-trips
+  hold for escalation (interrupting / non-interrupting / catch-all), error (always interrupting, catch-all), and
+  message + signal + timer (interrupting + non-interrupting).
 - **Call activities** (spec 133): a `<callActivity>` carrying the Elsa extension attribute
   `elsa:workflowDefinitionId` (our export convention) imports **bound** — a `DispatchWorkflow` child is
   synthesized (`WorkflowDefinitionId` literal + `WaitForCompletion`, honoring `elsa:waitForCompletion="false"`
@@ -134,8 +141,9 @@ event DI bounds (no association involved). An **escalation** throw/end/boundary 
 id="escalation-{code}" escalationCode="{code}" [name]>` declaration (message/signal precedent); a code-less
 catch-all boundary emits a ref-less `<escalationEventDefinition/>` and contributes no root declaration. An
 **event subprocess** emits `<subProcess triggeredByEvent="true">` with its body content, and the body's
-event-start emits its `escalationEventDefinition`/`errorEventDefinition` plus `isInterrupting="false"` when
-non-interrupting. A **call activity** emits `<callActivity>` with `calledElement` (the `bpmn.calledElement`
+event-start emits its `escalationEventDefinition`/`errorEventDefinition`/`messageEventDefinition`/
+`signalEventDefinition`/`timerEventDefinition` (a message/signal/timer body start emits `isInterrupting="false"` when
+non-interrupting, and a timer emits a one-shot `<timeDuration>`; its synthesized scope-listener node is not exported). A **call activity** emits `<callActivity>` with `calledElement` (the `bpmn.calledElement`
 passthrough when present, else the bound child's authored `WorkflowDefinitionId`), the
 `elsa:workflowDefinitionId` extension attribute when bound, and `elsa:waitForCompletion="false"` only when the
 bound child is authored fire-and-forget (the waited-by-default convention omits it); the bound `DispatchWorkflow`
@@ -161,6 +169,7 @@ three are pure conversions — nothing is persisted server-side:
 The Studio import/export UX; message/signal **payload and correlation** mapping (only the event `name`
 is mapped — the synthesized `Event` catch/boundary child leaves `CorrelationId` unset); absolute
 (`<timeDate>`) and non-recurring start timers; error-code (`errorRef`) matching on error boundaries;
-message/signal/timer-triggered event subprocesses (tier 2 — dropped); connector (sequence-flow and
+`timeCycle`/`timeDate`/cron **event-subprocess** timers (spec 134 ships one-shot `<timeDuration>` message/signal/timer
+event subprocesses; recurring shapes still degrade); connector (sequence-flow and
 association) BPMNEdge DI; `extensionElements` preservation for third-party vendor attributes;
 collaboration/pool export; and the BPMN MIWG conformance corpus.

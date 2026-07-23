@@ -79,5 +79,14 @@ public enum BpmnDiagnosticKind
     EventSubprocessCompleted,
 
     /// <summary>A call activity's bound child completed with a failure outcome (Faulted/DispatchFailed/Cancelled) and the engine routed the call-activity failure ladder (spec 133 D3), instead of normal outbound flows.</summary>
-    CallActivityFailureRouted
+    CallActivityFailureRouted,
+
+    /// <summary>A tier-2 scope listener was armed (spec 134): a message/signal/timer event subprocess minted a listener token and scheduled its suspending listener child at scope start (or re-armed after a non-interrupting fire).</summary>
+    ScopeListenerArmed,
+
+    /// <summary>A tier-2 scope listener fired (spec 134): a message/signal/timer stimulus resumed the listener child, so the event subprocess activates (non-interrupting also re-arms; interrupting drains sibling listeners).</summary>
+    ScopeListenerFired,
+
+    /// <summary>A tier-2 scope listener was retired (spec 134): its scope completed (teardown-then-complete) or was interrupted, so the still-armed listener token and its durable child are cancelled.</summary>
+    ScopeListenerRetired
 }
