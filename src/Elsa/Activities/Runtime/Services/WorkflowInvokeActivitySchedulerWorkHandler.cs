@@ -147,6 +147,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
     {
         var workflowDispatchStaging = serviceProvider.GetService<IWorkflowDispatchStagingAccessor>();
         workflowDispatchStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
+        // spec 135 D1: the PublishEvent send surface stages durable-first publish intents on this same invocation-keyed
+        // seam, mirroring the dispatch stager one-for-one (reset here, drain at the clean exits, reset on fault below).
+        var publishStimulusStaging = serviceProvider.GetService<IPublishStimulusStagingAccessor>();
+        publishStimulusStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
         var scopeService = new RuntimeContainerScopeService(
             activityExecutionStateStore,
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
@@ -284,6 +288,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         ActivityCompletionProjection? valueFlowCompletion = null;
         ActivityExecutionState? typedSuspendedState = null;
         WorkflowDispatchCheckpointRequest? stagedWorkflowDispatch = null;
+        IReadOnlyList<RuntimePostCommitIntent> stagedPublishIntents = [];
         ActivityFault? returnedFault = null;
         string? returnedCancellationReason = null;
         IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotificationWorkItems = [];
@@ -474,10 +479,24 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         $"The staged workflow dispatch mode '{stagedWorkflowDispatch.Record.Mode}' does not match the activity transition.");
                 }
             }
+
+            // spec 135 D1: drain the invocation's staged publish intents at the same clean exit the dispatch stager is
+            // drained. They fold onto PostCommitIntents only (no dispatch record), so a fire-and-continue send rides the
+            // activity's own commit and delivers post-commit. Staging is valid only with a completion or suspension
+            // transition (a leaf PublishEvent completes; a suspending publisher is future-proofed).
+            stagedPublishIntents = publishStimulusStaging?.TakePublishStimuli(
+                workItem.WorkflowExecutionId,
+                invokePayload.ActivityExecutionId) ?? [];
+            if (stagedPublishIntents.Count > 0 && typedSuspendedState is null && returnedTransition is not IActivityCompletionTransition)
+            {
+                throw new InvalidOperationException(
+                    "A published stimulus can be staged only with a successful completion or suspension transition.");
+            }
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
             workflowDispatchStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
+            publishStimulusStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
             if (disposalException is not null)
@@ -487,6 +506,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         catch (Exception exception)
         {
             workflowDispatchStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
+            publishStimulusStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
             var fault = disposalException is null
@@ -598,6 +618,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 typedSuspendedState,
                 valueSnapshots,
                 stagedWorkflowDispatch,
+                stagedPublishIntents,
                 cancellationToken);
             return;
         }
@@ -653,6 +674,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             durableValueChanges,
             workflowVariableWriteBack,
             stagedWorkflowDispatch,
+            stagedPublishIntents,
             occurredAt,
             cancellationToken);
     }
@@ -728,6 +750,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState suspendedState,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
+        IReadOnlyList<RuntimePostCommitIntent> publishIntents,
         CancellationToken cancellationToken)
     {
         var occurredAt = _timeProvider.GetUtcNow();
@@ -878,6 +901,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     workItem,
                     occurredAt))
                 .Concat(workflowDispatchIntents)
+                .Concat(publishIntents)
                 .ToArray(),
             Metadata: metadata);
 
@@ -1117,6 +1141,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
+        IReadOnlyList<RuntimePostCommitIntent> publishIntents,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
@@ -1140,9 +1165,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         var notificationIntents = parentNotifications
             .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
             .ToArray();
+        // spec 135 D1: staged publish intents ride behind the completion cascade + notification intents and ahead of any
+        // staged dispatch start intent (on core.Commit.PostCommitIntents), folding onto PostCommitIntents only.
         var commit = core.Commit with
         {
-            PostCommitIntents = [completionIntent, .. notificationIntents, .. core.Commit.PostCommitIntents]
+            PostCommitIntents = [completionIntent, .. notificationIntents, .. publishIntents, .. core.Commit.PostCommitIntents]
         };
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);

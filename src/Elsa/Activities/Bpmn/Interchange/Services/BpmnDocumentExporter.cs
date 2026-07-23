@@ -99,6 +99,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                 BpmnElementTypes.SubProcess => BuildSubProcess(element, childrenByNodeId),
                 BpmnElementTypes.CallActivity => BuildCallActivity(element, childrenByNodeId),
                 BpmnElementTypes.BoundaryEvent => BuildBoundaryEvent(element),
+                BpmnElementTypes.SendTask => BuildMessageTask("sendTask", element),
+                BpmnElementTypes.ReceiveTask => BuildMessageTask("receiveTask", element),
                 _ => new XElement(BpmnXmlNames.Model + element.ElementType)
             };
 
@@ -178,10 +180,13 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         // spec 127: an escalation end event emits an escalationEventDefinition + escalationRef.
         else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation)) is { } escalation)
             endEvent.Add(BuildEscalationEventDefinition(escalation));
+        // spec 135: a message end event emits a messageEventDefinition + messageRef (its synthesized PublishEvent child is engine detail, not exported).
+        else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Message)) is { } message)
+            AppendEventDefinition(endEvent, message, isCatch: false);
         return endEvent;
     }
 
-    /// <summary>Builds a compensate/escalation intermediate throw event (spec 124/127): <c>&lt;intermediateThrowEvent&gt;</c> + the single event definition.</summary>
+    /// <summary>Builds a compensate/escalation/message intermediate throw event (spec 124/127/135): <c>&lt;intermediateThrowEvent&gt;</c> + the single event definition.</summary>
     private static XElement BuildThrowEvent(BpmnElement element)
     {
         var throwEvent = new XElement(BpmnXmlNames.Model + "intermediateThrowEvent");
@@ -189,6 +194,9 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             throwEvent.Add(BuildCompensateEventDefinition(compensation));
         else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation)) is { } escalation)
             throwEvent.Add(BuildEscalationEventDefinition(escalation));
+        // spec 135: a message throw event emits a messageEventDefinition + messageRef (its synthesized PublishEvent child is engine detail, not exported).
+        else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Message)) is { } message)
+            AppendEventDefinition(throwEvent, message, isCatch: false);
         return throwEvent;
     }
 
@@ -337,6 +345,15 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             declarationsById[MessageSignalDeclarationId(definition.Type, name)] = (definition.Type, name.Trim());
         }
 
+        // spec 135: a bound sendTask/receiveTask carries its message name in Properties (a task uses a messageRef
+        // attribute, not a nested event definition), so its root <message> declaration is collected from there.
+        foreach (var element in structure.Elements)
+        {
+            if (!element.Properties.TryGetValue(BpmnDocumentImporter.MessageNamePropertyKey, out var taskName) || string.IsNullOrWhiteSpace(taskName))
+                continue;
+            declarationsById[MessageSignalDeclarationId(BpmnEventDefinitionTypes.Message, taskName)] = (BpmnEventDefinitionTypes.Message, taskName.Trim());
+        }
+
         foreach (var child in structure.Activities.Where(child => StringComparer.Ordinal.Equals(child.Structure?.Kind, BpmnProcessActivity.StructureKind)))
             CollectMessageSignalDeclarations(ReadStructure(child), declarationsById);
     }
@@ -423,6 +440,20 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             string text => bool.TryParse(text, out var parsed) ? parsed : null,
             _ => null
         };
+
+    /// <summary>
+    /// Builds a <c>&lt;sendTask&gt;</c>/<c>&lt;receiveTask&gt;</c> (spec 135): emits <c>messageRef</c> pointing at the
+    /// deduped root <c>&lt;message&gt;</c> declaration when the element carries a resolved message name (a bound send/receive
+    /// task). Its synthesized <c>PublishEvent</c>/<c>Event</c> child is engine detail the importer re-establishes, so its node
+    /// is not inlined. An unbound (name-less) send/receive task emits a bare task element and round-trips as unbound.
+    /// </summary>
+    private static XElement BuildMessageTask(string localName, BpmnElement element)
+    {
+        var task = new XElement(BpmnXmlNames.Model + localName);
+        if (element.Properties.TryGetValue(BpmnDocumentImporter.MessageNamePropertyKey, out var name) && !string.IsNullOrWhiteSpace(name))
+            task.SetAttributeValue("messageRef", MessageSignalDeclarationId(BpmnEventDefinitionTypes.Message, name));
+        return task;
+    }
 
     private static XElement BuildSubProcess(BpmnElement element, IReadOnlyDictionary<string, ActivityNode> childrenByNodeId)
     {

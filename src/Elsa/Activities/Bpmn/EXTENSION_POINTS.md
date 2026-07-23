@@ -62,6 +62,12 @@ Known implementations:
   — an escalation intermediate throw / escalation end event emits `[RaiseEscalation, EmitTokens|ConsumeToken]`;
   reading the escalation code from the element, seam-C staging (or the root no-op), and all boundary
   matching/firing/bubbling/late-race handling are owned by `BpmnExecutionEngine`, not these behaviors)*
+- `MessageThrowEventBehavior` / `MessageEndEventBehavior` *(intra-domain — default; message send surface, spec
+  135 — a message intermediate throw / message end event is a **bound-child** shape: it schedules its synthesized
+  `PublishEvent` send child (`ScheduleChild`) and, on the child's fire-and-continue completion, routes its
+  outbound flows (`TaskBehavior`-like, throw) or consumes its token (none-end). No new command kind, token
+  status, or engine command — the send lands durably post-commit through the `PublishEvent` primitive's own
+  staging seam; these behaviors stay decision-only)*
 - **Compensation (spec 124)** adds one command kind — `BpmnBehaviorCommandKind.TriggerCompensation` — and no
   new token status or state-schema break. A **compensation boundary** (`BpmnEventDefinitionTypes.Compensation`
   on a `boundaryEvent`, dormant like an error boundary) names its handler via
