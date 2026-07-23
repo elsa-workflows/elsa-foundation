@@ -5,9 +5,13 @@
     Foundation-native equivalent of the JTest single-outcome "SetVariable" concept. Classic Elsa's SetVariable
     is an activity; in Foundation it is a node intrinsic (`elsa.intrinsic.set@1`, kind "set").
 
-    KEY SCOPING RULE (learned the hard way): the target variable must be declared on the enclosing CONTAINER's
-    structure (here the root Sequence's `variables`), NOT at workflow-state level - the runtime seeds the scope
-    frame from the container declaration, so a workflow-level-only variable fails with "targets undeclared variable".
+    KEY SCOPING RULE: a `Set` intrinsic's target must resolve to a variable that is VISIBLE from the node's
+    scope. Since the #972 two-guard validation landed (`IntrinsicVariableTargetValidator` +
+    `ExecutableNodeCompiler.ValidateIntrinsicVariableTargets`), the reference's `DeclaringScopeId` must match a
+    visible declaring scope. The clean, end-to-end-working shape is a WORKFLOW-SCOPE variable (declared in
+    `state.Variables` via `Submit-Workflow -Variables`) referenced with no `declaringScopeId`. Declaring the
+    variable only on the enclosing container (the Sequence's `variables`) now FAILS publish validation, and
+    forcing a container `declaringScopeId` past the validator faults at runtime (see ../README.md).
 
     The workflow: Sequence[ Set(Message=<value>) -> SetOutput(Echo = Variable Message) ], then asserts the echoed
     output equals the value, proving the Set wrote the variable and a Variable-expression read it back.
@@ -29,10 +33,10 @@ $sequence = Invoke-Step "resolve Sequence" { Get-ActivityVersionId -Ctx $ctx -Ty
 $setVar  = New-SetVariableNode -NodeId "set-var" -VariableKey "Message" -Value $Value
 $readVar = New-SetOutputNode   -NodeId "read-var" -OutputName "Echo" -Value @{ value = "Message"; expressionType = "Variable" }
 $root    = New-ActivityNode -NodeId "root" -VersionId $sequence -Structure (
-    New-SequenceStructure -Activities @($setVar, $readVar) -Variables @( (New-VariableDef -Key "Message") )
+    New-SequenceStructure -Activities @($setVar, $readVar)
 )
 
-$def = Invoke-Step "submit"  { Submit-Workflow -Ctx $ctx -Name "SetVar-$(Get-Date -Format HHmmss)-$(Get-Random -Max 9999)" -Description "SetVariable intrinsic" -RootActivity $root }
+$def = Invoke-Step "submit"  { Submit-Workflow -Ctx $ctx -Name "SetVar-$(Get-Date -Format HHmmss)-$(Get-Random -Max 9999)" -Description "SetVariable intrinsic" -RootActivity $root -Variables @( (New-VariableDef -Key "Message") ) }
 $pub = Invoke-Step "publish" { Publish-WorkflowVersion -Ctx $ctx -VersionId $def.version.id }
 $run = Invoke-Step "execute" { Invoke-Artifact -Ctx $ctx -ArtifactId $pub.artifactId -SourceReferenceId $pub.sourceReferenceId }
 $inst = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $run.workflowExecutionId
