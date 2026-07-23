@@ -32,6 +32,8 @@ everything the flow needs (design + publishing + runtime APIs, identity, `Ground
 | `http/Test-HttpMethods.ps1` | one HttpEndpoint accepting GET/POST/PUT/DELETE, each returning a sync response |
 | `correlate/Test-Correlate.ps1` | `SetCorrelationId` intrinsic sets the instance correlation id; found by `?correlationId=` |
 | `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
+| `logging/Test-ValueCapture.ps1` | per-activity value snapshot: a WriteLine's `Text` input is captured (`DiagnosticSnapshot`) and its payload retrieved via the value-evidence endpoint |
+| `logging/Test-DiagnosticsSettings.ps1` | read-only `GET runtime/workflows/diagnostics/settings` — the capture policy that governs what value snapshots are captured |
 
 **Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;
 you publish an event by POSTing a stimulus `{ stimulusType:"Event", stimulusHash:"sha256:"+hex(SHA256(eventName)), mode:"StartOnly" }`
@@ -107,6 +109,37 @@ encode this.
 - No Foundation 1:1 for classic `FlowSwitch` default/fail, implicit joins, or `Switch` MatchAny mode
   (Foundation removed the flow-activity model). Covered at the concept level via `If`/`Switch`/`Parallel`;
   these are architectural gaps, not bugs.
+
+## Advanced tier (JTest logging + storage-drivers)
+
+The classic JTest "advanced" suites target Elsa 3.x persistence/observability primitives that Foundation
+does not have. One maps to a Foundation-native equivalent; the other is a genuine architectural gap.
+
+### logging -> per-activity value capture + diagnostics policy (reproduced)
+
+Classic Elsa configured *what activity state is persisted* per activity via `logPersistenceConfig`
+(Include/Exclude). Foundation has **no `logPersistenceConfig`**. Its equivalent is a runtime **value-capture**
+model governed by a server-wide **diagnostics settings** policy:
+
+- Each activity execution captures **value snapshots** (`captureMode` `DiagnosticSnapshot`) for its inputs;
+  the activity-execution detail lists them (`name`, `subject`, `evidenceId`, `captureState`) and the full
+  payload is fetched separately at
+  `runtime/workflows/instances/{wf}/activity-executions/{ae}/value-evidence/{evidenceId}/payload`.
+  Covered by `logging/Test-ValueCapture.ps1`.
+- `GET runtime/workflows/diagnostics/settings` reports the effective capture level, the host policy ceiling,
+  and the snapshot limits (why payloads come back as a **bounded preview**, not the raw value:
+  full-payload capture is disabled by host policy, `maxStringLength=256` etc.). Covered by
+  `logging/Test-DiagnosticsSettings.ps1` (read-only — it does not PUT/mutate the server-global setting).
+
+Capture is **boundary-level**: a bare root activity captures no snapshot (`valueSnapshotCount=0`), while the
+same activity nested in a `Sequence` does (`=1`) — which is why the value-capture test nests the WriteLine.
+
+### storage-drivers -> no equivalent (architectural gap)
+
+Classic Elsa let each variable pick a storage driver (Memory vs WorkflowInstance/persistent). Foundation has a
+**single durable-value storage driver** (`elsa.json`, `WellKnownRuntimeDurableValueStorageDrivers.Json`) — there
+is no Memory/WorkflowInstance dichotomy to select between, so the classic per-variable-driver tests do not
+reproduce. This is an architecture difference (like the removed flow-activity model), not a bug; no script.
 
 ## Composition change: DispatchWorkflow (child workflows)
 
