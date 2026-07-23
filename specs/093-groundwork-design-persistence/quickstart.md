@@ -678,6 +678,21 @@ its EF package/project references entirely (471/471 green; EF ratchet baseline s
 architecture 282/282) — the design source AND test dependency graphs are now zero-EF; the stale
 EF doc-comment and the dead extension-point link the audit found are fixed.
 
+### T086–T088 Phase 7 landing record (2026-07-23)
+
+**Reviewed candidate:** `3f36970ba` (docs/maps refresh `7992edc39` + T083–T085 remediations
+`5eefd9a7f` + audit-nit cleanup `3f36970ba`). **PR:** #997 (linked to #899/#641), Model B: draft →
+checks → ready → merge commit. Gate evidence: T083 battery (this file, §T083–T085); the T084 audit
+final verdict PASS with SC-004/SC-007 re-verified plainly satisfied at `5eefd9a7f`; benchmark and
+schema evidence links in `docs/reports/groundwork-design-persistence-performance.md` and
+`docs/reports/evidence/093-design-benchmarks/`.
+
+**Remaining zero-EF dependencies after this landing** (outside spec 093's scope, tracked on their
+own lanes): #642 diagnostics persistence, #643 OpenIddict stores, #646 cross-lane performance
+evidence, #647 final EF removal and audit — parent #629 remains open for them. Groundwork upstream
+follow-ups: groundwork#118 (relational uncertain-ack). The merge commit and final #641/#629 state
+are recorded on the issue timeline post-merge per T088.
+
 ### Phase 2 bounded-query substrate evidence (T019)
 
 On 2026-07-20, the canonical in-memory Groundwork test substrate was updated to
