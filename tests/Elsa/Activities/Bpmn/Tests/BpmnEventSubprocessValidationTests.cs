@@ -47,14 +47,23 @@ public sealed class BpmnEventSubprocessValidationTests
     }
 
     [Fact]
-    public void ErrorEventSubprocess_IsStatedCut_AndIsRejected() =>
-        // spec 128 stated cut: an error-triggered event subprocess is not executable in this slice (it needs a runtime
-        // deferred seam-B fault absorption). A follow-up unit removes this restriction.
-        AssertRejects(
+    public void ValidErrorEventSubprocess_BuildsCleanly_AndIndexesCatcher()
+    {
+        // spec 132: an error-triggered event subprocess is executable (deferred seam-B absorption, #989 fix). It is a
+        // catch-all (no error-code matching this slice) and always interrupting.
+        var graph = BpmnGraph.From(Node(
             DefaultElements(),
             DefaultFlows(),
-            [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessErrorStart("es-start"))],
-            "not executable in this slice");
+            children: [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessErrorStart("es-start"))]));
+
+        var catcher = Assert.Single(graph.EventSubprocesses);
+        Assert.Equal("es", catcher.ElementId);
+        Assert.Equal(BpmnEventSubprocessTriggerKind.Error, catcher.TriggerKind);
+        Assert.Null(catcher.Code);
+        Assert.True(catcher.Interrupting);
+        Assert.Equal("es-start", catcher.BodyStartElementId);
+        Assert.Same(catcher, graph.ErrorEventSubprocess());
+    }
 
     [Fact]
     public void EventSubprocess_WithSequenceFlow_IsRejected() =>
@@ -119,12 +128,12 @@ public sealed class BpmnEventSubprocessValidationTests
 
     [Fact]
     public void NonInterruptingErrorEventSubprocess_IsRejected() =>
-        // Error is a stated cut this slice, so a non-interrupting error start is rejected by the stated-cut rule too.
+        // spec 132: error events are always interrupting per BPMN; a non-interrupting error start is a malformed shape.
         AssertRejects(
             DefaultElements(),
             DefaultFlows(),
             [WorkflowChild("node-work"), Body("node-body", BpmnRuntimeFixture.EventSubprocessErrorStart("es-start", interrupting: false))],
-            "not executable in this slice");
+            "must be interrupting");
 
     [Fact]
     public void EventSubprocess_NestedInsideBody_IsRejected()
@@ -163,8 +172,34 @@ public sealed class BpmnEventSubprocessValidationTests
             "codes in one scope must be distinct");
 
     [Fact]
-    public void ErrorEventSubprocess_EvenNonInterruptingWithEscalationSibling_IsRejected() =>
-        // Even alongside a valid escalation event subprocess, an error trigger is rejected as the stated cut.
+    public void ErrorEventSubprocess_AlongsideEscalationSibling_BuildsBothCatchers()
+    {
+        // spec 132: an error event subprocess coexists with an escalation event subprocess in the same scope; both
+        // catchers are indexed.
+        var graph = BpmnGraph.From(Node(
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.Task("work", childNodeId: "node-work"),
+                BpmnRuntimeFixture.EndEvent("end"),
+                BpmnRuntimeFixture.EventSubprocess("es-1", "node-body-1"),
+                BpmnRuntimeFixture.EventSubprocess("es-2", "node-body-2")
+            ],
+            DefaultFlows(),
+            children:
+            [
+                WorkflowChild("node-work"),
+                Body("node-body-1", BpmnRuntimeFixture.EventSubprocessEscalationStart("es1-start", "E1")),
+                Body("node-body-2", BpmnRuntimeFixture.EventSubprocessErrorStart("es2-start"))
+            ]));
+
+        Assert.Equal(2, graph.EventSubprocesses.Count);
+        Assert.Equal("es-1", graph.EscalationEventSubprocess("E1")!.ElementId);
+        Assert.Equal("es-2", graph.ErrorEventSubprocess()!.ElementId);
+    }
+
+    [Fact]
+    public void TwoErrorEventSubprocesses_SameScope_IsRejected() =>
+        // spec 132: a scope may carry at most one error event subprocess (catch-all, no error-code disambiguation).
         AssertRejects(
             [
                 BpmnRuntimeFixture.StartEvent(),
@@ -176,10 +211,10 @@ public sealed class BpmnEventSubprocessValidationTests
             DefaultFlows(),
             [
                 WorkflowChild("node-work"),
-                Body("node-body-1", BpmnRuntimeFixture.EventSubprocessEscalationStart("es1-start", "E1")),
+                Body("node-body-1", BpmnRuntimeFixture.EventSubprocessErrorStart("es1-start")),
                 Body("node-body-2", BpmnRuntimeFixture.EventSubprocessErrorStart("es2-start"))
             ],
-            "not executable in this slice");
+            "at most one");
 
     private static BpmnElement[] DefaultElements() =>
     [
