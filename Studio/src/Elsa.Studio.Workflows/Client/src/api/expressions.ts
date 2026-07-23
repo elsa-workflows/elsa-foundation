@@ -5,7 +5,7 @@ import type {
   VariableTypeDescriptor,
   VariableTypeDescriptorsResponse
 } from "../workflowTypes";
-import { builtInConversionProfiles, type ConversionProfileReference } from "../conversionSettings";
+import { builtInConversionProfiles, type ConversionProfileReference } from "../conversionSource";
 import { ApiCapabilityUnavailableError, capabilityIds, resolveCapabilityLink } from "./capabilities";
 
 export async function listExpressionDescriptors(context: StudioEndpointContext): Promise<ExpressionDescriptor[]> {

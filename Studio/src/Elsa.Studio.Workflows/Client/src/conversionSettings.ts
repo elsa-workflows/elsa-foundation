@@ -13,12 +13,10 @@
  *   mutation helpers spread the previous record so unknown fields survive an edit.
  */
 
-export type ConversionMode = "auto" | "none" | "json" | "xml" | "profile";
+import type { ConversionMode, ConversionProfileReference } from "./conversionSource";
 
-export interface ConversionProfileReference {
-  id: string;
-  version: string;
-}
+export { builtInConversionProfiles, describeInferredSource } from "./conversionSource";
+export type { ConversionMode, ConversionProfileReference } from "./conversionSource";
 
 export interface ConversionModeDescriptor {
   mode: ConversionMode;
@@ -32,12 +30,6 @@ export const conversionModeDescriptors: ConversionModeDescriptor[] = [
   { mode: "json", displayName: "JSON", description: "Decode formatted content with the built-in elsa.json@1 profile." },
   { mode: "xml", displayName: "XML", description: "Decode formatted content with the built-in elsa.xml@1 profile." },
   { mode: "profile", displayName: "Profile", description: "Use a registered named conversion profile." }
-];
-
-/** The profiles every foundation host ships; the fallback when no listing endpoint is available. */
-export const builtInConversionProfiles: ConversionProfileReference[] = [
-  { id: "elsa.json", version: "1" },
-  { id: "elsa.xml", version: "1" }
 ];
 
 const conversionModes = new Set<string>(conversionModeDescriptors.map(descriptor => descriptor.mode));
@@ -80,24 +72,6 @@ export function withConversionMode(request: unknown, mode: ConversionMode): Reco
 export function withConversionProfile(request: unknown, profile: ConversionProfileReference): Record<string, unknown> {
   const base: Record<string, unknown> = isRecord(request) ? { ...request } : {};
   return { ...base, mode: "profile", profile: { id: profile.id, version: profile.version } };
-}
-
-/**
- * Client-side caption of where the bound value comes from while authoring. Publication is
- * authoritative — the pinned plan's `sourceRepresentation` appears in the Executable Inspector —
- * so this only mirrors the backend's representation defaults for authored expressions.
- */
-export function describeInferredSource(expressionType: string, value: unknown, mode: ConversionMode): string {
-  if (mode === "json") return "JSON content";
-  if (mode === "xml") return "XML content";
-  if (mode === "profile") return "Formatted content";
-  const type = expressionType.trim().toLowerCase();
-  if (type === "" || type === "literal" || type === "object") {
-    return value != null && typeof value === "object" ? "Structured value" : "Text";
-  }
-  if (type === "variable") return "Variable value";
-  if (type === "input") return "Workflow input";
-  return "Expression result";
 }
 
 // --- compiled conversion-plan inspection (Executable Inspector) ------------------------------------

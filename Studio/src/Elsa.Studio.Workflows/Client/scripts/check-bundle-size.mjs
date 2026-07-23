@@ -28,18 +28,17 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // fuller workspace dependency dist than a local partial build, so CI measures higher than a local run
 // — the budgets below are sized against the CI-observed landing sizes (definitions 368.37 kB, upgrade
 // 356.31 kB; a local build reports ~366.70 kB and ~351.21 kB respectively). Definitions +2 kB, upgrade
-// +6 kB to clear the CI numbers with the usual ~2 kB margin. BOTH landing budgets were raised again for
-// the activity output-capture editor: the "Capture into" variable-target picker was extracted for reuse
-// (IntrinsicInspector + the new Outputs editor), so ~4.8 kB of shared picker/conversion code now hoists
-// into the eager entry closure (entry JS 115.67 -> 120.52 kB local), which lifts BOTH landing paths, plus
-// a few capture-row styles in the shared stylesheet. Local measured paths moved 366.70 -> 369.60 kB and
-// 351.21 -> 356.52 kB; at the documented +1.7 kB / +5.1 kB CI gap the CI-observed sizes are ~371.3 kB and
-// ~361.6 kB. Definitions 370 -> 373, upgrade 358 -> 364 to clear those with ~2 kB margin.
+// +6 kB to clear the CI numbers with the usual ~2 kB margin. The activity output-capture editor initially
+// pulled the full conversion-settings module into the eager registration closure through activity-summary
+// formatting. That raised the clean-install entry/landing measurements to 120.52/369.60/356.52 kB. The
+// summary and built-in-profile primitives now live in the small conversionSource module, leaving the full
+// conversionSettings chunk deferred with the Workflow Editor. Clean-install measurements are consequently
+// 117.60/366.67/353.59 kB, so the landing budgets return to their pre-output-editor values with >3 kB margin.
 const budgets = {
-  entryJavaScript: 125_000,
+  entryJavaScript: 120_000,
   stylesheet: 185_000,
-  definitionsLandingTotal: 373_000,
-  upgradeLandingTotal: 364_000,
+  definitionsLandingTotal: 370_000,
+  upgradeLandingTotal: 358_000,
   individualChunk: 500_000
 };
 
@@ -55,18 +54,22 @@ const deferredHeavySurfaces = [
 ];
 
 const excludedFromDefinitionsLanding = deferredHeavySurfaces.filter(name => name !== "WorkflowDefinitions");
+const deferredInspectorSharedChunks = ["conversionSettings"];
+const variableTargetPickerMarker = "Loading visible variables… The current target is preserved.";
 
-function collectStaticFiles(entryKey, files = new Set()) {
+function collectStaticFiles(entryKey, files = new Set(), visitedEntries = new Set()) {
+  if (visitedEntries.has(entryKey)) return files;
+  visitedEntries.add(entryKey);
   const entry = manifest[entryKey];
   if (!entry) throw new Error(`Bundle manifest is missing ${entryKey}.`);
 
-  return collectStaticEntryFiles(entry, files);
+  return collectStaticEntryFiles(entry, files, visitedEntries);
 }
 
-function collectStaticEntryFiles(entry, files = new Set()) {
+function collectStaticEntryFiles(entry, files = new Set(), visitedEntries = new Set()) {
   files.add(entry.file);
   for (const cssFile of entry.css ?? []) files.add(cssFile);
-  for (const importedKey of entry.imports ?? []) collectStaticFiles(importedKey, files);
+  for (const importedKey of entry.imports ?? []) collectStaticFiles(importedKey, files, visitedEntries);
   return files;
 }
 
@@ -78,6 +81,10 @@ async function measure(files) {
     result.gzipBytes += gzipSync(content).byteLength;
   }
   return result;
+}
+
+async function readJavaScript(files) {
+  return (await Promise.all([...files].map(file => readFile(resolve(outputRoot, file), "utf8")))).join("\n");
 }
 
 function formatBytes(bytes) {
@@ -106,9 +113,12 @@ collectStaticFiles("src/workflow-editor/pages.tsx", definitionsLandingFiles);
 collectStaticEntryFiles(findChunk("WorkflowDefinitions"), definitionsLandingFiles);
 const upgradeLandingFiles = new Set(entryFiles);
 collectStaticFiles("src/ActivityUpgradeWorkbenchPage.tsx", upgradeLandingFiles);
+const workflowEditorFiles = collectStaticEntryFiles(findChunk("WorkflowEditor"));
 const entryJavaScriptFiles = filesWithExtension(entryFiles, ".js");
 const stylesheetFiles = filesWithExtension(entryFiles, ".css");
 const definitionsLandingJavaScriptFiles = filesWithExtension(definitionsLandingFiles, ".js");
+const authenticatedLandingJavaScriptFiles = filesWithExtension(new Set([...definitionsLandingFiles, ...upgradeLandingFiles]), ".js");
+const workflowEditorJavaScriptFiles = filesWithExtension(workflowEditorFiles, ".js");
 
 if (stylesheetFiles.size === 0) throw new Error("Bundle manifest is missing the Workflows entry stylesheet.");
 
@@ -117,6 +127,27 @@ for (const chunkName of excludedFromDefinitionsLanding) {
   if (definitionsLandingFiles.has(chunk.file)) {
     throw new Error(`The authenticated Definitions landing path eagerly includes ${chunkName}.`);
   }
+}
+
+for (const chunkName of deferredInspectorSharedChunks) {
+  const chunk = findChunk(chunkName);
+  if (!workflowEditorFiles.has(chunk.file)) {
+    throw new Error(`The deferred Workflow Editor no longer includes ${chunkName}.`);
+  }
+  if (entryFiles.has(chunk.file) || definitionsLandingFiles.has(chunk.file) || upgradeLandingFiles.has(chunk.file)) {
+    throw new Error(`${chunkName} leaked into an eager Workflows landing closure.`);
+  }
+}
+
+const [authenticatedLandingJavaScript, workflowEditorJavaScript] = await Promise.all([
+  readJavaScript(authenticatedLandingJavaScriptFiles),
+  readJavaScript(workflowEditorJavaScriptFiles)
+]);
+if (!workflowEditorJavaScript.includes(variableTargetPickerMarker)) {
+  throw new Error("The Workflow Editor closure is missing the variable-target picker.");
+}
+if (authenticatedLandingJavaScript.includes(variableTargetPickerMarker)) {
+  throw new Error("The variable-target picker leaked into an eager Workflows landing closure.");
 }
 
 const [entrySize, stylesheetSize, definitionsLandingSize, definitionsLandingTotalSize, upgradeLandingTotalSize] = await Promise.all([

@@ -1,7 +1,7 @@
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode } from "./workflowTypes";
 import { getInputPropertyName, readWrappedInputValue } from "./activityProperties";
-import { describeInferredSource } from "./conversionSettings";
+import { describeInferredSource } from "./conversionSource";
 
 /**
  * A per-instance one-liner for a canvas node: a preview of the activity's most meaningful authored
