@@ -38,8 +38,8 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitIntentHandler
         var payload = payloadElement.Deserialize<PublishStimulusIntentPayload>(SerializerOptions)
             ?? throw new InvalidOperationException($"PublishEvent publish intent '{intent.IntentId}' has an invalid payload.");
 
-        // Correlation is threaded verbatim into the dispatch request (spec 135 FR-5); narrowing is inert until #1001,
-        // so an un-narrowed (null) correlation broadcasts to every same-name listener — the shipped fabric's semantics.
+        // A nonblank correlation narrows only the resume fan-in to same-name Event waits that retained the same
+        // authored value (#1001). It does not filter published-trigger starts; null correlation remains broadcast.
         var request = new StimulusDispatchRequest(
             stimulusType: payload.StimulusType,
             stimulusHash: payload.StimulusHash,

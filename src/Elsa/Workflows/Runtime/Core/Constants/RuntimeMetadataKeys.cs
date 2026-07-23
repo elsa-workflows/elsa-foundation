@@ -72,9 +72,11 @@ public static class RuntimeMetadataKeys
     public const string StorageDriverKey = "runtime.storageDriverKey";
 
     /// <summary>
-    /// Passive correlation identifier threaded through stimulus routing (W7). Stamped as metadata on bookmarks,
-    /// trigger bindings, and dispatch envelopes so a caller can scope a stimulus to a correlation without the
-    /// engine owning a correlation subsystem. Absent when no correlation was supplied.
+    /// Passive correlation identifier threaded through stimulus routing (W7). Stamped as metadata on opted-in
+    /// bookmarks and dispatch envelopes so a caller can scope resume delivery without the engine owning a
+    /// correlation subsystem. Published trigger bindings retain their authored value in the dedicated
+    /// <c>CorrelationScope</c> field instead; start fan-out does not use this metadata key. Absent when no
+    /// correlation was supplied.
     /// </summary>
     public const string CorrelationId = "runtime.correlationId";
     public const string WorkflowDispatchId = "runtime.workflowDispatchId";

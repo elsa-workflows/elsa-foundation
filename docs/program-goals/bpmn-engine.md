@@ -40,11 +40,12 @@ general, spoof-proof runtime seam rather than a BPMN-private side channel.
   collection-mode multi-instance, PR #965), 124 (compensation, PR #966), 125 (transactions/cancel
   events, PR #970), 126 (runtime seam C, PR #974), 127 (escalation, PR #975), and 128 (event subprocesses tier 1,
   PR #992; error trigger stated-cut pending issue #989) 132 (#989 fix, PR #996), 133 (call activity, PR #999; #998 filed), and 134 (tier-2 event
-  subprocesses, PR #1000) 135 (message send surface, PR #1002; correlation narrowing filed as #1001), and 136
+  subprocesses, PR #1000) 135 (message send surface, PR #1002), and 136
   (collaboration/pool import, PR #1003) are merged. Every construct on the Phase 3 scope list has
-  shipped. Open follow-ups: #998 (seam-A dispatch-cancel reach), #1001 (receive-side correlation
-  stamping), the CancelLiveWork-through-seam-A carry, outputs→variables BPMN wiring (leaf capture
-  landed in #995), and two chips (call-activity E2E script; ReplaceChildren metadata preservation).
+  shipped. Receive-side authored Event correlation stamping (#1001, spec 137) is delivered; BPMN-specific
+  correlation authoring remains a separate stated cut. Open follow-ups: #998 (seam-A dispatch-cancel
+  reach), the CancelLiveWork-through-seam-A carry, outputs→variables BPMN wiring (leaf capture landed
+  in #995), and two chips (call-activity E2E script; ReplaceChildren metadata preservation).
 - Carried follow-ups from Phase 2: terminate/fault teardown through seam A (`CancelLiveWork` is
   logical-only today), error-code matching for error boundaries, non-interrupting timer repetition,
   `completionCondition`, MI output aggregation, `standardLoopCharacteristics`, unbounded-loop
