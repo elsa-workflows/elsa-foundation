@@ -3,7 +3,7 @@
     Write-endpoint coverage for the workflow-design API (design/workflows/*): the full CRUD lifecycle.
 .DESCRIPTION
     Exercises every mutating endpoint under the workflow-design area against throwaway fixtures, with valid and
-    negative (404) cases: submit; add; patch metadata; replace draft; promote draft; soft-delete + restore;
+    negative (404/409) cases: submit; add; patch metadata; replace draft; promote draft; soft-delete + restore;
     permanent-delete; discard draft. Route-bound ids are in the path; bodies exclude them.
     Requires the server running from source (see ../README.md).
 #>
@@ -58,10 +58,9 @@ Assert-Write -Ctx $ctx -Label "drafts/{id} (discard)" -Method DELETE -Path "desi
 # --- negatives ---
 Assert-Write -Ctx $ctx -Label "patch {bogus} -> 404" -Method PATCH -Path "design/workflows/definitions/def-bogus$tag" -Body @{ name = "x" } -ExpectStatus 404 | Out-Null
 Assert-Write -Ctx $ctx -Label "delete {bogus} -> 404" -Method DELETE -Path "design/workflows/definitions/def-bogus$tag" -Body @{} -ExpectStatus 404 | Out-Null
-# KNOWN BUG #1020: these return 500 today (unhandled) but should be 4xx. Accept 4xx-or-500 so this tracks the bug
-# and passes cleanly once fixed (to 404 / 409).
-Assert-Write -Ctx $ctx -Label "promote {bogus} -> 404 (currently 500, bug #1020)" -Method POST -Path "design/workflows/drafts/draft-bogus$tag/promote" -Body @{} -ExpectStatus 404,500 | Out-Null
+Assert-Write -Ctx $ctx -Label "promote {bogus} -> 404" -Method POST -Path "design/workflows/drafts/draft-bogus$tag/promote" -Body @{} -ExpectStatus 404 | Out-Null
+Assert-Write -Ctx $ctx -Label "permanent-delete {bogus} -> 404" -Method DELETE -Path "design/workflows/definitions/def-bogus$tag/permanent" -Body @{} -ExpectStatus 404 | Out-Null
 $thr2 = Assert-Write -Ctx $ctx -Label "definitions (add, throwaway for permanent-without-soft)" -Method POST -Path "design/workflows/definitions" -Body @{ name = "WwNoSoft-$tag"; initialState = (New-WorkflowState -RootActivity (Node "w" "n")) }
-Assert-Write -Ctx $ctx -Label "permanent without prior soft-delete -> 409 (currently 500, bug #1020)" -Method DELETE -Path "design/workflows/definitions/$($thr2.Json.definition.id)/permanent" -Body @{} -ExpectStatus 400,409,500 | Out-Null
+Assert-Write -Ctx $ctx -Label "permanent without prior soft-delete -> 409" -Method DELETE -Path "design/workflows/definitions/$($thr2.Json.definition.id)/permanent" -Body @{} -ExpectStatus 409 | Out-Null
 
 Complete-WriteSuite -Area "workflow-design API"

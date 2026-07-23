@@ -4,6 +4,7 @@ using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -61,8 +62,9 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                 async (context, token) =>
                 {
                     var document = await documents.FindByIdAsync(draftId, token)
-                                   ?? throw new InvalidOperationException(
-                                       $"Workflow definition draft '{draftId}' not found");
+                                   ?? throw EntityNotFoundException.ForEntity(
+                                       typeof(WorkflowDefinitionDraft),
+                                       draftId);
 
                     // FR-024 promotion gate: derive errors against the loaded Draft (see DraftValidationGate).
                     // Runs inside the per-Draft lock, so the validated state is exactly the state promoted.
@@ -127,8 +129,9 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                     // draft may later be discarded while its authoritative version remains valid.
                     draftLock = await lockProvider.AcquireLockAsync(draftLockKey, null, token);
                     var observed = await documents.FindByIdAsync(draftId, token)
-                                   ?? throw new InvalidOperationException(
-                                       $"Workflow definition draft '{draftId}' not found");
+                                   ?? throw EntityNotFoundException.ForEntity(
+                                       typeof(WorkflowDefinitionDraft),
+                                       draftId);
                     var definitionLockKey =
                         WorkflowDesignPersistenceLockKeys.DefinitionKey(observed.Entity.WorkflowDefinitionId);
                     definitionLock = await lockProvider.AcquireLockAsync(definitionLockKey, null, token);

@@ -1,8 +1,11 @@
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
+using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.Logging;
@@ -56,14 +59,12 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
             beforeAttempt: async token =>
             {
                 var definition = await definitionStore.FindByIdAsync(definitionId, token)
-                                 ?? throw new ArgumentException(
-                                     $"Workflow definition '{definitionId}' was not found.");
+                                 ?? throw EntityNotFoundException.ForEntity(
+                                     typeof(WorkflowDefinition),
+                                     definitionId);
                 accessContextAccessor.Current.EnsureTenantScope(definition.TenantId);
                 if (definition.DeletedAt is null)
-                {
-                    throw new InvalidOperationException(
-                        "A workflow definition must be soft-deleted before permanent deletion.");
-                }
+                    throw new WorkflowDefinitionNotSoftDeletedException(definitionId);
 
                 foreach (var guard in deletionGuards ?? [])
                     await guard.EnsureCanDeleteAsync(definitionId, token);
