@@ -169,6 +169,11 @@ public sealed class WorkflowExecutableCompiler(
                     new(ActivityInvocationOriginSegmentKind.AuthoredNode, activity.NodeId),
                     new(ActivityInvocationOriginSegmentKind.TemplateBoundary, publication.DefinitionVersionId)
                 ]);
+                // #1007: a reusable placed as a child inside a workflow container (Sequence, Flowchart, …) must
+                // expose the authored node id as its boundary ExecutableNodeId, because the container's compiled
+                // structure addresses that child by its authored node id. A reusable that is the workflow root is
+                // addressed by nothing structural, so it keeps its content-addressed placement id.
+                var isWorkflowRoot = StringComparer.Ordinal.Equals(activity.NodeId, rootActivity.NodeId);
                 var placement = await templatePlacer.PlaceAsync(new(
                     publication,
                     template,
@@ -176,7 +181,8 @@ public sealed class WorkflowExecutableCompiler(
                     origin,
                     publication.ActivityTypeKey,
                     bindings,
-                    outputCaptures), cancellationToken);
+                    outputCaptures,
+                    BindBoundaryRootToAuthoredNode: !isWorkflowRoot), cancellationToken);
                 placedActivities.Add(activity.NodeId, placement.Root);
                 placedLayoutSegments.AddRange(placement.LayoutSidecar.BoundarySegments);
                 foreach (var nodeId in Flatten(placement.Root).Select(x => x.ExecutableNodeId))

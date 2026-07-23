@@ -25,7 +25,12 @@ public sealed record ActivityTemplatePlacementRequest(
     ActivityInvocationOrigin InvocationOrigin,
     string ActivityTypeKey,
     IReadOnlyDictionary<string, RuntimeInputBinding> BoundaryInputBindings,
-    IReadOnlyDictionary<string, RuntimeOutputCapture> BoundaryOutputCaptures);
+    IReadOnlyDictionary<string, RuntimeOutputCapture> BoundaryOutputCaptures,
+    // #1007: when this placement is a child inside a workflow container (Sequence, Flowchart, …), the
+    // container's compiled structure addresses its children by the authored node id. The boundary node
+    // must therefore carry that authored node id as its ExecutableNodeId so the runtime resolves the
+    // placed child; a workflow-root placement leaves this false and keeps its content-addressed id.
+    bool BindBoundaryRootToAuthoredNode = false);
 
 public sealed record ActivityTemplatePlacement(
     ExecutableNode Root,
@@ -115,11 +120,15 @@ public sealed class ActivityTemplatePlacer(
         ActivityTemplatePlacementRequest rootRequest,
         CancellationToken cancellationToken)
     {
+        var boundaryRootId = ResolveBoundaryRootAuthoredNodeId(frame, rootRequest);
         var nodeIds = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var node in frame.Template.NodesById.Values.OrderBy(x => x.ExecutableNodeId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            nodeIds[node.ExecutableNodeId] = GenerateId("node", frame.Origin, $"node:{node.ExecutableNodeId}", generatedIds);
+            nodeIds[node.ExecutableNodeId] =
+                boundaryRootId is not null && StringComparer.Ordinal.Equals(node.ExecutableNodeId, frame.Template.Root.ExecutableNodeId)
+                    ? boundaryRootId
+                    : GenerateId("node", frame.Origin, $"node:{node.ExecutableNodeId}", generatedIds);
         }
 
         var placedNodes = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
@@ -380,6 +389,20 @@ public sealed class ActivityTemplatePlacer(
                 values["entryNodeId"] = JsonSerializer.SerializeToElement(entryChild.Root.ExecutableNodeId);
         }
         return new(descriptor.ConsumerKey, descriptor.SchemaVersion, JsonSerializer.SerializeToElement(values));
+    }
+
+    // #1007: resolves the authored node id the top-level boundary must adopt as its ExecutableNodeId when the
+    // placement is nested inside a workflow container. Only the requested (top-level) frame qualifies — nested
+    // occurrences keep their content-addressed ids — and only when the caller opts in and the invocation origin
+    // carries the authoring node segment. Returns null to fall back to a generated content-addressed id.
+    private static string? ResolveBoundaryRootAuthoredNodeId(PlacementFrame frame, ActivityTemplatePlacementRequest rootRequest)
+    {
+        if (!rootRequest.BindBoundaryRootToAuthoredNode || frame.OccurrenceId is not null)
+            return null;
+
+        var authoredNodeId = rootRequest.InvocationOrigin.Segments
+            .LastOrDefault(segment => segment.Kind == ActivityInvocationOriginSegmentKind.AuthoredNode)?.Id;
+        return string.IsNullOrWhiteSpace(authoredNodeId) ? null : authoredNodeId;
     }
 
     private string GenerateId(
