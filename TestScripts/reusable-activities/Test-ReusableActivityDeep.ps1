@@ -1,20 +1,23 @@
 <#
 .SYNOPSIS
-    3-layer reusable-activity hierarchy: leaf C <- mid B <- top workflow A, published bottom-up and executed.
+    3-layer reusable-activity hierarchy: leaf C <- mid B <- top workflow A, published bottom-up and executed,
+    with all three layers observably running.
 .DESCRIPTION
-    Exercises "3+ layers deep child/parent hierarchy of workflows used as activities" against Foundation's real
-    mechanism: reusable ACTIVITY graphs that reference other reusable activities by exact `activityVersionId`.
-    The publisher inlines the transitive closure, so publishing the top consumer pulls in the whole line.
+    Exercises "3+ layers deep child/parent hierarchy of workflows used as activities" against Foundation's real,
+    WORKING composition: a reusable activity consumes another reusable activity by making it the graph ROOT
+    (root-wrapping). The publisher records the dependency (B -> C) and inlines the transitive closure, so
+    publishing the top consumer pulls in the whole line and every layer executes.
 
-      C (leaf)  : reusable activity, graph = Sequence[ WriteLine("C ran") ].
-      B (mid)   : reusable activity, graph = Sequence[ <ref to C>, WriteLine("B ran") ]  (references C by version).
-      A (top)   : workflow whose ROOT is B.
+      C (leaf) : reusable activity, graph = Sequence[ WriteLine("C ran") ].
+      B (mid)  : reusable activity whose graph ROOT is C  (references C by exact version).
+      A (top)  : workflow whose root is B.
 
-    Published bottom-up (C -> B -> A). Asserts A executes to completion (the whole inlined chain resolved and
-    ran) and B is observably inlined. NOTE: deeply-inlined leaf executions (C, the WriteLines) are collapsed and
-    are not individually surfaced in the instance's shallow activity view or the descendants endpoint, so the
-    assertion is completion + B-inlined; completion is meaningful because a broken child binding faults instead
-    of completing (see Test-ReusableSequenceNesting.ps1). Requires the server running from source (see ../README.md).
+    Published bottom-up (C -> B -> A). Asserts A completes AND both the C-type and B-type activities ran inline.
+
+    NOTE on composition: nesting a reusable reference as one child inside a Sequence (so a layer could call its
+    child AND do other work) does NOT wire the child — in a workflow it faults (issue #1007), and inside a
+    reusable graph the dependency is silently dropped. Root-wrapping is the mechanism that actually composes
+    reusable activities today. Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
 param(
@@ -24,20 +27,22 @@ param(
 )
 . "$PSScriptRoot/_ReusableCommon.ps1"
 
-Write-Host "== 3-layer reusable-activity hierarchy (C <- B <- A) ==  -> $BaseUrl" -ForegroundColor Cyan
+Write-Host "== 3-layer reusable-activity hierarchy (C <- B <- A, root-wrapping) ==  -> $BaseUrl" -ForegroundColor Cyan
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 $seq = Invoke-Step "resolve Sequence"  { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Sequence.Activities.Sequence' }
 $wl  = Invoke-Step "resolve WriteLine" { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.WriteLine' }
 $t = Get-Random -Max 999999
 
-# Bottom-up publish: C, then B (references C), then A (root = B).
-$mC = New-GraphManifestJson -SeqVersionId $seq -ActivitiesJson ("[" + (New-WriteLineNodeJson -NodeId "c" -WriteLineVersionId $wl -Text "C ran t=$t") + "]")
-$C  = Invoke-Step "publish leaf C" { Publish-ReusableActivity -Ctx $ctx -DisplayName "LeafC-$t" -PayloadJson $mC }
+# Bottom-up publish: C, then B (root-wraps C), then A (root = B).
+$C = Invoke-Step "publish leaf C" { Publish-ReusableActivity -Ctx $ctx -DisplayName "LeafC-$t" -PayloadJson (New-GraphManifestJson -SeqVersionId $seq -ActivitiesJson ("[" + (New-WriteLineNodeJson -NodeId "c" -WriteLineVersionId $wl -Text "C ran t=$t") + "]")) }
 Write-Host ("[C] version={0}" -f $C.VersionId)
 
-$actsB = "[" + (New-ReusableRefNodeJson -NodeId "callC" -VersionId $C.VersionId) + "," + (New-WriteLineNodeJson -NodeId "b" -WriteLineVersionId $wl -Text "B ran t=$t") + "]"
-$B = Invoke-Step "publish mid B" { Publish-ReusableActivity -Ctx $ctx -DisplayName "MidB-$t" -PayloadJson (New-GraphManifestJson -SeqVersionId $seq -ActivitiesJson $actsB) }
+$B = Invoke-Step "publish mid B (root-wraps C)" { Publish-ReusableActivity -Ctx $ctx -DisplayName "MidB-$t" -PayloadJson (New-RootWrapManifestJson -RootVersionId $C.VersionId) }
 Write-Host ("[B] version={0} type={1}" -f $B.VersionId, $B.ActivityTypeKey)
+
+# Verify B actually depends on C (authoritative outbound edge) before running.
+$bDeps = Invoke-Step "verify B->C dependency" { Get-OutboundDependencyVersionIds -Ctx $ctx -VersionId $B.VersionId }
+$bDependsOnC = $bDeps -contains $C.VersionId
 
 $root = New-ActivityNode -NodeId "use-B" -VersionId $B.VersionId
 $def = Invoke-Step "submit top A"  { Submit-Workflow -Ctx $ctx -Name "TopA-$t" -Description "3-deep reusable hierarchy" -RootActivity $root }
@@ -46,11 +51,12 @@ $run = Invoke-Step "execute top A" { Invoke-Artifact -Ctx $ctx -ArtifactId $pub.
 $inst = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $run.workflowExecutionId
 Show-WorkflowInstance -Instance $inst
 
-$bInlined = Test-ReusableRan -Instance $inst -ActivityTypeKey $B.ActivityTypeKey
+$ranC = Test-ReusableRan -Instance $inst -ActivityTypeKey $C.ActivityTypeKey
+$ranB = Test-ReusableRan -Instance $inst -ActivityTypeKey $B.ActivityTypeKey
 Write-Host ""
-if ($inst.instance.status -in @('Completed','Finished') -and $bInlined) {
-    Write-Host "SUCCESS - 3-deep hierarchy published bottom-up and the top executed to completion (B inlined; C transitively inlined)." -ForegroundColor Green
+if ($inst.instance.status -in @('Completed','Finished') -and $bDependsOnC -and $ranC -and $ranB) {
+    Write-Host "SUCCESS - 3-deep hierarchy published bottom-up; B depends on C; top completed with both B and C running inline." -ForegroundColor Green
 } else {
-    Write-Host ("MISMATCH - status '{0}', B-inlined={1}" -f $inst.instance.status, $bInlined) -ForegroundColor Red
+    Write-Host ("MISMATCH - status '{0}', B->C dep={1}, C ran={2}, B ran={3}" -f $inst.instance.status, $bDependsOnC, $ranC, $ranB) -ForegroundColor Red
     exit 1
 }

@@ -94,6 +94,30 @@ function Publish-ReusableActivity {
     }
 }
 
+# Add a new draft to an EXISTING reusable definition (for publishing a subsequent version). Returns draft id + revision.
+function Add-ReusableActivityDraft {
+    param(
+        [Parameter(Mandatory)] $Ctx,
+        [Parameter(Mandatory)][string] $DefinitionId,
+        [Parameter(Mandatory)][string] $PayloadJson,
+        [string] $ContractJson = $script:DoneOnlyContract,
+        $SourceVersionId = $null
+    )
+    $sv = if ([string]::IsNullOrEmpty($SourceVersionId)) { "null" } else { '"' + $SourceVersionId + '"' }
+    $body = @"
+{"sourceVersionId":$sv,"provider":{"providerKey":"elsa.activity-graph","schemaVersion":"1","payload":$PayloadJson},"contract":$ContractJson,"layout":[]}
+"@
+    $r = Invoke-RestMethod "$($Ctx.BaseUrl)/design/activities/definitions/$DefinitionId/drafts" -Method Post -WebSession $Ctx.Session -ContentType 'application/json' -Body $body
+    [pscustomobject]@{ DraftId = $r.draftId; Revision = [long]$r.revision }
+}
+
+# Return the exact dependency version ids a consumer version is bound to (authoritative outbound edges).
+function Get-OutboundDependencyVersionIds {
+    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)][string] $VersionId)
+    $out = Invoke-RestMethod "$($Ctx.BaseUrl)/design/activities/versions/$VersionId/dependencies?direction=outbound" -WebSession $Ctx.Session -UseBasicParsing
+    @($out.items | ForEach-Object { $_.dependency.versionId })
+}
+
 # Build a graph manifest whose root is a Sequence running the given inner-node JSON array (raw JSON string).
 function New-GraphManifestJson {
     param(
@@ -104,6 +128,16 @@ function New-GraphManifestJson {
     )
     @"
 {"variables":$VariablesJson,"rootActivity":{"nodeId":"graph-root","activityVersionId":"$SeqVersionId","inputs":[],"outputs":[],"structure":{"kind":"Sequence","schemaVersion":"1","payload":{"activities":$ActivitiesJson}}},"outputMappings":$OutputMappingsJson}
+"@
+}
+
+# Build a graph manifest whose root IS another activity version directly (root-wraps-child). This is the working
+# way for a reusable activity to consume another reusable activity: nesting a reusable ref inside a Sequence
+# structure does NOT wire the dependency (see issue #1007 / README), whereas making the child the root does.
+function New-RootWrapManifestJson {
+    param([Parameter(Mandatory)][string] $RootVersionId, [string] $OutputMappingsJson = "[]", [string] $VariablesJson = "[]")
+    @"
+{"variables":$VariablesJson,"rootActivity":{"nodeId":"wrap","activityVersionId":"$RootVersionId","inputs":[],"outputs":[],"structure":null},"outputMappings":$OutputMappingsJson}
 "@
 }
 
