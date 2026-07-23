@@ -3,13 +3,14 @@
     While loop terminated by its own body: a Set of the condition variable ends the loop (issue #977).
 .DESCRIPTION
     Foundation-native equivalent of the JTest "While" concept. The loop condition is a Variable-read of a
-    container-scoped Boolean the enclosing Sequence declares (see the scoping rule in ../README.md); the loop
-    body is a Set intrinsic that flips it to false. With the #977 fix, While opts into per-pass input
-    re-materialization, so the body's committed Set is visible to the condition on the next evaluation and the
-    loop exits after exactly one pass — previously it ran to DrainCycleLimitExceededException (64 cycles).
+    WORKFLOW-SCOPE Boolean (see the scoping rule in ../README.md); the loop body is a Set intrinsic that flips it
+    to false. With the #977 fix, While opts into per-pass input re-materialization, so the body's committed Set is
+    visible to the condition on the next evaluation and the loop exits after exactly one pass — previously it ran
+    to DrainCycleLimitExceededException (64 cycles).
 
-    The workflow: Sequence[vars: KeepGoing=true]( While(Condition <- Variable KeepGoing){ Set(KeepGoing=false) } ).
-    Asserts the instance completes and the body ran exactly once.
+    The workflow: Sequence( While(Condition <- Variable KeepGoing){ Set(KeepGoing=false) } ) with KeepGoing
+    declared at workflow scope. Asserts the instance completes and the body ran exactly once. (Declaring KeepGoing
+    on the Sequence container instead now fails the #972 publish validation — see ../README.md.)
     Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
@@ -37,10 +38,10 @@ $loop = New-ActivityNode -NodeId "loop" -VersionId $while -Inputs @(
     }
 ) -Structure (New-WhileStructure -Body $flip)
 $root = New-ActivityNode -NodeId "root" -VersionId $sequence -Structure (
-    New-SequenceStructure -Activities @($loop) -Variables @( (New-VariableDef -Key "KeepGoing" -Alias "Boolean" -Default $true) )
+    New-SequenceStructure -Activities @($loop)
 )
 
-$def = Invoke-Step "submit"  { Submit-Workflow -Ctx $ctx -Name "While-$(Get-Date -Format HHmmss)-$(Get-Random -Max 9999)" -Description "While terminated by body Set" -RootActivity $root }
+$def = Invoke-Step "submit"  { Submit-Workflow -Ctx $ctx -Name "While-$(Get-Date -Format HHmmss)-$(Get-Random -Max 9999)" -Description "While terminated by body Set" -RootActivity $root -Variables @( (New-VariableDef -Key "KeepGoing" -Alias "Boolean" -Default $true) ) }
 $pub = Invoke-Step "publish" { Publish-WorkflowVersion -Ctx $ctx -VersionId $def.version.id }
 $run = Invoke-Step "execute" { Invoke-Artifact -Ctx $ctx -ArtifactId $pub.artifactId -SourceReferenceId $pub.sourceReferenceId }
 $inst = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $run.workflowExecutionId

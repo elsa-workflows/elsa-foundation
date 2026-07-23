@@ -26,12 +26,17 @@ everything the flow needs (design + publishing + runtime APIs, identity, `Ground
 | `Test-HttpWorkflow.ps1`     | `HttpEndpoint` start-trigger; publishes, then fires a real HTTP request at `/workflows/http/<path>` |
 | `Test-ChildWorkflow.ps1`    | parent/child dispatch: a parent `DispatchWorkflow` fires a separately-published child workflow |
 | `single-outcome/Test-ForLoop.ps1` / `Test-ForEachLoop.ps1` / `Test-SetOutput.ps1` / `Test-SetVariable.ps1` | loops + Set/SetOutput intrinsics |
+| `single-outcome/Test-WhileLoop.ps1` | `While` loop terminated by a body `Set` of the condition variable (#977) |
+| `single-outcome/Test-WhileCounter.ps1` | `While` driven by a JS-incremented counter — body reads/writes a variable from JS via `getVariable` (#984 + #977) |
 | `branching/Test-ParallelFork.ps1` | `Parallel` fork/join |
 | `composition/Test-ChildWorkflowInput.ps1` | parent dispatches a child **and passes it an input**; child echoes it; correlate the child by correlationId |
 | `javascript/Test-JavaScriptExpressions.ps1` | pure-ES JS in a Sync HTTP response body (array/object/json/optional-chaining/nullish/flat/replaceAll) |
 | `http/Test-HttpMethods.ps1` | one HttpEndpoint accepting GET/POST/PUT/DELETE, each returning a sync response |
+| `http/Test-HttpEcho.ps1` | capture request data (`ParsedContent`/`RouteData`/`Request`) into workflow variables and echo it back in a sync response (request-body, route-parameter, query-parameter, header; #972/#984) |
 | `correlate/Test-Correlate.ps1` | `SetCorrelationId` intrinsic sets the instance correlation id; found by `?correlationId=` |
 | `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
+| `logging/Test-ValueCapture.ps1` | per-activity value snapshot: a WriteLine's `Text` input is captured (`DiagnosticSnapshot`) and its payload retrieved via the value-evidence endpoint |
+| `logging/Test-DiagnosticsSettings.ps1` | read-only `GET runtime/workflows/diagnostics/settings` — the capture policy that governs what value snapshots are captured |
 | `_ElsaCommon.ps1`           | shared helpers (dot-sourced): login, activity lookup, submit/publish/execute, structures, observability |
 
 **Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;
@@ -39,10 +44,14 @@ you publish an event by POSTing a stimulus `{ stimulusType:"Event", stimulusHash
 to `runtime/workflows/stimuli` (modes: `StartOnly`/`ResumeOnly`/`StartAndResume`). The response returns the
 started `workflowExecutionId` directly.
 
-**HTTP finding:** request-data **echo** cases (query-parameter / route-parameter / request-body / headers) are
-**blocked by issue #972**. `HttpEndpoint` exposes request data as outputs, but capturing one into a variable
-forces workflow-scope, and reading a workflow-scope variable in a later container node faults at runtime
-(`Variable '...' in scope 'workflow' ... is unavailable`). Method-handling (no capture) reproduces cleanly.
+**HTTP finding (resolved):** request-data **echo** now works (`http/Test-HttpEcho.ps1` — request-body,
+route-parameter, query-parameter, and header). This was originally deferred under issue #972: capturing an `HttpEndpoint` output forced a
+workflow-scope variable, and reading a workflow-scope variable in a later node faulted. Both halves are fixed on
+current main. Two authoring notes: (1) `HttpEndpoint` exposes `Request` + `RouteData` (both **required** to bind)
+and `ParsedContent` (optional); output capture must target a workflow-scope `Variable`. (2) `WriteHttpResponse.Body`
+materializes as `System.String` and a captured Object/JsonElement variable does not implicitly convert — reading it
+through a **JS** binding (`JSON.stringify(getVariable('x'))` / member access, #984) both echoes the value and
+yields a string.
 
 **JavaScript finding:** Foundation evaluates binding JS in a **deterministic closed sandbox** — only `args`
 (declared expression params); `Date`/`Temporal`/`Intl`/`Math.random`/`crypto` are stripped, and there are **no
@@ -91,12 +100,28 @@ intrinsics**, so classic activities map like this:
 | For / ForEach | `For` / `ForEach` | `single-outcome/Test-ForLoop.ps1`, `Test-ForEachLoop.ps1` |
 | SetOutput (activity) | `elsa.intrinsic.set-output@1` intrinsic | `single-outcome/Test-SetOutput.ps1` |
 
-**Passing:** If, Switch, For (inclusive/exclusive), ForEach, Parallel fork/join, SetOutput, **SetVariable**.
+**Passing:** If, Switch, For (inclusive/exclusive), ForEach, Parallel fork/join, SetOutput, **SetVariable**,
+**While** (body-Set terminated, #977), **While with a JS counter** (#984 + #977), **HttpEndpoint request-data
+echo** (#972, request-body + route-parameter + query-parameter + header).
 
-Key scoping rule discovered: a variable used by `Set`/`Variable`-read intrinsics must be declared on the
-enclosing **container's structure** (e.g. the Sequence's `variables`), not at workflow-state level — otherwise
-the Set faults with *"targets undeclared variable"*. `New-VariableDef` + `New-SequenceStructure -Variables`
-encode this.
+**Key scoping rule (corrected).** Since the #972 two-guard validation landed
+(`IntrinsicVariableTargetValidator` at design time + `ExecutableNodeCompiler.ValidateIntrinsicVariableTargets`
+at publish), a variable reference and its declaration must agree on scope — and the design validator and the
+runtime (`VariableScope`) now resolve identically, via the reference's `DeclaringScopeId`. Two authorings work
+end to end, verified live:
+
+- **Workflow scope (simplest):** declare the variable in `state.Variables` (`Submit-Workflow -Variables`) and
+  reference it with **no** `declaringScopeId`. This is what the scripts use.
+- **Container scope:** declare the variable on a container (e.g. the Sequence's `variables`) **and** give every
+  reference to it (Set target, `Variable`-read, loop condition) a `declaringScopeId` equal to that container's
+  node id. Verified deterministic (5/5).
+
+What fails is the **mismatch** the old scripts had: declaring on the container while referencing with no
+`declaringScopeId` (i.e. workflow-scope). The #972 guard now rejects that at publish
+(*"targets variable '…' in scope 'workflow', which is not visible from this node's scope"*). Container-scope is
+**not** a runtime bug — an incomplete `declaringScopeId` on a read/condition is just an authoring error.
+`Test-SetVariable.ps1` / `Test-WhileLoop.ps1` were updated from the mismatching container declaration to clean
+workflow scope.
 
 **Resolved (`While`):** Both original blockers are fixed. (1) A JS value expression **can** now read a container
 variable via `getVariable('X')`/`variables.X`/`getX()` — the visible variable frames are projected into the isolated
@@ -110,6 +135,37 @@ instead of faulting at the 64-cycle drain limit.
   (Foundation removed the flow-activity model). Covered at the concept level via `If`/`Switch`/`Parallel`;
   these are architectural gaps, not bugs.
 
+## Advanced tier (JTest logging + storage-drivers)
+
+The classic JTest "advanced" suites target Elsa 3.x persistence/observability primitives that Foundation
+does not have. One maps to a Foundation-native equivalent; the other is a genuine architectural gap.
+
+### logging -> per-activity value capture + diagnostics policy (reproduced)
+
+Classic Elsa configured *what activity state is persisted* per activity via `logPersistenceConfig`
+(Include/Exclude). Foundation has **no `logPersistenceConfig`**. Its equivalent is a runtime **value-capture**
+model governed by a server-wide **diagnostics settings** policy:
+
+- Each activity execution captures **value snapshots** (`captureMode` `DiagnosticSnapshot`) for its inputs;
+  the activity-execution detail lists them (`name`, `subject`, `evidenceId`, `captureState`) and the full
+  payload is fetched separately at
+  `runtime/workflows/instances/{wf}/activity-executions/{ae}/value-evidence/{evidenceId}/payload`.
+  Covered by `logging/Test-ValueCapture.ps1`.
+- `GET runtime/workflows/diagnostics/settings` reports the effective capture level, the host policy ceiling,
+  and the snapshot limits (why payloads come back as a **bounded preview**, not the raw value:
+  full-payload capture is disabled by host policy, `maxStringLength=256` etc.). Covered by
+  `logging/Test-DiagnosticsSettings.ps1` (read-only — it does not PUT/mutate the server-global setting).
+
+Capture is **boundary-level**: a bare root activity captures no snapshot (`valueSnapshotCount=0`), while the
+same activity nested in a `Sequence` does (`=1`) — which is why the value-capture test nests the WriteLine.
+
+### storage-drivers -> no equivalent (architectural gap)
+
+Classic Elsa let each variable pick a storage driver (Memory vs WorkflowInstance/persistent). Foundation has a
+**single durable-value storage driver** (`elsa.json`, `WellKnownRuntimeDurableValueStorageDrivers.Json`) — there
+is no Memory/WorkflowInstance dichotomy to select between, so the classic per-variable-driver tests do not
+reproduce. This is an architecture difference (like the removed flow-activity model), not a bug; no script.
+
 ## Composition change: DispatchWorkflow (child workflows)
 
 `Test-ChildWorkflow.ps1` needs the `DispatchWorkflow` activity, which the reference server did not compose.
@@ -118,11 +174,16 @@ Enabling it (separate from the bug fixes below):
 - `src/Apps/Elsa.Server/shells.json` - features `ActivitiesDispatchWorkflowRuntime` + `ActivitiesDispatchWorkflowDesign`.
 - No `Program.cs` change needed: `.WithHostAssemblies()` discovers the referenced assemblies' shell features.
 
-Both dispatch modes work: fire-and-forget (`WaitForCompletion=false`, used by the test) completes the parent
-immediately with outcome `Dispatched` while the child runs independently; waited (`WaitForCompletion=true`)
-suspends the parent until the child completes, then resumes it with outcome `Completed`. (The waited path
-previously poisoned with a "exactly one matching typed trigger registration" fault - a resume-target id
-namespace mismatch filed as issue #976 and since fixed.)
+Fire-and-forget (`WaitForCompletion=false`, used by the test) works: the parent completes immediately with
+outcome `Dispatched` while the child runs independently.
+
+**Waited path (`WaitForCompletion=true`) is currently broken (regression).** Verified live on current main: the
+parent suspends at the dispatch node (`subStatus=TriggerWaiting`, no surfaced bookmark) and **never resumes**,
+even long after the child would have completed — the parent-after node never runs. `DispatchWorkflow` does
+register a wait bookmark + resume trigger (`DispatchWorkflow.cs:204-234`, resume target `CompletionResumeTargetId`),
+so the completion -> parent-resume delivery (`WorkflowDispatchCompletionEnricher` / `ParentResumeExecutor`) is not
+firing (or the child is not dispatched in waited mode). This contradicts the earlier "issue #976 fixed" note.
+Tracked as issue #1006; `Test-ChildWorkflow.ps1` therefore uses fire-and-forget only.
 
 ## Server fixes made while building these tests
 
