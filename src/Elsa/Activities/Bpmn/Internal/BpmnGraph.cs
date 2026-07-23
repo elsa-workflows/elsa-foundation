@@ -145,8 +145,19 @@ public sealed class BpmnGraph
     public BpmnElement? AttachedCancelBoundary(string hostElementId) =>
         _boundariesByHost[hostElementId].FirstOrDefault(BpmnElementFamilies.IsCancelBoundary);
 
-    /// <summary>The event subprocesses of this scope (spec 128): flow-less <c>TriggeredByEvent</c> subprocesses indexed by their body start-event trigger (kind + code), graph-derived and dormant.</summary>
+    /// <summary>The event subprocesses of this scope (spec 128/134): flow-less <c>TriggeredByEvent</c> subprocesses indexed by their body start-event trigger (kind + code), graph-derived.</summary>
     public IReadOnlyList<BpmnEventSubprocessCatcher> EventSubprocesses => _eventSubprocesses;
+
+    /// <summary>The scope's external-trigger (message/signal/timer) event subprocesses (spec 134), in deterministic element-id ordinal order; each is armed as a scope listener at scope start.</summary>
+    public IReadOnlyList<BpmnEventSubprocessCatcher> ExternalTriggerEventSubprocesses =>
+        _eventSubprocesses
+            .Where(catcher => catcher.IsExternalTrigger)
+            .OrderBy(catcher => catcher.ElementId, StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>The event subprocess bound to <paramref name="elementId"/> (spec 134), or <c>null</c>; each <c>TriggeredByEvent</c> element is exactly one catcher.</summary>
+    public BpmnEventSubprocessCatcher? EventSubprocessByElementId(string elementId) =>
+        _eventSubprocesses.FirstOrDefault(catcher => StringComparer.Ordinal.Equals(catcher.ElementId, elementId));
 
     /// <summary>The escalation event subprocess matching <paramref name="escalationCode"/> (spec 128): an exact code match wins; else the code-less catch-all; else <c>null</c>.</summary>
     public BpmnEventSubprocessCatcher? EscalationEventSubprocess(string escalationCode) =>
@@ -323,6 +334,16 @@ public sealed class BpmnGraph
                     throw new BpmnExecutionException($"BPMN child activity node '{element.ChildNodeId}' is bound by more than one element.");
             }
 
+            // spec 134: a scope-listener node is a second bound-child channel — a node is bound EITHER as some
+            // element's ChildNodeId OR as some element's ListenerNodeId, never both, never twice.
+            if (element.ListenerNodeId is not null)
+            {
+                if (!childrenByNodeId.ContainsKey(element.ListenerNodeId))
+                    throw new BpmnExecutionException($"BPMN element '{element.ElementId}' binds scope-listener node '{element.ListenerNodeId}', which does not exist in child slot '{BpmnProcessActivity.ActivitiesSlotName}'.");
+                if (!boundChildNodeIds.Add(element.ListenerNodeId))
+                    throw new BpmnExecutionException($"BPMN child activity node '{element.ListenerNodeId}' is bound by more than one element.");
+            }
+
             switch (family)
             {
                 case BpmnElementFamilies.StartEventNone:
@@ -411,17 +432,20 @@ public sealed class BpmnGraph
     }
 
     /// <summary>
-    /// Event subprocess rules (spec 128 D1). A <c>TriggeredByEvent</c> element is a flow-less <c>subProcess</c>
+    /// Event subprocess rules (spec 128/134 D1). A <c>TriggeredByEvent</c> element is a flow-less <c>subProcess</c>
     /// binding a body: it participates in no sequence flows, carries no loop characteristics, hosts no attached
     /// boundary, is not a compensation handler, not referenced as one, and is neither a compensation handler nor a
     /// transaction (the compensation-handler rule family, mirrored). Its body must declare exactly one start event
-    /// carrying exactly one supported trigger definition — escalation (with optional code; code-less = catch-all)
-    /// or error (catch-all only) — with no nested <c>TriggeredByEvent</c> inside the body (rejected this slice).
-    /// The body start event's interrupting flag (its <see cref="BpmnElement.CancelActivity"/>, the BPMN
-    /// <c>isInterrupting</c> default-true convention) must be interrupting for an error trigger. Per scope:
-    /// escalation codes are distinct with at most one code-less catch-all, and at most one error event subprocess.
-    /// The body structure is read the way MI validation reads <c>BpmnStructure.Variables</c> — authoring-time
-    /// knowledge, no runtime cross-scope reach. Returns the graph-derived catcher index.
+    /// carrying exactly one supported trigger definition — escalation (with optional code; code-less = catch-all),
+    /// error (catch-all only), or a message/signal (with a <c>name</c>) / timer (with an <c>interval</c>) — with no
+    /// nested <c>TriggeredByEvent</c> inside the body (rejected this slice). A message/signal/timer event subprocess
+    /// (spec 134) declares a required <see cref="BpmnElement.ListenerNodeId"/> (the armed scope listener) that
+    /// escalation/error must NOT declare (dormant catchers). The body start event's interrupting flag (its
+    /// <see cref="BpmnElement.CancelActivity"/>, the BPMN <c>isInterrupting</c> default-true convention) must be
+    /// interrupting for an error trigger. Per scope: escalation codes are distinct with at most one code-less
+    /// catch-all, and at most one error event subprocess. The body structure is read the way MI validation reads
+    /// <c>BpmnStructure.Variables</c> — authoring-time knowledge, no runtime cross-scope reach. Returns the
+    /// graph-derived catcher index.
     /// </summary>
     private static IReadOnlyList<BpmnEventSubprocessCatcher> ValidateEventSubprocesses(
         IReadOnlyCollection<BpmnElement> elements,
@@ -483,7 +507,7 @@ public sealed class BpmnGraph
                 throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' body must declare exactly one start event; it declares {bodyStarts.Length}.");
             var bodyStart = bodyStarts[0];
             if (bodyStart.EventDefinitions.Count != 1)
-                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' body start event '{bodyStart.ElementId}' must declare exactly one event definition of a supported trigger (escalation or error); it declares {bodyStart.EventDefinitions.Count}.");
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' body start event '{bodyStart.ElementId}' must declare exactly one event definition of a supported trigger (escalation, error, message, signal, or timer); it declares {bodyStart.EventDefinitions.Count}.");
 
             // Rule 3 — interrupting flag from the body start event's CancelActivity (isInterrupting, default true).
             var interrupting = bodyStart.CancelActivity;
@@ -491,6 +515,10 @@ public sealed class BpmnGraph
 
             if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Escalation))
             {
+                // spec 134: escalation/error are dormant catchers — they must NOT declare a scope listener.
+                if (element.ListenerNodeId is not null)
+                    throw new BpmnExecutionException($"BPMN escalation event subprocess '{element.ElementId}' declares a scope-listener node, but escalation event subprocesses are dormant (activated by a signal, not an armed listener); only message/signal/timer event subprocesses may declare a listener.");
+
                 var code = ReadEscalationCode(bodyStart);
                 if (code is null)
                 {
@@ -511,6 +539,8 @@ public sealed class BpmnGraph
                 // schedules its body — a deferred seam-B fault absorption, executable since the runtime metadata-leak
                 // fix (#989) landed. Interrupting only (per BPMN) and catch-all (no error-code matching this slice); a
                 // scope carries at most one.
+                if (element.ListenerNodeId is not null)
+                    throw new BpmnExecutionException($"BPMN error event subprocess '{element.ElementId}' declares a scope-listener node, but error event subprocesses are dormant (activated by a child fault, not an armed listener); only message/signal/timer event subprocesses may declare a listener.");
                 if (!interrupting)
                     throw new BpmnExecutionException($"BPMN error event subprocess '{element.ElementId}' must be interrupting; error events are always interrupting per BPMN.");
                 if (hasError)
@@ -519,13 +549,54 @@ public sealed class BpmnGraph
 
                 catchers.Add(new BpmnEventSubprocessCatcher(element.ElementId, element.ChildNodeId, bodyStart.ElementId, BpmnEventSubprocessTriggerKind.Error, Code: null, Interrupting: true));
             }
+            else if (ExternalTriggerKind(definitionType) is { } externalTriggerKind)
+            {
+                // spec 134: a message/signal/timer-triggered event subprocess needs an armed scope listener — a
+                // required ListenerNodeId referencing the synthesized suspending child (Event for message/signal,
+                // Delay for timer; not type-validated — the callActivity precedent). Its binding was accounted for in
+                // the exactly-one-binding loop. The body start's stimulus facts (message/signal name; timer interval)
+                // are validated non-empty; cron/timeCycle timers are not supported for event subprocesses (D5).
+                if (element.ListenerNodeId is null)
+                    throw new BpmnExecutionException($"BPMN {definitionType} event subprocess '{element.ElementId}' requires a scope-listener node (a message/signal/timer event subprocess arms a suspending listener at scope start); none is bound.");
+
+                ValidateExternalTriggerDefinition(element, bodyStart, definitionType);
+                catchers.Add(new BpmnEventSubprocessCatcher(element.ElementId, element.ChildNodeId, bodyStart.ElementId, externalTriggerKind, Code: null, interrupting, element.ListenerNodeId));
+            }
             else
             {
-                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' body start event '{bodyStart.ElementId}' declares an unsupported trigger definition '{definitionType}'; only escalation and error triggers are supported by this slice.");
+                throw new BpmnExecutionException($"BPMN event subprocess '{element.ElementId}' body start event '{bodyStart.ElementId}' declares an unsupported trigger definition '{definitionType}'; only escalation, error, message, signal, and timer triggers are supported by this slice.");
             }
         }
 
         return catchers;
+    }
+
+    /// <summary>The external-trigger (spec 134) event-subprocess kind of a body-start definition type, or <c>null</c> for a non-external type.</summary>
+    private static BpmnEventSubprocessTriggerKind? ExternalTriggerKind(string definitionType) =>
+        StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Message) ? BpmnEventSubprocessTriggerKind.Message
+        : StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Signal) ? BpmnEventSubprocessTriggerKind.Signal
+        : StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Timer) ? BpmnEventSubprocessTriggerKind.Timer
+        : null;
+
+    /// <summary>
+    /// Validates a message/signal/timer event-subprocess body start's stimulus facts (spec 134 D1): message/signal
+    /// declare a non-empty <c>name</c>; a timer declares a non-empty <c>interval</c> (<c>timeDuration</c>-shaped) and
+    /// no <c>cron</c> (cron/timeCycle timers are not supported for event subprocesses — the module-wide cut, D5).
+    /// </summary>
+    private static void ValidateExternalTriggerDefinition(BpmnElement element, BpmnElement bodyStart, string definitionType)
+    {
+        var properties = bodyStart.EventDefinitions.Single().Properties;
+        if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Timer))
+        {
+            if (properties.TryGetValue(BpmnEventDefinitionProperties.Cron, out var cron) && !string.IsNullOrWhiteSpace(cron))
+                throw new BpmnExecutionException($"BPMN timer event subprocess '{element.ElementId}' declares a cron schedule; cron/timeCycle timers are not supported for event subprocesses (only a one-shot interval, re-armed per non-interrupting fire).");
+            if (!properties.TryGetValue(BpmnEventDefinitionProperties.Interval, out var interval) || string.IsNullOrWhiteSpace(interval))
+                throw new BpmnExecutionException($"BPMN timer event subprocess '{element.ElementId}' body start event '{bodyStart.ElementId}' declares no interval; a timer event subprocess needs a one-shot duration interval.");
+            return;
+        }
+
+        if (!properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var name) || string.IsNullOrWhiteSpace(name))
+            throw new BpmnExecutionException($"BPMN {definitionType} event subprocess '{element.ElementId}' body start event '{bodyStart.ElementId}' declares no event name; a {definitionType} event subprocess resolves its stimulus from a non-empty name.");
     }
 
     /// <summary>
@@ -895,21 +966,31 @@ public sealed class BpmnGraph
 
 }
 
-/// <summary>The trigger kind of an event subprocess (spec 128 tier 1): the two dormant-catcher triggers this slice ships.</summary>
+/// <summary>The trigger kind of an event subprocess (spec 128/134): the two dormant-catcher triggers (escalation/error) plus the three tier-2 external-trigger listeners (message/signal/timer).</summary>
 public enum BpmnEventSubprocessTriggerKind
 {
     /// <summary>An escalation-triggered event subprocess (interrupting or non-interrupting), matched by code (exact beats code-less catch-all).</summary>
     Escalation,
 
     /// <summary>An error-triggered event subprocess (interrupting only, per BPMN), catch-all (no error-code matching this slice).</summary>
-    Error
+    Error,
+
+    /// <summary>A message-triggered event subprocess (spec 134): armed as a scope listener at scope start, fired by a named-event stimulus.</summary>
+    Message,
+
+    /// <summary>A signal-triggered event subprocess (spec 134): armed as a scope listener at scope start, fired by a named-event stimulus.</summary>
+    Signal,
+
+    /// <summary>A timer-triggered event subprocess (spec 134): armed as a scope listener at scope start (a one-shot <c>Delay</c>), re-armed per non-interrupting fire for repetition.</summary>
+    Timer
 }
 
 /// <summary>
-/// A graph-derived, dormant event-subprocess catcher (spec 128): a scope's <c>TriggeredByEvent</c> subprocess
-/// indexed by its body start-event trigger. No state records, no arming — it is resolved from the graph when its
-/// trigger occurs. <see cref="BodyStartElementId"/> is the single event-start element the body is seeded from via
-/// the scheduled-start hint; <see cref="Interrupting"/> is the body start event's <c>isInterrupting</c> flag.
+/// A graph-derived event-subprocess catcher (spec 128/134): a scope's <c>TriggeredByEvent</c> subprocess indexed by
+/// its body start-event trigger. Escalation/error catchers are dormant (no arming — resolved from the graph when their
+/// signal occurs); message/signal/timer catchers carry a <see cref="ListenerNodeId"/> and are armed as scope listeners
+/// at scope start (spec 134). <see cref="BodyStartElementId"/> is the single event-start element the body is seeded from
+/// via the scheduled-start hint; <see cref="Interrupting"/> is the body start event's <c>isInterrupting</c> flag.
 /// </summary>
 public sealed record BpmnEventSubprocessCatcher(
     string ElementId,
@@ -917,4 +998,10 @@ public sealed record BpmnEventSubprocessCatcher(
     string BodyStartElementId,
     BpmnEventSubprocessTriggerKind TriggerKind,
     string? Code,
-    bool Interrupting);
+    bool Interrupting,
+    string? ListenerNodeId = null)
+{
+    /// <summary>True when this catcher is an external-trigger listener (message/signal/timer, spec 134): armed at scope start with a suspending <see cref="ListenerNodeId"/> child. Escalation/error catchers are dormant.</summary>
+    public bool IsExternalTrigger =>
+        TriggerKind is BpmnEventSubprocessTriggerKind.Message or BpmnEventSubprocessTriggerKind.Signal or BpmnEventSubprocessTriggerKind.Timer;
+}

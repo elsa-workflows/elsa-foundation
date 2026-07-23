@@ -177,9 +177,8 @@ children, and diagnostics.
   reason `bpmn.event-subprocess.scope-interrupted`; a **non-interrupting** escalation activation runs alongside
   (repeated/concurrent activations are independent). Body completion is intercepted before behavior dispatch
   (the element has no flows): the activation token is consumed (`EventSubprocessCompleted`) and nothing routes;
-  a body fault rides the ordinary composite-fault path (no self-catching). Message/signal/timer-triggered event
-  subprocesses (they need a scope-listener token shape + completion-liveness rework), compensation/conditional
-  triggers, error-code matching, nested event subprocesses inside a body, and Studio authoring are stated cuts.
+  a body fault rides the ordinary composite-fault path (no self-catching). Compensation/conditional triggers,
+  error-code matching, nested event subprocesses inside a body, and Studio authoring are stated cuts.
   **Error trigger** (spec 132): an error-triggered event subprocess absorbs the host's child fault via **seam B**
   (the incident resolves) and then activates its body — a scheduled child, so the fault evaluation **defers**.
   Executable since the runtime deferred-seam-B **metadata-leak fix (#989)** landed (`WorkflowParentActivityCompletionSchedulerWorkHandler`
@@ -189,6 +188,30 @@ children, and diagnostics.
   mints the scope activation token, stops all other live work, and schedules the body; the incident records
   `bpmn.event-subprocess.error-absorbed`. A non-interrupting error start is rejected as a malformed shape (error
   events are always interrupting). Error-code matching remains a stated cut.
+  **Message/signal/timer triggers** (spec 134, tier 2): unlike the dormant escalation/error catchers, these need a
+  **scope listener** — a suspending catch child (the spec-116 `Event`/`Delay` machinery) armed at scope start that
+  waits for an external stimulus while the rest of the scope runs, and that must **never block completion**. Two
+  additive fields carry it: `BpmnToken.Kind` (nullable `Listener`|`Activation`, stamped at the listener/activation
+  mints, `null` everywhere else — an additive **role** field, not a token status), and `BpmnElement.ListenerNodeId`
+  (a second bound-child channel referencing the synthesized `Delay`/`Event` node — **required** on a message/signal/
+  timer event subprocess, **forbidden** on escalation/error; the exactly-one-binding accounting binds a node as
+  either a `ChildNodeId` or a `ListenerNodeId`, never both). **Arming** is two-phase at every `StartAsync` seeding
+  path (deterministic element-id ordinal): the listener **tokens** are minted before the seed propagates (so an
+  interrupting activation raised by that propagation drains them as ordinary live tokens), and their suspending
+  **children** are scheduled after, only when real work remains (the runtime forbids scheduling children in a
+  terminal evaluation — a scope whose seed completes synchronously completes with no listener ever armed). **Firing**
+  is intercepted in `OnChildCompletedAsync` before the tier-1 body-completion check (both tokens sit at the same
+  element — discriminate on `Kind == Listener`): **non-interrupting** consumes the listener, **re-arms** a fresh one
+  (deterministic `Sequence` ids; timer repetition falls out of the re-arm loop), then activates the body alongside
+  untouched work; **interrupting** consumes the listener and activates, `StopOtherLiveWork` draining sibling
+  listeners with no re-arm. **Completion is never blocked** (`FinishEvaluation`): both the clean-completion check and
+  the join-deadlock detector compute liveness over **non-listener** tokens and children (patched together — excluding
+  listeners from completion alone would misfire the deadlock detector on a listener-plus-real-join state); when only
+  listeners remain, they are torn down (`CancelTokenAndChild`, reason
+  `bpmn.event-subprocess.listener-superseded-by-completion`, token-id ordinal) and the scope completes normally. The
+  unfiltered teardown sites (`CancelLiveWork`, `StopOtherLiveWork`) leave listeners to die with the scope. Diagnostics
+  `ScopeListenerArmed`/`ScopeListenerFired`/`ScopeListenerRetired`. `timeCycle`/`timeDate`/cron event-subprocess
+  timers, correlation-scoped delivery beyond the shipped `Event` stimulus, and re-arm throttling are stated cuts.
 - **Call activities** (spec 133) let a process invoke a **separately published Elsa workflow** by binding a
   `Elsa.DispatchWorkflow` child. A `callActivity` element resolves to the **task family** (behaviors stay
   semantics-unaware; `TaskBehavior` unchanged), is a boundary host, and may carry multi-instance loop

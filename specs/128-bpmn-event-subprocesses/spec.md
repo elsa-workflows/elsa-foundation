@@ -306,6 +306,7 @@ byte-identical (its full suite passes unmodified).
 - **`StopOtherLiveWork` returns a stopped-count.** The extraction of spec-125's stop-others loop returns
   `(State, StoppedCount)` so `CancelTransaction` can keep its exact "stopped {N} other live token(s)" diagnostic —
   the transaction suite is byte-identical.
+- **STALE (un-gated by spec 132):** the error-trigger gating described below was removed by spec 132 (the runtime deferred-seam-B metadata-leak fix, #989); error-triggered event subprocesses are now executable and validation/import no longer reject them.
 - **Error trigger is a validated STATED CUT this slice (control-room gate ruling).** The error-trigger engine
   wiring (seam-B absorption + interrupting activation), model, and exporter emission are all in place but are made
   **author-unreachable**, following the spec-121 stated-cut pattern, because the runtime cannot yet complete it (see

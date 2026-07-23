@@ -299,6 +299,35 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static BpmnElement EventSubprocess(string elementId, string childNodeId) =>
         new(elementId, BpmnElementTypes.SubProcess, childNodeId: childNodeId, triggeredByEvent: true);
 
+    /// <summary>A message/signal/timer event subprocess (spec 134): a flow-less <c>triggeredByEvent</c> subprocess binding a nested body plus an armed scope-listener node (<paramref name="listenerNodeId"/>).</summary>
+    public static BpmnElement EventSubprocessWithListener(string elementId, string childNodeId, string listenerNodeId) =>
+        new(elementId, BpmnElementTypes.SubProcess, childNodeId: childNodeId, triggeredByEvent: true, listenerNodeId: listenerNodeId);
+
+    /// <summary>A message event-subprocess body start (spec 134): resolves its stimulus from <paramref name="name"/>; <paramref name="interrupting"/> models the start event's <c>isInterrupting</c> flag.</summary>
+    public static BpmnElement EventSubprocessMessageStart(string elementId, string name, bool interrupting = true) =>
+        new(elementId, BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Message, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })],
+            cancelActivity: interrupting);
+
+    /// <summary>A signal event-subprocess body start (spec 134): resolves its stimulus from <paramref name="name"/>.</summary>
+    public static BpmnElement EventSubprocessSignalStart(string elementId, string name, bool interrupting = true) =>
+        new(elementId, BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Signal, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })],
+            cancelActivity: interrupting);
+
+    /// <summary>A timer event-subprocess body start (spec 134): a one-shot <paramref name="interval"/> (ISO-8601 duration), re-armed per non-interrupting fire.</summary>
+    public static BpmnElement EventSubprocessTimerStart(string elementId, string interval, bool interrupting = true) =>
+        new(elementId, BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = interval })],
+            cancelActivity: interrupting);
+
+    /// <summary>A durable <c>Delay</c> wait child (a timer scope-listener's synthesized node), mirroring the timer catch-event child.</summary>
+    public static ExecutableNode DelayWaitNode(string nodeId, TimeSpan duration) =>
+        NewClrNode(nodeId, typeof(Elsa.Activities.Scheduling.Activities.Delay), new Dictionary<string, object?>
+        {
+            [nameof(Elsa.Activities.Scheduling.Activities.Delay.Duration)] = duration
+        });
+
     /// <summary>An escalation event-subprocess body start (spec 128); a <c>null</c> <paramref name="code"/> is the code-less catch-all, and <paramref name="interrupting"/> models the start event's <c>isInterrupting</c> flag.</summary>
     public static BpmnElement EventSubprocessEscalationStart(string elementId, string? code = null, bool interrupting = true) =>
         new(elementId, BpmnElementTypes.StartEvent,
