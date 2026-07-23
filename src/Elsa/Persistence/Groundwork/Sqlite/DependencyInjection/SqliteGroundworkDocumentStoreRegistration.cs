@@ -25,7 +25,8 @@ public static class SqliteGroundworkDocumentStoreRegistration
     public static IServiceCollection AddSqliteGroundworkDocumentStore(
         this IServiceCollection services,
         string connectionString,
-        bool autoApplyOnStartup = false)
+        bool autoApplyOnStartup = false,
+        bool skipInspectionWhenPlanUnchanged = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
@@ -43,7 +44,8 @@ public static class SqliteGroundworkDocumentStoreRegistration
             // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
             sp.GetService<ILogger<SqliteGroundworkDocumentStoreInitializer>>()
             ?? NullLogger<SqliteGroundworkDocumentStoreInitializer>.Instance,
-            sp.GetRequiredService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>()));
+            sp.GetRequiredService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>(),
+            skipInspectionWhenPlanUnchanged));
         services.AddHostedService(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(

@@ -27,6 +27,12 @@ Readiness](workspace-launch-readiness.md): a launchable workspace must also *sta
    already-current database. Constraint: the locked apply protocol
    (`specs/094-harden-groundwork-stores/contracts/storage-composition.md:158`) keeps approval semantics; the
    frozen `SchemaVersion` is **not** a lever — skip-if-current needs a separate applied-plan fingerprint.
+   **Skip-if-current: implemented (spec 133, SQLite), opt-in** — records an Elsa-owned applied-plan fingerprint
+   (`elsa_groundwork_admission_stamp`) and skips the full inspection/validation walk on a matching later boot,
+   measured ~5 s (loaded) warm walk → ~1 ms fingerprint read. Off by default: the fingerprint covers the plan
+   but not out-of-band drift. **Batching: deferred to Groundwork** — the 873-op apply is 873 package-internal
+   transactions (one per op, each with a durability re-read); the batch-apply path must land in the Groundwork
+   package (proposal in spec 133), not Elsa-side.
 4. **Opt-in eager activation.** A host-side `IHostedService` that triggers shell activation at startup (behind a
    switch) so the activation cliff is paid before the first user request, not during it. CShells is external and
    has no in-repo eager-activation option; see the unit-2 gating finding in spec 129.
@@ -63,11 +69,15 @@ EF-initializer consolidation is **not** in this bucket — it belongs to [Zero-E
 ## Linked surfaces
 
 - Spec: `specs/129-cold-start-phase-instrument/`
+- Spec: `specs/133-schema-admission-skip-and-batch/` (unit 3 skip-if-current; batching proposal for Groundwork)
 - Report: `docs/reports/cold-start-readiness-2026-07.md`
 - Charter/precedent: `docs/reports/runtime-http-performance-2026-07.md`
 - Instrument: `src/Apps/Elsa.Server/Boot/`, `src/Apps/Elsa.Server/Program.cs`
 - Recipe: `tools/performance/measure-cold-start.sh`
 - Deterministic guard: `tests/Elsa/Persistence/Groundwork/Tests/ColdStartSchemaOperationCountTests.cs`
+- Skip-if-current guard: `tests/Elsa/Persistence/Groundwork/Tests/GroundworkAdmissionSkipStampTests.cs`
+- Skip-if-current impl: `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkAdmissionStampStore.cs`,
+  `src/Elsa/Persistence/Groundwork/Unified/Composition/GroundworkAdmissionSkipStamp.cs`
 
 ## Removal or completion conditions
 
