@@ -152,6 +152,22 @@ children, and diagnostics.
   record or token status is introduced; the notification evaluation rides `FinishEvaluation`'s existing exits,
   and the bubble/seam-A staging happens only at the clean Defer/Complete exit. Escalation intermediate catch
   events remain a stated cut (not a BPMN construct — boundary/event-subprocess only).
+- **Message send surface** (spec 135, collaborations slice 1) lets a running process **publish** a named-event
+  stimulus. Unlike escalation's engine-command shape, a **message intermediate throw event** and a **message end
+  event** are **bound-child** shapes: they bind a synthesized `PublishEvent` send child (family
+  `intermediateThrowEvent.message` / `endEvent.message`, resolved from a single `message` event definition). The
+  behavior is the ordinary schedule-child → child-completes path — `MessageThrowEventBehavior` routes its outbound
+  flows on the child's fire-and-continue completion (`TaskBehavior`-like), `MessageEndEventBehavior` consumes its
+  token (none-end). The child's completion **is** the throw; the send itself lands durably **post-commit** (the
+  `PublishEvent` primitive stages a publish intent on the commit; no in-execution route). **`sendTask`** binds a
+  synthesized `PublishEvent`; **`receiveTask`** binds a synthesized `Event` catch child (the receive twin, same
+  suspension machinery). Both are task-family members — boundary hosts and multi-instance-legal; a differently
+  bound child behaves as authored (the callActivity no-type-check precedent). Validation: a message throw/end
+  requires a bound child and a message definition with a non-empty `name` (a send must say what it publishes). No
+  new BPMN state record, token status, or engine command — the schema stays v1-additive (two families + the
+  `Elsa.PublishEvent` placeholder version id). Cross-instance **correlation narrowing** is inert until issue #1001
+  (the send broadcasts by name); **signal** throw events and process-variable payload mapping are stated cuts;
+  collaboration/pool/`<messageFlow>` import is slice 2.
 - **Event subprocesses** (spec 128, tier 1) let a scope contain a flow-less `subProcess` marked
   `triggeredByEvent` whose **body** activates when its **start-event trigger** fires while the enclosing scope
   is active. This slice ships the **escalation** dormant-catcher trigger (interrupting or non-interrupting) and the
@@ -283,8 +299,12 @@ a transaction and on a boundary attached to a transaction host) and **call activ
 an `elsa:workflowDefinitionId` extension attribute → a bound `DispatchWorkflow` child, honoring
 `elsa:waitForCompletion="false"`; a plain `calledElement` imports unbound with an Info finding and a
 `bpmn.calledElement` passthrough — see `specs/133-bpmn-call-activity/`), so these constructs can now be authored
-from XML; a cyclic document imports clean. Later units add a loop-iteration variable surface, escalation
-boundaries, and compensation event subprocesses.
+from XML; a cyclic document imports clean. The **message send surface** (see `specs/135-bpmn-message-send/`) adds
+message intermediate throw + message end events and `sendTask`/`receiveTask` (bound `PublishEvent` sends /
+`Event` catch), and round-trips them (`messageEventDefinition` + deduped root `<message>` declarations;
+`sendTask`/`receiveTask` with `messageRef`; synthesized children never export; name-less throw Drops, name-less
+end degrades to a none end, name-less send/receive task imports unbound + Info, signal throw stays Dropped).
+Later units add a loop-iteration variable surface, escalation boundaries, and compensation event subprocesses.
 
 ## Expression-driven gateway conditions
 

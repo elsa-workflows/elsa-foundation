@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -373,6 +374,43 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
             [nameof(Elsa.Activities.Primitives.Activities.Event.EventName)] = eventName,
             [nameof(Elsa.Activities.Primitives.Activities.Event.CanStartWorkflow)] = false
         });
+
+    /// <summary>A <c>PublishEvent</c> send child (spec 135): stages a durable-first publish of the named event and completes Done immediately (fire-and-continue).</summary>
+    public static ExecutableNode PublishEventSendNode(string nodeId, string eventName) =>
+        NewClrNode(nodeId, typeof(Elsa.Activities.Primitives.Activities.PublishEvent), new Dictionary<string, object?>
+        {
+            [nameof(Elsa.Activities.Primitives.Activities.PublishEvent.EventName)] = eventName
+        });
+
+    /// <summary>A message intermediate throw event (spec 135): binds a synthesized <c>PublishEvent</c> send child; routes onward on the child's fire-and-continue completion.</summary>
+    public static BpmnElement MessageThrow(string elementId, string childNodeId, string name, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.IntermediateThrowEvent, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Message, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })]);
+
+    /// <summary>A message end event (spec 135): binds a synthesized <c>PublishEvent</c> send child; consumes its token on the child's completion (none-end semantics).</summary>
+    public static BpmnElement MessageEnd(string elementId, string childNodeId, string name) =>
+        new(elementId, BpmnElementTypes.EndEvent, childNodeId: childNodeId,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Message, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })]);
+
+    /// <summary>A sendTask (spec 135): a task-family element binding a synthesized <c>PublishEvent</c> send child.</summary>
+    public static BpmnElement SendTask(string elementId, string childNodeId, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.SendTask, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
+
+    /// <summary>A receiveTask (spec 135): a task-family element binding a synthesized <c>Event</c> catch child (the receive twin).</summary>
+    public static BpmnElement ReceiveTask(string elementId, string childNodeId, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.ReceiveTask, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
+
+    /// <summary>A multi-instance sendTask (spec 135/121): runs its bound <c>PublishEvent</c> child <paramref name="cardinality"/> times.</summary>
+    public static BpmnElement MultiInstanceSendTask(string elementId, string childNodeId, int cardinality, bool isSequential, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.SendTask, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
+            loopCharacteristics: new BpmnLoopCharacteristics(isSequential: isSequential, cardinality: cardinality));
+
+    /// <summary>The staged durable-first publish intents committed across the run (spec 135): the sends that route post-commit. The harness composes <c>ActivitiesPrimitivesFeature</c>, so the staging buffer + handler are already wired.</summary>
+    public IReadOnlyList<RuntimePostCommitIntent> PublishStimulusIntents() =>
+        Provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits()
+            .SelectMany(record => record.Commit.PostCommitIntents)
+            .Where(intent => StringComparer.Ordinal.Equals(intent.Kind, PublishStimulusConstants.PublishStimulusIntentKind))
+            .ToList();
 
     private static ExecutableNode NewClrNode(string nodeId, Type activityType, IReadOnlyDictionary<string, object?> literals) =>
         new(

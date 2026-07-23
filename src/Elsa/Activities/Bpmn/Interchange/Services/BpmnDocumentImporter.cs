@@ -39,8 +39,14 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     /// <summary>Placeholder activity version id for a bound call activity's synthesized <c>DispatchWorkflow</c> child (spec 133 D5; matches <c>DispatchWorkflow.ActivityType</c>). Hosts resolve the real catalog row later.</summary>
     public const string DefaultDispatchWorkflowActivityVersionId = "Elsa.DispatchWorkflow";
 
+    /// <summary>Placeholder activity version id for a message throw/end or sendTask's synthesized <c>PublishEvent</c> child (spec 135; matches <c>PublishEvent.ActivityType</c>). Hosts resolve the real catalog row later.</summary>
+    public const string DefaultPublishEventActivityVersionId = "Elsa.PublishEvent";
+
     /// <summary>The element property key carrying a call activity's foreign BPMN <c>calledElement</c> id (spec 133 D5): recorded for authoring reference and lossless round-trip, the <c>bpmn.errorRef</c> passthrough precedent.</summary>
     public const string CalledElementPropertyKey = "bpmn.calledElement";
+
+    /// <summary>The element property key carrying a sendTask/receiveTask's resolved message name (spec 135): a task uses a <c>messageRef</c> attribute (not a nested definition), so the name is recorded here for the root <c>&lt;message&gt;</c> declaration and lossless round-trip.</summary>
+    public const string MessageNamePropertyKey = "bpmn.messageName";
 
     public BpmnImportAnalysis Analyze(string xml, BpmnImportOptions? options = null)
     {
@@ -205,6 +211,25 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                         elements.Add(ResolveEscalationEnd(id, child, escalationEndDefinition, escalationDeclarations, context));
                         break;
                     }
+                    // spec 135: a message end event is a bound-child send with none-end semantics; a ref-less/name-less
+                    // message end degrades to a none end event with a finding (an end has no flows to cascade).
+                    if (child.Element(BpmnXmlNames.Model + "messageEventDefinition") is { } messageEndDefinition)
+                    {
+                        var name = ResolveMessageSignalName(messageEndDefinition, BpmnEventDefinitionTypes.Message, messageSignalNames);
+                        if (name is null)
+                        {
+                            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Message end event '{id}' declares a message event definition with no resolvable name (missing or unresolvable messageRef); it imported as a none end event.", id));
+                            elements.Add(new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(child)));
+                            break;
+                        }
+
+                        var messageEndChildNodeId = $"node-{id}";
+                        childActivities.Add(BuildPublishEventSendChild(messageEndChildNodeId, name));
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(child),
+                            childNodeId: messageEndChildNodeId,
+                            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Message, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })]));
+                        break;
+                    }
                     // spec 125 D4: a cancel end event is valid only inside a transaction; outside one it degrades to
                     // a none end event with a finding (the validator would reject a cancel end in a non-transaction).
                     if (child.Element(BpmnXmlNames.Model + "cancelEventDefinition") is not null)
@@ -240,6 +265,24 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     {
                         if (ResolveEscalationThrow(id, child, escalationThrowDefinition, escalationDeclarations, context) is { } escalationThrow)
                             elements.Add(escalationThrow);
+                        break;
+                    }
+                    // spec 135: a message throw is a bound-child send — resolve its messageRef to a name and synthesize a
+                    // PublishEvent child; a ref-less/name-less message throw is Dropped (its flows cascade-drop).
+                    if (child.Element(BpmnXmlNames.Model + "messageEventDefinition") is { } messageThrowDefinition)
+                    {
+                        var name = ResolveMessageSignalName(messageThrowDefinition, BpmnEventDefinitionTypes.Message, messageSignalNames);
+                        if (name is null)
+                        {
+                            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Message throw event '{id}' declares a message event definition with no resolvable name (missing or unresolvable messageRef); a send must say what it publishes, so it was dropped.", id));
+                            break;
+                        }
+
+                        var messageThrowChildNodeId = $"node-{id}";
+                        childActivities.Add(BuildPublishEventSendChild(messageThrowChildNodeId, name));
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.IntermediateThrowEvent, name: NameOf(child),
+                            childNodeId: messageThrowChildNodeId, defaultFlowId: DefaultOf(child),
+                            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Message, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })]));
                         break;
                     }
                     // spec 124: resolved in a later pass (compensate → keep with resolvable activityRef; anything
@@ -343,6 +386,24 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     if (BpmnXmlNames.TaskLocalNamesToElementTypes.TryGetValue(localName, out var taskType))
                     {
                         if (id is null) break;
+                        // spec 135: a sendTask/receiveTask with a resolvable messageRef binds a synthesized child — a
+                        // PublishEvent send for sendTask, an Event catch (BuildEventCatchChild, the receive twin) for
+                        // receiveTask. A name-less one falls through to the unbound + Info path below (serviceTask precedent).
+                        var isSendTask = StringComparer.Ordinal.Equals(taskType, BpmnElementTypes.SendTask);
+                        var isReceiveTask = StringComparer.Ordinal.Equals(taskType, BpmnElementTypes.ReceiveTask);
+                        if ((isSendTask || isReceiveTask)
+                            && ResolveMessageSignalName(child, BpmnEventDefinitionTypes.Message, messageSignalNames) is { } messageTaskName)
+                        {
+                            var messageTaskChildNodeId = $"node-{id}";
+                            childActivities.Add(isSendTask
+                                ? BuildPublishEventSendChild(messageTaskChildNodeId, messageTaskName)
+                                : BuildEventCatchChild(messageTaskChildNodeId, messageTaskName));
+                            elements.Add(new BpmnElement(id, taskType, name: NameOf(child), childNodeId: messageTaskChildNodeId, defaultFlowId: DefaultOf(child),
+                                properties: new Dictionary<string, string> { [MessageNamePropertyKey] = messageTaskName },
+                                loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context)));
+                            break;
+                        }
+
                         // Tasks import unbound (no ChildNodeId until an Elsa activity is bound), so a
                         // multi-instance task is a childless host on import → degrade (validate-representable).
                         elements.Add(new BpmnElement(id, taskType, name: NameOf(child), defaultFlowId: DefaultOf(child),
@@ -1295,6 +1356,10 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     /// <summary>A message/signal catch event's synthesized child: a mid-flow <c>Event</c> wait (<c>CanStartWorkflow = false</c>).</summary>
     private static ActivityNode BuildEventCatchChild(string nodeId, string eventName) =>
         new(nodeId, DefaultEventActivityVersionId, [LiteralArgument("EventName", eventName), LiteralArgument("CanStartWorkflow", false)], []);
+
+    /// <summary>A message throw/end or sendTask's synthesized send child (spec 135): a <c>PublishEvent</c> whose <c>EventName</c> literal is the resolved message name. Correlation/payload are unset by the importer (the D4 cut); an expression-bound payload is authorable on the bound child.</summary>
+    private static ActivityNode BuildPublishEventSendChild(string nodeId, string eventName) =>
+        new(nodeId, DefaultPublishEventActivityVersionId, [LiteralArgument("EventName", eventName)], []);
 
     /// <summary>
     /// Imports a <c>&lt;callActivity&gt;</c> (spec 133 D5). When the document carries the Elsa extension attribute

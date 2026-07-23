@@ -367,6 +367,12 @@ public sealed class BpmnGraph
                     if (element.ChildNodeId is null)
                         throw new BpmnExecutionException($"BPMN intermediate catch event '{element.ElementId}' requires a bound suspending child activity (for example Delay for timer, Event for message/signal).");
                     break;
+                case BpmnElementFamilies.IntermediateThrowEventMessage:
+                case BpmnElementFamilies.EndEventMessage:
+                    // spec 135: a message throw/end is a bound-child send — it binds a synthesized PublishEvent child.
+                    if (element.ChildNodeId is null)
+                        throw new BpmnExecutionException($"BPMN message {(StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent) ? "end" : "throw")} event '{element.ElementId}' requires a bound child activity (a PublishEvent send).");
+                    break;
             }
         }
 
@@ -414,6 +420,8 @@ public sealed class BpmnGraph
         ValidateBoundaryEvents(elements, outboundBySource, inboundByTarget);
 
         ValidateEscalation(elements);
+
+        ValidateMessageThrowEnd(elements);
 
         ValidateCompensation(elements, outboundBySource, inboundByTarget);
 
@@ -784,6 +792,28 @@ public sealed class BpmnGraph
             : null;
 
     /// <summary>
+    /// Message throw/end rules (spec 135). A message throw/end event is a bound-child send: its single message event
+    /// definition must carry a non-empty <c>name</c> (a send must say what it publishes), and it binds a synthesized
+    /// <c>PublishEvent</c> child (the bound-child requirement is enforced in the per-family switch above). Rejects
+    /// deterministically with the offending element named.
+    /// </summary>
+    private static void ValidateMessageThrowEnd(IReadOnlyCollection<BpmnElement> elements)
+    {
+        foreach (var sender in elements.Where(BpmnElementFamilies.IsMessageThrowOrEnd))
+        {
+            if (ReadMessageName(sender) is null)
+                throw new BpmnExecutionException($"BPMN message {(StringComparer.Ordinal.Equals(sender.ElementType, BpmnElementTypes.EndEvent) ? "end" : "throw")} event '{sender.ElementId}' must declare a non-empty message name; a send must say what it publishes.");
+        }
+    }
+
+    private static string? ReadMessageName(BpmnElement element) =>
+        element.EventDefinitions.SingleOrDefault() is { } definition
+        && definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var name)
+        && !string.IsNullOrWhiteSpace(name)
+            ? name.Trim()
+            : null;
+
+    /// <summary>
     /// Compensation rules (spec 124 D1). Compensation boundaries reference an existing handler; handlers are
     /// task-family/subProcess elements that bind a child, take zero sequence flows, carry no loop characteristics,
     /// host no boundary, and are referenced by exactly one compensation boundary (orphans rejected); compensate
@@ -848,7 +878,9 @@ public sealed class BpmnGraph
         foreach (var element in elements.Where(element => element.CompensationHandlerElementId is not null && !BpmnElementFamilies.IsCompensationBoundary(element)))
             throw new BpmnExecutionException($"BPMN element '{element.ElementId}' declares a compensation-handler reference but is not a compensation boundary event.");
 
-        foreach (var throwEvent in elements.Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateThrowEvent)))
+        // spec 135: a message throw (also an intermediateThrowEvent) IS a bound-child send, so this compensate-only
+        // rule is scoped to compensate throws; escalation throws are handled by ValidateEscalation.
+        foreach (var throwEvent in elements.Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateThrowEvent) && BpmnElementFamilies.HasCompensateDefinition(element)))
         {
             if (throwEvent.ChildNodeId is not null)
                 throw new BpmnExecutionException($"BPMN compensate throw event '{throwEvent.ElementId}' cannot bind a child activity.");

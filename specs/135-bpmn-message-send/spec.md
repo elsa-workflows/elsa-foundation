@@ -179,3 +179,50 @@ handler + activity are purely additive. Specs 119–134 suites pass unmodified.
 - Full test projects green: BPMN, BPMN Interchange, Activities Runtime, Workflows Runtime,
   ControlFlow, Architecture, plus the Primitives and router-adjacent test projects touched.
   Full solution build clean.
+
+## Deviations (implementation)
+
+- **Tripwire 1 (staging seam) — resolved by control-room ruling.** The activity-facing staging seam
+  (`IWorkflowDispatchStager.StageWorkflowDispatch`) is dispatch-specific: its `WorkflowDispatchCheckpointRequest`
+  mandates a `WorkflowDispatchRecord` and enforces the dispatch deterministic identity, and the invoke handler
+  folds that record into a `WorkflowDispatches` state change — it cannot carry a bare non-dispatch intent. Per the
+  ruling, implemented **Option A narrowed**: a new **publish-typed** seam `IPublishStimulusStager` /
+  `IPublishStimulusStagingAccessor` + invocation-keyed `PublishStimulusStagingBuffer` (mirroring the dispatch
+  buffer's layering), whose staging method takes the send's facets `(eventName, correlationId?, payload?)` — **not**
+  a raw `RuntimePostCommitIntent`. The buffer builds the `PublishStimulusIntentKind` intent itself (deriving the
+  `Event` stimulus identity via `EventStimulus` and bounded deterministic ids via `RuntimeChainId`), so an activity
+  cannot forge an arbitrary intent kind through the seam (spoof resistance; spec-123 narrowest-seam precedent). A
+  general bare-intent stager was explicitly rejected this unit. The invoke handler
+  (`WorkflowInvokeActivitySchedulerWorkHandler`) drains it one-for-one with the dispatch stager: reset at start,
+  drain at the completion + suspend clean exits (folding onto `PostCommitIntents` only — **no** `WorkflowDispatches`
+  change, dispatch path byte-identical), reset on the fault/cancel arms (a staged publish on a faulting evaluation
+  is dropped — fault wins). Multiple ordinal-ordered publishes per invocation are supported. The `PublishEvent`
+  side-effect profile is left **default** (publishing is a side effect; not opted into fusion).
+
+- **Tripwire 2 (cross-workflow test placement) — reported, not shimmed.** A full three-workflow harness (workflow A
+  `PublishEvent` → separately published workflow B message-start + parked workflow C `Event` catch, driven through
+  the real router/dispatchers) is disproportionate in any single existing project: `Elsa.Workflows.Runtime.Tests`
+  (home of the router fixtures + `Route_StartAndResume_DoesBoth`) does **not** reference
+  `Elsa.Activities.Primitives`, so it cannot use `PublishStimulusExecutor` without a layering-inverting project
+  reference, and its in-memory router stores are test-internal (reusing them elsewhere would duplicate them). The
+  `StartAndResume` pin is therefore delivered proportionately without a shim by composing two facts: (a)
+  `PublishEventTests.Handler_RoutesStartAndResume_WithCarriedValues` pins that `PublishEvent`'s post-commit delivery
+  routes in `StartAndResume` mode with the exact `Event` stimulus, correlation, payload, and idempotency key; and
+  (b) the pre-existing `StimulusRouterTests.Route_StartAndResume_DoesBoth` pins that `RouteAsync(StartAndResume)`
+  starts every matching published trigger AND resumes every matching waiting bookmark. Together they establish FR-2
+  end-to-end.
+
+- **`ValidateCompensation` filter narrowed (spec-124 source, no test change).** The compensate-only "throw event
+  cannot bind a child" rule iterated **all** `intermediateThrowEvent` elements; since a message throw is now a
+  bound-child `intermediateThrowEvent`, the rule was scoped to compensate throws (`HasCompensateDefinition`). The
+  frozen spec-124 test asserting a compensation throw's child is rejected still passes unchanged.
+
+- **Throw-event family-resolution error message kept verbatim.** Message throws resolve to their family before the
+  "unsupported throw definition" error line, so that message (asserted by a frozen spec-124 suite,
+  `BpmnCompensationValidationTests.ThrowEvent_WithNonCompensationDefinition_IsRejected`) was left byte-identical
+  rather than extended — the specs 119–134 suites pass unmodified.
+
+- **BPMN harness already composes `ActivitiesPrimitivesFeature`.** The BPMN execution tests inspect the committed
+  `PublishStimulusIntentKind` intents (the durable-first pin); the harness commits post-commit intents without
+  delivering them (mirroring the DispatchWorkflow BPMN coverage's stop-and-report on wiring the full delivery
+  harness), so no router/handler is delivered in-harness.

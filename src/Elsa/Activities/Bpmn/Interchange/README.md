@@ -108,6 +108,18 @@ Mapping rules for this slice:
   either case for authoring reference and lossless round-trip. The importer never emits a validator-rejected graph
   (a call activity validates as a task-family element, bound or childless). Publish-time pinning means import never
   needs to resolve the definition.
+- **Message send surface** (spec 135): an `intermediateThrowEvent`/`endEvent` with a `messageEventDefinition`
+  (root `<message>`-index name resolution, the message/signal precedent) imports **bound** — a `PublishEvent`
+  send child is synthesized (`EventName` literal, node id `node-{id}`, placeholder version id `Elsa.PublishEvent`)
+  and the element carries a `message` definition with the resolved `name`. A **name-less/ref-less** message throw
+  is **dropped** with a finding (its flows cascade-drop), a name-less message **end** degrades to a **none end**
+  (no flows to cascade). A `<sendTask messageRef="…">` binds a synthesized `PublishEvent`; a
+  `<receiveTask messageRef="…">` binds a synthesized `Event` catch child (reusing the spec-116 catch-child
+  synthesis verbatim — the receive twin); the resolved name is recorded as `Properties["bpmn.messageName"]` (a task
+  uses a `messageRef` attribute, not a nested definition). A **name-less** send/receive task imports as a plain
+  **unbound** task with an **Info** finding (the serviceTask precedent). A **signal** throw event stays **Dropped**
+  with a finding (a stated cut — the fabric is identical but the slice stays message-scoped). The importer never
+  emits a validator-rejected graph.
 - Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes are
   dropped with an issue. **Cyclic graphs import clean** — a
   loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation
@@ -148,7 +160,11 @@ passthrough when present, else the bound child's authored `WorkflowDefinitionId`
 `elsa:workflowDefinitionId` extension attribute when bound, and `elsa:waitForCompletion="false"` only when the
 bound child is authored fire-and-forget (the waited-by-default convention omits it); the bound `DispatchWorkflow`
 child node is an Elsa concern the importer re-establishes, so it is not inlined. Bound and unbound call activities
-both round-trip. Each distinct message/signal
+both round-trip. A **message throw/end** event (spec 135) emits a `messageEventDefinition` with a `messageRef`
+targeting a deduped root `<message>` declaration; a **sendTask**/**receiveTask** emits its element with a
+`messageRef` (its name read from `Properties["bpmn.messageName"]`, contributing the same deduped declaration). The
+synthesized `PublishEvent`/`Event` children are engine detail and are never exported (re-synthesized on import).
+Message throw, message end, sendTask, and receiveTask all round-trip. Each distinct message/signal
 name emits one deduped root `<message>`/`<signal>` declaration (deterministic id `message-{name}` /
 `signal-{name}`) that the element's `messageRef`/`signalRef` targets — a name that sanitizes to a
 colliding id shares a declaration. A catch event's bound `Delay`/`Event` child is engine detail and is not
