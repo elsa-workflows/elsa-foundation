@@ -18,6 +18,23 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# TARGETARCH is supplied automatically by BuildKit (amd64 or arm64) and drives the
+# .NET runtime identifier used for the ReadyToRun publish below. It is declared here
+# (after FROM) so it is in scope for the restore/publish RUN steps.
+#
+# Why a RID at all: ReadyToRun (spec 134) is a per-RID AOT pre-compilation of the
+# app's own ~90 assemblies (crossgen2), which cuts first-request JIT cost. R2R
+# therefore REQUIRES a concrete RuntimeIdentifier — a portable (RID-less) publish
+# cannot be R2R-compiled. The multi-arch image (linux/amd64 + linux/arm64, see
+# .github/workflows/docker.yml) builds each platform in its own target-arch SDK
+# image (emulated for the non-native arch), so crossgen runs native-for-target on
+# every platform — no cross-arch crossgen is involved. The publish stays
+# framework-dependent (--self-contained false) so it still runs on the shared
+# aspnet runtime in the final stage and only the app assemblies grow, not the image
+# by a whole bundled runtime. Scoping R2R to the Dockerfile (not the csproj) keeps
+# every local `dotnet build`/dev inner-loop on the fast JIT publish.
+ARG TARGETARCH
+
 # Copy repo-root build configuration first so restore layers cache well.
 # Directory.Build.props carries package metadata only (no build-behavior changes);
 # it is copied so the image builds identically to local/CI. This repo has no root
@@ -39,11 +56,26 @@ COPY src/ ./src/
 # WarningsNotAsErrors=NU1603 tolerates a restore-only warning that can appear in a clean
 # environment when a transitive preview dependency resolves to a newer available version,
 # without relaxing the repo's TreatWarningsAsErrors for real code warnings.
-RUN dotnet restore src/Apps/Elsa.Server/Elsa.Server.csproj \
+# Map BuildKit's TARGETARCH (amd64/arm64) to the .NET RID (linux-x64/linux-arm64).
+# Restore is RID-specific because R2R needs the target's crossgen2 + runtime pack.
+RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
+    && dotnet restore src/Apps/Elsa.Server/Elsa.Server.csproj \
+        -r "$RID" \
         -p:WarningsNotAsErrors=NU1603
-RUN dotnet publish src/Apps/Elsa.Server/Elsa.Server.csproj \
+
+# ReadyToRun publish (spec 134): framework-dependent, RID-targeted, crossgen'd.
+# TieredCompilation and TieredPGO are left at their .NET 10 defaults (both already
+# on) — R2R images still participate in tiered compilation, so the defaults are
+# already optimal and are deliberately NOT overridden here. InvariantGlobalization
+# is deliberately NOT enabled: the host does auth + culture-sensitive work, so
+# dropping ICU is unsafe (see specs/134-container-readytorun-publish/research.md).
+RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
+    && dotnet publish src/Apps/Elsa.Server/Elsa.Server.csproj \
         -c Release \
+        -r "$RID" \
+        --self-contained false \
         --no-restore \
+        -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603 \
         -o /app/publish
 
