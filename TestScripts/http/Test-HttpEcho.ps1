@@ -16,9 +16,15 @@
         implicitly convert. Reading it through a JS binding (`JSON.stringify(getVariable('x'))` / member access)
         yields a string, which both echoes the value and satisfies the Body type.
 
-    Two cases:
-      body  : POST a JSON body -> capture ParsedContent -> echo it back as JSON.
-      route : GET /<base>/{name} -> capture RouteData -> echo "hello <name>".
+    Four cases:
+      body   : POST a JSON body -> capture ParsedContent -> echo it back as JSON.
+      route  : GET /<base>/{name} -> capture RouteData -> echo "hello <name>".
+      query  : GET /<base>?msg=... -> read Request.query.msg[0] -> echo it.
+      header : GET /<base> with X-Custom: ... -> read Request.headers['X-Custom'][0] -> echo it.
+
+    The captured Request serializes (camelCase) as
+    `{ path, method, headers:{ Name:["v"] }, query:{ key:["v"] }, body, routeData:{ key:"v" } }` — header/query
+    values are arrays, header-name casing is preserved.
     Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
@@ -64,7 +70,7 @@ $wfVars = @(
     (New-VariableDef -Key "content" -Alias "Object")
 )
 
-$pass = 0; $total = 2
+$pass = 0; $total = 4
 
 # ---- Case 1: request-body echo ----
 $bodyPath = "echo-body-$(Get-Random -Max 999999)"
@@ -86,9 +92,29 @@ $rRoute = Invoke-Step "GET route" { Invoke-WebRequest "$BaseUrl/workflows/http/$
 if ($rRoute.Content -eq 'hello world') { Write-Host ("  OK  route -> {0}" -f $rRoute.Content) -ForegroundColor Green; $pass++ }
 else { Write-Host ("  FAIL route -> got [{0}]" -f $rRoute.Content) -ForegroundColor Red }
 
+# ---- Case 3: query-parameter echo ----
+$queryBase = "echo-query-$(Get-Random -Max 999999)"
+$rootQuery = New-EchoWorkflow -Path $queryBase -Methods @("GET") -BodyJs "getVariable('req').query.msg[0]" -ContentType "text/plain"
+$defQ = Invoke-Step "submit query"  { Submit-Workflow -Ctx $ctx -Name "EchoQuery-$(Get-Random -Max 9999)" -RootActivity $rootQuery -Variables $wfVars }
+Invoke-Step "publish query" { Publish-WorkflowVersion -Ctx $ctx -VersionId $defQ.version.id } | Out-Null
+Start-Sleep -Milliseconds 500
+$rQuery = Invoke-Step "GET query" { Invoke-WebRequest "$BaseUrl/workflows/http/$queryBase`?msg=hello-query" -Method GET -WebSession $ctx.Session -UseBasicParsing }
+if ($rQuery.Content -eq 'hello-query') { Write-Host ("  OK  query -> {0}" -f $rQuery.Content) -ForegroundColor Green; $pass++ }
+else { Write-Host ("  FAIL query -> got [{0}]" -f $rQuery.Content) -ForegroundColor Red }
+
+# ---- Case 4: header echo ----
+$headerBase = "echo-header-$(Get-Random -Max 999999)"
+$rootHeader = New-EchoWorkflow -Path $headerBase -Methods @("GET") -BodyJs "getVariable('req').headers['X-Custom'][0]" -ContentType "text/plain"
+$defH = Invoke-Step "submit header"  { Submit-Workflow -Ctx $ctx -Name "EchoHeader-$(Get-Random -Max 9999)" -RootActivity $rootHeader -Variables $wfVars }
+Invoke-Step "publish header" { Publish-WorkflowVersion -Ctx $ctx -VersionId $defH.version.id } | Out-Null
+Start-Sleep -Milliseconds 500
+$rHeader = Invoke-Step "GET header" { Invoke-WebRequest "$BaseUrl/workflows/http/$headerBase" -Method GET -Headers @{ "X-Custom" = "hdr-value" } -WebSession $ctx.Session -UseBasicParsing }
+if ($rHeader.Content -eq 'hdr-value') { Write-Host ("  OK  header -> {0}" -f $rHeader.Content) -ForegroundColor Green; $pass++ }
+else { Write-Host ("  FAIL header -> got [{0}]" -f $rHeader.Content) -ForegroundColor Red }
+
 Write-Host ""
 if ($pass -eq $total) {
-    Write-Host ("SUCCESS - {0}/{1} echo cases (request-body, route-parameter)" -f $pass, $total) -ForegroundColor Green
+    Write-Host ("SUCCESS - {0}/{1} echo cases (request-body, route-parameter, query-parameter, header)" -f $pass, $total) -ForegroundColor Green
 } else {
     Write-Host ("MISMATCH - {0}/{1} echo cases passed" -f $pass, $total) -ForegroundColor Red
     exit 1

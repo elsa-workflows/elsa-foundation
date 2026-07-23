@@ -32,7 +32,7 @@ everything the flow needs (design + publishing + runtime APIs, identity, `Ground
 | `composition/Test-ChildWorkflowInput.ps1` | parent dispatches a child **and passes it an input**; child echoes it; correlate the child by correlationId |
 | `javascript/Test-JavaScriptExpressions.ps1` | pure-ES JS in a Sync HTTP response body (array/object/json/optional-chaining/nullish/flat/replaceAll) |
 | `http/Test-HttpMethods.ps1` | one HttpEndpoint accepting GET/POST/PUT/DELETE, each returning a sync response |
-| `http/Test-HttpEcho.ps1` | capture request data (`ParsedContent`/`RouteData`) into workflow variables and echo it back in a sync response (request-body + route-parameter, #972/#984) |
+| `http/Test-HttpEcho.ps1` | capture request data (`ParsedContent`/`RouteData`/`Request`) into workflow variables and echo it back in a sync response (request-body, route-parameter, query-parameter, header; #972/#984) |
 | `correlate/Test-Correlate.ps1` | `SetCorrelationId` intrinsic sets the instance correlation id; found by `?correlationId=` |
 | `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
 | `logging/Test-ValueCapture.ps1` | per-activity value snapshot: a WriteLine's `Text` input is captured (`DiagnosticSnapshot`) and its payload retrieved via the value-evidence endpoint |
@@ -44,8 +44,8 @@ you publish an event by POSTing a stimulus `{ stimulusType:"Event", stimulusHash
 to `runtime/workflows/stimuli` (modes: `StartOnly`/`ResumeOnly`/`StartAndResume`). The response returns the
 started `workflowExecutionId` directly.
 
-**HTTP finding (resolved):** request-data **echo** now works (`http/Test-HttpEcho.ps1`, request-body +
-route-parameter). This was originally deferred under issue #972: capturing an `HttpEndpoint` output forced a
+**HTTP finding (resolved):** request-data **echo** now works (`http/Test-HttpEcho.ps1` — request-body,
+route-parameter, query-parameter, and header). This was originally deferred under issue #972: capturing an `HttpEndpoint` output forced a
 workflow-scope variable, and reading a workflow-scope variable in a later node faulted. Both halves are fixed on
 current main. Two authoring notes: (1) `HttpEndpoint` exposes `Request` + `RouteData` (both **required** to bind)
 and `ParsedContent` (optional); output capture must target a workflow-scope `Variable`. (2) `WriteHttpResponse.Body`
@@ -102,7 +102,7 @@ intrinsics**, so classic activities map like this:
 
 **Passing:** If, Switch, For (inclusive/exclusive), ForEach, Parallel fork/join, SetOutput, **SetVariable**,
 **While** (body-Set terminated, #977), **While with a JS counter** (#984 + #977), **HttpEndpoint request-data
-echo** (#972, request-body + route-parameter).
+echo** (#972, request-body + route-parameter + query-parameter + header).
 
 **Key scoping rule (corrected).** Since the #972 two-guard validation landed
 (`IntrinsicVariableTargetValidator` at design time + `ExecutableNodeCompiler.ValidateIntrinsicVariableTargets`
