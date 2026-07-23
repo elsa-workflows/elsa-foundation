@@ -242,7 +242,7 @@ What dependency-ordered Elsa slices migrate design, runtime, IAM, diagnostics, I
 
 ### Answer
 
-Resolve each store family into independently grabbable issues with only its specific released upstream dependencies. Spec 094 hardens the existing Runtime, IAM, Secrets, and Distributed implementations on Groundwork `preview.76`; Identity #644 is closed, diagnostics PR #660 remains draft, #646 owns executed EF comparison and physical-shape verdicts, and #647 owns the final reference-host switch and EF-family deletion. OpenIddict remains a separate migration lane until its complete contract surface is proven.
+Resolve each store family into independently grabbable issues with only its specific released upstream dependencies. The workflow/activity **design lane is complete**: spec 093 ([#641](https://github.com/elsa-workflows/elsa-foundation/issues/641), US1–US4, PRs #907/#919/#933/#934) made Groundwork the only design provider, deleted the EF design implementation family and its in-memory query fallback, and left the EF-core surface ratchet with zero design-persistence entries; its gate-5 criterion was replaced by the ratified 2026-07-22 absolute-budget amendment. #641 closes when that landing phase merges. Spec 094 hardens the existing Runtime, IAM, Secrets, and Distributed implementations on Groundwork `preview.76`; Identity #644 is closed, diagnostics PR #660 remains draft, #646 owns executed EF comparison and physical-shape verdicts, and #647 owns the final reference-host switch and EF-family deletion. OpenIddict remains a separate migration lane until its complete contract surface is proven.
 
 ## ef-removal: When May The EF Implementation Family Be Deleted?
 

@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 /// In-memory <see cref="IActivityDefinitionLookup"/> for the catalog-consulting baseline
 /// validators. <see cref="GetVersion"/> resolves only ids registered via <see cref="Add"/>;
 /// everything else throws <see cref="EntityNotFoundException"/>, matching the production
-/// version-store Get contract (both EFCore and Groundwork stores throw on a missing id —
+/// version-store Get contract (the Groundwork store throws on a missing id —
 /// they never return null). <see cref="ValidatorTestHelpers.RootActivityVersionId"/> is
 /// pre-seeded (as an empty version) so tests exercise their real nodes, not the synthetic
 /// root the test helpers fabricate for multi-activity graphs.

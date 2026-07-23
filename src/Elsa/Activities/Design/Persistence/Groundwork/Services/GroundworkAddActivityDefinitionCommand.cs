@@ -39,8 +39,8 @@ public sealed class GroundworkAddActivityDefinitionCommand(
         ArgumentNullException.ThrowIfNull(version);
         ArgumentNullException.ThrowIfNull(operationKey);
 
-        // Unlike the EF Core store (stamped by ElsaDbContextBase on save), the Groundwork document writer
-        // does not auto-stamp entity timestamps, so a Groundwork-backed create would otherwise persist
+        // The Groundwork document writer does not auto-stamp entity timestamps,
+        // so a create would otherwise persist
         // CreatedAt/LastModifiedAt as DateTimeOffset.MinValue — the studio then renders "Updated 01/01/1".
         var now = clock.UtcNow;
         definition.CreatedAt = definition.LastModifiedAt = now;

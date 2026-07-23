@@ -649,6 +649,50 @@ to #899 (its T080–T083 charter):** regeneration of `docs/maps/*` (which still 
 design EF projects) and the remaining stale extension-point cross-references — recorded here so
 the Phase 7 docs audit inherits them explicitly.
 
+### T083–T085 Phase 7 gates, requirement audit, and remediation (2026-07-23)
+
+**T083 full battery** at `7992edc39` (+ this commit's remediations, re-verified where affected):
+`git diff --check` clean; full Release build 0 errors; pack 145 packages, 0 errors; **complete
+container-free solution tests: 7,131 passed / 0 failed across 73 test projects**; provider matrix
+SQLite 57/57, PostgreSQL 62/62, SQL Server 62/62, MongoDB 59/59 (the first PG/SqlServer attempt hit
+a transient overnight environment collapse — every Docker suite ran 3–5× slow and the runner was
+killed; after a Docker prune/restart both leaves passed at normal pace on identical code, recorded
+here for honesty); benchmark acceptance stands on the ratified amended gate 5 (19/19 budgets, gate
+6 form selection) recorded in `docs/reports/groundwork-design-persistence-performance.md`.
+
+**T084 independent FR/SC audit** at `7992edc39` (read-only, code-traced, not tick-traced): all 22
+FRs and 8 SCs **satisfied in mechanism and behavior** — verdicts: 26 SATISFIED, 4
+SATISFIED-WITH-NOTE (FR-019/FR-021/SC-006/SC-007), 0 NOT-SATISFIED. The audit verified the bounded
+query substrate, scope isolation, atomicity, MongoDB topology truthfulness, inspect-only readiness,
+EF removal, and ratchet teeth in code. Actionable findings: (1) spec.md SC-004 and quickstart §6
+still carried the superseded EF-ratio wording — an internal inconsistency with the ratified
+2026-07-22 amendment; (2) SC-007's test-graph clause was not literally met (the activities-design
+test project still referenced the retained base-EF lane for one in-memory query-evaluation
+utility); (3) FR-021 residuals already charter-deferred here. SC-006's registration-time narrowing
+is disclosed and dispositioned (US3 §T063/T066).
+
+**T085 remediation (this commit):** SC-004 in spec.md and the quickstart exit gate now carry the
+amended budget wording with the decision-record pointer; `InMemoryReconcilerHarness` evaluates the
+closed query shape with a local in-memory evaluator and the activities-design test project dropped
+its EF package/project references entirely (471/471 green; EF ratchet baseline shrank 15 lines;
+architecture 282/282) — the design source AND test dependency graphs are now zero-EF; the stale
+EF doc-comment and the dead extension-point link the audit found are fixed.
+
+### T086–T088 Phase 7 landing record (2026-07-23)
+
+**Reviewed candidate:** `3f36970ba` (docs/maps refresh `7992edc39` + T083–T085 remediations
+`5eefd9a7f` + audit-nit cleanup `3f36970ba`). **PR:** #997 (linked to #899/#641), Model B: draft →
+checks → ready → merge commit. Gate evidence: T083 battery (this file, §T083–T085); the T084 audit
+final verdict PASS with SC-004/SC-007 re-verified plainly satisfied at `5eefd9a7f`; benchmark and
+schema evidence links in `docs/reports/groundwork-design-persistence-performance.md` and
+`docs/reports/evidence/093-design-benchmarks/`.
+
+**Remaining zero-EF dependencies after this landing** (outside spec 093's scope, tracked on their
+own lanes): #642 diagnostics persistence, #643 OpenIddict stores, #646 cross-lane performance
+evidence, #647 final EF removal and audit — parent #629 remains open for them. Groundwork upstream
+follow-ups: groundwork#118 (relational uncertain-ack). The merge commit and final #641/#629 state
+are recorded on the issue timeline post-merge per T088.
+
 ### Phase 2 bounded-query substrate evidence (T019)
 
 On 2026-07-20, the canonical in-memory Groundwork test substrate was updated to
@@ -796,16 +840,16 @@ Using the fixed workload from issue #646, run identical seeds, payloads, query s
 
 The 1K dataset is the required correctness/smoke scale, 100K is the required acceptance scale for every workload and mandatory provider, and 1M is required for every scale-bearing query/form comparison on every mandatory provider. An architect-approved workload exclusion must be recorded before timing; machine capacity does not silently waive a scale.
 
-Run every row in the [Benchmark Acceptance Catalog](contracts/design-persistence-contract.md#benchmark-acceptance-catalog). For each measured case, run three independent processes after one untimed warm-up per process. Each measured process must complete at least 100 operations and 30 seconds of steady-state work. Retain raw per-operation samples, fixed seed, payload hash, result hash, provider/server settings, machine metadata, allocation, round trips/database work, storage, write amplification, migration/backfill cost, and native plans. Compute per-run p50/p95/p99 and throughput, use the median of the three runs for the EF ratio gates, and report 95% bootstrap confidence intervals for form comparisons. Apply gates per catalog row; do not use a workload aggregate to hide a failing operation.
+Run every row in the [Benchmark Acceptance Catalog](contracts/design-persistence-contract.md#benchmark-acceptance-catalog). For each measured case, run three independent processes after one untimed warm-up per process. Each measured process must complete at least 100 operations and 30 seconds of steady-state work. Retain raw per-operation samples, fixed seed, payload hash, result hash, provider/server settings, machine metadata, allocation, round trips/database work, storage, write amplification, migration/backfill cost, and native plans. Compute per-run p50/p95/p99 and throughput, use the median of the three runs for the ratified per-row budget gates (EF comparisons recorded as evidence), and report 95% bootstrap confidence intervals for form comparisons. Apply gates per catalog row; do not use a workload aggregate to hide a failing operation.
 
 Exit gate:
 
 - correctness before timing;
-- p95 `<= 1.25x` EF;
-- throughput `>= 80%` EF;
-- p99 `<= 2x` EF;
+- the ratified absolute budgets per catalog row class (amended 2026-07-22; decision record in the
+  contract §Performance and Removal Gate) — 19/19 PASS recorded in
+  `docs/reports/groundwork-design-persistence-performance.md`, EF recorded as evidence;
 - selected entity forms improve median p95 or median throughput by at least 10% over each other Groundwork form at both 100K and 1M, with the improvement direction present in all three runs and the 95% bootstrap confidence interval excluding zero;
-- same-provider EF ratios are required wherever an EF oracle exists; MongoDB records its absolute baseline and must pass correctness, bounded-plan, and form-selection gates without a fabricated EF comparison.
+- same-provider EF measurements are recorded as evidence wherever an EF oracle existed; MongoDB records its absolute baseline and must pass correctness, bounded-plan, and form-selection gates without a fabricated EF comparison.
 
 ## 7. Run design behavior and architecture suites
 

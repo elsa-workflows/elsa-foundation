@@ -9,11 +9,11 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 - Domains in domain map: 26
 - Source extension catalogs discovered: 62
 - Source extension catalogs indexed from root: 61
-- Discovered source catalogs not linked from root index: 1
-- Root-indexed catalogs missing on disk: 0
+- Discovered source catalogs not linked from root index: 3
+- Root-indexed catalogs missing on disk: 2
 - Runtime-to-design direct reference signals: 0
 - Design-to-runtime direct reference signals: 5
-- Bridge-like direct reference shapes: 12
+- Bridge-like direct reference shapes: 13
 
 ## Reference Signals
 

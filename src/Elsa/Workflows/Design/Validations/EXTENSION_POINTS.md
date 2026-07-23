@@ -84,6 +84,6 @@ Both events are `IEvent` (framework §2.6.1); they differ only in **delivery str
 ## Cross-references
 
 - Granular FR-018 mutation events (declared as tested contract; publication currently retired pending an event-sourcing consumer): [`Elsa.Workflows.Design.Api/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Api/EXTENSION_POINTS.md).
-- Persistence-lifecycle seams: [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/EXTENSION_POINTS.md).
+- Design persistence provider (Groundwork stores + commands): [`Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1 + §2.24.2.

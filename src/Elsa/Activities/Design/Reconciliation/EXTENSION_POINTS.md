@@ -45,6 +45,6 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 
 ## Cross-references
 
-- Activity catalog persistence: [`Elsa.Activities.Design.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Persistence.EFCore/EXTENSION_POINTS.md).
+- Activity catalog persistence: [`Elsa.Activities.Design.Persistence.Groundwork/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Persistence.Groundwork/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1.
