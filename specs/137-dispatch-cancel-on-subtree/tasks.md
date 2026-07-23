@@ -61,8 +61,8 @@
 - [x] T008 Run every command in `specs/137-dispatch-cancel-on-subtree/quickstart.md`
 - [x] T009 Verify task completion, contract coverage, and absence of unresolved placeholders across `specs/137-dispatch-cancel-on-subtree/`
 - [x] T010 Run up to five self-review/fix iterations over `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCancellationEnricher.cs`, `tests/Elsa/Activities/DispatchWorkflow/Tests/WorkflowDispatchCancellationTests.cs`, and `specs/137-dispatch-cancel-on-subtree/`
-- [ ] T011 Commit the completed work unit on `codex/998-seam-a-dispatch-cancellation`, push to `origin`, and open a draft PR whose body contains `Closes #998`
-- [ ] T012 Add the PR link and validation evidence to GitHub issue #998 and record the in-review state in `docs/program-goals/bpmn-engine.md`
+- [x] T011 Commit the completed work unit on `codex/998-seam-a-dispatch-cancellation`, push to `origin`, and open a draft PR whose body contains `Closes #998`
+- [x] T012 Add the PR link and validation evidence to GitHub issue #998 and record the in-review state in `docs/program-goals/bpmn-engine.md`
 
 ---
 
