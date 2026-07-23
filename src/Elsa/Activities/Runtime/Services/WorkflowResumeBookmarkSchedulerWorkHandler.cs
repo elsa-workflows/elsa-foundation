@@ -17,6 +17,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 {
     public const string HandlerName = nameof(WorkflowResumeBookmarkSchedulerWorkHandler);
 
+    /// <summary>
+    /// The provider identity recorded for a resume whose stimulus source declared no typed payload contract
+    /// (#1014). It marks the delivery as runtime-synthesized from the waiting invocation's own trigger
+    /// registration, distinct from an adapter-authored delivery such as <c>Elsa.HttpEndpoint</c>.
+    /// </summary>
+    public const string UndeclaredStimulusProviderId = "runtime.stimulus";
+
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly TimeProvider _timeProvider;
 
@@ -81,8 +88,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{resumePayload.ExecutableNodeId}', but activity execution '{resumePayload.ActivityExecutionId}' belongs to executable node '{state.Execution.ExecutableNodeId}'.");
 
         var bookmark = await bookmarkStateStore.FindAsync(workItem.WorkflowExecutionId, resumePayload.BookmarkId, cancellationToken);
+        var deliveryMetadata = ResolveTriggerDeliveryMetadata(workItem, resumePayload, state);
 
-        if (TryResolveClaimedResume(state, workItem, resumePayload, out var claimedDelivery, out var claimedAttempt))
+        if (TryResolveClaimedResume(state, workItem, deliveryMetadata, out var claimedDelivery, out var claimedAttempt))
         {
             await ResumeActivityAsync(scope.ServiceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, null, [], executable, executableNode, state, claimedDelivery!, claimedAttempt, cancellationToken);
             return;
@@ -116,7 +124,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
 
-        if (!TryResolveTypedTriggerDelivery(state, bookmark, resumePayload, workItem, out var triggerDelivery))
+        if (!TryResolveTypedTriggerDelivery(state, bookmark, resumePayload, deliveryMetadata, workItem, out var triggerDelivery))
             return;
 
         var siblingBookmarks = await LoadOwnedSiblingBookmarksAsync(bookmarkStateStore, workItem, state, bookmark, cancellationToken);
@@ -516,10 +524,45 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         return siblings;
     }
 
+    /// <summary>
+    /// Resolves the typed delivery identity this resume is carrying (#1014). A stimulus source that declares a
+    /// payload contract (the HTTP endpoint, the <c>DispatchWorkflow</c> parent resume) supplies it on the durable
+    /// command payload. A source that does not — the runtime stimuli endpoint, the in-workflow <c>PublishEvent</c>
+    /// intent, the recurring-trigger pump — would otherwise resolve to no delivery at all, and the resume would be
+    /// dropped silently: bookmark intact, run parked forever, no incident. For those, the waiting invocation's own
+    /// committed trigger registration is the authority on the payload contract and the delivery adopts it; the
+    /// delivery identity is derived from the durable work item, so a redelivery of the same envelope synthesizes
+    /// byte-identical metadata and still lands on the claim-redelivery path (where the registration is already
+    /// consumed and the recorded delivery carries the contract instead).
+    /// </summary>
+    private static RuntimeTypedTriggerDeliveryMetadata? ResolveTriggerDeliveryMetadata(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        ActivityExecutionState state)
+    {
+        if (resumePayload.TriggerDelivery is { } declared)
+            return declared;
+
+        var deliveryId = workItem.CommandId;
+        var payloadType = state.TriggerRegistrations?
+                .FirstOrDefault(registration => StringComparer.Ordinal.Equals(registration.RegistrationId, resumePayload.BookmarkId))?.PayloadType
+            ?? state.TriggerDeliveries?
+                .FirstOrDefault(delivery => StringComparer.Ordinal.Equals(delivery.DeliveryId, deliveryId))?.PayloadType;
+        if (payloadType is null)
+            return null;
+
+        return new RuntimeTypedTriggerDeliveryMetadata(
+            deliveryId: deliveryId,
+            payloadType: payloadType,
+            providerId: UndeclaredStimulusProviderId,
+            receivedAt: workItem.EnqueuedAt,
+            deduplicationKey: workItem.IdempotencyKey);
+    }
+
     private static bool TryResolveClaimedResume(
         ActivityExecutionState state,
         RuntimeSchedulerWorkItem workItem,
-        RuntimeResumeBookmarkCommandPayload resumePayload,
+        RuntimeTypedTriggerDeliveryMetadata? deliveryMetadata,
         out ActivityTriggerDelivery? delivery,
         out ActivityAttempt? attempt)
     {
@@ -527,7 +570,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         attempt = null;
         if (state.Status != ActivityExecutionStatus.Running ||
             state.PrivateState is null ||
-            resumePayload.TriggerDelivery is not { } metadata ||
+            deliveryMetadata is not { } metadata ||
             !state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId, out var claimedWorkItemId) ||
             !StringComparer.Ordinal.Equals(claimedWorkItemId, workItem.WorkItemId) ||
             !state.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaim, out var claimedAttemptId))
@@ -552,13 +595,14 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState state,
         BookmarkState bookmark,
         RuntimeResumeBookmarkCommandPayload resumePayload,
+        RuntimeTypedTriggerDeliveryMetadata? deliveryMetadata,
         RuntimeSchedulerWorkItem workItem,
         out ActivityTriggerDelivery? delivery)
     {
         delivery = null;
         if (state.Status != ActivityExecutionStatus.Suspended ||
             state.PrivateState is null ||
-            resumePayload.TriggerDelivery is not { } metadata)
+            deliveryMetadata is not { } metadata)
             return false;
 
         var registrations = state.TriggerRegistrations?
