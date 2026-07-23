@@ -565,7 +565,8 @@ public sealed class WorkflowIntrinsicExecutor(
     {
         var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowState.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
-        var frameEnvelopes = BuildVisibleFrameEnvelopes(workflowState, intrinsicState, runtimeView);
+        var visibleFrames = BuildVisibleFrames(workflowState, intrinsicState, runtimeView);
+        var frameEnvelopes = ToAddressEnvelopes(visibleFrames);
 
         var context = new RuntimeInputBindingResolutionContext(
             workflowState.WorkflowExecutionId,
@@ -574,7 +575,8 @@ public sealed class WorkflowIntrinsicExecutor(
             runtimeView: runtimeView,
             executable: executable,
             workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
-            variableEnvelopes: frameEnvelopes);
+            variableEnvelopes: frameEnvelopes,
+            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames));
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {
@@ -683,14 +685,14 @@ public sealed class WorkflowIntrinsicExecutor(
             $"Variable scope '{declaringScopeId}' is not visible to intrinsic execution '{intrinsicState.InvocationId}'.");
     }
 
-    private static Dictionary<RuntimeVariableValueAddress, ValueEnvelope> BuildVisibleFrameEnvelopes(
+    private static List<VariableFrameState> BuildVisibleFrames(
         WorkflowExecutionState workflowState,
         ActivityExecutionState intrinsicState,
         IReadOnlyCollection<ActivityExecutionState> runtimeView)
     {
-        var result = new Dictionary<RuntimeVariableValueAddress, ValueEnvelope>();
+        var ordered = new List<VariableFrameState>();
         if (workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root)
-            AddFrame(root, result);
+            ordered.Add(root);
 
         var byId = runtimeView.ToDictionary(state => state.InvocationId, StringComparer.Ordinal);
         var ancestors = new Stack<ActivityExecutionState>();
@@ -705,23 +707,25 @@ public sealed class WorkflowIntrinsicExecutor(
         foreach (var ancestor in ancestors)
         {
             if (ancestor.IterationVariableFrame is { Status: VariableFrameStatus.Active } iteration)
-                AddFrame(iteration, result);
+                ordered.Add(iteration);
             if (ancestor.VariableFrame is { Status: VariableFrameStatus.Active } frame)
-                AddFrame(frame, result);
+                ordered.Add(frame);
         }
 
         if (intrinsicState.IterationVariableFrame is { Status: VariableFrameStatus.Active } currentIteration)
-            AddFrame(currentIteration, result);
+            ordered.Add(currentIteration);
 
-        return result;
+        return ordered;
     }
 
-    private static void AddFrame(
-        VariableFrameState frame,
-        IDictionary<RuntimeVariableValueAddress, ValueEnvelope> values)
+    private static Dictionary<RuntimeVariableValueAddress, ValueEnvelope> ToAddressEnvelopes(
+        IReadOnlyList<VariableFrameState> orderedFrames)
     {
+        var values = new Dictionary<RuntimeVariableValueAddress, ValueEnvelope>();
+        foreach (var frame in orderedFrames)
         foreach (var (key, value) in frame.Values)
             values[new RuntimeVariableValueAddress(frame.ScopeId, key)] = value;
+        return values;
     }
 
     private static void ValidateAssignment(

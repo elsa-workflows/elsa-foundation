@@ -24,7 +24,8 @@ public sealed class BpmnElement
         BpmnLoopCharacteristics? loopCharacteristics = null,
         bool isForCompensation = false,
         string? compensationHandlerElementId = null,
-        bool isTransaction = false)
+        bool isTransaction = false,
+        bool triggeredByEvent = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(elementId);
         ArgumentException.ThrowIfNullOrWhiteSpace(elementType);
@@ -43,6 +44,7 @@ public sealed class BpmnElement
         IsForCompensation = isForCompensation;
         CompensationHandlerElementId = string.IsNullOrWhiteSpace(compensationHandlerElementId) ? null : compensationHandlerElementId.Trim();
         IsTransaction = isTransaction;
+        TriggeredByEvent = triggeredByEvent;
     }
 
     [JsonPropertyName("elementId")]
@@ -120,6 +122,16 @@ public sealed class BpmnElement
     /// </summary>
     [JsonPropertyName("isTransaction")]
     public bool IsTransaction { get; }
+
+    /// <summary>
+    /// Marks a <b>event subprocess</b> (spec 128): a flow-less <c>subProcess</c>-family element that binds a
+    /// nested body whose single event-start (an escalation or error start event) activates the body when its
+    /// trigger occurs while the enclosing scope is active. Valid only on a <c>subProcess</c>-family element with a
+    /// bound child; the element participates in no sequence flows, hosts no boundary, and is neither a compensation
+    /// handler nor a transaction. <c>false</c> on every ordinary element.
+    /// </summary>
+    [JsonPropertyName("triggeredByEvent")]
+    public bool TriggeredByEvent { get; }
 }
 
 /// <summary>

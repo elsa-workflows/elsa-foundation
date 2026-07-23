@@ -71,7 +71,9 @@ public sealed class BpmnProcessTriggerStimulusProvider : IActivityTriggerStimulu
                 $"BPMN process node '{node.ExecutableNodeId}' has an invalid structure: {exception.Message}", exception);
         }
 
-        return graph.StartEvents.Where(element => element.EventDefinitions.Count > 0).ToArray();
+        // spec 128: an escalation/error start is an event-subprocess body start seeded via the scheduled-start hint,
+        // not an externally-triggered start — only timer/message/signal starts register a publish-time start trigger.
+        return graph.StartEvents.Where(BpmnElementFamilies.IsExternalStartTrigger).ToArray();
     }
 }
 

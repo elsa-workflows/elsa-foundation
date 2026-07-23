@@ -20,6 +20,12 @@ public sealed class StartEventBehavior(string elementFamily, string displayName)
     public static StartEventBehavior Message() => new(BpmnElementFamilies.StartEventMessage, "Start Event (Message)");
     public static StartEventBehavior Signal() => new(BpmnElementFamilies.StartEventSignal, "Start Event (Signal)");
 
+    /// <summary>The escalation event-subprocess body start (spec 128): once seeded via the scheduled-start hint, routes outbound like a none start.</summary>
+    public static StartEventBehavior Escalation() => new(BpmnElementFamilies.StartEventEscalation, "Start Event (Escalation)");
+
+    /// <summary>The error event-subprocess body start (spec 128): once seeded via the scheduled-start hint, routes outbound like a none start.</summary>
+    public static StartEventBehavior Error() => new(BpmnElementFamilies.StartEventError, "Start Event (Error)");
+
     public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
         BpmnBehaviorDecision.Of(BpmnBehaviorCommand.EmitTokens(BpmnFlowSelector.FlowIds(context.OutboundFlows)));
 

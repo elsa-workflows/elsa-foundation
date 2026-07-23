@@ -11,7 +11,8 @@ public sealed class RuntimeInputBindingResolutionContext
         IReadOnlyCollection<ActivityExecutionState>? runtimeView = null,
         WorkflowExecutable? executable = null,
         IReadOnlyDictionary<string, ValueEnvelope>? workflowInputEnvelopes = null,
-        IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes = null)
+        IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes = null,
+        IReadOnlyDictionary<string, ValueEnvelope>? visibleVariablesByName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -23,6 +24,7 @@ public sealed class RuntimeInputBindingResolutionContext
         Executable = executable;
         WorkflowInputEnvelopes = SnapshotEnvelopes(workflowInputEnvelopes);
         VariableEnvelopes = SnapshotEnvelopes(variableEnvelopes);
+        VisibleVariablesByName = SnapshotEnvelopes(visibleVariablesByName);
     }
 
     public string WorkflowExecutionId { get; }
@@ -33,6 +35,14 @@ public sealed class RuntimeInputBindingResolutionContext
     public WorkflowExecutable? Executable { get; }
     public IReadOnlyDictionary<string, ValueEnvelope> WorkflowInputEnvelopes { get; }
     public IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope> VariableEnvelopes { get; }
+
+    /// <summary>
+    /// The variables lexically visible to the consuming activity, projected by author-facing name with the
+    /// innermost scope winning (issue #984). Feeds the JavaScript <c>variables.X</c>/<c>getVariable('X')</c> read
+    /// surface. Distinct from <see cref="VariableEnvelopes"/>, which is keyed by declaring-scope address and drives
+    /// statically declared <c>Variable</c> parameter bindings. Empty when the producer supplies no projection.
+    /// </summary>
+    public IReadOnlyDictionary<string, ValueEnvelope> VisibleVariablesByName { get; }
 
     private static IReadOnlyDictionary<string, ValueEnvelope> SnapshotEnvelopes(
         IReadOnlyDictionary<string, ValueEnvelope>? values) =>

@@ -39,6 +39,7 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
 
         var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken);
         IsolatedJintEngine.SetReadOnlyArgs(engine, request.ParameterValues, featureOptions.Value);
+        IsolatedJintEngine.SetReadOnlyVariables(engine, request.AmbientVariables, featureOptions.Value);
 
         JsValue result;
         try

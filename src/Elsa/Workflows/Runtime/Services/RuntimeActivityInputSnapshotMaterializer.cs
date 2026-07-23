@@ -35,9 +35,8 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
         var resolvedWorkflowExecutionStateStore = workflowExecutionStateStore
             ?? serviceProvider.GetService<IWorkflowExecutionStateStore>()
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires the canonical workflow variable-frame owner store.");
-        var variableEnvelopes = (await new RuntimeContainerScopeService(activityExecutionStateStore, resolvedWorkflowExecutionStateStore)
-                .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken))
-            .Values;
+        var visibleFrames = await new RuntimeContainerScopeService(activityExecutionStateStore, resolvedWorkflowExecutionStateStore)
+            .BuildVisibleFramesAsync(state.Execution.WorkflowExecutionId, state, cancellationToken: cancellationToken);
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: state.Execution.WorkflowExecutionId,
             activityExecutionId: state.InvocationId,
@@ -45,7 +44,10 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             runtimeView: runtimeView,
             executable: executable,
             workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
-            variableEnvelopes: variableEnvelopes);
+            variableEnvelopes: visibleFrames.Values,
+            // Issue #984: expose the lexically visible variables to JavaScript value expressions
+            // (variables.X / getVariable('X') / get<Name>()) through the isolated engine's ambient read surface.
+            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames.Frames));
 
         return await inputMaterializer.MaterializeSnapshotAsync(
             executableNode,

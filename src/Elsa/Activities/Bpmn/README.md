@@ -150,8 +150,46 @@ children, and diagnostics.
   only to a `subProcess` host, honor `CancelActivity`, and per host carry **distinct codes** with **≤1**
   catch-all. Any non-escalation seam-C code is a forward-compatible diagnostic pass-through. No new BPMN state
   record or token status is introduced; the notification evaluation rides `FinishEvaluation`'s existing exits,
-  and the bubble/seam-A staging happens only at the clean Defer/Complete exit. Escalation event subprocesses,
-  escalation start events, and escalation intermediate catch events are stated cuts.
+  and the bubble/seam-A staging happens only at the clean Defer/Complete exit. Escalation intermediate catch
+  events remain a stated cut (not a BPMN construct — boundary/event-subprocess only).
+- **Event subprocesses** (spec 128, tier 1) let a scope contain a flow-less `subProcess` marked
+  `triggeredByEvent` whose **body** activates when its **start-event trigger** fires while the enclosing scope
+  is active. This slice ships the **escalation** dormant-catcher trigger (interrupting or non-interrupting); the
+  **error** trigger is wired but is a **validated stated cut** this slice (see the end of this entry). Catchers are **graph-derived** on `BpmnGraph`
+  (`EventSubprocesses`, indexed by trigger kind + code); no state record, no arming. Validation
+  (`ValidateEventSubprocesses`, the compensation-handler rule family mirrored): the element takes no flows, no
+  loop, hosts no boundary, is not a compensation handler nor a transaction; its body declares **exactly one**
+  start event carrying **one** supported trigger (escalation with optional code = catch-all, or error catch-all),
+  with **no nested** event subprocess; the interrupting flag is the body start event's `isInterrupting`
+  (default true; error must be interrupting); per scope escalation codes are distinct with **≤1** catch-all and
+  **≤1** error subprocess. Bodies are seeded through the **scheduled-start seeding** path: `BpmnScheduler`
+  forwards the body's single event-start element id as a command-metadata **hint** (gated on a body scheduling
+  cause so an inherited hint never contaminates an ordinary nested process), and `BpmnProcess.StartAsync` gains
+  a third seeding path that seeds exactly that start element (a bad hint faults deterministically); root-trigger
+  and direct-invocation seeding are byte-identical when the hint is absent. **Own-scope catching**: `RaiseEscalation`
+  consults the throwing scope's own escalation event subprocesses **first** (exact beats catch-all) and activates
+  one **instead of** staging upward — preserving one-hop bubbling. **Notification-side ladder** (spec 128 D3):
+  (1) host boundary exact, (2) scope event subprocess exact, (3) host boundary catch-all, (4) scope event
+  subprocess catch-all, (5) bubble. **Activation** mints a scope-level activation token (`AwaitingChild`,
+  `ParentTokenId` null, inheriting the triggering context's iteration key) and schedules the body with the hint;
+  an **interrupting** activation first stops all other live work through the shared `StopOtherLiveWork` helper
+  (extracted from spec 125's cancel-transaction stop-others loop — the transaction path stays byte-identical),
+  reason `bpmn.event-subprocess.scope-interrupted`; a **non-interrupting** escalation activation runs alongside
+  (repeated/concurrent activations are independent). Body completion is intercepted before behavior dispatch
+  (the element has no flows): the activation token is consumed (`EventSubprocessCompleted`) and nothing routes;
+  a body fault rides the ordinary composite-fault path (no self-catching). Message/signal/timer-triggered event
+  subprocesses (they need a scope-listener token shape + completion-liveness rework), compensation/conditional
+  triggers, error-code matching, nested event subprocesses inside a body, and Studio authoring are stated cuts.
+  **Error trigger is a validated stated cut this slice.** Its engine wiring (seam-B absorption + interrupting
+  activation) is in place but author-unreachable: `ValidateEventSubprocesses` rejects an error-triggered event
+  subprocess deterministically ("not executable in this slice") and the importer degrades one (Dropped + finding),
+  so `BpmnGraph.ErrorEventSubprocess()` is always `null` and the error paths are inert. The reason is a **runtime
+  seam-B gap**: the error trigger absorbs the child fault via seam B correctly (the incident resolves), but its
+  body is a scheduled child, so the fault evaluation **defers** — and the runtime does not yet support a deferred
+  seam-B fault absorption (it redelivers the original fault, faulting the composite; this reproduces with the
+  shipped spec-120 error boundary routing to a task, so it is a runtime gap, not a module one — seam-A + a deferred
+  child schedule works, the escalation interrupting path completes cleanly). A follow-up unit that lands the
+  runtime fix removes exactly the one validation rule and the one importer drop.
 - **Cyclic sequence flows** are executable (spec 122): a token carries an **iteration key** (`null` on the
   implicit first pass); traversing a **backward** (loop-back) sequence flow — the standard DFS back edge,
   precomputed once as `BpmnGraph.IsBackwardFlow` — mints a fresh key, and forward propagation inherits the

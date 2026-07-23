@@ -14,6 +14,12 @@ public static class BpmnElementFamilies
     public const string StartEventTimer = "startEvent.timer";
     public const string StartEventMessage = "startEvent.message";
     public const string StartEventSignal = "startEvent.signal";
+
+    /// <summary>The escalation event-subprocess body start family (spec 128): seeds one token via the scheduled-start hint, then routes outbound like a none start. Never externally triggered.</summary>
+    public const string StartEventEscalation = "startEvent.escalation";
+
+    /// <summary>The error event-subprocess body start family (spec 128): seeds one token via the scheduled-start hint, then routes outbound like a none start. Never externally triggered.</summary>
+    public const string StartEventError = "startEvent.error";
     public const string EndEventNone = "endEvent.none";
     public const string EndEventTerminate = "endEvent.terminate";
 
@@ -204,13 +210,32 @@ public static class BpmnElementFamilies
         if (element.EventDefinitions.Count == 0)
             return StartEventNone;
 
-        if (element.EventDefinitions.Count == 1 &&
-            EventStartFamiliesByDefinitionType.TryGetValue(element.EventDefinitions.Single().Type, out var family))
-            return family;
+        if (element.EventDefinitions.Count == 1)
+        {
+            var type = element.EventDefinitions.Single().Type;
+            if (EventStartFamiliesByDefinitionType.TryGetValue(type, out var family))
+                return family;
+            // spec 128: an escalation/error start event is an event-subprocess body start (seeded via the scheduled-start
+            // hint). Its runtime token behavior equals a none start; it is never a publish-time start trigger.
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Escalation))
+                return StartEventEscalation;
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Error))
+                return StartEventError;
+        }
 
         throw new BpmnExecutionException(
-            $"BPMN start event '{element.ElementId}' declares unsupported event definitions; only none, timer, message, and signal start events are supported by this engine slice (exactly one timer/message/signal definition).");
+            $"BPMN start event '{element.ElementId}' declares unsupported event definitions; only none, timer, message, signal, and event-subprocess (escalation/error) start events are supported by this engine slice (exactly one such definition).");
     }
+
+    /// <summary>
+    /// True when a start event is externally triggered at publish/dispatch time (spec 117): a timer/message/signal
+    /// start. A none start is direct-invocation, and an escalation/error start (spec 128) is an event-subprocess
+    /// body start seeded via the scheduled-start hint — neither registers a publish-time start trigger.
+    /// </summary>
+    public static bool IsExternalStartTrigger(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.StartEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        EventStartFamiliesByDefinitionType.ContainsKey(element.EventDefinitions.Single().Type);
 
     private static string ResolveEndEvent(BpmnElement element)
     {
