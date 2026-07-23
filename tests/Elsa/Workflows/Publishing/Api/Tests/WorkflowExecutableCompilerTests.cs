@@ -1355,6 +1355,60 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Set_intrinsic_targeting_an_invisible_variable_fails_publication()
+    {
+        // #972 publish backstop (PR #971 two-guard pattern): a Set whose target is declared in no
+        // reachable scope is refused at publication instead of poisoning at runtime.
+        var compiler = Compiler(WorkflowVersion(SequenceNode(
+            "sequence",
+            [SetIntrinsicNode("set-1", "var-missing")])));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("var-missing", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("not visible", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Set_intrinsic_targeting_a_declared_workflow_variable_compiles()
+    {
+        var message = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-message",
+            Name: "Message",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            Default: null);
+        var compiler = Compiler(WorkflowVersion(
+            SequenceNode("sequence", [SetIntrinsicNode("set-1", "var-message")]),
+            variables: [message]));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var setNode = executable.NodesById["set-1"];
+        Assert.Equal(WorkflowIntrinsicKind.Set, setNode.IntrinsicKind);
+        Assert.Equal("var-message", setNode.IntrinsicVariable?.VariableKey);
+    }
+
+    private static ActivityNode SetIntrinsicNode(string nodeId, string variableKey) =>
+        new(
+            nodeId,
+            "$intrinsic",
+            [new WorkflowArgumentState(
+                WorkflowIntrinsicInputKeys.Value,
+                new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"),
+                null, null, null, null)],
+            [])
+        {
+            Intrinsic = new AuthoredWorkflowIntrinsic(
+                AuthoredWorkflowIntrinsicKind.Set,
+                new TypeReference("String"),
+                new Elsa.Expressions.Core.Models.VariableReference(
+                    variableKey,
+                    Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId))
+        };
+
+    [Fact]
     public async Task Duplicate_workflow_variable_reference_key_fails_publication()
     {
         var duplicate = new Elsa.Expressions.Core.Models.VariableDefinition(
