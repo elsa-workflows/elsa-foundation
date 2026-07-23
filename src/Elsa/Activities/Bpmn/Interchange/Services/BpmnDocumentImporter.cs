@@ -59,7 +59,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     {
         var context = new ImportContext();
         var node = ImportCore(xml, options, context);
-        return new BpmnImportResult(node, context.ToAnalysis());
+        return new BpmnImportResult(node, context.ToAnalysis(), context.ImportedProcesses);
     }
 
     private static ActivityNode ImportCore(string xml, BpmnImportOptions? options, ImportContext context)
@@ -86,18 +86,172 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         if (processes.Length == 0)
             throw new BpmnInterchangeException("The document contains no <process> element.");
 
-        var process = options?.ProcessId is { } processId
+        // Primary selection is unchanged (explicit ProcessId > first executable > first). It is resolved (and a
+        // bad explicit id fails fast) before any process is built.
+        var primary = options?.ProcessId is { } processId
             ? processes.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(IdOf(candidate), processId))
               ?? throw new BpmnInterchangeException($"The document contains no process with id '{processId}'.")
             : processes.FirstOrDefault(candidate => string.Equals((string?)candidate.Attribute("isExecutable"), "true", StringComparison.OrdinalIgnoreCase))
               ?? processes[0];
+        var primaryIndex = Array.IndexOf(processes, primary);
 
+        // Document-level indexes are read ONCE and passed to every per-process build (spec 136: N-process import
+        // shares the root message/signal/escalation and diagram catalogs; only the process content differs).
         var diagram = ReadDiagram(definitions);
         var messageSignalNames = ReadMessageSignalDeclarations(definitions);
         var escalationDeclarations = ReadEscalationDeclarations(definitions);
-        var processIdValue = IdOf(process) ?? "process";
-        var nodeId = $"{options?.NodeIdPrefix ?? "node"}-{processIdValue}";
-        return BuildProcessNode(process, nodeId, diagram, messageSignalNames, escalationDeclarations, context);
+        var participants = ReadParticipants(definitions);
+        var messageFlows = ReadMessageFlows(definitions);
+
+        // spec 136 FR-1: every <process> imports independently through the existing BuildProcessNode path (the
+        // silent multi-pool drop ends). Each carries per-process-id findings; a non-executable process imports as a
+        // documentation pool with an Info finding.
+        var built = new List<BuiltProcess>(processes.Length);
+        foreach (var process in processes)
+        {
+            var processIdValue = IdOf(process) ?? "process";
+            var nodeId = $"{options?.NodeIdPrefix ?? "node"}-{processIdValue}";
+            var node = BuildProcessNode(process, nodeId, diagram, messageSignalNames, escalationDeclarations, context);
+            var structure = node.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+            var isExecutable = string.Equals((string?)process.Attribute("isExecutable"), "true", StringComparison.OrdinalIgnoreCase);
+            if (!isExecutable)
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Process '{processIdValue}' is not executable (isExecutable=\"false\"); it imported as a documentation pool.", processIdValue));
+            built.Add(new BuiltProcess(processIdValue, node, structure, isExecutable));
+        }
+
+        // spec 136 D1: for old-style single-node consumers, note that additional pools were imported (the silent
+        // drop is gone — the extras live in ProcessNodes).
+        if (built.Count > 1)
+        {
+            var additional = string.Join(", ", built.Where((_, index) => index != primaryIndex).Select(entry => entry.ProcessId));
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Document declares {built.Count} processes; the primary is '{built[primaryIndex].ProcessId}'. Additional pools imported into ProcessNodes: {additional}.", null));
+        }
+
+        ResolveCollaboration(built, participants, messageFlows, messageSignalNames, context);
+
+        // Re-serialize any process whose authored structure gained pools, lane pool ids, or message flows; an
+        // uncollaborated process keeps the exact node BuildProcessNode produced (single-process byte-identity).
+        foreach (var entry in built)
+            entry.Materialize(SerializerOptions);
+
+        context.ImportedProcesses = built
+            .Select(entry => new BpmnImportedProcess(entry.ProcessId, entry.ParticipantId, entry.ParticipantName, entry.Node))
+            .ToArray();
+
+        return built[primaryIndex].Node;
+    }
+
+    /// <summary>
+    /// Reads the document's collaboration (spec 136 D2/D3) and folds its facts onto the built processes: each
+    /// <c>&lt;participant processRef&gt;</c> becomes a <see cref="BpmnPool"/> on the referenced process (lanes gain
+    /// the pool id when the process has exactly one participant); black-box and unresolvable participants surface as
+    /// findings; each <c>&lt;messageFlow&gt;</c> resolves its endpoints across all imported processes (or a black-box
+    /// pool) and records a <see cref="BpmnMessageFlow"/> on the involved structures with matched/mismatch/black-box/
+    /// unresolvable findings.
+    /// </summary>
+    private static void ResolveCollaboration(
+        IReadOnlyList<BuiltProcess> built,
+        IReadOnlyList<ParticipantDeclaration> participants,
+        IReadOnlyList<MessageFlowDeclaration> messageFlows,
+        IReadOnlyDictionary<string, string> messageSignalNames,
+        ImportContext context)
+    {
+        var byProcessId = new Dictionary<string, BuiltProcess>(StringComparer.Ordinal);
+        foreach (var entry in built)
+            byProcessId.TryAdd(entry.ProcessId, entry);
+        var participantIds = participants.Select(participant => participant.Id).ToHashSet(StringComparer.Ordinal);
+
+        // Participants → pools (document order). A resolvable processRef stamps a pool on the referenced process; a
+        // black-box (ref-less) participant is Info; a broken processRef is Degraded.
+        foreach (var participant in participants)
+        {
+            if (participant.ProcessRef is null)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Participant '{participant.Id}'{Named(participant.Name)} declares no processRef; it imported as a black-box pool (no process).", participant.Id));
+                continue;
+            }
+
+            if (!byProcessId.TryGetValue(participant.ProcessRef, out var target))
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Participant '{participant.Id}'{Named(participant.Name)} references process '{participant.ProcessRef}', which is not a process in this document; its pool was not imported.", participant.Id));
+                continue;
+            }
+
+            target.Pools.Add(new BpmnPool(participant.Id, participant.Name, participant.ProcessRef, target.IsExecutable));
+            target.ReferencingParticipants.Add(participant);
+        }
+
+        // Lane pool ids + the ProcessNodes participant facts: unambiguous when exactly one participant references a
+        // process; ambiguous (multi-participant) leaves lane pool ids null with an Info finding.
+        foreach (var entry in built)
+        {
+            if (entry.ReferencingParticipants.Count == 1)
+            {
+                var participant = entry.ReferencingParticipants[0];
+                entry.LanePoolId = participant.Id;
+                entry.ParticipantId = participant.Id;
+                entry.ParticipantName = participant.Name;
+            }
+            else if (entry.ReferencingParticipants.Count > 1 && entry.Structure.Lanes.Count > 0)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Process '{entry.ProcessId}' is referenced by {entry.ReferencingParticipants.Count} participants; its lanes' pool ids were left unset (ambiguous).", entry.ProcessId));
+            }
+        }
+
+        // elementId → (owning process, message name) across every imported process's top-level elements.
+        var elementIndex = new Dictionary<string, (BuiltProcess Owner, string? MessageName)>(StringComparer.Ordinal);
+        foreach (var entry in built)
+            foreach (var element in entry.Structure.Elements)
+                elementIndex.TryAdd(element.ElementId, (entry, MessageNameOf(element)));
+
+        MessageFlowEndpoint Resolve(string reference)
+        {
+            if (string.IsNullOrWhiteSpace(reference))
+                return MessageFlowEndpoint.Unresolvable;
+            if (elementIndex.TryGetValue(reference, out var hit))
+                return MessageFlowEndpoint.Element(reference, hit.Owner.LanePoolId, hit.MessageName, hit.Owner);
+            if (participantIds.Contains(reference))
+                return MessageFlowEndpoint.BlackBox(reference);
+            return MessageFlowEndpoint.Unresolvable;
+        }
+
+        foreach (var flow in messageFlows)
+        {
+            var source = Resolve(flow.SourceRef);
+            var target = Resolve(flow.TargetRef);
+
+            if (source.Kind == MessageFlowEndpointKind.Unresolvable || target.Kind == MessageFlowEndpointKind.Unresolvable)
+            {
+                var unresolved = source.Kind == MessageFlowEndpointKind.Unresolvable ? flow.SourceRef : flow.TargetRef;
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Message flow '{flow.FlowId}' references '{(string.IsNullOrWhiteSpace(unresolved) ? "(missing)" : unresolved)}', which resolves to no imported element or pool; it was recorded nowhere.", flow.FlowId));
+                continue;
+            }
+
+            var flowMessageName = flow.MessageRef is { } messageRef && messageSignalNames.TryGetValue(messageRef, out var declared) && !string.IsNullOrWhiteSpace(declared)
+                ? declared.Trim()
+                : null;
+            var messageName = flowMessageName ?? source.MessageName ?? target.MessageName;
+            var record = new BpmnMessageFlow(flow.FlowId, flow.Name, source.ElementId, source.PoolId, target.ElementId, target.PoolId, messageName);
+
+            if (source.Kind == MessageFlowEndpointKind.BlackBox || target.Kind == MessageFlowEndpointKind.BlackBox)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Message flow '{flow.FlowId}' has a black-box pool endpoint; it imported as a documentation flow.", flow.FlowId));
+                source.Owner?.MessageFlows.Add(record);
+                target.Owner?.MessageFlows.Add(record);
+                continue;
+            }
+
+            // Both endpoints are elements. The wire fabric is name-keyed, so a send/receive whose message names differ
+            // (or where either side carries no message name) can never reach its receiver — a Degraded finding, not a
+            // silent wiring loss. A name match is an Info finding. Either way the resolved wiring is recorded.
+            if (source.MessageName is { } sourceName && target.MessageName is { } targetName && StringComparer.Ordinal.Equals(sourceName, targetName))
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Message flow '{flow.FlowId}' wires '{source.ElementId}' to '{target.ElementId}' on message '{sourceName}'.", flow.FlowId));
+            else
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Message flow '{flow.FlowId}' wires '{source.ElementId}' (message {Quote(source.MessageName)}) to '{target.ElementId}' (message {Quote(target.MessageName)}); the send and receive message names differ, so it cannot function through the name-keyed fabric.", flow.FlowId));
+
+            source.Owner!.MessageFlows.Add(record);
+            target.Owner!.MessageFlows.Add(record);
+        }
     }
 
     private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, IReadOnlyDictionary<string, string> messageSignalNames, IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations, ImportContext context, bool isTransaction = false, bool isEventSubprocessBody = false)
@@ -561,6 +715,122 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         }
 
         return JsonSerializer.SerializeToElement(new { shapes, edges }, SerializerOptions);
+    }
+
+    /// <summary>Reads the document's <c>&lt;collaboration&gt;/&lt;participant&gt;</c> declarations in document order (spec 136 D2).</summary>
+    private static IReadOnlyList<ParticipantDeclaration> ReadParticipants(XElement definitions)
+    {
+        var result = new List<ParticipantDeclaration>();
+        foreach (var collaboration in definitions.Elements(BpmnXmlNames.Model + "collaboration"))
+            foreach (var participant in collaboration.Elements(BpmnXmlNames.Model + "participant"))
+            {
+                if (IdOf(participant) is not { } id)
+                    continue;
+                var processRef = ((string?)participant.Attribute("processRef"))?.Trim();
+                result.Add(new ParticipantDeclaration(id, NameOf(participant), string.IsNullOrWhiteSpace(processRef) ? null : processRef));
+            }
+
+        return result;
+    }
+
+    /// <summary>Reads the document's <c>&lt;collaboration&gt;/&lt;messageFlow&gt;</c> declarations in document order (spec 136 D3).</summary>
+    private static IReadOnlyList<MessageFlowDeclaration> ReadMessageFlows(XElement definitions)
+    {
+        var result = new List<MessageFlowDeclaration>();
+        foreach (var collaboration in definitions.Elements(BpmnXmlNames.Model + "collaboration"))
+            foreach (var flow in collaboration.Elements(BpmnXmlNames.Model + "messageFlow"))
+            {
+                if (IdOf(flow) is not { } id)
+                    continue;
+                var messageRef = ((string?)flow.Attribute("messageRef"))?.Trim();
+                result.Add(new MessageFlowDeclaration(
+                    id,
+                    NameOf(flow),
+                    ((string?)flow.Attribute("sourceRef"))?.Trim() ?? "",
+                    ((string?)flow.Attribute("targetRef"))?.Trim() ?? "",
+                    string.IsNullOrWhiteSpace(messageRef) ? null : messageRef));
+            }
+
+        return result;
+    }
+
+    /// <summary>The message name an element carries (spec 136): a message event definition's resolved <c>name</c>, or a sendTask/receiveTask's <c>bpmn.messageName</c> property; <c>null</c> when the element is not message-bearing.</summary>
+    private static string? MessageNameOf(BpmnElement element)
+    {
+        if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Message)) is { } messageDefinition
+            && messageDefinition.Properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var eventName) && !string.IsNullOrWhiteSpace(eventName))
+            return eventName.Trim();
+        if (element.Properties.TryGetValue(MessageNamePropertyKey, out var taskName) && !string.IsNullOrWhiteSpace(taskName))
+            return taskName.Trim();
+        return null;
+    }
+
+    private static string Named(string? name) => string.IsNullOrWhiteSpace(name) ? "" : $" ('{name.Trim()}')";
+    private static string Quote(string? value) => value is null ? "(none)" : $"'{value}'";
+
+    /// <summary>A collaboration participant (spec 136 D2): its id, optional name, and referenced process id (null = black-box pool).</summary>
+    private readonly record struct ParticipantDeclaration(string Id, string? Name, string? ProcessRef);
+
+    /// <summary>A collaboration message flow (spec 136 D3): its id, optional name, endpoint refs, and optional messageRef.</summary>
+    private readonly record struct MessageFlowDeclaration(string FlowId, string? Name, string SourceRef, string TargetRef, string? MessageRef);
+
+    private enum MessageFlowEndpointKind { Unresolvable, Element, BlackBox }
+
+    /// <summary>A resolved message-flow endpoint (spec 136 D3): an element (in an imported process), a black-box pool, or unresolvable.</summary>
+    private readonly record struct MessageFlowEndpoint(MessageFlowEndpointKind Kind, string? ElementId, string? PoolId, string? MessageName, BuiltProcess? Owner)
+    {
+        public static readonly MessageFlowEndpoint Unresolvable = new(MessageFlowEndpointKind.Unresolvable, null, null, null, null);
+        public static MessageFlowEndpoint Element(string elementId, string? poolId, string? messageName, BuiltProcess owner) => new(MessageFlowEndpointKind.Element, elementId, poolId, messageName, owner);
+        public static MessageFlowEndpoint BlackBox(string poolId) => new(MessageFlowEndpointKind.BlackBox, null, poolId, null, null);
+    }
+
+    /// <summary>
+    /// A process imported during an N-process pass (spec 136): the built node and its deserialized authored structure,
+    /// plus the collaboration facts folded onto it (pools, the unambiguous lane pool id, message flows, and the
+    /// referencing participants). <see cref="Materialize"/> re-serializes the node only when a collaboration fact
+    /// changed the structure, so an uncollaborated process keeps its exact BuildProcessNode bytes.
+    /// </summary>
+    private sealed class BuiltProcess(string processId, ActivityNode node, BpmnAuthoredStructure structure, bool isExecutable)
+    {
+        public string ProcessId { get; } = processId;
+        public ActivityNode Node { get; private set; } = node;
+        public BpmnAuthoredStructure Structure { get; } = structure;
+        public bool IsExecutable { get; } = isExecutable;
+        public List<BpmnPool> Pools { get; } = [];
+        public List<BpmnMessageFlow> MessageFlows { get; } = [];
+        public List<ParticipantDeclaration> ReferencingParticipants { get; } = [];
+        public string? LanePoolId { get; set; }
+        public string? ParticipantId { get; set; }
+        public string? ParticipantName { get; set; }
+
+        public void Materialize(JsonSerializerOptions options)
+        {
+            if (Pools.Count == 0 && LanePoolId is null && MessageFlows.Count == 0)
+                return;
+
+            var lanes = LanePoolId is { } poolId
+                ? Structure.Lanes.Select(lane => new BpmnLane(lane.LaneId, poolId, lane.Name)).ToArray()
+                : Structure.Lanes;
+
+            var updated = new BpmnAuthoredStructure(
+                Structure.Activities,
+                Structure.Elements,
+                Structure.SequenceFlows,
+                Pools,
+                lanes,
+                Structure.Variables,
+                Structure.Diagram,
+                Structure.IsTransaction,
+                MessageFlows);
+
+            Node = Node with
+            {
+                Structure = new ActivityNodeStructure(
+                    BpmnProcessActivity.StructureKind,
+                    BpmnProcessActivity.StructureSchemaVersion,
+                    JsonSerializer.SerializeToElement(updated, options))
+            };
+        }
     }
 
     /// <summary>
@@ -1429,6 +1699,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     {
         public List<string> ProcessIds { get; } = [];
         public List<BpmnImportIssue> Issues { get; } = [];
+        public IReadOnlyList<BpmnImportedProcess> ImportedProcesses { get; set; } = [];
         public Dictionary<string, string> LaneByElementId { get; } = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _elementCounts = new(StringComparer.Ordinal);
 

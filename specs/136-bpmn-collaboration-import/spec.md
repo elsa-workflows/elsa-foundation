@@ -164,3 +164,23 @@ are deterministic.
   drop) and the single-process byte-identical regression pin both green.
 - Full test projects green: BPMN, BPMN Interchange, Activities Runtime, Workflows Runtime,
   ControlFlow, Architecture. Full solution build clean.
+
+## Deviations (implementation)
+
+- **`Internal/BpmnStructureHandler.ReplaceChildren` does not carry `MessageFlows`.** `MessageFlows` was added as a
+  trailing optional constructor parameter on `BpmnAuthoredStructure` so the positional reconstruction in
+  `BpmnStructureHandler.ReplaceChildren` (under `Internal/`, untouched per the zero-`Internal`-changes invariant)
+  keeps compiling. That path therefore drops message-flow metadata on a designer child-replacement (it already
+  passed `Pools` positionally, so pools survive it). The spec's surfaces — import, export, analysis — are
+  unaffected (they never route through `ReplaceChildren`); message flows are wiring documentation, so the loss on
+  that authoring path is acceptable and preserves the invariant.
+- **Lanes are still not exported.** The exporter emits the participant/pool wrapper and own-pool message flows
+  (D2/D3) but continues not to emit `<laneSet>`/`<lane>` (a pre-existing limitation), so lane `PoolId`s do not
+  survive an export→import round-trip; the pool wrapper does. Lane emission was out of D2's stated export scope.
+- **Mismatch message flows are recorded, not only matched ones.** D3 attaches "recorded in each involved
+  structure's `MessageFlows`" to the matched branch; the implementation also records a name-mismatch flow (both
+  endpoints are real elements, so the wiring facts are known and worth documenting) while still emitting the
+  Degraded finding. Only unresolvable-ref flows are recorded nowhere (as D3 requires).
+- **Analyze element counts now span all processes.** `BpmnImportAnalysis.ElementCounts` previously counted only the
+  selected process's elements; N-process import counts every process's elements (single-process documents are
+  unchanged). This is the N-aware analyze behavior the additive `ProcessNodes` implies.

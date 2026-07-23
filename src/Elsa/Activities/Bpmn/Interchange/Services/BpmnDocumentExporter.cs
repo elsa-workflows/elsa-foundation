@@ -48,6 +48,11 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         // importer's global id→name index the messageRef/signalRef resolve through.
         var declarations = new Dictionary<string, (string Type, string Name)>(StringComparer.Ordinal);
         CollectMessageSignalDeclarations(structure, declarations);
+        // spec 136: a message flow's message name contributes the same deduped root <message> declaration its
+        // re-emitted messageRef targets.
+        foreach (var flow in structure.MessageFlows)
+            if (!string.IsNullOrWhiteSpace(flow.MessageName))
+                declarations[MessageSignalDeclarationId(BpmnEventDefinitionTypes.Message, flow.MessageName)] = (BpmnEventDefinitionTypes.Message, flow.MessageName.Trim());
         foreach (var declaration in declarations.OrderBy(entry => entry.Key, StringComparer.Ordinal))
             definitions.Add(new XElement(
                 BpmnXmlNames.Model + (declaration.Value.Type == BpmnEventDefinitionTypes.Message ? "message" : "signal"),
@@ -67,6 +72,13 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                 escalation.SetAttributeValue("name", name);
             definitions.Add(escalation);
         }
+
+        // spec 136 D2/D3: a structure carrying pools/message flows emits a <collaboration> wrapper (its own
+        // participant(s), deduped by pool id; the exported process is the referenced process) plus its own-pool
+        // message flows, ahead of the process. Full N-pool document export from N separate structures is a
+        // documented cut — this is a per-definition export.
+        if (BuildCollaboration(processId, structure) is { } collaboration)
+            definitions.Add(collaboration);
 
         definitions.Add(process);
         definitions.Add(BuildDiagram(processId, structure));
@@ -453,6 +465,54 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         if (element.Properties.TryGetValue(BpmnDocumentImporter.MessageNamePropertyKey, out var name) && !string.IsNullOrWhiteSpace(name))
             task.SetAttributeValue("messageRef", MessageSignalDeclarationId(BpmnEventDefinitionTypes.Message, name));
         return task;
+    }
+
+    /// <summary>
+    /// Builds the <c>&lt;collaboration&gt;</c> wrapper (spec 136 D2/D3) for a structure carrying pools and/or message
+    /// flows: a <c>&lt;participant&gt;</c> per pool (deduped by pool id, referencing the exported process) and a
+    /// <c>&lt;messageFlow&gt;</c> per own-pool flow (deduped by flow id; a black-box endpoint emits its pool id as the
+    /// endpoint ref, a resolved message name a <c>messageRef</c> to the deduped root declaration). Returns <c>null</c>
+    /// when the structure carries neither.
+    /// </summary>
+    private static XElement? BuildCollaboration(string processId, BpmnAuthoredStructure structure)
+    {
+        if (structure.Pools.Count == 0 && structure.MessageFlows.Count == 0)
+            return null;
+
+        var collaboration = new XElement(BpmnXmlNames.Model + "collaboration", new XAttribute("id", $"{processId}-collaboration"));
+
+        var seenPools = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var pool in structure.Pools)
+        {
+            if (!seenPools.Add(pool.PoolId))
+                continue;
+            var participant = new XElement(BpmnXmlNames.Model + "participant",
+                new XAttribute("id", pool.PoolId),
+                new XAttribute("processRef", processId));
+            if (pool.Name is not null)
+                participant.SetAttributeValue("name", pool.Name);
+            collaboration.Add(participant);
+        }
+
+        var seenFlows = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var flow in structure.MessageFlows)
+        {
+            var sourceRef = flow.SourceElementId ?? flow.SourcePoolId;
+            var targetRef = flow.TargetElementId ?? flow.TargetPoolId;
+            if (string.IsNullOrWhiteSpace(sourceRef) || string.IsNullOrWhiteSpace(targetRef) || !seenFlows.Add(flow.FlowId))
+                continue;
+            var messageFlow = new XElement(BpmnXmlNames.Model + "messageFlow",
+                new XAttribute("id", flow.FlowId),
+                new XAttribute("sourceRef", sourceRef),
+                new XAttribute("targetRef", targetRef));
+            if (flow.Name is not null)
+                messageFlow.SetAttributeValue("name", flow.Name);
+            if (flow.MessageName is not null)
+                messageFlow.SetAttributeValue("messageRef", MessageSignalDeclarationId(BpmnEventDefinitionTypes.Message, flow.MessageName));
+            collaboration.Add(messageFlow);
+        }
+
+        return collaboration;
     }
 
     private static XElement BuildSubProcess(BpmnElement element, IReadOnlyDictionary<string, ActivityNode> childrenByNodeId)
