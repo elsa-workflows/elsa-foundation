@@ -395,11 +395,11 @@ public sealed class WorkflowExecutableCompilerTests
 
         // Every id the compiled Sequence structure references must resolve against a child in the slot — the exact
         // invariant the runtime SequenceNavigator enforces before executing the container.
-        var orderedIds = executable.RootActivity.Structure!.Payload
+        IReadOnlyCollection<string> orderedIds = executable.RootActivity.Structure!.Payload
             .Deserialize<SequenceExecutableStructure>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!
-            .Activities.ToArray();
+            .Activities;
         var childIds = slot.Activities.Select(child => child.ExecutableNodeId).ToHashSet(StringComparer.Ordinal);
-        Assert.Equal(["use-reusable", "after"], orderedIds);
+        Assert.Equal(new[] { "use-reusable", "after" }, orderedIds);
         Assert.All(orderedIds, id => Assert.Contains(id, childIds));
     }
 
