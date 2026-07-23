@@ -23,10 +23,10 @@ namespace Elsa.Activities.Primitives.Activities;
 /// completion and delivery.
 /// </para>
 /// <para>
-/// <see cref="CorrelationId"/> threads into the dispatch request verbatim for #1001-readiness; cross-instance
-/// narrowing is inert until the runtime stamps bookmark correlation, so an un-narrowed send broadcasts to every
-/// same-name listener this slice (documented). <see cref="Payload"/> rides as the stimulus input the way the API
-/// dispatch surface carries one.
+/// A nonblank <see cref="CorrelationId"/> scopes resume fan-in to same-name Event waits that retained the same
+/// authored value (#1001). A null or blank value preserves broadcast delivery, and correlation never filters the
+/// published-trigger start fan-out. <see cref="Payload"/> rides as the stimulus input the way the API dispatch
+/// surface carries one.
 /// </para>
 /// </remarks>
 [ActivityOutcome(ActivityOutcomes.Done)]
@@ -40,7 +40,7 @@ public sealed class PublishEvent(IPublishStimulusStager stager) : Activity<Activ
     [Required]
     public string EventName { get; set; } = null!;
 
-    /// <summary>An optional passive correlation id threaded into the dispatch request verbatim (broadcast until #1001).</summary>
+    /// <summary>An optional correlation id that scopes matching Event wait resumes; null or blank preserves broadcast delivery.</summary>
     [ActivityInput(Key = nameof(CorrelationId))]
     public string? CorrelationId { get; set; }
 

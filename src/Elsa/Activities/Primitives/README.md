@@ -18,13 +18,16 @@ activation lease disposes both the activity and its scope.
 `EventStimulus` binding at publish time; scheduled mid-flow (`CanStartWorkflow = false`) it suspends on the
 same stimulus identity and completes when the event is raised. `EventStimulus` maps an event name to the
 opaque `(StimulusType = "Event", StimulusHash = SHA-256 of the name)` routing pair — deliberately
-cross-workflow (the collaboration key).
+cross-workflow (the collaboration key). A nonblank `Event.CorrelationId` is retained on a mid-flow Event wait;
+a same-name delivery carrying that value resumes only matching opted-in waits. Null, empty, and whitespace-only
+correlation leave the wait unscoped, preserving broadcast delivery.
 
 `PublishEvent` (`Elsa.PublishEvent`, spec 135) is its **send** sibling. Its inputs are `EventName` (required),
-`CorrelationId` (optional; threaded verbatim into the dispatch for issue #1001-readiness — broadcast until it
-lands), and `Payload` (optional `JsonElement`). Execution is **durable-first**: it never calls the stimulus
-router in-line. It validates the name and stages a typed `PublishStimulusRequest` on the activity's own commit
-through `IPublishStimulusStager`, then completes `Done` immediately (fire-and-continue). The invocation-keyed
+`CorrelationId` (optional; narrows resume fan-in to waits retaining the same nonblank value, while null/blank
+remains broadcast), and `Payload` (optional `JsonElement`). Correlation never filters the published message-start
+fan-out, and BPMN-specific correlation authoring remains a separate concern. Execution is **durable-first**: it
+never calls the stimulus router in-line. It validates the name and stages a typed `PublishStimulusRequest` on the
+activity's own commit through `IPublishStimulusStager`, then completes `Done` immediately (fire-and-continue). The invocation-keyed
 `PublishStimulusStagingBuffer` (registered as both the activity-facing stager and the engine-facing
 `IPublishStimulusStagingAccessor` the invoke handler drains) builds a `PublishStimulusIntentKind` post-commit
 intent carrying the shared `Event` stimulus identity. After the checkpoint commits, `PublishStimulusExecutor`
