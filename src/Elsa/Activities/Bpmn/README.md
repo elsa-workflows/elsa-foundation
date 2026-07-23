@@ -189,6 +189,29 @@ children, and diagnostics.
   mints the scope activation token, stops all other live work, and schedules the body; the incident records
   `bpmn.event-subprocess.error-absorbed`. A non-interrupting error start is rejected as a malformed shape (error
   events are always interrupting). Error-code matching remains a stated cut.
+- **Call activities** (spec 133) let a process invoke a **separately published Elsa workflow** by binding a
+  `Elsa.DispatchWorkflow` child. A `callActivity` element resolves to the **task family** (behaviors stay
+  semantics-unaware; `TaskBehavior` unchanged), is a boundary host, and may carry multi-instance loop
+  characteristics. The child is authored `WaitForCompletion=true` by convention: the waited path
+  (`ScheduleChild → AwaitingChild → bookmark → resume → OnChildCompleted`) is the shipped dispatch machinery,
+  so the engine needs **no** wait changes. The one new engine piece is **failure-outcome translation** (D3): a
+  faulted/cancelled/dispatch-failed called workflow **COMPLETES** the DispatchWorkflow child with an outcome
+  (`Faulted`/`DispatchFailed`/`Cancelled`) — it never faults, produces no incident, so it cannot ride seam B.
+  `OnChildCompletedAsync` intercepts these outcome completions on a `callActivity`-bound child **before** normal
+  routing (joining the MI/compensation/transaction/event-subprocess interception ladder) and routes the
+  error-catcher ladder **directly, with no seam B**: (1) a host-attached **error boundary** mints an `Active`
+  token at the boundary (inheriting the interrupt target's iteration key) and propagates; (2) else the scope's
+  **error event subprocess** activates interrupting (spec-128 path); (3) else the process faults deterministically
+  (`bpmn.call-activity.faulted` / `.dispatch-failed` / `.cancelled`). `Completed`/`Dispatched` are untouched
+  (normal task-flow routing — a `conditionOutcome` flow can still discriminate them). A multi-instance instance
+  failure rides this per instance, composed with the spec-121 coordinator cascade (the interrupt target is the
+  loop coordinator, so firing a catcher interrupts every remaining instance); the diagnostic is
+  `CallActivityFailureRouted`. Fire-and-forget (`WaitForCompletion=false`) is a documented non-standard Elsa
+  extension: the `Dispatched` outcome routes normal outbound immediately. **Stated cuts** (D6): mid-process
+  teardown of a waited call activity does not cancel the dispatched child instance (whole-parent-cancel does);
+  child-outputs→process-variables capture (pending the ADR-0046 leaf output-capture wiring); BPMN
+  `ioSpecification`/data associations; MI output aggregation; `calledElement` version-selection/cross-tenant
+  semantics; callActivity-specific Studio UX.
 - **Cyclic sequence flows** are executable (spec 122): a token carries an **iteration key** (`null` on the
   implicit first pass); traversing a **backward** (loop-back) sequence flow — the standard DFS back edge,
   precomputed once as `BpmnGraph.IsBackwardFlow` — mints a fresh key, and forward propagation inherits the
@@ -233,9 +256,12 @@ boundary event, cardinality **and collection** multi-instance elements (collecti
 `elsa:collection`/`elsa:itemVariable` plus `elsa:variable` declarations), and **compensation** (boundary +
 `compensateEventDefinition` + `<association>` to an `isForCompensation` handler; compensate throw/end with an
 optional `activityRef`) and **transactions** (`<transaction>` + `cancelEventDefinition` on an end event inside
-a transaction and on a boundary attached to a transaction host), so these constructs can now be authored from
-XML; a cyclic document imports clean. Later units add a loop-iteration variable surface, escalation
-boundaries, compensation event subprocesses, and call activities.
+a transaction and on a boundary attached to a transaction host) and **call activities** (`<callActivity>` with
+an `elsa:workflowDefinitionId` extension attribute → a bound `DispatchWorkflow` child, honoring
+`elsa:waitForCompletion="false"`; a plain `calledElement` imports unbound with an Info finding and a
+`bpmn.calledElement` passthrough — see `specs/133-bpmn-call-activity/`), so these constructs can now be authored
+from XML; a cyclic document imports clean. Later units add a loop-iteration variable surface, escalation
+boundaries, and compensation event subprocesses.
 
 ## Expression-driven gateway conditions
 

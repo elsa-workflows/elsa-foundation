@@ -36,6 +36,12 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     /// <summary>Placeholder activity version id for a message/signal catch event's synthesized <c>Event</c> child (matches <c>Event.ActivityType</c>).</summary>
     public const string DefaultEventActivityVersionId = "Elsa.Event";
 
+    /// <summary>Placeholder activity version id for a bound call activity's synthesized <c>DispatchWorkflow</c> child (spec 133 D5; matches <c>DispatchWorkflow.ActivityType</c>). Hosts resolve the real catalog row later.</summary>
+    public const string DefaultDispatchWorkflowActivityVersionId = "Elsa.DispatchWorkflow";
+
+    /// <summary>The element property key carrying a call activity's foreign BPMN <c>calledElement</c> id (spec 133 D5): recorded for authoring reference and lossless round-trip, the <c>bpmn.errorRef</c> passthrough precedent.</summary>
+    public const string CalledElementPropertyKey = "bpmn.calledElement";
+
     public BpmnImportAnalysis Analyze(string xml, BpmnImportOptions? options = null)
     {
         var context = new ImportContext();
@@ -270,6 +276,12 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
                         loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context),
                         isForCompensation: IsForCompensationOf(child), isTransaction: true));
+                    break;
+                }
+                case "callActivity":
+                {
+                    if (id is null) break;
+                    ImportCallActivity(child, id, declaredVariableNames, elements, childActivities, context);
                     break;
                 }
                 case "boundaryEvent":
@@ -1209,6 +1221,57 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     /// <summary>A message/signal catch event's synthesized child: a mid-flow <c>Event</c> wait (<c>CanStartWorkflow = false</c>).</summary>
     private static ActivityNode BuildEventCatchChild(string nodeId, string eventName) =>
         new(nodeId, DefaultEventActivityVersionId, [LiteralArgument("EventName", eventName), LiteralArgument("CanStartWorkflow", false)], []);
+
+    /// <summary>
+    /// Imports a <c>&lt;callActivity&gt;</c> (spec 133 D5). When the document carries the Elsa extension attribute
+    /// <c>elsa:workflowDefinitionId</c> (our export convention) the element imports <b>bound</b>: a
+    /// <c>DispatchWorkflow</c> child is synthesized (<c>WorkflowDefinitionId</c> + <c>WaitForCompletion</c>, honoring
+    /// <c>elsa:waitForCompletion="false"</c>). Otherwise the element imports <b>unbound</b> (a foreign
+    /// <c>calledElement</c> has no guaranteed Elsa definition id) with an Info finding — the serviceTask precedent. A
+    /// present <c>calledElement</c> is recorded as <c>Properties["bpmn.calledElement"]</c> in either case for authoring
+    /// reference and lossless round-trip. Never emits a graph the validator rejects.
+    /// </summary>
+    private static void ImportCallActivity(
+        XElement element,
+        string id,
+        IReadOnlySet<string> declaredVariableNames,
+        List<BpmnElement> elements,
+        List<ActivityNode> childActivities,
+        ImportContext context)
+    {
+        var calledElement = (string?)element.Attribute("calledElement");
+        var workflowDefinitionId = (string?)element.Attribute(BpmnXmlNames.Elsa + "workflowDefinitionId");
+        // Default true (the waited convention); an authored elsa:waitForCompletion="false" is fire-and-forget.
+        var waitForCompletion = !string.Equals((string?)element.Attribute(BpmnXmlNames.Elsa + "waitForCompletion"), "false", StringComparison.OrdinalIgnoreCase);
+
+        var properties = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(calledElement))
+            properties[CalledElementPropertyKey] = calledElement.Trim();
+        IReadOnlyDictionary<string, string>? elementProperties = properties.Count > 0 ? properties : null;
+
+        if (!string.IsNullOrWhiteSpace(workflowDefinitionId))
+        {
+            // Bound: synthesize the DispatchWorkflow child (spec 118 synthesized-child pattern).
+            var childNodeId = $"node-{id}";
+            childActivities.Add(BuildCallActivityDispatchChild(childNodeId, workflowDefinitionId.Trim(), waitForCompletion));
+            elements.Add(new BpmnElement(id, BpmnElementTypes.CallActivity, name: NameOf(element), childNodeId: childNodeId, defaultFlowId: DefaultOf(element),
+                properties: elementProperties,
+                loopCharacteristics: ResolveLoopCharacteristics(element, id, hostBindsChild: true, declaredVariableNames, context)));
+            return;
+        }
+
+        // Unbound: a call activity imports childless (like a task) with an Info finding; a multi-instance callActivity
+        // is a childless host on import → its collection loop degrades (validate-representable), the task precedent.
+        elements.Add(new BpmnElement(id, BpmnElementTypes.CallActivity, name: NameOf(element), defaultFlowId: DefaultOf(element),
+            properties: elementProperties,
+            loopCharacteristics: ResolveLoopCharacteristics(element, id, hostBindsChild: false, declaredVariableNames, context)));
+        context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Call activity '{id}' imported unbound; bind a DispatchWorkflow activity to execute it.", id));
+    }
+
+    /// <summary>A bound call activity's synthesized child (spec 133 D5): the waited-by-convention <c>DispatchWorkflow</c> node (<c>WorkflowDefinitionId</c> literal + <c>WaitForCompletion</c>).</summary>
+    private static ActivityNode BuildCallActivityDispatchChild(string nodeId, string workflowDefinitionId, bool waitForCompletion) =>
+        new(nodeId, DefaultDispatchWorkflowActivityVersionId,
+            [LiteralArgument("WorkflowDefinitionId", workflowDefinitionId), LiteralArgument("WaitForCompletion", waitForCompletion)], []);
 
     /// <summary>Authors a single literal input binding for a synthesized child node.</summary>
     private static ArgumentState LiteralArgument(string key, object? value) =>

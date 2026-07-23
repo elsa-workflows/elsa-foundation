@@ -84,6 +84,57 @@ public sealed class BpmnGraphValidationTests
     }
 
     [Fact]
+    public void CallActivity_ResolvesToTaskFamily_BoundChildAndBoundaryHostAndMultiInstance_AreLegal()
+    {
+        // spec 133 D1: a call activity validates as a task-family boundary-host element and may carry
+        // multi-instance loop characteristics — bound child, attached error boundary, MI all accepted.
+        var node = NewExecutableNode(
+            children: [WorkflowChild("node-call")],
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.MultiInstanceCallActivity("call", "node-call", cardinality: 2, isSequential: true),
+                BpmnRuntimeFixture.BoundaryEvent("b-error", "call", BpmnEventDefinitionTypes.Error),
+                BpmnRuntimeFixture.EndEvent("end-ok"),
+                BpmnRuntimeFixture.EndEvent("end-error")
+            ],
+            flows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "call"),
+                BpmnRuntimeFixture.Flow("flow-2", "call", "end-ok"),
+                BpmnRuntimeFixture.Flow("flow-3", "b-error", "end-error")
+            ]);
+
+        var graph = BpmnGraph.From(node);
+
+        Assert.Equal(BpmnElementFamilies.Task, BpmnElementFamilies.Resolve(graph.GetRequiredElement("call")));
+        Assert.True(BpmnElementFamilies.IsCallActivity(graph.GetRequiredElement("call")));
+        Assert.NotNull(graph.AttachedErrorBoundary("call"));
+    }
+
+    [Fact]
+    public void ChildlessCallActivity_IsLegalAtValidation()
+    {
+        // spec 133 D1: a childless call activity is legal (the unbound import shape); its normal childless-element
+        // treatment applies (dead if never reached), like a task.
+        var node = NewExecutableNode(
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.CallActivity("call"),
+                BpmnRuntimeFixture.EndEvent()
+            ],
+            flows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "call"),
+                BpmnRuntimeFixture.Flow("flow-2", "call", "end")
+            ]);
+
+        var graph = BpmnGraph.From(node);
+        Assert.Null(graph.GetRequiredElement("call").ChildNodeId);
+    }
+
+    [Fact]
     public void GatewayBindingRules_ParallelGatewayCannotBindChild()
     {
         var node = NewExecutableNode(

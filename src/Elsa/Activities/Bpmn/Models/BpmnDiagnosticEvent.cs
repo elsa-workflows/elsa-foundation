@@ -76,5 +76,8 @@ public enum BpmnDiagnosticKind
     EventSubprocessActivated,
 
     /// <summary>An event subprocess body ran to completion (spec 128): the activation token is consumed and nothing is routed (the element has no flows).</summary>
-    EventSubprocessCompleted
+    EventSubprocessCompleted,
+
+    /// <summary>A call activity's bound child completed with a failure outcome (Faulted/DispatchFailed/Cancelled) and the engine routed the call-activity failure ladder (spec 133 D3), instead of normal outbound flows.</summary>
+    CallActivityFailureRouted
 }

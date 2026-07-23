@@ -189,6 +189,15 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static BpmnElement Task(string elementId, string? childNodeId = null, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
 
+    /// <summary>A call activity (spec 133): a task-family element that binds a <c>DispatchWorkflow</c> child; its child's Faulted/DispatchFailed/Cancelled outcomes route through BPMN error handling (D3).</summary>
+    public static BpmnElement CallActivity(string elementId, string? childNodeId = null, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.CallActivity, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
+
+    /// <summary>A multi-instance call activity (spec 133 D3 / spec 121): runs its bound <c>DispatchWorkflow</c> child <paramref name="cardinality"/> times.</summary>
+    public static BpmnElement MultiInstanceCallActivity(string elementId, string childNodeId, int cardinality, bool isSequential, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.CallActivity, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
+            loopCharacteristics: new BpmnLoopCharacteristics(isSequential: isSequential, cardinality: cardinality));
+
     /// <summary>A multi-instance task (spec 121): runs its bound child <paramref name="cardinality"/> times, sequentially or in parallel.</summary>
     public static BpmnElement MultiInstanceTask(string elementId, string childNodeId, int cardinality, bool isSequential, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, defaultFlowId: defaultFlowId,

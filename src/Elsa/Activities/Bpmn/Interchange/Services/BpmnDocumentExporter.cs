@@ -97,6 +97,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                 BpmnElementTypes.IntermediateThrowEvent => BuildThrowEvent(element),
                 BpmnElementTypes.EndEvent => BuildEndEvent(element),
                 BpmnElementTypes.SubProcess => BuildSubProcess(element, childrenByNodeId),
+                BpmnElementTypes.CallActivity => BuildCallActivity(element, childrenByNodeId),
                 BpmnElementTypes.BoundaryEvent => BuildBoundaryEvent(element),
                 _ => new XElement(BpmnXmlNames.Model + element.ElementType)
             };
@@ -358,6 +359,62 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
 
     /// <summary>The deterministic root-declaration id for an escalation code (spec 127 D4; message/signal precedent).</summary>
     private static string EscalationDeclarationId(string code) => $"escalation-{SanitizeId(code.Trim())}";
+
+    /// <summary>
+    /// Builds a <c>&lt;callActivity&gt;</c> (spec 133 D5): emits <c>calledElement</c> (the <c>bpmn.calledElement</c>
+    /// passthrough when present, else the bound child's authored <c>WorkflowDefinitionId</c>), the
+    /// <c>elsa:workflowDefinitionId</c> extension attribute when bound, and <c>elsa:waitForCompletion="false"</c> when
+    /// the bound child is authored fire-and-forget (the importer honors it; the default-true waited convention omits
+    /// it). The bound <c>DispatchWorkflow</c> child is an Elsa concern the importer re-establishes, so its node is not
+    /// inlined. Round-trips bound and unbound.
+    /// </summary>
+    private static XElement BuildCallActivity(BpmnElement element, IReadOnlyDictionary<string, ActivityNode> childrenByNodeId)
+    {
+        var callActivity = new XElement(BpmnXmlNames.Model + "callActivity");
+
+        string? workflowDefinitionId = null;
+        var waitForCompletion = true;
+        if (element.ChildNodeId is { } childNodeId && childrenByNodeId.TryGetValue(childNodeId, out var child))
+        {
+            workflowDefinitionId = ReadLiteralString(child, "WorkflowDefinitionId");
+            waitForCompletion = ReadLiteralBool(child, "WaitForCompletion") ?? true;
+        }
+
+        var calledElement = element.Properties.TryGetValue("bpmn.calledElement", out var passthrough) && !string.IsNullOrWhiteSpace(passthrough)
+            ? passthrough
+            : workflowDefinitionId;
+        if (!string.IsNullOrWhiteSpace(calledElement))
+            callActivity.SetAttributeValue("calledElement", calledElement);
+        if (!string.IsNullOrWhiteSpace(workflowDefinitionId))
+            callActivity.SetAttributeValue(BpmnXmlNames.Elsa + "workflowDefinitionId", workflowDefinitionId);
+        if (!waitForCompletion)
+            callActivity.SetAttributeValue(BpmnXmlNames.Elsa + "waitForCompletion", "false");
+
+        return callActivity;
+    }
+
+    /// <summary>Reads a synthesized child's literal string input (spec 133 D5), tolerating both the in-memory raw value and the round-tripped <see cref="JsonElement"/> form.</summary>
+    private static string? ReadLiteralString(ActivityNode node, string referenceKey) =>
+        node.Inputs.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, referenceKey))?.Value.Value switch
+        {
+            null => null,
+            string text => text,
+            JsonElement { ValueKind: JsonValueKind.String } json => json.GetString(),
+            { } other => other.ToString()
+        };
+
+    /// <summary>Reads a synthesized child's literal bool input (spec 133 D5), tolerating both the in-memory raw value and the round-tripped <see cref="JsonElement"/> form.</summary>
+    private static bool? ReadLiteralBool(ActivityNode node, string referenceKey) =>
+        node.Inputs.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, referenceKey))?.Value.Value switch
+        {
+            null => null,
+            bool value => value,
+            JsonElement { ValueKind: JsonValueKind.True } => true,
+            JsonElement { ValueKind: JsonValueKind.False } => false,
+            JsonElement { ValueKind: JsonValueKind.String } json => bool.TryParse(json.GetString(), out var parsed) ? parsed : null,
+            string text => bool.TryParse(text, out var parsed) ? parsed : null,
+            _ => null
+        };
 
     private static XElement BuildSubProcess(BpmnElement element, IReadOnlyDictionary<string, ActivityNode> childrenByNodeId)
     {
