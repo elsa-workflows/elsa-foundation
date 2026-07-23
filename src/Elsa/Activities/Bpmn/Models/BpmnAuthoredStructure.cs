@@ -21,7 +21,8 @@ public sealed class BpmnAuthoredStructure
         IReadOnlyCollection<BpmnLane>? lanes = null,
         IReadOnlyCollection<VariableDefinition>? variables = null,
         JsonElement? diagram = null,
-        bool isTransaction = false)
+        bool isTransaction = false,
+        IReadOnlyCollection<BpmnMessageFlow>? messageFlows = null)
     {
         Activities = activities ?? [];
         Elements = elements ?? [];
@@ -31,6 +32,7 @@ public sealed class BpmnAuthoredStructure
         Variables = variables ?? [];
         Diagram = diagram;
         IsTransaction = isTransaction;
+        MessageFlows = messageFlows ?? [];
     }
 
     [JsonPropertyName("activities")]
@@ -66,4 +68,13 @@ public sealed class BpmnAuthoredStructure
     /// </summary>
     [JsonPropertyName("isTransaction")]
     public bool IsTransaction { get; }
+
+    /// <summary>
+    /// Cross-pool message-flow wiring documentation (spec 136): the resolved <c>&lt;messageFlow&gt;</c> endpoints
+    /// whose send or receive side lives in this process's pool. Authored-side metadata only — the engine delivers
+    /// by name (the name-keyed stimulus fabric) and never reads this, the graph validator ignores it, and it is
+    /// stripped from the compiled executable <see cref="BpmnStructure"/>.
+    /// </summary>
+    [JsonPropertyName("messageFlows")]
+    public IReadOnlyCollection<BpmnMessageFlow> MessageFlows { get; }
 }

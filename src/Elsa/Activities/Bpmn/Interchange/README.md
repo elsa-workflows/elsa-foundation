@@ -120,6 +120,26 @@ Mapping rules for this slice:
   **unbound** task with an **Info** finding (the serviceTask precedent). A **signal** throw event stays **Dropped**
   with a finding (a stated cut — the fabric is identical but the slice stays message-scoped). The importer never
   emits a validator-rejected graph.
+- **Collaborations, pools, and message flows** (spec 136): a multi-pool document imports **every** `<process>`
+  independently — the primary (explicit `ProcessId` > first executable > first) stays `BpmnImportResult.ProcessNode`
+  and `BpmnImportResult.ProcessNodes` (additive) carries one `BpmnImportedProcess`
+  `(ProcessId, ParticipantId?, ParticipantName?, Node)` per process in document order (the former silent
+  multi-pool drop is gone — an **Info** finding notes the additional pools). A **non-executable** process
+  (`isExecutable="false"`) imports as a documentation pool with an **Info** finding. A `<collaboration>`'s
+  `<participant id name processRef>` populates a `BpmnPool` (`poolId`/`name`/`processRef`) on the referenced
+  process's structure and, when the process is referenced by **exactly one** participant, stamps that pool id onto
+  its lanes' `PoolId` (an ambiguous multi-participant process leaves lane pool ids null with an **Info** finding);
+  a **black-box** participant (no `processRef`) is an **Info** finding and imports no process; a broken `processRef`
+  is **Degraded**. A `<messageFlow id name sourceRef targetRef messageRef?>` resolves each endpoint to an element
+  (across **all** imported processes) or a black-box pool and records a `BpmnMessageFlow`
+  `(FlowId, Name?, SourceElementId?, SourcePoolId?, TargetElementId?, TargetPoolId?, MessageName?)` on each
+  **involved** structure: two message-bearing elements whose names **match** are **matched** (Info); names that
+  **differ** (or either side name-less) are **Degraded** naming both elements (the name-keyed fabric can never
+  deliver the flow as drawn); a **black-box** endpoint is **Info** (documentation flow); **unresolvable** endpoint
+  refs are **Degraded** and recorded nowhere. The pools and message flows are **authored-side metadata the engine
+  and graph validator ignore** — execution rides the name-keyed stimulus fabric (each pool is a separately
+  published definition), so `BpmnGraph.Validate` is unchanged and the importer never emits a validator-rejected
+  graph.
 - Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes are
   dropped with an issue. **Cyclic graphs import clean** — a
   loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation
@@ -164,7 +184,13 @@ both round-trip. A **message throw/end** event (spec 135) emits a `messageEventD
 targeting a deduped root `<message>` declaration; a **sendTask**/**receiveTask** emits its element with a
 `messageRef` (its name read from `Properties["bpmn.messageName"]`, contributing the same deduped declaration). The
 synthesized `PublishEvent`/`Event` children are engine detail and are never exported (re-synthesized on import).
-Message throw, message end, sendTask, and receiveTask all round-trip. Each distinct message/signal
+Message throw, message end, sendTask, and receiveTask all round-trip. A structure carrying **pools/message
+flows** (spec 136) emits a `<collaboration>` wrapper ahead of the process: a `<participant>` per pool (deduped
+by pool id, referencing the exported process) and its own-pool `<messageFlow>`s (a black-box endpoint emits its
+pool id as the endpoint ref; a resolved message name emits a `messageRef` to the deduped root `<message>`
+declaration). This is a **per-definition** export — a full N-pool document assembled from N separate structures
+is a documented cut, and lanes themselves are still not exported (so lane pool ids do not survive the round-trip,
+though the participant/pool wrapper does). Each distinct message/signal
 name emits one deduped root `<message>`/`<signal>` declaration (deterministic id `message-{name}` /
 `signal-{name}`) that the element's `messageRef`/`signalRef` targets — a name that sanitizes to a
 colliding id shares a declaration. A catch event's bound `Delay`/`Event` child is engine detail and is not
@@ -188,4 +214,7 @@ is mapped — the synthesized `Event` catch/boundary child leaves `CorrelationId
 `timeCycle`/`timeDate`/cron **event-subprocess** timers (spec 134 ships one-shot `<timeDuration>` message/signal/timer
 event subprocesses; recurring shapes still degrade); connector (sequence-flow and
 association) BPMNEdge DI; `extensionElements` preservation for third-party vendor attributes;
-collaboration/pool export; and the BPMN MIWG conformance corpus.
+**full N-pool document export** (spec 136 ships per-definition collaboration export — the participant wrapper and
+own-pool message flows — but not a single N-pool document assembled from N structures, nor lane emission);
+`<conversation>`/`<choreography>` elements; message-flow **correlation** (#1001); the Studio multi-pool import
+UX; and the BPMN MIWG conformance corpus.

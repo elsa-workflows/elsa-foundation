@@ -166,8 +166,12 @@ children, and diagnostics.
   requires a bound child and a message definition with a non-empty `name` (a send must say what it publishes). No
   new BPMN state record, token status, or engine command — the schema stays v1-additive (two families + the
   `Elsa.PublishEvent` placeholder version id). Cross-instance **correlation narrowing** is inert until issue #1001
-  (the send broadcasts by name); **signal** throw events and process-variable payload mapping are stated cuts;
-  collaboration/pool/`<messageFlow>` import is slice 2.
+  (the send broadcasts by name); **signal** throw events and process-variable payload mapping are stated cuts.
+  **Collaboration/pool/`<messageFlow>` import** (spec 136, collaborations slice 2) closes the phase: a multi-pool
+  document imports every `<process>` (each pool a separately published definition on the same name-keyed fabric),
+  populates `BpmnPool`/lane pool ids from `<participant processRef>`, and records `<messageFlow>` wiring as
+  authored-side metadata the engine and validator ignore — see `specs/136-bpmn-collaboration-import/` and the
+  Interchange README.
 - **Event subprocesses** (spec 128, tier 1) let a scope contain a flow-less `subProcess` marked
   `triggeredByEvent` whose **body** activates when its **start-event trigger** fires while the enclosing scope
   is active. This slice ships the **escalation** dormant-catcher trigger (interrupting or non-interrupting) and the
@@ -303,7 +307,12 @@ from XML; a cyclic document imports clean. The **message send surface** (see `sp
 message intermediate throw + message end events and `sendTask`/`receiveTask` (bound `PublishEvent` sends /
 `Event` catch), and round-trips them (`messageEventDefinition` + deduped root `<message>` declarations;
 `sendTask`/`receiveTask` with `messageRef`; synthesized children never export; name-less throw Drops, name-less
-end degrades to a none end, name-less send/receive task imports unbound + Info, signal throw stays Dropped).
+end degrades to a none end, name-less send/receive task imports unbound + Info, signal throw stays Dropped). The
+**collaboration/pool import** (see `specs/136-bpmn-collaboration-import/`) imports every `<process>` of a
+multi-pool document into `BpmnImportResult.ProcessNodes` (the primary stays `ProcessNode`), populates
+`BpmnPool`/lane pool ids from `<collaboration>/<participant processRef>`, and records `<messageFlow>` wiring
+(matched / name-mismatch-Degraded / black-box-Info / unresolvable-Degraded) as authored-side metadata the engine
+and graph validator ignore; export re-emits the per-definition participant wrapper and own-pool message flows.
 Later units add a loop-iteration variable surface, escalation boundaries, and compensation event subprocesses.
 
 ## Expression-driven gateway conditions
