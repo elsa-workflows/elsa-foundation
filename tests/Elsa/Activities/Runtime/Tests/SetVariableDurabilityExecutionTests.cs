@@ -86,7 +86,8 @@ public sealed class SetVariableDurabilityExecutionTests
         await using var jsProvider = BuildJavaScriptProvider();
         await using var harness = await CreateHarnessAsync(
             NewJavaScriptVariableWriteNode(script),
-            portableExpressionEvaluator: jsProvider.GetRequiredService<IPortableExpressionEvaluator>());
+            portableExpressionEvaluator: jsProvider.GetRequiredService<IPortableExpressionEvaluator>(),
+            workflowVariables: [new RuntimeVariableDeclaration("greeting", "greeting", StringType, ValueProtectionPolicy.InstanceInline)]);
 
         await harness.Handler.HandleAsync(harness.WorkItem);
 
@@ -250,14 +251,9 @@ public sealed class SetVariableDurabilityExecutionTests
             script,
             new RuntimeValueTypeDescriptor("alias", "String", null),
             capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1);
-        // The workflow-scope "greeting" variable is declared on the root structure so the runtime can project it into
-        // the JavaScript ambient read surface by its author name.
-        var structure = new ExecutableActivityStructure(
-            "test.structure",
-            "1.0.0",
-            JsonSerializer.SerializeToElement(
-                new { variables = new[] { new RuntimeVariableDeclaration("greeting", "greeting", StringType, ValueProtectionPolicy.InstanceInline) } },
-                new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        // #972 unified model: the workflow-scope "greeting" declaration lives on the EXECUTABLE (workflow
+        // variables), not on a node structure — the harness passes it via CreateHarnessAsync so the runtime
+        // projects it into the JavaScript ambient read surface from the canonical root frame.
         return new ExecutableNode(
             "node-set-javascript",
             "authored-set-javascript",
@@ -276,8 +272,7 @@ public sealed class SetVariableDurabilityExecutionTests
             },
             new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.Set,
-            intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId),
-            structure: structure);
+            intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
     }
 
     private static ServiceProvider BuildJavaScriptProvider()
@@ -356,10 +351,14 @@ public sealed class SetVariableDurabilityExecutionTests
 
     private static async Task<Harness> CreateHarnessAsync(
         ExecutableNode node,
-        IPortableExpressionEvaluator? portableExpressionEvaluator = null)
+        IPortableExpressionEvaluator? portableExpressionEvaluator = null,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null)
     {
         var identity = new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
-        var executable = new WorkflowExecutable(identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>());
+        var executable = new WorkflowExecutable(
+            identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
+            inputContract: null, dependencies: null, runtimeRequirements: null, storageDriverRequirements: null,
+            workflowVariables: workflowVariables);
         var executableStore = new InMemoryWorkflowExecutableStore();
         var workflowStore = new InMemoryWorkflowExecutionStateStore();
         var activityStore = new InMemoryActivityExecutionStateStore();
