@@ -65,6 +65,7 @@ Show-WorkflowInstance -Instance $parentInst
 # 4. find the child instance (dispatched asynchronously; poll by artifact)
 Write-Host "[observe] child instance:"
 $childInst = $null
+$childRun = $null
 for ($i = 0; $i -lt 12 -and -not $childInst; $i++) {
     Start-Sleep -Milliseconds 500
     $list = Invoke-RestMethod "$BaseUrl/runtime/workflows/instances?artifactId=$($childPub.artifactId)" -WebSession $ctx.Session
@@ -72,16 +73,19 @@ for ($i = 0; $i -lt 12 -and -not $childInst; $i++) {
     $childInst = $items | Where-Object { $_.artifactId -eq $childPub.artifactId } | Select-Object -First 1
 }
 if ($childInst) {
-    Show-WorkflowInstance -Instance (Wait-WorkflowInstance -Ctx $ctx -ExecutionId $childInst.workflowExecutionId)
+    $childRun = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $childInst.workflowExecutionId
+    Show-WorkflowInstance -Instance $childRun
 } else {
-    Write-Host "  (child instance not surfaced by the list query; its WriteLine still prints to the server console)" -ForegroundColor Yellow
+    Write-Host "  FAIL - child instance was not surfaced by the list query" -ForegroundColor Red
 }
 
 $dispatchOutcome = ($parentInst.activities | Where-Object { $_.executableNodeId -eq 'dispatch-child' }).outcomeNames -join ','
 Write-Host ""
-if ($parentInst.instance.status -in @('Completed','Finished') -and $dispatchOutcome -match 'Dispatched') {
-    Write-Host "SUCCESS - parent dispatched the child (outcome '$dispatchOutcome') and completed." -ForegroundColor Green
-    Write-Host "SERVER console should show: CHILD workflow ran! token=$token"
+if ($parentInst.instance.status -in @('Completed','Finished') -and
+    $dispatchOutcome -match 'Dispatched' -and
+    $childRun.instance.status -in @('Completed','Finished')) {
+    Write-Host "SUCCESS - parent dispatched the child (outcome '$dispatchOutcome'); both completed." -ForegroundColor Green
 } else {
-    Write-Host ("FINISHED with parent status '{0}', dispatch outcome '{1}'." -f $parentInst.instance.status, $dispatchOutcome) -ForegroundColor Yellow
+    Write-Host ("MISMATCH - parent status '{0}', dispatch outcome '{1}', child status '{2}'." -f $parentInst.instance.status, $dispatchOutcome, $childRun.instance.status) -ForegroundColor Red
+    exit 1
 }

@@ -147,8 +147,8 @@ Classic Elsa configured *what activity state is persisted* per activity via `log
 model governed by a server-wide **diagnostics settings** policy:
 
 - Each activity execution captures **value snapshots** (`captureMode` `DiagnosticSnapshot`) for its inputs;
-  the activity-execution detail lists them (`name`, `subject`, `evidenceId`, `captureState`) and the full
-  payload is fetched separately at
+  the activity-execution detail lists them (`name`, `subject`, `evidenceId`, `captureState`) and the
+  evidence payload is fetched separately at
   `runtime/workflows/instances/{wf}/activity-executions/{ae}/value-evidence/{evidenceId}/payload`.
   Covered by `logging/Test-ValueCapture.ps1`.
 - `GET runtime/workflows/diagnostics/settings` reports the effective capture level, the host policy ceiling,

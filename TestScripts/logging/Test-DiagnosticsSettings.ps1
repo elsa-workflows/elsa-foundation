@@ -10,7 +10,7 @@
     This test reads `GET /runtime/workflows/diagnostics/settings` (read-only, no mutation) and asserts the
     contract:
       - `requested` / `effective` / `hostPolicy` / `permissions` sections are present
-      - `effective.defaultLevel` is a real capture level (this is why value snapshots get captured)
+      - the effective `activityInputs` level is `DiagnosticSnapshot` or `Payload`
       - `hostPolicy.snapshotLimits` bounds snapshot size (why payloads return a bounded preview, not raw)
 
     It does NOT PUT/modify the settings (that is server-global state). Requires the server running from
@@ -44,6 +44,9 @@ $lim = $settings.hostPolicy.snapshotLimits
 if ($lim) {
     Write-Host ("snapshotLimits          : maxDepth={0} maxStringLength={1} maxTotalBytes={2}" -f $lim.maxDepth, $lim.maxStringLength, $lim.maxTotalBytes)
 }
+$activityInputOverride = $settings.effective.subjectOverrides.PSObject.Properties['activityInputs']
+$activityInputLevel = if ($activityInputOverride) { "$($activityInputOverride.Value)" } else { "$($settings.effective.defaultLevel)" }
+Write-Host ("effective.activityInputs  : {0}" -f $activityInputLevel)
 
 $failures = @()
 if (-not $settings.requested)                    { $failures += "missing 'requested' section" }
@@ -53,10 +56,13 @@ if (-not $settings.permissions)                  { $failures += "missing 'permis
 if (-not $settings.effective.defaultLevel)       { $failures += "effective.defaultLevel not reported" }
 if (-not $settings.hostPolicy.maximumLevel)      { $failures += "hostPolicy.maximumLevel not reported" }
 if (-not $settings.hostPolicy.snapshotLimits)    { $failures += "hostPolicy.snapshotLimits not reported" }
+if ($activityInputLevel -notin @('DiagnosticSnapshot', 'Payload')) {
+    $failures += "effective activityInputs level '$activityInputLevel' does not capture value snapshots"
+}
 
 Write-Host ""
 if ($failures.Count -eq 0) {
-    Write-Host ("SUCCESS - diagnostics capture policy reported: effective level '{0}', host max '{1}'" -f $settings.effective.defaultLevel, $settings.hostPolicy.maximumLevel) -ForegroundColor Green
+    Write-Host ("SUCCESS - diagnostics capture policy reported: activityInputs '{0}', host max '{1}'" -f $activityInputLevel, $settings.hostPolicy.maximumLevel) -ForegroundColor Green
 } else {
     Write-Host "FAIL - diagnostics settings contract violations:" -ForegroundColor Red
     $failures | ForEach-Object { Write-Host ("  - {0}" -f $_) -ForegroundColor Red }

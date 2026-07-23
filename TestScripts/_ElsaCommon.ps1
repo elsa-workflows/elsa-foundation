@@ -87,9 +87,9 @@ function New-ActivityNode {
     return $node
 }
 
-# Wrap child nodes in a Sequence structure payload. Pass -Variables to declare CONTAINER-SCOPED variables
-# (this is how a variable becomes visible to Set/Variable-read intrinsics in descendant nodes; declaring at
-# workflow-state level is NOT enough - the runtime seeds the scope frame from the container's structure).
+# Wrap child nodes in a Sequence structure payload. Pass -Variables to declare container-scoped variables.
+# Every descendant reference to one of those variables must set declaringScopeId to the Sequence node id.
+# Workflow-scoped variables instead belong in Submit-Workflow -Variables and omit declaringScopeId.
 function New-SequenceStructure {
     param([Parameter(Mandatory)][array] $Activities, [array] $Variables = @())
     $payload = @{ activities = $Activities }
@@ -103,27 +103,32 @@ function New-InputDef {
     @{ referenceKey = $Key; name = $Key; type = @{ alias = $Alias; collectionKind = "single" }; storageDriverType = $null; displayName = $Key; category = $null; isNullable = $true }
 }
 
-# A container-scoped variable declaration (referenceKey is the key you reference from Set/Variable expressions).
+# A variable declaration. Its placement determines its scope: Submit-Workflow -Variables for workflow scope,
+# or a container structure's variables collection for container scope.
 function New-VariableDef {
     param([Parameter(Mandatory)][string] $Key, [string] $Alias = "String", $Default = "")
     @{ referenceKey = $Key; name = $Key; type = @{ alias = $Alias; collectionKind = "single" }; storageDriverType = $null; default = @{ value = $Default; expressionType = "Literal" } }
 }
 
-# Set intrinsic node: assigns $Value to the container-scoped variable $VariableKey. $Value can be a plain
-# literal, or a hashtable @{ value=<js>; expressionType="JavaScript" } / @{ value="<key>"; expressionType="Variable" }.
+# Set intrinsic node: assigns $Value to $VariableKey. Omit -DeclaringScopeId for a workflow-scoped variable;
+# for a container-scoped variable, pass the declaring container's node id. $Value can be a plain literal,
+# or a hashtable @{ value=<js>; expressionType="JavaScript" } / @{ value="<key>"; expressionType="Variable" }.
 function New-SetVariableNode {
     param(
         [Parameter(Mandatory)][string] $NodeId,
         [Parameter(Mandatory)][string] $VariableKey,
         [Parameter(Mandatory)][AllowNull()] $Value,
-        [string] $ValueAlias = "String"
+        [string] $ValueAlias = "String",
+        [string] $DeclaringScopeId
     )
     $valueBinding = if ($Value -is [hashtable]) { $Value } else { @{ value = $Value; expressionType = "Literal" } }
+    $variableReference = @{ referenceKey = $VariableKey }
+    if ($DeclaringScopeId) { $variableReference.declaringScopeId = $DeclaringScopeId }
     @{
         nodeId            = $NodeId
         activityVersionId = "elsa.intrinsic.set@1"
         outputs           = @()
-        intrinsic         = @{ kind = "set"; valueType = @{ alias = $ValueAlias; collectionKind = "single" }; variable = @{ referenceKey = $VariableKey } }
+        intrinsic         = @{ kind = "set"; valueType = @{ alias = $ValueAlias; collectionKind = "single" }; variable = $variableReference }
         inputs            = @( @{ referenceKey = "value"; value = $valueBinding; autoEvaluate = $null; evaluatorType = $null; storageDriverType = $null; isSensitive = $null } )
     }
 }

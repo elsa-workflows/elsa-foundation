@@ -1,18 +1,19 @@
 <#
 .SYNOPSIS
-    Per-activity value capture: a WriteLine's input is captured as a diagnostic value snapshot and the
-    full payload is retrievable via the value-evidence endpoint.
+    Per-activity value capture: a WriteLine's input is captured as a diagnostic value snapshot and its
+    evidence payload is retrievable via the value-evidence endpoint.
 .DESCRIPTION
     Foundation-native analog of the JTest "logging" concept. Classic Elsa 3.x had a per-activity
     `logPersistenceConfig` (Include/Exclude what state gets persisted); Foundation has NO such knob.
     Instead the runtime captures per-activity **value snapshots** (capture mode `DiagnosticSnapshot`)
-    that are enumerated on the activity-execution detail and whose full payload is fetched separately.
+    that are enumerated on the activity-execution detail and whose evidence payload is fetched separately.
+    In `DiagnosticSnapshot` mode that payload is a bounded preview, not the raw authored value.
 
     This test drives that observability path end to end:
       1. run a Sequence[WriteLine("<marker>")]
       2. read the WriteLine activity-execution: assert it captured >= 1 value snapshot
       3. locate the ActivityInput snapshot for the `Text` input
-      4. GET its payload via .../value-evidence/{evidenceId}/payload and assert the preview == marker
+      4. GET its evidence payload via .../value-evidence/{evidenceId}/payload and assert the preview == marker
 
     Read-only: it does not change any server-wide diagnostics settings. See ../README.md for why the
     classic `logPersistenceConfig` and the storage-driver dichotomy do not map to Foundation.
@@ -66,12 +67,19 @@ $detail.valueSnapshots | ForEach-Object {
     Write-Host ("  - name={0} subject={1} captureMode={2} captureState={3} evidence={4}" -f $_.name, $_.subject, $_.captureMode, $_.captureState, $_.evidenceId)
 }
 
-# The Text input snapshot is the one we authored; fall back to the first snapshot if naming differs.
+# The Text input snapshot is the contract this test exercises; an unrelated snapshot must not satisfy it.
 $snap = $detail.valueSnapshots | Where-Object { $_.name -ieq 'Text' -and $_.subject -ieq 'ActivityInput' } | Select-Object -First 1
-if (-not $snap) { $snap = $detail.valueSnapshots | Select-Object -First 1 }
-if (-not $snap) { Write-Host "FAIL - no value snapshot enumerated on the activity-execution detail" -ForegroundColor Red; exit 1 }
+if (-not $snap) {
+    $available = @($detail.valueSnapshots | ForEach-Object { "$($_.subject)/$($_.name)" }) -join ', '
+    Write-Host "FAIL - Text/ActivityInput snapshot not found; available snapshots: $available" -ForegroundColor Red
+    exit 1
+}
+if ($snap.captureMode -notin @('DiagnosticSnapshot', 'Payload')) {
+    Write-Host "FAIL - Text/ActivityInput capture mode '$($snap.captureMode)' does not include value evidence" -ForegroundColor Red
+    exit 1
+}
 
-# Full payload is fetched separately (not inlined in the detail), keyed by evidence id.
+# Evidence payload is fetched separately (not inlined in the detail), keyed by evidence id.
 $payload = Invoke-Step "value-evidence payload" {
     Invoke-RestMethod "$($ctx.BaseUrl)/runtime/workflows/instances/$wfId/activity-executions/$($ae.activityExecutionId)/value-evidence/$($snap.evidenceId)/payload" -WebSession $ctx.Session -UseBasicParsing
 }

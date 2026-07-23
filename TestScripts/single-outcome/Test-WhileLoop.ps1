@@ -9,8 +9,8 @@
     to DrainCycleLimitExceededException (64 cycles).
 
     The workflow: Sequence( While(Condition <- Variable KeepGoing){ Set(KeepGoing=false) } ) with KeepGoing
-    declared at workflow scope. Asserts the instance completes and the body ran exactly once. (Declaring KeepGoing
-    on the Sequence container instead now fails the #972 publish validation — see ../README.md.)
+    declared at workflow scope. Asserts the instance completes and the body ran exactly once. Container scope is
+    also valid when every reference supplies the declaring Sequence node id (see ../README.md).
     Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
@@ -53,4 +53,5 @@ if ($inst.instance.status -in @('Completed','Finished') -and $passes -eq 1) {
     Write-Host ("SUCCESS - loop exited after one pass (body ran {0} time)" -f $passes) -ForegroundColor Green
 } else {
     Write-Host ("MISMATCH - status '{0}', body ran {1} time(s), expected 1 and Completed" -f $inst.instance.status, $passes) -ForegroundColor Red
+    exit 1
 }

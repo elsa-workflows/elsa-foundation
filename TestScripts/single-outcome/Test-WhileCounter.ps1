@@ -12,8 +12,8 @@
 
     The workflow: Sequence( While(Condition <- JS `getVariable('counter') < 3`){ Set(counter = JS
     `getVariable('counter') + 1`) } ) with `counter` (Int32) declared at WORKFLOW scope. Asserts the loop runs the
-    body exactly 3 times and completes. (Workflow-scope declaration is required by the #972 publish validation —
-    see ../README.md; declaring `counter` on the Sequence container fails to publish.)
+    body exactly 3 times and completes. Workflow scope is the simplest authoring here; container scope also works
+    when every reference supplies the declaring Sequence node id (see ../README.md).
     Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]

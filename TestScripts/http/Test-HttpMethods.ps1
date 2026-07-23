@@ -6,12 +6,9 @@
     SupportedMethods = [GET, POST, PUT, DELETE] and returns a fixed body synchronously. The script fires each
     verb and asserts a 2xx with the expected body. No request-data capture is involved, so this reproduces cleanly.
 
-    NOTE: the other JTest http cases (query-parameter, route-parameter, request-body, headers) echo request data
-    back in the response, which requires capturing an HttpEndpoint output into a workflow-scope variable and then
-    reading it in WriteHttpResponse. That read fails at runtime ("Variable '...' in scope 'workflow' ... is
-    unavailable") - the same variable-scope inconsistency tracked in issue #972 (output-capture forces
-    workflow-scope, but a workflow-scope variable isn't materialized into the container frame a later node reads).
-    So those echo cases are currently blocked here; see ../README.md.
+    The request-data echo cases (query-parameter, route-parameter, request-body, headers) are covered separately
+    by Test-HttpEcho.ps1. They capture HttpEndpoint outputs into workflow-scope variables and read them through
+    JavaScript bindings in WriteHttpResponse (#972/#984).
     Requires the server running from source.
 #>
 [CmdletBinding()]
@@ -62,3 +59,4 @@ foreach ($m in $Methods) {
 }
 Write-Host ""
 Write-Host ("{0}/{1} methods accepted and responded" -f $pass, $Methods.Count) -ForegroundColor $(if ($pass -eq $Methods.Count) { "Green" } else { "Yellow" })
+if ($pass -ne $Methods.Count) { exit 1 }
