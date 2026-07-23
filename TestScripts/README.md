@@ -183,7 +183,7 @@ even long after the child would have completed — the parent-after node never r
 register a wait bookmark + resume trigger (`DispatchWorkflow.cs:204-234`, resume target `CompletionResumeTargetId`),
 so the completion -> parent-resume delivery (`WorkflowDispatchCompletionEnricher` / `ParentResumeExecutor`) is not
 firing (or the child is not dispatched in waited mode). This contradicts the earlier "issue #976 fixed" note.
-Tracked in a follow-up issue; `Test-ChildWorkflow.ps1` therefore uses fire-and-forget only.
+Tracked as issue #1006; `Test-ChildWorkflow.ps1` therefore uses fire-and-forget only.
 
 ## Server fixes made while building these tests
 
