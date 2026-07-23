@@ -142,7 +142,7 @@ public abstract class WorkflowDesignLifecycleContractSuite
         var services = scope.ServiceProvider;
         var submitted = await SubmitAsync(services, "Keep active", null);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<WorkflowDefinitionNotSoftDeletedException>(() =>
             services.GetRequiredService<IDeleteWorkflowDefinitionPermanentlyCommand>().Execute(
                 DesignPersistenceFixtureData.OperationKey("permanent-delete-active"),
                 submitted.DefinitionId));
