@@ -316,10 +316,9 @@ public sealed class ActivityFaultIncidentRecorder
         if (!string.IsNullOrWhiteSpace(faultInfo.StackTrace))
             metadata[RuntimeMetadataKeys.FaultStackTrace] = faultInfo.StackTrace;
 
-        if (exception.InnerException is not { } inner)
+        if (_faultCapturePolicy.CaptureInner(exception) is not { } innerFaultInfo)
             return;
 
-        var innerFaultInfo = _faultCapturePolicy.Capture(inner);
         metadata[RuntimeMetadataKeys.FaultInnerType] = innerFaultInfo.ExceptionType;
         metadata[RuntimeMetadataKeys.FaultInnerMessage] = innerFaultInfo.Message;
     }

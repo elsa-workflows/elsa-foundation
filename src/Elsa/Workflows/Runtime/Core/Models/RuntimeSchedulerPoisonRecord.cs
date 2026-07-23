@@ -19,7 +19,8 @@ public sealed record RuntimeSchedulerPoisonRecord
         DateTimeOffset firstFailedAt,
         DateTimeOffset lastFailedAt,
         DateTimeOffset? nextRetryAt = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        RuntimeFaultInfo? innerFault = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
@@ -43,6 +44,7 @@ public sealed record RuntimeSchedulerPoisonRecord
         CommandKind = commandKind;
         HandlerName = handlerName;
         Fault = fault;
+        InnerFault = innerFault;
         FailureCount = failureCount;
         Disposition = disposition;
         FirstFailedAt = firstFailedAt;
@@ -56,6 +58,15 @@ public sealed record RuntimeSchedulerPoisonRecord
     public WorkflowExecutionCommandKind CommandKind { get; }
     public string HandlerName { get; }
     public RuntimeFaultInfo Fault { get; }
+
+    /// <summary>
+    /// The handler exception's first inner exception, when present, captured under the same
+    /// <see cref="Contracts.IRuntimeFaultCapturePolicy"/> as <see cref="Fault"/>. Handler crashes are routinely
+    /// wrapped (e.g. a checkpoint-writer exception around the physical storage fault), and without this the root
+    /// cause was lost with the outer capture (#1031).
+    /// </summary>
+    public RuntimeFaultInfo? InnerFault { get; }
+
     public int FailureCount { get; }
     public RuntimeSchedulerPoisonDisposition Disposition { get; }
     public DateTimeOffset FirstFailedAt { get; }

@@ -719,7 +719,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         disposition: RuntimeSchedulerPoisonDisposition.Poisoned,
         firstFailedAt: DateTimeOffset.UnixEpoch,
         lastFailedAt: DateTimeOffset.UnixEpoch,
-        metadata: new Dictionary<string, string> { ["tag"] = "v1" });
+        metadata: new Dictionary<string, string> { ["tag"] = "v1" },
+        innerFault: new RuntimeFaultInfo("System.ArgumentException", "root cause"));
 
     private static DurableTimer Timer() => new(
         TimerId: "timer-1",
