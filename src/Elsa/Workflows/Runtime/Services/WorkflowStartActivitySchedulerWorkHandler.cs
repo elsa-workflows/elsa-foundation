@@ -204,9 +204,10 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
 
         state.EnsureValueFlowCompatible();
 
+        // The root node is not exempt (#972): its structure variables are a normal container scope, so it
+        // activates its own container frame like any other declaring container.
         var requiresFrameActivation = state.IterationFrameRequest is not null ||
-                                      (!StringComparer.Ordinal.Equals(executableNode.ExecutableNodeId, executable.RootActivity.ExecutableNodeId) &&
-                                       new RuntimeVariableDeclarationProjector().ProjectDeclarations(executableNode).Count > 0);
+                                      new RuntimeVariableDeclarationProjector().ProjectDeclarations(executableNode).Count > 0;
         if (state.Status == ActivityExecutionStatus.Scheduled && requiresFrameActivation)
         {
             var workflowExecutionStateStore = _workflowExecutionStateStore

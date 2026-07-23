@@ -84,7 +84,8 @@ public sealed class WorkflowExecutable
         IReadOnlyCollection<WorkflowExecutableDependency>? dependencies,
         IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements,
         IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements,
-        WorkflowExecutableCheckpointCadence? checkpointCadence = null)
+        WorkflowExecutableCheckpointCadence? checkpointCadence = null,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(rootActivity);
@@ -101,6 +102,7 @@ public sealed class WorkflowExecutable
         InputContract = inputContract;
         Dependencies = SnapshotDependencies(dependencies, NodesById);
         CheckpointCadence = checkpointCadence;
+        WorkflowVariables = SnapshotWorkflowVariables(workflowVariables);
         CreatedAt = createdAt;
         CompatibilityMetadata = new ReadOnlyDictionary<string, string>(compatibilityMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
         RuntimeRequirements = Array.AsReadOnly((runtimeRequirements ?? [])
@@ -134,10 +136,39 @@ public sealed class WorkflowExecutable
     /// </summary>
     public WorkflowExecutableCheckpointCadence? CheckpointCadence { get; }
 
+    /// <summary>
+    /// The workflow-scope variable declarations compiled from the authored definition's
+    /// <c>state.Variables</c>. These seed the canonical root variable frame (scope id
+    /// <c>"workflow"</c>) at execution start; container-structure variables are NOT included here —
+    /// each container node (including the root node) owns those under its own node-id scope.
+    /// Part of the behavioral content hash: they define the workflow frame's key set and defaults.
+    /// </summary>
+    public IReadOnlyCollection<RuntimeVariableDeclaration> WorkflowVariables { get; }
+
     public DateTimeOffset CreatedAt { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
     public IReadOnlyCollection<RuntimeRequirement> RuntimeRequirements { get; }
     public IReadOnlyCollection<RuntimeStorageDriverRequirement> StorageDriverRequirements { get; }
+
+    private static IReadOnlyCollection<RuntimeVariableDeclaration> SnapshotWorkflowVariables(
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables)
+    {
+        if (workflowVariables is null || workflowVariables.Count == 0)
+            return Array.AsReadOnly(Array.Empty<RuntimeVariableDeclaration>());
+
+        var snapshot = workflowVariables
+            .Select(variable => variable ?? throw new ArgumentException("Workflow variable declarations cannot contain null entries.", nameof(workflowVariables)))
+            .OrderBy(variable => variable.VariableKey, StringComparer.Ordinal)
+            .ToArray();
+        var duplicateKey = snapshot
+            .GroupBy(variable => variable.VariableKey, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1)
+            ?.Key;
+        if (duplicateKey is not null)
+            throw new ArgumentException($"The workflow variable declaration '{duplicateKey}' is duplicated.", nameof(workflowVariables));
+
+        return Array.AsReadOnly(snapshot);
+    }
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode rootActivity)
     {

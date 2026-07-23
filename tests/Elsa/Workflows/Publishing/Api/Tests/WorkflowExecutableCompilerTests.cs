@@ -248,7 +248,6 @@ public sealed class WorkflowExecutableCompilerTests
             new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]),
             42);
         Assert.Equal(42, captured.InlineValue?.GetInt32());
-        Assert.Equal("CallerResult", captured.Metadata[RuntimeMetadataKeys.VariableName]);
     }
 
     [Fact]
@@ -492,12 +491,13 @@ public sealed class WorkflowExecutableCompilerTests
         var opaque = new OpaqueOutput("opaque");
 
         var captured = await CompleteReusableBoundaryAsync(executable, storageDrivers, opaque);
-        var projections = await RuntimeInputBindingStateProjection.ProjectAllAsync([captured], storageDrivers);
 
+        // #972: the externalized payload lands in the root variable frame as an External envelope — the
+        // custom driver's encoding (storage profile + locator) is preserved end-to-end.
         Assert.Equal(driver.DriverKey, placed.Root.OutputCaptures["Result"].StorageDriverKey);
-        Assert.Equal(DurableValueStorage.External, captured.Storage);
-        Assert.Equal(driver.DriverKey, captured.Type.Id);
-        Assert.Same(opaque, projections.WorkflowVariables["CallerResult"]);
+        Assert.NotNull(captured.ExternalReference);
+        Assert.Equal(driver.DriverKey, captured.ExternalReference!.StorageProfile);
+        Assert.Equal(DurableValueStorage.External, captured.Policy.Storage);
     }
 
     [Fact]
@@ -1327,6 +1327,105 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task CompilesWorkflowScopeVariablesOntoExecutableAndIntoBehavioralHash()
+    {
+        // #972: workflow-level state.Variables compile into WorkflowExecutable.WorkflowVariables — the
+        // declarations that seed the runtime's root variable frame. They are behavioral content: declaring
+        // a workflow variable is a distinct artifact identity, while a variable-less workflow hashes
+        // byte-identically to before the field existed.
+        var now = new DateTimeOffset(2026, 7, 22, 12, 0, 0, TimeSpan.Zero);
+        var node = Node("write-one", Text("hello"));
+        var message = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-message",
+            Name: "Message",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            Default: new ArgumentValue("hello", "Literal"));
+
+        var without = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
+        var with = await Compiler(WorkflowVersion(node, variables: [message])).CompileAsync(NewRequest(now));
+
+        Assert.Empty(without.WorkflowVariables);
+        var declaration = Assert.Single(with.WorkflowVariables);
+        Assert.Equal("var-message", declaration.VariableKey);
+        Assert.Equal("Message", declaration.Name);
+        Assert.Equal("String", declaration.Type.Alias);
+        Assert.Equal("hello", declaration.InitialBinding!.Literal!.InlineValue!.Value.GetString());
+        Assert.NotEqual(without.Identity.ArtifactHash, with.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Set_intrinsic_targeting_an_invisible_variable_fails_publication()
+    {
+        // #972 publish backstop (PR #971 two-guard pattern): a Set whose target is declared in no
+        // reachable scope is refused at publication instead of poisoning at runtime.
+        var compiler = Compiler(WorkflowVersion(SequenceNode(
+            "sequence",
+            [SetIntrinsicNode("set-1", "var-missing")])));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("var-missing", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("not visible", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Set_intrinsic_targeting_a_declared_workflow_variable_compiles()
+    {
+        var message = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-message",
+            Name: "Message",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            Default: null);
+        var compiler = Compiler(WorkflowVersion(
+            SequenceNode("sequence", [SetIntrinsicNode("set-1", "var-message")]),
+            variables: [message]));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var setNode = executable.NodesById["set-1"];
+        Assert.Equal(WorkflowIntrinsicKind.Set, setNode.IntrinsicKind);
+        Assert.Equal("var-message", setNode.IntrinsicVariable?.VariableKey);
+    }
+
+    private static ActivityNode SetIntrinsicNode(string nodeId, string variableKey) =>
+        new(
+            nodeId,
+            "$intrinsic",
+            [new WorkflowArgumentState(
+                WorkflowIntrinsicInputKeys.Value,
+                new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"),
+                null, null, null, null)],
+            [])
+        {
+            Intrinsic = new AuthoredWorkflowIntrinsic(
+                AuthoredWorkflowIntrinsicKind.Set,
+                new TypeReference("String"),
+                new Elsa.Expressions.Core.Models.VariableReference(
+                    variableKey,
+                    Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId))
+        };
+
+    [Fact]
+    public async Task Duplicate_workflow_variable_reference_key_fails_publication()
+    {
+        var duplicate = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-message",
+            Name: "Message",
+            Type: new TypeReference("String"),
+            StorageDriverType: null,
+            Default: null);
+        var compiler = Compiler(WorkflowVersion(Node("write-one", Text("hello")), variables: [duplicate, duplicate with { Name = "Other" }]));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("var-message", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task IndexesResumeTargetHandlerIntoExecutable()
     {
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
@@ -1389,7 +1488,7 @@ public sealed class WorkflowExecutableCompilerTests
                     executable: executable),
                 materializedAt);
 
-    private static async Task<DurableValueState> CompleteReusableBoundaryAsync(
+    private static async Task<ValueEnvelope> CompleteReusableBoundaryAsync(
         WorkflowExecutable executable,
         IRuntimeDurableValueStorageDriverRegistry storageDrivers,
         object? outputValue)
@@ -1405,17 +1504,46 @@ public sealed class WorkflowExecutableCompilerTests
         var durableStore = new InMemoryDurableValueStateStore();
         var inspectionStore = new InMemoryActivityExecutionInspectionStore();
         var incidentStore = new InMemoryIncidentStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
         var checkpointStore = new InMemoryRuntimeCheckpointCommitStore(
-            workflowExecutionStateStore: null,
+            workflowExecutionStateStore: workflowStateStore,
             activityExecutionStateStore: activityStore,
             bookmarkStateStore: null,
             durableValueStateStore: durableStore,
             incidentStateStore: incidentStore,
             operationalStateStore: null,
             schedulerStateStore: null,
-            activityExecutionInspectionWriter: inspectionStore);
+            activityExecutionInspectionWriter: inspectionStore,
+            rootWriteLeaseManager: PassThroughRootWriteLeaseManager.Instance);
 
         await executableStore.SaveAsync(executable);
+
+        // #972: the capture's workflow-variable target lives in the canonical root variable frame; seed a
+        // running workflow state whose root frame declares the target key.
+        var objectType = new Elsa.Primitives.Models.ValueTypeDescriptor("Object");
+        var rootFrame = new VariableFrameFactory().CreateRoot(
+            workflowExecutionId,
+            Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId,
+            new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal)
+            {
+                ["caller-result"] = ValueEnvelope.Absent(objectType, ValueProtectionPolicy.InstanceInline)
+            });
+        await workflowStateStore.SaveAsync(new WorkflowExecutionState(
+            workflowExecutionId,
+            executable.Identity,
+            WorkflowExecutionStatus.Running,
+            null,
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch,
+            null,
+            null,
+            null,
+            null,
+            new Dictionary<string, string>())
+        {
+            RootVariableFrame = rootFrame
+        });
         var boundaryContract = boundary.ActivityContract
             ?? throw new InvalidOperationException("The reusable boundary must carry its pinned runtime activity contract.");
         var boundaryState = RuntimeState(boundaryExecutionId, boundary, ActivityExecutionStatus.Running) with
@@ -1449,7 +1577,7 @@ public sealed class WorkflowExecutableCompilerTests
         services.AddScoped<IActivityActivator>(_ => new FixedActivityActivator(new OutputtingCompositeActivity(outputValue)));
         services.AddSingleton<IWorkflowExecutableStore>(executableStore);
         services.AddSingleton<IActivityExecutionStateStore>(activityStore);
-        services.AddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
+        services.AddSingleton<IWorkflowExecutionStateStore>(workflowStateStore);
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(schedulerQueue);
         services.AddSingleton(storageDrivers);
         services.AddSingleton<IDurableValueStateStore>(durableStore);
@@ -1496,14 +1624,25 @@ public sealed class WorkflowExecutableCompilerTests
 
         await handler.HandleAsync(workItem);
 
-        var captured = await durableStore.FindAsync(workflowExecutionId, "durable-variable:CallerResult");
-        if (captured is not null)
-            return captured;
-        var stored = await durableStore.ListAllDurableValueStatesAsync(workflowExecutionId);
+        // #972: the capture writes the canonical root variable frame in the completion commit — no
+        // variable:* durable row exists any more.
+        var committedWorkflowState = await workflowStateStore.FindAsync(workflowExecutionId);
+        if (committedWorkflowState?.RootVariableFrame is { } committedFrame &&
+            committedFrame.Values.TryGetValue("caller-result", out var capturedEnvelope) &&
+            capturedEnvelope.Presence != ValuePresence.Absent)
+        {
+            var stray = (await durableStore.ListAllDurableValueStatesAsync(workflowExecutionId))
+                .Where(value => value.ValueId.StartsWith(RuntimeWorkflowStateSeed.VariableValueIdPrefix, StringComparison.Ordinal))
+                .ToArray();
+            Assert.Empty(stray);
+            return capturedEnvelope;
+        }
+
+        var storedValues = await durableStore.ListAllDurableValueStatesAsync(workflowExecutionId);
         var incidents = await incidentStore.ListAsync(workflowExecutionId);
         throw new Xunit.Sdk.XunitException(
-            $"Normal Runtime boundary completion did not write the compiled caller output target. " +
-            $"Stored=[{string.Join(',', stored.Select(x => x.DurableValueId))}], " +
+            $"Normal Runtime boundary completion did not write the compiled caller output target into the root variable frame. " +
+            $"Stored=[{string.Join(',', storedValues.Select(x => x.DurableValueId))}], " +
             $"Incidents=[{string.Join(" | ", incidents.Select(x => $"{x.FailureType}:{x.Message}"))}].");
     }
 
@@ -1571,6 +1710,18 @@ public sealed class WorkflowExecutableCompilerTests
     private sealed class OpaqueOutput(string value)
     {
         public string Value { get; } = value;
+    }
+
+    private sealed class PassThroughRootWriteLeaseManager : IWorkflowExecutableRootWriteLeaseManager
+    {
+        public static PassThroughRootWriteLeaseManager Instance { get; } = new();
+
+        public ValueTask ExecuteAsync(
+            string artifactId,
+            string leaseId,
+            Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default) =>
+            write(cancellationToken);
     }
 
     private sealed class OpaqueOutputStorageDriver : IRuntimeDurableValueStorageDriver

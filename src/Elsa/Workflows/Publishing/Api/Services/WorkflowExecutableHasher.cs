@@ -32,7 +32,8 @@ public sealed class WorkflowExecutableHasher
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
-        WorkflowExecutableCheckpointCadence? checkpointCadence = null)
+        WorkflowExecutableCheckpointCadence? checkpointCadence = null,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null)
     {
         ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(inputContract);
@@ -40,7 +41,7 @@ public sealed class WorkflowExecutableHasher
 
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
-            WriteBehavioralPayload(writer, rootActivity, inputContract, dependencies, checkpointCadence);
+            WriteBehavioralPayload(writer, rootActivity, inputContract, dependencies, checkpointCadence, workflowVariables);
 
         return Hash(stream.ToArray());
     }
@@ -187,7 +188,8 @@ public sealed class WorkflowExecutableHasher
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
-        WorkflowExecutableCheckpointCadence? checkpointCadence)
+        WorkflowExecutableCheckpointCadence? checkpointCadence,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables)
     {
         writer.WriteStartObject();
         writer.WriteNumber("schemaVersion", 1);
@@ -203,6 +205,28 @@ public sealed class WorkflowExecutableHasher
             if (checkpointCadence.MaxSegmentCheckpoints is { } maxSegmentCheckpoints)
                 writer.WriteNumber("maxSegmentCheckpoints", maxSegmentCheckpoints);
             writer.WriteEndObject();
+        }
+
+        // Workflow-scope variable declarations are behavioral content (#972): they define the root variable
+        // frame's key set, types, and defaults, so equal-hash must imply an equal workflow scope. Written only
+        // when declared, so a workflow without state.Variables hashes byte-identically to before this field
+        // existed — existing artifact ids and goldens for variable-less workflows are stable.
+        if (workflowVariables is { Count: > 0 })
+        {
+            writer.WriteStartArray("workflowVariables");
+            foreach (var variable in workflowVariables.OrderBy(variable => variable.VariableKey, StringComparer.Ordinal))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("variableKey", variable.VariableKey);
+                writer.WriteString("name", variable.Name);
+                writer.WriteString("type", FormatType(variable.Type));
+                writer.WriteString("policy", FormatPolicy(variable.Policy));
+                writer.WriteString("initialBinding", variable.InitialBinding is { Literal: { } literal }
+                    ? FormatEnvelope(literal)
+                    : string.Empty);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
         }
 
         writer.WriteStartArray("nodes");

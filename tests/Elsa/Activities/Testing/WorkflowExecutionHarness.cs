@@ -257,17 +257,33 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         NewExecutable(rootActivity, Identity);
 
     /// <summary>
+    /// Convenience: wrap a root node in a <see cref="WorkflowExecutable"/> with the default harness identity and
+    /// the given workflow-scope variable declarations (seeded into the root frame at execution start, #972).
+    /// </summary>
+    public static WorkflowExecutable NewExecutable(ExecutableNode rootActivity, params RuntimeVariableDeclaration[] workflowVariables) =>
+        NewExecutable(rootActivity, Identity, workflowVariables);
+
+    /// <summary>
     /// Wraps a root node in a <see cref="WorkflowExecutable"/> with a caller-supplied identity. Concurrency harnesses
     /// that run many executions against one shared store use this to give each execution a distinct artifact identity
     /// (the executable store keys on <see cref="WorkflowExecutableIdentity.ArtifactId"/>).
     /// </summary>
-    public static WorkflowExecutable NewExecutable(ExecutableNode rootActivity, WorkflowExecutableIdentity identity) =>
+    public static WorkflowExecutable NewExecutable(
+        ExecutableNode rootActivity,
+        WorkflowExecutableIdentity identity,
+        params RuntimeVariableDeclaration[] workflowVariables) =>
         new(
             identity: identity,
             rootActivity: rootActivity,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: null,
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            checkpointCadence: null,
+            workflowVariables: workflowVariables);
 
     /// <summary>Builds a leaf probe node that records execution and emits the given outcomes (default <c>Done</c>).</summary>
     public static ExecutableNode NewProbeNode(string nodeId, IReadOnlyCollection<string>? outcomes = null) =>
@@ -343,7 +359,13 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             PinClrActivityContract(executable.RootActivity),
             executable.ResumeTargets,
             executable.CreatedAt,
-            executable.CompatibilityMetadata);
+            executable.CompatibilityMetadata,
+            inputContract: executable.InputContract,
+            dependencies: executable.Dependencies,
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            checkpointCadence: executable.CheckpointCadence,
+            workflowVariables: executable.WorkflowVariables);
 
     private ExecutableNode PinClrActivityContract(ExecutableNode node)
     {

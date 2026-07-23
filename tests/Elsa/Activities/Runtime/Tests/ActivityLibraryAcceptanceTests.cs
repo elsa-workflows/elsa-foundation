@@ -153,6 +153,50 @@ public sealed class ActivityLibraryAcceptanceTests
         Assert.Equal("all-iterated", rootFrame.Values["var-result"].InlineValue!.Value.GetString());
     }
 
+    [Fact]
+    public async Task SetTargetingRootContainerScopedVariable_CommitsIntoTheRootNodesOwnContainerFrame()
+    {
+        // #972 (#1b runtime side): the root Sequence's structure variables are a normal container scope owned
+        // by the root node itself — a Set targeting declaringScope = the root node id writes into the root
+        // node's OWN container frame, and the workflow root frame stays untouched.
+        await using var harness = NewHarness("actexec-sequence", "actexec-set-local");
+
+        var setLocal = SetVariableIntrinsicNode(
+            nodeId: "node-set-local",
+            variableKey: "var-local",
+            valueBinding: CanonicalLiteral(WorkflowIntrinsicInputKeys.Value, "String", "updated"),
+            declaringScopeId: "node-sequence");
+        var structurePayload = new
+        {
+            activities = new[] { setLocal.ExecutableNodeId },
+            variables = new[] { RuntimeVariableDeclarationTestData.Create("var-local", "local", "String", "initial") }
+        };
+        var root = new ExecutableNode(
+            executableNodeId: "node-sequence",
+            authoredActivityId: "authored-sequence",
+            activityType: typeof(SequenceActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: typeof(SequenceDescriptor).FullName!,
+            descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, [setLocal])],
+            structure: new ExecutableActivityStructure(
+                SequenceActivity.StructureKind,
+                SequenceActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(structurePayload, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root));
+
+        run.AssertWorkflowCompleted();
+        var sequenceState = Assert.Single(run.States("node-sequence"));
+        Assert.NotNull(sequenceState.VariableFrame);
+        Assert.Equal("node-sequence", sequenceState.VariableFrame!.ScopeId);
+        Assert.Equal("updated", sequenceState.VariableFrame.Values["var-local"].InlineValue!.Value.GetString());
+        var rootFrame = Assert.IsType<VariableFrameState>(run.WorkflowState?.RootVariableFrame);
+        Assert.Empty(rootFrame.Values);
+    }
+
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds)
     {
         var harness = WorkflowExecutionHarness.Create()
@@ -183,11 +227,16 @@ public sealed class ActivityLibraryAcceptanceTests
     }
 
     /// <summary>
-    /// Builds the composed executable: a Sequence root declaring workflow-scope variables <c>count</c> (Int32,
-    /// default 0) and <c>result</c> (String, default "none"), whose children are the ForEach loop and If branch.
+    /// Builds the composed executable: workflow-scope variables <c>count</c> (Int32, default 0) and
+    /// <c>result</c> (String, default "none") declared on the executable itself (#972 — the root frame is
+    /// seeded from these, not from the root Sequence's structure), whose root children are the ForEach loop
+    /// and If branch.
     /// </summary>
     private static WorkflowExecutable NewComposedExecutable(IReadOnlyCollection<string> collection) =>
-        WorkflowExecutionHarness.NewExecutable(NewComposedRoot(collection));
+        WorkflowExecutionHarness.NewExecutable(
+            NewComposedRoot(collection),
+            RuntimeVariableDeclarationTestData.Create("var-count", "count", "Int32", 0),
+            RuntimeVariableDeclarationTestData.Create("var-result", "result", "String", "none"));
 
     private static ExecutableNode NewComposedRoot(IReadOnlyCollection<string> collection)
     {
@@ -249,12 +298,7 @@ public sealed class ActivityLibraryAcceptanceTests
         var children = new[] { foreachNode, ifNode };
         var structurePayload = new
         {
-            activities = children.Select(child => child.ExecutableNodeId).ToArray(),
-            variables = new[]
-            {
-                RuntimeVariableDeclarationTestData.Create("var-count", "count", "Int32", 0),
-                RuntimeVariableDeclarationTestData.Create("var-result", "result", "String", "none")
-            }
+            activities = children.Select(child => child.ExecutableNodeId).ToArray()
         };
 
         var root = new ExecutableNode(
@@ -278,7 +322,8 @@ public sealed class ActivityLibraryAcceptanceTests
     private static ExecutableNode SetVariableIntrinsicNode(
         string nodeId,
         string variableKey,
-        RuntimeInputBinding valueBinding) =>
+        RuntimeInputBinding valueBinding,
+        string? declaringScopeId = null) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
@@ -292,7 +337,7 @@ public sealed class ActivityLibraryAcceptanceTests
             },
             metadata: new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.Set,
-            intrinsicVariable: new RuntimeVariableReference(variableKey, VariableReference.WorkflowScopeId));
+            intrinsicVariable: new RuntimeVariableReference(variableKey, declaringScopeId ?? VariableReference.WorkflowScopeId));
 
     private static RuntimeInputBinding CanonicalLiteral(string inputKey, string typeAlias, object? value)
     {

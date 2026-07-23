@@ -127,6 +127,7 @@ public sealed class WorkflowExecutableCompiler(
             // compilation, replacing the former double ProjectChildren traversal.
             var projection = activityTreeProjector.Project(rootActivity);
             ActivityTreeProjector.Validate(projection.Nodes);
+            executableNodeCompiler.ValidateIntrinsicVariableTargets(state, projection.Nodes);
 
             var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
             var placedActivities = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
@@ -207,7 +208,8 @@ public sealed class WorkflowExecutableCompiler(
             var inputContract = BuildInputContract(state.Inputs);
             var dependencies = BuildDependencies(dependencyClaims);
             var checkpointCadence = CompileCheckpointCadence(state.StrategyOptions);
-            var artifactHash = hasher.ComputeHash(compiledRoot, inputContract, dependencies, checkpointCadence);
+            var workflowVariables = executableNodeCompiler.CompileWorkflowVariables(state.Variables);
+            var artifactHash = hasher.ComputeHash(compiledRoot, inputContract, dependencies, checkpointCadence, workflowVariables);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             await ValidateDependencyGraphAsync(artifactId, artifactHash, dependencies, cancellationToken);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
@@ -248,7 +250,8 @@ public sealed class WorkflowExecutableCompiler(
                 storageDriverRequirements: storageDriverRequirements,
                 inputContract: inputContract,
                 dependencies: dependencies,
-                checkpointCadence: checkpointCadence);
+                checkpointCadence: checkpointCadence,
+                workflowVariables: workflowVariables);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
             return executable;
         }

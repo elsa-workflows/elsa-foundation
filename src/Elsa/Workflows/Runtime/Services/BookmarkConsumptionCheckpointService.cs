@@ -99,7 +99,7 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                 ActivityExecutionIds: [request.ActivityExecutionState.Execution.ActivityExecutionId],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
+                workflowExecution: request.WorkflowExecutionChange,
                 scheduler: null,
                 activityExecutions:
                 [

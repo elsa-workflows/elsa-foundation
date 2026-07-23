@@ -47,10 +47,11 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Fact]
-    public void WorkflowExecutable_Uses_A_Clean_V6_Baseline()
+    public void WorkflowExecutable_Uses_A_Clean_V7_Baseline()
     {
-        Assert.Equal(6, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
-        Assert.Equal(6, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        // v7 adds the compiled workflow-scope variable declarations (workflowVariables, #972).
+        Assert.Equal(7, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        Assert.Equal(7, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
     }
 
     // --- Read path: current version round-trips ---

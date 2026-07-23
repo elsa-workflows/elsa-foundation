@@ -83,9 +83,11 @@ public sealed class RuntimeContainerScopeService(
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(activityState);
 
+        // Every container node with declarations owns its own frame — INCLUDING the root node (#972). The
+        // root node's structure variables are a normal container scope (scope id = its node id), distinct
+        // from the "workflow" root frame, which declares exactly the executable's workflow-scope variables.
         var declarations = _declarations.ProjectInitialValues(node);
-        var isWorkflowRoot = StringComparer.Ordinal.Equals(node.ExecutableNodeId, executable.RootActivity.ExecutableNodeId);
-        var ownsContainer = !isWorkflowRoot && declarations.Count > 0;
+        var ownsContainer = declarations.Count > 0;
         var pendingIteration = ResolveIterationRequest(activityState, iterationRequest);
         if (activityState.VariableFrame is not null || activityState.IterationVariableFrame is not null)
         {
@@ -310,17 +312,18 @@ public sealed class RuntimeContainerScopeService(
                 continue;
             }
 
-            ExecutableNode owner;
+            // #972 unified model: the root frame's declarations come from the executable's compiled workflow
+            // variables (not the root node); #991's lenient enumeration (skip unresolvable scopes/keys for the
+            // JS accessor projection) is preserved for the container/node case.
+            IReadOnlyDictionary<string, RuntimeVariableDeclaration> declarations;
             if (frame.Kind == VariableFrameKind.Root)
-                owner = executable.RootActivity;
+                declarations = declarationProjector.ProjectDeclarations(executable.WorkflowVariables);
             else if (executable.NodesById.TryGetValue(frame.ScopeId, out var node))
-                owner = node;
+                declarations = declarationProjector.ProjectDeclarations(node);
             else if (lenient)
                 continue;
             else
                 throw new InvalidOperationException($"Variable frame '{frame.FrameId}' references missing executable scope '{frame.ScopeId}'.");
-
-            var declarations = declarationProjector.ProjectDeclarations(owner);
             foreach (var (key, value) in frame.Values)
             {
                 if (!declarations.TryGetValue(key, out var declaration))
