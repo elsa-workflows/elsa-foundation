@@ -132,7 +132,8 @@ internal static class TestCompiler
             new ExecutableNodeCompiler(
                 activityStructureService,
                 wellKnownTypeRegistry,
-                inputCompiler),
+                inputCompiler,
+                outputCompiler),
             placementSidecars,
             metadataEnricher);
     }

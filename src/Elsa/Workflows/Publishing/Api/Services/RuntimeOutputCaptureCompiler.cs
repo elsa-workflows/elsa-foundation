@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -11,10 +12,12 @@ using Elsa.Workflows.Runtime.Core.Services;
 namespace Elsa.Workflows.Publishing.Api.Services;
 
 /// <summary>
-/// Compiles an authored reusable-activity output binding into the ordinary Runtime durable-output capture
-/// contract. Only an explicit workflow-scope <c>Variable</c> reference is accepted: container targets cannot be
-/// resolved to one concrete execution during publication, and treating arbitrary authored values as durable ids
-/// would guess at target semantics.
+/// Compiles an authored activity output binding into the ordinary Runtime durable-output capture contract. Only
+/// an explicit workflow-scope <c>Variable</c> reference is accepted: container targets cannot be resolved to one
+/// concrete execution during publication, and treating arbitrary authored values as durable ids would guess at
+/// target semantics. The same validation and conversion body serves both reusable-activity boundary outputs
+/// (<see cref="CompileBoundaryOutputs"/>) and ordinary leaf-activity result projections
+/// (<see cref="CompileResultProjectionOutputs"/>); the two entry points only normalize their contract shape.
 /// </summary>
 public sealed class RuntimeOutputCaptureCompiler(
     IRuntimeDurableValueStorageDriverRegistry storageDrivers,
@@ -25,9 +28,65 @@ public sealed class RuntimeOutputCaptureCompiler(
 
     private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
 
+    /// <summary>The minimal output shape the capture body reads, factored so boundary and leaf contracts share it.</summary>
+    private sealed record OutputCaptureTarget(
+        string ReferenceKey,
+        string Name,
+        ValueTypeDescriptor Type,
+        bool IsRequired,
+        string StorageDriverKey,
+        ValueRepresentation? SourceRepresentation);
+
+    /// <summary>
+    /// Compiles the authored outputs of a reusable-activity boundary node against its published
+    /// <see cref="ActivityOutputContract"/> definitions.
+    /// </summary>
     public IReadOnlyDictionary<string, RuntimeOutputCapture> CompileBoundaryOutputs(
         string nodeId,
         IReadOnlyCollection<ActivityOutputContract> definitions,
+        IEnumerable<ArgumentState> authoredOutputs,
+        IEnumerable<VariableDefinition> workflowVariables) =>
+        Compile(
+            nodeId,
+            definitions
+                .Select(definition => new OutputCaptureTarget(
+                    definition.ReferenceKey,
+                    definition.Name,
+                    new ValueTypeDescriptor(definition.Type.Alias, definition.Type.CollectionKind),
+                    definition.IsRequired,
+                    definition.StorageDriverKey,
+                    definition.SourceRepresentation))
+                .ToArray(),
+            authoredOutputs,
+            workflowVariables);
+
+    /// <summary>
+    /// Compiles the authored outputs of an ordinary leaf activity node against its typed result-projection
+    /// contracts. A projection carries no explicit boundary storage driver, so an authored external storage
+    /// profile is honored and otherwise the durable value defaults to the JSON driver.
+    /// </summary>
+    public IReadOnlyDictionary<string, RuntimeOutputCapture> CompileResultProjectionOutputs(
+        string nodeId,
+        IReadOnlyCollection<ActivityResultProjectionContract> projections,
+        IEnumerable<ArgumentState> authoredOutputs,
+        IEnumerable<VariableDefinition> workflowVariables) =>
+        Compile(
+            nodeId,
+            projections
+                .Select(projection => new OutputCaptureTarget(
+                    projection.Key,
+                    projection.Key,
+                    projection.Type,
+                    projection.IsRequired,
+                    projection.Policy.StorageProfile ?? WellKnownRuntimeDurableValueStorageDrivers.Json,
+                    projection.SourceRepresentation))
+                .ToArray(),
+            authoredOutputs,
+            workflowVariables);
+
+    private IReadOnlyDictionary<string, RuntimeOutputCapture> Compile(
+        string nodeId,
+        IReadOnlyCollection<OutputCaptureTarget> definitions,
         IEnumerable<ArgumentState> authoredOutputs,
         IEnumerable<VariableDefinition> workflowVariables)
     {

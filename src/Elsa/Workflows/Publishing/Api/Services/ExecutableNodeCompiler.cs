@@ -25,7 +25,8 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 public sealed class ExecutableNodeCompiler(
     IActivityStructureService activityStructureService,
     IWellKnownTypeRegistry wellKnownTypeRegistry,
-    RuntimeInputBindingCompiler inputBindingCompiler)
+    RuntimeInputBindingCompiler inputBindingCompiler,
+    RuntimeOutputCaptureCompiler outputCaptureCompiler)
 {
     private static readonly JsonSerializerOptions DescriptorSerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -33,8 +34,14 @@ public sealed class ExecutableNodeCompiler(
         ActivityNode rootActivity,
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
-        IReadOnlyDictionary<string, ExecutableNode>? placedActivities = null) =>
-        CompileNode(rootActivity, projection, activityRows, placedActivities ?? new Dictionary<string, ExecutableNode>());
+        IReadOnlyDictionary<string, ExecutableNode>? placedActivities = null,
+        IEnumerable<VariableDefinition>? workflowVariables = null) =>
+        CompileNode(
+            rootActivity,
+            projection,
+            activityRows,
+            placedActivities ?? new Dictionary<string, ExecutableNode>(),
+            workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? []);
 
     /// <summary>
     /// Compiles the unbound root of a source-owned activity template through the same descriptor and
@@ -84,13 +91,14 @@ public sealed class ExecutableNodeCompiler(
         ActivityNode activity,
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
-        IReadOnlyDictionary<string, ExecutableNode> placedActivities)
+        IReadOnlyDictionary<string, ExecutableNode> placedActivities,
+        IReadOnlyCollection<VariableDefinition> workflowVariables)
     {
         if (placedActivities.TryGetValue(activity.NodeId, out var placed))
             return placed;
 
         if (activity.Intrinsic is not null)
-            return CompileIntrinsicNode(activity, projection, activityRows, placedActivities);
+            return CompileIntrinsicNode(activity, projection, activityRows, placedActivities, workflowVariables);
 
         var activityVersion = activityRows[activity.ActivityVersionId];
         var descriptor = new RuntimeActivityDescriptor(
@@ -102,7 +110,7 @@ public sealed class ExecutableNodeCompiler(
 
         var inputDefinitionsByReferenceKey = inputDefinitions.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
-        var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities);
+        var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables);
 
         foreach (var inputState in activity.Inputs)
         {
@@ -156,6 +164,8 @@ public sealed class ExecutableNodeCompiler(
             ? null
             : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure, inputBindings: inputBindings);
 
+        var outputCaptures = CompileOutputCaptures(activity, activityContract, workflowVariables);
+
         return new ExecutableNode(
             executableNodeId: activity.NodeId,
             authoredActivityId: activity.NodeId,
@@ -163,7 +173,7 @@ public sealed class ExecutableNodeCompiler(
             activityTypeVersion: activityVersion.Version,
             descriptor: descriptor,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal),
+            outputCaptures: outputCaptures,
             metadata: new Dictionary<string, string>
             {
                 ["authoredNodeId"] = activity.NodeId,
@@ -174,11 +184,35 @@ public sealed class ExecutableNodeCompiler(
             activityContract: activityContract);
     }
 
+    /// <summary>
+    /// Turns a leaf activity's authored outputs (<see cref="ActivityNode.Outputs"/>) into durable output captures
+    /// against its typed result-projection contracts. An activity with no authored outputs yields none, preserving
+    /// the prior empty-capture behavior; the shared <see cref="RuntimeOutputCaptureCompiler"/> enforces the same
+    /// workflow-scope Variable rules as the reusable-activity boundary path.
+    /// </summary>
+    private IReadOnlyDictionary<string, RuntimeOutputCapture> CompileOutputCaptures(
+        ActivityNode activity,
+        Elsa.Activities.Runtime.Core.Models.ActivityContract? activityContract,
+        IReadOnlyCollection<VariableDefinition> workflowVariables)
+    {
+        var authoredOutputs = activity.Outputs as IReadOnlyCollection<ArgumentState> ?? activity.Outputs.ToArray();
+        var projections = activityContract?.Result.Projections.Values.ToArray() ?? [];
+        if (authoredOutputs.Count == 0)
+            return new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal);
+
+        return outputCaptureCompiler.CompileResultProjectionOutputs(
+            activity.NodeId,
+            projections,
+            authoredOutputs,
+            workflowVariables);
+    }
+
     private ExecutableNode CompileIntrinsicNode(
         ActivityNode activity,
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
-        IReadOnlyDictionary<string, ExecutableNode> placedActivities)
+        IReadOnlyDictionary<string, ExecutableNode> placedActivities,
+        IReadOnlyCollection<VariableDefinition> workflowVariables)
     {
         var intrinsic = activity.Intrinsic!;
         var runtimeKind = intrinsic.Kind switch
@@ -264,7 +298,7 @@ public sealed class ExecutableNodeCompiler(
                 ["authoredNodeId"] = activity.NodeId,
                 [TriggerNodeMetadata.ExecutionTypeKey] = ActivityExecutionType.Action.ToString()
             },
-            childSlots: CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities),
+            childSlots: CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables),
             structure: CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity)),
             activityContract: null,
             intrinsicKind: runtimeKind,
@@ -497,12 +531,13 @@ public sealed class ExecutableNodeCompiler(
         IEnumerable<ActivityChildProjection> childSlots,
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
-        IReadOnlyDictionary<string, ExecutableNode> placedActivities)
+        IReadOnlyDictionary<string, ExecutableNode> placedActivities,
+        IReadOnlyCollection<VariableDefinition> workflowVariables)
     {
         return childSlots
             .Select(slot => new ExecutableChildSlot(
                 slot.Name,
-                slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities)).ToArray()))
+                slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables)).ToArray()))
             .ToArray();
     }
 
