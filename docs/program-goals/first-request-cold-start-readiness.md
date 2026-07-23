@@ -21,8 +21,13 @@ Readiness](workspace-launch-readiness.md): a launchable workspace must also *sta
 
 1. **Instrument (this unit — spec 129).** Opt-in `Elsa.Boot` phase-timing diagnostic + deterministic schema
    op-count baseline + measurement recipe + baseline report. Measurement only. Gates units 2–5.
-2. **ReadyToRun publish.** Add R2R (and evaluate TieredPGO) to `src/Apps/Elsa.Server/Dockerfile` to cut JIT
-   cost. Sized by the instrument's host-build / first-request JIT share.
+2. **ReadyToRun publish (spec 134 — DELIVERED).** R2R added to the container publish path
+   (`src/Apps/Elsa.Server/Dockerfile`, per-RID via `TARGETARCH`, framework-dependent, Dockerfile-scoped so dev
+   builds are untouched) to cut the JIT-bound host-build + Kestrel-startup share. TieredPGO left at its default-on
+   value (R2R composes with tiered compilation); InvariantGlobalization rejected (host does auth + culture-
+   sensitive work). Measured honestly in `specs/134-container-readytorun-publish/research.md` — the deterministic
+   signal is publish size + a clean per-RID crossgen pass; walls were not benchmarked (fleet load). See the
+   recommendation there.
 3. **Schema batch / skip-if-current.** Reduce the 873-operation fresh-DB admission and skip it entirely on an
    already-current database. Constraint: the locked apply protocol
    (`specs/094-harden-groundwork-stores/contracts/storage-composition.md:158`) keeps approval semantics; the
