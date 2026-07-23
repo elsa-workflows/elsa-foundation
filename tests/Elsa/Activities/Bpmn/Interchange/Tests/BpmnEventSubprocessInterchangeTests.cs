@@ -46,6 +46,27 @@ public sealed class BpmnEventSubprocessInterchangeTests
         </definitions>
         """;
 
+    private const string ErrorDocument = """
+        <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="https://example.org">
+          <process id="p" isExecutable="true">
+            <startEvent id="start" />
+            <task id="work" />
+            <endEvent id="end" />
+            <subProcess id="es-err" triggeredByEvent="true">
+              <startEvent id="es-err-start">
+                <errorEventDefinition />
+              </startEvent>
+              <task id="es-err-task" />
+              <endEvent id="es-err-end" />
+              <sequenceFlow id="ee1" sourceRef="es-err-start" targetRef="es-err-task" />
+              <sequenceFlow id="ee2" sourceRef="es-err-task" targetRef="es-err-end" />
+            </subProcess>
+            <sequenceFlow id="f1" sourceRef="start" targetRef="work" />
+            <sequenceFlow id="f2" sourceRef="work" targetRef="end" />
+          </process>
+        </definitions>
+        """;
+
     [Fact]
     public void Import_ResolvesEventSubprocesses_AndValidates()
     {
@@ -99,12 +120,37 @@ public sealed class BpmnEventSubprocessInterchangeTests
             "es", "unsupported trigger definition");
 
     [Fact]
-    public void ErrorTrigger_DegradesAsStatedCut() =>
-        // spec 128 stated cut: an error-triggered event subprocess is not executable this slice, so it degrades
-        // (dropped with a finding) rather than importing — the importer never emits a validator-rejected graph.
+    public void ErrorEventSubprocess_RoundTripsThroughExportImport_WithFidelity()
+    {
+        // spec 132: an error-triggered event subprocess is executable (deferred seam-B absorption, #989 fix); it
+        // imports as a TriggeredByEvent element and round-trips through export→import as an (always interrupting)
+        // error trigger, indexing the error catcher.
+        var imported = _importer.Import(ErrorDocument).ProcessNode;
+        var xml = _exporter.Export(imported);
+
+        Assert.Contains("triggeredByEvent=\"true\"", xml, StringComparison.Ordinal);
+        Assert.Contains("<errorEventDefinition", xml, StringComparison.Ordinal);
+
+        var reimported = Import(xml);
+        var es = reimported.Elements.Single(element => element.ElementId == "es-err");
+        Assert.True(es.TriggeredByEvent);
+        var errStart = ReadNested(reimported, es.ChildNodeId!).Elements.Single(element => element.ElementId == "es-err-start");
+        Assert.Equal(BpmnEventDefinitionTypes.Error, errStart.EventDefinitions.Single().Type);
+
+        var graph = BpmnGraph.From(BridgeToExecutableNode(reimported));
+        var catcher = Assert.Single(graph.EventSubprocesses);
+        Assert.Equal(BpmnEventSubprocessTriggerKind.Error, catcher.TriggerKind);
+        Assert.True(catcher.Interrupting);
+        Assert.NotNull(graph.ErrorEventSubprocess());
+    }
+
+    [Fact]
+    public void NonInterruptingError_Degrades() =>
+        // spec 132: error events are always interrupting per BPMN, so a non-interrupting error start is a genuinely
+        // malformed shape — it degrades (dropped with a finding) so the importer never emits a validator-rejected graph.
         AssertDrops(
-            EventSubprocessDoc("es", body: "<startEvent id=\"s\"><errorEventDefinition /></startEvent>"),
-            "es", "error-triggered event subprocesses are not executable in this slice");
+            EventSubprocessDoc("es", body: "<startEvent id=\"s\" isInterrupting=\"false\"><errorEventDefinition /></startEvent>"),
+            "es", "non-interrupting error event subprocess");
 
     [Fact]
     public void DuplicateEscalationCode_Drops()

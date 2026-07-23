@@ -271,14 +271,49 @@ public sealed class BpmnEventSubprocessTests
 
     // ---- Error trigger -----------------------------------------------------------------------------------------
 
-    // NOTE (spec 128 deviation / tripwire #3): the error event subprocess absorbs a child fault via seam B and then
-    // activates its body — which is a scheduled child, so the fault evaluation DEFERS. The runtime does not support a
-    // deferred seam-B fault absorption: the named incident resolves, but the original fault is redelivered/misattributed
-    // to the newly scheduled child, faulting the composite. This is a runtime limitation, not a BPMN-module one — it
-    // reproduces with the SHIPPED spec-120 error boundary routing to a task (which likewise defers). Seam-A + a deferred
-    // child schedule works (see the escalation interrupting notification test). The error-trigger model/validation,
-    // interchange, and engine wiring are exercised; its end-to-end runtime completion is blocked pending a runtime fix.
-    // The escalation trigger (own-scope + notification, interrupting + non-interrupting) is unaffected and fully works.
+    // spec 132 (FR-4): the error event subprocess absorbs a host child fault via seam B and then activates its body —
+    // a scheduled child, so the fault evaluation DEFERS. Executable since the runtime deferred-seam-B metadata-leak fix
+    // (#989) landed: the named incident resolves, the scope's other live work is interrupted, the body runs, and the
+    // scope completes normally.
+    [Fact]
+    public async Task ErrorEventSubprocess_AbsorbsChildFault_ResolvesIncident_RunsBody_ScopeCompletes()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewFaultingNode("node-fault"),
+                EsBody(fixture, "node-esbody", "node-es-probe", BpmnRuntimeFixture.EventSubprocessErrorStart("es-start"))
+            ],
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.Task("work", childNodeId: "node-fault"),
+                BpmnRuntimeFixture.EndEvent("end"),
+                BpmnRuntimeFixture.EventSubprocess("es", "node-esbody")
+            ],
+            sequenceFlows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "work"),
+                BpmnRuntimeFixture.Flow("flow-2", "work", "end")
+            ]);
+
+        var run = await fixture.RunAsync(executable);
+
+        // The host child faults; the scope error event subprocess absorbed it, ran its body, and the scope completed.
+        run.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
+        run.AssertWorkflowCompleted();
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-fault").Status);
+        Assert.Single(run.States("node-es-probe"));
+
+        var incident = Assert.Single(await fixture.Provider.GetRequiredService<IIncidentStateStore>()
+            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
+        Assert.Equal(IncidentStatus.Resolved, incident.Status);
+        Assert.Equal(IncidentResolutionAction.Continue, incident.ResolutionAction);
+        Assert.NotNull(incident.ResolvedAt);
+        Assert.Equal("actexec-bpmn", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
+        Assert.Equal(BpmnExecutionEngine.EventSubprocessErrorAbsorptionReason, incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
+    }
 
     [Fact]
     public async Task EscalationEventSubprocess_DoesNotAbsorbChildFault_CompositeFaults()

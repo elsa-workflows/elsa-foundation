@@ -196,6 +196,49 @@ public sealed class BpmnBoundaryEventTests
     }
 
     [Fact]
+    public async Task ErrorBoundary_RoutesToTask_AbsorbsFault_TaskRunsAndCompletes()
+    {
+        // spec 132 (FR-5): the SHIPPED spec-120 latent bug — an error boundary whose outbound routes to a TASK (not
+        // an end event) schedules that task, so the fault evaluation DEFERS. Before the #989 metadata-leak fix this
+        // misattributed the original fault to the newly scheduled boundary task and faulted the composite; every
+        // shipped spec-120 test routed the boundary to an end event, hiding it. Now: fault absorbed, boundary task
+        // runs and completes, process completes.
+        await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-fault", "actexec-recover");
+        var executable = fixture.NewExecutable(
+            children: [fixture.NewFaultingNode("node-fault"), fixture.NewProbeNode("node-recover")],
+            elements:
+            [
+                BpmnRuntimeFixture.StartEvent(),
+                BpmnRuntimeFixture.Task("host", childNodeId: "node-fault"),
+                BpmnRuntimeFixture.BoundaryEvent("b-error", "host", BpmnEventDefinitionTypes.Error),
+                BpmnRuntimeFixture.Task("recover", childNodeId: "node-recover"),
+                BpmnRuntimeFixture.EndEvent("end-host"),
+                BpmnRuntimeFixture.EndEvent("end-error")
+            ],
+            sequenceFlows:
+            [
+                BpmnRuntimeFixture.Flow("flow-1", "start", "host"),
+                BpmnRuntimeFixture.Flow("flow-2", "host", "end-host"),
+                BpmnRuntimeFixture.Flow("flow-3", "b-error", "recover"),
+                BpmnRuntimeFixture.Flow("flow-4", "recover", "end-error")
+            ]);
+
+        var run = await fixture.RunAsync(executable);
+
+        // The host's child faults; the error boundary absorbs it and the boundary path's task runs to completion.
+        run.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
+        run.AssertWorkflowCompleted();
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-fault").Status);
+        Assert.Equal(ActivityExecutionStatus.Completed, run.State("node-recover").Status);
+
+        var incident = Assert.Single(await fixture.Provider.GetRequiredService<IIncidentStateStore>()
+            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
+        Assert.Equal(IncidentStatus.Resolved, incident.Status);
+        Assert.Equal("actexec-bpmn", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
+        Assert.Equal(BpmnExecutionEngine.ErrorBoundaryAbsorptionReason, incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
+    }
+
+    [Fact]
     public async Task ErrorBoundary_WithSiblingCatchListener_CancelsListener_OnAbsorb()
     {
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-1", "actexec-2", "actexec-3");

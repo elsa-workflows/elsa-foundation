@@ -166,3 +166,29 @@ deterministic (key-set based, no content inspection).
 - Full test projects green: Activities Runtime, Workflows Runtime, BPMN, BPMN Interchange,
   ControlFlow, Architecture. Full solution build clean.
 - Issue #989 closed by the PR.
+
+## Deviations
+
+- **D1 runtime fix — reader inventory confirmed, no tripwire.** The verified reader inventory held exactly:
+  the only readers of the three fault-scoped keys from `CommandMetadata` are the handler's own
+  `IsChildFaulted`/`ReadIncidentId` (reading the `ChildFaultParentEvaluation`-minted item — underived,
+  untouched) and `ReplaySafeFusionDriver` (~266, wants `ChildFaulted` absent). `NewContinuationSchedulingWorkItem`
+  also copies `CommandMetadata` wholesale but is reached ONLY from the non-fault branch (`else if` after
+  `if (childFaulted)`, ~234), so it never inherits fault-evaluation metadata — not a strip site. The two named
+  sites (`NewChildActivityScheduleWorkItems`, `NewCompletionWorkItem`) are the complete set; both now route
+  through one shared helper `WithoutFaultEvaluationMetadata`. Negative check performed: neutralizing the strip
+  fails all three new runtime tests (the clean completion misroutes into `OnChildFaultedAsync`, which reschedules
+  and exhausts the deterministic id pool — the exact #989 leak), confirming the tests bind the fix.
+- **D2 grandparent chain built cheaply (no document-and-skip).** The three-level fault chain was buildable with
+  the existing structural doubles, so test 3 (`CompositeAbsorbsAndCompletesUnderGrandparent_...`) is a full
+  assertion, not a skip. Added infrastructure: a transparent `RecordingSchedulerWorkQueue` decorator (records
+  enqueued items for the hygiene pin) and small recording parent doubles.
+- **D3 error-must-be-interrupting shape rule KEPT (not silently normalized).** BPMN error events are always
+  interrupting and the engine's `AbsorbChildFaultThroughErrorEventSubprocess` activates the catcher as
+  interrupting. Rather than silently normalize an authored non-interrupting error start, the un-gate keeps a
+  shape rule: `ValidateEventSubprocesses` rejects a non-interrupting error start ("must be interrupting") and the
+  importer degrades it (Dropped + finding). This preserves the `BpmnEventSubprocessValidationTests` class-doc's
+  "error-must-be-interrupting rule" and surfaces malformed models instead of altering them. The blanket stated-cut
+  rejection ("not executable in this slice") and the importer's error drop were deleted exactly as specified; a
+  new "≤1 error event subprocess per scope" cap mirrors the escalation catch-all cap (the graph's
+  `ErrorEventSubprocess()` already assumed at most one).

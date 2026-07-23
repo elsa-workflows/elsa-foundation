@@ -131,11 +131,12 @@ Known implementations:
   reason `BpmnExecutionEngine.EventSubprocessScopeInterruptedReason`). `RaiseEscalation` gains the own-scope check
   (returns the matched catcher instead of staging upward); `OnChildNotifiedAsync` gains the specificity ladder
   (`BpmnGraph.EscalationEventSubprocessExact`/`EscalationCatchAllEventSubprocess`); `OnChildFaultedAsync` gains
-  the scope error catcher (`BpmnGraph.ErrorEventSubprocess`, seam-B absorption then interrupting activation). Body
+  the scope error catcher (`BpmnGraph.ErrorEventSubprocess`, seam-B absorption then interrupting activation;
+  executable since the runtime deferred-seam-B metadata-leak fix #989, spec 132). Body
   completion is intercepted before behavior dispatch (`TriggeredByEvent`); two additive diagnostic kinds
   (`EventSubprocessActivated`/`EventSubprocessCompleted`). `ResolveTokenId` was hardened so a nested
   BpmnProcess body's leaked inner `bpmn.tokenId` on an inline completion is not mistaken for the parent's
-  activation token. Behaviors stay decision-only. See the README for the error-trigger runtime seam-B limitation.
+  activation token. Behaviors stay decision-only.
 - **Multi-instance loops (spec 121)** add no behavior: a `BpmnElement.LoopCharacteristics`
   (`BpmnLoopCharacteristics`) turns a task/subprocess host's `ScheduleChild` decision into a loop the
   engine owns entirely — a coordinator token plus private per-instance sub-tokens, each scheduled through
