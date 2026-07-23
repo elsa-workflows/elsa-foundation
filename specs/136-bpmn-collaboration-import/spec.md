@@ -167,13 +167,14 @@ are deterministic.
 
 ## Deviations (implementation)
 
-- **`Internal/BpmnStructureHandler.ReplaceChildren` does not carry `MessageFlows`.** `MessageFlows` was added as a
-  trailing optional constructor parameter on `BpmnAuthoredStructure` so the positional reconstruction in
-  `BpmnStructureHandler.ReplaceChildren` (under `Internal/`, untouched per the zero-`Internal`-changes invariant)
-  keeps compiling. That path therefore drops message-flow metadata on a designer child-replacement (it already
-  passed `Pools` positionally, so pools survive it). The spec's surfaces — import, export, analysis — are
-  unaffected (they never route through `ReplaceChildren`); message flows are wiring documentation, so the loss on
-  that authoring path is acceptable and preserves the invariant.
+- **`Internal/BpmnStructureHandler.ReplaceChildren` did not carry `MessageFlows`** (resolved in a follow-up).
+  `MessageFlows` was added as a trailing optional constructor parameter on `BpmnAuthoredStructure` so the
+  positional reconstruction in `BpmnStructureHandler.ReplaceChildren` (under `Internal/`, untouched per this
+  unit's zero-`Internal`-changes invariant) kept compiling — at the cost of dropping message-flow metadata on a
+  designer child-replacement (it already passed `Pools` positionally, so pools survived it). The spec's
+  surfaces — import, export, analysis — never routed through `ReplaceChildren`, so the invariant held for this
+  unit. A follow-up threaded `MessageFlows` through the rebuild; `BpmnStructureHandlerTests` pins that a
+  `ReplaceChildren` round-trip preserves both `Pools` and `MessageFlows`.
 - **Lanes are still not exported.** The exporter emits the participant/pool wrapper and own-pool message flows
   (D2/D3) but continues not to emit `<laneSet>`/`<lane>` (a pre-existing limitation), so lane `PoolId`s do not
   survive an export→import round-trip; the pool wrapper does. Lane emission was out of D2's stated export scope.
