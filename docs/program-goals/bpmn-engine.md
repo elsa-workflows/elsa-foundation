@@ -36,14 +36,15 @@ general, spoof-proof runtime seam rather than a BPMN-private side channel.
 
 ## Active objectives
 
-- Phase 3 delivery, sequenced by the control room: specs 123 (scoped-variable read seam +
+- **Phase 3 construct list COMPLETE (2026-07-23)**: specs 123 (scoped-variable read seam +
   collection-mode multi-instance, PR #965), 124 (compensation, PR #966), 125 (transactions/cancel
   events, PR #970), 126 (runtime seam C, PR #974), 127 (escalation, PR #975), and 128 (event subprocesses tier 1,
   PR #992; error trigger stated-cut pending issue #989) 132 (#989 fix, PR #996), 133 (call activity, PR #999; #998 filed), and 134 (tier-2 event
-  subprocesses, PR #1000) are merged; the event-subprocess construct is complete, and 135 (message send surface,
-  PR #1002; correlation narrowing filed as #1001) makes cross-pool messaging executable between
-  separately published processes. The final Phase 3 slice is collaboration/pool import
-  (N-definition split + messageFlow wiring — an import-API shape decision).
+  subprocesses, PR #1000) 135 (message send surface, PR #1002; correlation narrowing filed as #1001), and 136
+  (collaboration/pool import, PR #1003) are merged. Every construct on the Phase 3 scope list has
+  shipped. Open follow-ups: #998 (seam-A dispatch-cancel reach), #1001 (receive-side correlation
+  stamping), the CancelLiveWork-through-seam-A carry, outputs→variables BPMN wiring (leaf capture
+  landed in #995), and two chips (call-activity E2E script; ReplaceChildren metadata preservation).
 - Carried follow-ups from Phase 2: terminate/fault teardown through seam A (`CancelLiveWork` is
   logical-only today), error-code matching for error boundaries, non-interrupting timer repetition,
   `completionCondition`, MI output aggregation, `standardLoopCharacteristics`, unbounded-loop
