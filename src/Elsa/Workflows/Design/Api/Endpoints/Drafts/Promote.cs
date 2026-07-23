@@ -1,6 +1,7 @@
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Constants;
 using Elsa.Workflows.Design.Api.Models;
@@ -36,6 +37,10 @@ internal sealed class Promote(ICommandSender commandSender, ILogger<Promote> log
             foreach (var error in exception.Errors)
                 AddError(new ValidationFailure(error.Path, error.Message) { ErrorCode = error.Type });
             await Send.ErrorsAsync(409, cancellationToken);
+        }
+        catch (EntityNotFoundException exception)
+        {
+            ThrowError(exception.Message, 404);
         }
         catch (ArgumentException exception)
         {
