@@ -501,6 +501,163 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public void Leaf_result_projection_output_compiles_a_workflow_scope_variable_capture()
+    {
+        // The ordinary leaf path lowers an authored ActivityNode.Outputs binding through the same compiler the
+        // reusable-activity boundary uses, but against ActivityResultProjectionContract inputs.
+        var projection = new ActivityResultProjectionContract(
+            "Value",
+            "value",
+            new ValueTypeDescriptor("String"),
+            isRequired: false,
+            policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
+        var outputTarget = new WorkflowArgumentState(
+            "Value",
+            new ArgumentValue(
+                JsonSerializer.SerializeToElement(new { referenceKey = "orderId", declaringScopeId = "workflow" }),
+                "Variable"),
+            null, null, null, null,
+            new AuthoredValueConversionRequest(AuthoredValueConversionMode.Auto));
+
+        var captures = LeafOutputCompiler().CompileResultProjectionOutputs(
+            "read-value",
+            [projection],
+            [outputTarget],
+            [new("orderId", "OrderId", new TypeReference("String"), null, null)]);
+
+        var capture = captures["Value"];
+        Assert.Equal("Value", capture.OutputName);
+        Assert.Equal("variable:OrderId", capture.ValueId);
+        Assert.Equal("OrderId", capture.Metadata[RuntimeMetadataKeys.VariableName]);
+        Assert.Equal("orderId", capture.Metadata["targetVariableReferenceKey"]);
+        Assert.Equal(WellKnownRuntimeDurableValueStorageDrivers.Json, capture.StorageDriverKey);
+        Assert.True(capture.CaptureOnSuccessfulCompletion);
+        Assert.NotNull(capture.ConversionPlan);
+    }
+
+    [Fact]
+    public void Leaf_result_projection_without_an_authored_target_produces_no_capture()
+    {
+        var projection = new ActivityResultProjectionContract(
+            "Value",
+            "value",
+            new ValueTypeDescriptor("String"),
+            isRequired: false,
+            policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
+
+        var captures = LeafOutputCompiler().CompileResultProjectionOutputs(
+            "read-value",
+            [projection],
+            [],
+            [new("orderId", "OrderId", new TypeReference("String"), null, null)]);
+
+        Assert.Empty(captures);
+    }
+
+    [Fact]
+    public void Leaf_result_projection_output_targeting_non_workflow_scope_is_rejected()
+    {
+        var projection = new ActivityResultProjectionContract(
+            "Value",
+            "value",
+            new ValueTypeDescriptor("String"),
+            isRequired: false,
+            policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
+        var outputTarget = new WorkflowArgumentState(
+            "Value",
+            new ArgumentValue(
+                JsonSerializer.SerializeToElement(new { referenceKey = "orderId", declaringScopeId = "container-1" }),
+                "Variable"),
+            null, null, null, null);
+
+        var exception = Assert.Throws<ArgumentException>(() => LeafOutputCompiler().CompileResultProjectionOutputs(
+            "read-value",
+            [projection],
+            [outputTarget],
+            [new("orderId", "OrderId", new TypeReference("String"), null, null)]));
+
+        Assert.Contains("non-workflow scope 'container-1'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Leaf_result_projection_output_with_transient_resource_source_is_rejected()
+    {
+        var projection = new ActivityResultProjectionContract(
+            "Value",
+            "value",
+            new ValueTypeDescriptor("String"),
+            isRequired: false,
+            policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
+            sourceRepresentation: ValueRepresentation.TransientResource);
+        var outputTarget = new WorkflowArgumentState(
+            "Value",
+            new ArgumentValue(
+                JsonSerializer.SerializeToElement(new { referenceKey = "orderId", declaringScopeId = "workflow" }),
+                "Variable"),
+            null, null, null, null);
+
+        var exception = Assert.Throws<ArgumentException>(() => LeafOutputCompiler().CompileResultProjectionOutputs(
+            "read-value",
+            [projection],
+            [outputTarget],
+            [new("orderId", "OrderId", new TypeReference("String"), null, null)]));
+
+        Assert.StartsWith("VF-ACT-005", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Leaf_activity_authored_output_compiles_into_a_workflow_scope_variable_capture()
+    {
+        // End-to-end wiring: a single leaf CLR activity whose typed result declares an [Output] projection,
+        // with an authored ActivityNode.Outputs binding, must publish a RuntimeOutputCapture on its node.
+        var registry = TestWellKnownTypeRegistry.Create();
+        var alias = TypeAliasConvention.CanonicalAlias(typeof(OutputProducingActivity));
+        registry.RegisterType(typeof(OutputProducingActivity), alias);
+        var activityVersion = ClrActivityVersion("activity-output-producer", "Test.OutputProducer", alias);
+        var outputTarget = new WorkflowArgumentState(
+            "Value",
+            new ArgumentValue(
+                JsonSerializer.SerializeToElement(new { referenceKey = "orderId", declaringScopeId = "workflow" }),
+                "Variable"),
+            null, null, null, null);
+        var root = new ActivityNode("read-value", activityVersion.Id, [], [outputTarget]);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(
+                root,
+                variables: [new("orderId", "OrderId", new TypeReference("String"), null, null)])),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var capture = executable.RootActivity.OutputCaptures["Value"];
+        Assert.Equal("variable:OrderId", capture.ValueId);
+        Assert.Equal("OrderId", capture.Metadata[RuntimeMetadataKeys.VariableName]);
+        Assert.True(capture.CaptureOnSuccessfulCompletion);
+        Assert.Contains(
+            new RuntimeStorageDriverRequirement(WellKnownRuntimeDurableValueStorageDrivers.Json),
+            executable.StorageDriverRequirements);
+    }
+
+    private static RuntimeOutputCaptureCompiler LeafOutputCompiler() =>
+        new(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
+
+    // A leaf CLR activity whose typed result record declares a stable [Output] projection, so the publish-time
+    // contract build produces an ActivityResultProjectionContract the output-capture compiler can bind to.
+    public sealed record OutputProducingResult
+    {
+        [Output(Key = "Value")]
+        public string Value { get; init; } = string.Empty;
+    }
+
+    private sealed class OutputProducingActivity : Activity<OutputProducingResult>
+    {
+        protected override ValueTask<ActivityTransition<OutputProducingResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(new OutputProducingResult { Value = "produced" }));
+    }
+
+    [Fact]
     public async Task Compiler_applies_event_collected_node_metadata_before_executable_assembly()
     {
         var workflowVersion = WorkflowVersion(Node("write-one", Text("hello")));
@@ -1790,6 +1947,8 @@ public sealed class WorkflowExecutableCompilerTests
         var references = new EmptySourceReferenceReader();
         var registry = TestWellKnownTypeRegistry.Create();
         var inputCompiler = new RuntimeInputBindingCompiler(registry);
+        var outputCompiler = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry(
+            [new JsonRuntimeDurableValueStorageDriver()]));
         return new WorkflowExecutableCompiler(
             new FakeVersionStore(workflow),
             new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
@@ -1798,14 +1957,14 @@ public sealed class WorkflowExecutableCompilerTests
             references,
             new ActivityTemplatePlacer(publications, templates, references, new Sha256ActivityPlacementHasher()),
             inputCompiler,
-            new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry(
-                [new JsonRuntimeDurableValueStorageDriver()])),
+            outputCompiler,
             new WorkflowExecutableHasher(),
             new ActivityTreeProjector(_activityStructureService),
             new ExecutableNodeCompiler(
                 _activityStructureService,
                 registry,
-                inputCompiler),
+                inputCompiler,
+                outputCompiler),
             placementSidecars: null,
             metadataEnricher: MetadataEnricher(new FixedDependencySource(dependencies)),
             executableStore: executableStore);
