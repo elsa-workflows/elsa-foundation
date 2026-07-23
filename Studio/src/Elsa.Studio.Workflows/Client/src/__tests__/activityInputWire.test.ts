@@ -238,10 +238,12 @@ describe("authored conversion request round-trip", () => {
     ]);
   });
 
-  it("leaves activity-node output argument states untouched on both directions", () => {
+  it("leaves a foreign non-variable output argument state untouched on both directions", () => {
+    // Only Variable-expression outputs are the authored variable captures the editor models; any other
+    // output binding rides through the outputs array verbatim so a document authored elsewhere is lossless.
     const outputs = [{
       referenceKey: "response",
-      value: { value: { referenceKey: "v1" }, expressionType: "Variable" },
+      value: { value: "wf-out", expressionType: "Output" },
       conversion: { mode: "json" }
     }];
     const loaded: WorkflowDefinitionState = {
@@ -250,6 +252,90 @@ describe("authored conversion request round-trip", () => {
 
     expect(expandStateFromWire(loaded).rootActivity!.outputs).toEqual(outputs);
     expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.outputs).toEqual(outputs);
+  });
+});
+
+describe("activity output-capture wire round-trip", () => {
+  it("folds an authored top-level output capture into the canonical outputs array", () => {
+    const state = stateOf(readLine("read-one", {
+      Result: { target: { referenceKey: "line", declaringScopeId: "workflow" } }
+    }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    expect(node.outputs).toEqual([
+      { referenceKey: "Result", value: { value: { referenceKey: "line", declaringScopeId: "workflow" }, expressionType: "Variable" } }
+    ]);
+    expect("Result" in node).toBe(false);
+  });
+
+  it("produces no output entry for an unbound output", () => {
+    const state = stateOf(readLine("read-one", {}));
+    expect(canonicalizeStateForWire(state).rootActivity!.outputs).toEqual([]);
+  });
+
+  it("folds an authored conversion request onto the output capture and omits the default", () => {
+    const withConversionState = stateOf(readLine("read-one", {
+      Result: { target: { referenceKey: "line", declaringScopeId: "workflow" }, conversion: { mode: "json" } }
+    }));
+    const plainState = stateOf(readLine("read-two", {
+      Result: { target: { referenceKey: "line", declaringScopeId: "workflow" } }
+    }));
+
+    expect(canonicalizeStateForWire(withConversionState).rootActivity!.outputs).toEqual([
+      { referenceKey: "Result", value: { value: { referenceKey: "line", declaringScopeId: "workflow" }, expressionType: "Variable" }, conversion: { mode: "json" } }
+    ]);
+    expect("conversion" in (canonicalizeStateForWire(plainState).rootActivity!.outputs![0] as object)).toBe(false);
+  });
+
+  it("expands a Variable-expression output back into the in-memory capture model on load", () => {
+    const outputs = [{
+      referenceKey: "Result",
+      value: { value: { referenceKey: "line", declaringScopeId: "workflow" }, expressionType: "Variable" },
+      conversion: { mode: "json" }
+    }];
+    const loaded: WorkflowDefinitionState = {
+      rootActivity: { nodeId: "n1", activityVersionId: "v1", inputs: [], outputs, structure: null }
+    };
+
+    const expanded = expandStateFromWire(loaded).rootActivity as ActivityNode & { Result: Record<string, unknown> };
+    expect(expanded.Result).toEqual({
+      target: { referenceKey: "line", declaringScopeId: "workflow" },
+      conversion: { mode: "json" }
+    });
+    expect(expanded.outputs).toEqual([]);
+
+    // Re-canonicalize is lossless.
+    expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.outputs).toEqual(outputs);
+  });
+
+  it("preserves forward-compatible output ArgumentState extras through expand and canonicalize", () => {
+    const outputs = [{
+      referenceKey: "Result",
+      value: { value: { referenceKey: "line", declaringScopeId: "workflow" }, expressionType: "Variable" },
+      autoEvaluate: false,
+      someFutureOutputField: { nested: 1 }
+    }];
+    const loaded: WorkflowDefinitionState = {
+      rootActivity: { nodeId: "n1", activityVersionId: "v1", inputs: [], outputs, structure: null }
+    };
+
+    const expanded = expandStateFromWire(loaded).rootActivity as ActivityNode & { Result: Record<string, unknown> };
+    expect(expanded.Result.argumentExtras).toEqual({ autoEvaluate: false, someFutureOutputField: { nested: 1 } });
+    expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.outputs).toEqual(outputs);
+  });
+
+  it("folds captures and input bindings independently on the same node", () => {
+    const state = stateOf({
+      ...readLine("mixed", { prompt: wrapped("Name?", "Literal") }),
+      Result: { target: { referenceKey: "line", declaringScopeId: "workflow" } }
+    });
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+    expect(node.inputs).toEqual([{ referenceKey: "prompt", value: { value: "Name?", expressionType: "Literal" } }]);
+    expect(node.outputs).toEqual([
+      { referenceKey: "Result", value: { value: { referenceKey: "line", declaringScopeId: "workflow" }, expressionType: "Variable" } }
+    ]);
   });
 });
 
@@ -380,6 +466,12 @@ function writeLine(nodeId: string, properties: Record<string, unknown>): Activit
     structure: null,
     ...properties
   };
+}
+
+// A regular activity carrying authored output captures as top-level properties (keyed by output
+// referenceKey), the output-side mirror of writeLine's top-level input properties.
+function readLine(nodeId: string, properties: Record<string, unknown>): ActivityNode {
+  return writeLine(nodeId, properties);
 }
 
 function wrapped(value: unknown, type: string) {

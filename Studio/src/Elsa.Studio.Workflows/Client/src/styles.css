@@ -4197,6 +4197,24 @@ button.wf-node-slot-badge:focus-visible {
   font-size: 11px;
 }
 
+.wf-output-row-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.wf-output-capture {
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.wf-output-capture-label {
+  color: var(--wf-muted-text);
+  font-size: 11px;
+}
+
 .wf-runtime-panel {
   display: grid;
   gap: 10px;

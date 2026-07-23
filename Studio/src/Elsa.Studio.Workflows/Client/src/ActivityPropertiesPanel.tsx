@@ -873,7 +873,7 @@ const conversionModePickerDescriptors: StudioExpressionDescriptor[] = conversion
 // mode keeps free-form id/version entry, so an unreachable listing never blocks authoring).
 const conversionProfilesCache = new Map<string, Promise<ConversionProfileReference[]>>();
 
-function useConversionProfiles(context: StudioEndpointContext): ConversionProfileReference[] {
+export function useConversionProfiles(context: StudioEndpointContext): ConversionProfileReference[] {
   const [profiles, setProfiles] = useState<ConversionProfileReference[]>(builtInConversionProfiles);
 
   useEffect(() => {

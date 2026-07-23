@@ -186,7 +186,15 @@ export function InspectorPanel({
         </div>
       ) : null}
       {propertiesPanel}
-      <ActivityOutputsPanel descriptor={selectedDescriptor} />
+      <ActivityOutputsPanel
+        descriptor={selectedDescriptor}
+        activity={selectedNode}
+        context={context}
+        visibleVariables={scopedVariableAnalysis.visibleVariables}
+        scopeStatus={scopedVariableAnalysis.status}
+        scopeRetry={scopedVariableAnalysis.retry}
+        onChange={onSelectedActivityChange}
+      />
       {selectedSupportsScopedVariables ? (
         <div className="wf-container-variables">
           <ScopedVariablesEditor

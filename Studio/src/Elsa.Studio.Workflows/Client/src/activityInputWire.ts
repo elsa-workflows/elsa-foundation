@@ -165,16 +165,19 @@ function canonicalizeActivityNode(node: ActivityNode): ActivityNode {
   // Seed from any pre-existing wire-shaped inputs (e.g. template-seeded defaults on a freshly dropped
   // node), then overlay the top-level authored properties — an edited value wins over its seeded
   // default under the same referenceKey. Keyed by referenceKey, so the transform is idempotent.
-  const inputs = new Map<string, unknown>();
-  for (const existing of Array.isArray(node.inputs) ? node.inputs : []) {
-    if (isRecord(existing) && typeof existing.referenceKey === "string") inputs.set(existing.referenceKey, existing);
-  }
+  const inputs = seedArgumentMap(node.inputs);
+  // Output captures fold into `node.outputs[]` the same way inputs fold into `node.inputs[]`: seed from
+  // existing wire entries (including foreign, non-capture bindings that must survive verbatim), then
+  // overlay authored top-level captures under the output's referenceKey.
+  const outputs = seedArgumentMap(node.outputs);
 
   const extras: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node)) {
     if (structuralKeys.has(key)) continue;
     if (isWrappedInputValue(value)) {
       inputs.set(key, toWireArgumentState(key, value, inputs.get(key)));
+    } else if (isOutputCaptureValue(value)) {
+      outputs.set(key, toWireOutputArgumentState(key, value, outputs.get(key)));
     } else {
       extras[key] = value;
     }
@@ -185,9 +188,17 @@ function canonicalizeActivityNode(node: ActivityNode): ActivityNode {
     nodeId: node.nodeId,
     activityVersionId: node.activityVersionId,
     inputs: [...inputs.values()],
-    outputs: Array.isArray(node.outputs) ? node.outputs : [],
+    outputs: [...outputs.values()],
     structure: node.structure
   };
+}
+
+function seedArgumentMap(records: unknown): Map<string, unknown> {
+  const map = new Map<string, unknown>();
+  for (const existing of Array.isArray(records) ? records : []) {
+    if (isRecord(existing) && typeof existing.referenceKey === "string") map.set(existing.referenceKey, existing);
+  }
+  return map;
 }
 
 // The wrapped value is authoritative for the expression and the conversion request (its absence on an
@@ -204,6 +215,31 @@ function toWireArgumentState(
     ...(wrapped.argumentExtras ?? omitKeys(seededRecord, argumentStateOwnKeys)),
     referenceKey,
     value: toWireArgument(wrapped.expression),
+    ...(conversion != null ? { conversion } : {})
+  };
+}
+
+// The authored in-memory shape for an output capture (see activityOutputCapture.ts): a variable target
+// plus optional conversion/extras. The target rides the wire as a Variable-expression ArgumentValue.
+interface OutputCaptureValue {
+  target: Record<string, unknown>;
+  conversion?: unknown;
+  argumentExtras?: Record<string, unknown>;
+}
+
+// The capture value is authoritative for the target and the conversion request; a seeded wire record only
+// fills in the passthrough ArgumentState extras when the capture was never expanded.
+function toWireOutputArgumentState(
+  referenceKey: string,
+  capture: OutputCaptureValue,
+  seeded: unknown
+): WireArgumentState {
+  const seededRecord = isRecord(seeded) ? seeded : {};
+  const conversion = "conversion" in capture ? capture.conversion : seededRecord.conversion;
+  return {
+    ...(capture.argumentExtras ?? omitKeys(seededRecord, argumentStateOwnKeys)),
+    referenceKey,
+    value: { value: capture.target, expressionType: "Variable" },
     ...(conversion != null ? { conversion } : {})
   };
 }
@@ -230,7 +266,29 @@ function expandActivityNode(node: ActivityNode): ActivityNode {
     } satisfies WrappedInputValue;
   }
 
-  return { ...node, ...expanded, inputs: [] };
+  // Expand only Variable-expression output bindings into the editable in-memory capture model; any other
+  // output ArgumentState (a foreign non-variable binding) rides through the outputs array untouched so a
+  // document authored elsewhere never loses fields on load.
+  const remainingOutputs: unknown[] = [];
+  for (const argument of Array.isArray(node.outputs) ? node.outputs : []) {
+    const capture = toOutputCaptureValue(argument);
+    if (capture) expanded[(argument as Record<string, unknown>).referenceKey as string] = capture;
+    else remainingOutputs.push(argument);
+  }
+
+  return { ...node, ...expanded, inputs: [], outputs: remainingOutputs };
+}
+
+function toOutputCaptureValue(argument: unknown): OutputCaptureValue | null {
+  if (!isRecord(argument) || typeof argument.referenceKey !== "string") return null;
+  const argumentValue = isRecord(argument.value) ? argument.value : null;
+  if (!argumentValue || argumentValue.expressionType !== "Variable" || !isRecord(argumentValue.value)) return null;
+  const argumentExtras = omitKeys(argument, argumentStateOwnKeys);
+  return {
+    target: argumentValue.value,
+    ...(argument.conversion != null ? { conversion: argument.conversion } : {}),
+    ...(Object.keys(argumentExtras).length > 0 ? { argumentExtras } : {})
+  };
 }
 
 // Resolves an expression to the backend's ArgumentValue { value, expressionType }. Most expressions keep
@@ -265,6 +323,14 @@ function isWrappedInputValue(value: unknown): value is WrappedInputValue {
   if (!isRecord(value) || Array.isArray(value)) return false;
   const expression = value.expression;
   return isRecord(expression) && typeof expression.type === "string";
+}
+
+// An authored output capture carries a variable `target` reference (never an `expression`), so it is
+// distinguishable from a wrapped input value among the node's top-level authored properties.
+function isOutputCaptureValue(value: unknown): value is OutputCaptureValue {
+  if (!isRecord(value) || Array.isArray(value)) return false;
+  const target = value.target;
+  return isRecord(target) && typeof target.referenceKey === "string";
 }
 
 function isActivityNode(value: unknown): value is ActivityNode {
