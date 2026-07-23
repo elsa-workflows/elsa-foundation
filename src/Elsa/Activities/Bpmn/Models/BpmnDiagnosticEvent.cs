@@ -70,5 +70,23 @@ public enum BpmnDiagnosticKind
     EscalationUnhandled,
 
     /// <summary>An interrupting escalation boundary matched a notification whose host had already terminalized (spec 127); a no-op, never a fault.</summary>
-    EscalationLate
+    EscalationLate,
+
+    /// <summary>An event subprocess was activated by its start-event trigger (escalation or error) (spec 128): an activation token was minted and its body scheduled.</summary>
+    EventSubprocessActivated,
+
+    /// <summary>An event subprocess body ran to completion (spec 128): the activation token is consumed and nothing is routed (the element has no flows).</summary>
+    EventSubprocessCompleted,
+
+    /// <summary>A call activity's bound child completed with a failure outcome (Faulted/DispatchFailed/Cancelled) and the engine routed the call-activity failure ladder (spec 133 D3), instead of normal outbound flows.</summary>
+    CallActivityFailureRouted,
+
+    /// <summary>A tier-2 scope listener was armed (spec 134): a message/signal/timer event subprocess minted a listener token and scheduled its suspending listener child at scope start (or re-armed after a non-interrupting fire).</summary>
+    ScopeListenerArmed,
+
+    /// <summary>A tier-2 scope listener fired (spec 134): a message/signal/timer stimulus resumed the listener child, so the event subprocess activates (non-interrupting also re-arms; interrupting drains sibling listeners).</summary>
+    ScopeListenerFired,
+
+    /// <summary>A tier-2 scope listener was retired (spec 134): its scope completed (teardown-then-complete) or was interrupted, so the still-armed listener token and its durable child are cancelled.</summary>
+    ScopeListenerRetired
 }

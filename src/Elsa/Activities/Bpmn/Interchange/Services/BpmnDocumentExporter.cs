@@ -48,6 +48,11 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         // importer's global id→name index the messageRef/signalRef resolve through.
         var declarations = new Dictionary<string, (string Type, string Name)>(StringComparer.Ordinal);
         CollectMessageSignalDeclarations(structure, declarations);
+        // spec 136: a message flow's message name contributes the same deduped root <message> declaration its
+        // re-emitted messageRef targets.
+        foreach (var flow in structure.MessageFlows)
+            if (!string.IsNullOrWhiteSpace(flow.MessageName))
+                declarations[MessageSignalDeclarationId(BpmnEventDefinitionTypes.Message, flow.MessageName)] = (BpmnEventDefinitionTypes.Message, flow.MessageName.Trim());
         foreach (var declaration in declarations.OrderBy(entry => entry.Key, StringComparer.Ordinal))
             definitions.Add(new XElement(
                 BpmnXmlNames.Model + (declaration.Value.Type == BpmnEventDefinitionTypes.Message ? "message" : "signal"),
@@ -68,13 +73,20 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             definitions.Add(escalation);
         }
 
+        // spec 136 D2/D3: a structure carrying pools/message flows emits a <collaboration> wrapper (its own
+        // participant(s), deduped by pool id; the exported process is the referenced process) plus its own-pool
+        // message flows, ahead of the process. Full N-pool document export from N separate structures is a
+        // documented cut — this is a per-definition export.
+        if (BuildCollaboration(processId, structure) is { } collaboration)
+            definitions.Add(collaboration);
+
         definitions.Add(process);
         definitions.Add(BuildDiagram(processId, structure));
 
         return new XDocument(new XDeclaration("1.0", "utf-8", null), definitions).ToString();
     }
 
-    private static void AppendContainerContent(XElement container, BpmnAuthoredStructure structure)
+    private static void AppendContainerContent(XElement container, BpmnAuthoredStructure structure, bool isEventSubprocessBody = false)
     {
         var childrenByNodeId = structure.Activities.ToDictionary(activity => activity.NodeId, StringComparer.Ordinal);
 
@@ -92,12 +104,15 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         {
             var xmlElement = element.ElementType switch
             {
-                BpmnElementTypes.StartEvent => BuildEventElement("startEvent", element, isCatch: false),
+                BpmnElementTypes.StartEvent => BuildEventElement("startEvent", element, isCatch: false, isEventSubprocessBodyStart: isEventSubprocessBody),
                 BpmnElementTypes.IntermediateCatchEvent => BuildEventElement("intermediateCatchEvent", element, isCatch: true),
                 BpmnElementTypes.IntermediateThrowEvent => BuildThrowEvent(element),
                 BpmnElementTypes.EndEvent => BuildEndEvent(element),
                 BpmnElementTypes.SubProcess => BuildSubProcess(element, childrenByNodeId),
+                BpmnElementTypes.CallActivity => BuildCallActivity(element, childrenByNodeId),
                 BpmnElementTypes.BoundaryEvent => BuildBoundaryEvent(element),
+                BpmnElementTypes.SendTask => BuildMessageTask("sendTask", element),
+                BpmnElementTypes.ReceiveTask => BuildMessageTask("receiveTask", element),
                 _ => new XElement(BpmnXmlNames.Model + element.ElementType)
             };
 
@@ -177,10 +192,13 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
         // spec 127: an escalation end event emits an escalationEventDefinition + escalationRef.
         else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation)) is { } escalation)
             endEvent.Add(BuildEscalationEventDefinition(escalation));
+        // spec 135: a message end event emits a messageEventDefinition + messageRef (its synthesized PublishEvent child is engine detail, not exported).
+        else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Message)) is { } message)
+            AppendEventDefinition(endEvent, message, isCatch: false);
         return endEvent;
     }
 
-    /// <summary>Builds a compensate/escalation intermediate throw event (spec 124/127): <c>&lt;intermediateThrowEvent&gt;</c> + the single event definition.</summary>
+    /// <summary>Builds a compensate/escalation/message intermediate throw event (spec 124/127/135): <c>&lt;intermediateThrowEvent&gt;</c> + the single event definition.</summary>
     private static XElement BuildThrowEvent(BpmnElement element)
     {
         var throwEvent = new XElement(BpmnXmlNames.Model + "intermediateThrowEvent");
@@ -188,6 +206,9 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             throwEvent.Add(BuildCompensateEventDefinition(compensation));
         else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation)) is { } escalation)
             throwEvent.Add(BuildEscalationEventDefinition(escalation));
+        // spec 135: a message throw event emits a messageEventDefinition + messageRef (its synthesized PublishEvent child is engine detail, not exported).
+        else if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Message)) is { } message)
+            AppendEventDefinition(throwEvent, message, isCatch: false);
         return throwEvent;
     }
 
@@ -213,11 +234,36 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     /// definition from the populated <see cref="BpmnEventDefinition"/> properties (spec 118 D4). A catch
     /// event's bound child (<c>Delay</c>/<c>Event</c>) is engine detail and is not exported.
     /// </summary>
-    private static XElement BuildEventElement(string localName, BpmnElement element, bool isCatch)
+    private static XElement BuildEventElement(string localName, BpmnElement element, bool isCatch, bool isEventSubprocessBodyStart = false)
     {
         var xmlElement = new XElement(BpmnXmlNames.Model + localName);
         if (element.EventDefinitions.FirstOrDefault() is { } definition)
-            AppendEventDefinition(xmlElement, definition, isCatch);
+        {
+            // spec 128 D7: an event-subprocess body start declares an escalation/error trigger + isInterrupting="false"
+            // when non-interrupting (the default-true convention omits it when interrupting).
+            if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation))
+            {
+                xmlElement.Add(BuildEscalationEventDefinition(definition));
+                if (!element.CancelActivity) xmlElement.SetAttributeValue("isInterrupting", "false");
+            }
+            else if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Error))
+            {
+                xmlElement.Add(new XElement(BpmnXmlNames.Model + "errorEventDefinition"));
+                if (!element.CancelActivity) xmlElement.SetAttributeValue("isInterrupting", "false");
+            }
+            else if (isEventSubprocessBodyStart)
+            {
+                // spec 134 D4: a message/signal/timer event-subprocess body start exports its stimulus + isInterrupting.
+                // A timer body start is a one-shot <timeDuration> (isCatch shape), NOT the recurring <timeCycle> a root
+                // timer start uses. The synthesized scope-listener child is engine detail and is not exported.
+                AppendEventDefinition(xmlElement, definition, isCatch: true);
+                if (!element.CancelActivity) xmlElement.SetAttributeValue("isInterrupting", "false");
+            }
+            else
+            {
+                AppendEventDefinition(xmlElement, definition, isCatch);
+            }
+        }
         return xmlElement;
     }
 
@@ -311,6 +357,15 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             declarationsById[MessageSignalDeclarationId(definition.Type, name)] = (definition.Type, name.Trim());
         }
 
+        // spec 135: a bound sendTask/receiveTask carries its message name in Properties (a task uses a messageRef
+        // attribute, not a nested event definition), so its root <message> declaration is collected from there.
+        foreach (var element in structure.Elements)
+        {
+            if (!element.Properties.TryGetValue(BpmnDocumentImporter.MessageNamePropertyKey, out var taskName) || string.IsNullOrWhiteSpace(taskName))
+                continue;
+            declarationsById[MessageSignalDeclarationId(BpmnEventDefinitionTypes.Message, taskName)] = (BpmnEventDefinitionTypes.Message, taskName.Trim());
+        }
+
         foreach (var child in structure.Activities.Where(child => StringComparer.Ordinal.Equals(child.Structure?.Kind, BpmnProcessActivity.StructureKind)))
             CollectMessageSignalDeclarations(ReadStructure(child), declarationsById);
     }
@@ -342,10 +397,132 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
     /// <summary>The deterministic root-declaration id for an escalation code (spec 127 D4; message/signal precedent).</summary>
     private static string EscalationDeclarationId(string code) => $"escalation-{SanitizeId(code.Trim())}";
 
+    /// <summary>
+    /// Builds a <c>&lt;callActivity&gt;</c> (spec 133 D5): emits <c>calledElement</c> (the <c>bpmn.calledElement</c>
+    /// passthrough when present, else the bound child's authored <c>WorkflowDefinitionId</c>), the
+    /// <c>elsa:workflowDefinitionId</c> extension attribute when bound, and <c>elsa:waitForCompletion="false"</c> when
+    /// the bound child is authored fire-and-forget (the importer honors it; the default-true waited convention omits
+    /// it). The bound <c>DispatchWorkflow</c> child is an Elsa concern the importer re-establishes, so its node is not
+    /// inlined. Round-trips bound and unbound.
+    /// </summary>
+    private static XElement BuildCallActivity(BpmnElement element, IReadOnlyDictionary<string, ActivityNode> childrenByNodeId)
+    {
+        var callActivity = new XElement(BpmnXmlNames.Model + "callActivity");
+
+        string? workflowDefinitionId = null;
+        var waitForCompletion = true;
+        if (element.ChildNodeId is { } childNodeId && childrenByNodeId.TryGetValue(childNodeId, out var child))
+        {
+            workflowDefinitionId = ReadLiteralString(child, "WorkflowDefinitionId");
+            waitForCompletion = ReadLiteralBool(child, "WaitForCompletion") ?? true;
+        }
+
+        var calledElement = element.Properties.TryGetValue("bpmn.calledElement", out var passthrough) && !string.IsNullOrWhiteSpace(passthrough)
+            ? passthrough
+            : workflowDefinitionId;
+        if (!string.IsNullOrWhiteSpace(calledElement))
+            callActivity.SetAttributeValue("calledElement", calledElement);
+        if (!string.IsNullOrWhiteSpace(workflowDefinitionId))
+            callActivity.SetAttributeValue(BpmnXmlNames.Elsa + "workflowDefinitionId", workflowDefinitionId);
+        if (!waitForCompletion)
+            callActivity.SetAttributeValue(BpmnXmlNames.Elsa + "waitForCompletion", "false");
+
+        return callActivity;
+    }
+
+    /// <summary>Reads a synthesized child's literal string input (spec 133 D5), tolerating both the in-memory raw value and the round-tripped <see cref="JsonElement"/> form.</summary>
+    private static string? ReadLiteralString(ActivityNode node, string referenceKey) =>
+        node.Inputs.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, referenceKey))?.Value.Value switch
+        {
+            null => null,
+            string text => text,
+            JsonElement { ValueKind: JsonValueKind.String } json => json.GetString(),
+            { } other => other.ToString()
+        };
+
+    /// <summary>Reads a synthesized child's literal bool input (spec 133 D5), tolerating both the in-memory raw value and the round-tripped <see cref="JsonElement"/> form.</summary>
+    private static bool? ReadLiteralBool(ActivityNode node, string referenceKey) =>
+        node.Inputs.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, referenceKey))?.Value.Value switch
+        {
+            null => null,
+            bool value => value,
+            JsonElement { ValueKind: JsonValueKind.True } => true,
+            JsonElement { ValueKind: JsonValueKind.False } => false,
+            JsonElement { ValueKind: JsonValueKind.String } json => bool.TryParse(json.GetString(), out var parsed) ? parsed : null,
+            string text => bool.TryParse(text, out var parsed) ? parsed : null,
+            _ => null
+        };
+
+    /// <summary>
+    /// Builds a <c>&lt;sendTask&gt;</c>/<c>&lt;receiveTask&gt;</c> (spec 135): emits <c>messageRef</c> pointing at the
+    /// deduped root <c>&lt;message&gt;</c> declaration when the element carries a resolved message name (a bound send/receive
+    /// task). Its synthesized <c>PublishEvent</c>/<c>Event</c> child is engine detail the importer re-establishes, so its node
+    /// is not inlined. An unbound (name-less) send/receive task emits a bare task element and round-trips as unbound.
+    /// </summary>
+    private static XElement BuildMessageTask(string localName, BpmnElement element)
+    {
+        var task = new XElement(BpmnXmlNames.Model + localName);
+        if (element.Properties.TryGetValue(BpmnDocumentImporter.MessageNamePropertyKey, out var name) && !string.IsNullOrWhiteSpace(name))
+            task.SetAttributeValue("messageRef", MessageSignalDeclarationId(BpmnEventDefinitionTypes.Message, name));
+        return task;
+    }
+
+    /// <summary>
+    /// Builds the <c>&lt;collaboration&gt;</c> wrapper (spec 136 D2/D3) for a structure carrying pools and/or message
+    /// flows: a <c>&lt;participant&gt;</c> per pool (deduped by pool id, referencing the exported process) and a
+    /// <c>&lt;messageFlow&gt;</c> per own-pool flow (deduped by flow id; a black-box endpoint emits its pool id as the
+    /// endpoint ref, a resolved message name a <c>messageRef</c> to the deduped root declaration). Returns <c>null</c>
+    /// when the structure carries neither.
+    /// </summary>
+    private static XElement? BuildCollaboration(string processId, BpmnAuthoredStructure structure)
+    {
+        if (structure.Pools.Count == 0 && structure.MessageFlows.Count == 0)
+            return null;
+
+        var collaboration = new XElement(BpmnXmlNames.Model + "collaboration", new XAttribute("id", $"{processId}-collaboration"));
+
+        var seenPools = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var pool in structure.Pools)
+        {
+            if (!seenPools.Add(pool.PoolId))
+                continue;
+            var participant = new XElement(BpmnXmlNames.Model + "participant",
+                new XAttribute("id", pool.PoolId),
+                new XAttribute("processRef", processId));
+            if (pool.Name is not null)
+                participant.SetAttributeValue("name", pool.Name);
+            collaboration.Add(participant);
+        }
+
+        var seenFlows = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var flow in structure.MessageFlows)
+        {
+            var sourceRef = flow.SourceElementId ?? flow.SourcePoolId;
+            var targetRef = flow.TargetElementId ?? flow.TargetPoolId;
+            if (string.IsNullOrWhiteSpace(sourceRef) || string.IsNullOrWhiteSpace(targetRef) || !seenFlows.Add(flow.FlowId))
+                continue;
+            var messageFlow = new XElement(BpmnXmlNames.Model + "messageFlow",
+                new XAttribute("id", flow.FlowId),
+                new XAttribute("sourceRef", sourceRef),
+                new XAttribute("targetRef", targetRef));
+            if (flow.Name is not null)
+                messageFlow.SetAttributeValue("name", flow.Name);
+            if (flow.MessageName is not null)
+                messageFlow.SetAttributeValue("messageRef", MessageSignalDeclarationId(BpmnEventDefinitionTypes.Message, flow.MessageName));
+            collaboration.Add(messageFlow);
+        }
+
+        return collaboration;
+    }
+
     private static XElement BuildSubProcess(BpmnElement element, IReadOnlyDictionary<string, ActivityNode> childrenByNodeId)
     {
         // spec 125: a transaction subprocess exports as <transaction>; everything else is identical to a subprocess.
         var subProcess = new XElement(BpmnXmlNames.Model + (element.IsTransaction ? "transaction" : "subProcess"));
+
+        // spec 128 D7: an event subprocess exports triggeredByEvent="true"; its body start event carries the trigger.
+        if (element.TriggeredByEvent)
+            subProcess.SetAttributeValue("triggeredByEvent", "true");
 
         // A nested BpmnProcess child inlines as subprocess content; any other bound activity has no
         // BPMN representation for its internals, so the subprocess exports empty (the binding is an
@@ -354,7 +531,7 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
             && childrenByNodeId.TryGetValue(childNodeId, out var child)
             && StringComparer.Ordinal.Equals(child.Structure?.Kind, BpmnProcessActivity.StructureKind))
         {
-            AppendContainerContent(subProcess, ReadStructure(child));
+            AppendContainerContent(subProcess, ReadStructure(child), isEventSubprocessBody: element.TriggeredByEvent);
         }
 
         return subProcess;

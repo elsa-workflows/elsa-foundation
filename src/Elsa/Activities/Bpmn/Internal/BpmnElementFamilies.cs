@@ -14,6 +14,12 @@ public static class BpmnElementFamilies
     public const string StartEventTimer = "startEvent.timer";
     public const string StartEventMessage = "startEvent.message";
     public const string StartEventSignal = "startEvent.signal";
+
+    /// <summary>The escalation event-subprocess body start family (spec 128): seeds one token via the scheduled-start hint, then routes outbound like a none start. Never externally triggered.</summary>
+    public const string StartEventEscalation = "startEvent.escalation";
+
+    /// <summary>The error event-subprocess body start family (spec 128): seeds one token via the scheduled-start hint, then routes outbound like a none start. Never externally triggered.</summary>
+    public const string StartEventError = "startEvent.error";
     public const string EndEventNone = "endEvent.none";
     public const string EndEventTerminate = "endEvent.terminate";
 
@@ -30,8 +36,14 @@ public static class BpmnElementFamilies
     /// <summary>The escalation intermediate throw event family (spec 127): raises an escalation to the parent scope, then routes its outbound flows (fire-and-continue).</summary>
     public const string IntermediateThrowEventEscalation = "intermediateThrowEvent.escalation";
 
+    /// <summary>The message intermediate throw event family (spec 135): a bound-child send — schedules the synthesized <c>PublishEvent</c> child, then routes its outbound flows on the child's fire-and-continue completion.</summary>
+    public const string IntermediateThrowEventMessage = "intermediateThrowEvent.message";
+
     /// <summary>The escalation end event family (spec 127): raises an escalation to the parent scope, then consumes its token (none-end semantics).</summary>
     public const string EndEventEscalation = "endEvent.escalation";
+
+    /// <summary>The message end event family (spec 135): a bound-child send — schedules the synthesized <c>PublishEvent</c> child, then consumes its token on the child's completion (none-end semantics).</summary>
+    public const string EndEventMessage = "endEvent.message";
     public const string Task = "task";
     public const string SubProcess = "subProcess";
     public const string ExclusiveGateway = "exclusiveGateway";
@@ -51,7 +63,10 @@ public static class BpmnElementFamilies
         BpmnElementTypes.ManualTask,
         BpmnElementTypes.BusinessRuleTask,
         BpmnElementTypes.SendTask,
-        BpmnElementTypes.ReceiveTask
+        BpmnElementTypes.ReceiveTask,
+        // spec 133: a call activity resolves to the task family (TaskBehavior unchanged) and is a boundary-host /
+        // multi-instance-legal member; its call-activity distinction is the engine-side failure-outcome translation.
+        BpmnElementTypes.CallActivity
     };
 
     public static string Resolve(BpmnElement element)
@@ -126,6 +141,13 @@ public static class BpmnElementFamilies
         element.EventDefinitions.Count == 1 &&
         StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Escalation);
 
+    /// <summary>True when an element is a message throw (intermediate) or message end event (spec 135): it carries exactly one message event definition. A message throw/end is a bound-child send (it binds a synthesized <c>PublishEvent</c>).</summary>
+    public static bool IsMessageThrowOrEnd(BpmnElement element) =>
+        (StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateThrowEvent) ||
+         StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent)) &&
+        element.EventDefinitions.Count == 1 &&
+        StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Message);
+
     /// <summary>True when an element is an escalation throw (intermediate) or escalation end event (spec 127): it carries exactly one escalation event definition.</summary>
     public static bool IsEscalationThrowOrEnd(BpmnElement element) =>
         (StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateThrowEvent) ||
@@ -161,6 +183,10 @@ public static class BpmnElementFamilies
         StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.BoundaryEvent) &&
         element.EventDefinitions.Count == 1 &&
         StringComparer.Ordinal.Equals(element.EventDefinitions.Single().Type, BpmnEventDefinitionTypes.Cancel);
+
+    /// <summary>True when an element is a call activity (spec 133): a task-family element whose bound <c>DispatchWorkflow</c> child's failure outcomes route through BPMN error handling (D3).</summary>
+    public static bool IsCallActivity(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.CallActivity);
 
     /// <summary>The host families a boundary event may attach to (spec 120 D2): the task family and embedded subprocesses.</summary>
     public static bool IsBoundaryHostFamily(BpmnElement element) =>
@@ -204,13 +230,32 @@ public static class BpmnElementFamilies
         if (element.EventDefinitions.Count == 0)
             return StartEventNone;
 
-        if (element.EventDefinitions.Count == 1 &&
-            EventStartFamiliesByDefinitionType.TryGetValue(element.EventDefinitions.Single().Type, out var family))
-            return family;
+        if (element.EventDefinitions.Count == 1)
+        {
+            var type = element.EventDefinitions.Single().Type;
+            if (EventStartFamiliesByDefinitionType.TryGetValue(type, out var family))
+                return family;
+            // spec 128: an escalation/error start event is an event-subprocess body start (seeded via the scheduled-start
+            // hint). Its runtime token behavior equals a none start; it is never a publish-time start trigger.
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Escalation))
+                return StartEventEscalation;
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Error))
+                return StartEventError;
+        }
 
         throw new BpmnExecutionException(
-            $"BPMN start event '{element.ElementId}' declares unsupported event definitions; only none, timer, message, and signal start events are supported by this engine slice (exactly one timer/message/signal definition).");
+            $"BPMN start event '{element.ElementId}' declares unsupported event definitions; only none, timer, message, signal, and event-subprocess (escalation/error) start events are supported by this engine slice (exactly one such definition).");
     }
+
+    /// <summary>
+    /// True when a start event is externally triggered at publish/dispatch time (spec 117): a timer/message/signal
+    /// start. A none start is direct-invocation, and an escalation/error start (spec 128) is an event-subprocess
+    /// body start seeded via the scheduled-start hint — neither registers a publish-time start trigger.
+    /// </summary>
+    public static bool IsExternalStartTrigger(BpmnElement element) =>
+        StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.StartEvent) &&
+        element.EventDefinitions.Count == 1 &&
+        EventStartFamiliesByDefinitionType.ContainsKey(element.EventDefinitions.Single().Type);
 
     private static string ResolveEndEvent(BpmnElement element)
     {
@@ -228,10 +273,12 @@ public static class BpmnElementFamilies
                 return EndEventCancel;
             if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Escalation))
                 return EndEventEscalation;
+            if (StringComparer.Ordinal.Equals(type, BpmnEventDefinitionTypes.Message))
+                return EndEventMessage;
         }
 
         throw new BpmnExecutionException(
-            $"BPMN end event '{element.ElementId}' declares unsupported event definitions; only none, terminate, compensate, cancel, and escalation end events are supported by this engine slice.");
+            $"BPMN end event '{element.ElementId}' declares unsupported event definitions; only none, terminate, compensate, cancel, escalation, and message end events are supported by this engine slice.");
     }
 
     /// <summary>
@@ -251,7 +298,11 @@ public static class BpmnElementFamilies
             return IntermediateThrowEventCompensation;
         if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Escalation))
             return IntermediateThrowEventEscalation;
+        if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Message))
+            return IntermediateThrowEventMessage;
 
+        // Message throws resolve above; this reports the remaining unsupported definition types (e.g. signal). The
+        // "compensate and escalation" wording is asserted by a frozen spec-124 suite, so it is kept verbatim.
         throw new BpmnExecutionException(
             $"BPMN intermediate throw event '{element.ElementId}' declares event definition type '{definitionType}'; only compensate and escalation throw events are supported by this engine slice.");
     }

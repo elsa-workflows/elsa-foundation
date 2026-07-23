@@ -139,6 +139,98 @@ public sealed class ChildFaultAbsorptionExecutionTests
         Assert.Contains("cannot absorb child faults", parent.Fault!.Message, StringComparison.Ordinal);
     }
 
+    // #989: a parent that absorbs a child fault AND schedules a NEW child during the SAME fault evaluation
+    // (Defer branch) must receive that new child's clean completion as an ordinary completion, not as a
+    // fabricated fault of the original (already-resolved) incident. Before the fix, the fault-evaluation work
+    // item's fault-scoped CommandMetadata leaked onto the derived child schedule and misclassified its clean
+    // completion as a fault.
+    [Fact]
+    public async Task ChildFault_AbsorbedWithDeferThatSchedulesNewChild_DeliversCleanCompletion()
+    {
+        await using var harness = ReschedulingHarness(new FaultAbsorptionDirective());
+
+        var run = await harness.RunAsync(NewReschedulingAbsorptionExecutable());
+
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted("node-parent");
+        run.AssertCompleted("node-g");
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-f").Status);
+        var incident = Assert.Single(await ListIncidentsAsync(harness));
+        Assert.Equal(IncidentStatus.Resolved, incident.Status);
+        Assert.Equal(IncidentResolutionAction.Continue, incident.ResolutionAction);
+        Assert.Equal("actexec-parent", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
+    }
+
+    // #989 FR-2 hygiene pin: a work item derived (scheduled) from a fault evaluation carries none of the three
+    // fault-scoped metadata keys. Pins the fix shape directly, independent of the downstream misclassification.
+    [Fact]
+    public async Task ChildScheduleDerivedFromFaultEvaluation_CarriesNoFaultScopedMetadata()
+    {
+        var recorder = new EnqueuedWorkItemRecorder();
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .WithFaultingLeaf()
+            .ConfigureServices(services => services.AddSingleton(new FaultAbsorptionDirective()))
+            .ConfigureServices(services => RecordingSchedulerWorkQueue.Register(services, recorder))
+            .Build("actexec-parent", "actexec-f", "actexec-g");
+
+        var run = await harness.RunAsync(NewReschedulingAbsorptionExecutable());
+        run.AssertWorkflowCompleted();
+
+        var scheduleItems = recorder.Items
+            .Where(item => item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity)
+            .ToArray();
+        Assert.NotEmpty(scheduleItems);
+        foreach (var item in scheduleItems)
+        {
+            Assert.DoesNotContain(RuntimeMetadataKeys.ChildFaulted, item.CommandMetadata.Keys);
+            Assert.DoesNotContain(RuntimeMetadataKeys.IncidentId, item.CommandMetadata.Keys);
+            Assert.DoesNotContain(RuntimeMetadataKeys.CompletedChildActivityExecutionId, item.CommandMetadata.Keys);
+        }
+    }
+
+    // #989 latent leak in NewCompletionWorkItem: a composite that absorbs a child fault and COMPLETES under a
+    // fault-handling grandparent must deliver its completion to the grandparent as a completion, not a fault.
+    [Fact]
+    public async Task CompositeAbsorbsAndCompletesUnderGrandparent_GrandparentReceivesCompletion()
+    {
+        var recorder = new ChildOutcomeRecorder();
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .WithFaultingLeaf()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(new FaultAbsorptionDirective { CompleteOnAbsorb = true });
+                services.AddSingleton(recorder);
+            })
+            .Build("actexec-gp", "actexec-parent", "actexec-f");
+
+        var run = await harness.RunAsync(StructuralExecutionTestSupport.NewExecutable(
+            StructuralExecutionTestSupport.NewStructuralNode("node-gp", typeof(ChildOutcomeRecordingParentActivity),
+                StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(FaultAbsorbingParentActivity),
+                    WorkflowExecutionHarness.NewFaultingNode("node-f")))));
+
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted("node-gp");
+        run.AssertCompleted("node-parent");
+        Assert.Equal("completed", Assert.Single(recorder.Outcomes));
+        var incident = Assert.Single(await ListIncidentsAsync(harness));
+        Assert.Equal(IncidentStatus.Resolved, incident.Status);
+    }
+
+    private static WorkflowExecutionHarness ReschedulingHarness(FaultAbsorptionDirective directive) =>
+        WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .WithFaultingLeaf()
+            .ConfigureServices(services => services.AddSingleton(directive))
+            .Build("actexec-parent", "actexec-f", "actexec-g");
+
+    private static WorkflowExecutable NewReschedulingAbsorptionExecutable() =>
+        StructuralExecutionTestSupport.NewExecutable(
+            StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(ReschedulingFaultAbsorbingParentActivity),
+                WorkflowExecutionHarness.NewFaultingNode("node-f"),
+                WorkflowExecutionHarness.NewProbeNode("node-g")));
+
     private static async Task<WorkflowExecutionRun> RunLeafFaultScenarioAsync(FaultAbsorptionDirective directive)
     {
         await using var harness = NewHarness(directive, "actexec-parent", "actexec-f", "actexec-a", "actexec-a-child");
@@ -226,5 +318,73 @@ public sealed class ChildFaultAbsorptionExecutionTests
 
         public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
             ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
+
+    /// <summary>
+    /// The #989 repro shape: schedules only its faulting child up front; on that child's fault it absorbs the
+    /// incident AND schedules a fresh clean child during the SAME fault evaluation, then defers. The clean
+    /// child's completion must arrive as an ordinary completion.
+    /// </summary>
+    public sealed class ReschedulingFaultAbsorbingParentActivity(FaultAbsorptionDirective directive) : StructuralActivity,
+        IRuntimeStructuralActivity,
+        IRuntimeActivityChildCompletionHandler,
+        IRuntimeActivityChildFaultHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var faultingChild = Assert.Single(context.ExecutableNode.ChildSlots).Activities.First();
+            context.ScheduleChildActivity(faultingChild.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
+        {
+            var runtimeContext = (IRuntimeActivityExecutionContext)context.ParentContext;
+            runtimeContext.RequestChildFaultAbsorption(context.IncidentId!, directive.Reason);
+            var cleanChild = Assert.Single(runtimeContext.ExecutableNode.ChildSlots).Activities.Last();
+            runtimeContext.ScheduleChildActivity(cleanChild.ExecutableNodeId, runtimeContext.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
+
+    /// <summary>Records whether a fault-handling parent's single child arrived as a completion or a fault (spec 132 grandparent chain).</summary>
+    public sealed class ChildOutcomeRecorder
+    {
+        private readonly List<string> _outcomes = [];
+        public IReadOnlyList<string> Outcomes => _outcomes;
+        public void Record(string outcome) => _outcomes.Add(outcome);
+    }
+
+    /// <summary>
+    /// A fault-handling structural parent that records the outcome its single child delivered. Completes on a
+    /// completion; on a (mis)delivered fault it merely defers, so a leaked fault leaves a blocking incident and
+    /// the workflow never completes — the negative signal the grandparent-chain test relies on.
+    /// </summary>
+    public sealed class ChildOutcomeRecordingParentActivity(ChildOutcomeRecorder recorder) : StructuralActivity,
+        IRuntimeStructuralActivity,
+        IRuntimeActivityChildCompletionHandler,
+        IRuntimeActivityChildFaultHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
+        {
+            recorder.Record("completed");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
+        {
+            recorder.Record("faulted");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
     }
 }

@@ -1,12 +1,17 @@
 using System.Text.Json;
+using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript;
+using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Primitives.Models;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -67,6 +72,27 @@ public sealed class SetVariableDurabilityExecutionTests
         Assert.Equal(["current", "suffix"], evaluator.Request.ParameterValues.Keys);
         Assert.Equal("initial", evaluator.Request.ParameterValues["current"].GetString());
         Assert.Equal("updated", evaluator.Request.ParameterValues["suffix"].GetString());
+    }
+
+    [Theory]
+    [InlineData("getVariable('greeting') + '!'")]
+    [InlineData("variables.greeting + '!'")]
+    [InlineData("getGreeting() + '!'")]
+    public async Task Set_intrinsic_reads_the_visible_variable_through_the_javascript_ambient_surface(string script)
+    {
+        // Issue #984: the loop-counter/variable-read case. A Set whose value is a native JavaScript expression must
+        // observe the variable lexically visible to it through variables.X / getVariable('X') / get<Name>() — not just
+        // statically declared args — and write the computed result back into the frame.
+        await using var jsProvider = BuildJavaScriptProvider();
+        await using var harness = await CreateHarnessAsync(
+            NewJavaScriptVariableWriteNode(script),
+            portableExpressionEvaluator: jsProvider.GetRequiredService<IPortableExpressionEvaluator>(),
+            workflowVariables: [new RuntimeVariableDeclaration("greeting", "greeting", StringType, ValueProtectionPolicy.InstanceInline)]);
+
+        await harness.Handler.HandleAsync(harness.WorkItem);
+
+        var persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
+        Assert.Equal("initial!", persistedWorkflow!.RootVariableFrame!.Values["greeting"].InlineValue!.Value.GetString());
     }
 
     [Theory]
@@ -217,6 +243,54 @@ public sealed class SetVariableDurabilityExecutionTests
             intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
     }
 
+    private static ExecutableNode NewJavaScriptVariableWriteNode(string script)
+    {
+        using var descriptor = JsonDocument.Parse("{}");
+        var expression = new RuntimeExpressionBinding(
+            "JavaScript",
+            script,
+            new RuntimeValueTypeDescriptor("alias", "String", null),
+            capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1);
+        // #972 unified model: the workflow-scope "greeting" declaration lives on the EXECUTABLE (workflow
+        // variables), not on a node structure — the harness passes it via CreateHarnessAsync so the runtime
+        // projects it into the JavaScript ambient read surface from the canonical root frame.
+        return new ExecutableNode(
+            "node-set-javascript",
+            "authored-set-javascript",
+            "elsa.intrinsic.set",
+            "1.0.0",
+            "intrinsic",
+            descriptor.RootElement,
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Value] = new(
+                    WorkflowIntrinsicInputKeys.Value,
+                    StringType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Expression,
+                    expression: expression)
+            },
+            new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
+    }
+
+    private static ServiceProvider BuildJavaScriptProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMemoryCache();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        new ExpressionsFeature().ConfigureServices(services);
+        new JavaScriptFeature().ConfigureServices(services);
+        new JintFeature().ConfigureServices(services);
+        var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        foreach (var task in scope.ServiceProvider.GetServices<IStartupTask>())
+            task.ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
+        return provider;
+    }
+
     private static ExecutableNode NewTerminalNode(WorkflowIntrinsicKind intrinsicKind)
     {
         using var descriptor = JsonDocument.Parse("{}");
@@ -277,10 +351,14 @@ public sealed class SetVariableDurabilityExecutionTests
 
     private static async Task<Harness> CreateHarnessAsync(
         ExecutableNode node,
-        IPortableExpressionEvaluator? portableExpressionEvaluator = null)
+        IPortableExpressionEvaluator? portableExpressionEvaluator = null,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null)
     {
         var identity = new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
-        var executable = new WorkflowExecutable(identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>());
+        var executable = new WorkflowExecutable(
+            identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
+            inputContract: null, dependencies: null, runtimeRequirements: null, storageDriverRequirements: null,
+            workflowVariables: workflowVariables);
         var executableStore = new InMemoryWorkflowExecutableStore();
         var workflowStore = new InMemoryWorkflowExecutionStateStore();
         var activityStore = new InMemoryActivityExecutionStateStore();

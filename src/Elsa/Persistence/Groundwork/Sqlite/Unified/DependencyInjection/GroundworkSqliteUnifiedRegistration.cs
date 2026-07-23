@@ -22,18 +22,22 @@ public static class GroundworkSqliteUnifiedRegistration
     public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
-        bool autoApplyOnStartup = false) =>
-        services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(connectionString, autoApplyOnStartup);
+        bool autoApplyOnStartup = false,
+        bool skipInspectionWhenPlanUnchanged = false) =>
+        services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+            connectionString, autoApplyOnStartup, skipInspectionWhenPlanUnchanged);
 
     /// <summary>Registers the schema selected from the current shell's enabled feature descriptors.</summary>
     public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
         ShellFeatureContext context,
-        bool autoApplyOnStartup = false)
+        bool autoApplyOnStartup = false,
+        bool skipInspectionWhenPlanUnchanged = false)
     {
         services.AddGroundworkReferenceDeploymentSchema(context);
-        return services.AddGroundworkSqliteUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
+        return services.AddGroundworkSqliteUnifiedPersistenceCore(
+            connectionString, autoApplyOnStartup, skipInspectionWhenPlanUnchanged);
     }
 
     /// <summary>
@@ -43,21 +47,25 @@ public static class GroundworkSqliteUnifiedRegistration
     public static IServiceCollection AddGroundworkSqliteUnifiedPersistence<TDeploymentSource>(
         this IServiceCollection services,
         string connectionString,
-        bool autoApplyOnStartup = false)
+        bool autoApplyOnStartup = false,
+        bool skipInspectionWhenPlanUnchanged = false)
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
     {
         services.AddGroundworkStorageComposition<TDeploymentSource>();
-        return services.AddGroundworkSqliteUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
+        return services.AddGroundworkSqliteUnifiedPersistenceCore(
+            connectionString, autoApplyOnStartup, skipInspectionWhenPlanUnchanged);
     }
 
     private static IServiceCollection AddGroundworkSqliteUnifiedPersistenceCore(
         this IServiceCollection services,
         string connectionString,
-        bool autoApplyOnStartup)
+        bool autoApplyOnStartup,
+        bool skipInspectionWhenPlanUnchanged)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
-        services.AddSqliteGroundworkDocumentStore(connectionString, autoApplyOnStartup);
+        services.AddSqliteGroundworkDocumentStore(
+            connectionString, autoApplyOnStartup, skipInspectionWhenPlanUnchanged);
         services.AddGroundworkUnifiedStoreFamilies();
         services.AddGroundworkWorkflowRunHealth(
             _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),

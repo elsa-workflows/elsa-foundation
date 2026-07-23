@@ -204,9 +204,10 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
 
         state.EnsureValueFlowCompatible();
 
+        // The root node is not exempt (#972): its structure variables are a normal container scope, so it
+        // activates its own container frame like any other declaring container.
         var requiresFrameActivation = state.IterationFrameRequest is not null ||
-                                      (!StringComparer.Ordinal.Equals(executableNode.ExecutableNodeId, executable.RootActivity.ExecutableNodeId) &&
-                                       new RuntimeVariableDeclarationProjector().ProjectDeclarations(executableNode).Count > 0);
+                                      new RuntimeVariableDeclarationProjector().ProjectDeclarations(executableNode).Count > 0;
         if (state.Status == ActivityExecutionStatus.Scheduled && requiresFrameActivation)
         {
             var workflowExecutionStateStore = _workflowExecutionStateStore
@@ -308,6 +309,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         CancellationToken cancellationToken) =>
         // Shares the one materialization implementation with the parent-completion re-materialization seam
         // (issue #977), constructed from this handler's own stores so the pinned entry snapshot is unchanged.
+        // The JavaScript ambient variable projection (issue #984) lives inside that shared materializer, so both
+        // the entry path and the re-materialization seam expose visible variables to expressions identically.
         new RuntimeActivityInputSnapshotMaterializer(_activityExecutionStateStore, _durableValueStateStore, _workflowExecutionStateStore)
             .MaterializeAsync(executable, executableNode, state, serviceProvider, materializedAt, cancellationToken);
 

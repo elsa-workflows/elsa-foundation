@@ -1,5 +1,6 @@
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Activities.Primitives.Activities;
 
@@ -13,9 +14,11 @@ namespace Elsa.Activities.Primitives.Activities;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Deliberately minimal per the W7 ruling: the trigger is keyed by event name plus an optional passive
-/// correlation value, with no payload schema or filters. When a workflow is started by the event, the activity
-/// returns the event name in one atomic result so the run is observable.
+/// Deliberately minimal per the W7 ruling: the trigger is keyed by event name plus an optional authored
+/// correlation value, with no payload schema or filters. On a mid-flow wait, a nonblank correlation is retained
+/// as bookmark metadata so correlated delivery narrows resume fan-in; null or blank preserves broadcast behavior.
+/// When a workflow is started by the event, the activity returns the event name in one atomic result so the run
+/// is observable.
 /// </para>
 /// <para>
 /// Role selection mirrors <c>HttpEndpoint</c>: the activity completes when the run's start trigger delivery
@@ -39,7 +42,10 @@ public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState,
     [Required]
     public string EventName { get; set; } = null!;
 
-    /// <summary>An optional passive correlation value threaded through routing; it does not own a correlation subsystem.</summary>
+    /// <summary>
+    /// An optional correlation value retained by mid-flow waits for exact resume matching. Null or blank keeps
+    /// the wait unscoped; this does not filter start-trigger fan-out or introduce a separate correlation subsystem.
+    /// </summary>
     [ActivityInput(Key = nameof(CorrelationId))]
     public string? CorrelationId { get; set; }
 
@@ -57,10 +63,18 @@ public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState,
         if (ShouldComplete(context))
             return ValueTask.FromResult(Complete(new EventResult(EventName)));
 
+        var correlationId = string.IsNullOrWhiteSpace(CorrelationId) ? null : CorrelationId.Trim();
+        var metadata = correlationId is null
+            ? null
+            : new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [RuntimeMetadataKeys.CorrelationId] = correlationId
+            };
         var registration = new ActivityTriggerRegistration<EventReceived>(
             ResumeTargetId,
             EventStimulus.StimulusType,
-            EventStimulus.Hash(EventName));
+            EventStimulus.Hash(EventName),
+            metadata: metadata);
         return ValueTask.FromResult(Suspend(new EventWaitState(EventName), [registration]));
     }
 

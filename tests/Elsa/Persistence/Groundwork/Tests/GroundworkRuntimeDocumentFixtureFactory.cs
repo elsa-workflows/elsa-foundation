@@ -433,7 +433,31 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 ["resume-1"] = new("resume-1", "node-child", "Bookmark", new Dictionary<string, string> { ["stimulus"] = "Http" }, "local-resume-1")
             },
             createdAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" });
+            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" },
+            inputContract: null,
+            dependencies: null,
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            checkpointCadence: null,
+            // v7 (#972): workflow-scope declarations compiled from state.Variables; pins the wire shape of
+            // the workflowVariables field including a literal initial binding.
+            workflowVariables:
+            [
+                new RuntimeVariableDeclaration(
+                    "customerEmail",
+                    "CustomerEmail",
+                    new ValueTypeDescriptor("System.String"),
+                    ValueProtectionPolicy.InstanceInline,
+                    new RuntimeInputBinding(
+                        inputKey: "customerEmail",
+                        targetType: new ValueTypeDescriptor("System.String"),
+                        effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                        source: RuntimeInputBindingSource.Literal,
+                        literal: ValueEnvelope.Inline(
+                            new ValueTypeDescriptor("System.String"),
+                            JsonSerializer.SerializeToElement("nobody@example.com"),
+                            ValueProtectionPolicy.InstanceInline)))
+            ]);
     }
 
     private static ExecutableActivityTemplate ActivityTemplate()

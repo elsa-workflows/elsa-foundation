@@ -8,7 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
-/// <summary>Records provider-atomic child cancellation responsibility in a parent Cancel checkpoint.</summary>
+/// <summary>Records provider-atomic child cancellation responsibility from workflow or activity cancellation checkpoints.</summary>
 public sealed class WorkflowDispatchCancellationEnricher : IRuntimeCheckpointCommitEnricher
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -33,13 +33,27 @@ public sealed class WorkflowDispatchCancellationEnricher : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(commit);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (commit.StateChanges.WorkflowExecution?.State is not { Status: WorkflowExecutionStatus.Cancelled } parent)
+        var wholeParentCancelled =
+            commit.StateChanges.WorkflowExecution?.State.Status == WorkflowExecutionStatus.Cancelled;
+        var cancelledActivityExecutionIds = commit.StateChanges.ActivityExecutions
+            .Where(change =>
+                change.Operation == RuntimeStateChangeOperation.Upsert &&
+                change.State.Status == ActivityExecutionStatus.Cancelled)
+            .Select(change => change.State.Execution.ActivityExecutionId)
+            .ToHashSet(StringComparer.Ordinal);
+        if (!wholeParentCancelled && cancelledActivityExecutionIds.Count == 0)
             return commit;
 
         var requests = commit.StateChanges.WorkflowDispatchCancellations.ToList();
         var intents = commit.PostCommitIntents.ToList();
-        await foreach (var record in ListForParentAsync(parent.WorkflowExecutionId, cancellationToken))
+        await foreach (var record in ListForParentAsync(commit.WorkflowExecutionId, cancellationToken))
         {
+            if (!wholeParentCancelled &&
+                !cancelledActivityExecutionIds.Contains(record.ParentActivityExecutionId))
+            {
+                continue;
+            }
+
             if (record.Mode != WorkflowDispatchMode.WaitForCompletion ||
                 !WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(record))
             {

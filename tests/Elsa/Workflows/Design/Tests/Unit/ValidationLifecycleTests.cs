@@ -31,7 +31,10 @@ public sealed class ValidationLifecycleTests
 
         // Wire the real VariableUniquenessValidator into the capturing publisher's hook so every
         // OnDraftValidating dispatch runs the production validator code against the snapshot.
-        var validator = new VariableUniquenessValidator();
+        var validator = new VariableUniquenessValidator(
+            BaselineValidatorTests.ValidatorTestHelpers.Options(),
+            BaselineValidatorTests.ValidatorTestHelpers.Walker(),
+            BaselineValidatorTests.ValidatorTestHelpers.StructureService());
         host.EventPublisher.OnPublish = evt =>
         {
             if (evt is OnDraftValidating validating)

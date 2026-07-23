@@ -327,6 +327,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : IWorkflow
         ActivityExecutionState completedParentState;
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> containerVariableSnapshots;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> completionDurableValueChanges;
+        RuntimeStateChange<WorkflowExecutionState>? completionWorkflowVariableWriteBack = null;
         try
         {
             var completedAt = _timeProvider.GetUtcNow();
@@ -338,14 +339,27 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : IWorkflow
                                        ?? ActivityTransition.Complete(ActivityUnit.Value, resolvedContinuation.OutcomeName!);
             var completionProjection = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, openAttempt, contract, completionTransition, completedAt, cancellationToken);
-            var outputCaptureChanges = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
+            var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode,
                 (IActivityCompletionTransition)completionTransition, completionProjection, completedAt, cancellationToken);
             completionDurableValueChanges = (completionCheckpointPreparation?.DurableValueChanges ?? [])
-                .Concat(outputCaptureChanges)
+                .Concat(captureProjection.DurableValues)
                 .GroupBy(change => change.StateId, StringComparer.Ordinal)
                 .Select(group => group.Last())
                 .ToArray();
+            // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
+            // completion (#972), mirroring how the Set intrinsic commits its changed frame.
+            completionWorkflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+                workItem.WorkflowExecutionId,
+                parentExecutableNode.ExecutableNodeId,
+                captureProjection.WorkflowVariableWrites,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+                    [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
+                },
+                cancellationToken);
             var completedAttempt = new ActivityAttempt(
                 openAttempt.AttemptId, openAttempt.InvocationId, openAttempt.Ordinal, openAttempt.Reason,
                 openAttempt.StartedAt, completedAt, openAttempt.TriggerDeliveryId,
@@ -392,7 +406,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : IWorkflow
         await CommitCompletedParentActivityAsync(
             checkpointCommitter, inspectionAccumulator, workItem, payload, completedParentState,
             ReadCompletionOutcomeNames(completedParentState), subtreeCancellationPlans, parentNotificationWorkItems,
-            containerVariableSnapshots, completionDurableValueChanges, cancellationToken);
+            containerVariableSnapshots, completionDurableValueChanges, completionWorkflowVariableWriteBack, cancellationToken);
     }
 
     private async ValueTask RecordParentFaultAsync(
@@ -525,6 +539,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : IWorkflow
         IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotifications,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
         CancellationToken cancellationToken)
     {
         var occurredAt = _timeProvider.GetUtcNow();
@@ -547,7 +562,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : IWorkflow
                 ActivityExecutionIds: [notifyPayload.ActivityExecutionId, .. cancellationChanges.CancelledActivityExecutionIds],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
+                workflowExecution: workflowVariableWriteBack,
                 scheduler: null,
                 activityExecutions:
                 [

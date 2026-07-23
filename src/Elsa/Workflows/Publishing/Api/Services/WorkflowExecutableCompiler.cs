@@ -127,6 +127,7 @@ public sealed class WorkflowExecutableCompiler(
             // compilation, replacing the former double ProjectChildren traversal.
             var projection = activityTreeProjector.Project(rootActivity);
             ActivityTreeProjector.Validate(projection.Nodes);
+            executableNodeCompiler.ValidateIntrinsicVariableTargets(state, projection.Nodes);
 
             var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
             var placedActivities = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
@@ -168,6 +169,11 @@ public sealed class WorkflowExecutableCompiler(
                     new(ActivityInvocationOriginSegmentKind.AuthoredNode, activity.NodeId),
                     new(ActivityInvocationOriginSegmentKind.TemplateBoundary, publication.DefinitionVersionId)
                 ]);
+                // #1007: a reusable placed as a child inside a workflow container (Sequence, Flowchart, …) must
+                // expose the authored node id as its boundary ExecutableNodeId, because the container's compiled
+                // structure addresses that child by its authored node id. A reusable that is the workflow root is
+                // addressed by nothing structural, so it keeps its content-addressed placement id.
+                var isWorkflowRoot = StringComparer.Ordinal.Equals(activity.NodeId, rootActivity.NodeId);
                 var placement = await templatePlacer.PlaceAsync(new(
                     publication,
                     template,
@@ -175,7 +181,8 @@ public sealed class WorkflowExecutableCompiler(
                     origin,
                     publication.ActivityTypeKey,
                     bindings,
-                    outputCaptures), cancellationToken);
+                    outputCaptures,
+                    BindBoundaryRootToAuthoredNode: !isWorkflowRoot), cancellationToken);
                 placedActivities.Add(activity.NodeId, placement.Root);
                 placedLayoutSegments.AddRange(placement.LayoutSidecar.BoundarySegments);
                 foreach (var nodeId in Flatten(placement.Root).Select(x => x.ExecutableNodeId))
@@ -187,7 +194,7 @@ public sealed class WorkflowExecutableCompiler(
                 }
             }
 
-            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities);
+            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables);
             IReadOnlyCollection<ExecutableDependencyClaim> dependencyClaims = [];
             if (metadataEnricher is not null)
             {
@@ -207,7 +214,8 @@ public sealed class WorkflowExecutableCompiler(
             var inputContract = BuildInputContract(state.Inputs);
             var dependencies = BuildDependencies(dependencyClaims);
             var checkpointCadence = CompileCheckpointCadence(state.StrategyOptions);
-            var artifactHash = hasher.ComputeHash(compiledRoot, inputContract, dependencies, checkpointCadence);
+            var workflowVariables = executableNodeCompiler.CompileWorkflowVariables(state.Variables);
+            var artifactHash = hasher.ComputeHash(compiledRoot, inputContract, dependencies, checkpointCadence, workflowVariables);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             await ValidateDependencyGraphAsync(artifactId, artifactHash, dependencies, cancellationToken);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
@@ -248,7 +256,8 @@ public sealed class WorkflowExecutableCompiler(
                 storageDriverRequirements: storageDriverRequirements,
                 inputContract: inputContract,
                 dependencies: dependencies,
-                checkpointCadence: checkpointCadence);
+                checkpointCadence: checkpointCadence,
+                workflowVariables: workflowVariables);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
             return executable;
         }

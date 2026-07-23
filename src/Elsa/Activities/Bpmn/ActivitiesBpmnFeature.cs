@@ -29,6 +29,8 @@ public class ActivitiesBpmnFeature : IShellFeature
         services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Timer());
         services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Message());
         services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Signal());
+        services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Escalation());
+        services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Error());
         services.AddSingleton<IBpmnElementBehavior, NoneEndEventBehavior>();
         services.AddSingleton<IBpmnElementBehavior, TerminateEndEventBehavior>();
         services.AddSingleton<IBpmnElementBehavior, CatchEventBehavior>();
@@ -37,6 +39,8 @@ public class ActivitiesBpmnFeature : IShellFeature
         services.AddSingleton<IBpmnElementBehavior, CancelEndEventBehavior>();
         services.AddSingleton<IBpmnElementBehavior, EscalationThrowEventBehavior>();
         services.AddSingleton<IBpmnElementBehavior, EscalationEndEventBehavior>();
+        services.AddSingleton<IBpmnElementBehavior, MessageThrowEventBehavior>();
+        services.AddSingleton<IBpmnElementBehavior, MessageEndEventBehavior>();
         services.AddSingleton<IBpmnElementBehavior, TaskBehavior>();
         services.AddSingleton<IBpmnElementBehavior, SubProcessBehavior>();
         services.AddSingleton<IBpmnElementBehavior, ExclusiveGatewayBehavior>();

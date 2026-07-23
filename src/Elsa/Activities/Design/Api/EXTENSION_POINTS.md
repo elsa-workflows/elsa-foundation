@@ -27,9 +27,8 @@ documented in its [contributing-feature catalog](../../Graph/Design/EXTENSION_PO
 
 ## Sources and reconciliation
 
-Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Server`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/EXTENSION_POINTS.md). EF Core and Groundwork persistence-specific seams are documented in their own catalogs:
+Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Server`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/EXTENSION_POINTS.md). Groundwork persistence-specific seams are documented in their own catalog:
 
-- [`Persistence/EFCore/EXTENSION_POINTS.md`](../Persistence/EFCore/EXTENSION_POINTS.md)
 - [`Persistence/Groundwork/EXTENSION_POINTS.md`](../Persistence/Groundwork/EXTENSION_POINTS.md)
 
 The catalog endpoint normalizes those stored definitions and applies availability evaluation. Context-sensitive input options deliberately belong to Workflow Design API because they require submitted workflow state and node context.

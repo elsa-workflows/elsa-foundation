@@ -262,8 +262,10 @@ public sealed class RuntimeStartCommandSchedulingTests
     }
 
     [Fact]
-    public async Task DrainAsync_SeedsSuppliedVariablesAndInputsAsDurableRuntimeState()
+    public async Task DrainAsync_SeedsSuppliedInputsAsDurableRuntimeState_AndNoVariableRows()
     {
+        // #972: supplied variables overlay the canonical root variable frame instead of the retired
+        // variable:* durable channel — only the input lands as a durable value row.
         var store = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var durableValueStore = new InMemoryDurableValueStateStore();
@@ -290,13 +292,12 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         var write = Assert.Single(checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, write.Commit.Checkpoint.Name);
-        Assert.Equal(2, write.Commit.StateChanges.DurableValues.Count);
+        Assert.Equal(1, write.Commit.StateChanges.DurableValues.Count);
 
         var durableValues = await durableValueStore.ListAllDurableValueStatesAsync("wfexec-1");
-        var variables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
         var inputs = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
-        Assert.Equal("Hello", ((JsonElement)Assert.Single(variables).Value!).GetString());
         Assert.Equal("World", ((JsonElement)Assert.Single(inputs).Value!).GetString());
+        Assert.DoesNotContain(durableValues, value => value.Metadata.ContainsKey(RuntimeMetadataKeys.VariableName));
     }
 
     private JsonElement NewStartPayloadWithSeed(WorkflowExecutableIdentity identity) =>

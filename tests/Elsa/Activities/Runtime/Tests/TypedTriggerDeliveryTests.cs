@@ -21,7 +21,6 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         await _activityStateStore.SaveAsync(NewTypedRunningState());
         foreach (var change in RuntimeWorkflowStateSeed.BuildSeedChanges(
                      "wfexec-1",
-                     variables: null,
                      inputs: null,
                      capturedAt: _now,
                      stimulusInput: Json("\"not-an-approval-trigger\""),

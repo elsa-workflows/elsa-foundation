@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -189,6 +190,15 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static BpmnElement Task(string elementId, string? childNodeId = null, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
 
+    /// <summary>A call activity (spec 133): a task-family element that binds a <c>DispatchWorkflow</c> child; its child's Faulted/DispatchFailed/Cancelled outcomes route through BPMN error handling (D3).</summary>
+    public static BpmnElement CallActivity(string elementId, string? childNodeId = null, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.CallActivity, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
+
+    /// <summary>A multi-instance call activity (spec 133 D3 / spec 121): runs its bound <c>DispatchWorkflow</c> child <paramref name="cardinality"/> times.</summary>
+    public static BpmnElement MultiInstanceCallActivity(string elementId, string childNodeId, int cardinality, bool isSequential, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.CallActivity, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
+            loopCharacteristics: new BpmnLoopCharacteristics(isSequential: isSequential, cardinality: cardinality));
+
     /// <summary>A multi-instance task (spec 121): runs its bound child <paramref name="cardinality"/> times, sequentially or in parallel.</summary>
     public static BpmnElement MultiInstanceTask(string elementId, string childNodeId, int cardinality, bool isSequential, string? defaultFlowId = null) =>
         new(elementId, BpmnElementTypes.Task, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
@@ -286,6 +296,51 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
         return properties;
     }
 
+    /// <summary>An event subprocess (spec 128): a flow-less <c>triggeredByEvent</c> subprocess binding a nested body whose event-start trigger activates it.</summary>
+    public static BpmnElement EventSubprocess(string elementId, string childNodeId) =>
+        new(elementId, BpmnElementTypes.SubProcess, childNodeId: childNodeId, triggeredByEvent: true);
+
+    /// <summary>A message/signal/timer event subprocess (spec 134): a flow-less <c>triggeredByEvent</c> subprocess binding a nested body plus an armed scope-listener node (<paramref name="listenerNodeId"/>).</summary>
+    public static BpmnElement EventSubprocessWithListener(string elementId, string childNodeId, string listenerNodeId) =>
+        new(elementId, BpmnElementTypes.SubProcess, childNodeId: childNodeId, triggeredByEvent: true, listenerNodeId: listenerNodeId);
+
+    /// <summary>A message event-subprocess body start (spec 134): resolves its stimulus from <paramref name="name"/>; <paramref name="interrupting"/> models the start event's <c>isInterrupting</c> flag.</summary>
+    public static BpmnElement EventSubprocessMessageStart(string elementId, string name, bool interrupting = true) =>
+        new(elementId, BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Message, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })],
+            cancelActivity: interrupting);
+
+    /// <summary>A signal event-subprocess body start (spec 134): resolves its stimulus from <paramref name="name"/>.</summary>
+    public static BpmnElement EventSubprocessSignalStart(string elementId, string name, bool interrupting = true) =>
+        new(elementId, BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Signal, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })],
+            cancelActivity: interrupting);
+
+    /// <summary>A timer event-subprocess body start (spec 134): a one-shot <paramref name="interval"/> (ISO-8601 duration), re-armed per non-interrupting fire.</summary>
+    public static BpmnElement EventSubprocessTimerStart(string elementId, string interval, bool interrupting = true) =>
+        new(elementId, BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = interval })],
+            cancelActivity: interrupting);
+
+    /// <summary>A durable <c>Delay</c> wait child (a timer scope-listener's synthesized node), mirroring the timer catch-event child.</summary>
+    public static ExecutableNode DelayWaitNode(string nodeId, TimeSpan duration) =>
+        NewClrNode(nodeId, typeof(Elsa.Activities.Scheduling.Activities.Delay), new Dictionary<string, object?>
+        {
+            [nameof(Elsa.Activities.Scheduling.Activities.Delay.Duration)] = duration
+        });
+
+    /// <summary>An escalation event-subprocess body start (spec 128); a <c>null</c> <paramref name="code"/> is the code-less catch-all, and <paramref name="interrupting"/> models the start event's <c>isInterrupting</c> flag.</summary>
+    public static BpmnElement EventSubprocessEscalationStart(string elementId, string? code = null, bool interrupting = true) =>
+        new(elementId, BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, code is null ? null : EscalationProperties(code, null))],
+            cancelActivity: interrupting);
+
+    /// <summary>An error event-subprocess body start (spec 128): catch-all, always interrupting (per BPMN).</summary>
+    public static BpmnElement EventSubprocessErrorStart(string elementId, bool interrupting = true) =>
+        new(elementId, BpmnElementTypes.StartEvent,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Error)],
+            cancelActivity: interrupting);
+
     /// <summary>
     /// Builds a nested <c>BpmnProcess</c> executable node (spec 127 escalation scenarios): its own element graph
     /// plus a child slot of inner activity nodes (probes/waiters/further nested processes). Mirrors how the publish
@@ -319,6 +374,43 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
             [nameof(Elsa.Activities.Primitives.Activities.Event.EventName)] = eventName,
             [nameof(Elsa.Activities.Primitives.Activities.Event.CanStartWorkflow)] = false
         });
+
+    /// <summary>A <c>PublishEvent</c> send child (spec 135): stages a durable-first publish of the named event and completes Done immediately (fire-and-continue).</summary>
+    public static ExecutableNode PublishEventSendNode(string nodeId, string eventName) =>
+        NewClrNode(nodeId, typeof(Elsa.Activities.Primitives.Activities.PublishEvent), new Dictionary<string, object?>
+        {
+            [nameof(Elsa.Activities.Primitives.Activities.PublishEvent.EventName)] = eventName
+        });
+
+    /// <summary>A message intermediate throw event (spec 135): binds a synthesized <c>PublishEvent</c> send child; routes onward on the child's fire-and-continue completion.</summary>
+    public static BpmnElement MessageThrow(string elementId, string childNodeId, string name, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.IntermediateThrowEvent, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Message, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })]);
+
+    /// <summary>A message end event (spec 135): binds a synthesized <c>PublishEvent</c> send child; consumes its token on the child's completion (none-end semantics).</summary>
+    public static BpmnElement MessageEnd(string elementId, string childNodeId, string name) =>
+        new(elementId, BpmnElementTypes.EndEvent, childNodeId: childNodeId,
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Message, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })]);
+
+    /// <summary>A sendTask (spec 135): a task-family element binding a synthesized <c>PublishEvent</c> send child.</summary>
+    public static BpmnElement SendTask(string elementId, string childNodeId, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.SendTask, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
+
+    /// <summary>A receiveTask (spec 135): a task-family element binding a synthesized <c>Event</c> catch child (the receive twin).</summary>
+    public static BpmnElement ReceiveTask(string elementId, string childNodeId, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.ReceiveTask, childNodeId: childNodeId, defaultFlowId: defaultFlowId);
+
+    /// <summary>A multi-instance sendTask (spec 135/121): runs its bound <c>PublishEvent</c> child <paramref name="cardinality"/> times.</summary>
+    public static BpmnElement MultiInstanceSendTask(string elementId, string childNodeId, int cardinality, bool isSequential, string? defaultFlowId = null) =>
+        new(elementId, BpmnElementTypes.SendTask, childNodeId: childNodeId, defaultFlowId: defaultFlowId,
+            loopCharacteristics: new BpmnLoopCharacteristics(isSequential: isSequential, cardinality: cardinality));
+
+    /// <summary>The staged durable-first publish intents committed across the run (spec 135): the sends that route post-commit. The harness composes <c>ActivitiesPrimitivesFeature</c>, so the staging buffer + handler are already wired.</summary>
+    public IReadOnlyList<RuntimePostCommitIntent> PublishStimulusIntents() =>
+        Provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits()
+            .SelectMany(record => record.Commit.PostCommitIntents)
+            .Where(intent => StringComparer.Ordinal.Equals(intent.Kind, PublishStimulusConstants.PublishStimulusIntentKind))
+            .ToList();
 
     private static ExecutableNode NewClrNode(string nodeId, Type activityType, IReadOnlyDictionary<string, object?> literals) =>
         new(

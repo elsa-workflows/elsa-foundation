@@ -11,6 +11,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -25,7 +26,8 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 public sealed class ExecutableNodeCompiler(
     IActivityStructureService activityStructureService,
     IWellKnownTypeRegistry wellKnownTypeRegistry,
-    RuntimeInputBindingCompiler inputBindingCompiler)
+    RuntimeInputBindingCompiler inputBindingCompiler,
+    RuntimeOutputCaptureCompiler outputCaptureCompiler)
 {
     private static readonly JsonSerializerOptions DescriptorSerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -33,8 +35,14 @@ public sealed class ExecutableNodeCompiler(
         ActivityNode rootActivity,
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
-        IReadOnlyDictionary<string, ExecutableNode>? placedActivities = null) =>
-        CompileNode(rootActivity, projection, activityRows, placedActivities ?? new Dictionary<string, ExecutableNode>());
+        IReadOnlyDictionary<string, ExecutableNode>? placedActivities = null,
+        IEnumerable<VariableDefinition>? workflowVariables = null) =>
+        CompileNode(
+            rootActivity,
+            projection,
+            activityRows,
+            placedActivities ?? new Dictionary<string, ExecutableNode>(),
+            workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? []);
 
     /// <summary>
     /// Compiles the unbound root of a source-owned activity template through the same descriptor and
@@ -84,13 +92,14 @@ public sealed class ExecutableNodeCompiler(
         ActivityNode activity,
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
-        IReadOnlyDictionary<string, ExecutableNode> placedActivities)
+        IReadOnlyDictionary<string, ExecutableNode> placedActivities,
+        IReadOnlyCollection<VariableDefinition> workflowVariables)
     {
         if (placedActivities.TryGetValue(activity.NodeId, out var placed))
             return placed;
 
         if (activity.Intrinsic is not null)
-            return CompileIntrinsicNode(activity, projection, activityRows, placedActivities);
+            return CompileIntrinsicNode(activity, projection, activityRows, placedActivities, workflowVariables);
 
         var activityVersion = activityRows[activity.ActivityVersionId];
         var descriptor = new RuntimeActivityDescriptor(
@@ -102,7 +111,7 @@ public sealed class ExecutableNodeCompiler(
 
         var inputDefinitionsByReferenceKey = inputDefinitions.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
-        var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities);
+        var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables);
 
         foreach (var inputState in activity.Inputs)
         {
@@ -156,6 +165,8 @@ public sealed class ExecutableNodeCompiler(
             ? null
             : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure, inputBindings: inputBindings);
 
+        var outputCaptures = CompileOutputCaptures(activity, activityContract, workflowVariables);
+
         return new ExecutableNode(
             executableNodeId: activity.NodeId,
             authoredActivityId: activity.NodeId,
@@ -163,7 +174,7 @@ public sealed class ExecutableNodeCompiler(
             activityTypeVersion: activityVersion.Version,
             descriptor: descriptor,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal),
+            outputCaptures: outputCaptures,
             metadata: new Dictionary<string, string>
             {
                 ["authoredNodeId"] = activity.NodeId,
@@ -174,11 +185,35 @@ public sealed class ExecutableNodeCompiler(
             activityContract: activityContract);
     }
 
+    /// <summary>
+    /// Turns a leaf activity's authored outputs (<see cref="ActivityNode.Outputs"/>) into durable output captures
+    /// against its typed result-projection contracts. An activity with no authored outputs yields none, preserving
+    /// the prior empty-capture behavior; the shared <see cref="RuntimeOutputCaptureCompiler"/> enforces the same
+    /// workflow-scope Variable rules as the reusable-activity boundary path.
+    /// </summary>
+    private IReadOnlyDictionary<string, RuntimeOutputCapture> CompileOutputCaptures(
+        ActivityNode activity,
+        Elsa.Activities.Runtime.Core.Models.ActivityContract? activityContract,
+        IReadOnlyCollection<VariableDefinition> workflowVariables)
+    {
+        var authoredOutputs = activity.Outputs as IReadOnlyCollection<ArgumentState> ?? activity.Outputs.ToArray();
+        var projections = activityContract?.Result.Projections.Values.ToArray() ?? [];
+        if (authoredOutputs.Count == 0)
+            return new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal);
+
+        return outputCaptureCompiler.CompileResultProjectionOutputs(
+            activity.NodeId,
+            projections,
+            authoredOutputs,
+            workflowVariables);
+    }
+
     private ExecutableNode CompileIntrinsicNode(
         ActivityNode activity,
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
-        IReadOnlyDictionary<string, ExecutableNode> placedActivities)
+        IReadOnlyDictionary<string, ExecutableNode> placedActivities,
+        IReadOnlyCollection<VariableDefinition> workflowVariables)
     {
         var intrinsic = activity.Intrinsic!;
         var runtimeKind = intrinsic.Kind switch
@@ -264,7 +299,7 @@ public sealed class ExecutableNodeCompiler(
                 ["authoredNodeId"] = activity.NodeId,
                 [TriggerNodeMetadata.ExecutionTypeKey] = ActivityExecutionType.Action.ToString()
             },
-            childSlots: CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities),
+            childSlots: CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables),
             structure: CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity)),
             activityContract: null,
             intrinsicKind: runtimeKind,
@@ -497,12 +532,13 @@ public sealed class ExecutableNodeCompiler(
         IEnumerable<ActivityChildProjection> childSlots,
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
-        IReadOnlyDictionary<string, ExecutableNode> placedActivities)
+        IReadOnlyDictionary<string, ExecutableNode> placedActivities,
+        IReadOnlyCollection<VariableDefinition> workflowVariables)
     {
         return childSlots
             .Select(slot => new ExecutableChildSlot(
                 slot.Name,
-                slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities)).ToArray()))
+                slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables)).ToArray()))
             .ToArray();
     }
 
@@ -550,6 +586,64 @@ public sealed class ExecutableNodeCompiler(
             structure.Kind,
             structure.SchemaVersion,
             JsonSerializer.SerializeToElement(payload, DescriptorSerializerOptions));
+    }
+
+    /// <summary>
+    /// Publish-time backstop for the <c>IntrinsicVariableTargetValidator</c> draft guard (#972, PR #971
+    /// two-guard pattern): every variable-writing intrinsic must target a variable visible from its scope
+    /// (workflow-scope <c>state.Variables</c> or a visible ancestor container's declarations, ADR 0027).
+    /// Compiling an invisible target would publish an executable that poisons at runtime
+    /// ("Set intrinsic ... targets undeclared variable"); publication is refused instead.
+    /// </summary>
+    public void ValidateIntrinsicVariableTargets(
+        WorkflowDefinitionState state,
+        IReadOnlyCollection<ActivityNode> nodes,
+        int maxDepth = 100)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(nodes);
+
+        var intrinsicTargets = nodes
+            .Where(node => node.Intrinsic?.Variable is not null)
+            .ToArray();
+        if (intrinsicTargets.Length == 0)
+            return;
+
+        var visibility = new ScopedVariableResolver(activityStructureService)
+            .Resolve(state.Variables, state.RootActivity, maxDepth);
+        foreach (var node in intrinsicTargets)
+        {
+            var reference = node.Intrinsic!.Variable!;
+            if (visibility.IsReferenceVisible(node.NodeId, reference))
+                continue;
+
+            var scopeId = reference.IsWorkflowScope ? VariableReference.WorkflowScopeId : reference.DeclaringScopeId;
+            throw new ArgumentException(
+                $"Workflow {node.Intrinsic.Kind} intrinsic node '{node.NodeId}' targets variable '{reference.ReferenceKey}' in scope '{scopeId}', " +
+                "which is not visible from this node's scope. Declare the variable on the workflow or on a visible ancestor container before publishing; " +
+                "compiling it would publish an executable that fails at execution time.");
+        }
+    }
+
+    /// <summary>
+    /// Compiles the authored workflow-scope variable declarations (<c>state.Variables</c>) into the canonical
+    /// executable form carried on <see cref="WorkflowExecutable.WorkflowVariables"/>. These seed the runtime's
+    /// root variable frame (scope id <c>"workflow"</c>); the same VF-ACT-005 storage rules and literal-default
+    /// requirement apply as for container-structure declarations.
+    /// </summary>
+    public IReadOnlyCollection<RuntimeVariableDeclaration> CompileWorkflowVariables(IEnumerable<VariableDefinition> variables)
+    {
+        ArgumentNullException.ThrowIfNull(variables);
+        var authored = variables.ToArray();
+        var duplicate = authored
+            .GroupBy(variable => variable.ReferenceKey, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicate is not null)
+            throw new ArgumentException($"Workflow variable '{duplicate.Key}' is declared more than once.");
+
+        return authored
+            .Select(variable => CompileVariableDeclaration(VariableReference.WorkflowScopeId, variable))
+            .ToArray();
     }
 
     private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)

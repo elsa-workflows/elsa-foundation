@@ -45,8 +45,10 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
             options.SigningKey = ActivityExecutionHierarchyCursorSigningKey);
         services.TryAddScoped<WorkflowExecutableInspector>();
 
-        // API-only wiring: the FastEndpoints request handlers this feature's endpoints dispatch through.
-        services.AddRequestHandlersFrom(GetType().Assembly);
+        // API-only wiring: the FastEndpoints request and command handlers this feature's endpoints dispatch through.
+        var assembly = GetType().Assembly;
+        services.AddRequestHandlersFrom(assembly);
+        services.AddCommandHandlersFrom(assembly);
         services.TryAddScoped<IActivityExecutionInspectionAuthorizationContext, HttpContextActivityExecutionInspectionAuthorizationContext>();
         // Resolves the host's effective checkpoint cadence for the instance detail view (ADR 0032 R3). Reads the
         // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.

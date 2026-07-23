@@ -62,6 +62,12 @@ Known implementations:
   — an escalation intermediate throw / escalation end event emits `[RaiseEscalation, EmitTokens|ConsumeToken]`;
   reading the escalation code from the element, seam-C staging (or the root no-op), and all boundary
   matching/firing/bubbling/late-race handling are owned by `BpmnExecutionEngine`, not these behaviors)*
+- `MessageThrowEventBehavior` / `MessageEndEventBehavior` *(intra-domain — default; message send surface, spec
+  135 — a message intermediate throw / message end event is a **bound-child** shape: it schedules its synthesized
+  `PublishEvent` send child (`ScheduleChild`) and, on the child's fire-and-continue completion, routes its
+  outbound flows (`TaskBehavior`-like, throw) or consumes its token (none-end). No new command kind, token
+  status, or engine command — the send lands durably post-commit through the `PublishEvent` primitive's own
+  staging seam; these behaviors stay decision-only)*
 - **Compensation (spec 124)** adds one command kind — `BpmnBehaviorCommandKind.TriggerCompensation` — and no
   new token status or state-schema break. A **compensation boundary** (`BpmnEventDefinitionTypes.Compensation`
   on a `boundaryEvent`, dormant like an error boundary) names its handler via
@@ -114,6 +120,64 @@ Known implementations:
   (`EscalationRaised`/`EscalationCaught`/`EscalationUnhandled`/`EscalationLate`). Escalation boundaries are
   validated (`ValidateEscalation`): dormant, subprocess host only, distinct codes + ≤1 catch-all per host. All
   of it lives in the engine; behaviors stay decision-only.
+- **Event subprocesses (spec 128, tier 1)** add **no** behavior, command kind, token status, or state record — a
+  flow-less `BpmnElement.TriggeredByEvent` subprocess is a **graph-derived, dormant** catcher indexed on
+  `BpmnGraph.EventSubprocesses` (a `BpmnEventSubprocessCatcher` per element: trigger kind + code + interrupting +
+  body start element id). `ValidateEventSubprocesses` reads each body's authored structure (the way MI reads
+  `BpmnStructure.Variables`) and enforces the D1 rules. Two additive `StartEventBehavior` families
+  (`StartEventEscalation`/`StartEventError`) route an event-subprocess body start like a none start; the publish
+  trigger provider skips them (`BpmnElementFamilies.IsExternalStartTrigger`). **Scheduled-start seeding** extends
+  `BpmnScheduler.ScheduleChild` with an optional `startElementId` forwarded as the command-metadata hint
+  `BpmnStartTrigger.StartElementIdMetadataKey`, gated in `BpmnProcess.StartAsync`'s third seeding path on the
+  `BpmnExecutionEngine.EventSubprocessBodySchedulingCause` so an inherited hint can never contaminate an ordinary
+  nested process (a bad hint faults `bpmn.start.unresolved-hint`). Activation is engine-owned
+  (`BpmnExecutionEngine.ActivateEventSubprocess`): mint a scope-level activation token, schedule the body with the
+  hint, and — when interrupting — stop all other live work through the shared
+  `BpmnExecutionEngine.StopOtherLiveWork` helper (extracted from the spec-125 cancel-transaction stop-others loop;
+  reason `BpmnExecutionEngine.EventSubprocessScopeInterruptedReason`). `RaiseEscalation` gains the own-scope check
+  (returns the matched catcher instead of staging upward); `OnChildNotifiedAsync` gains the specificity ladder
+  (`BpmnGraph.EscalationEventSubprocessExact`/`EscalationCatchAllEventSubprocess`); `OnChildFaultedAsync` gains
+  the scope error catcher (`BpmnGraph.ErrorEventSubprocess`, seam-B absorption then interrupting activation;
+  executable since the runtime deferred-seam-B metadata-leak fix #989, spec 132). Body
+  completion is intercepted before behavior dispatch (`TriggeredByEvent`); two additive diagnostic kinds
+  (`EventSubprocessActivated`/`EventSubprocessCompleted`). `ResolveTokenId` was hardened so a nested
+  BpmnProcess body's leaked inner `bpmn.tokenId` on an inline completion is not mistaken for the parent's
+  activation token. Behaviors stay decision-only.
+- **Message/signal/timer event subprocesses (spec 134, tier 2)** add **no** behavior, command kind, or **token
+  status** — only two additive nullable model fields and three diagnostics. `BpmnToken.Kind`
+  (`BpmnTokenKind.Listener`|`Activation`) is a token **role** discriminator stamped at the listener/activation mints
+  and `null` elsewhere; `BpmnElement.ListenerNodeId` is a second bound-child channel (the synthesized `Delay`/`Event`
+  scope-listener node), folded into `BpmnGraph.Validate`'s exactly-one-binding accounting (a node binds as either a
+  `ChildNodeId` or a `ListenerNodeId`). `BpmnEventSubprocessTriggerKind` gains `Message`/`Signal`/`Timer`;
+  `BpmnEventSubprocessCatcher` gains `ListenerNodeId` + `IsExternalTrigger`; `BpmnGraph` gains
+  `ExternalTriggerEventSubprocesses`/`EventSubprocessByElementId`. Arming is engine-owned and two-phase: the listener
+  tokens are minted (`BpmnExecutionEngine.MintScopeListenerTokens`) before the seed propagates so an interrupting
+  activation drains them, and their children are scheduled (`ScheduleScopeListenerChildren`, cause
+  `BpmnExecutionEngine.ScopeListenerSchedulingCause`) after, only when real work remains; re-arm uses the combined
+  `ArmScopeListener`. Firing is intercepted in `OnChildCompletedAsync` before the tier-1 body-completion check,
+  discriminating on `Kind == Listener` (`HandleScopeListenerFired`): non-interrupting re-arms then activates,
+  interrupting activates and drains via `StopOtherLiveWork`. The liveness filter lives in **exactly** the two
+  `FinishEvaluation` predicates (completion + join-deadlock, computed over non-listener tokens/children); the
+  teardown-then-complete path cancels stranded listeners with reason
+  `BpmnExecutionEngine.EventSubprocessListenerSupersededByCompletionReason`. Diagnostics
+  `ScopeListenerArmed`/`ScopeListenerFired`/`ScopeListenerRetired`. Behaviors stay decision-only.
+- **Call activities (spec 133)** add **no** behavior, command kind, token status, or state record. A
+  `BpmnElementTypes.CallActivity` element resolves to the **task family** (added to `BpmnElementFamilies`'
+  task set, so it is boundary-host and multi-instance legal with no behavior change) and binds a
+  `Elsa.DispatchWorkflow` child whose waited path is the shipped dispatch machinery. The one new engine piece
+  is **failure-outcome translation**: `OnChildCompletedAsync` intercepts a `callActivity`-bound child completing
+  with `Faulted`/`DispatchFailed`/`Cancelled` (`BpmnExecutionEngine.CallActivityFailureOutcomes`) **before**
+  behavior dispatch (joining the MI/compensation/transaction/event-subprocess interception ladder; the MI-instance
+  case is handled inside the instance interception so the coordinator cascade composes first) and routes the
+  error-catcher ladder **directly, with no seam B** (`RouteCallActivityFailureOutcome`): host error boundary
+  (`BpmnGraph.AttachedErrorBoundary`, the spec-120 mint-and-propagate) → scope error event subprocess
+  (`BpmnGraph.ErrorEventSubprocess`, the spec-128 interrupting activation via `ActivateEventSubprocess`) → the
+  deterministic composite fault (`bpmn.call-activity.faulted` / `.dispatch-failed` / `.cancelled`). The interrupt
+  target is the completing host token, or the MI loop coordinator when the completing token is an instance
+  (`ResolveMultiInstanceCoordinatorTokenId`, so firing a catcher cascades every remaining instance). One additive
+  diagnostic kind (`CallActivityFailureRouted`) and one seam-A reason
+  (`BpmnExecutionEngine.CallActivityFailureRoutedReason`). `Completed`/`Dispatched` are untouched (normal task-flow
+  routing). No seam-B request is staged on this path. Behaviors stay decision-only.
 - **Multi-instance loops (spec 121)** add no behavior: a `BpmnElement.LoopCharacteristics`
   (`BpmnLoopCharacteristics`) turns a task/subprocess host's `ScheduleChild` decision into a loop the
   engine owns entirely — a coordinator token plus private per-instance sub-tokens, each scheduled through

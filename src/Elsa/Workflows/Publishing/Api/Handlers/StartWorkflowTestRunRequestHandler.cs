@@ -212,10 +212,10 @@ public sealed class StartWorkflowTestRunRequestHandler(
         if (draftSnapshot is not null)
             await testRunStore.SaveDraftSnapshotAsync(draftSnapshot, cancellationToken);
 
-        // Seed authored workflow variable defaults from the compiled executable's root structure so a test
-        // run resolves `variables.*` input expressions to their declared values (Seam C, #254), matching the
-        // production runtime-API start path.
-        var variables = VariableDeclarations.ProjectDeclaredVariableDefaultsByName(executable.RootActivity);
+        // Seed authored workflow variable defaults from the compiled executable's workflow-scope declarations
+        // so a test run resolves `variables.*` input expressions to their declared values (Seam C, #254),
+        // matching the production runtime-API start path.
+        var variables = VariableDeclarations.ProjectDeclaredVariableDefaultsByName(executable.WorkflowVariables);
 
         var partition = partitionAccessor?.Current ??
                         new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);

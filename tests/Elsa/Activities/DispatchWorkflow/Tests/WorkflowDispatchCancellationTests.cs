@@ -27,49 +27,44 @@ public sealed class WorkflowDispatchCancellationTests
         var first = await enricher.EnrichAsync(commit);
         var replay = await enricher.EnrichAsync(commit);
 
-        var request = Assert.Single(first.StateChanges.WorkflowDispatchCancellations);
-        Assert.Equal(dispatch.DispatchId, request.DispatchId);
-        Assert.Equal(dispatch.ParentWorkflowExecutionId, request.ParentWorkflowExecutionId);
-        Assert.Equal(dispatch.ParentActivityExecutionId, request.ParentActivityExecutionId);
-        Assert.Equal(dispatch.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId);
-        Assert.Equal(Now, request.RequestedAt);
-        Assert.True(WorkflowDispatchCancellationRequest.Equivalent(
-            request,
-            Assert.Single(replay.StateChanges.WorkflowDispatchCancellations)));
-
-        var identity = Identity();
-        var intent = Assert.Single(first.PostCommitIntents);
-        Assert.Equal(identity.ChildCancelIntentId, intent.IntentId);
-        Assert.Equal(dispatch.ParentWorkflowExecutionId, intent.WorkflowExecutionId);
-        Assert.Equal(dispatch.ParentActivityExecutionId, intent.ActivityExecutionId);
-        Assert.Equal(DispatchWorkflowConstants.CancelChildIntentKind, intent.Kind);
-        Assert.Equal(identity.ChildCancelIdempotencyKey, intent.IdempotencyKey);
-        Assert.Equal(Now, intent.RecordedAt);
-        Assert.Equal(dispatch.DispatchId, intent.Metadata[RuntimeMetadataKeys.DispatchId]);
-        Assert.Equal(dispatch.ChildWorkflowExecutionId, intent.Metadata[RuntimeMetadataKeys.ChildWorkflowExecutionId]);
-        Assert.Equal(2, intent.Metadata.Count);
-        var payload = intent.Payload!.Value.Deserialize<WorkflowDispatchChildCancelPayload>(JsonOptions())!;
-        Assert.Equal(dispatch.DispatchId, payload.DispatchId);
-        Assert.Equal(dispatch.ParentWorkflowExecutionId, payload.ParentWorkflowExecutionId);
-        Assert.Equal(dispatch.ParentActivityExecutionId, payload.ParentActivityExecutionId);
-        Assert.Equal(dispatch.ChildWorkflowExecutionId, payload.ChildWorkflowExecutionId);
-        Assert.True(JsonElement.DeepEquals(
-            intent.Payload.Value,
-            Assert.Single(replay.PostCommitIntents).Payload!.Value));
+        AssertDeterministicCancellationWork(first, replay, dispatch);
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(WorkflowDispatchStatus.Pending, false)]
+    [InlineData(WorkflowDispatchStatus.Pending, true)]
+    [InlineData(WorkflowDispatchStatus.Started, false)]
+    [InlineData(WorkflowDispatchStatus.Started, true)]
+    public async Task ActivityCancellationCheckpoint_StagesDeterministicWork(
+        WorkflowDispatchStatus status,
+        bool cancelWholeParent)
+    {
+        var store = new InMemoryWorkflowDispatchStore();
+        var dispatch = await SaveDispatchAsync(store, status);
+        var enricher = new WorkflowDispatchCancellationEnricher(store);
+        var commit = NewCancellationCommit(cancelWholeParent, dispatch.ParentActivityExecutionId);
+
+        var first = await enricher.EnrichAsync(commit);
+        var replay = await enricher.EnrichAsync(commit);
+
+        AssertDeterministicCancellationWork(first, replay, dispatch);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
     public async Task CancellationCheckpoint_ReplaysAfterProviderResolutionAndTerminalProjection(
-        bool admitBeforeCancellation)
+        bool admitBeforeCancellation,
+        bool cancelWholeParent)
     {
         var store = new InMemoryWorkflowDispatchStore();
         var dispatch = await SaveDispatchAsync(store, WorkflowDispatchStatus.Pending);
         if (admitBeforeCancellation)
             await store.TryAdmitAsync(dispatch.DispatchId, Now.AddSeconds(1));
         var enricher = new WorkflowDispatchCancellationEnricher(store);
-        var commit = NewParentCancelCommit();
+        var commit = NewCancellationCommit(cancelWholeParent, "activity-cancel");
         var first = await enricher.EnrichAsync(commit);
         await store.ApplyCancellationAsync(Assert.Single(first.StateChanges.WorkflowDispatchCancellations));
         if (admitBeforeCancellation)
@@ -90,12 +85,15 @@ public sealed class WorkflowDispatchCancellationTests
         Assert.True(JsonElement.DeepEquals(firstIntent.Payload!.Value, replayIntent.Payload!.Value));
     }
 
-    [Fact]
-    public async Task CancellationCheckpoint_ReplaysCommittedOutboxWhenTerminalWinsAfterEnrichment()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CancellationCheckpoint_ReplaysCommittedOutboxWhenTerminalWinsAfterEnrichment(
+        bool cancelWholeParent)
     {
         var store = new InMemoryWorkflowDispatchStore();
         var dispatch = await SaveDispatchAsync(store, WorkflowDispatchStatus.Started);
-        var commit = NewParentCancelCommit();
+        var commit = NewCancellationCommit(cancelWholeParent, "activity-cancel");
         var first = await new WorkflowDispatchCancellationEnricher(store).EnrichAsync(commit);
         var firstIntent = Assert.Single(first.PostCommitIntents);
         await store.SaveAsync(dispatch.TransitionTo(WorkflowDispatchStatus.Completed, Now.AddSeconds(1)));
@@ -122,20 +120,82 @@ public sealed class WorkflowDispatchCancellationTests
     }
 
     [Theory]
-    [InlineData(WorkflowDispatchStatus.Completed)]
-    [InlineData(WorkflowDispatchStatus.Faulted)]
-    [InlineData(WorkflowDispatchStatus.Cancelled)]
-    [InlineData(WorkflowDispatchStatus.DispatchFailed)]
-    public async Task TerminalDispatch_DoesNotCreateCancelWork(WorkflowDispatchStatus status)
+    [InlineData(WorkflowDispatchStatus.Completed, false)]
+    [InlineData(WorkflowDispatchStatus.Completed, true)]
+    [InlineData(WorkflowDispatchStatus.Faulted, false)]
+    [InlineData(WorkflowDispatchStatus.Faulted, true)]
+    [InlineData(WorkflowDispatchStatus.Cancelled, false)]
+    [InlineData(WorkflowDispatchStatus.Cancelled, true)]
+    [InlineData(WorkflowDispatchStatus.DispatchFailed, false)]
+    [InlineData(WorkflowDispatchStatus.DispatchFailed, true)]
+    public async Task TerminalDispatch_DoesNotCreateCancelWork(
+        WorkflowDispatchStatus status,
+        bool cancelWholeParent)
     {
         var store = new InMemoryWorkflowDispatchStore();
         await SaveDispatchAsync(store, status);
 
         var enriched = await new WorkflowDispatchCancellationEnricher(store)
-            .EnrichAsync(NewParentCancelCommit());
+            .EnrichAsync(NewCancellationCommit(cancelWholeParent, "activity-cancel"));
 
         Assert.Empty(enriched.StateChanges.WorkflowDispatchCancellations);
         Assert.Empty(enriched.PostCommitIntents);
+    }
+
+    [Fact]
+    public async Task ActivityCancellationCheckpoint_DoesNotCancelSiblingDispatch()
+    {
+        var store = new InMemoryWorkflowDispatchStore();
+        await SaveDispatchAsync(store, WorkflowDispatchStatus.Started);
+
+        var enriched = await new WorkflowDispatchCancellationEnricher(store)
+            .EnrichAsync(NewCancellationCommit(cancelWholeParent: false, "activity-sibling"));
+
+        Assert.Empty(enriched.StateChanges.WorkflowDispatchCancellations);
+        Assert.Empty(enriched.PostCommitIntents);
+    }
+
+    [Theory]
+    [InlineData(ActivityExecutionStatus.Running, RuntimeStateChangeOperation.Upsert)]
+    [InlineData(ActivityExecutionStatus.Cancelled, RuntimeStateChangeOperation.Delete)]
+    public async Task NonCancellationActivityChange_DoesNotCreateCancelWork(
+        ActivityExecutionStatus status,
+        RuntimeStateChangeOperation operation)
+    {
+        var store = new InMemoryWorkflowDispatchStore();
+        await SaveDispatchAsync(store, WorkflowDispatchStatus.Started);
+
+        var enriched = await new WorkflowDispatchCancellationEnricher(store)
+            .EnrichAsync(NewActivityChangeCommit("activity-cancel", status, operation));
+
+        Assert.Empty(enriched.StateChanges.WorkflowDispatchCancellations);
+        Assert.Empty(enriched.PostCommitIntents);
+    }
+
+    [Fact]
+    public async Task ActivityCancellationCheckpoint_FindsMatchingDispatchOnLaterPage()
+    {
+        var store = new InMemoryWorkflowDispatchStore();
+        for (var index = 0; index < WorkflowDispatchQuery.MaximumTake; index++)
+        {
+            await store.SaveAsync(NewDispatch(
+                $"activity-page-{index:D3}",
+                WorkflowDispatchStatus.Pending,
+                createdAt: Now.AddMinutes(-3)));
+        }
+        var dispatch = NewDispatch(
+            "activity-cancel",
+            WorkflowDispatchStatus.Pending,
+            createdAt: Now.AddMinutes(-2));
+        await store.SaveAsync(dispatch);
+
+        var enriched = await new WorkflowDispatchCancellationEnricher(store)
+            .EnrichAsync(NewCancellationCommit(cancelWholeParent: false, "activity-cancel"));
+
+        Assert.Equal(dispatch.DispatchId, Assert.Single(enriched.StateChanges.WorkflowDispatchCancellations).DispatchId);
+        Assert.Equal(
+            new WorkflowDispatchIdentity("parent-cancel", "activity-cancel").ChildCancelIntentId,
+            Assert.Single(enriched.PostCommitIntents).IntentId);
     }
 
     [Fact]
@@ -153,18 +213,22 @@ public sealed class WorkflowDispatchCancellationTests
     }
 
     [Theory]
-    [InlineData(WorkflowDispatchMode.WaitForCompletion, false)]
-    [InlineData(WorkflowDispatchMode.FireAndForget, false)]
-    [InlineData(WorkflowDispatchMode.FireAndForget, true)]
+    [InlineData(WorkflowDispatchMode.WaitForCompletion, false, false)]
+    [InlineData(WorkflowDispatchMode.WaitForCompletion, false, true)]
+    [InlineData(WorkflowDispatchMode.FireAndForget, false, false)]
+    [InlineData(WorkflowDispatchMode.FireAndForget, false, true)]
+    [InlineData(WorkflowDispatchMode.FireAndForget, true, false)]
+    [InlineData(WorkflowDispatchMode.FireAndForget, true, true)]
     public async Task IndependentDispatch_DoesNotCreateCancelWork(
         WorkflowDispatchMode mode,
-        bool authoredPolicy)
+        bool authoredPolicy,
+        bool cancelWholeParent)
     {
         var store = new InMemoryWorkflowDispatchStore();
         await SaveDispatchAsync(store, WorkflowDispatchStatus.Started, mode, authoredPolicy);
 
         var enriched = await new WorkflowDispatchCancellationEnricher(store)
-            .EnrichAsync(NewParentCancelCommit());
+            .EnrichAsync(NewCancellationCommit(cancelWholeParent, "activity-cancel"));
 
         Assert.Empty(enriched.StateChanges.WorkflowDispatchCancellations);
         Assert.Empty(enriched.PostCommitIntents);
@@ -359,41 +423,157 @@ public sealed class WorkflowDispatchCancellationTests
     }
 
     private static RuntimeCheckpointCommit NewParentCancelCommit()
+        => NewCancellationCommit(cancelWholeParent: true);
+
+    private static RuntimeCheckpointCommit NewCancellationCommit(
+        bool cancelWholeParent,
+        params string[] cancelledActivityExecutionIds)
     {
-        var execution = NewParentState(WorkflowExecutionStatus.Cancelled);
+        var activityChanges = cancelledActivityExecutionIds
+            .Select(activityExecutionId =>
+            {
+                var state = NewActivityState(activityExecutionId, ActivityExecutionStatus.Cancelled);
+                return new RuntimeStateChange<ActivityExecutionState>(
+                    activityExecutionId,
+                    RuntimeStateChangeOperation.Upsert,
+                    state,
+                    new Dictionary<string, string>());
+            })
+            .ToArray();
+        return NewCancellationCommit(cancelWholeParent, activityChanges);
+    }
+
+    private static RuntimeCheckpointCommit NewActivityChangeCommit(
+        string activityExecutionId,
+        ActivityExecutionStatus status,
+        RuntimeStateChangeOperation operation)
+    {
+        var state = NewActivityState(activityExecutionId, status);
+        return NewCancellationCommit(
+            cancelWholeParent: false,
+            [
+                new RuntimeStateChange<ActivityExecutionState>(
+                    activityExecutionId,
+                    operation,
+                    state,
+                    new Dictionary<string, string>())
+            ]);
+    }
+
+    private static RuntimeCheckpointCommit NewCancellationCommit(
+        bool cancelWholeParent,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> activityChanges)
+    {
+        var execution = NewParentState(
+            cancelWholeParent ? WorkflowExecutionStatus.Cancelled : WorkflowExecutionStatus.Running);
+        var workflowChange = cancelWholeParent
+            ? new RuntimeStateChange<WorkflowExecutionState>(
+                execution.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                execution,
+                new Dictionary<string, string>())
+            : null;
         return new RuntimeCheckpointCommit(
             "commit-parent-cancelled",
             new RuntimeCheckpoint(
                 "checkpoint-parent-cancelled",
-                RuntimeCheckpointNames.WorkflowCancelled,
+                cancelWholeParent ? RuntimeCheckpointNames.WorkflowCancelled : "ActivitySubtreeCancelled",
                 execution.WorkflowExecutionId,
                 Now,
                 [],
                 new Dictionary<string, string>()),
             new RuntimeCheckpointStateChangeSet(
-                new RuntimeStateChange<WorkflowExecutionState>(
-                    execution.WorkflowExecutionId,
-                    RuntimeStateChangeOperation.Upsert,
-                    execution,
-                    new Dictionary<string, string>()),
+                workflowChange,
                 null,
-                [], [], [], [], []),
+                activityChanges, [], [], [], []),
             [],
             new Dictionary<string, string>());
+    }
+
+    private static ActivityExecutionState NewActivityState(
+        string activityExecutionId,
+        ActivityExecutionStatus status) => new(
+        new ActivityExecution(
+            activityExecutionId,
+            "parent-cancel",
+            $"node-{activityExecutionId}",
+            activityExecutionId,
+            DispatchWorkflowConstants.ActivityType,
+            "1.0.0"),
+        status,
+        null,
+        Now.AddMinutes(-2),
+        Now.AddMinutes(-2),
+        status == ActivityExecutionStatus.Cancelled ? Now : null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        [],
+        [],
+        0,
+        0,
+        new Dictionary<string, string>());
+
+    private static void AssertDeterministicCancellationWork(
+        RuntimeCheckpointCommit first,
+        RuntimeCheckpointCommit replay,
+        WorkflowDispatchRecord dispatch)
+    {
+        var request = Assert.Single(first.StateChanges.WorkflowDispatchCancellations);
+        Assert.Equal(dispatch.DispatchId, request.DispatchId);
+        Assert.Equal(dispatch.ParentWorkflowExecutionId, request.ParentWorkflowExecutionId);
+        Assert.Equal(dispatch.ParentActivityExecutionId, request.ParentActivityExecutionId);
+        Assert.Equal(dispatch.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId);
+        Assert.Equal(Now, request.RequestedAt);
+        Assert.True(WorkflowDispatchCancellationRequest.Equivalent(
+            request,
+            Assert.Single(replay.StateChanges.WorkflowDispatchCancellations)));
+
+        var identity = new WorkflowDispatchIdentity(
+            dispatch.ParentWorkflowExecutionId,
+            dispatch.ParentActivityExecutionId);
+        var intent = Assert.Single(first.PostCommitIntents);
+        Assert.Equal(identity.ChildCancelIntentId, intent.IntentId);
+        Assert.Equal(dispatch.ParentWorkflowExecutionId, intent.WorkflowExecutionId);
+        Assert.Equal(dispatch.ParentActivityExecutionId, intent.ActivityExecutionId);
+        Assert.Equal(DispatchWorkflowConstants.CancelChildIntentKind, intent.Kind);
+        Assert.Equal(identity.ChildCancelIdempotencyKey, intent.IdempotencyKey);
+        Assert.Equal(Now, intent.RecordedAt);
+        Assert.Equal(dispatch.DispatchId, intent.Metadata[RuntimeMetadataKeys.DispatchId]);
+        Assert.Equal(dispatch.ChildWorkflowExecutionId, intent.Metadata[RuntimeMetadataKeys.ChildWorkflowExecutionId]);
+        Assert.Equal(2, intent.Metadata.Count);
+        var payload = intent.Payload!.Value.Deserialize<WorkflowDispatchChildCancelPayload>(JsonOptions())!;
+        Assert.Equal(dispatch.DispatchId, payload.DispatchId);
+        Assert.Equal(dispatch.ParentWorkflowExecutionId, payload.ParentWorkflowExecutionId);
+        Assert.Equal(dispatch.ParentActivityExecutionId, payload.ParentActivityExecutionId);
+        Assert.Equal(dispatch.ChildWorkflowExecutionId, payload.ChildWorkflowExecutionId);
+        Assert.True(JsonElement.DeepEquals(
+            intent.Payload.Value,
+            Assert.Single(replay.PostCommitIntents).Payload!.Value));
     }
 
     private static WorkflowDispatchRecord NewDispatch(
         WorkflowDispatchStatus status,
         WorkflowDispatchMode mode = WorkflowDispatchMode.WaitForCompletion,
-        bool authoredPolicy = true)
+        bool authoredPolicy = true) =>
+        NewDispatch("activity-cancel", status, mode, authoredPolicy);
+
+    private static WorkflowDispatchRecord NewDispatch(
+        string activityExecutionId,
+        WorkflowDispatchStatus status,
+        WorkflowDispatchMode mode = WorkflowDispatchMode.WaitForCompletion,
+        bool authoredPolicy = true,
+        DateTimeOffset? createdAt = null)
     {
-        var identity = Identity();
+        var identity = new WorkflowDispatchIdentity("parent-cancel", activityExecutionId);
         var metadata = new Dictionary<string, string>();
         WorkflowDispatchLifecycle.SetEffectiveCancellationPolicy(metadata, mode, authoredPolicy);
         return new WorkflowDispatchRecord(
             identity.DispatchId,
             "parent-cancel",
-            "activity-cancel",
+            activityExecutionId,
             identity.ChildWorkflowExecutionId,
             ChildIdentity(),
             ChildSource(),
@@ -405,7 +585,7 @@ public sealed class WorkflowDispatchCancellationTests
             WorkflowRunKind.PublishedRun,
             new WorkflowExecutionAuthoritySnapshot("parent-cancel", "root-initiator"),
             [],
-            Now.AddMinutes(-2),
+            createdAt ?? Now.AddMinutes(-2),
             Now.AddMinutes(-1),
             metadata);
     }

@@ -4,6 +4,7 @@ using Elsa.Locking.Core;
 using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
@@ -535,6 +536,15 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task PromoteDraft_rejects_an_unknown_draft_as_not_found()
+    {
+        var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            PromoteCommand().Execute(NextKey(), "draft-missing", CancellationToken.None));
+
+        Assert.Contains("draft-missing", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task PromoteDraft_preserves_the_scope_identity_on_the_version_and_layout()
     {
         const string scope = GroundworkTestAccess.DefaultScopeValue;
@@ -697,10 +707,30 @@ public class GroundworkWorkflowDefinitionCommandTests
             VersionLayoutStore(),
             _accessContext);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<WorkflowDefinitionNotSoftDeletedException>(() =>
             delete.Execute(NextKey(), "definition-active", CancellationToken.None));
 
+        Assert.Equal("definition-active", exception.DefinitionId);
         Assert.NotNull(await definitions.FindByIdAsync("definition-active"));
+    }
+
+    [Fact]
+    public async Task DeleteWorkflowDefinitionPermanently_rejects_an_unknown_definition_as_not_found()
+    {
+        var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
+            _store,
+            AtomicWrite(),
+            Payloads,
+            new GroundworkWorkflowDefinitionStore(_store),
+            DraftStore(),
+            VersionStore(),
+            VersionLayoutStore(),
+            _accessContext);
+
+        var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            delete.Execute(NextKey(), "definition-missing", CancellationToken.None));
+
+        Assert.Contains("definition-missing", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

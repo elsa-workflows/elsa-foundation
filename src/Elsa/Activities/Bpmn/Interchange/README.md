@@ -77,8 +77,71 @@ Mapping rules for this slice:
   none end event (no flows to cascade). On a `boundaryEvent` attached to a **subprocess** host → escalation
   boundary (ref-less = code-less catch-all); attached to a **task-family** host (childless on import), a
   **colliding code**, or a **second catch-all** on one host → dropped with a finding (validate-representable).
-- Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes
-  (call activities, event subprocesses, …) are dropped with an issue. **Cyclic graphs import clean** — a
+- **Event subprocesses** (spec 128, tier 1): a `<subProcess triggeredByEvent="true">` imports as a
+  `TriggeredByEvent` element bound to a nested body; the body's single event-start declares the trigger — an
+  `escalationEventDefinition` (with `escalationRef` resolving to a code = catch-all when ref-less) or an
+  `errorEventDefinition`, its `isInterrupting` (default `true`) mapped onto the body start event's flag. The
+  importer validates the body shape and per-scope uniqueness **before** emitting, so it never emits a
+  validator-rejected graph: **dropped** with a specific finding when the body has no/multiple start events, an
+  unsupported trigger (compensation/conditional/… → not a supported event-subprocess trigger), a colliding escalation
+  code, a second catch-all in one scope, or a second / non-interrupting error event subprocess. An **error**-triggered
+  event subprocess is **executable** since the runtime deferred-seam-B fix (#989, spec 132): it imports as an
+  (always-interrupting, catch-all) error trigger; a scope carries **≤1**, and a non-interrupting error start
+  degrades (Dropped + finding) as a malformed shape. **Message/signal/timer** triggers (spec 134): a body start
+  carrying a `messageEventDefinition`/`signalEventDefinition` (root-index name resolution) or a `timerEventDefinition`
+  with a one-shot `<timeDuration>` imports **with a synthesized scope-listener node** (`node-{id}-listener`, an
+  `Event` wait for message/signal or a `Delay` for timer, reusing the spec-116/118 catch-child synthesis) and a
+  `ListenerNodeId` on the element; a `<timeCycle>`/`<timeDate>`/cron timer degrades (the body start becomes a none
+  start → the event subprocess drops). **Export**: `triggeredByEvent="true"` on the `<subProcess>` plus the body's
+  event-start with its definition and `isInterrupting="false"` only when non-interrupting (a timer body start exports
+  a `<timeDuration>`, not the recurring `<timeCycle>` a root timer start uses); the synthesized listener node is **not**
+  exported (re-synthesized on import); escalation codes dedupe through the root `<escalation>` declarations. Round-trips
+  hold for escalation (interrupting / non-interrupting / catch-all), error (always interrupting, catch-all), and
+  message + signal + timer (interrupting + non-interrupting).
+- **Call activities** (spec 133): a `<callActivity>` carrying the Elsa extension attribute
+  `elsa:workflowDefinitionId` (our export convention) imports **bound** — a `DispatchWorkflow` child is
+  synthesized (`WorkflowDefinitionId` literal + `WaitForCompletion`, honoring `elsa:waitForCompletion="false"`
+  for fire-and-forget; the spec-118 synthesized-child pattern). A plain `<callActivity calledElement="…">` (a
+  foreign BPMN process id with no guaranteed Elsa definition mapping) imports **unbound** with an **Info** finding
+  ("imported unbound; bind a DispatchWorkflow activity to execute it" — the serviceTask precedent); the
+  `calledElement` is recorded as `Properties["bpmn.calledElement"]` (the `bpmn.errorRef` passthrough precedent) in
+  either case for authoring reference and lossless round-trip. The importer never emits a validator-rejected graph
+  (a call activity validates as a task-family element, bound or childless). Publish-time pinning means import never
+  needs to resolve the definition.
+- **Message send surface** (spec 135): an `intermediateThrowEvent`/`endEvent` with a `messageEventDefinition`
+  (root `<message>`-index name resolution, the message/signal precedent) imports **bound** — a `PublishEvent`
+  send child is synthesized (`EventName` literal, node id `node-{id}`, placeholder version id `Elsa.PublishEvent`)
+  and the element carries a `message` definition with the resolved `name`. A **name-less/ref-less** message throw
+  is **dropped** with a finding (its flows cascade-drop), a name-less message **end** degrades to a **none end**
+  (no flows to cascade). A `<sendTask messageRef="…">` binds a synthesized `PublishEvent`; a
+  `<receiveTask messageRef="…">` binds a synthesized `Event` catch child (reusing the spec-116 catch-child
+  synthesis verbatim — the receive twin); the resolved name is recorded as `Properties["bpmn.messageName"]` (a task
+  uses a `messageRef` attribute, not a nested definition). A **name-less** send/receive task imports as a plain
+  **unbound** task with an **Info** finding (the serviceTask precedent). A **signal** throw event stays **Dropped**
+  with a finding (a stated cut — the fabric is identical but the slice stays message-scoped). The importer never
+  emits a validator-rejected graph.
+- **Collaborations, pools, and message flows** (spec 136): a multi-pool document imports **every** `<process>`
+  independently — the primary (explicit `ProcessId` > first executable > first) stays `BpmnImportResult.ProcessNode`
+  and `BpmnImportResult.ProcessNodes` (additive) carries one `BpmnImportedProcess`
+  `(ProcessId, ParticipantId?, ParticipantName?, Node)` per process in document order (the former silent
+  multi-pool drop is gone — an **Info** finding notes the additional pools). A **non-executable** process
+  (`isExecutable="false"`) imports as a documentation pool with an **Info** finding. A `<collaboration>`'s
+  `<participant id name processRef>` populates a `BpmnPool` (`poolId`/`name`/`processRef`) on the referenced
+  process's structure and, when the process is referenced by **exactly one** participant, stamps that pool id onto
+  its lanes' `PoolId` (an ambiguous multi-participant process leaves lane pool ids null with an **Info** finding);
+  a **black-box** participant (no `processRef`) is an **Info** finding and imports no process; a broken `processRef`
+  is **Degraded**. A `<messageFlow id name sourceRef targetRef messageRef?>` resolves each endpoint to an element
+  (across **all** imported processes) or a black-box pool and records a `BpmnMessageFlow`
+  `(FlowId, Name?, SourceElementId?, SourcePoolId?, TargetElementId?, TargetPoolId?, MessageName?)` on each
+  **involved** structure: two message-bearing elements whose names **match** are **matched** (Info); names that
+  **differ** (or either side name-less) are **Degraded** naming both elements (the name-keyed fabric can never
+  deliver the flow as drawn); a **black-box** endpoint is **Info** (documentation flow); **unresolvable** endpoint
+  refs are **Degraded** and recorded nowhere. The pools and message flows are **authored-side metadata the engine
+  and graph validator ignore** — execution rides the name-keyed stimulus fabric (each pool is a separately
+  published definition), so `BpmnGraph.Validate` is unchanged and the importer never emits a validator-rejected
+  graph.
+- Expression flow conditions import as unconditional flows (reported); other unsupported flow nodes are
+  dropped with an issue. **Cyclic graphs import clean** — a
   loop-back sequence flow is executable (spec 122: token iteration keys), so the former cycle degradation
   finding is gone; the graph validator's structural rules still constrain where a loop-back may land.
 - BPMNDI shapes/edges are preserved verbatim on the authored `diagram` payload.
@@ -108,8 +171,26 @@ emits `<boundaryEvent attachedToRef="…"><cancelEventDefinition/></boundaryEven
 event DI bounds (no association involved). An **escalation** throw/end/boundary emits an
 `<escalationEventDefinition>` with an `escalationRef` pointing at a deduped root `<escalation
 id="escalation-{code}" escalationCode="{code}" [name]>` declaration (message/signal precedent); a code-less
-catch-all boundary emits a ref-less `<escalationEventDefinition/>` and contributes no root declaration. Each
-distinct message/signal
+catch-all boundary emits a ref-less `<escalationEventDefinition/>` and contributes no root declaration. An
+**event subprocess** emits `<subProcess triggeredByEvent="true">` with its body content, and the body's
+event-start emits its `escalationEventDefinition`/`errorEventDefinition`/`messageEventDefinition`/
+`signalEventDefinition`/`timerEventDefinition` (a message/signal/timer body start emits `isInterrupting="false"` when
+non-interrupting, and a timer emits a one-shot `<timeDuration>`; its synthesized scope-listener node is not exported). A **call activity** emits `<callActivity>` with `calledElement` (the `bpmn.calledElement`
+passthrough when present, else the bound child's authored `WorkflowDefinitionId`), the
+`elsa:workflowDefinitionId` extension attribute when bound, and `elsa:waitForCompletion="false"` only when the
+bound child is authored fire-and-forget (the waited-by-default convention omits it); the bound `DispatchWorkflow`
+child node is an Elsa concern the importer re-establishes, so it is not inlined. Bound and unbound call activities
+both round-trip. A **message throw/end** event (spec 135) emits a `messageEventDefinition` with a `messageRef`
+targeting a deduped root `<message>` declaration; a **sendTask**/**receiveTask** emits its element with a
+`messageRef` (its name read from `Properties["bpmn.messageName"]`, contributing the same deduped declaration). The
+synthesized `PublishEvent`/`Event` children are engine detail and are never exported (re-synthesized on import).
+Message throw, message end, sendTask, and receiveTask all round-trip. A structure carrying **pools/message
+flows** (spec 136) emits a `<collaboration>` wrapper ahead of the process: a `<participant>` per pool (deduped
+by pool id, referencing the exported process) and its own-pool `<messageFlow>`s (a black-box endpoint emits its
+pool id as the endpoint ref; a resolved message name emits a `messageRef` to the deduped root `<message>`
+declaration). This is a **per-definition** export — a full N-pool document assembled from N separate structures
+is a documented cut, and lanes themselves are still not exported (so lane pool ids do not survive the round-trip,
+though the participant/pool wrapper does). Each distinct message/signal
 name emits one deduped root `<message>`/`<signal>` declaration (deterministic id `message-{name}` /
 `signal-{name}`) that the element's `messageRef`/`signalRef` targets — a name that sanitizes to a
 colliding id shares a declaration. A catch event's bound `Delay`/`Event` child is engine detail and is not
@@ -130,6 +211,10 @@ three are pure conversions — nothing is persisted server-side:
 The Studio import/export UX; message/signal **payload and correlation** mapping (only the event `name`
 is mapped — the synthesized `Event` catch/boundary child leaves `CorrelationId` unset); absolute
 (`<timeDate>`) and non-recurring start timers; error-code (`errorRef`) matching on error boundaries;
-escalation boundaries and compensation/event subprocesses (still dropped); connector (sequence-flow and
+`timeCycle`/`timeDate`/cron **event-subprocess** timers (spec 134 ships one-shot `<timeDuration>` message/signal/timer
+event subprocesses; recurring shapes still degrade); connector (sequence-flow and
 association) BPMNEdge DI; `extensionElements` preservation for third-party vendor attributes;
-collaboration/pool export; and the BPMN MIWG conformance corpus.
+**full N-pool document export** (spec 136 ships per-definition collaboration export — the participant wrapper and
+own-pool message flows — but not a single N-pool document assembled from N structures, nor lane emission);
+`<conversation>`/`<choreography>` elements; message-flow **correlation** (#1001); the Studio multi-pool import
+UX; and the BPMN MIWG conformance corpus.

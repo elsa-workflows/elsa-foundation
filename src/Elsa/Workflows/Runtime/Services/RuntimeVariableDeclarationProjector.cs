@@ -21,15 +21,31 @@ public sealed class RuntimeVariableDeclarationProjector
         var projection = node.Structure.Payload.Deserialize<StructureVariablesProjection>(SerializerOptions)
             ?? throw new InvalidOperationException($"Executable node '{node.ExecutableNodeId}' has malformed variable declaration structure.");
 
-        return projection?.Variables?
-                   .Where(declaration => !string.IsNullOrWhiteSpace(declaration.VariableKey))
-                   .ToDictionary(declaration => declaration.VariableKey, StringComparer.Ordinal)
-               ?? EmptyDeclarations;
+        return ProjectDeclarations(projection?.Variables ?? []);
     }
 
-    public IReadOnlyDictionary<string, ValueEnvelope> ProjectInitialValues(ExecutableNode node)
+    public IReadOnlyDictionary<string, RuntimeVariableDeclaration> ProjectDeclarations(
+        IReadOnlyCollection<RuntimeVariableDeclaration> declarations)
     {
-        var declarations = ProjectDeclarations(node);
+        ArgumentNullException.ThrowIfNull(declarations);
+        if (declarations.Count == 0)
+            return EmptyDeclarations;
+
+        return declarations
+            .Where(declaration => !string.IsNullOrWhiteSpace(declaration.VariableKey))
+            .ToDictionary(declaration => declaration.VariableKey, StringComparer.Ordinal);
+    }
+
+    public IReadOnlyDictionary<string, ValueEnvelope> ProjectInitialValues(ExecutableNode node) =>
+        ProjectInitialValues(ProjectDeclarations(node));
+
+    public IReadOnlyDictionary<string, ValueEnvelope> ProjectInitialValues(
+        IReadOnlyCollection<RuntimeVariableDeclaration> declarations) =>
+        ProjectInitialValues(ProjectDeclarations(declarations));
+
+    private static IReadOnlyDictionary<string, ValueEnvelope> ProjectInitialValues(
+        IReadOnlyDictionary<string, RuntimeVariableDeclaration> declarations)
+    {
         if (declarations.Count == 0)
             return EmptyValues;
 
@@ -39,8 +55,9 @@ public sealed class RuntimeVariableDeclarationProjector
             StringComparer.Ordinal);
     }
 
-    public IReadOnlyDictionary<string, object?> ProjectDeclaredVariableDefaultsByName(ExecutableNode node) =>
-        ProjectDeclarations(node).Values
+    public IReadOnlyDictionary<string, object?> ProjectDeclaredVariableDefaultsByName(
+        IReadOnlyCollection<RuntimeVariableDeclaration> declarations) =>
+        ProjectDeclarations(declarations).Values
             .Select(declaration => (Declaration: declaration, Envelope: ToEnvelope(declaration)))
             .Where(item => item.Envelope.Presence != ValuePresence.Absent)
             .ToDictionary(

@@ -7,6 +7,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -65,7 +66,9 @@ public sealed class SourceOwnedActivityVersionPublisherTests
     {
         var types = TestWellKnownTypeRegistry.Create();
         var structure = new DefaultActivityStructureService([]);
-        var nodeCompiler = new ExecutableNodeCompiler(structure, types, new RuntimeInputBindingCompiler(types));
+        var outputCompiler = new RuntimeOutputCaptureCompiler(
+            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
+        var nodeCompiler = new ExecutableNodeCompiler(structure, types, new RuntimeInputBindingCompiler(types), outputCompiler);
         return new(command, new EmptyPublicationStore(), nodeCompiler, TimeProvider.System);
     }
 

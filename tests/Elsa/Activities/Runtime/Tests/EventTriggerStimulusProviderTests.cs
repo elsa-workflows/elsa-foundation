@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -148,6 +149,37 @@ public sealed class EventTriggerStimulusProviderTests
         Assert.Equal(EventStimulus.Hash("order-shipped"), registration.StimulusHash);
     }
 
+    [Theory]
+    [InlineData("order-7")]
+    [InlineData(" order-7 ")]
+    public async Task Execute_suspends_with_trimmed_correlation_metadata(string correlationId)
+    {
+        var activity = await NewEventActivityAsync(canStartWorkflow: false, correlationId);
+
+        var transition = await ((IActivity)activity).ExecuteAsync(DirectContext());
+
+        var suspension = Assert.IsAssignableFrom<IStatefulActivitySuspensionTransition<EventWaitState>>(transition);
+        var registration = Assert.IsType<ActivityTriggerRegistration<EventReceived>>(Assert.Single(suspension.Registrations));
+        Assert.Equal(
+            new Dictionary<string, string> { [RuntimeMetadataKeys.CorrelationId] = "order-7" },
+            registration.Metadata);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Execute_suspends_without_correlation_metadata_when_correlation_is_blank(string? correlationId)
+    {
+        var activity = await NewEventActivityAsync(canStartWorkflow: false, correlationId);
+
+        var transition = await ((IActivity)activity).ExecuteAsync(DirectContext());
+
+        var suspension = Assert.IsAssignableFrom<IStatefulActivitySuspensionTransition<EventWaitState>>(transition);
+        var registration = Assert.IsType<ActivityTriggerRegistration<EventReceived>>(Assert.Single(suspension.Registrations));
+        Assert.Empty(registration.Metadata);
+    }
+
     [Fact]
     public async Task Execute_suspends_when_the_start_trigger_targeted_another_node()
     {
@@ -191,7 +223,7 @@ public sealed class EventTriggerStimulusProviderTests
         Assert.Equal("Done", completion.Outcome);
     }
 
-    private static async Task<Event> NewEventActivityAsync(bool canStartWorkflow)
+    private static async Task<Event> NewEventActivityAsync(bool canStartWorkflow, string? correlationId = null)
     {
         await using var services = new ServiceCollection().BuildServiceProvider();
         await using var activation = await TypedActivityTestActivation.ActivateAsync<Event>(
@@ -199,7 +231,7 @@ public sealed class EventTriggerStimulusProviderTests
             new Dictionary<string, object?>
             {
                 [nameof(Event.EventName)] = "order-shipped",
-                [nameof(Event.CorrelationId)] = null,
+                [nameof(Event.CorrelationId)] = correlationId,
                 [nameof(Event.CanStartWorkflow)] = canStartWorkflow
             });
         return Assert.IsType<Event>(activation.Activity);

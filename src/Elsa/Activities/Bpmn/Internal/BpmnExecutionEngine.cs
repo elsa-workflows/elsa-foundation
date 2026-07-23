@@ -67,8 +67,48 @@ public sealed class BpmnExecutionEngine(
     /// <summary>The seam-A reason recorded on the host's (and its subtree's) cancelled tokens when an interrupting escalation boundary fired (spec 127).</summary>
     public const string EscalationHostInterruptedReason = "bpmn.escalation.host-interrupted";
 
+    /// <summary>The scheduling cause recorded on an event-subprocess body's child schedule (spec 128); gates the third <see cref="StartAsync"/> seeding path so an inherited start-element hint never contaminates an ordinary nested process.</summary>
+    public const string EventSubprocessBodySchedulingCause = "bpmn.event-subprocess.body";
+
+    /// <summary>The reason recorded on the other live tokens an interrupting event subprocess stops when it interrupts its scope (spec 128).</summary>
+    public const string EventSubprocessScopeInterruptedReason = "bpmn.event-subprocess.scope-interrupted";
+
+    /// <summary>The seam-B fault-absorption reason recorded on the resolved incident when an error event subprocess absorbed the host's child fault (spec 128).</summary>
+    public const string EventSubprocessErrorAbsorptionReason = "bpmn.event-subprocess.error-absorbed";
+
+    /// <summary>The scheduling cause recorded on a tier-2 scope listener's suspending child schedule (spec 134); armed at scope start and re-armed per non-interrupting fire.</summary>
+    public const string ScopeListenerSchedulingCause = "bpmn.event-subprocess.listener";
+
+    /// <summary>The seam-A reason recorded on a still-armed scope listener's cancelled durable child when its scope completed and tore the listener down (spec 134 teardown-then-complete).</summary>
+    public const string EventSubprocessListenerSupersededByCompletionReason = "bpmn.event-subprocess.listener-superseded-by-completion";
+
     /// <summary>The deterministic fault code raised when a transaction child completes Cancelled but no cancel boundary is attached to route the cancellation (spec 125 D2b).</summary>
     public const string TransactionCancelledUnhandledFaultCode = "bpmn.transaction.cancelled-unhandled";
+
+    /// <summary>The seam-A reason recorded on the host's (and sibling listeners') cancelled subtrees when a call activity's failure outcome routed a catcher or faulted (spec 133 D3).</summary>
+    public const string CallActivityFailureRoutedReason = "bpmn.call-activity.failure-routed";
+
+    /// <summary>The <c>Faulted</c> failure outcome of a call activity's bound <c>DispatchWorkflow</c> child (spec 133 D3). Mirrors <c>DispatchWorkflowOutcomes.Faulted</c> by convention; kept local so the module takes no runtime dependency.</summary>
+    public const string CallActivityFaultedOutcomeName = "Faulted";
+
+    /// <summary>The <c>DispatchFailed</c> failure outcome of a call activity's bound <c>DispatchWorkflow</c> child (spec 133 D3). Mirrors <c>DispatchWorkflowOutcomes.DispatchFailed</c> by convention.</summary>
+    public const string CallActivityDispatchFailedOutcomeName = "DispatchFailed";
+
+    /// <summary>The <c>Cancelled</c> failure outcome of a call activity's bound <c>DispatchWorkflow</c> child (spec 133 D3). Shares the value of <see cref="CancelledOutcomeName"/> by convention.</summary>
+    public const string CallActivityCancelledOutcomeName = "Cancelled";
+
+    /// <summary>The deterministic composite fault code raised when a call activity's <c>Faulted</c> outcome reaches no error catcher (spec 133 D3).</summary>
+    public const string CallActivityFaultedFaultCode = "bpmn.call-activity.faulted";
+
+    /// <summary>The deterministic composite fault code raised when a call activity's <c>DispatchFailed</c> outcome reaches no error catcher (spec 133 D3).</summary>
+    public const string CallActivityDispatchFailedFaultCode = "bpmn.call-activity.dispatch-failed";
+
+    /// <summary>The deterministic composite fault code raised when a call activity's <c>Cancelled</c> outcome reaches no error catcher (spec 133 D3).</summary>
+    public const string CallActivityCancelledFaultCode = "bpmn.call-activity.cancelled";
+
+    /// <summary>The call-activity failure outcomes the engine translates into BPMN error handling (spec 133 D3), in deterministic precedence order. <c>Completed</c>/<c>Dispatched</c> are untouched (normal task-flow routing).</summary>
+    private static readonly IReadOnlyList<string> CallActivityFailureOutcomes =
+        [CallActivityFaultedOutcomeName, CallActivityDispatchFailedOutcomeName, CallActivityCancelledOutcomeName];
 
     /// <summary>An empty live-child map: a cancel end stops other live work logically only (in-flight children keep running and are absorbed on late completion — the terminate precedent), so no seam-A subtree cancellation is staged.</summary>
     private static readonly IReadOnlyDictionary<(string NodeId, string? IterationId), string> NoLiveChildren =
@@ -98,15 +138,34 @@ public sealed class BpmnExecutionEngine(
 
         // Spec 117 D6: a trigger delivery targets this composite (its own node id was the matched binding's node),
         // so exactly one event-defined start element — named by the forwarded binding metadata — seeds a token.
-        // Otherwise (direct invocation) every none start event seeds a token and event-defined starts stay dormant.
+        // spec 128 D2: an event-subprocess body carries a scheduled-start hint (gated on its scheduling cause), so
+        // exactly its single event-start element seeds. Otherwise (direct invocation) every none start seeds a token.
         var seedResult = context.TriggerNodeId is { } triggerNodeId && StringComparer.Ordinal.Equals(triggerNodeId, context.ExecutableNode.ExecutableNodeId)
             ? SeedFromTrigger(context, graph, state)
-            : SeedFromDirectInvocation(graph, state);
+            : TryReadScheduledStartHint(context) is { } scheduledStartElementId
+                ? SeedFromScheduledStart(graph, state, scheduledStartElementId)
+                : SeedFromDirectInvocation(graph, state);
 
         if (seedResult.Fault is not null)
             return ValueTask.FromResult(FinishEvaluation(context, seedResult));
 
-        var result = Propagate(context, graph, seedResult.State, context.ActivityExecutionState.Execution.ActivityExecutionId);
+        // spec 134 D2: arm one scope listener per external-trigger (message/signal/timer) event subprocess at this
+        // seeding path (deterministic catcher element-id ordinal). Arming is TWO-PHASE (a Deviation the runtime forces):
+        // the listener TOKENS are minted BEFORE propagating the seed — so an interrupting activation raised by the
+        // seed's own propagation (an own-scope escalation) drains them as ordinary live tokens — but their suspending
+        // children are scheduled AFTER propagation and only when real work remains live (an active child is pending).
+        // The runtime forbids scheduling children in a terminal evaluation, so a scope whose seed completes
+        // synchronously (start → end) would otherwise strand just-scheduled listener children against the same
+        // evaluation's completion; deferring the child schedule lets such a scope complete with the listener token torn
+        // down and no child ever scheduled (BPMN semantics: the listener never got a chance to fire). Every StartAsync
+        // seeding path arms — a nested event-subprocess body scheduled via the D2 hint arms its OWN nested listeners.
+        var ownerActivityExecutionId = context.ActivityExecutionState.Execution.ActivityExecutionId;
+        var armedState = MintScopeListenerTokens(graph, seedResult.State, ownerActivityExecutionId);
+
+        var result = Propagate(context, graph, armedState, ownerActivityExecutionId);
+        if (result is { Fault: null, Terminated: false } && result.State.ActiveChildren.Count > 0)
+            result = result with { State = ScheduleScopeListenerChildren(context, graph, result.State, ownerActivityExecutionId) };
+
         return ValueTask.FromResult(FinishEvaluation(context, result));
     }
 
@@ -131,6 +190,40 @@ public sealed class BpmnExecutionEngine(
         }
 
         return SeedToken(state, startElement.ElementId, $"BPMN event-defined start event '{startElement.ElementId}' emitted the initial token from a trigger delivery.");
+    }
+
+    /// <summary>
+    /// Reads the event-subprocess body start-element hint from the scheduler work item's command metadata (spec 128
+    /// D2), gated on the event-subprocess-body scheduling cause so an inherited hint on an ordinary nested process's
+    /// schedule (whose cause differs) is ignored. <c>null</c> when absent — the byte-identical no-hint path.
+    /// </summary>
+    private static string? TryReadScheduledStartHint(IRuntimeActivityExecutionContext context)
+    {
+        var metadata = context.SchedulerWorkItem.CommandMetadata;
+        return metadata.TryGetValue(SchedulingCauseMetadataKey, out var cause)
+               && StringComparer.Ordinal.Equals(cause, EventSubprocessBodySchedulingCause)
+               && metadata.TryGetValue(BpmnStartTrigger.StartElementIdMetadataKey, out var hint)
+               && !string.IsNullOrWhiteSpace(hint)
+            ? hint
+            : null;
+    }
+
+    /// <summary>
+    /// Seeds an event-subprocess body from its scheduled-start hint (spec 128 D2): the single event-start element
+    /// named by the hint seeds one token, then the body runs as an ordinary nested process. A hint naming an element
+    /// that is not a start event of this process faults deterministically.
+    /// </summary>
+    private static EvaluationResult SeedFromScheduledStart(BpmnGraph graph, BpmnExecutionState state, string startElementId)
+    {
+        var startElement = graph.StartEvents.FirstOrDefault(element => StringComparer.Ordinal.Equals(element.ElementId, startElementId));
+        if (startElement is null)
+        {
+            var message = $"BPMN process was scheduled with a start-element hint '{startElementId}', which is not a start event of this process.";
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, null, null, null, message);
+            return new EvaluationResult(state, new ActivityFault("bpmn.start.unresolved-hint", message));
+        }
+
+        return SeedToken(state, startElement.ElementId, $"BPMN event-subprocess body start '{startElement.ElementId}' seeded the initial token from a scheduled-start hint.");
     }
 
     private static EvaluationResult SeedFromDirectInvocation(BpmnGraph graph, BpmnExecutionState state)
@@ -188,6 +281,16 @@ public sealed class BpmnExecutionEngine(
             && FindLoopByCoordinator(state, instanceParentTokenId) is { } loop
             && StringComparer.Ordinal.Equals(token.AtElementId, loop.ElementId))
         {
+            // spec 133 D3 (MI composition): the instance interception context is entered first; when the instance is a
+            // call activity completing with a failure outcome, the D3 ladder routes here composed with the spec-121
+            // coordinator cascade (RouteCallActivityFailureOutcome resolves the interrupt target to the loop
+            // coordinator, so firing an error boundary / error event subprocess interrupts every remaining instance).
+            if (IsCallActivityFailureCompletion(graph, token, completionContext.OutcomeNames, out var instanceFailureOutcome))
+            {
+                return ValueTask.FromResult(FinishEvaluation(context, RouteCallActivityFailureOutcome(
+                    context, graph, state, token, instanceFailureOutcome, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
+            }
+
             return ValueTask.FromResult(FinishEvaluation(context, HandleMultiInstanceInstanceCompletion(
                 context, graph, state, token, loop, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
         }
@@ -212,6 +315,34 @@ public sealed class BpmnExecutionEngine(
         {
             return ValueTask.FromResult(FinishEvaluation(context, HandleTransactionCancelled(
                 context, graph, state, token, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
+        }
+
+        // spec 128/134 D5: a completion at a TriggeredByEvent element — intercept BEFORE behavior dispatch (the
+        // MI/compensation-handler interception precedent). A listener token and an activation token both sit here, so
+        // discriminate on Kind: a Listener completion (spec 134) is a fired scope listener (activate + re-arm/interrupt),
+        // BEFORE the tier-1 body-completion check; an Activation (or Kind-less tier-1) completion is the body finishing —
+        // the element has no flows, so the activation token is consumed and nothing is routed.
+        if (graph.GetRequiredElement(token.AtElementId).TriggeredByEvent)
+        {
+            if (token.Kind == BpmnTokenKind.Listener && graph.EventSubprocessByElementId(token.AtElementId) is { } firedCatcher)
+            {
+                return ValueTask.FromResult(FinishEvaluation(context, HandleScopeListenerFired(
+                    context, graph, state, token, firedCatcher, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
+            }
+
+            return ValueTask.FromResult(FinishEvaluation(context, HandleEventSubprocessBodyCompletion(state, token)));
+        }
+
+        // spec 133 D3: a call activity's bound child (a DispatchWorkflow node) completed with a failure outcome
+        // (Faulted/DispatchFailed/Cancelled) — intercept BEFORE normal behavior dispatch (joining the MI/compensation/
+        // transaction/event-subprocess interception ladder). The completion never routes normal outbound; instead the
+        // engine routes the error-catcher ladder directly (host error boundary → scope error event subprocess →
+        // composite fault) with NO seam-B absorption (the child is already terminal; no incident exists). The MI-
+        // instance case is handled above, inside the instance interception, so the coordinator cascade composes first.
+        if (IsCallActivityFailureCompletion(graph, token, completionContext.OutcomeNames, out var callActivityFailureOutcome))
+        {
+            return ValueTask.FromResult(FinishEvaluation(context, RouteCallActivityFailureOutcome(
+                context, graph, state, token, callActivityFailureOutcome, liveChildAeiByNode, pendingCancellations, completionContext.CompletedChildActivityExecutionId)));
         }
 
         // spec 119 D2/D3: if the completing token is a live event-based-gateway race member, it is the winner.
@@ -299,6 +430,19 @@ public sealed class BpmnExecutionEngine(
             return ValueTask.FromResult(AbsorbChildFaultThroughErrorBoundary(context, graph, state, faultedChild, hostToken, errorBoundary, incidentId, faultContext.FaultedChildActivityExecutionId));
         }
 
+        // spec 128 D4: no host error boundary, but the scope has an error event subprocess — absorb the fault via seam B
+        // (like the boundary path) and activate the event subprocess interrupting. An event-subprocess body's own fault
+        // is NOT self-caught (its host element is the TriggeredByEvent element): it rides the ordinary composite-fault path.
+        if (faultedChild is not null
+            && faultContext.IncidentId is { } errorEventSubprocessIncidentId
+            && !graph.GetRequiredElement(faultedChild.ElementId).TriggeredByEvent
+            && graph.ErrorEventSubprocess() is { } errorEventSubprocess
+            && state.Tokens.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.TokenId, faultedChild.TokenId)) is { } errorHostToken
+            && errorHostToken.Status is not (BpmnTokenStatus.Consumed or BpmnTokenStatus.Canceled))
+        {
+            return ValueTask.FromResult(AbsorbChildFaultThroughErrorEventSubprocess(context, graph, state, faultedChild, errorHostToken, errorEventSubprocess, errorEventSubprocessIncidentId, faultContext.FaultedChildActivityExecutionId));
+        }
+
         if (faultedChild is not null)
             state = RemoveActiveChild(state, faultedChild.TokenId);
 
@@ -363,30 +507,350 @@ public sealed class BpmnExecutionEngine(
     }
 
     /// <summary>
-    /// Raises an escalation from an escalation throw/end event (spec 127 D2a), on the thrower's own (nested)
-    /// evaluation. When this process has a committed parent, stages a seam-C <c>RequestParentNotification</c>
-    /// (code <see cref="EscalationNotificationCode"/>, payload <c>{ code, name? }</c>) that rides the evaluation's
-    /// Defer/Complete commit; at a root process it is a no-op with an <c>EscalationUnhandled</c> diagnostic (an
-    /// escalation nobody can catch is a signal into the void, not an error). Never faults. The companion routing
-    /// command routes/consumes as usual.
+    /// Absorbs the host's child fault through the scope's error event subprocess (spec 128 D4): drops the faulted
+    /// child's active-child record (its subtree rides the seam-B absorption plan), then activates the (always
+    /// interrupting) error event subprocess — minting a scope-level activation token and stopping all other live
+    /// work in the scope (which cancels the faulted host token, its sibling listeners, and any other branch, with
+    /// their seam-A subtree cancellations carried) before scheduling the body. The absorption request and the
+    /// seam-A cancellations are staged only at the clean (Defer/Complete) exit — never on a routing fault.
     /// </summary>
-    private static BpmnExecutionState RaiseEscalation(
+    private RuntimeStructuralContinuation AbsorbChildFaultThroughErrorEventSubprocess(
         IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnActiveChild faultedChild,
+        BpmnToken faultedToken,
+        BpmnEventSubprocessCatcher errorEventSubprocess,
+        string incidentId,
+        string faultedChildActivityExecutionId)
+    {
+        var pendingCancellations = new List<BpmnPendingSubtreeCancellation>();
+        var liveChildAeiByNode = BuildLiveChildAeiByNode(context);
+
+        // The faulted child's own subtree is reclaimed by the seam-B absorption plan; only drop its record so the
+        // subsequent stop-others (which cancels the faulted host token) does not stage a duplicate seam-A cancel.
+        var faultIterationKey = faultedToken.IterationKey;
+        state = RemoveActiveChild(state, faultedChild.TokenId);
+
+        var activation = ActivateEventSubprocess(context, graph, state, errorEventSubprocess, faultIterationKey,
+            liveChildAeiByNode, pendingCancellations, faultedChildActivityExecutionId,
+            $"child fault of host '{faultedToken.AtElementId}'");
+        state = activation.State;
+
+        var result = Propagate(context, graph, state, faultedChildActivityExecutionId) with
+        {
+            PendingSubtreeCancellations = pendingCancellations,
+            FaultAbsorption = new BpmnFaultAbsorption(incidentId, EventSubprocessErrorAbsorptionReason)
+        };
+
+        return FinishEvaluation(context, result);
+    }
+
+    /// <summary>
+    /// True when the completing token is a call activity whose bound child completed with a translated failure
+    /// outcome (spec 133 D3): <c>Faulted</c>/<c>DispatchFailed</c>/<c>Cancelled</c>. Yields the matched outcome
+    /// (deterministic precedence). <c>Completed</c>/<c>Dispatched</c> return <c>false</c> (normal task-flow routing).
+    /// </summary>
+    private static bool IsCallActivityFailureCompletion(
+        BpmnGraph graph,
+        BpmnToken token,
+        IReadOnlyCollection<string> outcomeNames,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? failureOutcome)
+    {
+        failureOutcome = null;
+        if (!BpmnElementFamilies.IsCallActivity(graph.GetRequiredElement(token.AtElementId)))
+            return false;
+
+        failureOutcome = CallActivityFailureOutcomes.FirstOrDefault(outcome => outcomeNames.Contains(outcome, StringComparer.Ordinal));
+        return failureOutcome is not null;
+    }
+
+    /// <summary>
+    /// Routes a call activity's translated failure outcome (spec 133 D3), the completion-path analog of the spec
+    /// 120/128 seam-B fault absorptions but WITHOUT any seam B: a faulted/cancelled/dispatch-failed called workflow
+    /// COMPLETES the DispatchWorkflow child with an outcome (it never faults, produces no incident), so there is
+    /// nothing to absorb — the host token is consumed and the error-catcher ladder is routed directly. The completing
+    /// child's active-child record was already dropped by the caller. The ladder: (1) a host-attached error boundary
+    /// mints an <c>Active</c> token at the boundary (inheriting the interrupt target's iteration key) and propagates;
+    /// (2) else the scope's error event subprocess activates interrupting (spec-128 activation); (3) else the process
+    /// faults deterministically with the per-outcome composite fault code. The interrupt target is the multi-instance
+    /// loop coordinator when the completing token is an instance (spec 121 cascade — firing a catcher interrupts every
+    /// remaining instance), otherwise the completing host token itself. NO seam-B request is staged on this path.
+    /// </summary>
+    private EvaluationResult RouteCallActivityFailureOutcome(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnToken completingToken,
+        string failureOutcome,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
+        List<BpmnPendingSubtreeCancellation> pendingCancellations,
+        string completedActivityExecutionId)
+    {
+        var element = graph.GetRequiredElement(completingToken.AtElementId);
+
+        // The interrupt target is the MI loop coordinator when the completing token is an instance (spec 121
+        // coordinator cascade), otherwise the completing host token itself.
+        var interruptTokenId = ResolveMultiInstanceCoordinatorTokenId(state, completingToken) ?? completingToken.TokenId;
+        var interruptIterationKey = state.Tokens.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.TokenId, interruptTokenId))?.IterationKey;
+
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.CallActivityFailureRouted, element.ElementId, null, completingToken.TokenId,
+            $"BPMN call activity '{element.ElementId}' completed with the '{failureOutcome}' outcome; routing the call-activity failure path.");
+
+        // Ladder tier 1: a host-attached error boundary (spec 120) fires — mint a token to route its outbound flows.
+        if (graph.AttachedErrorBoundary(element.ElementId) is { } errorBoundary)
+        {
+            state = CancelTokenAndChild(state, interruptTokenId, CallActivityFailureRoutedReason, liveChildAeiByNode, pendingCancellations,
+                (token, reason) => $"BPMN error boundary '{errorBoundary.ElementId}' routed a call-activity '{failureOutcome}' outcome of host '{element.ElementId}' and cancelled token '{token.TokenId}' at '{token.AtElementId}' ({reason}).");
+            state = CancelHostListeners(graph, state, interruptTokenId, listenerTokenToSkip: null, CallActivityFailureRoutedReason, liveChildAeiByNode, pendingCancellations);
+
+            var errorToken = NewToken(state, errorBoundary.ElementId, flowId: null, parentTokenId: interruptTokenId, BpmnTokenStatus.Active, producingActivityExecutionId: completedActivityExecutionId, iterationKey: interruptIterationKey);
+            state = AddToken(state, errorToken);
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TokenEmitted, errorBoundary.ElementId, null, errorToken.TokenId,
+                $"BPMN error boundary '{errorBoundary.ElementId}' fired and emitted token '{errorToken.TokenId}' to route the call-activity failure path.");
+
+            var boundaryResult = Propagate(context, graph, state, completedActivityExecutionId);
+            return boundaryResult with { PendingSubtreeCancellations = pendingCancellations };
+        }
+
+        // Ladder tier 2: the scope's error event subprocess (spec 128) activates interrupting — stop all other live
+        // work (which cancels the interrupt target and its listeners) and schedule the body.
+        if (graph.ErrorEventSubprocess() is { } errorEventSubprocess)
+        {
+            var activation = ActivateEventSubprocess(context, graph, state, errorEventSubprocess, interruptIterationKey,
+                liveChildAeiByNode, pendingCancellations, completedActivityExecutionId,
+                $"call-activity '{failureOutcome}' outcome of host '{element.ElementId}'");
+            var subprocessResult = Propagate(context, graph, activation.State, completedActivityExecutionId);
+            return subprocessResult with { PendingSubtreeCancellations = pendingCancellations };
+        }
+
+        // Ladder tier 3: no catcher — the process faults deterministically with the per-outcome composite fault code.
+        // Consume the interrupt target (coordinator cascade or host token) and its listeners; a fault continuation
+        // drops the carried seam-A cancellations (the whole process is faulting).
+        state = CancelTokenAndChild(state, interruptTokenId, CallActivityFailureRoutedReason, liveChildAeiByNode, pendingCancellations,
+            (token, reason) => $"BPMN call activity '{element.ElementId}' faulted and cancelled token '{token.TokenId}' at '{token.AtElementId}' ({reason}).");
+        state = CancelHostListeners(graph, state, interruptTokenId, listenerTokenToSkip: null, CallActivityFailureRoutedReason, liveChildAeiByNode, pendingCancellations);
+
+        var faultCode = failureOutcome switch
+        {
+            CallActivityFaultedOutcomeName => CallActivityFaultedFaultCode,
+            CallActivityDispatchFailedOutcomeName => CallActivityDispatchFailedFaultCode,
+            _ => CallActivityCancelledFaultCode
+        };
+        var message = $"BPMN call activity '{element.ElementId}' completed with the '{failureOutcome}' outcome, but no error boundary or error event subprocess is available to route it.";
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, element.ElementId, null, completingToken.TokenId, message);
+        return new EvaluationResult(state, new ActivityFault(faultCode, message));
+    }
+
+    /// <summary>
+    /// Raises an escalation from an escalation throw/end event (spec 127 D2a / spec 128 D3), on the thrower's own
+    /// (nested) evaluation. First consults the throwing scope's OWN escalation event subprocesses (spec 128; exact
+    /// code beats catch-all): a match returns that catcher so the caller activates it (D5) instead of staging
+    /// upward — preserving one-hop bubbling (each scope checks itself before passing the signal up). On no own-scope
+    /// match, when this process has a committed parent it stages a seam-C <c>RequestParentNotification</c>
+    /// (code <see cref="EscalationNotificationCode"/>, payload <c>{ code, name? }</c>) that rides the evaluation's
+    /// Defer/Complete commit; at a root process it is a no-op with an <c>EscalationUnhandled</c> diagnostic. Never
+    /// faults. The companion routing command routes/consumes as usual.
+    /// </summary>
+    private static (BpmnExecutionState State, BpmnEventSubprocessCatcher? OwnScopeActivation) RaiseEscalation(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
         BpmnExecutionState state,
         BpmnToken token,
         BpmnElement element)
     {
         var (code, name) = ReadEscalation(element);
 
+        // spec 128 D3: own-scope catch — an escalation event subprocess in the throwing scope catches it before bubbling.
+        if (graph.EscalationEventSubprocess(code) is { } catcher)
+        {
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationCaught, element.ElementId, null, token.TokenId,
+                $"BPMN escalation event '{element.ElementId}' raised escalation code '{code}', caught by own-scope event subprocess '{catcher.ElementId}'.");
+            return (state, catcher);
+        }
+
         if (context.ActivityExecutionState.ParentActivityExecutionId is not null)
         {
             context.RequestParentNotification(EscalationNotificationCode, BuildEscalationPayload(code, name));
-            return BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationRaised, element.ElementId, null, token.TokenId,
-                $"BPMN escalation event '{element.ElementId}' raised escalation code '{code}' to its parent scope.");
+            return (BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationRaised, element.ElementId, null, token.TokenId,
+                $"BPMN escalation event '{element.ElementId}' raised escalation code '{code}' to its parent scope."), null);
         }
 
-        return BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationUnhandled, element.ElementId, null, token.TokenId,
-            $"BPMN escalation event '{element.ElementId}' raised escalation code '{code}' at a root process; no parent scope can catch it (no-op).");
+        return (BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationUnhandled, element.ElementId, null, token.TokenId,
+            $"BPMN escalation event '{element.ElementId}' raised escalation code '{code}' at a root process; no parent scope can catch it (no-op)."), null);
+    }
+
+    /// <summary>
+    /// Activates an event subprocess (spec 128 D5): mints a scope-level activation token at the event-subprocess
+    /// element (<c>AwaitingChild</c>, <c>ParentTokenId</c> null, inheriting <paramref name="triggerIterationKey"/>
+    /// where one exists), and schedules the bound body child seeded at its single event-start element via the D2
+    /// hint. An interrupting activation first stops all OTHER live work in the scope through the shared
+    /// <see cref="StopOtherLiveWork"/> helper (the coordinator cascades and seam-A carries honored per the caller's
+    /// live-child map), keeping the activation token alive so the scope survives until the body completes. Non-
+    /// interrupting activations leave other scope work untouched (repeated/concurrent activations are independent —
+    /// distinct tokens and a fresh body schedule). Does not propagate; the caller drives propagation and staging.
+    /// </summary>
+    private EvaluationResult ActivateEventSubprocess(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnEventSubprocessCatcher catcher,
+        string? triggerIterationKey,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
+        List<BpmnPendingSubtreeCancellation> pendingCancellations,
+        string producingActivityExecutionId,
+        string triggerDescription)
+    {
+        var ownerActivityExecutionId = context.ActivityExecutionState.Execution.ActivityExecutionId;
+
+        var activationToken = NewToken(state, catcher.ElementId, flowId: null, parentTokenId: null, BpmnTokenStatus.AwaitingChild,
+            producingActivityExecutionId: producingActivityExecutionId, iterationKey: triggerIterationKey, kind: BpmnTokenKind.Activation);
+        state = AddToken(state, activationToken);
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EventSubprocessActivated, catcher.ElementId, null, activationToken.TokenId,
+            $"BPMN {(catcher.Interrupting ? "interrupting" : "non-interrupting")} event subprocess '{catcher.ElementId}' activated ({triggerDescription}).");
+
+        // Interrupting: stop all OTHER live work in the scope, keeping the activation token alive as the scope's work.
+        if (catcher.Interrupting)
+            state = StopOtherLiveWork(state, activationToken.TokenId, EventSubprocessScopeInterruptedReason, liveChildAeiByNode, pendingCancellations,
+                (stoppedToken, reason) => $"BPMN event subprocess '{catcher.ElementId}' interrupted the scope and cancelled token '{stoppedToken.TokenId}' at '{stoppedToken.AtElementId}' ({reason}).").State;
+
+        state = BpmnScheduler.ScheduleChild(context, state, catcher.ChildNodeId, catcher.ElementId, activationToken.TokenId, ownerActivityExecutionId,
+            EventSubprocessBodySchedulingCause, startElementId: catcher.BodyStartElementId);
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Scheduled, catcher.ElementId, null, activationToken.TokenId,
+            $"BPMN event subprocess '{catcher.ElementId}' scheduled body '{catcher.ChildNodeId}' seeded at start element '{catcher.BodyStartElementId}'.");
+
+        return new EvaluationResult(state, PendingSubtreeCancellations: pendingCancellations);
+    }
+
+    /// <summary>
+    /// Handles an event-subprocess body completion (spec 128 D5), intercepted before behavior dispatch. The
+    /// event-subprocess element has no outbound flows, so the activation token is simply consumed and nothing is
+    /// routed; the scope's ordinary liveness/completion accounting then proceeds.
+    /// </summary>
+    private static EvaluationResult HandleEventSubprocessBodyCompletion(BpmnExecutionState state, BpmnToken activationToken)
+    {
+        state = UpdateToken(state, activationToken with { Status = BpmnTokenStatus.Consumed });
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EventSubprocessCompleted, activationToken.AtElementId, null, activationToken.TokenId,
+            $"BPMN event subprocess '{activationToken.AtElementId}' body completed; the activation token is consumed and nothing is routed.");
+        return new EvaluationResult(state);
+    }
+
+    /// <summary>
+    /// Handles a fired tier-2 scope listener (spec 134 D2), intercepted before behavior dispatch. The listener child
+    /// (a suspending <c>Event</c>/<c>Delay</c>) resumed on its stimulus, so the event subprocess activates. The firing
+    /// listener token is consumed (its child was already dropped at the top of <see cref="OnChildCompletedAsync"/>).
+    /// A <b>non-interrupting</b> catcher re-arms a fresh listener FIRST (deterministic ids from <c>Sequence</c>; timer
+    /// repetition falls out of the re-arm loop, each arm a single one-shot child) and then activates the body
+    /// non-interrupting alongside untouched scope work. An <b>interrupting</b> catcher does not re-arm: the activation's
+    /// <see cref="StopOtherLiveWork"/> drains every other live token — including sibling scope listeners (ordinary live
+    /// tokens there, their suspended children riding the seam-A carries) — before scheduling the body.
+    /// </summary>
+    private EvaluationResult HandleScopeListenerFired(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnToken listenerToken,
+        BpmnEventSubprocessCatcher catcher,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
+        List<BpmnPendingSubtreeCancellation> pendingCancellations,
+        string completedActivityExecutionId)
+    {
+        var ownerActivityExecutionId = context.ActivityExecutionState.Execution.ActivityExecutionId;
+
+        state = UpdateToken(state, listenerToken with { Status = BpmnTokenStatus.Consumed });
+        state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.ScopeListenerFired, catcher.ElementId, null, listenerToken.TokenId,
+            $"BPMN {(catcher.Interrupting ? "interrupting" : "non-interrupting")} {catcher.TriggerKind} scope listener for event subprocess '{catcher.ElementId}' fired.");
+
+        if (!catcher.Interrupting)
+            state = ArmScopeListener(context, state, catcher, ownerActivityExecutionId);
+
+        var activation = ActivateEventSubprocess(context, graph, state, catcher, listenerToken.IterationKey,
+            liveChildAeiByNode, pendingCancellations, completedActivityExecutionId, $"scope listener '{catcher.ElementId}' fired");
+        state = activation.State;
+
+        var result = Propagate(context, graph, state, ownerActivityExecutionId);
+        return result with { PendingSubtreeCancellations = pendingCancellations };
+    }
+
+    /// <summary>
+    /// Phase 1 of scope-listener arming (spec 134 D2): mints one <see cref="BpmnTokenKind.Listener"/> token per
+    /// external-trigger (message/signal/timer) event subprocess at its element (<c>AwaitingChild</c>,
+    /// <c>ParentTokenId</c> null), in deterministic element-id ordinal order, BEFORE the seed propagates — so an
+    /// interrupting activation raised during that propagation drains the listener tokens as ordinary live tokens. Their
+    /// suspending children are scheduled later (<see cref="ScheduleScopeListenerChildren"/>).
+    /// </summary>
+    private static BpmnExecutionState MintScopeListenerTokens(BpmnGraph graph, BpmnExecutionState state, string schedulingActivityExecutionId)
+    {
+        foreach (var catcher in graph.ExternalTriggerEventSubprocesses)
+        {
+            var listenerToken = NewToken(state, catcher.ElementId, flowId: null, parentTokenId: null, BpmnTokenStatus.AwaitingChild,
+                producingActivityExecutionId: schedulingActivityExecutionId, iterationKey: null, kind: BpmnTokenKind.Listener);
+            state = AddToken(state, listenerToken);
+        }
+
+        return state;
+    }
+
+    /// <summary>
+    /// Phase 2 of scope-listener arming (spec 134 D2): schedules the suspending listener child (the synthesized
+    /// <c>Delay</c>/<c>Event</c>) for each still-live listener token that has no child yet, in deterministic element-id
+    /// ordinal order. Called AFTER the seed propagates and only when real work remains (an active child is pending), so
+    /// the runtime never schedules a listener child in a terminal evaluation. A listener token drained by an interrupting
+    /// activation during propagation is no longer live and is skipped.
+    /// </summary>
+    private static BpmnExecutionState ScheduleScopeListenerChildren(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        string schedulingActivityExecutionId)
+    {
+        var pendingListenerTokens = state.Tokens
+            .Where(token => token.Kind == BpmnTokenKind.Listener && token.Status == BpmnTokenStatus.AwaitingChild
+                            && !state.ActiveChildren.Any(child => StringComparer.Ordinal.Equals(child.TokenId, token.TokenId)))
+            .OrderBy(token => token.AtElementId, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var listenerToken in pendingListenerTokens)
+        {
+            var catcher = graph.EventSubprocessByElementId(listenerToken.AtElementId)
+                ?? throw new BpmnExecutionException($"BPMN scope listener token '{listenerToken.TokenId}' resolved no event subprocess at '{listenerToken.AtElementId}'.");
+            state = ScheduleScopeListenerChild(context, state, catcher, listenerToken.TokenId, schedulingActivityExecutionId);
+        }
+
+        return state;
+    }
+
+    /// <summary>
+    /// Arms a fresh tier-2 scope listener in one shot (spec 134 D2 re-arm): mints a <see cref="BpmnTokenKind.Listener"/>
+    /// token and schedules its listener child together. Used to re-arm after a non-interrupting fire (which always then
+    /// schedules the body, so the evaluation defers — never a terminal evaluation).
+    /// </summary>
+    private static BpmnExecutionState ArmScopeListener(
+        IRuntimeActivityExecutionContext context,
+        BpmnExecutionState state,
+        BpmnEventSubprocessCatcher catcher,
+        string schedulingActivityExecutionId)
+    {
+        var listenerToken = NewToken(state, catcher.ElementId, flowId: null, parentTokenId: null, BpmnTokenStatus.AwaitingChild,
+            producingActivityExecutionId: schedulingActivityExecutionId, iterationKey: null, kind: BpmnTokenKind.Listener);
+        state = AddToken(state, listenerToken);
+        return ScheduleScopeListenerChild(context, state, catcher, listenerToken.TokenId, schedulingActivityExecutionId);
+    }
+
+    /// <summary>Schedules a listener token's suspending child (the synthesized <c>Delay</c>/<c>Event</c>) and records the <c>ScopeListenerArmed</c> diagnostic (spec 134 D2).</summary>
+    private static BpmnExecutionState ScheduleScopeListenerChild(
+        IRuntimeActivityExecutionContext context,
+        BpmnExecutionState state,
+        BpmnEventSubprocessCatcher catcher,
+        string listenerTokenId,
+        string schedulingActivityExecutionId)
+    {
+        var listenerNodeId = catcher.ListenerNodeId
+            ?? throw new BpmnExecutionException($"BPMN event subprocess '{catcher.ElementId}' has no scope-listener node to arm; validation should have required one for a message/signal/timer trigger.");
+
+        state = BpmnScheduler.ScheduleChild(context, state, listenerNodeId, catcher.ElementId, listenerTokenId, schedulingActivityExecutionId, ScopeListenerSchedulingCause);
+        return BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.ScopeListenerArmed, catcher.ElementId, null, listenerTokenId,
+            $"BPMN event subprocess '{catcher.ElementId}' armed a {catcher.TriggerKind} scope listener (child '{listenerNodeId}').");
     }
 
     /// <summary>
@@ -445,16 +909,47 @@ public sealed class BpmnExecutionEngine(
             : null;
         var isLate = hostToken is null || hostToken.Status is BpmnTokenStatus.Consumed or BpmnTokenStatus.Canceled;
 
-        var boundary = MatchEscalationBoundary(graph, hostElement.ElementId, escalationCode);
-        if (boundary is null)
-            return BubbleOrUnhandled(context, state, notification, escalationCode, hostElement.ElementId);
+        // spec 128 D3: the specificity ladder — (1) host boundary exact, (2) scope event subprocess exact, (3) host
+        // boundary catch-all, (4) scope event subprocess catch-all, (5) bubble. Exact beats catch-all across kinds;
+        // within a level the host boundary (more local to the throwing child) beats the scope-level subprocess.
+        var boundaries = graph.AttachedEscalationBoundaries(hostElement.ElementId);
+        var boundaryExact = boundaries.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(ReadEscalationBoundaryCode(candidate), escalationCode));
+        var boundaryCatchAll = boundaries.FirstOrDefault(candidate => ReadEscalationBoundaryCode(candidate) is null);
+        var eventSubprocessExact = graph.EscalationEventSubprocessExact(escalationCode);
+        var eventSubprocessCatchAll = graph.EscalationCatchAllEventSubprocess();
 
-        // Non-interrupting fire (live or late): mint a boundary token alongside the untouched host and route.
+        if (boundaryExact is not null)
+            return FireEscalationBoundaryMatch(context, graph, state, boundaryExact, hostElement, hostToken, isLate, notification, escalationCode);
+        if (eventSubprocessExact is not null)
+            return FireEscalationEventSubprocessMatch(context, graph, state, eventSubprocessExact, hostToken, notification, escalationCode);
+        if (boundaryCatchAll is not null)
+            return FireEscalationBoundaryMatch(context, graph, state, boundaryCatchAll, hostElement, hostToken, isLate, notification, escalationCode);
+        if (eventSubprocessCatchAll is not null)
+            return FireEscalationEventSubprocessMatch(context, graph, state, eventSubprocessCatchAll, hostToken, notification, escalationCode);
+
+        return BubbleOrUnhandled(context, state, notification, escalationCode, hostElement.ElementId);
+    }
+
+    /// <summary>
+    /// Fires a matched escalation boundary (spec 127 D2b; byte-identical to spec 127): a non-interrupting boundary
+    /// fires (live or late) alongside the untouched host; an interrupting boundary cancels the host token (or its MI
+    /// coordinator) and routes, unless the host had already terminalized (a late race no-ops with an
+    /// <c>EscalationLate</c> diagnostic — interrupting it retroactively would double-route its outbound).
+    /// </summary>
+    private EvaluationResult FireEscalationBoundaryMatch(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnElement boundary,
+        BpmnElement hostElement,
+        BpmnToken? hostToken,
+        bool isLate,
+        ActivityChildNotifiedContext notification,
+        string escalationCode)
+    {
         if (!boundary.CancelActivity)
             return FireEscalationBoundary(context, graph, state, boundary, hostToken, interruptTokenId: null, notification, escalationCode);
 
-        // Interrupting fire. A late race (host already terminal) no-ops deterministically — interrupting it
-        // retroactively would double-route the host's already-taken outbound.
         if (isLate)
         {
             state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationLate, boundary.ElementId, null, hostToken?.TokenId,
@@ -466,6 +961,30 @@ public sealed class BpmnExecutionEngine(
         // otherwise the host token itself (the spec 120 error-boundary interrupt precedent).
         var interruptTokenId = ResolveMultiInstanceCoordinatorTokenId(state, hostToken!) ?? hostToken!.TokenId;
         return FireEscalationBoundary(context, graph, state, boundary, hostToken, interruptTokenId, notification, escalationCode);
+    }
+
+    /// <summary>
+    /// Fires a matched scope escalation event subprocess on the notification path (spec 128 D3/D5): activates the
+    /// catcher (interrupting stops all other live work in the scope — including the host subprocess whose child
+    /// escalated — with seam-A carries staged at the clean exit; non-interrupting leaves other scope work untouched),
+    /// inheriting the escalation host token's iteration key, then propagates the body schedule.
+    /// </summary>
+    private EvaluationResult FireEscalationEventSubprocessMatch(
+        IRuntimeActivityExecutionContext context,
+        BpmnGraph graph,
+        BpmnExecutionState state,
+        BpmnEventSubprocessCatcher catcher,
+        BpmnToken? hostToken,
+        ActivityChildNotifiedContext notification,
+        string escalationCode)
+    {
+        var pendingCancellations = new List<BpmnPendingSubtreeCancellation>();
+        var liveChildAeiByNode = catcher.Interrupting ? BuildLiveChildAeiByNode(context) : NoLiveChildren;
+        var activation = ActivateEventSubprocess(context, graph, state, catcher, hostToken?.IterationKey, liveChildAeiByNode,
+            pendingCancellations, notification.NotifyingChildActivityExecutionId, $"escalation code '{escalationCode}'");
+
+        var result = Propagate(context, graph, activation.State, context.ActivityExecutionState.Execution.ActivityExecutionId);
+        return result with { PendingSubtreeCancellations = pendingCancellations };
     }
 
     /// <summary>
@@ -530,14 +1049,6 @@ public sealed class BpmnExecutionEngine(
         state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.EscalationUnhandled, hostElementId, null, null,
             $"BPMN root process found no escalation boundary for code '{escalationCode ?? "(none)"}'{(hostElementId is null ? "" : $" on host '{hostElementId}'")}; the escalation is unhandled (no-op).");
         return new EvaluationResult(state);
-    }
-
-    /// <summary>Matches an escalation code against a host's attached escalation boundaries (spec 127 D2b): an exact code match wins; else the code-less catch-all; else <c>null</c> (no match — bubble).</summary>
-    private static BpmnElement? MatchEscalationBoundary(BpmnGraph graph, string hostElementId, string escalationCode)
-    {
-        var boundaries = graph.AttachedEscalationBoundaries(hostElementId);
-        return boundaries.FirstOrDefault(boundary => StringComparer.Ordinal.Equals(ReadEscalationBoundaryCode(boundary), escalationCode))
-               ?? boundaries.FirstOrDefault(boundary => ReadEscalationBoundaryCode(boundary) is null);
     }
 
     /// <summary>The escalation code+name an escalation throw/end event carries (spec 127); the code is validated non-empty at graph build.</summary>
@@ -962,6 +1473,11 @@ public sealed class BpmnExecutionEngine(
         BpmnBehaviorDecision decision,
         string schedulingActivityExecutionId)
     {
+        // spec 128 D3: an own-scope escalation match is captured here and activated AFTER the full throw decision
+        // (its companion routing command runs first), so an interrupting activation's stop-others also stops the
+        // throw's just-emitted successor.
+        BpmnEventSubprocessCatcher? ownScopeActivation = null;
+
         foreach (var command in decision.Commands)
         {
             switch (command.Kind)
@@ -1000,11 +1516,14 @@ public sealed class BpmnExecutionEngine(
                 }
                 case BpmnBehaviorCommandKind.RaiseEscalation:
                 {
-                    // spec 127: the escalation throw/end raises an escalation. RaiseEscalation is the FIRST command of
-                    // the throw's decision ([RaiseEscalation, EmitTokens|ConsumeToken]); it stages a seam-C parent
-                    // notification (a nested process) or records a root no-op diagnostic (never a fault), and the loop
-                    // then processes the companion routing command as usual.
-                    state = RaiseEscalation(context, state, token, element);
+                    // spec 127/128: the escalation throw/end raises an escalation. RaiseEscalation is the FIRST command
+                    // of the throw's decision ([RaiseEscalation, EmitTokens|ConsumeToken]); it either records an
+                    // own-scope catch (spec 128 — activated after the loop), stages a seam-C parent notification, or
+                    // records a root no-op diagnostic (never a fault), and the loop then processes the companion
+                    // routing command as usual.
+                    var raised = RaiseEscalation(context, graph, state, token, element);
+                    state = raised.State;
+                    ownScopeActivation = raised.OwnScopeActivation;
                     break;
                 }
                 case BpmnBehaviorCommandKind.ScheduleChild:
@@ -1055,6 +1574,17 @@ public sealed class BpmnExecutionEngine(
                 default:
                     throw new BpmnExecutionException($"BPMN behavior command '{command.Kind}' is not supported by this engine slice.");
             }
+        }
+
+        // spec 128 D3/D5: activate the own-scope event subprocess now that the throw's routing command has run. This
+        // evaluation rides the Propagate loop, so an interrupting activation stops other live work logically only
+        // (NoLiveChildren — the CancelLiveWork-logical-only invariant); in-flight children are absorbed on late
+        // completion (the transaction-cancel precedent).
+        if (ownScopeActivation is { } catcher)
+        {
+            var ownScopeCancellations = new List<BpmnPendingSubtreeCancellation>();
+            return ActivateEventSubprocess(context, graph, state, catcher, token.IterationKey, NoLiveChildren, ownScopeCancellations,
+                schedulingActivityExecutionId, $"own-scope escalation code '{ReadEscalation(element).Code}'");
         }
 
         return new EvaluationResult(state);
@@ -1173,20 +1703,16 @@ public sealed class BpmnExecutionEngine(
     {
         // Step 1: stop all OTHER live work logically. The cancel-end token stays live as the coming replay's
         // coordinator; every other live token is cancelled (cascading MI/race/compensation-run teardown). In-flight
-        // children keep running (empty live-child map → no seam-A staging), absorbed on late completion.
+        // children keep running (empty live-child map → no seam-A staging), absorbed on late completion. The
+        // stop-others loop is shared with the spec 128 event-subprocess interrupting activation (StopOtherLiveWork).
         var stopScratch = new List<BpmnPendingSubtreeCancellation>();
-        var otherLiveTokenIds = state.Tokens
-            .Where(candidate => candidate.Status is BpmnTokenStatus.Active or BpmnTokenStatus.AwaitingChild or BpmnTokenStatus.WaitingAtJoin
-                                && !StringComparer.Ordinal.Equals(candidate.TokenId, cancelEndToken.TokenId))
-            .Select(candidate => candidate.TokenId)
-            .ToArray();
-        foreach (var liveTokenId in otherLiveTokenIds)
-            state = CancelTokenAndChild(state, liveTokenId, TransactionCancelledStopReason, NoLiveChildren, stopScratch,
-                (token, reason) => $"BPMN cancel end event '{cancelEndElement.ElementId}' stopped live token '{token.TokenId}' at '{token.AtElementId}' ({reason}).");
+        var (stoppedState, stoppedCount) = StopOtherLiveWork(state, cancelEndToken.TokenId, TransactionCancelledStopReason, NoLiveChildren, stopScratch,
+            (token, reason) => $"BPMN cancel end event '{cancelEndElement.ElementId}' stopped live token '{token.TokenId}' at '{token.AtElementId}' ({reason}).");
+        state = stoppedState;
 
         state = state with { Cancelling = true, Sequence = state.Sequence + 1 };
         state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.TransactionCancelled, cancelEndElement.ElementId, null, cancelEndToken.TokenId,
-            $"BPMN cancel end event '{cancelEndElement.ElementId}' began cancelling the transaction (stopped {otherLiveTokenIds.Length} other live token(s)).");
+            $"BPMN cancel end event '{cancelEndElement.ElementId}' began cancelling the transaction (stopped {stoppedCount} other live token(s)).");
 
         // Step 2: claim every Registered compensable (the whole scope, reverse registration order) and open a
         // compensation run coordinated by the cancel-end token. An empty claim skips straight to completion.
@@ -1374,9 +1900,50 @@ public sealed class BpmnExecutionEngine(
         }
 
         var liveTokens = state.Tokens.Where(token => token.Status is BpmnTokenStatus.Active or BpmnTokenStatus.AwaitingChild or BpmnTokenStatus.WaitingAtJoin).ToArray();
-        if (liveTokens.Length == 0 && state.ActiveChildren.Count == 0)
+
+        // spec 134 D3: liveness is computed over NON-listener tokens and NON-listener active children (a listener token
+        // is Kind==Listener; a listener's active child is the child scheduled on that token). A scope listener must never
+        // block the scope from completing, and excluding a listener's active child keeps the deadlock detector from
+        // misfiring on a listener-plus-real-join state (the listener's excluded child would otherwise make
+        // ActiveChildren.Count == 0 while a genuine join-waiter sits there). The completion check AND the deadlock
+        // detector use the SAME filtered view — patched together. Teardown/stop sites stay unfiltered (listeners die
+        // with the scope).
+        var listenerTokenIds = state.Tokens
+            .Where(token => token.Kind == BpmnTokenKind.Listener)
+            .Select(token => token.TokenId)
+            .ToHashSet(StringComparer.Ordinal);
+        var nonListenerLiveTokens = liveTokens.Where(token => !listenerTokenIds.Contains(token.TokenId)).ToArray();
+        var nonListenerActiveChildCount = state.ActiveChildren.Count(child => !listenerTokenIds.Contains(child.TokenId));
+
+        if (nonListenerLiveTokens.Length == 0 && nonListenerActiveChildCount == 0)
         {
-            // Clean completion — legal to stage the carried seam-A/seam-B teardown in this commit (spec 119 D3 / spec 120 D5).
+            // Only scope listeners (if any) remain live: the real work is done. Strictly AFTER the fault/pending-fault/
+            // terminate branches above (which own their own teardown via CancelLiveWork), tear the still-armed listeners
+            // down — CancelTokenAndChild carries each live durable listener child's seam-A cancellation, folded into this
+            // commit's staged cancellations, in token-id ordinal order — then complete with the normal outcome selection
+            // (spec 134 D3 teardown-then-complete).
+            var liveListenerTokenIds = liveTokens
+                .Where(token => listenerTokenIds.Contains(token.TokenId))
+                .Select(token => token.TokenId)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+
+            if (liveListenerTokenIds.Length > 0)
+            {
+                var pending = new List<BpmnPendingSubtreeCancellation>(result.PendingSubtreeCancellations ?? []);
+                var liveChildAeiByNode = BuildLiveChildAeiByNode(context);
+                foreach (var listenerTokenId in liveListenerTokenIds)
+                {
+                    var listenerElementId = GetRequiredToken(state, listenerTokenId).AtElementId;
+                    state = CancelTokenAndChild(state, listenerTokenId, EventSubprocessListenerSupersededByCompletionReason, liveChildAeiByNode, pending,
+                        (token, reason) => $"BPMN scope listener token '{token.TokenId}' at '{token.AtElementId}' was retired because the scope completed ({reason}).");
+                    state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.ScopeListenerRetired, listenerElementId, null, listenerTokenId,
+                        $"BPMN event subprocess '{listenerElementId}' scope listener '{listenerTokenId}' was retired when the scope completed.");
+                }
+                result = result with { State = state, PendingSubtreeCancellations = pending };
+            }
+
+            // Clean completion — legal to stage the carried seam-A/seam-B teardown in this commit (spec 119 D3 / spec 120 D5 / spec 134 D3).
             StagePendingSubtreeCancellations(context, result);
             // spec 125: a cancelled transaction completes with the distinguishable Cancelled outcome (parent maps it
             // to the cancel boundary; a root transaction completes the workflow with it) rather than Done.
@@ -1390,10 +1957,12 @@ public sealed class BpmnExecutionEngine(
         // (e.g. a parallel join downstream of an exclusive decision). Fault deterministically instead of
         // leaving the process Running forever. spec 122: iteration-key join grouping does not weaken this —
         // "all live tokens WaitingAtJoin, no active children" means nothing can propagate a new arrival for
-        // ANY iteration group, so it is a true deadlock regardless of how arrivals are grouped.
-        if (state.ActiveChildren.Count == 0 && liveTokens.All(token => token.Status == BpmnTokenStatus.WaitingAtJoin))
+        // ANY iteration group, so it is a true deadlock regardless of how arrivals are grouped. spec 134 D3: the
+        // filtered view keeps a lone armed listener (which will never produce a join arrival) from being read as a
+        // deadlock while preserving a genuine join-deadlock alongside a live listener.
+        if (nonListenerActiveChildCount == 0 && nonListenerLiveTokens.Length > 0 && nonListenerLiveTokens.All(token => token.Status == BpmnTokenStatus.WaitingAtJoin))
         {
-            var joinElementIds = string.Join(", ", liveTokens.Select(token => token.AtElementId).Distinct(StringComparer.Ordinal));
+            var joinElementIds = string.Join(", ", nonListenerLiveTokens.Select(token => token.AtElementId).Distinct(StringComparer.Ordinal));
             var message = $"BPMN process deadlocked: token(s) wait at join(s) [{joinElementIds}] but no live token or running child can produce the missing arrival(s).";
             state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, null, null, null, message);
             return persister.StageState(RuntimeStructuralContinuation.Faulted(new ActivityFault("bpmn.join.deadlock", message)), state);
@@ -1586,6 +2155,31 @@ public sealed class BpmnExecutionEngine(
         return BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Canceled, token.AtElementId, token.FlowId, token.TokenId, diagnosticMessage(token, reason));
     }
 
+    /// <summary>
+    /// Stops all live work in the scope except <paramref name="keepTokenId"/> (spec 125 / spec 128): every other
+    /// live token is cancelled through <see cref="CancelTokenAndChild"/> so the MI/race/compensation-run coordinator
+    /// cascades tear loops/races/replays down consistently. Shared by the cancel-transaction path (which keeps the
+    /// cancel-end coordinator, logical-only via <see cref="NoLiveChildren"/>) and the event-subprocess interrupting
+    /// activation (which keeps the activation token). Returns the count of stopped tokens for the caller's diagnostic.
+    /// </summary>
+    private static (BpmnExecutionState State, int StoppedCount) StopOtherLiveWork(
+        BpmnExecutionState state,
+        string keepTokenId,
+        string reason,
+        IReadOnlyDictionary<(string NodeId, string? IterationId), string> liveChildAeiByNode,
+        List<BpmnPendingSubtreeCancellation> pendingCancellations,
+        Func<BpmnToken, string, string> diagnosticMessage)
+    {
+        var otherLiveTokenIds = state.Tokens
+            .Where(candidate => candidate.Status is BpmnTokenStatus.Active or BpmnTokenStatus.AwaitingChild or BpmnTokenStatus.WaitingAtJoin
+                                && !StringComparer.Ordinal.Equals(candidate.TokenId, keepTokenId))
+            .Select(candidate => candidate.TokenId)
+            .ToArray();
+        foreach (var liveTokenId in otherLiveTokenIds)
+            state = CancelTokenAndChild(state, liveTokenId, reason, liveChildAeiByNode, pendingCancellations, diagnosticMessage);
+        return (state, otherLiveTokenIds.Length);
+    }
+
     /// <summary>The instance sub-token ids of a live multi-instance loop (spec 121): tokens parented to the coordinator and sitting at the host element.</summary>
     private static IReadOnlyCollection<string> InstanceTokenIds(BpmnExecutionState state, BpmnLoopState loop) =>
         state.Tokens
@@ -1645,13 +2239,21 @@ public sealed class BpmnExecutionEngine(
 
     private static string ResolveTokenId(IRuntimeActivityExecutionContext context, BpmnExecutionState state, string completedNodeId, string? completedIterationId)
     {
-        // The primary path: engine-scheduled children carry the bpmn.tokenId command metadata on inline completion.
-        if (context.SchedulerWorkItem.CommandMetadata.TryGetValue(TokenIdMetadataKey, out var metadataTokenId) && !string.IsNullOrWhiteSpace(metadataTokenId))
-            return metadataTokenId;
-
         var candidates = state.ActiveChildren
             .Where(child => StringComparer.Ordinal.Equals(child.NodeId, completedNodeId))
             .ToArray();
+
+        // The primary path: engine-scheduled children carry the bpmn.tokenId command metadata on inline completion.
+        // The metadata is authoritative when the completing node has NO active children (its child was already torn
+        // down by a terminate/cancel — the late-completion case, absorbed by the canceled-token guard) or when it
+        // names one of the node's active children. But when the node HAS active children and the metadata names none
+        // of them, it is a nested BpmnProcess body's OWN last internal bpmn.tokenId leaked onto the inline completion
+        // work item (spec 128 event-subprocess body): that leaked id must not be mistaken for the parent's activation
+        // token, so the by-node resolution below owns it.
+        if (context.SchedulerWorkItem.CommandMetadata.TryGetValue(TokenIdMetadataKey, out var metadataTokenId)
+            && !string.IsNullOrWhiteSpace(metadataTokenId)
+            && (candidates.Length == 0 || candidates.Any(child => StringComparer.Ordinal.Equals(child.TokenId, metadataTokenId))))
+            return metadataTokenId;
 
         // A resumed child's completion does not carry the bpmn.tokenId metadata. For N concurrent same-node
         // multi-instance instances (spec 121) the completing child's iteration id disambiguates them; a single

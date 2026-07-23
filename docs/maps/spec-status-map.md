@@ -117,8 +117,8 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [091-structured-logs-replay-cursors](../../specs/091-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
 | [092-domain-owned-apis](../../specs/092-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |
 | [092-reusable-activity-definitions](../../specs/092-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Draft | - | 104 | 0 | retained, deferred, out of scope |
-| [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 10 | 78 | - |
-| [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 99 | 6 | - |
+| [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 79 | 9 | - |
+| [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 100 | 5 | - |
 | [095-groundwork-aspnetcore-identity](../../specs/095-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
 | [095-runtime-intent-handlers](../../specs/095-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
 | [095-value-flow-redesign](../../specs/095-value-flow-redesign/spec.md) | Replace Memory-Block Value Flow | Draft | - | 117 | 0 | retained, deferred, out of scope |
@@ -135,3 +135,26 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [106-openiddict-groundwork-stores](../../specs/106-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 0 | 73 | retained |
 | [106-runtime-live-drain-delivery](../../specs/106-runtime-live-drain-delivery/spec.md) | In-memory live-drain EnqueueSchedulerWork delivery (Immediate mode) | unknown | - | 0 | 0 | retained |
 | [107-side-effect-profile](../../specs/107-side-effect-profile/spec.md) | Author-Declared Side-Effect Profile Gates the Pre-Activation Claim Boundary | Draft | - | 0 | 0 | deferred, out of scope |
+| [108-bpmn-container-activity](../../specs/108-bpmn-container-activity/spec.md) | 108-bpmn-container-activity | unknown | - | 0 | 0 | deferred, out of scope |
+| [108-per-workflow-cadence](../../specs/108-per-workflow-cadence/spec.md) | Per-Workflow Checkpoint Cadence Authoring + Per-Run Cadence Stamp | Implemented | - | 11 | 0 | out of scope |
+| [109-runtime-inprocess-hop-fast-path](../../specs/109-runtime-inprocess-hop-fast-path/spec.md) | In-process-hop payload short-circuit (ADR 0031 fast path, item a) | unknown | - | 0 | 0 | out of scope |
+| [110-drain-turn-durable-roundtrips](../../specs/110-drain-turn-durable-roundtrips/spec.md) | Collapse per-drain-turn durable round-trips — characterize, and eliminate the redundant executable-artifact reads | Draft (characterization complete; premise re-aimed by evidence) | - | 4 | 7 | deferred |
+| [111-burst-scoped-reconstructible-cache](../../specs/111-burst-scoped-reconstructible-cache/spec.md) | Burst-Scoped Reconstructible Cache + Executable-Artifact Read Cache | Implemented | - | 0 | 0 | - |
+| [112-runtime-child-subtree-cancellation](../../specs/112-runtime-child-subtree-cancellation/spec.md) | 112-runtime-child-subtree-cancellation | unknown | - | 0 | 0 | deferred, out of scope |
+| [113-terminal-resumption-purge](../../specs/113-terminal-resumption-purge/spec.md) | Stop the perpetual post-completion resumption re-drive of terminal workflows | Draft (characterization complete; fix implemented) | - | 12 | 0 | out of scope |
+| [114-concurrency-throughput-instrument](../../specs/114-concurrency-throughput-instrument/spec.md) | Concurrency / throughput instrument for the in-process runtime | Draft (instrument delivered; scaling curve captured — see [research.md](./research.md)) | - | 0 | 0 | - |
+| [115-group-commit-fsync-sharing](../../specs/115-group-commit-fsync-sharing/spec.md) | Group-commit / cross-drain fsync sharing on the shared durable writer | Draft (design + implementation; measurement gated — see [research.md](./research.md)) | - | 0 | 0 | - |
+| [115-runtime-handled-child-fault](../../specs/115-runtime-handled-child-fault/spec.md) | 115-runtime-handled-child-fault | unknown | - | 0 | 0 | deferred, out of scope |
+| [116-bpmn-catch-events](../../specs/116-bpmn-catch-events/spec.md) | 116-bpmn-catch-events | unknown | - | 0 | 0 | deferred, out of scope |
+| [117-bpmn-event-start-events](../../specs/117-bpmn-event-start-events/spec.md) | 117-bpmn-event-start-events | unknown | - | 0 | 0 | deferred, out of scope |
+| [118-bpmn-interchange-event-definitions](../../specs/118-bpmn-interchange-event-definitions/spec.md) | 118-bpmn-interchange-event-definitions | unknown | - | 0 | 0 | retained, deferred, out of scope |
+| [119-bpmn-event-based-gateway](../../specs/119-bpmn-event-based-gateway/spec.md) | 119-bpmn-event-based-gateway | unknown | - | 0 | 0 | deferred, out of scope |
+| [119-publish-time-routing-tables](../../specs/119-publish-time-routing-tables/spec.md) | Publish-time routing tables, recomputed on materialization (ADR 0047 D3) | unknown | - | 0 | 0 | retained |
+| [120-bpmn-boundary-events](../../specs/120-bpmn-boundary-events/spec.md) | 120-bpmn-boundary-events | unknown | - | 0 | 0 | superseded, deferred, out of scope |
+| [121-bpmn-multi-instance](../../specs/121-bpmn-multi-instance/spec.md) | 121-bpmn-multi-instance | unknown | - | 0 | 0 | superseded, retained, deferred, out of scope |
+| [122-bpmn-cyclic-flows](../../specs/122-bpmn-cyclic-flows/spec.md) | 122-bpmn-cyclic-flows | unknown | - | 0 | 0 | retained, deferred, out of scope |
+| [123-replaysafe-hop-fusion](../../specs/123-replaysafe-hop-fusion/spec.md) | ReplaySafe hop fusion — fused schedule→start→invoke + inline single-predecessor completion (ADR 0047 D1+D2) | unknown | - | 0 | 0 | deferred, out of scope |
+| [123-runtime-scoped-variable-read](../../specs/123-runtime-scoped-variable-read/spec.md) | 123-runtime-scoped-variable-read | unknown | - | 0 | 0 | retained, deferred, out of scope |
+| [124-bpmn-compensation](../../specs/124-bpmn-compensation/spec.md) | 124-bpmn-compensation | unknown | - | 0 | 0 | retained, out of scope |
+| [125-bpmn-transactions](../../specs/125-bpmn-transactions/spec.md) | 125-bpmn-transactions | unknown | - | 0 | 0 | deferred, out of scope |
+| [126-runtime-child-parent-notification](../../specs/126-runtime-child-parent-notification/spec.md) | 126-runtime-child-parent-notification | unknown | - | 0 | 0 | out of scope |

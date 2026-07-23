@@ -37,7 +37,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Workspace Split Readiness](workspace-split-readiness.md) | Active | Future `elsa-workspace` extraction / portable feature-development flow | Joey plus active architects/agents | Keep feature-development flows portable without blocking launch |
 | [Diagnostics Observability Readiness](diagnostics-observability-readiness.md) | Active | Diagnostics observability port (structured logs + OpenTelemetry) across foundation + studio | Joey plus active architects/agents | Port structured logs and OTEL to foundation architecture (EFCore persistence, studio bottom-panel tabs) |
 | [Elsa 4 Architecture Review Remediation](elsa-4-review-remediation.md) | Active | Cross-domain remediation of the 2026-07 review findings (W1–W21) | Sipke plus active architects/agents | Phase 0 first wave (W2/W3/W4/W6); W1/W5 held for specs/083 Move 2 |
-| [BPMN Engine](bpmn-engine.md) | Active | Executable BPMN 2.0 engine + interchange + the runtime seams it consumes | Sipke plus the BPMN control-room session | Phase 3: specs 123–127 merged; next event subprocesses, then call activity / collaborations |
+| [BPMN Engine](bpmn-engine.md) | Active | Executable BPMN 2.0 engine + interchange + the runtime seams it consumes | Sipke plus the BPMN control-room session | Phase 3 CONSTRUCT LIST COMPLETE (specs 123–128, 132–136); open follow-ups tracked in the bucket (#998, #1001, chips) |
 | [First-Request / Cold-Start Readiness](first-request-cold-start-readiness.md) | Active | Host boot / first-request latency (engine perf phase 4, track 2) | Sipke plus active performance/runtime agents | Unit 1 instrument (spec 129) landing; then R2R, schema skip-if-current, eager activation, warmups |
 
 ## Goal File Rules

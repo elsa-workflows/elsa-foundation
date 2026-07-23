@@ -150,8 +150,111 @@ children, and diagnostics.
   only to a `subProcess` host, honor `CancelActivity`, and per host carry **distinct codes** with **≤1**
   catch-all. Any non-escalation seam-C code is a forward-compatible diagnostic pass-through. No new BPMN state
   record or token status is introduced; the notification evaluation rides `FinishEvaluation`'s existing exits,
-  and the bubble/seam-A staging happens only at the clean Defer/Complete exit. Escalation event subprocesses,
-  escalation start events, and escalation intermediate catch events are stated cuts.
+  and the bubble/seam-A staging happens only at the clean Defer/Complete exit. Escalation intermediate catch
+  events remain a stated cut (not a BPMN construct — boundary/event-subprocess only).
+- **Message send surface** (spec 135, collaborations slice 1) lets a running process **publish** a named-event
+  stimulus. Unlike escalation's engine-command shape, a **message intermediate throw event** and a **message end
+  event** are **bound-child** shapes: they bind a synthesized `PublishEvent` send child (family
+  `intermediateThrowEvent.message` / `endEvent.message`, resolved from a single `message` event definition). The
+  behavior is the ordinary schedule-child → child-completes path — `MessageThrowEventBehavior` routes its outbound
+  flows on the child's fire-and-continue completion (`TaskBehavior`-like), `MessageEndEventBehavior` consumes its
+  token (none-end). The child's completion **is** the throw; the send itself lands durably **post-commit** (the
+  `PublishEvent` primitive stages a publish intent on the commit; no in-execution route). **`sendTask`** binds a
+  synthesized `PublishEvent`; **`receiveTask`** binds a synthesized `Event` catch child (the receive twin, same
+  suspension machinery). Both are task-family members — boundary hosts and multi-instance-legal; a differently
+  bound child behaves as authored (the callActivity no-type-check precedent). Validation: a message throw/end
+  requires a bound child and a message definition with a non-empty `name` (a send must say what it publishes). No
+  new BPMN state record, token status, or engine command — the schema stays v1-additive (two families + the
+  `Elsa.PublishEvent` placeholder version id). Cross-instance **correlation narrowing** is inert until issue #1001
+  (the send broadcasts by name); **signal** throw events and process-variable payload mapping are stated cuts.
+  **Collaboration/pool/`<messageFlow>` import** (spec 136, collaborations slice 2) closes the phase: a multi-pool
+  document imports every `<process>` (each pool a separately published definition on the same name-keyed fabric),
+  populates `BpmnPool`/lane pool ids from `<participant processRef>`, and records `<messageFlow>` wiring as
+  authored-side metadata the engine and validator ignore — see `specs/136-bpmn-collaboration-import/` and the
+  Interchange README.
+- **Event subprocesses** (spec 128, tier 1) let a scope contain a flow-less `subProcess` marked
+  `triggeredByEvent` whose **body** activates when its **start-event trigger** fires while the enclosing scope
+  is active. This slice ships the **escalation** dormant-catcher trigger (interrupting or non-interrupting) and the
+  **error** trigger (always interrupting; see the end of this entry). Catchers are **graph-derived** on `BpmnGraph`
+  (`EventSubprocesses`, indexed by trigger kind + code); no state record, no arming. Validation
+  (`ValidateEventSubprocesses`, the compensation-handler rule family mirrored): the element takes no flows, no
+  loop, hosts no boundary, is not a compensation handler nor a transaction; its body declares **exactly one**
+  start event carrying **one** supported trigger (escalation with optional code = catch-all, or error catch-all),
+  with **no nested** event subprocess; the interrupting flag is the body start event's `isInterrupting`
+  (default true; error must be interrupting); per scope escalation codes are distinct with **≤1** catch-all and
+  **≤1** error subprocess. Bodies are seeded through the **scheduled-start seeding** path: `BpmnScheduler`
+  forwards the body's single event-start element id as a command-metadata **hint** (gated on a body scheduling
+  cause so an inherited hint never contaminates an ordinary nested process), and `BpmnProcess.StartAsync` gains
+  a third seeding path that seeds exactly that start element (a bad hint faults deterministically); root-trigger
+  and direct-invocation seeding are byte-identical when the hint is absent. **Own-scope catching**: `RaiseEscalation`
+  consults the throwing scope's own escalation event subprocesses **first** (exact beats catch-all) and activates
+  one **instead of** staging upward — preserving one-hop bubbling. **Notification-side ladder** (spec 128 D3):
+  (1) host boundary exact, (2) scope event subprocess exact, (3) host boundary catch-all, (4) scope event
+  subprocess catch-all, (5) bubble. **Activation** mints a scope-level activation token (`AwaitingChild`,
+  `ParentTokenId` null, inheriting the triggering context's iteration key) and schedules the body with the hint;
+  an **interrupting** activation first stops all other live work through the shared `StopOtherLiveWork` helper
+  (extracted from spec 125's cancel-transaction stop-others loop — the transaction path stays byte-identical),
+  reason `bpmn.event-subprocess.scope-interrupted`; a **non-interrupting** escalation activation runs alongside
+  (repeated/concurrent activations are independent). Body completion is intercepted before behavior dispatch
+  (the element has no flows): the activation token is consumed (`EventSubprocessCompleted`) and nothing routes;
+  a body fault rides the ordinary composite-fault path (no self-catching). Compensation/conditional triggers,
+  error-code matching, nested event subprocesses inside a body, and Studio authoring are stated cuts.
+  **Error trigger** (spec 132): an error-triggered event subprocess absorbs the host's child fault via **seam B**
+  (the incident resolves) and then activates its body — a scheduled child, so the fault evaluation **defers**.
+  Executable since the runtime deferred-seam-B **metadata-leak fix (#989)** landed (`WorkflowParentActivityCompletionSchedulerWorkHandler`
+  no longer inherits the fault-evaluation work item's fault-scoped `CommandMetadata` onto derived child schedules /
+  upward completions). It is **always interrupting** (per BPMN) and **catch-all** (no error-code matching this
+  slice); a scope carries **≤1**. `AbsorbChildFaultThroughErrorEventSubprocess` drops the faulted child's record,
+  mints the scope activation token, stops all other live work, and schedules the body; the incident records
+  `bpmn.event-subprocess.error-absorbed`. A non-interrupting error start is rejected as a malformed shape (error
+  events are always interrupting). Error-code matching remains a stated cut.
+  **Message/signal/timer triggers** (spec 134, tier 2): unlike the dormant escalation/error catchers, these need a
+  **scope listener** — a suspending catch child (the spec-116 `Event`/`Delay` machinery) armed at scope start that
+  waits for an external stimulus while the rest of the scope runs, and that must **never block completion**. Two
+  additive fields carry it: `BpmnToken.Kind` (nullable `Listener`|`Activation`, stamped at the listener/activation
+  mints, `null` everywhere else — an additive **role** field, not a token status), and `BpmnElement.ListenerNodeId`
+  (a second bound-child channel referencing the synthesized `Delay`/`Event` node — **required** on a message/signal/
+  timer event subprocess, **forbidden** on escalation/error; the exactly-one-binding accounting binds a node as
+  either a `ChildNodeId` or a `ListenerNodeId`, never both). **Arming** is two-phase at every `StartAsync` seeding
+  path (deterministic element-id ordinal): the listener **tokens** are minted before the seed propagates (so an
+  interrupting activation raised by that propagation drains them as ordinary live tokens), and their suspending
+  **children** are scheduled after, only when real work remains (the runtime forbids scheduling children in a
+  terminal evaluation — a scope whose seed completes synchronously completes with no listener ever armed). **Firing**
+  is intercepted in `OnChildCompletedAsync` before the tier-1 body-completion check (both tokens sit at the same
+  element — discriminate on `Kind == Listener`): **non-interrupting** consumes the listener, **re-arms** a fresh one
+  (deterministic `Sequence` ids; timer repetition falls out of the re-arm loop), then activates the body alongside
+  untouched work; **interrupting** consumes the listener and activates, `StopOtherLiveWork` draining sibling
+  listeners with no re-arm. **Completion is never blocked** (`FinishEvaluation`): both the clean-completion check and
+  the join-deadlock detector compute liveness over **non-listener** tokens and children (patched together — excluding
+  listeners from completion alone would misfire the deadlock detector on a listener-plus-real-join state); when only
+  listeners remain, they are torn down (`CancelTokenAndChild`, reason
+  `bpmn.event-subprocess.listener-superseded-by-completion`, token-id ordinal) and the scope completes normally. The
+  unfiltered teardown sites (`CancelLiveWork`, `StopOtherLiveWork`) leave listeners to die with the scope. Diagnostics
+  `ScopeListenerArmed`/`ScopeListenerFired`/`ScopeListenerRetired`. `timeCycle`/`timeDate`/cron event-subprocess
+  timers, correlation-scoped delivery beyond the shipped `Event` stimulus, and re-arm throttling are stated cuts.
+- **Call activities** (spec 133) let a process invoke a **separately published Elsa workflow** by binding a
+  `Elsa.DispatchWorkflow` child. A `callActivity` element resolves to the **task family** (behaviors stay
+  semantics-unaware; `TaskBehavior` unchanged), is a boundary host, and may carry multi-instance loop
+  characteristics. The child is authored `WaitForCompletion=true` by convention: the waited path
+  (`ScheduleChild → AwaitingChild → bookmark → resume → OnChildCompleted`) is the shipped dispatch machinery,
+  so the engine needs **no** wait changes. The one new engine piece is **failure-outcome translation** (D3): a
+  faulted/cancelled/dispatch-failed called workflow **COMPLETES** the DispatchWorkflow child with an outcome
+  (`Faulted`/`DispatchFailed`/`Cancelled`) — it never faults, produces no incident, so it cannot ride seam B.
+  `OnChildCompletedAsync` intercepts these outcome completions on a `callActivity`-bound child **before** normal
+  routing (joining the MI/compensation/transaction/event-subprocess interception ladder) and routes the
+  error-catcher ladder **directly, with no seam B**: (1) a host-attached **error boundary** mints an `Active`
+  token at the boundary (inheriting the interrupt target's iteration key) and propagates; (2) else the scope's
+  **error event subprocess** activates interrupting (spec-128 path); (3) else the process faults deterministically
+  (`bpmn.call-activity.faulted` / `.dispatch-failed` / `.cancelled`). `Completed`/`Dispatched` are untouched
+  (normal task-flow routing — a `conditionOutcome` flow can still discriminate them). A multi-instance instance
+  failure rides this per instance, composed with the spec-121 coordinator cascade (the interrupt target is the
+  loop coordinator, so firing a catcher interrupts every remaining instance); the diagnostic is
+  `CallActivityFailureRouted`. Fire-and-forget (`WaitForCompletion=false`) is a documented non-standard Elsa
+  extension: the `Dispatched` outcome routes normal outbound immediately. **Stated cuts** (D6): mid-process
+  teardown of a waited call activity does not cancel the dispatched child instance (whole-parent-cancel does);
+  child-outputs→process-variables capture (pending the ADR-0046 leaf output-capture wiring); BPMN
+  `ioSpecification`/data associations; MI output aggregation; `calledElement` version-selection/cross-tenant
+  semantics; callActivity-specific Studio UX.
 - **Cyclic sequence flows** are executable (spec 122): a token carries an **iteration key** (`null` on the
   implicit first pass); traversing a **backward** (loop-back) sequence flow — the standard DFS back edge,
   precomputed once as `BpmnGraph.IsBackwardFlow` — mints a fresh key, and forward propagation inherits the
@@ -196,9 +299,21 @@ boundary event, cardinality **and collection** multi-instance elements (collecti
 `elsa:collection`/`elsa:itemVariable` plus `elsa:variable` declarations), and **compensation** (boundary +
 `compensateEventDefinition` + `<association>` to an `isForCompensation` handler; compensate throw/end with an
 optional `activityRef`) and **transactions** (`<transaction>` + `cancelEventDefinition` on an end event inside
-a transaction and on a boundary attached to a transaction host), so these constructs can now be authored from
-XML; a cyclic document imports clean. Later units add a loop-iteration variable surface, escalation
-boundaries, compensation event subprocesses, and call activities.
+a transaction and on a boundary attached to a transaction host) and **call activities** (`<callActivity>` with
+an `elsa:workflowDefinitionId` extension attribute → a bound `DispatchWorkflow` child, honoring
+`elsa:waitForCompletion="false"`; a plain `calledElement` imports unbound with an Info finding and a
+`bpmn.calledElement` passthrough — see `specs/133-bpmn-call-activity/`), so these constructs can now be authored
+from XML; a cyclic document imports clean. The **message send surface** (see `specs/135-bpmn-message-send/`) adds
+message intermediate throw + message end events and `sendTask`/`receiveTask` (bound `PublishEvent` sends /
+`Event` catch), and round-trips them (`messageEventDefinition` + deduped root `<message>` declarations;
+`sendTask`/`receiveTask` with `messageRef`; synthesized children never export; name-less throw Drops, name-less
+end degrades to a none end, name-less send/receive task imports unbound + Info, signal throw stays Dropped). The
+**collaboration/pool import** (see `specs/136-bpmn-collaboration-import/`) imports every `<process>` of a
+multi-pool document into `BpmnImportResult.ProcessNodes` (the primary stays `ProcessNode`), populates
+`BpmnPool`/lane pool ids from `<collaboration>/<participant processRef>`, and records `<messageFlow>` wiring
+(matched / name-mismatch-Degraded / black-box-Info / unresolvable-Degraded) as authored-side metadata the engine
+and graph validator ignore; export re-emits the per-definition participant wrapper and own-pool message flows.
+Later units add a loop-iteration variable surface, escalation boundaries, and compensation event subprocesses.
 
 ## Expression-driven gateway conditions
 

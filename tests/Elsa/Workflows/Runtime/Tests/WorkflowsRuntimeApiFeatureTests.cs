@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Commands;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -15,6 +16,18 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class WorkflowsRuntimeApiFeatureTests
 {
+    [Fact]
+    public void Registers_runtime_diagnostics_settings_command_handler()
+    {
+        var services = new ServiceCollection();
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<ICommandHandler<SaveRuntimeDiagnosticsSettings, RuntimeDiagnosticsSettingsView>>();
+    }
+
     [Fact]
     public void Registers_value_payload_reader_through_its_feature_contract_only()
     {

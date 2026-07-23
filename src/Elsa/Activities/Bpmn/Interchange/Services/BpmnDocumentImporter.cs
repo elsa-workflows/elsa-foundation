@@ -36,6 +36,18 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     /// <summary>Placeholder activity version id for a message/signal catch event's synthesized <c>Event</c> child (matches <c>Event.ActivityType</c>).</summary>
     public const string DefaultEventActivityVersionId = "Elsa.Event";
 
+    /// <summary>Placeholder activity version id for a bound call activity's synthesized <c>DispatchWorkflow</c> child (spec 133 D5; matches <c>DispatchWorkflow.ActivityType</c>). Hosts resolve the real catalog row later.</summary>
+    public const string DefaultDispatchWorkflowActivityVersionId = "Elsa.DispatchWorkflow";
+
+    /// <summary>Placeholder activity version id for a message throw/end or sendTask's synthesized <c>PublishEvent</c> child (spec 135; matches <c>PublishEvent.ActivityType</c>). Hosts resolve the real catalog row later.</summary>
+    public const string DefaultPublishEventActivityVersionId = "Elsa.PublishEvent";
+
+    /// <summary>The element property key carrying a call activity's foreign BPMN <c>calledElement</c> id (spec 133 D5): recorded for authoring reference and lossless round-trip, the <c>bpmn.errorRef</c> passthrough precedent.</summary>
+    public const string CalledElementPropertyKey = "bpmn.calledElement";
+
+    /// <summary>The element property key carrying a sendTask/receiveTask's resolved message name (spec 135): a task uses a <c>messageRef</c> attribute (not a nested definition), so the name is recorded here for the root <c>&lt;message&gt;</c> declaration and lossless round-trip.</summary>
+    public const string MessageNamePropertyKey = "bpmn.messageName";
+
     public BpmnImportAnalysis Analyze(string xml, BpmnImportOptions? options = null)
     {
         var context = new ImportContext();
@@ -47,7 +59,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     {
         var context = new ImportContext();
         var node = ImportCore(xml, options, context);
-        return new BpmnImportResult(node, context.ToAnalysis());
+        return new BpmnImportResult(node, context.ToAnalysis(), context.ImportedProcesses);
     }
 
     private static ActivityNode ImportCore(string xml, BpmnImportOptions? options, ImportContext context)
@@ -74,21 +86,175 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         if (processes.Length == 0)
             throw new BpmnInterchangeException("The document contains no <process> element.");
 
-        var process = options?.ProcessId is { } processId
+        // Primary selection is unchanged (explicit ProcessId > first executable > first). It is resolved (and a
+        // bad explicit id fails fast) before any process is built.
+        var primary = options?.ProcessId is { } processId
             ? processes.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(IdOf(candidate), processId))
               ?? throw new BpmnInterchangeException($"The document contains no process with id '{processId}'.")
             : processes.FirstOrDefault(candidate => string.Equals((string?)candidate.Attribute("isExecutable"), "true", StringComparison.OrdinalIgnoreCase))
               ?? processes[0];
+        var primaryIndex = Array.IndexOf(processes, primary);
 
+        // Document-level indexes are read ONCE and passed to every per-process build (spec 136: N-process import
+        // shares the root message/signal/escalation and diagram catalogs; only the process content differs).
         var diagram = ReadDiagram(definitions);
         var messageSignalNames = ReadMessageSignalDeclarations(definitions);
         var escalationDeclarations = ReadEscalationDeclarations(definitions);
-        var processIdValue = IdOf(process) ?? "process";
-        var nodeId = $"{options?.NodeIdPrefix ?? "node"}-{processIdValue}";
-        return BuildProcessNode(process, nodeId, diagram, messageSignalNames, escalationDeclarations, context);
+        var participants = ReadParticipants(definitions);
+        var messageFlows = ReadMessageFlows(definitions);
+
+        // spec 136 FR-1: every <process> imports independently through the existing BuildProcessNode path (the
+        // silent multi-pool drop ends). Each carries per-process-id findings; a non-executable process imports as a
+        // documentation pool with an Info finding.
+        var built = new List<BuiltProcess>(processes.Length);
+        foreach (var process in processes)
+        {
+            var processIdValue = IdOf(process) ?? "process";
+            var nodeId = $"{options?.NodeIdPrefix ?? "node"}-{processIdValue}";
+            var node = BuildProcessNode(process, nodeId, diagram, messageSignalNames, escalationDeclarations, context);
+            var structure = node.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+            var isExecutable = string.Equals((string?)process.Attribute("isExecutable"), "true", StringComparison.OrdinalIgnoreCase);
+            if (!isExecutable)
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Process '{processIdValue}' is not executable (isExecutable=\"false\"); it imported as a documentation pool.", processIdValue));
+            built.Add(new BuiltProcess(processIdValue, node, structure, isExecutable));
+        }
+
+        // spec 136 D1: for old-style single-node consumers, note that additional pools were imported (the silent
+        // drop is gone — the extras live in ProcessNodes).
+        if (built.Count > 1)
+        {
+            var additional = string.Join(", ", built.Where((_, index) => index != primaryIndex).Select(entry => entry.ProcessId));
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Document declares {built.Count} processes; the primary is '{built[primaryIndex].ProcessId}'. Additional pools imported into ProcessNodes: {additional}.", null));
+        }
+
+        ResolveCollaboration(built, participants, messageFlows, messageSignalNames, context);
+
+        // Re-serialize any process whose authored structure gained pools, lane pool ids, or message flows; an
+        // uncollaborated process keeps the exact node BuildProcessNode produced (single-process byte-identity).
+        foreach (var entry in built)
+            entry.Materialize(SerializerOptions);
+
+        context.ImportedProcesses = built
+            .Select(entry => new BpmnImportedProcess(entry.ProcessId, entry.ParticipantId, entry.ParticipantName, entry.Node))
+            .ToArray();
+
+        return built[primaryIndex].Node;
     }
 
-    private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, IReadOnlyDictionary<string, string> messageSignalNames, IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations, ImportContext context, bool isTransaction = false)
+    /// <summary>
+    /// Reads the document's collaboration (spec 136 D2/D3) and folds its facts onto the built processes: each
+    /// <c>&lt;participant processRef&gt;</c> becomes a <see cref="BpmnPool"/> on the referenced process (lanes gain
+    /// the pool id when the process has exactly one participant); black-box and unresolvable participants surface as
+    /// findings; each <c>&lt;messageFlow&gt;</c> resolves its endpoints across all imported processes (or a black-box
+    /// pool) and records a <see cref="BpmnMessageFlow"/> on the involved structures with matched/mismatch/black-box/
+    /// unresolvable findings.
+    /// </summary>
+    private static void ResolveCollaboration(
+        IReadOnlyList<BuiltProcess> built,
+        IReadOnlyList<ParticipantDeclaration> participants,
+        IReadOnlyList<MessageFlowDeclaration> messageFlows,
+        IReadOnlyDictionary<string, string> messageSignalNames,
+        ImportContext context)
+    {
+        var byProcessId = new Dictionary<string, BuiltProcess>(StringComparer.Ordinal);
+        foreach (var entry in built)
+            byProcessId.TryAdd(entry.ProcessId, entry);
+        var participantIds = participants.Select(participant => participant.Id).ToHashSet(StringComparer.Ordinal);
+
+        // Participants → pools (document order). A resolvable processRef stamps a pool on the referenced process; a
+        // black-box (ref-less) participant is Info; a broken processRef is Degraded.
+        foreach (var participant in participants)
+        {
+            if (participant.ProcessRef is null)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Participant '{participant.Id}'{Named(participant.Name)} declares no processRef; it imported as a black-box pool (no process).", participant.Id));
+                continue;
+            }
+
+            if (!byProcessId.TryGetValue(participant.ProcessRef, out var target))
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Participant '{participant.Id}'{Named(participant.Name)} references process '{participant.ProcessRef}', which is not a process in this document; its pool was not imported.", participant.Id));
+                continue;
+            }
+
+            target.Pools.Add(new BpmnPool(participant.Id, participant.Name, participant.ProcessRef, target.IsExecutable));
+            target.ReferencingParticipants.Add(participant);
+        }
+
+        // Lane pool ids + the ProcessNodes participant facts: unambiguous when exactly one participant references a
+        // process; ambiguous (multi-participant) leaves lane pool ids null with an Info finding.
+        foreach (var entry in built)
+        {
+            if (entry.ReferencingParticipants.Count == 1)
+            {
+                var participant = entry.ReferencingParticipants[0];
+                entry.LanePoolId = participant.Id;
+                entry.ParticipantId = participant.Id;
+                entry.ParticipantName = participant.Name;
+            }
+            else if (entry.ReferencingParticipants.Count > 1 && entry.Structure.Lanes.Count > 0)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Process '{entry.ProcessId}' is referenced by {entry.ReferencingParticipants.Count} participants; its lanes' pool ids were left unset (ambiguous).", entry.ProcessId));
+            }
+        }
+
+        // elementId → (owning process, message name) across every imported process's top-level elements.
+        var elementIndex = new Dictionary<string, (BuiltProcess Owner, string? MessageName)>(StringComparer.Ordinal);
+        foreach (var entry in built)
+            foreach (var element in entry.Structure.Elements)
+                elementIndex.TryAdd(element.ElementId, (entry, MessageNameOf(element)));
+
+        MessageFlowEndpoint Resolve(string reference)
+        {
+            if (string.IsNullOrWhiteSpace(reference))
+                return MessageFlowEndpoint.Unresolvable;
+            if (elementIndex.TryGetValue(reference, out var hit))
+                return MessageFlowEndpoint.Element(reference, hit.Owner.LanePoolId, hit.MessageName, hit.Owner);
+            if (participantIds.Contains(reference))
+                return MessageFlowEndpoint.BlackBox(reference);
+            return MessageFlowEndpoint.Unresolvable;
+        }
+
+        foreach (var flow in messageFlows)
+        {
+            var source = Resolve(flow.SourceRef);
+            var target = Resolve(flow.TargetRef);
+
+            if (source.Kind == MessageFlowEndpointKind.Unresolvable || target.Kind == MessageFlowEndpointKind.Unresolvable)
+            {
+                var unresolved = source.Kind == MessageFlowEndpointKind.Unresolvable ? flow.SourceRef : flow.TargetRef;
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Message flow '{flow.FlowId}' references '{(string.IsNullOrWhiteSpace(unresolved) ? "(missing)" : unresolved)}', which resolves to no imported element or pool; it was recorded nowhere.", flow.FlowId));
+                continue;
+            }
+
+            var flowMessageName = flow.MessageRef is { } messageRef && messageSignalNames.TryGetValue(messageRef, out var declared) && !string.IsNullOrWhiteSpace(declared)
+                ? declared.Trim()
+                : null;
+            var messageName = flowMessageName ?? source.MessageName ?? target.MessageName;
+            var record = new BpmnMessageFlow(flow.FlowId, flow.Name, source.ElementId, source.PoolId, target.ElementId, target.PoolId, messageName);
+
+            if (source.Kind == MessageFlowEndpointKind.BlackBox || target.Kind == MessageFlowEndpointKind.BlackBox)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Message flow '{flow.FlowId}' has a black-box pool endpoint; it imported as a documentation flow.", flow.FlowId));
+                source.Owner?.MessageFlows.Add(record);
+                target.Owner?.MessageFlows.Add(record);
+                continue;
+            }
+
+            // Both endpoints are elements. The wire fabric is name-keyed, so a send/receive whose message names differ
+            // (or where either side carries no message name) can never reach its receiver — a Degraded finding, not a
+            // silent wiring loss. A name match is an Info finding. Either way the resolved wiring is recorded.
+            if (source.MessageName is { } sourceName && target.MessageName is { } targetName && StringComparer.Ordinal.Equals(sourceName, targetName))
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Message flow '{flow.FlowId}' wires '{source.ElementId}' to '{target.ElementId}' on message '{sourceName}'.", flow.FlowId));
+            else
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Message flow '{flow.FlowId}' wires '{source.ElementId}' (message {Quote(source.MessageName)}) to '{target.ElementId}' (message {Quote(target.MessageName)}); the send and receive message names differ, so it cannot function through the name-keyed fabric.", flow.FlowId));
+
+            source.Owner!.MessageFlows.Add(record);
+            target.Owner!.MessageFlows.Add(record);
+        }
+    }
+
+    private static ActivityNode BuildProcessNode(XElement container, string nodeId, JsonElement? diagram, IReadOnlyDictionary<string, string> messageSignalNames, IReadOnlyDictionary<string, EscalationDeclaration> escalationDeclarations, ImportContext context, bool isTransaction = false, bool isEventSubprocessBody = false)
     {
         var elements = new List<BpmnElement>();
         var flows = new List<BpmnSequenceFlow>();
@@ -107,6 +273,12 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         var declaredVariables = ReadDeclaredVariables(container);
         var declaredVariableNames = declaredVariables.Select(variable => variable.Name).ToHashSet(StringComparer.Ordinal);
 
+        // spec 128 D7 / spec 132: per-scope event-subprocess trackers — distinct escalation codes with at most one
+        // code-less catch-all, and at most one error-triggered event subprocess (now executable, #989 fix).
+        var eventSubprocessEscalationCodes = new HashSet<string>(StringComparer.Ordinal);
+        var hasEventSubprocessEscalationCatchAll = false;
+        var hasEventSubprocessError = false;
+
         foreach (var child in container.Elements().Where(child => child.Name.Namespace == BpmnXmlNames.Model))
         {
             var localName = child.Name.LocalName;
@@ -118,6 +290,37 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 case "startEvent":
                 {
                     if (id is null) break;
+                    // spec 128 D7: an event-subprocess body start declares an escalation/error trigger + isInterrupting
+                    // (default true). It imports with its definition so the event-subprocess body-shape holds; a
+                    // ref-less escalation start is the code-less catch-all.
+                    if (child.Element(BpmnXmlNames.Model + "escalationEventDefinition") is { } startEscalationDefinition)
+                    {
+                        var code = ResolveEscalationRefCode(startEscalationDefinition, escalationDeclarations);
+                        var properties = code is null ? null : EscalationProperties(code, ResolveEscalationRefName(startEscalationDefinition, escalationDeclarations));
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.StartEvent, name: NameOf(child),
+                            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, properties)],
+                            cancelActivity: (bool?)child.Attribute("isInterrupting") ?? true));
+                        break;
+                    }
+                    if (child.Element(BpmnXmlNames.Model + "errorEventDefinition") is not null)
+                    {
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.StartEvent, name: NameOf(child),
+                            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Error)],
+                            cancelActivity: (bool?)child.Attribute("isInterrupting") ?? true));
+                        break;
+                    }
+                    // spec 134 D4: a message/signal/timer event-subprocess body start declares its stimulus + isInterrupting
+                    // (default true) and imports with a one-shot <timeDuration> for timer (not the recurring <timeCycle> a
+                    // root timer start uses). A body start whose definition is unusable degrades to a none start; the outer
+                    // event-subprocess resolution then drops the whole subprocess (its body start has no supported trigger).
+                    if (isEventSubprocessBody)
+                    {
+                        var bodyStartDefinition = ResolveEventSubprocessBodyStartDefinition(id, child, messageSignalNames, context);
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.StartEvent, name: NameOf(child),
+                            eventDefinitions: bodyStartDefinition is null ? null : [bodyStartDefinition],
+                            cancelActivity: (bool?)child.Attribute("isInterrupting") ?? true));
+                        break;
+                    }
                     var startDefinitions = child.Elements().Where(IsEventDefinition).ToArray();
                     var startDefinition = startDefinitions.Length == 0
                         ? null
@@ -162,6 +365,25 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                         elements.Add(ResolveEscalationEnd(id, child, escalationEndDefinition, escalationDeclarations, context));
                         break;
                     }
+                    // spec 135: a message end event is a bound-child send with none-end semantics; a ref-less/name-less
+                    // message end degrades to a none end event with a finding (an end has no flows to cascade).
+                    if (child.Element(BpmnXmlNames.Model + "messageEventDefinition") is { } messageEndDefinition)
+                    {
+                        var name = ResolveMessageSignalName(messageEndDefinition, BpmnEventDefinitionTypes.Message, messageSignalNames);
+                        if (name is null)
+                        {
+                            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Message end event '{id}' declares a message event definition with no resolvable name (missing or unresolvable messageRef); it imported as a none end event.", id));
+                            elements.Add(new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(child)));
+                            break;
+                        }
+
+                        var messageEndChildNodeId = $"node-{id}";
+                        childActivities.Add(BuildPublishEventSendChild(messageEndChildNodeId, name));
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(child),
+                            childNodeId: messageEndChildNodeId,
+                            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Message, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })]));
+                        break;
+                    }
                     // spec 125 D4: a cancel end event is valid only inside a transaction; outside one it degrades to
                     // a none end event with a finding (the validator would reject a cancel end in a non-transaction).
                     if (child.Element(BpmnXmlNames.Model + "cancelEventDefinition") is not null)
@@ -199,6 +421,24 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                             elements.Add(escalationThrow);
                         break;
                     }
+                    // spec 135: a message throw is a bound-child send — resolve its messageRef to a name and synthesize a
+                    // PublishEvent child; a ref-less/name-less message throw is Dropped (its flows cascade-drop).
+                    if (child.Element(BpmnXmlNames.Model + "messageEventDefinition") is { } messageThrowDefinition)
+                    {
+                        var name = ResolveMessageSignalName(messageThrowDefinition, BpmnEventDefinitionTypes.Message, messageSignalNames);
+                        if (name is null)
+                        {
+                            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Message throw event '{id}' declares a message event definition with no resolvable name (missing or unresolvable messageRef); a send must say what it publishes, so it was dropped.", id));
+                            break;
+                        }
+
+                        var messageThrowChildNodeId = $"node-{id}";
+                        childActivities.Add(BuildPublishEventSendChild(messageThrowChildNodeId, name));
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.IntermediateThrowEvent, name: NameOf(child),
+                            childNodeId: messageThrowChildNodeId, defaultFlowId: DefaultOf(child),
+                            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Message, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name })]));
+                        break;
+                    }
                     // spec 124: resolved in a later pass (compensate → keep with resolvable activityRef; anything
                     // else drops, its flows cascading as unresolved references).
                     pendingCompensateThrows.Add(child);
@@ -216,7 +456,24 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                 {
                     if (id is null) break;
                     var nestedNodeId = $"node-{id}";
-                    childActivities.Add(BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, escalationDeclarations, context));
+                    var isEventSubprocess = (bool?)child.Attribute("triggeredByEvent") == true;
+                    var subProcessBodyNode = BuildProcessNode(child, nestedNodeId, diagram: null, messageSignalNames, escalationDeclarations, context, isEventSubprocessBody: isEventSubprocess);
+
+                    // spec 128/134 D7: an event subprocess (triggeredByEvent="true") — validate the body shape and per-scope
+                    // uniqueness BEFORE emitting the element, so the importer never emits a graph the validator rejects. A
+                    // message/signal/timer body start additionally synthesizes an armed scope-listener child (spec 134).
+                    if (isEventSubprocess)
+                    {
+                        if (TryResolveEventSubprocess(id, subProcessBodyNode, eventSubprocessEscalationCodes, ref hasEventSubprocessEscalationCatchAll, ref hasEventSubprocessError, context) is not { } eventSubprocess)
+                            break; // Dropped (finding added inside); its body node is not added, flows cascade-drop.
+                        childActivities.Add(subProcessBodyNode);
+                        if (eventSubprocess.ListenerChild is { } listenerChild)
+                            childActivities.Add(listenerChild);
+                        elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, triggeredByEvent: true, listenerNodeId: eventSubprocess.ListenerNodeId));
+                        break;
+                    }
+
+                    childActivities.Add(subProcessBodyNode);
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
                         loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context),
                         isForCompensation: IsForCompensationOf(child)));
@@ -232,6 +489,12 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     elements.Add(new BpmnElement(id, BpmnElementTypes.SubProcess, name: NameOf(child), childNodeId: nestedNodeId, defaultFlowId: DefaultOf(child),
                         loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context),
                         isForCompensation: IsForCompensationOf(child), isTransaction: true));
+                    break;
+                }
+                case "callActivity":
+                {
+                    if (id is null) break;
+                    ImportCallActivity(child, id, declaredVariableNames, elements, childActivities, context);
                     break;
                 }
                 case "boundaryEvent":
@@ -277,6 +540,24 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
                     if (BpmnXmlNames.TaskLocalNamesToElementTypes.TryGetValue(localName, out var taskType))
                     {
                         if (id is null) break;
+                        // spec 135: a sendTask/receiveTask with a resolvable messageRef binds a synthesized child — a
+                        // PublishEvent send for sendTask, an Event catch (BuildEventCatchChild, the receive twin) for
+                        // receiveTask. A name-less one falls through to the unbound + Info path below (serviceTask precedent).
+                        var isSendTask = StringComparer.Ordinal.Equals(taskType, BpmnElementTypes.SendTask);
+                        var isReceiveTask = StringComparer.Ordinal.Equals(taskType, BpmnElementTypes.ReceiveTask);
+                        if ((isSendTask || isReceiveTask)
+                            && ResolveMessageSignalName(child, BpmnEventDefinitionTypes.Message, messageSignalNames) is { } messageTaskName)
+                        {
+                            var messageTaskChildNodeId = $"node-{id}";
+                            childActivities.Add(isSendTask
+                                ? BuildPublishEventSendChild(messageTaskChildNodeId, messageTaskName)
+                                : BuildEventCatchChild(messageTaskChildNodeId, messageTaskName));
+                            elements.Add(new BpmnElement(id, taskType, name: NameOf(child), childNodeId: messageTaskChildNodeId, defaultFlowId: DefaultOf(child),
+                                properties: new Dictionary<string, string> { [MessageNamePropertyKey] = messageTaskName },
+                                loopCharacteristics: ResolveLoopCharacteristics(child, id, hostBindsChild: true, declaredVariableNames, context)));
+                            break;
+                        }
+
                         // Tasks import unbound (no ChildNodeId until an Elsa activity is bound), so a
                         // multi-instance task is a childless host on import → degrade (validate-representable).
                         elements.Add(new BpmnElement(id, taskType, name: NameOf(child), defaultFlowId: DefaultOf(child),
@@ -361,7 +642,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
         var elementsWithLanes = elements
             .Select(element => context.LaneByElementId.TryGetValue(element.ElementId, out var laneId)
-                ? new BpmnElement(element.ElementId, element.ElementType, element.Name, element.ChildNodeId, laneId, element.DefaultFlowId, element.EventDefinitions, element.Properties, element.AttachedToRef, element.CancelActivity, element.LoopCharacteristics, element.IsForCompensation, element.CompensationHandlerElementId, element.IsTransaction)
+                ? new BpmnElement(element.ElementId, element.ElementType, element.Name, element.ChildNodeId, laneId, element.DefaultFlowId, element.EventDefinitions, element.Properties, element.AttachedToRef, element.CancelActivity, element.LoopCharacteristics, element.IsForCompensation, element.CompensationHandlerElementId, element.IsTransaction, element.TriggeredByEvent)
                 : element)
             .ToArray();
 
@@ -434,6 +715,122 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         }
 
         return JsonSerializer.SerializeToElement(new { shapes, edges }, SerializerOptions);
+    }
+
+    /// <summary>Reads the document's <c>&lt;collaboration&gt;/&lt;participant&gt;</c> declarations in document order (spec 136 D2).</summary>
+    private static IReadOnlyList<ParticipantDeclaration> ReadParticipants(XElement definitions)
+    {
+        var result = new List<ParticipantDeclaration>();
+        foreach (var collaboration in definitions.Elements(BpmnXmlNames.Model + "collaboration"))
+            foreach (var participant in collaboration.Elements(BpmnXmlNames.Model + "participant"))
+            {
+                if (IdOf(participant) is not { } id)
+                    continue;
+                var processRef = ((string?)participant.Attribute("processRef"))?.Trim();
+                result.Add(new ParticipantDeclaration(id, NameOf(participant), string.IsNullOrWhiteSpace(processRef) ? null : processRef));
+            }
+
+        return result;
+    }
+
+    /// <summary>Reads the document's <c>&lt;collaboration&gt;/&lt;messageFlow&gt;</c> declarations in document order (spec 136 D3).</summary>
+    private static IReadOnlyList<MessageFlowDeclaration> ReadMessageFlows(XElement definitions)
+    {
+        var result = new List<MessageFlowDeclaration>();
+        foreach (var collaboration in definitions.Elements(BpmnXmlNames.Model + "collaboration"))
+            foreach (var flow in collaboration.Elements(BpmnXmlNames.Model + "messageFlow"))
+            {
+                if (IdOf(flow) is not { } id)
+                    continue;
+                var messageRef = ((string?)flow.Attribute("messageRef"))?.Trim();
+                result.Add(new MessageFlowDeclaration(
+                    id,
+                    NameOf(flow),
+                    ((string?)flow.Attribute("sourceRef"))?.Trim() ?? "",
+                    ((string?)flow.Attribute("targetRef"))?.Trim() ?? "",
+                    string.IsNullOrWhiteSpace(messageRef) ? null : messageRef));
+            }
+
+        return result;
+    }
+
+    /// <summary>The message name an element carries (spec 136): a message event definition's resolved <c>name</c>, or a sendTask/receiveTask's <c>bpmn.messageName</c> property; <c>null</c> when the element is not message-bearing.</summary>
+    private static string? MessageNameOf(BpmnElement element)
+    {
+        if (element.EventDefinitions.FirstOrDefault(definition => StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Message)) is { } messageDefinition
+            && messageDefinition.Properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var eventName) && !string.IsNullOrWhiteSpace(eventName))
+            return eventName.Trim();
+        if (element.Properties.TryGetValue(MessageNamePropertyKey, out var taskName) && !string.IsNullOrWhiteSpace(taskName))
+            return taskName.Trim();
+        return null;
+    }
+
+    private static string Named(string? name) => string.IsNullOrWhiteSpace(name) ? "" : $" ('{name.Trim()}')";
+    private static string Quote(string? value) => value is null ? "(none)" : $"'{value}'";
+
+    /// <summary>A collaboration participant (spec 136 D2): its id, optional name, and referenced process id (null = black-box pool).</summary>
+    private readonly record struct ParticipantDeclaration(string Id, string? Name, string? ProcessRef);
+
+    /// <summary>A collaboration message flow (spec 136 D3): its id, optional name, endpoint refs, and optional messageRef.</summary>
+    private readonly record struct MessageFlowDeclaration(string FlowId, string? Name, string SourceRef, string TargetRef, string? MessageRef);
+
+    private enum MessageFlowEndpointKind { Unresolvable, Element, BlackBox }
+
+    /// <summary>A resolved message-flow endpoint (spec 136 D3): an element (in an imported process), a black-box pool, or unresolvable.</summary>
+    private readonly record struct MessageFlowEndpoint(MessageFlowEndpointKind Kind, string? ElementId, string? PoolId, string? MessageName, BuiltProcess? Owner)
+    {
+        public static readonly MessageFlowEndpoint Unresolvable = new(MessageFlowEndpointKind.Unresolvable, null, null, null, null);
+        public static MessageFlowEndpoint Element(string elementId, string? poolId, string? messageName, BuiltProcess owner) => new(MessageFlowEndpointKind.Element, elementId, poolId, messageName, owner);
+        public static MessageFlowEndpoint BlackBox(string poolId) => new(MessageFlowEndpointKind.BlackBox, null, poolId, null, null);
+    }
+
+    /// <summary>
+    /// A process imported during an N-process pass (spec 136): the built node and its deserialized authored structure,
+    /// plus the collaboration facts folded onto it (pools, the unambiguous lane pool id, message flows, and the
+    /// referencing participants). <see cref="Materialize"/> re-serializes the node only when a collaboration fact
+    /// changed the structure, so an uncollaborated process keeps its exact BuildProcessNode bytes.
+    /// </summary>
+    private sealed class BuiltProcess(string processId, ActivityNode node, BpmnAuthoredStructure structure, bool isExecutable)
+    {
+        public string ProcessId { get; } = processId;
+        public ActivityNode Node { get; private set; } = node;
+        public BpmnAuthoredStructure Structure { get; } = structure;
+        public bool IsExecutable { get; } = isExecutable;
+        public List<BpmnPool> Pools { get; } = [];
+        public List<BpmnMessageFlow> MessageFlows { get; } = [];
+        public List<ParticipantDeclaration> ReferencingParticipants { get; } = [];
+        public string? LanePoolId { get; set; }
+        public string? ParticipantId { get; set; }
+        public string? ParticipantName { get; set; }
+
+        public void Materialize(JsonSerializerOptions options)
+        {
+            if (Pools.Count == 0 && LanePoolId is null && MessageFlows.Count == 0)
+                return;
+
+            var lanes = LanePoolId is { } poolId
+                ? Structure.Lanes.Select(lane => new BpmnLane(lane.LaneId, poolId, lane.Name)).ToArray()
+                : Structure.Lanes;
+
+            var updated = new BpmnAuthoredStructure(
+                Structure.Activities,
+                Structure.Elements,
+                Structure.SequenceFlows,
+                Pools,
+                lanes,
+                Structure.Variables,
+                Structure.Diagram,
+                Structure.IsTransaction,
+                MessageFlows);
+
+            Node = Node with
+            {
+                Structure = new ActivityNodeStructure(
+                    BpmnProcessActivity.StructureKind,
+                    BpmnProcessActivity.StructureSchemaVersion,
+                    JsonSerializer.SerializeToElement(updated, options))
+            };
+        }
     }
 
     /// <summary>
@@ -531,6 +928,144 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
 
         return new BpmnElement(id, BpmnElementTypes.EndEvent, name: NameOf(element),
             eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, EscalationProperties(code, ResolveEscalationRefName(definition, escalationDeclarations)))]);
+    }
+
+    /// <summary>
+    /// Validates an event subprocess's imported body shape and per-scope uniqueness (spec 128 D7). The body must
+    /// declare exactly one start event with exactly one supported trigger definition — escalation (with optional
+    /// code; code-less = catch-all) or error (interrupting only) — with per scope distinct escalation codes, at most
+    /// one code-less catch-all, and at most one error event subprocess. Any violation Drops the event subprocess with
+    /// a specific finding so the importer never emits a graph the validator rejects; a valid trigger updates the
+    /// scope trackers and returns <c>true</c>.
+    /// </summary>
+    /// <summary>The outcome of resolving an event subprocess (spec 128/134 D7): for a message/signal/timer trigger, the synthesized scope-listener node and its bound child; for escalation/error, both null.</summary>
+    private readonly record struct EventSubprocessImport(string? ListenerNodeId, ActivityNode? ListenerChild);
+
+    private static EventSubprocessImport? TryResolveEventSubprocess(
+        string id,
+        ActivityNode bodyNode,
+        HashSet<string> escalationCodes,
+        ref bool hasEscalationCatchAll,
+        ref bool hasError,
+        ImportContext context)
+    {
+        var bodyStructure = bodyNode.Structure?.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions);
+        var starts = (bodyStructure?.Elements ?? [])
+            .Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.StartEvent))
+            .ToArray();
+        if (starts.Length != 1)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body must declare exactly one start event; it declares {starts.Length}. It was dropped.", id));
+            return null;
+        }
+
+        var start = starts[0];
+        if (start.EventDefinitions.Count != 1)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body start event must declare exactly one supported trigger definition (escalation, error, message, signal, or timer); it declares {start.EventDefinitions.Count}. It was dropped.", id));
+            return null;
+        }
+
+        var definition = start.EventDefinitions.Single();
+        var interrupting = start.CancelActivity;
+        if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Escalation))
+        {
+            var code = definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Code, out var codeValue) && !string.IsNullOrWhiteSpace(codeValue) ? codeValue.Trim() : null;
+            if (code is null)
+            {
+                if (hasEscalationCatchAll)
+                {
+                    context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a second code-less catch-all escalation event subprocess in its scope, which may carry at most one; it was dropped.", id));
+                    return null;
+                }
+                hasEscalationCatchAll = true;
+            }
+            else if (!escalationCodes.Add(code))
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' declares escalation code '{code}', which another event subprocess in its scope already claims; it was dropped.", id));
+                return null;
+            }
+
+            return new EventSubprocessImport(ListenerNodeId: null, ListenerChild: null);
+        }
+
+        if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Error))
+        {
+            // spec 132: an error-triggered event subprocess is executable (deferred seam-B absorption, #989 fix).
+            // Interrupting only (per BPMN) and catch-all (no error-code matching this slice); a scope carries at most
+            // one. A non-interrupting or second error event subprocess degrades — dropped with a finding — so the
+            // importer never emits a graph the validator rejects.
+            if (!interrupting)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a non-interrupting error event subprocess; error events are always interrupting per BPMN, so it was dropped.", id));
+                return null;
+            }
+            if (hasError)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' is a second error-triggered event subprocess in its scope, which may carry at most one; it was dropped.", id));
+                return null;
+            }
+            hasError = true;
+            return new EventSubprocessImport(ListenerNodeId: null, ListenerChild: null);
+        }
+
+        // spec 134: a message/signal/timer event subprocess synthesizes an armed scope-listener node (node-{id}-listener):
+        // an Event wait for message/signal (name), a Delay for timer (one-shot interval). The body-start import already
+        // populated the stimulus facts; a body start whose facts were unresolvable degraded to a none start (0 event
+        // definitions), which was dropped above — so if we reach here the name/interval is present.
+        var listenerNodeId = $"node-{id}-listener";
+        if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Message) || StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Signal))
+        {
+            var name = definition.Properties[BpmnEventDefinitionProperties.Name];
+            return new EventSubprocessImport(listenerNodeId, BuildEventCatchChild(listenerNodeId, name));
+        }
+
+        if (StringComparer.Ordinal.Equals(definition.Type, BpmnEventDefinitionTypes.Timer))
+        {
+            var interval = definition.Properties[BpmnEventDefinitionProperties.Interval];
+            return new EventSubprocessImport(listenerNodeId, BuildDelayCatchChild(listenerNodeId, interval));
+        }
+
+        context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, $"Event subprocess '{id}' body start event declares an unsupported trigger definition '{definition.Type}'; only escalation, error, message, signal, and timer triggers are supported. It was dropped.", id));
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves a message/signal/timer event-subprocess body start's event definition (spec 134 D4): message/signal
+    /// resolve their <c>name</c> (via <c>messageRef</c>/<c>signalRef</c>); a timer resolves a one-shot
+    /// <c>&lt;timeDuration&gt;</c> to an interval. A <c>&lt;timeCycle&gt;</c>/<c>&lt;timeDate&gt;</c>/cron timer or an
+    /// unresolvable name degrades to a none start (returns <c>null</c> + a finding), which the caller then drops.
+    /// </summary>
+    private static BpmnEventDefinition? ResolveEventSubprocessBodyStartDefinition(string id, XElement child, IReadOnlyDictionary<string, string> messageSignalNames, ImportContext context)
+    {
+        if (child.Element(BpmnXmlNames.Model + "messageEventDefinition") is { } messageDefinition)
+            return ResolveEventSubprocessMessageSignal(id, messageDefinition, BpmnEventDefinitionTypes.Message, messageSignalNames, context);
+        if (child.Element(BpmnXmlNames.Model + "signalEventDefinition") is { } signalDefinition)
+            return ResolveEventSubprocessMessageSignal(id, signalDefinition, BpmnEventDefinitionTypes.Signal, messageSignalNames, context);
+        if (child.Element(BpmnXmlNames.Model + "timerEventDefinition") is { } timerDefinition)
+        {
+            var duration = ResolveCatchTimerDuration(timerDefinition);
+            if (duration is null)
+            {
+                context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Event subprocess '{id}' body start declares a timer that is not a one-shot <timeDuration> (timeCycle/timeDate/cron event-subprocess timers are not supported); it imported as a none start and the event subprocess was dropped.", id));
+                return null;
+            }
+            return new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = duration });
+        }
+
+        return null;
+    }
+
+    private static BpmnEventDefinition? ResolveEventSubprocessMessageSignal(string id, XElement definition, string type, IReadOnlyDictionary<string, string> messageSignalNames, ImportContext context)
+    {
+        var name = ResolveMessageSignalName(definition, type, messageSignalNames);
+        if (name is null)
+        {
+            context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Degraded, $"Event subprocess '{id}' body start declares a {type} event definition with no resolvable name; it imported as a none start and the event subprocess was dropped.", id));
+            return null;
+        }
+
+        return new BpmnEventDefinition(type, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = name });
     }
 
     /// <summary>The display name an escalation ref resolves to (the declaration's <c>name</c>), or <c>null</c>.</summary>
@@ -876,7 +1411,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
         elements[index] = new BpmnElement(handler.ElementId, handler.ElementType, handler.Name, handler.ChildNodeId, handler.LaneId,
             handler.DefaultFlowId, handler.EventDefinitions, handler.Properties, handler.AttachedToRef, handler.CancelActivity,
             handler.LoopCharacteristics, isForCompensation: true, compensationHandlerElementId: handler.CompensationHandlerElementId,
-            isTransaction: handler.IsTransaction);
+            isTransaction: handler.IsTransaction, triggeredByEvent: handler.TriggeredByEvent);
     }
 
     /// <summary>
@@ -1092,6 +1627,61 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     private static ActivityNode BuildEventCatchChild(string nodeId, string eventName) =>
         new(nodeId, DefaultEventActivityVersionId, [LiteralArgument("EventName", eventName), LiteralArgument("CanStartWorkflow", false)], []);
 
+    /// <summary>A message throw/end or sendTask's synthesized send child (spec 135): a <c>PublishEvent</c> whose <c>EventName</c> literal is the resolved message name. Correlation/payload are unset by the importer (the D4 cut); an expression-bound payload is authorable on the bound child.</summary>
+    private static ActivityNode BuildPublishEventSendChild(string nodeId, string eventName) =>
+        new(nodeId, DefaultPublishEventActivityVersionId, [LiteralArgument("EventName", eventName)], []);
+
+    /// <summary>
+    /// Imports a <c>&lt;callActivity&gt;</c> (spec 133 D5). When the document carries the Elsa extension attribute
+    /// <c>elsa:workflowDefinitionId</c> (our export convention) the element imports <b>bound</b>: a
+    /// <c>DispatchWorkflow</c> child is synthesized (<c>WorkflowDefinitionId</c> + <c>WaitForCompletion</c>, honoring
+    /// <c>elsa:waitForCompletion="false"</c>). Otherwise the element imports <b>unbound</b> (a foreign
+    /// <c>calledElement</c> has no guaranteed Elsa definition id) with an Info finding — the serviceTask precedent. A
+    /// present <c>calledElement</c> is recorded as <c>Properties["bpmn.calledElement"]</c> in either case for authoring
+    /// reference and lossless round-trip. Never emits a graph the validator rejects.
+    /// </summary>
+    private static void ImportCallActivity(
+        XElement element,
+        string id,
+        IReadOnlySet<string> declaredVariableNames,
+        List<BpmnElement> elements,
+        List<ActivityNode> childActivities,
+        ImportContext context)
+    {
+        var calledElement = (string?)element.Attribute("calledElement");
+        var workflowDefinitionId = (string?)element.Attribute(BpmnXmlNames.Elsa + "workflowDefinitionId");
+        // Default true (the waited convention); an authored elsa:waitForCompletion="false" is fire-and-forget.
+        var waitForCompletion = !string.Equals((string?)element.Attribute(BpmnXmlNames.Elsa + "waitForCompletion"), "false", StringComparison.OrdinalIgnoreCase);
+
+        var properties = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(calledElement))
+            properties[CalledElementPropertyKey] = calledElement.Trim();
+        IReadOnlyDictionary<string, string>? elementProperties = properties.Count > 0 ? properties : null;
+
+        if (!string.IsNullOrWhiteSpace(workflowDefinitionId))
+        {
+            // Bound: synthesize the DispatchWorkflow child (spec 118 synthesized-child pattern).
+            var childNodeId = $"node-{id}";
+            childActivities.Add(BuildCallActivityDispatchChild(childNodeId, workflowDefinitionId.Trim(), waitForCompletion));
+            elements.Add(new BpmnElement(id, BpmnElementTypes.CallActivity, name: NameOf(element), childNodeId: childNodeId, defaultFlowId: DefaultOf(element),
+                properties: elementProperties,
+                loopCharacteristics: ResolveLoopCharacteristics(element, id, hostBindsChild: true, declaredVariableNames, context)));
+            return;
+        }
+
+        // Unbound: a call activity imports childless (like a task) with an Info finding; a multi-instance callActivity
+        // is a childless host on import → its collection loop degrades (validate-representable), the task precedent.
+        elements.Add(new BpmnElement(id, BpmnElementTypes.CallActivity, name: NameOf(element), defaultFlowId: DefaultOf(element),
+            properties: elementProperties,
+            loopCharacteristics: ResolveLoopCharacteristics(element, id, hostBindsChild: false, declaredVariableNames, context)));
+        context.Issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Info, $"Call activity '{id}' imported unbound; bind a DispatchWorkflow activity to execute it.", id));
+    }
+
+    /// <summary>A bound call activity's synthesized child (spec 133 D5): the waited-by-convention <c>DispatchWorkflow</c> node (<c>WorkflowDefinitionId</c> literal + <c>WaitForCompletion</c>).</summary>
+    private static ActivityNode BuildCallActivityDispatchChild(string nodeId, string workflowDefinitionId, bool waitForCompletion) =>
+        new(nodeId, DefaultDispatchWorkflowActivityVersionId,
+            [LiteralArgument("WorkflowDefinitionId", workflowDefinitionId), LiteralArgument("WaitForCompletion", waitForCompletion)], []);
+
     /// <summary>Authors a single literal input binding for a synthesized child node.</summary>
     private static ArgumentState LiteralArgument(string key, object? value) =>
         new(key, new ArgumentValue(value, "Literal"), null, null, null, null);
@@ -1109,6 +1699,7 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     {
         public List<string> ProcessIds { get; } = [];
         public List<BpmnImportIssue> Issues { get; } = [];
+        public IReadOnlyList<BpmnImportedProcess> ImportedProcesses { get; set; } = [];
         public Dictionary<string, string> LaneByElementId { get; } = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _elementCounts = new(StringComparer.Ordinal);
 

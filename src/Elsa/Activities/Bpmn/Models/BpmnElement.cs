@@ -24,7 +24,9 @@ public sealed class BpmnElement
         BpmnLoopCharacteristics? loopCharacteristics = null,
         bool isForCompensation = false,
         string? compensationHandlerElementId = null,
-        bool isTransaction = false)
+        bool isTransaction = false,
+        bool triggeredByEvent = false,
+        string? listenerNodeId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(elementId);
         ArgumentException.ThrowIfNullOrWhiteSpace(elementType);
@@ -33,6 +35,7 @@ public sealed class BpmnElement
         ElementType = elementType;
         Name = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
         ChildNodeId = string.IsNullOrWhiteSpace(childNodeId) ? null : childNodeId.Trim();
+        ListenerNodeId = string.IsNullOrWhiteSpace(listenerNodeId) ? null : listenerNodeId.Trim();
         LaneId = string.IsNullOrWhiteSpace(laneId) ? null : laneId.Trim();
         DefaultFlowId = string.IsNullOrWhiteSpace(defaultFlowId) ? null : defaultFlowId.Trim();
         EventDefinitions = eventDefinitions ?? [];
@@ -43,6 +46,7 @@ public sealed class BpmnElement
         IsForCompensation = isForCompensation;
         CompensationHandlerElementId = string.IsNullOrWhiteSpace(compensationHandlerElementId) ? null : compensationHandlerElementId.Trim();
         IsTransaction = isTransaction;
+        TriggeredByEvent = triggeredByEvent;
     }
 
     [JsonPropertyName("elementId")]
@@ -120,6 +124,29 @@ public sealed class BpmnElement
     /// </summary>
     [JsonPropertyName("isTransaction")]
     public bool IsTransaction { get; }
+
+    /// <summary>
+    /// Marks a <b>event subprocess</b> (spec 128/134): a flow-less <c>subProcess</c>-family element that binds a
+    /// nested body whose single event-start (an escalation/error start event, or a message/signal/timer start event
+    /// with a <see cref="ListenerNodeId"/> scope listener) activates the body when its trigger occurs while the
+    /// enclosing scope is active. Valid only on a <c>subProcess</c>-family element with a
+    /// bound child; the element participates in no sequence flows, hosts no boundary, and is neither a compensation
+    /// handler nor a transaction. <c>false</c> on every ordinary element.
+    /// </summary>
+    [JsonPropertyName("triggeredByEvent")]
+    public bool TriggeredByEvent { get; }
+
+    /// <summary>
+    /// The authored node id of the synthesized scope-listener child (spec 134): a suspending <c>Delay</c> (timer) or
+    /// <c>Event</c> (message/signal) armed at scope start for a message/signal/timer-triggered event subprocess. It is a
+    /// second bound-child channel alongside <see cref="ChildNodeId"/> (the body). <b>Required</b> on a
+    /// <see cref="TriggeredByEvent"/> element whose body-start trigger is message/signal/timer (the external triggers need
+    /// an armed listener), and <b>null</b> on escalation/error event subprocesses (dormant catchers, unchanged) and every
+    /// other element. The exactly-one-binding accounting binds a node either as some element's <see cref="ChildNodeId"/>
+    /// or as some element's <see cref="ListenerNodeId"/>, never both, never twice.
+    /// </summary>
+    [JsonPropertyName("listenerNodeId")]
+    public string? ListenerNodeId { get; }
 }
 
 /// <summary>
@@ -142,6 +169,14 @@ public static class BpmnElementTypes
     public const string BusinessRuleTask = "businessRuleTask";
     public const string SendTask = "sendTask";
     public const string ReceiveTask = "receiveTask";
+
+    /// <summary>
+    /// A call activity (spec 133): a task-family element that invokes a separately published Elsa workflow by
+    /// binding a <c>Elsa.DispatchWorkflow</c> child. Resolves to the task family (behaviors stay semantics-unaware);
+    /// its only behavioral distinction is the engine-side failure-outcome translation (spec 133 D3) and its
+    /// interchange fidelity (D5).
+    /// </summary>
+    public const string CallActivity = "callActivity";
     public const string SubProcess = "subProcess";
     public const string ExclusiveGateway = "exclusiveGateway";
     public const string ParallelGateway = "parallelGateway";

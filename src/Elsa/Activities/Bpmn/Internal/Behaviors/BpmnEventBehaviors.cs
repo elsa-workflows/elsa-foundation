@@ -20,6 +20,12 @@ public sealed class StartEventBehavior(string elementFamily, string displayName)
     public static StartEventBehavior Message() => new(BpmnElementFamilies.StartEventMessage, "Start Event (Message)");
     public static StartEventBehavior Signal() => new(BpmnElementFamilies.StartEventSignal, "Start Event (Signal)");
 
+    /// <summary>The escalation event-subprocess body start (spec 128): once seeded via the scheduled-start hint, routes outbound like a none start.</summary>
+    public static StartEventBehavior Escalation() => new(BpmnElementFamilies.StartEventEscalation, "Start Event (Escalation)");
+
+    /// <summary>The error event-subprocess body start (spec 128): once seeded via the scheduled-start hint, routes outbound like a none start.</summary>
+    public static StartEventBehavior Error() => new(BpmnElementFamilies.StartEventError, "Start Event (Error)");
+
     public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
         BpmnBehaviorDecision.Of(BpmnBehaviorCommand.EmitTokens(BpmnFlowSelector.FlowIds(context.OutboundFlows)));
 
@@ -157,6 +163,50 @@ public sealed class EscalationEndEventBehavior : IBpmnElementBehavior
 
     public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
         throw new BpmnExecutionException($"BPMN escalation end event '{context.Element.ElementId}' cannot own a child activity.");
+}
+
+/// <summary>
+/// Message intermediate throw event (spec 135): a bound-child send. On token arrival it schedules the synthesized
+/// <c>PublishEvent</c> child; the child stages a durable-first publish and completes immediately (fire-and-continue),
+/// which is an ordinary child completion that routes the throw token's outbound flows by the shared task selection
+/// rules. The send itself lands post-commit — the behavior stays semantics-unaware. Graph validation guarantees the
+/// bound child exists (a message throw is never unbound).
+/// </summary>
+public sealed class MessageThrowEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.IntermediateThrowEventMessage;
+    public string DisplayName => "Message Throw Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.ScheduleChild());
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context)
+    {
+        var flows = BpmnFlowSelector.SelectTaskFlows(context);
+        if (flows.Count == 0 && context.OutboundFlows.Count > 0)
+            return BpmnBehaviorDecision.Of(BpmnBehaviorCommand.Fault(
+                "bpmn.flow.none-taken",
+                $"BPMN message throw event '{context.Element.ElementId}' completed with outcomes [{string.Join(", ", context.OutcomeNames)}] but no outbound sequence flow matched and no default flow is declared."));
+
+        return BpmnBehaviorDecision.Of(BpmnBehaviorCommand.EmitTokens(BpmnFlowSelector.FlowIds(flows)));
+    }
+}
+
+/// <summary>
+/// Message end event (spec 135): a bound-child send with none-end semantics. On token arrival it schedules the
+/// synthesized <c>PublishEvent</c> child; when the child completes (fire-and-continue) the token is consumed. The send
+/// lands post-commit — the behavior stays semantics-unaware. Graph validation guarantees the bound child exists.
+/// </summary>
+public sealed class MessageEndEventBehavior : IBpmnElementBehavior
+{
+    public string ElementFamily => BpmnElementFamilies.EndEventMessage;
+    public string DisplayName => "Message End Event";
+
+    public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.ScheduleChild());
+
+    public BpmnBehaviorDecision OnChildCompleted(IBpmnBehaviorContext context) =>
+        BpmnBehaviorDecision.Of(BpmnBehaviorCommand.ConsumeToken());
 }
 
 /// <summary>Terminate end event: consume every live token and complete the process immediately.</summary>

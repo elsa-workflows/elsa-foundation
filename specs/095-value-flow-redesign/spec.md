@@ -13,6 +13,8 @@ dynamic authoring.
 
 **Decision**: [ADR 0045](../../docs/adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md)
 
+**Scoped amendment**: [ADR 0048](../../docs/adr/0048-container-output-captures-resolve-through-producer-visible-variable-frames.md)
+
 **Terminology**: [Elsa glossary](../../docs/glossary/elsa.md)
 
 ## User Scenarios & Testing *(mandatory)*
@@ -352,10 +354,13 @@ service isolation, retry, and resumption behavior.
 - **FR-027**: Variable declarations MUST have lexical scope and runtime values MUST be isolated by one
   concrete activation frame of that scope.
 - **FR-028**: Variable reads MUST resolve when the consumer invocation materializes its inputs.
-- **FR-029**: Variable writes MUST be explicit graph-visible operations and MUST commit before
-  sequential downstream work observes them.
-- **FR-030**: Input-binding expressions, activity completion, and activity transitions MUST NOT
-  perform hidden variable writes.
+- **FR-029**: Variable writes MUST be explicit graph-visible operations. A pinned activity
+  output-capture binding edge qualifies as a graph-visible operation under ADR 0048; it MUST commit
+  before sequential downstream work observes it.
+- **FR-030**: Input-binding expressions, unbound activity completion, and activity transitions MUST
+  NOT perform hidden variable writes. The only activity-completion write is an authored, pinned, and
+  inspectable output-capture edge governed by ADR 0048 and committed atomically with the producing
+  completion.
 - **FR-031**: Potentially concurrent ordinary writes to the same variable MUST fail publication unless
   an explicit deterministic merge or reduction governs them.
 - **FR-032**: A required activity-result binding MUST identify a producer that is causally and
