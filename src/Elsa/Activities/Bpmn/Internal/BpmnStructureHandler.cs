@@ -36,7 +36,8 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
             current.Lanes,
             current.Variables,
             current.Diagram,
-            current.IsTransaction);
+            current.IsTransaction,
+            current.MessageFlows);
 
         return activity with
         {
