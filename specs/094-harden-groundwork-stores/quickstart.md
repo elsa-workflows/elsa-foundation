@@ -5,10 +5,10 @@ This guide is the implementation/review path for feature 094. A narrow green uni
 ## Prerequisites
 
 - .NET 10 SDK selected by the repository.
-- Access to the package feed containing the pinned Groundwork `0.0.1-preview.77` release.
+- Access to the package feed containing the pinned Groundwork `0.0.1-preview.80` release.
 - Docker-compatible container runtime for SQL Server, PostgreSQL, and MongoDB.
 - Enough local resources to run MongoDB as a replica set for transaction scenarios.
-- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.77`, matching all
+- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.80`, matching all
   Groundwork packages.
 
 Groundwork PR #88 is the generic version-aware codec boundary in this release; PR #101 admits sort-only index
@@ -18,15 +18,22 @@ reference Groundwork.
 
 Do not use a standalone MongoDB instance for scenarios that claim multi-document atomicity.
 
-The repository's current Groundwork family is `0.0.1-preview.77`; do not combine it with a different
+The repository's current Groundwork family is `0.0.1-preview.80`; do not combine it with a different
 `Groundwork.Tool` or provider package version. PR #88 provides the generic version-aware codec consumed by this
 family. Elsa owns only its per-kind policies, legacy-stamp parsing, JSON options, and concrete upcasters behind
 the Elsa provider marker.
 
-The checked-in checkpoint/fence attachment includes the reviewed `0.0.1-preview.77` four-provider slice for
+The checked-in checkpoint/fence attachment includes the reviewed `0.0.1-preview.80` four-provider slice for
 `runtime-checkpoint-commit`, `runtime-execution-liveness`, and `runtime-post-commit-outbox`. The remaining
-`preview.76` artifacts are historical provenance, not current `preview.77` pass evidence. A partial attachment
+`preview.76`/`preview.77` artifacts are historical provenance, not current `preview.80` pass evidence. A partial attachment
 does not advance a row to evidence-complete or close the package-generation readiness gate.
+
+**2026-07-23 #646 takeover evidence**: `Directory.Packages.props`,
+`.config/dotnet-tools.json`, and the coverage-ledger header agree on `0.0.1-preview.80`.
+The version wording in this guide, the performance handoff, the zero-EF program goal, and the
+decision map was reconciled without rewriting historical attachment provenance. The focused
+`GroundworkPerformanceHandoffTests` / `GroundworkCoverageLedgerValidator` architecture slice passed
+7/7 after a clean restore.
 
 ## 1. Inspect the frozen denominator
 
@@ -315,9 +322,9 @@ For each workload in [`contracts/performance-handoff.md`](contracts/performance-
 
 Do not time setup, schema application, or a workload whose correctness/provider gate is failing.
 For `iam-normalized-lookup-update`, run the real physical Groundwork correctness path with mandatory SQLite and
-the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.77` and the current Identity
+the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.80` and the current Identity
 storage manifest. Retain its provider identity, input/result digests, observable operations, and native route
-evidence captured at 100,000 physical records. The accepted `preview.76` matrix, the earlier `preview.60` /
+evidence captured at 100,000 physical records. The accepted `preview.76`/`preview.77` artifacts, the earlier `preview.60` /
 Identity manifest v1.0.4 matrix, and all older artifacts are immutable historical provenance, not current pass
 evidence; the ledger remains unlinked until fresh exact-head artifacts exist. The committed EF contract baseline is explicitly non-executed;
 #646 owns live EF execution, equality, and timing.
