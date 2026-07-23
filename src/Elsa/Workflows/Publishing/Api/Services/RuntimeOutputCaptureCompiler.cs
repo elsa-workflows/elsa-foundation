@@ -114,7 +114,7 @@ public sealed class RuntimeOutputCaptureCompiler(
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["referenceKey"] = definition.ReferenceKey,
-                    ["targetVariableReferenceKey"] = variable.ReferenceKey,
+                    [RuntimeMetadataKeys.TargetVariableReferenceKey] = variable.ReferenceKey,
                     [RuntimeMetadataKeys.VariableName] = variable.Name,
                     [RuntimeMetadataKeys.StorageDriverKey] = definition.StorageDriverKey
                 },

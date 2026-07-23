@@ -15,8 +15,11 @@ public sealed class BookmarkConsumptionCheckpointRequest
         IReadOnlyCollection<RuntimeSchedulerWorkItem> continuationWorkItems,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
-        string? commitDiscriminator)
+        string? commitDiscriminator,
+        RuntimeStateChange<WorkflowExecutionState>? workflowExecutionChange = null)
     {
+        if (workflowExecutionChange is not null && transitionKind != BookmarkResumeCheckpointTransitionKind.ActivityCompletion)
+            throw new ArgumentException($"Bookmark resume transition '{transitionKind}' cannot carry a workflow execution state change.", nameof(workflowExecutionChange));
         ArgumentNullException.ThrowIfNull(resumeWorkItem);
         ArgumentNullException.ThrowIfNull(resumePayload);
         ArgumentNullException.ThrowIfNull(activityExecutionState);
@@ -96,6 +99,7 @@ public sealed class BookmarkConsumptionCheckpointRequest
         ContinuationWorkItems = continuations;
         ValueSnapshots = valueSnapshots;
         DurableValueChanges = durableValueChanges;
+        WorkflowExecutionChange = workflowExecutionChange;
     }
 
     public BookmarkResumeCheckpointTransitionKind TransitionKind { get; }
@@ -117,13 +121,20 @@ public sealed class BookmarkConsumptionCheckpointRequest
     public IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> ValueSnapshots { get; }
 
     /// <summary>
-    /// Durable-value changes (e.g. the resume callback's workflow-scope variable write-back, #286/#310) to commit
-    /// atomically with the selected resume transition checkpoint. Mirrors how the invoke path folds
-    /// <c>RuntimeContainerScopeService.BuildWorkflowScopeWriteBackChanges</c> (engine package) output into its completion
-    /// commit, so a variable a resume callback mutated is durably re-projected for downstream activities rather
-    /// than being lost when the in-memory scope is discarded. Empty unless the resume callback mutated a variable.
+    /// Durable-value changes (e.g. the completing activity's workflow-output captures) to commit atomically
+    /// with the selected resume transition checkpoint, mirroring how the invoke path folds its capture
+    /// projection into the completion commit. Workflow-variable captures do NOT ride this channel — they
+    /// travel as <see cref="WorkflowExecutionChange"/> (#972). Empty unless the completion produced captures.
     /// </summary>
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValueChanges { get; }
+
+    /// <summary>
+    /// The workflow execution state change carrying a workflow-variable output-capture write-back onto the
+    /// canonical root variable frame (#972), committed atomically with the completion transition — the frame
+    /// is the single runtime truth for workflow-scope variables. Null unless the completing activity captured
+    /// an output into a workflow variable. Completion transitions only.
+    /// </summary>
+    public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecutionChange { get; }
 
     public static BookmarkConsumptionCheckpointRequest ForInitialTriggerClaim(
         RuntimeSchedulerWorkItem resumeWorkItem,
@@ -204,7 +215,8 @@ public sealed class BookmarkConsumptionCheckpointRequest
         ActivityExecutionState completedState,
         RuntimeSchedulerWorkItem completionWorkItem,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null,
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null) =>
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null,
+        RuntimeStateChange<WorkflowExecutionState>? workflowExecutionChange = null) =>
         new(
             BookmarkResumeCheckpointTransitionKind.ActivityCompletion,
             resumeWorkItem,
@@ -215,7 +227,8 @@ public sealed class BookmarkConsumptionCheckpointRequest
             [completionWorkItem],
             valueSnapshots ?? [],
             durableValueChanges ?? [],
-            null);
+            null,
+            workflowExecutionChange);
 
     private static void ValidateOwnedBookmark(
         string workflowExecutionId,

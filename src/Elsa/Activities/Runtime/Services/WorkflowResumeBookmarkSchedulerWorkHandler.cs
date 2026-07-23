@@ -445,8 +445,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             };
         }
         completedState = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(completedState);
-        var outputCaptureChanges = typedCompletion is null
-            ? []
+        var captureProjection = typedCompletion is null
+            ? RuntimeOutputCaptureProjection.Empty
             : await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId,
                 executionState.InvocationId,
@@ -455,6 +455,19 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 typedCompletion,
                 _timeProvider.GetUtcNow(),
                 cancellationToken);
+        // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
+        // completion (#972), mirroring how the Set intrinsic commits its changed frame.
+        var workflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+            serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+            workItem.WorkflowExecutionId,
+            executableNode.ExecutableNodeId,
+            captureProjection.WorkflowVariableWrites,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+                [RuntimeMetadataKeys.CheckpointReason] = RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason
+            },
+            cancellationToken);
         await bookmarkConsumptionCheckpointService.CommitAsync(
             BookmarkConsumptionCheckpointRequest.ForCompletion(
                 workItem,
@@ -462,7 +475,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 completedState,
                 NewCompletionWorkItem(workItem, resumePayload, completedState),
                 valueSnapshots,
-                outputCaptureChanges),
+                captureProjection.DurableValues,
+                workflowVariableWriteBack),
             cancellationToken);
     }
 

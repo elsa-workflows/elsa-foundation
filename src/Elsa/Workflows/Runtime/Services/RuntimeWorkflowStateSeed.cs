@@ -5,27 +5,25 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
-/// Turns workflow variables and inputs into persisted runtime state at workflow start, mirroring how
-/// activity results become immutable completion records owned by the producing invocation. Each
-/// seeded value is a <see cref="DurableValueState"/> tagged with <see cref="RuntimeMetadataKeys.VariableName"/>
-/// or <see cref="RuntimeMetadataKeys.InputName"/> so that
-/// <see cref="RuntimeInputBindingStateProjection.ProjectWorkflowVariables"/> /
-/// <see cref="RuntimeInputBindingStateProjection.ProjectWorkflowInputs"/> can rebuild the <c>variables.*</c>
-/// and <c>input.*</c> snapshots for later activities and after the instance unloads/resumes.
+/// Turns workflow inputs into persisted runtime state at workflow start, mirroring how activity results
+/// become immutable completion records owned by the producing invocation. Each seeded value is a
+/// <see cref="DurableValueState"/> tagged with <see cref="RuntimeMetadataKeys.InputName"/> so that
+/// <see cref="RuntimeInputBindingStateProjection.ProjectWorkflowInputs"/> can rebuild the <c>input.*</c>
+/// snapshot for later activities and after the instance unloads/resumes.
 /// </summary>
 /// <remarks>
-/// This seeds the start-time values. Mid-run mutation visibility (#286) is layered on top by
-/// <see cref="BuildVariableWriteBackChanges"/>, which re-emits a mutated workflow-scope variable under the
-/// same reserved value id with a later <c>capturedAt</c> so <see cref="RuntimeInputBindingStateProjection.ProjectWorkflowVariables"/>
-/// (most-recent capture wins) projects the current value into the next materialization.
+/// Workflow variables are NOT seeded here (#972): the canonical root variable frame — seeded from
+/// <c>WorkflowExecutable.WorkflowVariables</c> at the workflow-started checkpoint — is the single runtime
+/// truth for workflow-scope variables. The retired <c>variable:*</c> durable channel had no live readers.
 /// </remarks>
 public static class RuntimeWorkflowStateSeed
 {
-    // Reserved durable-value-id namespace for seeded workflow state. Other durable values derive their
-    // value ids from the authored output reference, so a structural collision is only possible if a
-    // compiler ever emitted an output reference literally prefixed "variable:" / "input:". Projection also
-    // disambiguates by metadata key (VariableName / InputName), so a collision would have to share both the
-    // value-id prefix and the tag; keep these prefixes reserved for the seed to preserve that guarantee.
+    // Reserved durable-value-id namespaces. Other durable values derive their value ids from the authored
+    // output reference, so a structural collision is only possible if a compiler ever emitted an output
+    // reference literally prefixed with one of these. Projection also disambiguates by metadata key, so a
+    // collision would have to share both the value-id prefix and the tag; keep these prefixes reserved.
+    // The variable: prefix is no longer written as a durable value id — it survives solely as the compiled
+    // output-capture marker identifying workflow-variable capture targets (#972).
     public const string VariableValueIdPrefix = "variable:";
     public const string InputValueIdPrefix = "input:";
     public const string OutputValueIdPrefix = "output:";
@@ -58,13 +56,12 @@ public static class RuntimeWorkflowStateSeed
     public const string IdentityInstanceNameName = "instanceName";
 
     /// <summary>
-    /// Builds the durable-value state changes that persist the supplied workflow variables and inputs for a
-    /// workflow execution. Variable and input names share no key space because they are stored under distinct
-    /// value-id prefixes. Null collections are treated as empty.
+    /// Builds the durable-value state changes that persist the supplied workflow inputs for a workflow
+    /// execution. Null collections are treated as empty. Workflow variables are seeded into the root
+    /// variable frame, not this channel (#972).
     /// </summary>
     public static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildSeedChanges(
         string workflowExecutionId,
-        IReadOnlyDictionary<string, object?>? variables,
         IReadOnlyDictionary<string, object?>? inputs,
         DateTimeOffset capturedAt,
         JsonElement? stimulusInput = null,
@@ -74,9 +71,6 @@ public static class RuntimeWorkflowStateSeed
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
         var changes = new List<RuntimeStateChange<DurableValueState>>();
-
-        foreach (var (name, value) in variables ?? EmptyValues)
-            changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.VariableName, VariableValueIdPrefix, name, value, capturedAt));
 
         foreach (var (name, value) in inputs ?? EmptyValues)
             changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.InputName, InputValueIdPrefix, name, value, capturedAt));
@@ -99,30 +93,6 @@ public static class RuntimeWorkflowStateSeed
                 TriggerMetadataSlotName,
                 triggerMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
                 capturedAt));
-
-        return changes;
-    }
-
-    /// <summary>
-    /// Builds the durable-value changes that persist mid-run mutations of workflow-scope variables (#286).
-    /// Each entry re-emits the variable under the same reserved <see cref="VariableValueIdPrefix"/> value id
-    /// the start-time seed used, so the write-back upserts the seeded durable value rather than adding a
-    /// sibling; with a later <paramref name="capturedAt"/> the most-recent-capture-wins projection
-    /// (<see cref="RuntimeInputBindingStateProjection.ProjectWorkflowVariables"/>) then surfaces the current
-    /// value to the next materialization. Mirrors how container-scope mutations write back via
-    /// <see cref="RuntimeContainerScopeService.PersistScopeMutationsAsync"/>. Null collection is treated as empty.
-    /// </summary>
-    public static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildVariableWriteBackChanges(
-        string workflowExecutionId,
-        IReadOnlyDictionary<string, object?>? variables,
-        DateTimeOffset capturedAt)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-
-        var changes = new List<RuntimeStateChange<DurableValueState>>();
-
-        foreach (var (name, value) in variables ?? EmptyValues)
-            changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.VariableName, VariableValueIdPrefix, name, value, capturedAt));
 
         return changes;
     }

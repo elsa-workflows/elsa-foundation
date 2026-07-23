@@ -121,13 +121,18 @@ public static class RuntimeMetadataKeys
     public const string IdentityName = "runtime.identityName";
 
     /// <summary>
-    /// Metadata key on a durable value carrying a workflow variable value. Its presence marks the durable
-    /// value as a persisted workflow variable and its value is the
-    /// variable name, mirroring how <see cref="OutputName"/> tags activity-output durable values. Read by
-    /// <c>RuntimeInputBindingStateProjection.ProjectWorkflowVariables</c> (engine package)
-    /// to rebuild the <c>variables.*</c> snapshot for input materialization.
+    /// Metadata key on a durable value carrying a workflow variable value. Historical (#972): workflow
+    /// variables now live in the canonical root variable frame, so nothing writes or reads this tag any
+    /// more; the constant is retained only so historical durable rows remain identifiable.
     /// </summary>
     public const string VariableName = "runtime.variableName";
+
+    /// <summary>
+    /// Metadata key on a compiled output capture that targets a workflow-scope variable: its value is the
+    /// variable's stable reference key — the key the capture's runtime write-back uses to address the
+    /// canonical root variable frame (#972). Written by <c>RuntimeOutputCaptureCompiler</c> at publication.
+    /// </summary>
+    public const string TargetVariableReferenceKey = "targetVariableReferenceKey";
 
     /// <summary>
     /// Metadata key on a durable value carrying a workflow input value. Its presence marks the durable value
