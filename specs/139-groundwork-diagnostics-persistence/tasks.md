@@ -114,8 +114,10 @@
   - Evidence: Bounded catalog query/upsert/capacity paths passed inside the 68-test adapter suite.
 - [X] T030 [US2] Implement bounded trace, span, metric-point, and telemetry-log record queries in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs`
   - Evidence: Bounded telemetry record queries passed inside the 68-test adapter suite.
-- [ ] T031 [US2] Add the missing authorized OpenTelemetry logs query endpoint in `src/Elsa/Diagnostics/OpenTelemetry/Endpoints/OpenTelemetry/Logs/Endpoint.cs`
-- [ ] T032 [US2] Add endpoint binding and result tests in `tests/Elsa/Diagnostics/OpenTelemetry/Tests/OpenTelemetryLogsEndpointTests.cs`
+- [X] T031 [US2] Add the missing authorized OpenTelemetry logs query endpoint in `src/Elsa/Diagnostics/OpenTelemetry/Endpoints/OpenTelemetry/Logs/Endpoint.cs`
+  - Evidence: the POST `/diagnostics/opentelemetry/logs/search` endpoint delegates to `IOpenTelemetryProvider.GetLogsAsync` and is guarded by `Diagnostics:OpenTelemetry`.
+- [X] T032 [US2] Add endpoint binding and result tests in `tests/Elsa/Diagnostics/OpenTelemetry/Tests/OpenTelemetryLogsEndpointTests.cs`
+  - Evidence: the focused endpoint contract passes 2/2, covering route, verb, authorization, filter/token forwarding, and exact provider result return.
 - [ ] T033 [US2] Run the US2 query, scope, retention, and plan suite against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us2-provider-results.json`
 
 **Checkpoint**: All persisted diagnostics queries and mutations are exact, scope-safe, and demonstrably bounded across all providers.
