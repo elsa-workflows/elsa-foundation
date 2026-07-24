@@ -169,11 +169,10 @@ export ELSA_GROUNDWORK_SOURCE_TREE="8b3504d52cef5f4a19ae5318fc66f46aefcfd048"
 export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview81"
 
 # Reproduction is only valid from the retained source snapshot. These checks
-# deliberately fail from a later documentation/evidence commit.
-test "$(git rev-parse HEAD)" = "$ELSA_GROUNDWORK_SOURCE_COMMIT"
-test "$(git rev-parse 'HEAD^{tree}')" = "$ELSA_GROUNDWORK_SOURCE_TREE"
-test -z "$(git status --porcelain)"
-
+# are chained to the publisher so a later or dirty checkout cannot publish.
+test "$(git rev-parse HEAD)" = "$ELSA_GROUNDWORK_SOURCE_COMMIT" &&
+test "$(git rev-parse 'HEAD^{tree}')" = "$ELSA_GROUNDWORK_SOURCE_TREE" &&
+test -z "$(git status --porcelain)" &&
 ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE=1 \
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
   --configuration Release --no-build \
