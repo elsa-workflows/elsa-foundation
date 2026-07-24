@@ -123,8 +123,10 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
                 Order: new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
                 Predicate: new DiagnosticRecordPredicate.All(
                 [
+                    DiagnosticRecordPredicate.Contains(RecordFields.TraceId, "trace-a"),
                     DiagnosticRecordPredicate.Equal(RecordFields.ResourceId, DiagnosticFieldValue.String("resource")),
                     DiagnosticRecordPredicate.Equal(RecordFields.ServiceName, DiagnosticFieldValue.String("orders")),
+                    DiagnosticRecordPredicate.Contains(RecordFields.WorkflowInstanceId, "workflow-a"),
                     DiagnosticRecordPredicate.Equal(RecordFields.Status, DiagnosticFieldValue.Int64(1)),
                     DiagnosticRecordPredicate.RangeInclusive(RecordFields.StartTime, DiagnosticFieldValue.Timestamp(time), DiagnosticFieldValue.Timestamp(time.AddMinutes(1))),
                     new DiagnosticRecordPredicate.Any(

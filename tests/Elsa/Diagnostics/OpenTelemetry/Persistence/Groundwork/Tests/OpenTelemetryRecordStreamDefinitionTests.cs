@@ -44,6 +44,9 @@ public sealed class OpenTelemetryRecordStreamDefinitionTests
         var point = OpenTelemetryRecordStreamDefinitions.CreateMetricPoints("points");
         var log = OpenTelemetryRecordStreamDefinitions.CreateLogs("logs");
 
+        Assert.Equal(9, trace.Limits.MaxPredicateValues);
+        Assert.All([span, point, log], definition => Assert.Equal(8, definition.Limits.MaxPredicateValues));
+
         var traceId = Field(trace, RecordFields.TraceId);
         Assert.True(traceId.SupportsLatestPerKey);
         Assert.Equal(DiagnosticStringCasePolicy.UnicodeOrdinalIgnoreCase, traceId.CasePolicy);

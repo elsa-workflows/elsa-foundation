@@ -31,7 +31,9 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
 
         var traces = await store.QueryTracesAsync(new()
         {
+            TraceId = "TRACE-A",
             ResourceId = resource.Id,
+            WorkflowInstanceId = "WORKFLOW-A",
             Status = SpanStatus.Ok,
             From = time,
             To = time,

@@ -263,7 +263,11 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
             telemetryBinding);
         var resourceOld = Resource("resource-old", "Old", timestamp.AddSeconds(-1));
         var resource = Resource("resource-api", "Orders", timestamp);
-        var resourceNew = Resource("resource-new", "New", timestamp.AddSeconds(1));
+        var resourceNew = Resource(
+            "resource-new",
+            "New",
+            timestamp.AddSeconds(1),
+            TelemetryResourceStatus.Stale);
         var traceA = Trace("trace-a", resource.Id, timestamp, "process order", SpanStatus.Ok);
         var traceB = Trace("trace-b", resource.Id, timestamp, "process payment", SpanStatus.Error, "workflow-b");
         var instrumentOld = Instrument("instrument-old", resourceOld.Id, "old.duration");
@@ -287,8 +291,10 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
 
         var traces = await telemetry.QueryTracesAsync(new()
         {
+            TraceId = "TRACE-A",
             ResourceId = resource.Id,
             ServiceName = "ORDERS",
+            WorkflowInstanceId = "WORKFLOW-A",
             Status = SpanStatus.Ok,
             From = timestamp,
             To = timestamp,
@@ -322,6 +328,7 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         var resources = await telemetry.QueryResourcesAsync(new() { Take = 20 });
         var searchedResources = await telemetry.QueryResourcesAsync(new() { Search = "ORDERS", Take = 20 });
         var serviceResources = await telemetry.QueryResourcesAsync(new() { ServiceName = "orders", Take = 20 });
+        var activeResources = await telemetry.QueryResourcesAsync(new() { Status = TelemetryResourceStatus.Active, Take = 20 });
         var diagnostics = await telemetry.GetDiagnosticsAsync();
 
         Assert.Equal([traceA.TraceId], traces.Items.Select(trace => trace.TraceId));
@@ -333,6 +340,7 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         Assert.Equal(["resource-new", "resource-api"], resources.Items.Select(item => item.Id));
         Assert.Equal([resource.Id], searchedResources.Items.Select(item => item.Id));
         Assert.Equal([resource.Id], serviceResources.Items.Select(item => item.Id));
+        Assert.Equal([resource.Id], activeResources.Items.Select(item => item.Id));
         Assert.Equal((2, 2), (diagnostics.ResourceCount, diagnostics.MetricInstrumentCount));
     }
 
@@ -389,8 +397,12 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         return store;
     }
 
-    private static TelemetryResource Resource(string id, string serviceName, DateTimeOffset lastSeen) =>
-        new(id, serviceName, null, "dotnet", new Dictionary<string, string?>(), lastSeen, TelemetryResourceStatus.Active);
+    private static TelemetryResource Resource(
+        string id,
+        string serviceName,
+        DateTimeOffset lastSeen,
+        TelemetryResourceStatus status = TelemetryResourceStatus.Active) =>
+        new(id, serviceName, null, "dotnet", new Dictionary<string, string?>(), lastSeen, status);
 
     private static TelemetryTrace Trace(
         string id,

@@ -23,7 +23,10 @@ public static class OpenTelemetryRecordStreamDefinitions
             Timestamp(RecordFields.StartTime, required: true, orderable: true),
             Timestamp(RecordFields.EndTime, required: true),
             String(RecordFields.Name, maxStringBytes: MaxNameBytes)
-        ]);
+        ],
+        // The public trace filter has nine value slots when every optional field is supplied:
+        // trace, resource, service, workflow, status, two range bounds, and two search branches.
+        maxPredicateValues: 9);
 
     /// <summary>Creates the span stream definition for a host-selected stream identity.</summary>
     public static DiagnosticRecordStreamDefinition CreateSpans(string streamId) => Definition(
@@ -90,7 +93,8 @@ public static class OpenTelemetryRecordStreamDefinitions
     private static DiagnosticRecordStreamDefinition Definition(
         string streamId,
         string storageName,
-        IReadOnlyList<DiagnosticFieldDefinition> fields)
+        IReadOnlyList<DiagnosticFieldDefinition> fields,
+        int maxPredicateValues = 8)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(streamId);
 
@@ -108,9 +112,9 @@ public static class OpenTelemetryRecordStreamDefinitions
                 MaxFieldsPerRecord: fields.Count,
                 MaxQueryLimit: 5_000,
                 MaxPredicateNodes: 32,
-                // A telemetry-log body can be 64 KiB. Eight values keep the portable comparison
-                // projection beneath Groundwork's 32 MiB bounded-query budget on every stream.
-                MaxPredicateValues: 8,
+                // Non-trace streams keep the tighter eight-value budget because a telemetry-log
+                // body can be 64 KiB. Traces opt into nine for their declared full-filter shape.
+                MaxPredicateValues: maxPredicateValues,
                 MaxJsonDepth: 64),
             MaxOperationClockSkew: TimeSpan.FromMinutes(5),
             AppendIdempotencyWindow: TimeSpan.FromHours(1),
