@@ -13,8 +13,8 @@
     left unauthored on purpose - this also regression-tests the HttpEndpoint preflight fix, which used to
     500 on unauthored nullable options (they compile to an omitted literal that was mis-read as non-literal).
 .EXAMPLE
-    pwsh ./TestScripts/Test-HttpWorkflow.ps1
-    pwsh ./TestScripts/Test-HttpWorkflow.ps1 -Method POST
+    pwsh ./e2e-tests/Test-HttpWorkflow.ps1
+    pwsh ./e2e-tests/Test-HttpWorkflow.ps1 -Method POST
 #>
 [CmdletBinding()]
 param(

@@ -1,8 +1,9 @@
-# TestScripts - backend workflow flow tests
+# e2e-tests - backend end-to-end REST tests
 
-Pure backend (no Studio, no Docker) tests that drive the `Elsa.Server` REST API through the full
-workflow lifecycle against the default **SQLite** composition. Verified against Elsa Foundation
-@ `6b5996de` (+ the two server fixes below), .NET 10.
+Pure backend (no Studio, no Docker) **end-to-end** tests that drive the `Elsa.Server` REST API through the
+full workflow lifecycle (login -> design/submit -> publish -> execute/runtime -> observe) against the default
+**SQLite** composition. These are the black-box counterpart to the in-process C# tests under `tests/`: they
+exercise the real HTTP + persistence + runtime-pump path that unit/integration tests stub out. .NET 10.
 
 ## Prerequisites
 
@@ -13,7 +14,51 @@ dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj --launch-profile ht
 ```
 
 It listens on `http://localhost:5095`. The default `appsettings.json` + `shells.json` already enable
-everything the flow needs (design + publishing + runtime APIs, identity, `GroundworkUnifiedPersistenceSqlite`).
+everything the core flow needs (design + publishing + runtime APIs, identity, `GroundworkUnifiedPersistenceSqlite`).
+
+## Running these tests — READ THIS (agents included)
+
+- **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no
+  `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
+- **Rebuild gotcha:** after rebuilding the server from newer source, **delete the SQLite DBs first**
+  (`elsa-groundwork.db*`, `elsa.sqlite.db*`, `*.schema.lock` under `src/Apps/Elsa.Server/`; stop the server /
+  free port 5095 first). Old documents carry an older schema version a newer build refuses to read, which
+  surfaces as spurious `500`s on publish.
+- **Opt-in features:** `scheduling/` requires `ActivitiesScheduling` + `WorkflowsRuntimeScheduling` +
+  `WorkflowsRuntimeRecurringTriggers` in `shells.json` (enabled by default since #1053); `DispatchWorkflow`/`bpmn`
+  require the DispatchWorkflow features (see "Composition change" below). A suite whose features aren't composed
+  will fault, not skip.
+
+**A failing e2e test is a signal, not a verdict.** It means one of two things: (1) a genuine **regression** in the
+server, or (2) the test is **stale** because the codebase moved — a contract/response shape changed, a tracked bug
+was fixed, or a feature was renamed. Before changing the server *or* the test, determine which: pull current
+`main`, rebuild with a fresh DB, re-run, and reconcile. Tests marked `KNOWN ISSUE #NNNN` are living trackers that
+pass green on purpose and are written to **auto-flip to a strict assertion once the bug is fixed** — if a tracker
+starts "failing", the referenced bug was probably fixed and the tracker should be tightened, not worked around.
+
+## Test categorization (true e2e vs integration-candidate)
+
+Every suite is kept; each is tagged by whether it genuinely needs the live HTTP + persistence + runtime path
+(**true e2e**) or mainly asserts an API contract/shape that could later move to a C# integration test
+(`WebApplicationFactory`) or a TestContainers harness (**integration-candidate**). Nothing is deleted here;
+candidates are flagged for future migration so coverage is never dropped before its replacement exists.
+
+| Suite | Category | Why |
+|---|---|---|
+| root `Test-WorkflowFlow/Sequence/If/Switch/Http/ChildWorkflow` | true e2e | full lifecycle, real HTTP trigger, dispatch |
+| `branching`, `single-outcome`, `variables`, `javascript` | true e2e | real publish + runtime of composites / intrinsics / JS sandbox |
+| `events`, `stimuli`, `orchestration-controls`, `correlate` | true e2e | stimulus / bookmark / resume + correlation runtime |
+| `fault-handling`, `persistence-querying` | true e2e | incident recording + instance query over the runtime |
+| `reusable-activities` | true e2e | authoring lifecycle + graph inlining at runtime |
+| `scheduling` | true e2e | hosted durable-timer / recurring-trigger pumps |
+| `bpmn`, `composition` | true e2e | waited `DispatchWorkflow` + BPMN error boundary |
+| `logging` | mixed | `Test-ValueCapture` is runtime e2e; `Test-DiagnosticsSettings` is a read-only contract check |
+| `get-endpoints` | integration-candidate | GET status/shape contract; migrate to `WebApplicationFactory` |
+| `write-endpoints` | integration-candidate | CRUD status/shape contract; migrate to `WebApplicationFactory` |
+
+The two integration-candidate suites (`get-endpoints`, `write-endpoints`) mostly assert HTTP status codes and
+response shapes with little runtime behavior — the natural long-term home is an in-process `WebApplicationFactory`
+(or TestContainers) test in `tests/`, at which point they can be retired from here.
 
 ## Scripts
 
@@ -63,9 +108,10 @@ design, not a bug); pure-ES (array/object/json/modern syntax) works fully.
 Run any of them:
 
 ```bash
-pwsh ./TestScripts/Test-WorkflowFlow.ps1
-pwsh ./TestScripts/Test-SequenceWorkflow.ps1 -Lines "one","two","three"
-pwsh ./TestScripts/Test-HttpWorkflow.ps1 -Method GET
+# Windows (no pwsh): powershell -NoProfile -ExecutionPolicy Bypass -File ./e2e-tests/Test-WorkflowFlow.ps1
+pwsh ./e2e-tests/Test-WorkflowFlow.ps1
+pwsh ./e2e-tests/Test-SequenceWorkflow.ps1 -Lines "one","two","three"
+pwsh ./e2e-tests/Test-HttpWorkflow.ps1 -Method GET
 ```
 
 Each prints step-by-step progress and the resulting instance (status + per-activity executions). On any

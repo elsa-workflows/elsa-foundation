@@ -6,8 +6,8 @@
     executed. By default it runs BOTH conditions (true and false) to prove each path. The condition is a
     literal here; in a real workflow it would typically be an expression over inputs/variables.
 .EXAMPLE
-    pwsh ./TestScripts/Test-IfWorkflow.ps1
-    pwsh ./TestScripts/Test-IfWorkflow.ps1 -Condition true
+    pwsh ./e2e-tests/Test-IfWorkflow.ps1
+    pwsh ./e2e-tests/Test-IfWorkflow.ps1 -Condition true
 #>
 [CmdletBinding()]
 param(

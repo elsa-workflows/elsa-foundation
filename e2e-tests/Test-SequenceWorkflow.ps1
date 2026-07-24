@@ -6,8 +6,8 @@
     its Structure payload (kind 'elsa.sequence.structure'). Submits -> publishes -> executes -> observes,
     proving the children run in authored order. Requires the server running from source.
 .EXAMPLE
-    pwsh ./TestScripts/Test-SequenceWorkflow.ps1
-    pwsh ./TestScripts/Test-SequenceWorkflow.ps1 -Lines "one","two","three","four"
+    pwsh ./e2e-tests/Test-SequenceWorkflow.ps1
+    pwsh ./e2e-tests/Test-SequenceWorkflow.ps1 -Lines "one","two","three","four"
 #>
 [CmdletBinding()]
 param(
