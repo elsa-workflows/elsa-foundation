@@ -298,6 +298,7 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         var metrics = await telemetry.QueryMetricsAsync(new()
         {
             ResourceId = resource.Id,
+            ServiceName = "ORDERS",
             InstrumentName = "DURATION",
             From = timestamp,
             To = timestamp,
@@ -306,6 +307,7 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         var logs = await telemetry.QueryLogsAsync(new()
         {
             ResourceId = resource.Id,
+            ServiceName = "orders",
             TraceId = "B",
             SpanId = "SPAN-B",
             Severity = "err",
