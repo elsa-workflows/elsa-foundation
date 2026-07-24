@@ -6,8 +6,8 @@
   "evidenceClassification": "exact-integrated-head-certification",
   "currentPromotionTarget": "0.0.1-preview.81",
   "groundworkPackageVersion": "0.0.1-preview.81",
-  "recordedAtUtc": "2026-07-24T11:10:38Z",
-  "gitHeadAtRun": "8ba7775deed77c8c3a0caefcad7be094921ebc54",
+  "recordedAtUtc": "2026-07-24T11:17:56Z",
+  "gitHeadAtRun": "47d3892446022a2b41a678f0913eba51b3ef4662",
   "originMainAtRun": "165cf20723e088ca1bcb1530abf2149cabacb2bc",
   "testedSourceState": "Clean exact branch HEAD after merging the recorded origin/main.",
   "groundworkPackageResolution": "The Persistence Tests project and both adapter test projects were restored with --force-evaluate before their recorded runs; their project.assets.json files resolved every Groundwork library at 0.0.1-preview.81.",
@@ -16,7 +16,7 @@
     "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs": "9ecdfd8be39f28e15afa12b3b347f4bc21112594ad1d229d6673850657143ceb",
     "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs": "aa78c7ff9b41391d749500080b15d7013b055e70b5e51722471bd41167360eca",
     "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryCatalogTests.cs": "cee767d7db4aad64d13c77d9349af992e6a77351acd0755c7f4eef4f53bdede4",
-    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs": "9334c7fb5bd0ea9cb0ef5a27c78f70ff8334df18562737b79c148fe8f370202f",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs": "3200ec96c9a27f4d77dfa9c934f967faabd24d261dc2c96c07b92cffe0918840",
     "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryStoreTests.cs": "cbc109854bb5aa0f6a9c3d97a00272f21b59259c17aa7dbbafa68237349a43d1",
     "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/OpenTelemetryRecordStreamDefinitionTests.cs": "bae06d72d97650714d8177f515a4c9e517aeb96d16e60338ef7bd0b13a2f05c8"
   },
@@ -69,7 +69,7 @@
       "passed": 17,
       "failed": 0,
       "skipped": 0,
-      "durationSeconds": 30
+      "durationSeconds": 27
     },
     {
       "purpose": "OpenTelemetry complete adapter regression, including query and catalog depth",
@@ -86,7 +86,7 @@
       "passed": 147,
       "failed": 0,
       "skipped": 0,
-      "durationSeconds": 68,
+      "durationSeconds": 51,
       "evidenceBoundary": "Checkpoint regression only; this is not T057 final zero-EF certification."
     }
   ],

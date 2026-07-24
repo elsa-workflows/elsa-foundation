@@ -58,18 +58,18 @@ represented as preview.81/four-provider certification.
 ## Preview.81 exact-head T043 lifecycle recertification (2026-07-24)
 
 On clean `codex/642-groundwork-diagnostics-replay` integration head
-`8ba7775deed77c8c3a0caefcad7be094921ebc54`, with Groundwork resolved at
+`47d3892446022a2b41a678f0913eba51b3ef4662`, with Groundwork resolved at
 `0.0.1-preview.81`, the provider-neutral lifecycle command recorded in
 [`evidence/us3-lifecycle-results.json`](evidence/us3-lifecycle-results.json) passed **49/49** in
 Release with no failures or skips. The tested head had merged `origin/main`
-`165cf20723e088ca1bcb1530abf2149cabacb2bc`; it was 24 branch commits ahead and 0 behind.
+`165cf20723e088ca1bcb1530abf2149cabacb2bc`; it was 26 branch commits ahead and 0 behind.
 
 This certifies T043's load, shutdown, lifecycle, and observability boundary only. It does not certify
 the container-provider matrix, performance verdict, zero-EF removal, or a future exact-main head.
 
 ## Preview.81 integrated four-provider recertification (2026-07-24)
 
-On clean integrated head `8ba7775deed77c8c3a0caefcad7be094921ebc54`, after merging `origin/main`
+On clean integrated head `47d3892446022a2b41a678f0913eba51b3ef4662`, after merging `origin/main`
 `165cf20723e088ca1bcb1530abf2149cabacb2bc`, the exact commands retained in the US1 and US2
 manifests passed:
 
@@ -100,6 +100,7 @@ coverage for every declared trace filter plus resource, trace, metric, and log s
 and native-plan coverage for those record predicates. Commit `f3866b9cb` then resolved the
 adversarial review's nine-value full-trace-filter blocker by raising only the trace stream's
 predicate-value budget to nine; all other signal streams retain the tighter eight-value budget.
+Commit `47d389244` aligned the SQLite adapter regression with that same complete nine-value filter.
 The exact four-provider fixture supplies every trace filter together and separately certifies
 resource status, search, and service filters.
 
