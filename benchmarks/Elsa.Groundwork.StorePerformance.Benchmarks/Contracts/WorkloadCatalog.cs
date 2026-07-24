@@ -147,7 +147,9 @@ public sealed class WorkloadCatalog
         }
 
         if (actual.Id != ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId ||
-            actual.Version != ReproducibleWorkloadScenarioCatalog.BlockedVersion)
+            actual.Version != ReproducibleWorkloadScenarioCatalog.BlockedVersion ||
+            actual.Input.FingerprintSha256 != ReproducibleWorkloadScenarioCatalog.BlockedInputFingerprint ||
+            actual.Correctness.ResultDigestSha256 != ReproducibleWorkloadScenarioCatalog.BlockedResultDigest)
             throw new WorkloadContractException($"The workload '{actual.Id}' is not the explicitly blocked Secret comparator contract.");
     }
 

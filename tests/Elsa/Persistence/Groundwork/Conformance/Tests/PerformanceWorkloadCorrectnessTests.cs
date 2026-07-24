@@ -100,6 +100,12 @@ public sealed class PerformanceWorkloadCorrectnessTests
 
         var secret = workloads[ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId];
         Assert.Equal(ReproducibleWorkloadScenarioCatalog.BlockedVersion, secret["version"]!.GetValue<string>());
+        Assert.Equal(
+            ReproducibleWorkloadScenarioCatalog.BlockedInputFingerprint,
+            secret["input"]!["fingerprintSha256"]!.GetValue<string>());
+        Assert.Equal(
+            ReproducibleWorkloadScenarioCatalog.BlockedResultDigest,
+            secret["correctness"]!["resultDigestSha256"]!.GetValue<string>());
         Assert.Contains("real EF Secret repository comparator", ReproducibleWorkloadScenarioCatalog.BlockedReason, StringComparison.Ordinal);
     }
 

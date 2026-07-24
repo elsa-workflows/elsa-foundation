@@ -13,6 +13,8 @@ public static class ReproducibleWorkloadScenarioCatalog
 {
     public const string BlockedWorkloadId = "secret-create-read-list";
     public const string BlockedVersion = "1.0.0";
+    public const string BlockedInputFingerprint = "339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c";
+    public const string BlockedResultDigest = "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb";
     public const string BlockedReasonCode = "comparator.secret.real-ef-required";
     public const string BlockedReason = "A real EF Secret repository comparator is required; synthetic or waived comparison is not admissible.";
 
@@ -43,6 +45,8 @@ public static class ReproducibleWorkloadScenarioCatalog
         {
             id = BlockedWorkloadId,
             version = BlockedVersion,
+            inputFingerprintSha256 = BlockedInputFingerprint,
+            resultDigestSha256 = BlockedResultDigest,
             reasonCode = BlockedReasonCode,
             reason = BlockedReason
         }
