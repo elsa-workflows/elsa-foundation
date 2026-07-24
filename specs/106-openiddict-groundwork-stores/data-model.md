@@ -11,7 +11,7 @@ The following records belong only to `Elsa.Foundation.Identity.OpenIddict.Ground
 | Identity/concurrency | id, opaque concurrency value | Primary identity; CAS update/delete. |
 | Client configuration | application/client/consent types, client id/secret | Unique client-id route. |
 | Presentation/keys | display name(s), JSON Web Key Set | Round-trip only unless a named query proves a projection. |
-| Collections | permissions, requirements, redirect URIs, post-logout redirect URIs | Preview.81 exposes linked declarations only on non-entity physical forms. The record unit remains logical until architecture review chooses shared/dedicated storage or separately declared linked membership units. |
+| Collections | permissions, requirements, redirect URIs, post-logout redirect URIs | Preview.81 linked projections are scalar and cannot maintain/query collection elements. The record unit remains logical until Groundwork#128 supplies bounded element storage and membership routes. |
 | Metadata | properties, settings | Canonical JSON round-trip. |
 
 ## 2. Authorization Record
@@ -70,18 +70,23 @@ Scope -----------------------> referenced by authorization scope values
 - **Provider evidence**: provider/version/topology, manifest fingerprint, scenario, independent-client count, failure window, result digest, native plan/mutation-plan artifact, restart outcome.
 - **Performance submission**: #646 workload id, fixed dataset/payload/concurrency, correctness digest, physical form, machine/provider identity, and pass/redesign/blocked verdict.
 
-## 8. Preview.81 Physical-Form Blocker
+## 8. Preview.81 Collection-Element Blocker
 
 Applications, authorizations, scopes, and tokens remain four distinct logical record
 units. They are not yet declared as four physical entity tables:
 
 - `PhysicalTableDefinition.PhysicalEntityTable` admits projected scalar columns and
   physical indexes, but has no linked projection/key parameter.
-- The shared/dedicated document forms expose the linked projection contract.
+- The shared/dedicated document forms expose only scalar linked projections and
+  maintain one linked row per canonical document.
 - OpenIddict requires searchable collection membership for redirect URIs,
-  post-logout redirect URIs, authorization scopes, and scope resources.
+  post-logout redirect URIs, authorization scopes, and scope resources, including
+  an owner-contains-all route for minimal authorization scopes.
 
-Choosing shared/dedicated storage changes the original physical-form decision.
-Choosing extra linked membership units changes the “four tables” count and requires
-portable atomicity/readiness evidence. Either choice is architecture- and
-performance-bearing, so the manifest/store scaffolding gate remains blocked.
+Neither choosing shared/dedicated storage nor adding adapter-owned membership
+documents satisfies the contract: the former cannot expand collection elements,
+and the latter would require forbidden client-side intersection for contains-all.
+Groundwork#128 owns portable element maintenance, grouping/membership queries,
+readiness, and four-provider evidence. The manifest/store scaffolding gate remains
+blocked until that executable capability is published; #646 then selects among
+the admitted physical forms.

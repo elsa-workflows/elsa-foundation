@@ -121,17 +121,22 @@ therefore continues to enforce that:
   parameters.
 
 OpenIddict requires searchable membership routes for redirect URIs, post-logout
-redirect URIs, authorization scopes, and scope resources. Consequently the
-original “four physical entity tables with linked multivalue relationships”
-cannot be declared through preview.81.
+redirect URIs, authorization scopes, and scope resources. Subsequent adversarial
+review opened the shared/dedicated implementation rather than trusting its name:
+the linked projection is scalar and maintains exactly one sidecar row per
+canonical document. The ordinary query API has scalar-in-set and substring
+operations, not collection membership or owner-contains-all. Consequently no
+preview.81 physical form can implement the required routes.
 
-Production manifest/store scaffolding is blocked pending review of:
-
-1. shared/dedicated physical forms for the four logical units; or
-2. four entity units plus separately declared linked membership units.
-
-Both alternatives change the original design and require #646 physical-form
-evidence. No provider-specific or client-side fallback was added.
+The missing provider-neutral capability is tracked by
+valence-works/Groundwork#128. The clean prototype branch
+`codex/openiddict-multivalue-projections` at `e4e88c0` adds declaration vocabulary
+but intentionally rejects current scalar provider paths; it is not runtime
+evidence. Production manifest/store scaffolding remains blocked until #128 ships
+automatic collection-element maintenance, exact membership/contains-all queries,
+readiness/fingerprint integration, native plans, and real four-provider proof.
+Only then can #646 select physical forms. No provider-specific or client-side
+fallback was added.
 
 ### Focused validation
 
@@ -197,8 +202,9 @@ Initial red result: **24 failed, 0 passed, 0 skipped** after successful compilat
 
 The shared fixture keeps those tests compilable and fixes the expected contract
 without adding client-side evaluation, generic-query fallback, a storage
-manifest, store implementations, or a physical form. T006/T007A therefore
-continues to block T011, T016, and every physical-form-dependent production task.
+manifest, store implementations, or a physical form. T006/T007A and
+Groundwork#128 therefore continue to block T011, T016, and every
+physical-form-dependent production task.
 
 ### EF-free behavior-boundary correction
 
@@ -224,7 +230,7 @@ Root verification after solution registration:
 - the Groundwork contract project now reports **24 expected red, 1 passed**:
   the provider-neutral behavior composition test passes, while codec, feature,
   Groundwork registration/store, and failure-mapper seams remain deliberately
-  absent behind T006/T007A.
+  absent behind T006/T007A and Groundwork#128.
 
 This correction changes dependency ownership only. It does not select a
 physical form or start a blocked production-store task.

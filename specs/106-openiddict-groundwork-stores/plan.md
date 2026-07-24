@@ -14,7 +14,7 @@ Replace the EF-backed OpenIddict persistence integration with one concrete `Elsa
 
 **Primary Dependencies**: OpenIddict.Abstractions/Core/AspNetCore 7.5.0; Elsa Identity abstractions; Groundwork Core, Documents, provider packages, and Tool from one public binary-compatible `0.0.1-preview.81` family; Microsoft.Extensions dependency injection and options
 
-**Storage**: Four global logical record units—applications, authorizations, scopes, and tokens—with canonical JSON authoritative. Preview.81 proves scalar physical-entity projections but cannot attach linked multivalue storage to `PhysicalEntityTable`; shared/dedicated or additional linked units require an explicit design and #646 verdict before production scaffolding. Mandatory providers remain SQLite, SQL Server, PostgreSQL, and MongoDB.
+**Storage**: Four global logical record units—applications, authorizations, scopes, and tokens—with canonical JSON authoritative. Preview.81 proves scalar projections only. Its linked sidecar is one scalar row per document and no form provides collection-element maintenance or exact membership/contains-all routes. Groundwork#128 is a hard prerequisite before #646 can compare executable forms. Mandatory providers remain SQLite, SQL Server, PostgreSQL, and MongoDB.
 
 **Testing**: xUnit; existing OpenIddict identity, API, shell, and ASP.NET Core Identity Groundwork acceptance tests; new direct store branch suites; shared real-provider conformance; native route/mutation-plan evidence; restart/failure injection; architecture dependency guard
 
@@ -47,7 +47,7 @@ The Elsa and framework constitutions are draft/provisional. This matters because
 | Elsa §E6 naming | PASS | New Elsa-owned types use the provider prefix and one role suffix; external OpenIddict names are retained only when mirroring external contracts. |
 | Accepted zero-EF ADR | PASS | OpenIddict is a separate delivery lane inside the zero-EF completion gate. Groundwork is the target first-party persistence family; EF remains only as an oracle until this lane and the shared exit gates pass. |
 
-**Post-probe re-check**: BLOCKED before production store scaffolding. The data model confines physical projections and Groundwork session mechanics to the provider package, but preview.81 exposes linked projection parameters only on non-entity physical forms. The quickstart records the evidence and the design choice remains explicit rather than being improvised in an adapter.
+**Post-probe re-check**: BLOCKED before production store scaffolding. The data model confines physical projections and Groundwork session mechanics to the provider package, but adversarial review proved preview.81 linked projections are scalar and cannot implement required collection membership on any form. The quickstart records the evidence and Groundwork#128 rather than improvising provider-specific or client-side behavior.
 
 ## Hard Prerequisite Gate
 
@@ -61,10 +61,9 @@ No production store task may begin until the exact public `0.0.1-preview.81` Gro
 
 If any capability is absent, incomplete, non-public, or fails its probe, mark this feature blocked at that prerequisite and either link upstream work or record the Elsa design decision required to consume an already-public alternative form. Do not hide the gap with raw provider queries, client filtering, synthetic plan evidence, or a compatibility fallback.
 
-The preview.81 probe proves that `PhysicalEntityTable` has no public linked parameter while the shared/dedicated document forms do. Therefore “four physical entity tables with linked multivalue relationships” is not an implementable contract. Production scaffolding remains blocked until architecture review chooses and #646 evaluates one of:
+The preview.81 probe proves that `PhysicalEntityTable` has no public linked parameter. Independent review then proved the shared/dedicated linked contract is scalar, maintains one sidecar row per canonical document, and cannot express collection membership or owner-contains-all. Therefore neither “four physical entity tables with linked multivalue relationships” nor the apparent shared/dedicated alternative is implementable.
 
-1. four shared/dedicated logical units using the public linked projection contract; or
-2. four entity units plus separately declared linked membership units with explicit atomicity, naming, readiness, and provider evidence.
+Production scaffolding remains blocked on valence-works/Groundwork#128. That upstream capability must automatically maintain collection-element rows/entries, provide exact membership and contains-all queries with distinct-owner count/order/page, participate in schema fingerprints/readiness, and pass native-plan and four-provider conformance. Only then can #646 evaluate per-unit physical forms.
 
 ## Project Structure
 
