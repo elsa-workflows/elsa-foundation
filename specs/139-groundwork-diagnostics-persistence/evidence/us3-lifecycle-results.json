@@ -15,13 +15,13 @@
     "passed": 49,
     "failed": 0,
     "skipped": 0,
-    "recordedAtUtc": "2026-07-24T10:43:09Z",
+    "recordedAtUtc": "2026-07-24T11:02:24Z",
     "branch": "codex/642-groundwork-diagnostics-replay",
-    "gitHead": "9ac3b62d8f3da6ac5e1231aacfe4d1cd61b161dd",
-    "originMain": "305e2dc553b09131e7ae49c083cdcb3125da1868",
-    "mergeBaseWithOriginMain": "305e2dc553b09131e7ae49c083cdcb3125da1868",
+    "gitHead": "ef94016a07664e4e754af5612e38068d59c86fdb",
+    "originMain": "165cf20723e088ca1bcb1530abf2149cabacb2bc",
+    "mergeBaseWithOriginMain": "165cf20723e088ca1bcb1530abf2149cabacb2bc",
     "originMainOnlyCommitCount": 0,
-    "branchOnlyCommitCount": 17,
+    "branchOnlyCommitCount": 21,
     "testedSourceState": "Clean exact branch HEAD after merging the recorded origin/main; divergence was recorded immediately before the run."
   },
   "coveredSuites": [

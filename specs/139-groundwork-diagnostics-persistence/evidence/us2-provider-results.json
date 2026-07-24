@@ -6,9 +6,9 @@
   "evidenceClassification": "exact-integrated-head-certification",
   "currentPromotionTarget": "0.0.1-preview.81",
   "groundworkPackageVersion": "0.0.1-preview.81",
-  "recordedAtUtc": "2026-07-24T10:57:13Z",
-  "gitHeadAtRun": "d6e10c293b2414b4f8613b80424c3ecddca6c95e",
-  "originMainAtRun": "305e2dc553b09131e7ae49c083cdcb3125da1868",
+  "recordedAtUtc": "2026-07-24T11:02:24Z",
+  "gitHeadAtRun": "ef94016a07664e4e754af5612e38068d59c86fdb",
+  "originMainAtRun": "165cf20723e088ca1bcb1530abf2149cabacb2bc",
   "testedSourceState": "Clean exact branch HEAD after merging the recorded origin/main.",
   "groundworkPackageResolution": "The Persistence Tests project and both adapter test projects were restored with --force-evaluate before their recorded runs; their project.assets.json files resolved every Groundwork library at 0.0.1-preview.81.",
   "hashAlgorithm": "SHA-256",
@@ -69,7 +69,7 @@
       "passed": 17,
       "failed": 0,
       "skipped": 0,
-      "durationSeconds": 25
+      "durationSeconds": 18
     },
     {
       "purpose": "OpenTelemetry complete adapter regression, including query and catalog depth",
@@ -86,7 +86,7 @@
       "passed": 147,
       "failed": 0,
       "skipped": 0,
-      "durationSeconds": 62,
+      "durationSeconds": 59,
       "evidenceBoundary": "Checkpoint regression only; this is not T057 final zero-EF certification."
     }
   ],

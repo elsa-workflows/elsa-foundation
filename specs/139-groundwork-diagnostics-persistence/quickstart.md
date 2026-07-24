@@ -58,19 +58,19 @@ represented as preview.81/four-provider certification.
 ## Preview.81 exact-head T043 lifecycle recertification (2026-07-24)
 
 On clean `codex/642-groundwork-diagnostics-replay` integration head
-`9ac3b62d8f3da6ac5e1231aacfe4d1cd61b161dd`, with Groundwork resolved at
+`ef94016a07664e4e754af5612e38068d59c86fdb`, with Groundwork resolved at
 `0.0.1-preview.81`, the provider-neutral lifecycle command recorded in
 [`evidence/us3-lifecycle-results.json`](evidence/us3-lifecycle-results.json) passed **49/49** in
 Release with no failures or skips. The tested head had merged `origin/main`
-`305e2dc553b09131e7ae49c083cdcb3125da1868`; it was 17 branch commits ahead and 0 behind.
+`165cf20723e088ca1bcb1530abf2149cabacb2bc`; it was 21 branch commits ahead and 0 behind.
 
 This certifies T043's load, shutdown, lifecycle, and observability boundary only. It does not certify
 the container-provider matrix, performance verdict, zero-EF removal, or a future exact-main head.
 
 ## Preview.81 integrated four-provider recertification (2026-07-24)
 
-On clean code-and-test head `d6e10c293b2414b4f8613b80424c3ecddca6c95e`, after merging `origin/main`
-`305e2dc553b09131e7ae49c083cdcb3125da1868`, the exact commands retained in the US1 and US2
+On clean integrated head `ef94016a07664e4e754af5612e38068d59c86fdb`, after merging `origin/main`
+`165cf20723e088ca1bcb1530abf2149cabacb2bc`, the exact commands retained in the US1 and US2
 manifests passed:
 
 - US1 real-provider matrix: **24/24** across SQLite, SQL Server, PostgreSQL, and replica-set MongoDB.
