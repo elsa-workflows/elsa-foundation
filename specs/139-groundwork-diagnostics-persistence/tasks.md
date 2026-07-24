@@ -159,7 +159,7 @@
 - [X] T042 [US3] Register one explicit start/stop/drain-before-provider-disposal lifecycle in `src/Elsa/Diagnostics/Persistence/Extensions/DiagnosticsPersistenceRegistration.cs`
   - Evidence: The shared registration/coordinator path is implemented in DiagnosticsPersistenceRegistration.cs; lifecycle tests passed in the 34-test batch.
 - [X] T043 [US3] Run the complete load and shutdown suite and record queue bounds, loss totals, and completion outcomes in `specs/139-groundwork-diagnostics-persistence/evidence/us3-lifecycle-results.json`
-  - Evidence: The six manifest-bound lifecycle suites passed 49/49 on the preview.80 replay base; the manifest labels preview.81 promotion as pending.
+  - Evidence: The six manifest-bound lifecycle suites passed 49/49 on the clean exact `codex/642-groundwork-diagnostics-replay` preview.81 head (`df39cc9aae3ad5ac2ebfdb0f4589c88b014a1d52`). The manifest records the exact command, resolved package version, and `origin/main` divergence. This is T043-only evidence, not four-provider, performance, EF-removal, or final-main certification.
 
 **Checkpoint**: Persistence latency cannot block producers or leave accepted acknowledgements unresolved; every loss and shutdown outcome is observable.
 

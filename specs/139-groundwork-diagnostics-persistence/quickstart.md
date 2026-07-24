@@ -15,9 +15,9 @@ dotnet test tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics
 ```
 
 The replay targets Groundwork `0.0.1-preview.81`. Runs recorded against preview.73, preview.75, or
-preview.80 are historical provenance only and cannot promote the lane. After current `main` is merged
-into the replay branch, rerun every focused and four-provider command before treating evidence as
-exact-head certification.
+preview.80 are historical provenance only and cannot promote the lane. The T043 manifest records one
+clean exact-branch-head preview.81 lifecycle certification; it does not replace the focused and
+four-provider recertification required after any later `main` integration.
 
 ## Required provider certification
 
@@ -39,7 +39,7 @@ a passing or program-owner-ratified verdict.
 
 ## Replay-base evidence (not promotion evidence)
 
-On 2026-07-24, before integrating current `main`/Groundwork preview.81, the replay implementation
+On 2026-07-24, before integrating the then-current `main`/Groundwork preview.81, the replay implementation
 compiled and passed:
 
 - Structured Logs Groundwork: 17/17.
@@ -54,6 +54,19 @@ compiled and passed:
 These results prove the replayed implementation is internally coherent on its preview.80 base. They
 do not complete T008, T022, T027, T033, T050-T052, or any EF-removal task, and they must not be
 represented as preview.81/four-provider certification.
+
+## Preview.81 exact-head T043 lifecycle recertification (2026-07-24)
+
+On clean `codex/642-groundwork-diagnostics-replay` head
+`df39cc9aae3ad5ac2ebfdb0f4589c88b014a1d52`, with Groundwork resolved at
+`0.0.1-preview.81`, the provider-neutral lifecycle command recorded in
+[`evidence/us3-lifecycle-results.json`](evidence/us3-lifecycle-results.json) passed **49/49** in
+Release with no failures or skips. At the run, `origin/main` was
+`6458b39ad4a251c992a7384f1f325e164320d481`; the branch was 10 commits ahead and 9 commits behind,
+with merge base `78033cf1167071123cb9fe5ef38653973bd65200`.
+
+This certifies T043's load, shutdown, lifecycle, and observability boundary only. It does not certify
+the container-provider matrix, performance verdict, zero-EF removal, or a future exact-main head.
 
 ## T053/T054 removal-ledger intake (2026-07-24)
 
