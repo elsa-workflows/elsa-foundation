@@ -1,4 +1,5 @@
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
@@ -8,12 +9,10 @@ using Groundwork.Core.Scoping;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Elsa.Persistence.Groundwork.Conformance.Tests;
+namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity.Performance;
 
 /// <summary>
 /// Executes the shared, timing-free IAM scenario against each real SQLite-backed store implementation.
@@ -46,27 +45,63 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
     [Trait("Category", "Sqlite")]
     public async Task Ef_identity_store_contracts_produce_the_ratified_digest()
     {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
         var services = new ServiceCollection();
-        services.AddDbContext<ApplicationIdentityDbContext>(options => options.UseSqlite(connection));
-        services.AddIdentityCore<AspNetCoreIdentityUser>()
-            .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<ApplicationIdentityDbContext>();
+        services.AddFoundationAspNetCoreIdentityEntityFrameworkCore();
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var serviceProvider = scope.ServiceProvider;
         var db = serviceProvider.GetRequiredService<ApplicationIdentityDbContext>();
-        await db.Database.EnsureCreatedAsync();
-        var adapter = new EfIdentityWorkloadAdapter(serviceProvider.GetRequiredService<IServiceScopeFactory>());
-
-        AssertRatified(await new IamNormalizedLookupWorkload().ExecuteAsync(adapter));
+        try
+        {
+            await db.Database.EnsureCreatedAsync();
+            var adapter = new EfIdentityWorkloadAdapter(serviceProvider.GetRequiredService<IServiceScopeFactory>());
+            AssertRatified(await new IamNormalizedLookupWorkload().ExecuteAsync(adapter));
+        }
+        finally
+        {
+            await db.Database.EnsureDeletedAsync();
+        }
     }
 
     private static void AssertRatified(IamNormalizedLookupResult result)
     {
         Assert.Equal(IamNormalizedLookupWorkload.ExpectedInputFingerprint, result.InputFingerprint);
         Assert.Equal(IamNormalizedLookupWorkload.ExpectedResultDigest, result.ResultDigest);
+    }
+
+    private sealed class GroundworkIdentityWorkloadAdapter(
+        GroundworkIdentityUserStore users,
+        GroundworkIdentityRoleStore roles) : IIamIdentityWorkloadAdapter
+    {
+        public Task<IdentityResult> CreateUserAsync(AspNetCoreIdentityUser user, CancellationToken token) =>
+            users.CreateAsync(user, token);
+
+        public Task<IdentityResult> CreateRoleAsync(IdentityRole role, CancellationToken token) =>
+            roles.CreateAsync(role, token);
+
+        public Task AddToRoleAsync(AspNetCoreIdentityUser user, string role, CancellationToken token) =>
+            users.AddToRoleAsync(user, role, token);
+
+        public Task<AspNetCoreIdentityUser?> FindUserByNormalizedNameAsync(string value, CancellationToken token) =>
+            users.FindByNameAsync(value, token);
+
+        public Task<AspNetCoreIdentityUser?> FindUserByNormalizedEmailAsync(string value, CancellationToken token) =>
+            users.FindByEmailAsync(value, token);
+
+        public Task<IdentityRole?> FindRoleByNormalizedNameAsync(string value, CancellationToken token) =>
+            roles.FindByNameAsync(value, token);
+
+        public Task<IList<string>> GetRolesAsync(AspNetCoreIdentityUser user, CancellationToken token) =>
+            users.GetRolesAsync(user, token);
+
+        public Task<IList<AspNetCoreIdentityUser>> GetUsersInRoleAsync(string value, CancellationToken token) =>
+            users.GetUsersInRoleAsync(value, token);
+
+        public Task<AspNetCoreIdentityUser?> FindUserByIdAsync(string value, CancellationToken token) =>
+            users.FindByIdAsync(value, token);
+
+        public Task<IdentityResult> UpdateUserAsync(AspNetCoreIdentityUser user, CancellationToken token) =>
+            users.UpdateAsync(user, token);
     }
 
     private sealed class EfIdentityWorkloadAdapter(IServiceScopeFactory scopeFactory) : IIamIdentityWorkloadAdapter

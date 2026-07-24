@@ -387,6 +387,15 @@ SQLite correctness selection passed 11/11. This checkpoint does not authorize ti
 capture, the executable matrix target, and the remaining workload adapters are still open, so no
 performance verdict or coverage-ledger row advances.
 
+Hosted CI initially rejected the checkpoint because the benchmark test project did not follow the
+domain-tree path convention and the EF comparator had been placed in the EF-free Groundwork
+conformance project. The remediation moved protocol tests to
+`tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests`, moved the EF-vs-Groundwork SQLite
+correctness case into the already-EF-owning Foundation Identity test project, and removed the new EF
+edge from Groundwork conformance. After a forced full restore, the benchmark suite passed 16/16, the
+two SQLite correctness targets passed 2/2, and the project-path, Groundwork EF-free boundary, and
+shrink-only EF-surface guards passed 3/3. The baseline did not expand.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
