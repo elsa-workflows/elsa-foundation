@@ -127,7 +127,8 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
                 name,
                 ReadString(port, "displayName") ?? name,
                 ReadString(port, "type"),
-                ReadBoolean(port, "isBrowsable") ?? true);
+                ReadBoolean(port, "isBrowsable") ?? true,
+                ReadString(port, "referenceKey") ?? name);
         }
     }
 

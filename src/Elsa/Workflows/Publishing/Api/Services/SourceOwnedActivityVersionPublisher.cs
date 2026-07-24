@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -180,7 +181,39 @@ public sealed class SourceOwnedActivityVersionPublisher(
             UiHint: output.UiHint,
             UiSpecifications: output.UISpecifications,
             SourceRepresentation: output.SourceRepresentation)).ToArray(),
-        [new("Done", "Done", true)]);
+        ToOutcomes(version));
+
+    private static IReadOnlyList<ActivityOutcomeContract> ToOutcomes(IActivityDefinitionVersion version)
+    {
+        var outcomes = new List<ActivityOutcomeContract>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var facet in version.DesignFacets.Where(x =>
+                     StringComparer.Ordinal.Equals(x.Kind, "elsa.outcomes") &&
+                     x.Payload.ValueKind == JsonValueKind.Object &&
+                     x.Payload.TryGetProperty("ports", out var ports) &&
+                     ports.ValueKind == JsonValueKind.Array))
+        {
+            foreach (var port in facet.Payload.GetProperty("ports").EnumerateArray())
+            {
+                if (port.ValueKind != JsonValueKind.Object ||
+                    !port.TryGetProperty("name", out var nameProperty) ||
+                    nameProperty.ValueKind != JsonValueKind.String ||
+                    string.IsNullOrWhiteSpace(nameProperty.GetString()))
+                    continue;
+
+                var name = nameProperty.GetString()!;
+                var referenceKey = port.TryGetProperty("referenceKey", out var referenceProperty) &&
+                                   referenceProperty.ValueKind == JsonValueKind.String &&
+                                   !string.IsNullOrWhiteSpace(referenceProperty.GetString())
+                    ? referenceProperty.GetString()!
+                    : name;
+                if (seen.Add(referenceKey))
+                    outcomes.Add(new(referenceKey, name, true));
+            }
+        }
+
+        return outcomes.Count == 0 ? [new("Done", "Done", true)] : outcomes;
+    }
 
     private static string StableId(string prefix, string value) =>
         $"{prefix}-{Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)))}";

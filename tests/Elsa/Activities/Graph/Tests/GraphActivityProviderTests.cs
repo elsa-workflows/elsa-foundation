@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Graph.Design.Models;
 using Elsa.Activities.Graph.Design.Services;
+using Elsa.Activities.Graph.Runtime.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -77,7 +78,57 @@ public sealed class GraphActivityProviderTests
         Assert.Empty(firstErrors);
         Assert.Empty(secondErrors);
         Assert.Equal(CollectionKind.Single, firstManifest!.Variables[0].Type.CollectionKind);
+        var (rootActivity, variables, outputMappings) = firstManifest;
+        Assert.Equal("graph-root", rootActivity.GetProperty("nodeId").GetString());
+        Assert.Single(variables);
+        Assert.Single(outputMappings);
         Assert.Equal(firstManifest.ToCanonicalUtf8Bytes(), secondManifest!.ToCanonicalUtf8Bytes());
+    }
+
+    [Fact]
+    public void Schema_two_round_trip_preserves_outcome_mappings()
+    {
+        var payload = ParseJson("""
+            {
+              "variables": [],
+              "rootActivity": {
+                "nodeId": "graph-root",
+                "activityVersionId": "activity-ver-root",
+                "inputs": [],
+                "outputs": [],
+                "structure": null
+              },
+              "outputMappings": [],
+              "outcomeMappings": [
+                {
+                  "sourceOutcomeReferenceKey": "rejected",
+                  "boundaryOutcomeReferenceKey": "declined"
+                },
+                {
+                  "sourceOutcomeReferenceKey": "approved",
+                  "boundaryOutcomeReferenceKey": "accepted"
+                }
+              ]
+            }
+            """);
+
+        Assert.True(ActivityGraphManifest.TryParse(ActivityGraphManifest.MultipleOutcomesSchemaVersion, payload, out var manifest, out var errors));
+
+        Assert.Empty(errors);
+        Assert.Equal(ActivityGraphManifest.MultipleOutcomesSchemaVersion, manifest!.ManifestSchemaVersion);
+        Assert.Equal(
+            [
+                new ActivityGraphOutcomeMapping("rejected", "declined"),
+                new ActivityGraphOutcomeMapping("approved", "accepted")
+            ],
+            manifest.OutcomeMappings);
+        Assert.True(ActivityGraphManifest.TryParse(
+            ActivityGraphManifest.MultipleOutcomesSchemaVersion,
+            manifest.ToCanonicalJsonElement(),
+            out var canonical,
+            out var canonicalErrors));
+        Assert.Empty(canonicalErrors);
+        Assert.Equal(manifest.ToCanonicalUtf8Bytes(), canonical!.ToCanonicalUtf8Bytes());
     }
 
     [Fact]
@@ -91,8 +142,31 @@ public sealed class GraphActivityProviderTests
         var outcome = Assert.IsType<ActivityOutcomeContract>(change.Outcome);
         Assert.Equal("done", outcome.ReferenceKey);
         Assert.True(outcome.IsEmitted);
-        var required = Assert.Single(_provider.AuthoringCapabilities.ContractConstraints.RequiredOutcomes);
-        Assert.Equal(outcome, required);
+        Assert.Empty(_provider.AuthoringCapabilities.ContractConstraints.RequiredOutcomes);
+    }
+
+    [Fact]
+    public async Task Schema_two_contract_proposal_preserves_authored_outcomes()
+    {
+        var contract = OutcomeContract(("accepted", "Accepted"), ("declined", "Declined"));
+
+        var proposal = await _provider.ProposeContractAsync(new(CreateSchemaTwoManifest(), contract));
+
+        Assert.Empty(proposal.Diagnostics);
+        Assert.Empty(proposal.Changes);
+        Assert.Equal(
+            [ActivityGraphManifest.SchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion],
+            _provider.SupportedManifestSchemas.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Schema_two_requires_at_least_one_emitted_boundary_outcome()
+    {
+        var diagnostics = await _provider.ValidateAsync(
+            CreateSchemaTwoManifest("[]"),
+            new DesignActivityContract("1", [], [], []));
+
+        Assert.Contains(diagnostics, x => x.Code == "activity.graph.outcome-required");
     }
 
     [Fact]
@@ -253,6 +327,78 @@ public sealed class GraphActivityProviderTests
     }
 
     [Fact]
+    public async Task Schema_two_compilation_resolves_multiple_boundary_outcomes()
+    {
+        var boundaryContract = OutcomeContract(("accepted", "Accepted"), ("declined", "Declined"));
+        var entryContract = OutcomeContract(("approved", "Approved"), ("rejected", "Rejected"));
+        var manifest = CreateSchemaTwoManifest();
+        var request = new ActivityTemplateCompilationRequest(
+            "definition-1",
+            "activity-type-1",
+            "draft-1",
+            7,
+            "2.0.0",
+            boundaryContract,
+            manifest,
+            [CreateDependency("graph-root", "activity-ver-root", "root-origin", entryContract)],
+            "provider-fingerprint");
+
+        var compilation = await _provider.CompileAsync(request);
+
+        Assert.Empty(compilation.Diagnostics);
+        var payload = compilation.ExecutableRoot!.Descriptor.Payload;
+        Assert.Equal(
+            new[]
+            {
+                new GraphActivityOutcomeMappingDescriptor("Approved", "Accepted"),
+                new GraphActivityOutcomeMappingDescriptor("Rejected", "Declined")
+            },
+            payload.GetProperty("outcomeMappings").Deserialize<GraphActivityOutcomeMappingDescriptor[]>(
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        Assert.Equal(["Accepted", "Declined"], compilation.ExecutableRoot.ActivityContract!.Outcomes);
+    }
+
+    [Theory]
+    [InlineData(
+        """[{"sourceOutcomeReferenceKey":"approved","boundaryOutcomeReferenceKey":"accepted"}]""",
+        "activity.graph.outcome-mapping-required")]
+    [InlineData(
+        """[{"sourceOutcomeReferenceKey":"approved","boundaryOutcomeReferenceKey":"accepted"},{"sourceOutcomeReferenceKey":"approved","boundaryOutcomeReferenceKey":"declined"}]""",
+        "activity.graph.outcome-mapping-source-duplicate")]
+    [InlineData(
+        """[{"sourceOutcomeReferenceKey":"approved","boundaryOutcomeReferenceKey":"accepted"},{"sourceOutcomeReferenceKey":"rejected","boundaryOutcomeReferenceKey":"accepted"}]""",
+        "activity.graph.outcome-mapping-boundary-duplicate")]
+    [InlineData(
+        """[{"sourceOutcomeReferenceKey":"missing","boundaryOutcomeReferenceKey":"accepted"},{"sourceOutcomeReferenceKey":"rejected","boundaryOutcomeReferenceKey":"declined"}]""",
+        "activity.graph.outcome-mapping-source-unknown")]
+    [InlineData(
+        """[{"sourceOutcomeReferenceKey":"approved","boundaryOutcomeReferenceKey":"missing"},{"sourceOutcomeReferenceKey":"rejected","boundaryOutcomeReferenceKey":"declined"}]""",
+        "activity.graph.outcome-mapping-boundary-unknown")]
+    public async Task Schema_two_compilation_rejects_invalid_outcome_mappings(string mappings, string expectedCode)
+    {
+        var manifest = CreateSchemaTwoManifest(mappings);
+        var request = new ActivityTemplateCompilationRequest(
+            "definition-1",
+            "activity-type-1",
+            "draft-1",
+            7,
+            "2.0.0",
+            OutcomeContract(("accepted", "Accepted"), ("declined", "Declined")),
+            manifest,
+            [CreateDependency(
+                "graph-root",
+                "activity-ver-root",
+                "root-origin",
+                OutcomeContract(("approved", "Approved"), ("rejected", "Rejected")))],
+            "provider-fingerprint");
+
+        var compilation = await _provider.CompileAsync(request);
+
+        Assert.Contains(compilation.Diagnostics, x => x.Code == expectedCode);
+        Assert.Null(compilation.ExecutableRoot);
+    }
+
+    [Fact]
     public async Task Dependency_discovery_preserves_parent_slot_and_authored_order()
     {
         var manifest = CreateManifest("""
@@ -343,17 +489,22 @@ public sealed class GraphActivityProviderTests
     }
 
     [Fact]
-    public async Task Same_schema_migration_is_canonical_and_unsupported_migration_is_explicit()
+    public async Task Same_schema_and_schema_two_migrations_are_canonical_and_unsupported_migration_is_explicit()
     {
         var source = CreateManifest();
 
         var first = await _provider.MigrateAsync(new(source, "1"));
         var second = await _provider.MigrateAsync(new(source, "1"));
-        var unsupported = await _provider.MigrateAsync(new(source, "2"));
+        var schemaTwo = await _provider.MigrateAsync(new(source, "2"));
+        var unsupported = await _provider.MigrateAsync(new(source, "99"));
 
         Assert.NotNull(first.Manifest);
         Assert.Equal(first.Manifest!.Payload.GetRawText(), second.Manifest!.Payload.GetRawText());
         Assert.Empty(first.Diagnostics);
+        Assert.NotNull(schemaTwo.Manifest);
+        Assert.Equal("2", schemaTwo.Manifest!.SchemaVersion);
+        Assert.Equal(JsonValueKind.Array, schemaTwo.Manifest.Payload.GetProperty("outcomeMappings").ValueKind);
+        Assert.Equal(0, schemaTwo.Manifest.Payload.GetProperty("outcomeMappings").GetArrayLength());
         Assert.Null(unsupported.Manifest);
         Assert.Equal("activity.provider.migration-unsupported", Assert.Single(unsupported.Diagnostics).Code);
     }
@@ -410,6 +561,35 @@ public sealed class GraphActivityProviderTests
             }
             """));
 
+    private static ActivityProviderManifest CreateSchemaTwoManifest(string? outcomeMappings = null) => new(
+        GraphActivityProvider.Key,
+        ActivityGraphManifest.MultipleOutcomesSchemaVersion,
+        ParseJson($$"""
+            {
+              "variables": [],
+              "rootActivity": {
+                "structure": null,
+                "outputs": [],
+                "nodeId": "graph-root",
+                "inputs": [],
+                "activityVersionId": "activity-ver-root"
+              },
+              "outputMappings": [],
+              "outcomeMappings": {{outcomeMappings ?? """
+                [
+                  {
+                    "sourceOutcomeReferenceKey": "approved",
+                    "boundaryOutcomeReferenceKey": "accepted"
+                  },
+                  {
+                    "sourceOutcomeReferenceKey": "rejected",
+                    "boundaryOutcomeReferenceKey": "declined"
+                  }
+                ]
+                """}}
+            }
+            """));
+
     private static DesignActivityContract CreateContract() => new(
         "1",
         [],
@@ -422,13 +602,23 @@ public sealed class GraphActivityProviderTests
             "elsa.json")],
         [new ActivityOutcomeContract("done", "Done", true)]);
 
-    private static ActivityResolvedDependency CreateDependency(string occurrenceId, string versionId, string originId) => new(
+    private static DesignActivityContract OutcomeContract(params (string ReferenceKey, string Name)[] outcomes) => new(
+        "1",
+        [],
+        [],
+        outcomes.Select(x => new ActivityOutcomeContract(x.ReferenceKey, x.Name, true)).ToArray());
+
+    private static ActivityResolvedDependency CreateDependency(
+        string occurrenceId,
+        string versionId,
+        string originId,
+        DesignActivityContract? contract = null) => new(
         $"definition-{occurrenceId}",
         versionId,
         "1.0.0",
         $"template-{occurrenceId}",
         $"sha256-{occurrenceId}",
-        CreateContract(),
+        contract ?? CreateContract(),
         ActivityDefinitionVersionLifecycle.Active,
         null,
         occurrenceId,
