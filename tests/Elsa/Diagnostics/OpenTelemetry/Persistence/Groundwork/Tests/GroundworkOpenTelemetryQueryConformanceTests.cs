@@ -18,7 +18,7 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
         var time = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
         var resource = Resource("resource-api", "Orders", time);
         var traceA = Trace("trace-a", resource.Id, time, "process order", SpanStatus.Ok);
-        var traceB = Trace("trace-b", resource.Id, time, "process payment", SpanStatus.Error);
+        var traceB = Trace("trace-b", resource.Id, time, "process payment", SpanStatus.Error, "workflow-b");
         var instrument = Instrument("instrument-a", resource.Id, "orders.duration");
         var pointA = Point("point-a", instrument, resource.Id, time, traceA.TraceId);
         var pointB = Point("point-b", instrument, resource.Id, time, traceB.TraceId);
@@ -39,6 +39,12 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
             Take = 10
         });
         Assert.Collection(traces.Items, trace => Assert.Equal(traceA.TraceId, trace.TraceId));
+
+        var traceIdMatches = await store.QueryTracesAsync(new() { TraceId = "TRACE-A", Take = 10 });
+        Assert.Collection(traceIdMatches.Items, trace => Assert.Equal(traceA.TraceId, trace.TraceId));
+
+        var workflowMatches = await store.QueryTracesAsync(new() { WorkflowInstanceId = "WORKFLOW-A", Take = 10 });
+        Assert.Collection(workflowMatches.Items, trace => Assert.Equal(traceA.TraceId, trace.TraceId));
 
         var metrics = await store.QueryMetricsAsync(new()
         {
@@ -439,8 +445,14 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
     private static TelemetryResource Resource(string id, string service, DateTimeOffset time) =>
         new(id, service, null, "dotnet", new Dictionary<string, string?>(), time, TelemetryResourceStatus.Active);
 
-    private static TelemetryTrace Trace(string id, string resourceId, DateTimeOffset time, string name, SpanStatus status) =>
-        new(id, null, name, time, time, TimeSpan.Zero, status, [resourceId], ["workflow-a"], 1);
+    private static TelemetryTrace Trace(
+        string id,
+        string resourceId,
+        DateTimeOffset time,
+        string name,
+        SpanStatus status,
+        string workflowInstanceId = "workflow-a") =>
+        new(id, null, name, time, time, TimeSpan.Zero, status, [resourceId], [workflowInstanceId], 1);
 
     private static TelemetrySpan Span(string id, string traceId, string spanId, string resourceId, DateTimeOffset time) =>
         new(id, traceId, spanId, null, resourceId, "operation", "internal", time, time, SpanStatus.Ok, null,

@@ -123,9 +123,8 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
                 Order: new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
                 Predicate: new DiagnosticRecordPredicate.All(
                 [
-                    DiagnosticRecordPredicate.Contains(RecordFields.TraceId, "trace"),
                     DiagnosticRecordPredicate.Equal(RecordFields.ResourceId, DiagnosticFieldValue.String("resource")),
-                    DiagnosticRecordPredicate.Contains(RecordFields.WorkflowInstanceId, "workflow"),
+                    DiagnosticRecordPredicate.Equal(RecordFields.ServiceName, DiagnosticFieldValue.String("orders")),
                     DiagnosticRecordPredicate.Equal(RecordFields.Status, DiagnosticFieldValue.Int64(1)),
                     DiagnosticRecordPredicate.RangeInclusive(RecordFields.StartTime, DiagnosticFieldValue.Timestamp(time), DiagnosticFieldValue.Timestamp(time.AddMinutes(1))),
                     new DiagnosticRecordPredicate.Any(
@@ -133,6 +132,16 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
                         DiagnosticRecordPredicate.Contains(RecordFields.TraceId, "trace"),
                         DiagnosticRecordPredicate.Contains(RecordFields.Name, "request")
                     ])
+                ]),
+                LatestPerKeyField: RecordFields.TraceId));
+        yield return (
+            "trace-identity-filters",
+            new(scope, new(telemetry.TraceStreamId), Limit: 7,
+                Order: new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
+                Predicate: new DiagnosticRecordPredicate.All(
+                [
+                    DiagnosticRecordPredicate.Contains(RecordFields.TraceId, "trace-a"),
+                    DiagnosticRecordPredicate.Contains(RecordFields.WorkflowInstanceId, "workflow-a")
                 ]),
                 LatestPerKeyField: RecordFields.TraceId));
         yield return (
@@ -153,6 +162,7 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
                 Predicate: new DiagnosticRecordPredicate.All(
                 [
                     DiagnosticRecordPredicate.Equal(RecordFields.ResourceId, DiagnosticFieldValue.String("resource")),
+                    DiagnosticRecordPredicate.Equal(RecordFields.ServiceName, DiagnosticFieldValue.String("orders")),
                     DiagnosticRecordPredicate.Contains(RecordFields.InstrumentName, "duration"),
                     DiagnosticRecordPredicate.RangeInclusive(RecordFields.Timestamp, DiagnosticFieldValue.Timestamp(time), DiagnosticFieldValue.Timestamp(time.AddMinutes(1)))
                 ])));
@@ -163,6 +173,7 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
                 Predicate: new DiagnosticRecordPredicate.All(
                 [
                     DiagnosticRecordPredicate.Equal(RecordFields.ResourceId, DiagnosticFieldValue.String("resource")),
+                    DiagnosticRecordPredicate.Equal(RecordFields.ServiceName, DiagnosticFieldValue.String("orders")),
                     DiagnosticRecordPredicate.Contains(RecordFields.TraceId, "trace"),
                     DiagnosticRecordPredicate.Contains(RecordFields.SpanId, "span"),
                     DiagnosticRecordPredicate.Contains(RecordFields.SeverityText, "information"),

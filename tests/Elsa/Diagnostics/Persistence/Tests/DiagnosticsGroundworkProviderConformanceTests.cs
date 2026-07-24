@@ -265,7 +265,7 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         var resource = Resource("resource-api", "Orders", timestamp);
         var resourceNew = Resource("resource-new", "New", timestamp.AddSeconds(1));
         var traceA = Trace("trace-a", resource.Id, timestamp, "process order", SpanStatus.Ok);
-        var traceB = Trace("trace-b", resource.Id, timestamp, "process payment", SpanStatus.Error);
+        var traceB = Trace("trace-b", resource.Id, timestamp, "process payment", SpanStatus.Error, "workflow-b");
         var instrumentOld = Instrument("instrument-old", resourceOld.Id, "old.duration");
         var instrument = Instrument("instrument-a", resource.Id, "orders.duration");
         var instrumentNew = Instrument("instrument-new", resourceNew.Id, "new.duration");
@@ -295,6 +295,8 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
             Search = "ORDER",
             Take = 10
         });
+        var traceIdMatches = await telemetry.QueryTracesAsync(new() { TraceId = "TRACE-A", Take = 10 });
+        var workflowMatches = await telemetry.QueryTracesAsync(new() { WorkflowInstanceId = "WORKFLOW-A", Take = 10 });
         var metrics = await telemetry.QueryMetricsAsync(new()
         {
             ResourceId = resource.Id,
@@ -323,6 +325,8 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         var diagnostics = await telemetry.GetDiagnosticsAsync();
 
         Assert.Equal([traceA.TraceId], traces.Items.Select(trace => trace.TraceId));
+        Assert.Equal([traceA.TraceId], traceIdMatches.Items.Select(trace => trace.TraceId));
+        Assert.Equal([traceA.TraceId], workflowMatches.Items.Select(trace => trace.TraceId));
         Assert.Equal([pointA.Id, pointB.Id], metrics.Points.Select(point => point.Id));
         Assert.Equal([logB.Id], logs.Items.Select(log => log.Id));
         Assert.Equal(["span-a"], detail!.Spans.Select(span => span.SpanId));
@@ -393,8 +397,9 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         string resourceId,
         DateTimeOffset timestamp,
         string name,
-        SpanStatus status) =>
-        new(id, null, name, timestamp, timestamp, TimeSpan.Zero, status, [resourceId], ["workflow-a"], 1);
+        SpanStatus status,
+        string workflowInstanceId = "workflow-a") =>
+        new(id, null, name, timestamp, timestamp, TimeSpan.Zero, status, [resourceId], [workflowInstanceId], 1);
 
     private static TelemetrySpan Span(
         string id,
