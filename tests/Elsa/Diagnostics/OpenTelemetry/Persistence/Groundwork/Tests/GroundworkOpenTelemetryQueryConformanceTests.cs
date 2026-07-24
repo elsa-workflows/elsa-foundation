@@ -33,6 +33,7 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
         {
             TraceId = "TRACE-A",
             ResourceId = resource.Id,
+            ServiceName = "ORDERS",
             WorkflowInstanceId = "WORKFLOW-A",
             Status = SpanStatus.Ok,
             From = time,
