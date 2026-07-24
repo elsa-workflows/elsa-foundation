@@ -248,7 +248,7 @@ public static class ArtifactSafety
 
     internal static bool ContainsSensitiveContent(string content) =>
         SensitiveContent.IsMatch(content) ||
-        content.Contains("://", StringComparison.Ordinal) && content.Contains('@');
+        content.Contains("://", StringComparison.Ordinal);
 
     internal static void ValidateRawStructured(JsonElement value)
     {

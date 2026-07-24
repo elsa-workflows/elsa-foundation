@@ -368,6 +368,30 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Raw_plan_text_and_json_reject_credential_free_connection_uris()
+    {
+        var paths = new[]
+        {
+            (Path.Combine(Path.GetTempPath(), $"elsa646-raw-plan-{Guid.NewGuid():N}.txt"), "mongodb://mongo.internal:27017/elsa"),
+            (Path.Combine(Path.GetTempPath(), $"elsa646-raw-plan-{Guid.NewGuid():N}.json"), """{"uri":"mongodb://mongo.internal:27017/elsa"}""")
+        };
+        try
+        {
+            foreach (var (path, content) in paths)
+            {
+                File.WriteAllText(path, content);
+                var error = Assert.Throws<PerformanceContractException>(() => ArtifactStore.ValidateRawPlanFile(path));
+                Assert.Contains("connection values or credentials", error.Message, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        finally
+        {
+            foreach (var (path, _) in paths)
+                if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Artifact_schema_v2_rejects_v1_manifests_and_missing_required_process_fields()
     {
         using var legacy = ArtifactFixture.Create();
