@@ -8,7 +8,11 @@ public static class CatalogDocuments
     public const string SchemaVersion = "1";
 
     public const string InstrumentResourceIdPath = "/resourceId";
+    public const string ResourceIdSearchKeyPath = "/idSearchKey";
     public const string ServiceNamePath = "/serviceName";
+    public const string ServiceNameComparisonKeyPath = "/serviceNameComparisonKey";
+    public const string ServiceNameHashPath = "/serviceNameHash";
+    public const string ServiceNameSearchKeyPath = "/serviceNameSearchKey";
     public const string ResourceStatusPath = "/status";
     public const string InstrumentNamePath = "/name";
     public const string InstrumentKindPath = "/kind";

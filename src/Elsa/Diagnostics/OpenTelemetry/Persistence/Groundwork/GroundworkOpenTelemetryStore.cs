@@ -122,13 +122,13 @@ public sealed class GroundworkOpenTelemetryStore :
         _logDefinition = OpenTelemetryRecordStreamDefinitions.CreateLogs(binding.LogStreamId);
         _timeProvider = timeProvider ?? TimeProvider.System;
         var value = options.Value;
-        _traceCapacity = ClampCapacity(value.TraceCapacity);
-        _spanCapacity = ClampCapacity(value.SpanCapacity);
-        _metricPointCapacity = ClampCapacity(value.MetricPointCapacity);
-        _logRecordCapacity = ClampCapacity(value.LogRecordCapacity);
-        _resourceCapacity = ClampCapacity(value.ResourceCapacity);
-        _metricInstrumentCapacity = ClampCapacity(value.MetricInstrumentCapacity);
-        _maxQuerySize = ClampCapacity(value.MaxQuerySize);
+        _traceCapacity = ClampRetentionCapacity(value.TraceCapacity);
+        _spanCapacity = ClampRetentionCapacity(value.SpanCapacity);
+        _metricPointCapacity = ClampRetentionCapacity(value.MetricPointCapacity);
+        _logRecordCapacity = ClampRetentionCapacity(value.LogRecordCapacity);
+        _resourceCapacity = ClampRetentionCapacity(value.ResourceCapacity);
+        _metricInstrumentCapacity = ClampRetentionCapacity(value.MetricInstrumentCapacity);
+        _maxQuerySize = ClampQuerySize(value.MaxQuerySize);
         _sourceRegistry = sourceRegistry;
         _drain = new(
             new GroundworkOpenTelemetryDrainTarget(this),
@@ -254,10 +254,31 @@ public sealed class GroundworkOpenTelemetryStore :
         DiagnosticRecordInput[] logs;
         SaveDocumentRequest[] resources;
         SaveDocumentRequest[] instruments;
+        IReadOnlyDictionary<string, string> serviceNames;
         try
         {
-            var serviceNames = await ResolveServiceNamesAsync(batch, cancellationToken);
-            traces = NormalizeTraces(batch.Traces);
+            serviceNames = await ResolveServiceNamesAsync(batch, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (CatalogPayloadException exception)
+        {
+            throw new OpenTelemetryPersistenceDataException(
+                "write",
+                "The OpenTelemetry persistence operation encountered malformed durable resource catalog data.",
+                context,
+                exception);
+        }
+        catch (Exception exception)
+        {
+            throw TranslateFailure("write", context, exception);
+        }
+
+        try
+        {
+            traces = NormalizeTraces(batch.Traces, serviceNames);
             spans = NormalizeRecords(batch.Spans, span => _recordSerializer.ToRecord(span.Id, span));
             points = NormalizeRecords(batch.MetricPoints, point => _recordSerializer.ToRecord(
                 point.Id,
@@ -319,26 +340,54 @@ public sealed class GroundworkOpenTelemetryStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        RejectUnsupportedTextFilter(filter.Search, nameof(filter.Search), "query-resources");
-        RejectUnsupportedTextFilter(filter.ServiceName, nameof(filter.ServiceName), "query-resources");
         var take = ClampTake(filter.Take);
         if (take == 0)
             return new([], _sourceRegistry?.DroppedCount ?? 0);
 
         try
         {
-            var query = filter.Status is null
-                ? new DocumentQuery(
-                    CatalogDocuments.ResourceKind,
-                    OpenTelemetryGroundworkStorageSchema.ResourcesByLastSeenQuery,
-                    take: take)
-                : new DocumentQuery(
-                    CatalogDocuments.ResourceKind,
-                    OpenTelemetryGroundworkStorageSchema.ResourcesByStatusQuery,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                        CatalogDocuments.ResourceStatusPath.TrimStart('/'),
-                        ((int)filter.Status.Value).ToString(System.Globalization.CultureInfo.InvariantCulture)))],
-                    take: take);
+            var clauses = new List<DocumentQueryClause>();
+            if (filter.Status is { } status)
+                clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    CatalogDocuments.ResourceStatusPath.TrimStart('/'),
+                    ((int)status).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+            if (!string.IsNullOrWhiteSpace(filter.ServiceName))
+            {
+                var serviceProjection = DiagnosticStringComparisonKey.Project(
+                    filter.ServiceName,
+                    DiagnosticStringCasePolicy.UnicodeOrdinalIgnoreCase);
+                clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    CatalogDocuments.ServiceNameHashPath.TrimStart('/'),
+                    serviceProjection.ComparisonKeyHash)));
+                clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    CatalogDocuments.ServiceNameComparisonKeyPath.TrimStart('/'),
+                    serviceProjection.ComparisonKey)));
+            }
+            if (!string.IsNullOrWhiteSpace(filter.Search))
+            {
+                var searchKey = CatalogDocumentSerializer.SearchKey(filter.Search);
+                clauses.Add(DocumentQueryClause.AnyOf(
+                    DocumentQueryComparison.Contains(
+                        CatalogDocuments.ResourceIdSearchKeyPath.TrimStart('/'),
+                        searchKey),
+                    DocumentQueryComparison.Contains(
+                        CatalogDocuments.ServiceNameSearchKeyPath.TrimStart('/'),
+                        searchKey)));
+            }
+
+            var query = new DocumentQuery(
+                CatalogDocuments.ResourceKind,
+                clauses.Count == 0
+                    ? OpenTelemetryGroundworkStorageSchema.ResourcesByLastSeenQuery
+                    : filter.Status is not null && string.IsNullOrWhiteSpace(filter.Search) &&
+                      string.IsNullOrWhiteSpace(filter.ServiceName)
+                        ? OpenTelemetryGroundworkStorageSchema.ResourcesByStatusQuery
+                        : !string.IsNullOrWhiteSpace(filter.ServiceName) &&
+                          string.IsNullOrWhiteSpace(filter.Search)
+                            ? OpenTelemetryGroundworkStorageSchema.ResourcesByServiceQuery
+                        : OpenTelemetryGroundworkStorageSchema.ResourcesFilteredQuery,
+                clauses,
+                take: take);
             var page = await _stores.DocumentQueries.QueryAsync(query, cancellationToken);
             return new(
                 page.Documents.Select(x => _catalogSerializer.ToResource(x).Resource).ToArray(),
@@ -363,7 +412,6 @@ public sealed class GroundworkOpenTelemetryStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        RejectUnsupportedTextFilter(filter.ServiceName, nameof(filter.ServiceName), "query-traces");
         ValidateRange(filter.From, filter.To, nameof(filter));
         var take = ClampTake(filter.Take);
         if (take == 0)
@@ -374,6 +422,7 @@ public sealed class GroundworkOpenTelemetryStore :
             var predicates = new List<DiagnosticRecordPredicate>();
             AddContainsTextPredicate(predicates, RecordFields.TraceId, filter.TraceId);
             AddExactTextPredicate(predicates, RecordFields.ResourceId, filter.ResourceId);
+            AddExactTextPredicate(predicates, RecordFields.ServiceName, filter.ServiceName);
             AddContainsTextPredicate(predicates, RecordFields.WorkflowInstanceId, filter.WorkflowInstanceId);
             if (filter.Status is { } status)
                 predicates.Add(DiagnosticRecordPredicate.Equal(RecordFields.Status, DiagnosticFieldValue.Int64((long)status)));
@@ -429,18 +478,21 @@ public sealed class GroundworkOpenTelemetryStore :
                 return null;
 
             var trace = _recordSerializer.ToTrace(traceRecord);
-            var spanPage = await _stores.Spans.QueryAsync(new(
-                _scope,
+            var tracePredicate = DiagnosticRecordPredicate.Equal(
+                RecordFields.TraceId,
+                DiagnosticFieldValue.String(trace.TraceId));
+            var spans = await QueryAllAsync(
+                _stores.Spans,
                 _spanStream,
-                _maxQuerySize,
                 new(RecordFields.OrderKey, DiagnosticSortDirection.Ascending),
-                Predicate: DiagnosticRecordPredicate.Equal(RecordFields.TraceId, DiagnosticFieldValue.String(trace.TraceId))), cancellationToken);
-            var logPage = await _stores.Logs.QueryAsync(new(
-                _scope,
+                tracePredicate,
+                cancellationToken);
+            var logs = await QueryAllAsync(
+                _stores.Logs,
                 _logStream,
-                _maxQuerySize,
                 new(RecordFields.OrderKey, DiagnosticSortDirection.Ascending),
-                Predicate: DiagnosticRecordPredicate.Equal(RecordFields.TraceId, DiagnosticFieldValue.String(trace.TraceId))), cancellationToken);
+                tracePredicate,
+                cancellationToken);
             var resources = new List<TelemetryResource>(trace.ResourceIds.Count);
             foreach (var resourceId in trace.ResourceIds.Distinct(CatalogIdentityComparer))
             {
@@ -450,9 +502,9 @@ public sealed class GroundworkOpenTelemetryStore :
             }
             return new(
                 trace,
-                spanPage.Records.Select(_recordSerializer.ToSpan).ToArray(),
+                spans.Select(_recordSerializer.ToSpan).ToArray(),
                 resources.OrderBy(x => x.ServiceName, StringComparer.Ordinal).ThenBy(x => x.Id, StringComparer.Ordinal).ToArray(),
-                logPage.Records.Select(_recordSerializer.ToLog).ToArray());
+                logs.Select(_recordSerializer.ToLog).ToArray());
         }
         catch (OperationCanceledException)
         {
@@ -896,12 +948,20 @@ public sealed class GroundworkOpenTelemetryStore :
             RecordId = $"otel-{Hash($"{batchId}:{streamKind}:{record.RecordId}")}"
         }).ToArray();
 
-    private DiagnosticRecordInput[] NormalizeTraces(IReadOnlyCollection<TelemetryTrace> values)
+    private DiagnosticRecordInput[] NormalizeTraces(
+        IReadOnlyCollection<TelemetryTrace> values,
+        IReadOnlyDictionary<string, string> serviceNames)
     {
         ArgumentNullException.ThrowIfNull(values);
+        ArgumentNullException.ThrowIfNull(serviceNames);
         return NormalizeRecords(values, trace =>
         {
-            var provisional = _recordSerializer.ToRecord(trace.TraceId, trace);
+            var provisional = _recordSerializer.ToRecord(
+                trace.TraceId,
+                trace,
+                trace.ResourceIds
+                    .Select(resourceId => ServiceNameFor(resourceId, serviceNames))
+                    .OfType<string>());
             return provisional with { RecordId = $"trace-{Hash(provisional.Payload)}" };
         });
     }
@@ -916,6 +976,7 @@ public sealed class GroundworkOpenTelemetryStore :
             CatalogIdentityComparer);
         var resourceIds = batch.MetricPoints.Select(point => point.ResourceId)
             .Concat(batch.Logs.Select(log => log.ResourceId))
+            .Concat(batch.Traces.SelectMany(trace => trace.ResourceIds))
             .Distinct(CatalogIdentityComparer)
             .ToArray();
         foreach (var resourceId in resourceIds.Where(resourceId => !services.ContainsKey(resourceId)))
@@ -1047,6 +1108,31 @@ public sealed class GroundworkOpenTelemetryStore :
             cancellationToken);
     }
 
+    private async Task<IReadOnlyList<DiagnosticRecord>> QueryAllAsync(
+        IDiagnosticRecordStore store,
+        DiagnosticStreamId stream,
+        DiagnosticRecordOrder order,
+        DiagnosticRecordPredicate predicate,
+        CancellationToken cancellationToken)
+    {
+        var records = new List<DiagnosticRecord>();
+        DiagnosticRecordContinuation? continuation = null;
+        do
+        {
+            var page = await store.QueryAsync(new(
+                _scope,
+                stream,
+                _maxQuerySize,
+                order,
+                Continuation: continuation,
+                Predicate: predicate), cancellationToken);
+            records.AddRange(page.Records);
+            continuation = page.Continuation;
+        } while (continuation is not null);
+
+        return records;
+    }
+
     private async Task SaveCatalogAsync(
         SaveDocumentRequest request,
         CancellationToken cancellationToken)
@@ -1118,16 +1204,6 @@ public sealed class GroundworkOpenTelemetryStore :
             _ => new DiagnosticRecordPredicate.All(predicates)
         };
 
-    private static void RejectUnsupportedTextFilter(string? value, string parameterName, string operation)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
-            throw new OpenTelemetryPersistenceCapabilityException(
-                operation,
-                "bounded-catalog-join",
-                $"Filter '{parameterName}' requires a portable bounded catalog-to-record join, which Groundwork preview.72 does not expose.",
-                Context(("filter", parameterName)));
-    }
-
     private static void AddExactTextPredicate(
         ICollection<DiagnosticRecordPredicate> predicates,
         string field,
@@ -1185,6 +1261,11 @@ public sealed class GroundworkOpenTelemetryStore :
                 "The OpenTelemetry persistence operation encountered a malformed durable record.",
                 context,
                 exception),
+            CatalogPayloadException => new OpenTelemetryPersistenceDataException(
+                operation,
+                "The OpenTelemetry persistence operation encountered malformed durable catalog data.",
+                context,
+                exception),
             JsonException => new OpenTelemetryPersistenceDataException(
                 operation,
                 "The OpenTelemetry persistence operation encountered malformed durable data.",
@@ -1203,7 +1284,9 @@ public sealed class GroundworkOpenTelemetryStore :
 
     private int ClampTake(int? requested) => Math.Clamp(requested ?? _maxQuerySize, 0, _maxQuerySize);
 
-    private static int ClampCapacity(int value) => Math.Max(1, value);
+    private static int ClampRetentionCapacity(int value) => Math.Max(0, value);
+
+    private static int ClampQuerySize(int value) => Math.Max(1, value);
 
     private static int ToCount(long value) => value >= int.MaxValue ? int.MaxValue : (int)Math.Max(0, value);
 

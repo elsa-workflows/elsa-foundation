@@ -17,6 +17,7 @@ public static class OpenTelemetryRecordStreamDefinitions
         [
             String(RecordFields.TraceId, required: true, latestPerKey: true),
             String(RecordFields.ResourceId, required: true, multiple: true),
+            String(RecordFields.ServiceName, multiple: true),
             String(RecordFields.WorkflowInstanceId, multiple: true),
             Int64(RecordFields.Status, required: true),
             Timestamp(RecordFields.StartTime, required: true, orderable: true),

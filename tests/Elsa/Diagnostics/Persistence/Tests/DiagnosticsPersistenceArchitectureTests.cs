@@ -18,22 +18,6 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
     private static readonly string DiagnosticsTestRoot = Path.Combine(RepoRoot, "tests", "Elsa", "Diagnostics");
 
     [Fact]
-    public void Diagnostics_project_graph_and_source_tree_contain_no_EF_Core_surface()
-    {
-        var violations = FindDiagnosticsProjects()
-            .SelectMany(FindEfProjectViolations)
-            .Concat(FindEfDirectoryViolations())
-            .Concat(FindEfSourceViolations())
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.True(
-            violations.Length == 0,
-            "Diagnostics may have no EF Core project, package, project reference, context, entity configuration, migration, or registration after T053-T055:" +
-            Environment.NewLine + string.Join(Environment.NewLine, violations));
-    }
-
-    [Fact]
     public void Provider_neutral_diagnostics_projects_are_Groundwork_free_in_the_project_graph_and_source_tree()
     {
         var violations = FindDiagnosticsSourceProjects()

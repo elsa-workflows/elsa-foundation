@@ -26,7 +26,10 @@ public sealed class CanonicalRecordSerializer
 
     /// <summary>Creates the immutable record form of a trace summary.</summary>
     /// <exception cref="RecordPayloadException">The trace contains data that cannot be represented canonically.</exception>
-    public DiagnosticRecordInput ToRecord(string recordId, TelemetryTrace trace)
+    public DiagnosticRecordInput ToRecord(
+        string recordId,
+        TelemetryTrace trace,
+        IEnumerable<string>? serviceNames = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
         ArgumentNullException.ThrowIfNull(trace);
@@ -35,6 +38,9 @@ public sealed class CanonicalRecordSerializer
         {
             var traceId = RequiredText(trace.TraceId, nameof(trace.TraceId));
             var resourceIds = CanonicalSet(trace.ResourceIds, nameof(trace.ResourceIds), requireValue: true);
+            var canonicalServiceNames = CanonicalSet(
+                serviceNames ?? [],
+                nameof(serviceNames));
             var workflowInstanceIds = CanonicalSet(trace.WorkflowInstanceIds, nameof(trace.WorkflowInstanceIds));
             EnumValue<SpanStatus>((int)trace.Status, nameof(trace.Status));
 
@@ -55,6 +61,7 @@ public sealed class CanonicalRecordSerializer
                 Fields(
                     (RecordFields.TraceId, Strings(traceId)),
                     (RecordFields.ResourceId, Strings(resourceIds)),
+                    (RecordFields.ServiceName, Strings(canonicalServiceNames)),
                     (RecordFields.WorkflowInstanceId, Strings(workflowInstanceIds)),
                     (RecordFields.Status, Int64((long)trace.Status)),
                     (RecordFields.StartTime, Timestamp(trace.StartTime)),

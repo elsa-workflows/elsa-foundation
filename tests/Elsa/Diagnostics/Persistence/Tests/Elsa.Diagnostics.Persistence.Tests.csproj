@@ -14,7 +14,6 @@
     <PackageReference Include="Groundwork.PostgreSql" />
     <PackageReference Include="Groundwork.Sqlite" />
     <PackageReference Include="Groundwork.SqlServer" />
-    <PackageReference Include="JsonSchema.Net" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />

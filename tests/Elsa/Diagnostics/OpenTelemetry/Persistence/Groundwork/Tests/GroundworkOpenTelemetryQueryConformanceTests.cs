@@ -170,7 +170,7 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
     }
 
     [Fact]
-    public async Task Trace_detail_uses_exact_trace_lookup_and_bounded_related_stream_lookups()
+    public async Task Trace_detail_uses_exact_trace_lookup_and_pages_every_related_record()
     {
         var store = await _fixture.CreateStoreAsync();
         var time = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
@@ -187,6 +187,50 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
         Assert.Collection(detail.Spans, item => Assert.Equal(span.Id, item.Id));
         Assert.Collection(detail.Resources, item => Assert.Equal(resource.Id, item.Id));
         Assert.Collection(detail.Logs, item => Assert.Equal(log.Id, item.Id));
+    }
+
+    [Fact]
+    public async Task Trace_detail_does_not_silently_truncate_at_the_per_query_limit()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var store = _fixture.CreateStore(
+            providers,
+            options: new OpenTelemetryDiagnosticsOptions
+            {
+                MaxQuerySize = 2,
+                ResourceCapacity = 20,
+                TraceCapacity = 20,
+                SpanCapacity = 20,
+                LogRecordCapacity = 20
+            });
+        var time = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-api", "Orders", time);
+        var trace = Trace("trace-a", resource.Id, time, "process order", SpanStatus.Ok);
+        var spans = Enumerable.Range(1, 3)
+            .Select(index => Span(
+                $"span-record-{index}",
+                trace.TraceId,
+                $"span-{index}",
+                resource.Id,
+                time.AddTicks(index)))
+            .ToArray();
+        var logs = Enumerable.Range(1, 3)
+            .Select(index => Log(
+                $"log-{index}",
+                resource.Id,
+                time.AddTicks(index),
+                trace.TraceId,
+                $"span-{index}",
+                "Information",
+                $"log {index}"))
+            .ToArray();
+
+        await store.WriteDurablyAsync(new([resource], [trace], spans, [], [], logs));
+
+        var detail = await store.GetTraceAsync(trace.TraceId);
+
+        Assert.Equal(["span-1", "span-2", "span-3"], detail!.Spans.Select(x => x.SpanId));
+        Assert.Equal(["log-1", "log-2", "log-3"], detail.Logs.Select(x => x.Id));
     }
 
     [Fact]
@@ -246,6 +290,41 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
     }
 
     [Fact]
+    public async Task Zero_signal_capacities_remove_every_current_record()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var store = _fixture.CreateStore(
+            providers,
+            options: new OpenTelemetryDiagnosticsOptions
+            {
+                TraceCapacity = 0,
+                SpanCapacity = 0,
+                MetricPointCapacity = 0,
+                LogRecordCapacity = 0,
+                ResourceCapacity = 10,
+                MetricInstrumentCapacity = 10,
+                MaxQuerySize = 20
+            });
+        var time = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-api", "Orders", time);
+        var trace = Trace("trace-a", resource.Id, time, "process order", SpanStatus.Ok);
+        var instrument = Instrument("instrument-a", resource.Id, "orders.duration");
+
+        await store.WriteDurablyAsync(new(
+            [resource],
+            [trace],
+            [Span("span-record-a", trace.TraceId, "span-a", resource.Id, time)],
+            [instrument],
+            [Point("point-a", instrument, resource.Id, time, trace.TraceId)],
+            [Log("log-a", resource.Id, time, trace.TraceId, "span-a", "Information", "accepted")]));
+
+        var diagnostics = await store.GetDiagnosticsAsync();
+        Assert.Equal(
+            (0, 0, 0, 0),
+            (diagnostics.TraceCount, diagnostics.SpanCount, diagnostics.MetricPointCount, diagnostics.LogRecordCount));
+    }
+
+    [Fact]
     public async Task Oversized_catalog_only_batch_is_rejected_without_mutation()
     {
         var store = await _fixture.CreateStoreAsync();
@@ -261,18 +340,35 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
     }
 
     [Fact]
-    public async Task Filters_that_require_missing_catalog_or_group_routes_fail_before_provider_io()
+    public async Task Resource_and_trace_filters_execute_through_declared_provider_routes()
     {
         var store = await _fixture.CreateStoreAsync();
-        using var canceled = new CancellationTokenSource();
-        canceled.Cancel();
+        var time = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+        var orders = Resource("resource-orders", "Orders API", time);
+        var billing = Resource("resource-billing", "Billing API", time.AddSeconds(1));
+        await store.WriteDurablyAsync(new(
+            [orders, billing],
+            [
+                Trace("trace-orders", orders.Id, time, "orders", SpanStatus.Ok),
+                Trace("trace-billing", billing.Id, time.AddSeconds(1), "billing", SpanStatus.Ok)
+            ],
+            [],
+            [],
+            [],
+            []));
 
-        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() =>
-            store.QueryResourcesAsync(new() { Search = "orders" }, canceled.Token).AsTask());
-        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() =>
-            store.QueryResourcesAsync(new() { ServiceName = "orders" }, canceled.Token).AsTask());
-        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() =>
-            store.QueryTracesAsync(new() { ServiceName = "orders" }, canceled.Token).AsTask());
+        Assert.Equal(
+            [orders.Id],
+            (await store.QueryResourcesAsync(new() { Search = "ORDERS", Take = 10 })).Items.Select(x => x.Id));
+        Assert.Equal(
+            [billing.Id],
+            (await store.QueryResourcesAsync(new() { Search = "BILLING", Take = 10 })).Items.Select(x => x.Id));
+        Assert.Equal(
+            [orders.Id],
+            (await store.QueryResourcesAsync(new() { ServiceName = "orders api", Take = 10 })).Items.Select(x => x.Id));
+        Assert.Equal(
+            ["trace-billing"],
+            (await store.QueryTracesAsync(new() { ServiceName = "BILLING API", Take = 10 })).Items.Select(x => x.TraceId));
     }
 
     [Fact]

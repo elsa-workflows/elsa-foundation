@@ -196,6 +196,9 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
 
     private static IEnumerable<(string Name, DocumentQuery Query, bool IsCount)> CatalogQueries()
     {
+        var service = DiagnosticStringComparisonKey.Project(
+            "orders",
+            DiagnosticStringCasePolicy.UnicodeOrdinalIgnoreCase);
         yield return ("resource-history", new(CatalogDocuments.ResourceKind, OpenTelemetryGroundworkStorageSchema.ResourcesByLastSeenQuery, take: 7), false);
         yield return ("resource-status", new(
             CatalogDocuments.ResourceKind,
@@ -203,6 +206,18 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
             [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                 CatalogDocuments.ResourceStatusPath.TrimStart('/'),
                 "1"))],
+            take: 7), false);
+        yield return ("resource-service", new(
+            CatalogDocuments.ResourceKind,
+            OpenTelemetryGroundworkStorageSchema.ResourcesByServiceQuery,
+            [
+                DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    CatalogDocuments.ServiceNameHashPath.TrimStart('/'),
+                    service.ComparisonKeyHash)),
+                DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    CatalogDocuments.ServiceNameComparisonKeyPath.TrimStart('/'),
+                    service.ComparisonKey))
+            ],
             take: 7), false);
         yield return ("instrument-history", new(CatalogDocuments.InstrumentKind, OpenTelemetryGroundworkStorageSchema.InstrumentsByLastSeenQuery, take: 7), false);
         yield return ("resource-count", new(CatalogDocuments.ResourceKind, OpenTelemetryGroundworkStorageSchema.ResourcesByLastSeenQuery, take: 0), true);

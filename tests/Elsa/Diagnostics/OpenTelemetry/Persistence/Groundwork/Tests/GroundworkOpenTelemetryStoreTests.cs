@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Exceptions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
@@ -398,7 +399,7 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() => store.QueryResourcesAsync(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.QueryResourcesAsync(
             new() { ServiceName = "API" }, cancellation.Token).AsTask());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.QueryTracesAsync(
             new(), cancellation.Token).AsTask());
@@ -539,6 +540,29 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
         Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, failure.Reason);
         Assert.Equal(batchId.ToString(), failure.Context["batchId"]);
         Assert.IsType<DocumentSchemaVersionException>(failure.InnerException);
+    }
+
+    [Fact]
+    public async Task Malformed_catalog_payload_is_reported_as_provider_neutral_corrupt_data()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var store = _fixture.CreateStore(providers);
+        var resource = CreateBatch().Resources.Single() with { Id = "resource-corrupt" };
+        var request = new CatalogDocumentSerializer().ToSaveRequest(resource);
+        var content = JsonNode.Parse(request.ContentJson)!.AsObject();
+        content.Remove("attributes");
+        var result = await providers.Documents.SaveAsync(request with
+        {
+            ContentJson = content.ToJsonString()
+        });
+        Assert.Equal(DocumentStoreWriteStatus.Saved, result.Status);
+
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceDataException>(() =>
+            store.QueryResourcesAsync(new() { Take = 10 }).AsTask());
+
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, failure.Reason);
+        Assert.Equal("query-resources", failure.Operation);
+        Assert.IsType<CatalogPayloadException>(failure.InnerException);
     }
 
     [Fact]

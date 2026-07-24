@@ -288,6 +288,7 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         var traces = await telemetry.QueryTracesAsync(new()
         {
             ResourceId = resource.Id,
+            ServiceName = "ORDERS",
             Status = SpanStatus.Ok,
             From = timestamp,
             To = timestamp,
@@ -315,6 +316,8 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         });
         var detail = await telemetry.GetTraceAsync("TRACE-A");
         var resources = await telemetry.QueryResourcesAsync(new() { Take = 20 });
+        var searchedResources = await telemetry.QueryResourcesAsync(new() { Search = "ORDERS", Take = 20 });
+        var serviceResources = await telemetry.QueryResourcesAsync(new() { ServiceName = "orders", Take = 20 });
         var diagnostics = await telemetry.GetDiagnosticsAsync();
 
         Assert.Equal([traceA.TraceId], traces.Items.Select(trace => trace.TraceId));
@@ -322,6 +325,8 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         Assert.Equal([logB.Id], logs.Items.Select(log => log.Id));
         Assert.Equal(["span-a"], detail!.Spans.Select(span => span.SpanId));
         Assert.Equal(["resource-new", "resource-api"], resources.Items.Select(item => item.Id));
+        Assert.Equal([resource.Id], searchedResources.Items.Select(item => item.Id));
+        Assert.Equal([resource.Id], serviceResources.Items.Select(item => item.Id));
         Assert.Equal((2, 2), (diagnostics.ResourceCount, diagnostics.MetricInstrumentCount));
     }
 

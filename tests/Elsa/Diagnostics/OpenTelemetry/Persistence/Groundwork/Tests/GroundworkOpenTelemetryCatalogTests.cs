@@ -42,7 +42,7 @@ public sealed class GroundworkOpenTelemetryCatalogTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Misconfigured_catalog_capacities_clamp_to_one()
+    public async Task Zero_catalog_capacities_remove_every_current_entry()
     {
         var providers = await _fixture.CreateProvidersAsync();
         var store = new GroundworkOpenTelemetryStore(
@@ -59,9 +59,57 @@ public sealed class GroundworkOpenTelemetryCatalogTests : IAsyncLifetime
         await store.WriteDurablyAsync(Batch(Resource("resource-a", time), Instrument("instrument-a", "resource-a"), time));
 
         var diagnostics = await store.GetDiagnosticsAsync();
-        Assert.Equal(1, diagnostics.ResourceCount);
-        Assert.Equal(1, diagnostics.MetricInstrumentCount);
-        Assert.Equal("resource-a", Assert.Single((await store.QueryResourcesAsync(new() { Take = 20 })).Items).Id);
+        Assert.Equal(0, diagnostics.ResourceCount);
+        Assert.Equal(0, diagnostics.MetricInstrumentCount);
+        Assert.Empty((await store.QueryResourcesAsync(new() { Take = 20 })).Items);
+    }
+
+    [Fact]
+    public async Task Equal_last_seen_values_use_the_stable_retention_tie_breaker()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var store = new GroundworkOpenTelemetryStore(
+            providers,
+            Options.Create(new OpenTelemetryDiagnosticsOptions
+            {
+                ResourceCapacity = 2,
+                MetricInstrumentCapacity = 2,
+                MaxQuerySize = 20
+            }),
+            _fixture.Binding);
+        var time = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+
+        await store.WriteDurablyAsync(new(
+            [
+                Resource("resource-a", time),
+                Resource("resource-b", time),
+                Resource("resource-c", time)
+            ],
+            [],
+            [],
+            [
+                Instrument("instrument-a", "resource-a"),
+                Instrument("instrument-b", "resource-b"),
+                Instrument("instrument-c", "resource-c")
+            ],
+            [],
+            []));
+
+        var first = (await store.QueryResourcesAsync(new() { Take = 20 })).Items.Select(x => x.Id).ToArray();
+        var restarted = new GroundworkOpenTelemetryStore(
+            await _fixture.CreateProvidersAsync(),
+            Options.Create(new OpenTelemetryDiagnosticsOptions
+            {
+                ResourceCapacity = 2,
+                MetricInstrumentCapacity = 2,
+                MaxQuerySize = 20
+            }),
+            _fixture.Binding);
+        var second = (await restarted.QueryResourcesAsync(new() { Take = 20 })).Items.Select(x => x.Id).ToArray();
+
+        Assert.Equal(2, first.Length);
+        Assert.Equal(first, second);
+        Assert.Equal(2, (await restarted.GetDiagnosticsAsync()).MetricInstrumentCount);
     }
 
     [Fact]

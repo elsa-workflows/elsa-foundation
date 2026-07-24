@@ -24,6 +24,10 @@ public sealed class CatalogDocumentSerializer
         {
             var id = RequiredText(resource.Id, nameof(resource.Id));
             var serviceName = RequiredText(resource.ServiceName, nameof(resource.ServiceName));
+            var idSearchKey = SearchKey(id);
+            var serviceNameProjection = DiagnosticStringComparisonKey.Project(
+                serviceName,
+                DiagnosticStringCasePolicy.UnicodeOrdinalIgnoreCase);
             EnumValue<TelemetryResourceStatus>((int)resource.Status, nameof(resource.Status));
 
             return CreateRequest(
@@ -32,6 +36,10 @@ public sealed class CatalogDocumentSerializer
                 new ResourceDocument(
                     id,
                     serviceName,
+                    idSearchKey,
+                    serviceNameProjection.ComparisonKey,
+                    serviceNameProjection.ComparisonKeyHash,
+                    serviceNameProjection.SearchKey,
                     resource.ServiceInstanceId,
                     resource.TelemetrySdkLanguage,
                     Canonicalize(resource.Attributes),
@@ -85,6 +93,8 @@ public sealed class CatalogDocumentSerializer
         return Deserialize(envelope, CatalogDocuments.ResourceKind, (ResourceDocument document) =>
         {
             ValidateIdentity(envelope, document.Id, document.RetentionTieBreaker);
+            ValidateSearchKey(document.Id, document.IdSearchKey, nameof(document.IdSearchKey));
+            ValidateServiceProjection(document);
             return new ResourceCatalogEntry(
                 new(
                     RequiredText(document.Id, nameof(document.Id)),
@@ -205,6 +215,33 @@ public sealed class CatalogDocumentSerializer
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
     }
 
+    internal static string ComparisonKey(string value) =>
+        DiagnosticStringComparisonKey.CreateUnicodeOrdinalIgnoreCase(RequiredText(value, nameof(value)));
+
+    internal static string SearchKey(string value) =>
+        DiagnosticStringComparisonKey.CreateSearchKey(
+            RequiredText(value, nameof(value)),
+            DiagnosticStringCasePolicy.UnicodeOrdinalIgnoreCase);
+
+    private static void ValidateSearchKey(string? value, string? searchKey, string field)
+    {
+        if (!StringComparer.Ordinal.Equals(SearchKey(RequiredText(value, field)), searchKey))
+            throw new CatalogPayloadException($"The OpenTelemetry catalog field '{field}' is not canonical.");
+    }
+
+    private static void ValidateServiceProjection(ResourceDocument document)
+    {
+        var projection = DiagnosticStringComparisonKey.Project(
+            RequiredText(document.ServiceName, nameof(document.ServiceName)),
+            DiagnosticStringCasePolicy.UnicodeOrdinalIgnoreCase);
+        if (!StringComparer.Ordinal.Equals(projection.ComparisonKey, document.ServiceNameComparisonKey) ||
+            !StringComparer.Ordinal.Equals(projection.ComparisonKeyHash, document.ServiceNameHash) ||
+            !StringComparer.Ordinal.Equals(projection.SearchKey, document.ServiceNameSearchKey))
+        {
+            throw new CatalogPayloadException("The OpenTelemetry resource service-name projection is not canonical.");
+        }
+    }
+
     private static AttributeDocument[] Canonicalize(IDictionary<string, string?> attributes) =>
         Required(attributes, nameof(attributes))
             .OrderBy(x => x.Key, StringComparer.Ordinal)
@@ -246,6 +283,10 @@ public sealed class CatalogDocumentSerializer
     private sealed record ResourceDocument(
         string Id,
         string ServiceName,
+        string IdSearchKey,
+        string ServiceNameComparisonKey,
+        string ServiceNameHash,
+        string ServiceNameSearchKey,
         string? ServiceInstanceId,
         string? TelemetrySdkLanguage,
         AttributeDocument[] Attributes,

@@ -98,7 +98,7 @@ public sealed class OpenTelemetryRecordStreamDefinitionTests
         {
             (serializer.ToRecord("trace-record", new TelemetryTrace(
                     "trace-1", "root", "orders", Timestamp, Timestamp.AddSeconds(1), TimeSpan.FromSeconds(1),
-                    SpanStatus.Ok, ["resource-1"], ["workflow-1"], 1)),
+                    SpanStatus.Ok, ["resource-1"], ["workflow-1"], 1), ["orders"]),
                 OpenTelemetryRecordStreamDefinitions.CreateTraces("traces")),
             (serializer.ToRecord("span-record", new TelemetrySpan(
                     "span-record", "trace-1", "span-1", "root", "resource-1", "orders", "internal",

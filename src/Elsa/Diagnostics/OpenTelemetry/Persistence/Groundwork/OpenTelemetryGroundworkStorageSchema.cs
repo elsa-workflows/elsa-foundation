@@ -16,6 +16,7 @@ public static class OpenTelemetryGroundworkStorageSchema
     public const string OperationLedgerKind = "openTelemetryCaptureOperation";
 
     public const string ByResourceStatusIndex = "by-resource-status";
+    public const string ByResourceServiceIndex = "by-resource-service";
     public const string ByInstrumentResourceIndex = "by-resource";
     public const string ByInstrumentKindIndex = "by-kind";
     public const string ByLastSeenIndex = "by-last-seen";
@@ -23,7 +24,9 @@ public static class OpenTelemetryGroundworkStorageSchema
     public const string ByRetentionIndex = "by-retention";
     public const string ByCaptureCreatedAtIndex = "by-created-at";
     public const string ResourcesByLastSeenQuery = "resources-by-last-seen";
+    public const string ResourcesFilteredQuery = "resources-filtered";
     public const string ResourcesByStatusQuery = "resources-by-status";
+    public const string ResourcesByServiceQuery = "resources-by-service";
     public const string InstrumentsByLastSeenQuery = "instruments-by-last-seen";
     public const string CaptureOperationsByCreatedAtQuery = "capture-operations-by-created-at";
 
@@ -65,18 +68,26 @@ public static class OpenTelemetryGroundworkStorageSchema
                 "elsa_open_telemetry_resources",
                 "elsa_open_telemetry_resource_indexes",
                 [
+                    Column(CatalogDocuments.ResourceIdSearchKeyPath, PortablePhysicalType.String, length: 512),
+                    Column(CatalogDocuments.ServiceNameComparisonKeyPath, PortablePhysicalType.String),
+                    Column(CatalogDocuments.ServiceNameHashPath, PortablePhysicalType.String, length: 64),
+                    Column(CatalogDocuments.ServiceNameSearchKeyPath, PortablePhysicalType.String),
                     Column(CatalogDocuments.ResourceStatusPath, PortablePhysicalType.Int32),
                     Column(CatalogDocuments.LastSeenPath, PortablePhysicalType.Int64),
                     Column(CatalogDocuments.RetentionTieBreakerPath, PortablePhysicalType.String, length: 512)
                 ],
                 [
                     Logical(ByResourceStatusIndex, CatalogDocuments.ResourceStatusPath, IndexValueKind.Number),
+                    ResourceServiceLogical(),
                     Logical(ByLastSeenIndex, CatalogDocuments.LastSeenPath, IndexValueKind.Number),
-                    Logical(ByRetentionTieBreakerIndex, CatalogDocuments.RetentionTieBreakerPath, IndexValueKind.Keyword)
+                    Logical(ByRetentionTieBreakerIndex, CatalogDocuments.RetentionTieBreakerPath, IndexValueKind.Keyword),
+                    RetentionLogical()
                 ],
                 [
-                    StatusRetentionQuery(),
-                    Query(ResourcesByLastSeenQuery, ByLastSeenIndex, CatalogDocuments.LastSeenPath, sortable: true),
+                    ResourceFilterQuery(),
+                    ResourceStatusQuery(),
+                    ResourceServiceQuery(),
+                    RetentionQuery(ResourcesByLastSeenQuery),
                     Query("resources-by-retention-tie-breaker", ByRetentionTieBreakerIndex, CatalogDocuments.RetentionTieBreakerPath, sortable: true)
                 ]),
             CatalogUnit(
@@ -94,12 +105,13 @@ public static class OpenTelemetryGroundworkStorageSchema
                     Logical(ByInstrumentResourceIndex, CatalogDocuments.InstrumentResourceIdPath, IndexValueKind.Keyword),
                     Logical(ByInstrumentKindIndex, CatalogDocuments.InstrumentKindPath, IndexValueKind.Number),
                     Logical(ByLastSeenIndex, CatalogDocuments.LastSeenPath, IndexValueKind.Number),
-                    Logical(ByRetentionTieBreakerIndex, CatalogDocuments.RetentionTieBreakerPath, IndexValueKind.Keyword)
+                    Logical(ByRetentionTieBreakerIndex, CatalogDocuments.RetentionTieBreakerPath, IndexValueKind.Keyword),
+                    RetentionLogical()
                 ],
                 [
                     Query("instruments-by-resource", ByInstrumentResourceIndex),
                     Query("instruments-by-kind", ByInstrumentKindIndex),
-                    Query(InstrumentsByLastSeenQuery, ByLastSeenIndex, CatalogDocuments.LastSeenPath, sortable: true),
+                    RetentionQuery(InstrumentsByLastSeenQuery),
                     Query("instruments-by-retention-tie-breaker", ByRetentionTieBreakerIndex, CatalogDocuments.RetentionTieBreakerPath, sortable: true)
                 ]),
             LedgerUnit()
@@ -119,16 +131,7 @@ public static class OpenTelemetryGroundworkStorageSchema
         LogicalIndexDeclaration[] logicalIndexes,
         BoundedQueryDeclaration[] queries)
     {
-        var indexes = logicalIndexes
-            .Select(PhysicalIndex)
-            .Append(new PhysicalIndexDefinition(
-                ByRetentionIndex,
-                [
-                    new PhysicalIndexColumnDefinition("storage_scope", 0),
-                    new PhysicalIndexColumnDefinition(Path(CatalogDocuments.LastSeenPath), 1),
-                    new PhysicalIndexColumnDefinition(Path(CatalogDocuments.RetentionTieBreakerPath), 2)
-                ]))
-            .ToArray();
+        var indexes = logicalIndexes.Select(PhysicalIndex).ToArray();
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             tableName,
             columns,
@@ -220,6 +223,27 @@ public static class OpenTelemetryGroundworkStorageSchema
         false,
         MissingValueBehavior.Excluded);
 
+    private static LogicalIndexDeclaration RetentionLogical() => new(
+        ByRetentionIndex,
+        [
+            new IndexField(Path(CatalogDocuments.LastSeenPath), IndexValueKind.Number),
+            new IndexField(Path(CatalogDocuments.RetentionTieBreakerPath), IndexValueKind.Keyword)
+        ],
+        IndexValueKind.Keyword,
+        false,
+        MissingValueBehavior.Excluded);
+
+    private static LogicalIndexDeclaration ResourceServiceLogical() => new(
+        ByResourceServiceIndex,
+        [
+            new IndexField(Path(CatalogDocuments.ServiceNameHashPath), IndexValueKind.Keyword),
+            new IndexField(Path(CatalogDocuments.LastSeenPath), IndexValueKind.Number),
+            new IndexField(Path(CatalogDocuments.RetentionTieBreakerPath), IndexValueKind.Keyword)
+        ],
+        IndexValueKind.Keyword,
+        false,
+        MissingValueBehavior.Excluded);
+
     private static BoundedQueryDeclaration Query(
         string name,
         string indexName,
@@ -236,18 +260,134 @@ public static class OpenTelemetryGroundworkStorageSchema
             ? [new BoundedQuerySortField(Path(sortPath!), PhysicalSortDirection.Descending)]
             : []);
 
-    private static BoundedQueryDeclaration StatusRetentionQuery() => new(
-        ResourcesByStatusQuery,
-        ByLastSeenIndex,
+    private static BoundedQueryDeclaration RetentionQuery(string identity) => new(
+        identity,
+        ByRetentionIndex,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         QuerySortSupport.Descending,
         QueryPagingSupport.Offset,
         BoundedQueryExecutionClass.ScaleBearing,
         supportsTotalCount: true,
         sortFields:
-        [new(Path(CatalogDocuments.LastSeenPath), PhysicalSortDirection.Descending)],
+        [
+            new(Path(CatalogDocuments.LastSeenPath), PhysicalSortDirection.Descending),
+            new(Path(CatalogDocuments.RetentionTieBreakerPath), PhysicalSortDirection.Descending)
+        ]);
+
+    private static BoundedQueryDeclaration ResourceFilterQuery() => new(
+        ResourcesFilteredQuery,
+        ByRetentionIndex,
+        new HashSet<PortableQueryOperation>
+        {
+            PortableQueryOperation.Equal,
+            PortableQueryOperation.Contains
+        },
+        QuerySortSupport.Descending,
+        QueryPagingSupport.Offset,
+        BoundedQueryExecutionClass.Ordinary,
+        supportsDisjunction: true,
+        supportsTotalCount: true,
+        sortFields:
+        [
+            new(Path(CatalogDocuments.LastSeenPath), PhysicalSortDirection.Descending),
+            new(Path(CatalogDocuments.RetentionTieBreakerPath), PhysicalSortDirection.Descending)
+        ],
+        predicateFields:
+        [
+            new(
+                Path(CatalogDocuments.LastSeenPath),
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }),
+            new(
+                Path(CatalogDocuments.RetentionTieBreakerPath),
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+        ],
         residualPredicateFields:
         [
+            new(
+                Path(CatalogDocuments.ResourceStatusPath),
+                IndexValueKind.Number,
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }),
+            new(
+                Path(CatalogDocuments.ServiceNameHashPath),
+                IndexValueKind.Keyword,
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }),
+            new(
+                Path(CatalogDocuments.ResourceIdSearchKeyPath),
+                IndexValueKind.String,
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Contains }),
+            new(
+                Path(CatalogDocuments.ServiceNameComparisonKeyPath),
+                IndexValueKind.String,
+                new HashSet<PortableQueryOperation>
+                {
+                    PortableQueryOperation.Equal
+                }),
+            new(
+                Path(CatalogDocuments.ServiceNameSearchKeyPath),
+                IndexValueKind.String,
+                new HashSet<PortableQueryOperation>
+                {
+                    PortableQueryOperation.Contains
+                })
+        ]);
+
+    private static BoundedQueryDeclaration ResourceStatusQuery() => new(
+        ResourcesByStatusQuery,
+        ByRetentionIndex,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        QuerySortSupport.Descending,
+        QueryPagingSupport.Offset,
+        BoundedQueryExecutionClass.ScaleBearing,
+        supportsTotalCount: true,
+        sortFields:
+        [
+            new(Path(CatalogDocuments.LastSeenPath), PhysicalSortDirection.Descending),
+            new(Path(CatalogDocuments.RetentionTieBreakerPath), PhysicalSortDirection.Descending)
+        ],
+        predicateFields:
+        [
+            new(
+                Path(CatalogDocuments.LastSeenPath),
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }),
+            new(
+                Path(CatalogDocuments.RetentionTieBreakerPath),
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+        ],
+        residualPredicateFields:
+        [
+            new(
+                Path(CatalogDocuments.ResourceStatusPath),
+                IndexValueKind.Number,
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+                isRequired: true)
+        ]);
+
+    private static BoundedQueryDeclaration ResourceServiceQuery() => new(
+        ResourcesByServiceQuery,
+        ByResourceServiceIndex,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        QuerySortSupport.Descending,
+        QueryPagingSupport.Offset,
+        BoundedQueryExecutionClass.ScaleBearing,
+        supportsTotalCount: true,
+        sortFields:
+        [
+            new(Path(CatalogDocuments.LastSeenPath), PhysicalSortDirection.Descending),
+            new(Path(CatalogDocuments.RetentionTieBreakerPath), PhysicalSortDirection.Descending)
+        ],
+        predicateFields:
+        [
+            new(
+                Path(CatalogDocuments.ServiceNameHashPath),
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+        ],
+        residualPredicateFields:
+        [
+            new(
+                Path(CatalogDocuments.ServiceNameComparisonKeyPath),
+                IndexValueKind.String,
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+                isRequired: true),
             new(
                 Path(CatalogDocuments.ResourceStatusPath),
                 IndexValueKind.Number,
@@ -261,7 +401,12 @@ public static class OpenTelemetryGroundworkStorageSchema
             index.Identity,
             new[] { new PhysicalIndexColumnDefinition("storage_scope", 0) }
                 .Concat(paths.Select((path, position) =>
-                    new PhysicalIndexColumnDefinition(path, position + 1)))
+                    new PhysicalIndexColumnDefinition(
+                        path,
+                        position + 1,
+                        index.Identity == ByResourceServiceIndex && position > 0
+                            ? PhysicalSortDirection.Descending
+                            : PhysicalSortDirection.Ascending)))
                 .ToArray());
     }
 
