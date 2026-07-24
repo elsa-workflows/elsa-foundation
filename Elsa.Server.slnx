@@ -2,6 +2,9 @@
   <Folder Name="/benchmarks/Elsa/Activities/Runtime/">
     <Project Path="benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/Elsa/Groundwork/StorePerformance/">
+    <Project Path="benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/benchmarks/Elsa/Workflows/Runtime/">
     <Project Path="benchmarks/Elsa/Workflows/Runtime/Benchmarks/Elsa.Workflows.Runtime.Benchmarks.csproj" />
   </Folder>
@@ -402,6 +405,9 @@
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Groundwork/StorePerformance/">
+    <Project Path="tests/Elsa/Groundwork/StorePerformance/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Modularity/">
     <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
