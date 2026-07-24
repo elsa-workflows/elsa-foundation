@@ -480,19 +480,24 @@ candidate are:
 
 | Axis | Required finding and disposition | Candidate status |
 |---|---|---|
-| Correctness/mechanism | The JSON fingerprints could match while semantic input fields drifted from the code-owned parameters. `WorkloadCatalog` now compares every semantic JSON field with the code-owned parameter set before admitting the workload, and a negative test proves that recomputing the source digest cannot bypass this check. | Awaiting originating-reviewer re-verification |
-| Evidence integrity | Expected results were derived dynamically from the same implementation under test, so they were not an independent ratchet. All twelve workloads now have separately maintained literal golden vectors, duplicated independently in the conformance test, and catalog admission rejects any mismatch. | Awaiting originating-reviewer re-verification |
-| Scope/test preservation | The checkpoint described definitions as executable workloads even though it adds contract vectors rather than public-operation runners. The CLI and documentation now use `workload-vectors`, explicitly reserve execution for future real adapters, and remove the unsupported T099 evidence claim. | Awaiting originating-reviewer re-verification |
-| Evidence integrity | Secret's Blocked state existed only in prose, so synthetic or forged artifacts could still enter matrix, comparison, or gate paths. The closed workload schema now carries `benchmarkAdmission`; matrix planning, comparison, and gating reject Secret with `comparator.secret.real-ef-required`, including forged complete inputs. | Awaiting originating-reviewer re-verification |
-| Correctness/evidence integrity | The first replacement review found that ready IAM still checked only hashes, version, and seed; reviewed source-digest drift could therefore change its semantic inputs, scenario, or operation sequence. IAM admission now binds all six semantic inputs, scenario identity, and exact operation sequence to `IamNormalizedLookupWorkload`; three negative cases recompute the source digest and prove each class of drift fails closed. | Awaiting originating-reviewer re-verification |
+| Correctness/mechanism | The JSON fingerprints could match while semantic input fields drifted from the code-owned parameters. `WorkloadCatalog` now compares every semantic JSON field with the code-owned parameter set before admitting the workload, and a negative test proves that recomputing the source digest cannot bypass this check. | PASS |
+| Evidence integrity | Expected results were derived dynamically from the same implementation under test, so they were not an independent ratchet. All twelve workloads now have separately maintained literal golden vectors, duplicated independently in the conformance test, and catalog admission rejects any mismatch. | PASS |
+| Scope/test preservation | The checkpoint described definitions as executable workloads even though it adds contract vectors rather than public-operation runners. The CLI and documentation now use `workload-vectors`, explicitly reserve execution for future real adapters, and remove the unsupported T099 evidence claim. | PASS |
+| Evidence integrity | Secret's Blocked state existed only in prose, so synthetic or forged artifacts could still enter matrix, comparison, or gate paths. The closed workload schema now carries `benchmarkAdmission`; matrix planning, comparison, and gating reject Secret with `comparator.secret.real-ef-required`, including forged complete inputs. | PASS |
+| Correctness/evidence integrity | The first replacement review found that ready IAM still checked only hashes, version, and seed; reviewed source-digest drift could therefore change its semantic inputs, scenario, or operation sequence. IAM admission now binds all six semantic inputs, scenario identity, and exact operation sequence to `IamNormalizedLookupWorkload`; three negative cases recompute the source digest and prove each class of drift fails closed. | PASS |
 
 Root revalidation of the remediated candidate passed the benchmark harness **60/60**, the focused
 workload-correctness conformance selection **5/5**, and the performance-handoff architecture
 selection **7/7**. GitGuardian identified the Secret workload's literal identifier beside its two
 public SHA-256 golden vectors as a generic high-entropy secret; the dictionary now references the
 separately declared workload identifier, retaining the exact immutable vectors without placing a
-secret-labeled token beside them. This section remains provisional until the originating reviewers
-re-inspect the exact replacement range and their final verdicts are recorded.
+secret-labeled token beside them. The originating reviewers re-inspected exact clean range
+`c4b5fa00499e8448ecf48250fc088ba75186556a..d15d64c9b65559cb554b0371c3c8cfd114f0fe2c`
+and returned PASS on correctness/mechanism, evidence integrity, and scope/test preservation. Their
+independent verification included the **60/60**, **5/5**, and **7/7** selections above, the real
+Identity EF/Groundwork SQLite oracle **2/2**, the full architecture/ratchet suite **285/285**, three
+recomputed-digest IAM attacks, and a synthetic Secret matrix attempt that failed before child launch
+with `comparator.secret.real-ef-required`.
 
 ### #646 harness review disposition
 
