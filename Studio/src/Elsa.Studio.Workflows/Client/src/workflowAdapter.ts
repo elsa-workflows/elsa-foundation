@@ -1079,7 +1079,7 @@ function readFlowPorts(value: unknown): WorkflowPortDescriptor[] {
     const type = typeof item.type === "string" ? item.type : typeof item.portType === "string" ? item.portType : "";
     const isBrowsable = item.isBrowsable !== false && item.browsable !== false;
     const name = typeof item.name === "string" ? item.name : typeof item.id === "string" ? item.id : "";
-    if (isBrowsable && type.toLowerCase() === "flow" && name) {
+    if (isBrowsable && ["flow", "outcome"].includes(type.toLowerCase()) && name) {
       const displayName = typeof item.displayName === "string" ? item.displayName : name;
       ports.push({ name, displayName });
     }

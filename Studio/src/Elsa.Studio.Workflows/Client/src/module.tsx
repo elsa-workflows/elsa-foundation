@@ -7,7 +7,7 @@ import "./styles.css";
 import { registerVariableReferenceContribution } from "./variableReferenceContribution";
 import { registerInputReferenceContribution } from "./inputReferenceContribution";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
-import { activityGraphImplementationEditorContribution } from "./activityGraphContribution";
+import { activityGraphImplementationEditorContribution, activityGraphSchema2ImplementationEditorContribution } from "./activityGraphContribution";
 import { clearActivityDefinitionRecoveryForIdentity } from "./activityDefinitionRecovery";
 
 const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowManagementPage })));
@@ -39,6 +39,7 @@ export function register(api: ElsaStudioModuleApi) {
   api.expressionEditors.add(createObjectExpressionEditorContribution(() => api.propertyEditors.list()));
   registerInputReferenceContribution(api.expressionEditors);
   api.activityEditors.add(activityGraphImplementationEditorContribution);
+  api.activityEditors.add(activityGraphSchema2ImplementationEditorContribution);
   if (api.runtime.identity?.subject && api.runtime.identity.tenantId && typeof window !== "undefined") {
     window.addEventListener(authSessionEndedEvent, () => clearActivityDefinitionRecoveryForIdentity(api.runtime.identity), { once: true });
   }

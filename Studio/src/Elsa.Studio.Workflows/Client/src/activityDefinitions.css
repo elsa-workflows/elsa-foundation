@@ -290,7 +290,11 @@
 .ad-graph-tools span, .ad-graph-tools p { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .ad-graph-tools button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.35rem; padding: .45rem .65rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: inherit; background: var(--studio-surface); cursor: pointer; }
 .ad-graph-tools button:disabled { opacity: .55; cursor: not-allowed; }
-.ad-graph-add, .ad-graph-inspector { display: grid; gap: .65rem; padding: .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); }
+.ad-graph-add, .ad-graph-inspector, .ad-graph-outcome-mappings { display: grid; gap: .65rem; padding: .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); }
+.ad-graph-outcome-mappings h3 { margin: 0; font-size: var(--studio-section-title-size); }
+.ad-graph-outcome-mappings ul { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
+.ad-graph-outcome-mappings li, .ad-graph-outcome-mapping-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: end; }
+.ad-graph-outcome-mapping-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
 .ad-graph-inspector h3 { margin: 0; font-size: var(--studio-section-title-size); }
 .ad-graph-node-actions { display: grid; grid-template-columns: auto auto 1fr; gap: .4rem; }
 .ad-graph-canvas { display: grid; grid-template-rows: auto auto 1fr; align-content: start; min-width: 0; padding: 1rem 1.25rem 2rem; overflow: auto; background: radial-gradient(circle at 1px 1px, var(--studio-border) 1px, transparent 0); background-size: 20px 20px; }

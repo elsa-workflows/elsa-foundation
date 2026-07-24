@@ -509,6 +509,7 @@ export interface StudioActivityOutputDescriptor extends StudioActivityPropertyDe
 
 export interface StudioActivityPortDescriptor {
   name: string;
+  referenceKey?: string | null;
   displayName?: string | null;
   type: StudioActivityPortType;
   isBrowsable?: boolean | null;
@@ -1307,6 +1308,18 @@ export interface StudioActivityDiagnosticFocusRequest {
   editorElement: HTMLElement;
 }
 
+export interface StudioActivityOutcomeContract {
+  referenceKey: string;
+  name: string;
+  isEmitted: boolean;
+  description?: string | null;
+}
+
+export interface StudioActivityDefinitionContract {
+  contractSchemaVersion: string;
+  outcomes: StudioActivityOutcomeContract[];
+}
+
 export interface StudioActivityDefinitionImplementationEditorProps {
   context: StudioEndpointContext;
   definitionId: string;
@@ -1315,6 +1328,7 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   providerKey: string;
   providerSchemaVersion: string;
   manifestFingerprint: string;
+  contract?: StudioActivityDefinitionContract;
   value: StudioActivityDefinitionImplementationState;
   readOnly: boolean;
   onChange(value: StudioActivityDefinitionImplementationState): void;
