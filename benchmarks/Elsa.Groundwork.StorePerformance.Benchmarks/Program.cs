@@ -35,8 +35,8 @@ internal static class BenchmarkCli
         var catalog = WorkloadCatalog.Load(FindRepositoryRoot());
         if (!catalog.Workloads.TryGetValue(workload, out var definition)) throw new PerformanceContractException($"Unknown frozen workload '{workload}'.");
         var packages = Options(args, "--package").Select(ParsePackage).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-        var request = new MatrixRequest(definition.Id, definition.Version, provider, adapter, form, scale, Require(args, "--commit"), packages, Require(args, "--composition"), definition.Input.Seed, definition.Input.FingerprintSha256, Require(args, "--native-plan"), Require(args, "--native-plan-evidence"));
-        var plan = MatrixPlan.Create(request);
+        var request = new MatrixRequest(Require(args, "--cohort"), Require(args, "--measurement-set"), definition.Id, definition.Version, provider, adapter, form, scale, Require(args, "--commit"), packages, Require(args, "--composition"), definition.Input.Seed, definition.Input.FingerprintSha256, Require(args, "--native-plan"), Require(args, "--native-plan-evidence"), Require(args, "--native-plan-sha256"));
+        var plan = MatrixPlan.Create(definition, request);
         var child = Option(args, "--child-command") ?? throw new PerformanceContractException("matrix requires --child-command for a real provider adapter host; this foundation intentionally supplies no fake adapter.");
         await ProcessMatrixRunner.RunAsync(plan, child, output, CancellationToken.None);
         return 0;
@@ -45,7 +45,7 @@ internal static class BenchmarkCli
     private static int Compare(string[] args)
     {
         var output = Require(args, "--out");
-        var comparison = Comparison.Compare(output, Require(args, "--oracle"), Require(args, "--target"));
+        var comparison = Comparison.Compare(output, Require(args, "--oracle"), Require(args, "--target"), WorkloadCatalog.Load(FindRepositoryRoot()));
         var result = ResultStore.Write(Option(args, "--result") ?? Path.Combine(output, "comparison.v1.json"), comparison);
         Console.WriteLine($"Comparison result: {result}");
         return comparison.Complete && comparison.CorrectnessEqual ? 0 : 2;
@@ -53,7 +53,7 @@ internal static class BenchmarkCli
     private static int Gate(string[] args)
     {
         var output = Require(args, "--out");
-        var comparison = Comparison.Compare(output, Require(args, "--oracle"), Require(args, "--target"));
+        var comparison = Comparison.Compare(output, Require(args, "--oracle"), Require(args, "--target"), WorkloadCatalog.Load(FindRepositoryRoot()));
         ResultStore.Write(Option(args, "--comparison-result") ?? Path.Combine(output, "comparison.from-gate.v1.json"), comparison);
         var requestedClass = string.Equals(Option(args, "--class"), "runtime", StringComparison.OrdinalIgnoreCase) ? GateClass.RuntimeHotPath : GateClass.OrdinaryStore;
         var replacement = Option(args, "--replacement");
@@ -72,7 +72,7 @@ internal static class BenchmarkCli
         var separator = value.IndexOf('=', StringComparison.Ordinal);
         return separator > 0 && separator < value.Length - 1 ? new KeyValuePair<string, string>(value[..separator], value[(separator + 1)..]) : throw new PerformanceContractException("--package must be name=version and must be repeated for every provider package.");
     }
-    private static int Help() { Console.WriteLine("#646 store performance harness\n  matrix <scale> --workload <id> --provider <provider> --adapter <adapter> --form <physical-form> --commit <40-hex-sha> --composition <64-hex-fingerprint> --package <name=version> --native-plan <identity> --native-plan-evidence <safe-reference> --out <artifact-directory> --child-command <adapter-host>\n  compare --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--result <comparison.json>]\n  gate --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--class runtime|ordinary] [--replacement <reviewed-gate.v1.json>] [--comparison-result <comparison.json>] [--result <gate.json>]"); return 0; }
+    private static int Help() { Console.WriteLine("#646 store performance harness\n  matrix <scale> --cohort <safe-id> --measurement-set <safe-id> --workload <id> --provider <provider> --adapter <adapter> --form <physical-form> --commit <40-hex-sha> --composition <64-hex-fingerprint> --package <name=version> --native-plan <identity> --native-plan-evidence <safe-top-level.json> --native-plan-sha256 <64-hex-content-digest> --out <artifact-directory> --child-command <adapter-host>\n  compare --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--result <comparison.json>]\n  gate --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--class runtime|ordinary] [--replacement <reviewed-gate.v1.json>] [--comparison-result <comparison.json>] [--result <gate.json>]"); return 0; }
     private static int Fail(string message) { Console.Error.WriteLine($"error: {message}"); return 2; }
     private static string FindRepositoryRoot() { for (var directory = new DirectoryInfo(Directory.GetCurrentDirectory()); directory is not null; directory = directory.Parent) if (File.Exists(Path.Combine(directory.FullName, "AGENTS.md"))) return directory.FullName; throw new PerformanceContractException("Repository root was not found."); }
 }

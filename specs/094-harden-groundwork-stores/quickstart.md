@@ -405,6 +405,30 @@ EF-surface ratchet selection passed **65/65**. This remains a harness and one-wo
 checkpoint only: it publishes no timing, physical-form selection, coverage-ledger verdict, or #646
 completion claim.
 
+The frozen review of that candidate rejected five green-looking but non-durable mechanisms:
+preexisting artifacts could be re-certified, comparison trusted stored summaries, cross-commit or
+machine-mismatched targets could be compared, native-plan evidence was label-only, and matrix
+admission did not consult the frozen provider/form contract. The remediated schema-v2 protocol now:
+
+- binds two distinct four-process measurement sets to one cohort and one expected commit in a
+  hash-complete manifest;
+- rejects stale planned paths, partial or mixed cohorts, changed admitted files, and unbound files;
+- validates finite positive raw samples and reproduces stored summaries, while comparison and gates
+  recompute their statistics from the raw samples;
+- requires exact commit equality and stable machine-environment equality across targets;
+- binds structured route evidence to an actual hashed JSON file and its cohort, measurement set,
+  workload, provider, adapter, physical form, scale, commit, and composition fingerprint; and
+- admits only providers and physical forms named by the immutable workload contract.
+
+Root revalidation passed the expanded harness suite **40/40**, the real IAM EF and Groundwork SQLite
+correctness selection **2/2**, the architecture plus shrink-only EF-surface ratchet selection
+**65/65**, and a zero-warning Release harness build. Adapter identity is not present in the immutable
+Spec 094 workload schema, so exact adapter allowlisting remains explicitly open rather than inferred.
+Likewise, route-specific expected limits/cardinalities require a versioned execution profile or
+successor workload; this checkpoint validates that the facts are complete, bounded, target-bound,
+and file-backed without mutating the frozen workload document. No timing or ledger verdict is
+claimed.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:

@@ -2,6 +2,25 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
 public static class Statistics
 {
+    /// <summary>Accept only summaries that can be reproduced from the durable raw operation data.
+    /// This keeps artifacts from carrying a separately asserted performance result.</summary>
+    public static bool HasAuthoritativeRawMetrics(OperationSample operation)
+    {
+        var samples = operation.RawLatenciesMilliseconds;
+        if (operation.Count <= 0 || !double.IsFinite(operation.SteadyStateSeconds) || operation.SteadyStateSeconds <= 0 || samples is null || samples.Count != operation.Count || samples.Any(sample => !double.IsFinite(sample) || sample <= 0))
+            return false;
+
+        var summaries = new[] { operation.P50Milliseconds, operation.P95Milliseconds, operation.P99Milliseconds, operation.ThroughputPerSecond };
+        var expectedThroughput = operation.Count / operation.SteadyStateSeconds;
+        return summaries.All(value => double.IsFinite(value) && value > 0)
+            && double.IsFinite(expectedThroughput)
+            && expectedThroughput > 0
+            && NearlyEqual(operation.P50Milliseconds, Percentile(samples, 50))
+            && NearlyEqual(operation.P95Milliseconds, Percentile(samples, 95))
+            && NearlyEqual(operation.P99Milliseconds, Percentile(samples, 99))
+            && NearlyEqual(operation.ThroughputPerSecond, expectedThroughput);
+    }
+
     public static double Percentile(IReadOnlyList<double> samples, double percentile)
     {
         if (samples.Count == 0) return double.NaN;
@@ -52,4 +71,7 @@ public static class Statistics
         for (var index = 0; index < draw.Length; index++) draw[index] = source[random.Next(source.Count)];
         return Percentile(draw, percentile);
     }
+
+    private static bool NearlyEqual(double actual, double expected) =>
+        Math.Abs(actual - expected) <= 1e-12 * Math.Max(1d, Math.Abs(expected));
 }

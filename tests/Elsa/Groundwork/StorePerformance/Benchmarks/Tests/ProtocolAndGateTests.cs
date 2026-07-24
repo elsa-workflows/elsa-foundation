@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Xunit;
@@ -14,9 +17,244 @@ public sealed class ProtocolAndGateTests
         Assert.Equal(100, BenchmarkProtocol.Acceptance.MinimumOperations);
         Assert.Equal(TimeSpan.FromSeconds(30), BenchmarkProtocol.Acceptance.MinimumSteadyState);
 
-        var plan = MatrixPlan.Create(Request());
+        var plan = MatrixPlan.Create(Workload(), Request());
         Assert.Equal([ProcessKind.Warmup, ProcessKind.Measured, ProcessKind.Measured, ProcessKind.Measured], plan.Runs.Select(run => run.ProcessKind));
         Assert.Equal([0, 1, 2, 3], plan.Runs.Select(run => run.ProcessIndex));
+    }
+
+    [Fact]
+    public void Matrix_rejects_provider_and_physical_form_outside_the_frozen_workload()
+    {
+        var workload = Workload();
+
+        Assert.Throws<PerformanceContractException>(() =>
+            MatrixPlan.Create(workload, Request() with { Provider = "oracle" }));
+        Assert.Throws<PerformanceContractException>(() =>
+            MatrixPlan.Create(workload, Request() with { PhysicalForm = "unreviewed-form" }));
+    }
+
+    [Fact]
+    public async Task Matrix_rejects_a_preexisting_planned_artifact_from_a_noop_child()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");
+        try
+        {
+            var plan = MatrixPlan.Create(Workload(), Request());
+            ArtifactStore.Write(directory, ArtifactFor(plan.Runs[0]));
+
+            var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+                ProcessMatrixRunner.RunAsync(plan, directory, (_, _, _) => Task.FromResult(0), CancellationToken.None));
+
+            Assert.Contains("preexisting", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Matrix_rejects_a_fresh_noop_child_without_writing_a_manifest()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");
+        try
+        {
+            var plan = MatrixPlan.Create(Workload(), Request());
+
+            var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+                ProcessMatrixRunner.RunAsync(plan, directory, (_, _, _) => Task.FromResult(0), CancellationToken.None));
+
+            Assert.Contains("did not emit", error.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(Directory.Exists(directory) && Directory.EnumerateFiles(directory, "artifact-manifest.*.json").Any());
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Matrix_manifest_binds_exactly_four_fresh_validated_artifacts()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");
+        try
+        {
+            var plan = MatrixPlan.Create(Workload(), Request());
+
+            await ProcessMatrixRunner.RunAsync(
+                plan,
+                directory,
+                (run, output, _) =>
+                {
+                    WriteArtifact(output, run);
+                    return Task.FromResult(0);
+                },
+                CancellationToken.None);
+
+            var artifactSet = ArtifactStore.ReadAll(directory);
+            Assert.Equal(4, artifactSet.Artifacts.Count);
+            Assert.Equal(
+                plan.Runs.Select(run => (run.ProcessKind, run.ProcessIndex)).OrderBy(run => run.ProcessKind).ThenBy(run => run.ProcessIndex),
+                artifactSet.Artifacts.Select(artifact => (artifact.Request.ProcessKind, artifact.Request.ProcessIndex)).OrderBy(run => run.ProcessKind).ThenBy(run => run.ProcessIndex));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Matrix_rejects_a_child_artifact_that_does_not_match_the_complete_request()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");
+        try
+        {
+            var plan = MatrixPlan.Create(Workload(), Request());
+
+            var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+                ProcessMatrixRunner.RunAsync(
+                    plan,
+                    directory,
+                    (run, output, _) =>
+                    {
+                        WriteArtifact(output, run with { PackageVersions = new Dictionary<string, string> { ["Groundwork.Sqlite"] = "0.0.1-preview.82" } });
+                        return Task.FromResult(0);
+                    },
+                    CancellationToken.None));
+
+            Assert.Contains("exactly match", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Matrix_rejects_a_child_that_emits_a_future_planned_artifact_early()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");
+        try
+        {
+            var plan = MatrixPlan.Create(Workload(), Request());
+            var first = true;
+
+            var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+                ProcessMatrixRunner.RunAsync(
+                    plan,
+                    directory,
+                    (run, output, _) =>
+                    {
+                        WriteArtifact(output, run);
+                        if (first)
+                        {
+                            first = false;
+                            WriteArtifact(output, plan.Runs[1]);
+                        }
+                        return Task.FromResult(0);
+                    },
+                    CancellationToken.None));
+
+            Assert.Contains("unexpected artifact", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Two_fresh_measurement_sets_in_one_cohort_can_compare()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");
+        try
+        {
+            await RunMatrixAsync(MatrixPlan.Create(Workload(), Request("ef", "ef-set")), directory);
+            await RunMatrixAsync(MatrixPlan.Create(Workload(), Request("groundwork", "groundwork-set", compositionFingerprint: new string('f', 64))), directory);
+
+            var result = Comparison.Compare(
+                directory,
+                "sqlite/ef/document-type-specific-tables",
+                "sqlite/groundwork/document-type-specific-tables",
+                WorkloadCatalog.Load(Repository.Root()));
+
+            Assert.True(result.Complete);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Matrix_rejects_a_duplicate_measurement_set_or_mixed_cohort()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");
+        try
+        {
+            var plan = MatrixPlan.Create(Workload(), Request("ef", "ef-set"));
+            await RunMatrixAsync(plan, directory);
+
+            var duplicate = await Assert.ThrowsAsync<PerformanceContractException>(() => RunMatrixAsync(plan, directory));
+            Assert.Contains("distinct measurement set", duplicate.Message, StringComparison.OrdinalIgnoreCase);
+
+            var mixed = MatrixPlan.Create(Workload(), Request("groundwork", "groundwork-set", "other-cohort"));
+            var mixedError = await Assert.ThrowsAsync<PerformanceContractException>(() => RunMatrixAsync(mixed, directory));
+            Assert.Contains("existing cohort", mixedError.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Matrix_rejects_traversal_in_native_plan_evidence_reference()
+    {
+        var request = Request() with { NativePlanEvidenceReference = "../native-plan.json" };
+
+        Assert.Throws<PerformanceContractException>(() => MatrixPlan.Create(Workload(), request));
+    }
+
+    [Fact]
+    public async Task Matrix_rejects_missing_or_hash_mismatched_native_plan_evidence_files()
+    {
+        var missingDirectory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");
+        var mismatchDirectory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");
+        try
+        {
+            var plan = MatrixPlan.Create(Workload(), Request());
+            var missing = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+                ProcessMatrixRunner.RunAsync(
+                    plan,
+                    missingDirectory,
+                    (run, output, _) =>
+                    {
+                        ArtifactStore.Write(output, ArtifactFor(run));
+                        return Task.FromResult(0);
+                    },
+                    CancellationToken.None));
+            Assert.Contains("evidence", missing.Message, StringComparison.OrdinalIgnoreCase);
+
+            var mismatch = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+                ProcessMatrixRunner.RunAsync(
+                    plan,
+                    mismatchDirectory,
+                    (run, output, _) =>
+                    {
+                        Directory.CreateDirectory(output);
+                        File.WriteAllText(Path.Combine(output, run.NativePlanEvidenceReference), "tampered");
+                        ArtifactStore.Write(output, ArtifactFor(run));
+                        return Task.FromResult(0);
+                    },
+                    CancellationToken.None));
+            Assert.Contains("evidence", mismatch.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(missingDirectory)) Directory.Delete(missingDirectory, recursive: true);
+            if (Directory.Exists(mismatchDirectory)) Directory.Delete(mismatchDirectory, recursive: true);
+        }
     }
 
     [Fact]
@@ -58,7 +296,7 @@ public sealed class ProtocolAndGateTests
     {
         var request = Request() with { PackageVersions = new Dictionary<string, string> { ["connection-string"] = "safe-looking-value" } };
 
-        var error = Assert.Throws<PerformanceContractException>(() => MatrixPlan.Create(request));
+        var error = Assert.Throws<PerformanceContractException>(() => MatrixPlan.Create(Workload(), request));
 
         Assert.Contains("sensitive", error.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -80,7 +318,82 @@ public sealed class ProtocolAndGateTests
         finally { File.Delete(path); }
     }
 
-    private static MatrixRequest Request() => new(
-        "bookmark-lookup", "1.0.0", "sqlite", "groundwork", "document-type-specific-tables", "100k",
-        new string('a', 40), new Dictionary<string, string> { ["Groundwork.Sqlite"] = "0.0.1-preview.81" }, new string('b', 64), "spec094-bookmark-lookup-v1", new string('c', 64), "list-by-stimulus-and-type", "native-plan.json");
+    private static MatrixRequest Request(string adapter = "groundwork", string measurementSet = "groundwork-set", string cohort = "cohort-646", string? compositionFingerprint = null)
+    {
+        var request = new MatrixRequest(
+            cohort, measurementSet, "bookmark-lookup", "1.0.0", "sqlite", adapter, "document-type-specific-tables", "100k",
+            new string('a', 40), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, compositionFingerprint ?? new string('b', 64), "spec094-bookmark-lookup-v1", "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", $"{measurementSet}.native-plan.json", new string('0', 64));
+        return request with { NativePlanContentSha256 = Hash(NativePlanPayload(request)) };
+    }
+
+    private static PerformanceWorkload Workload() =>
+        WorkloadCatalog.Load(Repository.Root()).Workloads["bookmark-lookup"];
+
+    private static ProcessArtifact ArtifactFor(RunRequest request)
+    {
+        var raw = Enumerable.Repeat(1d, 100).ToArray();
+        IReadOnlyList<OperationSample> operations = request.ProcessKind == ProcessKind.Warmup
+            ? []
+            :
+            [
+                new OperationSample(
+                    "read",
+                    raw.Length,
+                    30,
+                    raw.Length / 30d,
+                    Statistics.Percentile(raw, 50),
+                    Statistics.Percentile(raw, 95),
+                    Statistics.Percentile(raw, 99),
+                    raw)
+            ];
+        return new ProcessArtifact(
+            2,
+            request,
+            BenchmarkProtocol.Acceptance,
+            true,
+            new CorrectnessEvidence(
+                "9f3d29edc4c3e64409f3fb9b64b4ec3e7d5e5064d8233be8afd92215ec3d680e",
+                "file-backed-distinct-connections",
+                new NativePlanEvidence(
+                    "list-by-stimulus-and-type",
+                    request.NativePlanEvidenceReference,
+                    request.NativePlanContentSha256,
+                    NativeRoutes)),
+            operations,
+            new MachineMetadata("test-os", "test-runtime", "X64", "X64", 1, "2026-07-24T00:00:00Z"));
+    }
+
+    private static void WriteArtifact(string outputDirectory, RunRequest request)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        var evidencePath = Path.Combine(outputDirectory, request.NativePlanEvidenceReference);
+        if (!File.Exists(evidencePath)) File.WriteAllText(evidencePath, NativePlanPayload(request));
+        ArtifactStore.Write(outputDirectory, ArtifactFor(request));
+    }
+
+    private static Task RunMatrixAsync(MatrixPlan plan, string outputDirectory) =>
+        ProcessMatrixRunner.RunAsync(
+            plan,
+            outputDirectory,
+            (run, output, _) =>
+            {
+                WriteArtifact(output, run);
+                return Task.FromResult(0);
+            },
+            CancellationToken.None);
+
+    private static readonly NativeRouteEvidence[] NativeRoutes =
+    [
+        new("list-by-stimulus-and-type", new string('e', 64), "bounded-index-seek", "ix-bookmarks", 100_000, true, true, 25, 1),
+        new("list-by-stimulus-type", new string('f', 64), "bounded-index-seek", "ix-bookmarks", 100_000, true, true, 25, 1)
+    ];
+    private static string NativePlanPayload(MatrixRequest request) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
+        2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
+        request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha,
+        request.CompositionFingerprint, request.NativePlanIdentity, NativeRoutes));
+    private static string NativePlanPayload(RunRequest request) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
+        2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
+        request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha,
+        request.CompositionFingerprint, request.NativePlanIdentity, NativeRoutes));
+    private static string Hash(string content) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
 }
