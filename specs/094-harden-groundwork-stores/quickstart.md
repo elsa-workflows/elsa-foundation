@@ -371,6 +371,22 @@ Identity manifest v1.0.4 matrix, and all older artifacts are immutable historica
 evidence; the ledger remains unlinked until fresh exact-head artifacts exist. The committed EF contract baseline is explicitly non-executed;
 #646 owns live EF execution, equality, and timing.
 
+### #646 IAM adapter checkpoint
+
+The #646 harness now owns one provider-neutral `iam-normalized-lookup-update` scenario and executes it
+through the real ASP.NET Core Identity store contracts. On 2026-07-24, the timing-free SQLite
+checkpoint ran the same fixed seed and observations through:
+
+- `ApplicationIdentityDbContext` registered with `AddEntityFrameworkStores`;
+- `GroundworkIdentityUserStore` and `GroundworkIdentityRoleStore` over the production SQLite driver.
+
+Both targets reproduced input fingerprint
+`5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9` and result digest
+`32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc`. The focused workload and
+SQLite correctness selection passed 11/11. This checkpoint does not authorize timing: EF native-plan
+capture, the executable matrix target, and the remaining workload adapters are still open, so no
+performance verdict or coverage-ledger row advances.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
