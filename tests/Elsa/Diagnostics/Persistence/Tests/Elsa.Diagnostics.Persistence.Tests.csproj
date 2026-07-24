@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Groundwork.DiagnosticRecords" />
+    <PackageReference Include="Groundwork.MongoDb" />
+    <PackageReference Include="Groundwork.PostgreSql" />
+    <PackageReference Include="Groundwork.Sqlite" />
+    <PackageReference Include="Groundwork.SqlServer" />
+    <PackageReference Include="JsonSchema.Net" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="MongoDB.Driver" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Testcontainers.MongoDb" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\Persistence\Elsa.Diagnostics.Persistence.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\Persistence\Groundwork\Elsa.Diagnostics.Persistence.Groundwork.csproj" Aliases="DiagnosticsGroundwork" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Persistence\Groundwork\Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Persistence\Groundwork\Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
+  </ItemGroup>
+
+</Project>

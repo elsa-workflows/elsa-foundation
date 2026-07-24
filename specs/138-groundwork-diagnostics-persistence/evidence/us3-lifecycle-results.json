@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "workUnit": "138-groundwork-diagnostics-persistence",
+  "userStory": "US3",
+  "outcome": "pass",
+  "evidenceClassification": "replay-base-only",
+  "currentPromotionTarget": "0.0.1-preview.81",
+  "promotionNote": "The provider-neutral lifecycle suite was rerun on the uncommitted spec-138 replay over the preview.80 base. Preview.81 exact-head certification remains pending.",
+  "testProject": "tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj",
+  "testCommand": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-restore -c Release --filter 'FullyQualifiedName~DiagnosticsDrainLoadTests|FullyQualifiedName~DiagnosticsDrainShutdownTests|FullyQualifiedName~DiagnosticsDrainLifecycleTests|FullyQualifiedName~DiagnosticsPersistenceObservabilityTests|FullyQualifiedName~DiagnosticsPersistenceLifecycleTests|FullyQualifiedName~DiagnosticsLifecycleEvidenceTests'",
+  "testRun": {
+    "configuration": "Release",
+    "passed": 49,
+    "failed": 0,
+    "skipped": 0,
+    "recordedAtUtc": "2026-07-24T00:32:15Z",
+    "gitHead": "67efaa76b719301c16a1fc017bdc93e17e660515",
+    "testedSourceState": "Uncommitted spec-138 replay changes over the recorded base; root integration and preview.81 recertification are required before promotion."
+  },
+  "coveredSuites": [
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsDrainLoadTests",
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsDrainShutdownTests",
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsDrainLifecycleTests",
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsPersistenceObservabilityTests",
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsPersistenceLifecycleTests",
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsLifecycleEvidenceTests"
+  ],
+  "queueBounds": {
+    "concurrentProducerQueueCapacity": 512,
+    "concurrentProducerCount": 200,
+    "overflowQueueCapacity": 2,
+    "overflowSubmittedCount": 3,
+    "overflowShedCount": 1
+  },
+  "lossTotals": {
+    "queueOverflow": 1,
+    "retryExhausted": 1,
+    "shutdownTimeout": 1,
+    "writeAfterClosure": 1,
+    "durableRetentionDeletion": 3,
+    "subscriberDelivery": 7
+  },
+  "completionOutcomes": {
+    "graceful": {
+      "state": "Stopped",
+      "drained": true,
+      "acceptedAcknowledgementCount": 8,
+      "finalRetentionDeletedCount": 3
+    },
+    "timedOut": {
+      "state": "TimedOut",
+      "drained": false,
+      "acceptedAcknowledgementCount": 1,
+      "upperBoundMilliseconds": 1000
+    }
+  },
+  "retries": {
+    "commitRetryCountBeforeExhaustion": 2,
+    "commitFailureCountAfterExhaustion": 1,
+    "retentionRetryCountBeforeRecovery": 2
+  }
+}

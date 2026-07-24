@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "workUnit": "138-groundwork-diagnostics-persistence",
+  "userStory": "US1",
+  "outcome": "incomplete",
+  "evidenceClassification": "historical-provenance-only",
+  "currentPromotionTarget": "0.0.1-preview.81",
+  "promotionNote": "This preview.73 run predates the spec-138 replay and is retained only as design provenance. It does not certify preview.81 or current main.",
+  "recordedAtUtc": "2026-07-20T01:46:58Z",
+  "gitHeadAtRun": "28eb679b1552231cffcb19b5e30c906f8f925668",
+  "testedSourceState": "The new shared suites and harness change were uncommitted when run; they were committed unchanged in the immediately following checkpoint.",
+  "groundworkPackageVersion": "0.0.1-preview.73",
+  "runs": [
+    {
+      "provider": "sqlite",
+      "status": "partial-pass",
+      "executed": [
+        "DiagnosticsGroundworkProviderConformanceTests (2 restart cases)",
+        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)",
+        "DiagnosticsDurableOperationConformanceTests (5 SQLite diagnostic-record operation cases)",
+        "GroundworkStructuredLogReplayTests and GroundworkStructuredLogQueryConformanceTests (12 cases)",
+        "GroundworkOpenTelemetryRestartTests (1 case)"
+      ],
+      "notExecuted": [
+        "The complete adapter-level US1 suite through the four-provider fixture"
+      ]
+    },
+    {
+      "provider": "sqlserver",
+      "status": "partial-pass",
+      "executed": [
+        "DiagnosticsGroundworkProviderConformanceTests (2 restart cases)",
+        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)"
+      ],
+      "notExecuted": [
+        "Structured Logs replay/error matrix",
+        "OpenTelemetry operation-idempotency and restart matrix"
+      ]
+    },
+    {
+      "provider": "postgresql",
+      "status": "partial-pass",
+      "executed": [
+        "DiagnosticsGroundworkProviderConformanceTests (2 restart cases)",
+        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)"
+      ],
+      "notExecuted": [
+        "Structured Logs replay/error matrix",
+        "OpenTelemetry operation-idempotency and restart matrix"
+      ]
+    },
+    {
+      "provider": "mongodb",
+      "status": "partial-pass",
+      "executed": [
+        "DiagnosticsGroundworkProviderConformanceTests (2 restart cases)",
+        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)"
+      ],
+      "notExecuted": [
+        "Structured Logs replay/error matrix",
+        "OpenTelemetry operation-idempotency and restart matrix"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-build -c Release --filter 'FullyQualifiedName~DiagnosticsGroundworkProviderConformanceTests' --logger 'console;verbosity=normal'",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-build -c Release --filter 'FullyQualifiedName~DiagnosticsScopeAndRetentionConformanceTests' --logger 'console;verbosity=normal'",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-build -c Release --filter 'FullyQualifiedName~DiagnosticsDurableOperationConformanceTests' --logger 'console;verbosity=normal'",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "command": "dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.Tests.csproj --no-restore -c Release --filter 'FullyQualifiedName~GroundworkStructuredLogQueryConformanceTests|FullyQualifiedName~GroundworkStructuredLogReplayTests' --logger 'console;verbosity=normal'",
+      "passed": 12,
+      "failed": 0
+    },
+    {
+      "command": "dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj --no-restore -c Release --filter 'FullyQualifiedName~GroundworkOpenTelemetryRestartTests|FullyQualifiedName~GroundworkOpenTelemetryQueryConformanceTests|FullyQualifiedName~GroundworkOpenTelemetryCatalogTests' --logger 'console;verbosity=normal'",
+      "passed": 17,
+      "failed": 0
+    }
+  ],
+  "blockers": [
+    "T022 remains open: the all-four-provider US1 adapter conformance matrix has not yet been executed. This manifest is not a certification."
+  ]
+}

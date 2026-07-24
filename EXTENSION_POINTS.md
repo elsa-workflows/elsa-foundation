@@ -160,6 +160,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
+| Diagnostics persistence lifecycle (bounded drain, durable acknowledgement, readiness, observability) | [`src/Elsa/Diagnostics/Persistence/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/Persistence/EXTENSION_POINTS.md) |
 | Structured logs (log store, live feed, sink, source provider) | [`src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md) |
 | OpenTelemetry (telemetry store, live feed, ingestor, redactor, trusted OTLP authentication/context, source registry, provider, collector config) | [`src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md) |
 
