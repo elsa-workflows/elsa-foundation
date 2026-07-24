@@ -6,17 +6,29 @@
   "evidenceClassification": "exact-integrated-head-certification",
   "currentPromotionTarget": "0.0.1-preview.81",
   "groundworkPackageVersion": "0.0.1-preview.81",
-  "recordedAtUtc": "2026-07-24T06:28:43Z",
-  "gitHeadAtRun": "ff1d0ae47325eda1406c52b66d0bb72e321049e4",
-  "originMainAtRun": "6458b39ad4a251c992a7384f1f325e164320d481",
+  "recordedAtUtc": "2026-07-24T10:42:21Z",
+  "gitHeadAtRun": "9ac3b62d8f3da6ac5e1231aacfe4d1cd61b161dd",
+  "originMainAtRun": "305e2dc553b09131e7ae49c083cdcb3125da1868",
   "testedSourceState": "Clean exact branch HEAD after merging the recorded origin/main.",
   "groundworkPackageResolution": "The Persistence Tests project and both adapter test projects were restored with --force-evaluate before their recorded runs; their project.assets.json files resolved every Groundwork library at 0.0.1-preview.81.",
-  "testSourceSha256": "33d8b0ac732ea6394d90197d969f1a96bd3e342cdc1bc2a202036b6e84cba530",
+  "hashAlgorithm": "SHA-256",
+  "testSourceSha256": {
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs": "df8e2de61dafe84102462e844a1612848ede558b33d9c6581c7e62744c292da3",
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs": "b834687e1ed3f215419ec643e3904d0d999c01918f941ba1de6dbc38cd30524b",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryCatalogTests.cs": "cee767d7db4aad64d13c77d9349af992e6a77351acd0755c7f4eef4f53bdede4",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs": "6005cdc602b2351993a80569c6f0fe86b3d9ccecaa96bc18203dfd4aa2f3d6a1",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryStoreTests.cs": "cbc109854bb5aa0f6a9c3d97a00272f21b59259c17aa7dbbafa68237349a43d1",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/OpenTelemetryRecordStreamDefinitionTests.cs": "3eb1042302cfe482cabfd76f93ec6d5cc680b54d0317bd565ee4ed6211161608"
+  },
   "productionSourceSha256": {
-    "GroundworkOpenTelemetryDocumentStoreGate.cs": "b52e989b79723f0411c4f309efc206c8684c0993fef6c494ebc05abe7e73064d",
-    "GroundworkOpenTelemetryStores.cs": "8450b3e3a4ece98918e7d1cbcb7108c506d4e7339fabd0d756c945944a70ecf5",
-    "GroundworkOpenTelemetryPersistenceFeature.cs": "630f80f1fd7d6de125aacf3430edadb0979f5f1fff4dfa9abf1fa10b7721b35d",
-    "GroundworkStructuredLogsPersistenceFeature.cs": "c14daa89a4c5551bd8e11532b8ab2df1f0fb1ef80778d9ed96b3d41fc2446c2b"
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs": "5d456383e636f6f72fd92fec58ad0e6c2ef288eecf06aebab88d2437d09b23e1",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/OpenTelemetryGroundworkStorageSchema.cs": "297b6d86ddaa6e2d06609049149e7fe130ef55cb008c5f29b7eecbfbc7d3bac2",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/CatalogDocumentSerializer.cs": "a8475dae3905cd41a5aba4fe180caf44ab64f986a016a33ecda52597feb7a810",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/CatalogDocuments.cs": "b5f45120b8f8636cc11b66eeb7630b3f547b3c2eebb3bb6211d01f444143423e",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/CanonicalRecordSerializer.cs": "4b6b30954a5063dafe6b39b76689d54b71ad5aaa9d9bc2d6e28e6f0dff059e22",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/OpenTelemetryRecordStreamDefinitions.cs": "a1045bc4ba4678d0648b009e95a7a61e0750c3ac743eeb098f59063a9a1a19b8",
+    "src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogStore.cs": "9e836726ea4ea955d58b5be53665b4af9a74b28a973dc9f4989876132ff27537",
+    "src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/StructuredLogsGroundworkStorageSchema.cs": "0d08c62651c9f451df174e41e8d1e88e5e1b42386e8400fe1a79d264f05a0e14"
   },
   "providers": [
     {
@@ -51,11 +63,11 @@
   "commands": [
     {
       "purpose": "Four-provider US1 certification",
-      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj -c Release --filter 'FullyQualifiedName~OpenTelemetry_catalogs_records_and_counts_survive_restart|FullyQualifiedName~Structured_log_commit_cursor_and_high_water_survive_restart|FullyQualifiedName~Structured_log_replay_retry_and_failure_semantics_match_across_providers|FullyQualifiedName~OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers|FullyQualifiedName~DiagnosticsScopeAndRetentionConformanceTests' --logger 'console;verbosity=minimal'",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj -c Release --no-restore --filter 'FullyQualifiedName~OpenTelemetry_catalogs_records_and_counts_survive_restart|FullyQualifiedName~Structured_log_commit_cursor_and_high_water_survive_restart|FullyQualifiedName~Structured_log_replay_retry_and_failure_semantics_match_across_providers|FullyQualifiedName~OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers|FullyQualifiedName~DiagnosticsScopeAndRetentionConformanceTests' --logger 'console;verbosity=minimal'",
       "passed": 24,
       "failed": 0,
       "skipped": 0,
-      "durationSeconds": 16
+      "durationSeconds": 26
     },
     {
       "purpose": "Structured Logs complete adapter regression",
@@ -67,9 +79,10 @@
     {
       "purpose": "OpenTelemetry complete adapter regression",
       "command": "dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj -c Release --no-restore --logger 'console;verbosity=minimal'",
-      "passed": 69,
+      "passed": 73,
       "failed": 0,
       "skipped": 1,
+      "discovered": 74,
       "skipBoundary": "One explicit Groundwork#130 skip for provider-side grouped trace reduction."
     },
     {

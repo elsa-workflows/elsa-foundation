@@ -52,7 +52,7 @@ objective is now represented by a red Groundwork test and T054 cannot delete it.
 |---|---|---|
 | `EfCoreOpenTelemetryStoreTests.WriteAsync_PopulatesSourceRegistrySynchronouslyAndPersistsAllSignalTypes` | Accepted batch marks source and persists every signal kind. | `GroundworkOpenTelemetryStoreTests.Capture_marks_sources_only_when_the_drain_accepts_the_batch` plus `GroundworkOpenTelemetryRestartTests.Exact_catalog_and_immutable_counts_survive_store_restart` — covered. |
 | `.QueryTracesAsync_WhenTraceIdAppearsInMultipleBatches_ReturnsMergedSummary` | Repeat trace records merge earliest start, latest end, worst status, summed span count, and workflow ids. | `GroundworkOpenTelemetryQueryConformanceTests.Repeated_trace_records_merge_to_one_summary_across_durable_batches` — **added red; blocked.** Current `LatestPerKeyField` returns only the newer record. |
-| `.QueryMetricsAndLogs_FilterByServiceNameThroughDurableResources` | Metric/log service-name filtering follows durable resource metadata. | `GroundworkOpenTelemetryQueryConformanceTests.Metric_and_log_service_name_filters_follow_the_durable_resource_catalog` — **added red; blocked.** Current adapter throws `OpenTelemetryPersistenceCapabilityException`. |
+| `.QueryMetricsAndLogs_FilterByServiceNameThroughDurableResources` | Metric/log service-name filtering follows durable resource metadata. | `GroundworkOpenTelemetryQueryConformanceTests.Metric_and_log_service_name_filters_follow_the_durable_resource_catalog` plus `DiagnosticsGroundworkProviderConformanceTests.Query_filters_ordering_limits_and_catalog_capacity_match_across_providers` — covered by the adapter suite and all four providers. |
 | `.QueryMetricsAsync_WhenInstrumentIdsDifferOnlyByCase_CollapsesLikeInMemoryStore` | Case-equivalent catalog ids coalesce but retain all points. | `GroundworkOpenTelemetryQueryConformanceTests.Case_equivalent_instrument_ids_collapse_while_retaining_both_points` — covered. |
 | `.DrainPrunesHighVolumeSignalsToConfiguredCapacities` | Exact retention for all immutable signal streams and catalogs. | `GroundworkOpenTelemetryQueryConformanceTests.Signal_retention_keeps_the_exact_newest_window_for_every_stream` plus `GroundworkOpenTelemetryCatalogTests.Catalog_upserts_and_capacity_keep_the_newest_entries` — covered. |
 | `.CompleteDrainingAsync_WhenDrainingWasNeverStarted_Throws` | Direct pre-start completion is invalid. | `GroundworkOpenTelemetryStoreTests.Lifecycle_stop_before_start_is_terminal_without_retention_io` — covered by replacement lifecycle contract. |
@@ -76,8 +76,8 @@ The added shared-host lifecycle test is the resulting non-token-scan coverage.
 
 Before T053/T054 can be approved and performed:
 
-1. Resolve the two red OpenTelemetry tests above without broad client-side evaluation, then rerun their
-   Groundwork suite and the four-provider conformance relevant to the repaired behavior.
+1. Resolve the one remaining OpenTelemetry test above without broad client-side evaluation, then
+   rerun its Groundwork suite and the four-provider conformance relevant to the repaired behavior.
 2. Obtain explicit recorded architect approval for every original EF-test removal, including the two
    EF-mechanism-only factory/sentinel rows.
 3. Satisfy the existing T050-T052 performance/remediation gates and the uncompleted T047/T057 final

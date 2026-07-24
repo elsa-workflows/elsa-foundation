@@ -58,26 +58,28 @@ represented as preview.81/four-provider certification.
 ## Preview.81 exact-head T043 lifecycle recertification (2026-07-24)
 
 On clean `codex/642-groundwork-diagnostics-replay` integration head
-`05f26897cdf293643e8f76d6ff4ac8456fba39a9`, with Groundwork resolved at
+`9ac3b62d8f3da6ac5e1231aacfe4d1cd61b161dd`, with Groundwork resolved at
 `0.0.1-preview.81`, the provider-neutral lifecycle command recorded in
 [`evidence/us3-lifecycle-results.json`](evidence/us3-lifecycle-results.json) passed **49/49** in
 Release with no failures or skips. The tested head had merged `origin/main`
-`6458b39ad4a251c992a7384f1f325e164320d481`; it was 12 branch commits ahead and 0 behind.
+`305e2dc553b09131e7ae49c083cdcb3125da1868`; it was 17 branch commits ahead and 0 behind.
 
 This certifies T043's load, shutdown, lifecycle, and observability boundary only. It does not certify
 the container-provider matrix, performance verdict, zero-EF removal, or a future exact-main head.
 
 ## Preview.81 integrated four-provider recertification (2026-07-24)
 
-On clean pushed head `ff1d0ae47325eda1406c52b66d0bb72e321049e4`, after merging `origin/main`
-`6458b39ad4a251c992a7384f1f325e164320d481`, the exact commands retained in the US1 and US2
+On clean code-and-test head `9ac3b62d8f3da6ac5e1231aacfe4d1cd61b161dd`, after merging `origin/main`
+`305e2dc553b09131e7ae49c083cdcb3125da1868`, the exact commands retained in the US1 and US2
 manifests passed:
 
 - US1 real-provider matrix: **24/24** across SQLite, SQL Server, PostgreSQL, and replica-set MongoDB.
 - Structured Logs adapter: **18/18**.
-- OpenTelemetry adapter: **69 passed, 1 explicit #130 skip**.
+- OpenTelemetry adapter: **74 discovered, 73 passed, 1 explicit #130 skip**.
 - Provider-independent durable operations: **5/5**.
 - US2 real-provider query/scope/retention/native-plan matrix: **17/17**.
+- Four-provider bounded-plan slice: **5/5**, including eight catalog routes.
+- Full shared diagnostics persistence checkpoint: **147/147**.
 
 The provider fixture contains exactly the four mandatory providers and starts pinned SQL Server,
 PostgreSQL, and MongoDB Testcontainers without fallback or provider skips; SQLite uses a real
@@ -85,7 +87,23 @@ database file. The provider and adapter projects were force-restored before thei
 and their assets resolve every Groundwork library to `0.0.1-preview.81`. The #130 skip remains a
 truthful blocker for provider-side grouped trace reduction and repeated-trace merge across durable
 batches; the passing matrix does not claim that behavior. The manifests retain the exact commands,
-source hashes, provider case counts, and evidence boundaries.
+full relative source paths with SHA-256 hashes, provider case counts, and evidence boundaries. The
+147-test result is adapter-checkpoint evidence only; it is not T057 final zero-EF certification.
+
+## Independent-review remediation checkpoint (2026-07-24)
+
+Three adversarial read-only reviews of the pre-remediation candidate found real correctness,
+evidence, and scope defects. Commit `5538d8414` resolved zero-capacity retention, deterministic tied
+catalog eviction, paged trace detail, the declared resource/trace service filters, corrupt catalog
+taxonomy, and bounded physical plans. Commit `9ac3b62d8` added four-provider coverage for resource,
+trace, metric, and log service-name filters.
+
+The evidence review also found that the original T015 red baseline was recorded too late. T015
+therefore remains unchecked as a non-retroactive process deviation; later green runs establish
+behavior, not historical test-first compliance. The scope review found two future-phase guards
+enabled before their prerequisites. Commit `5538d8414` removed the premature T047 zero-EF assertion
+and T050 lane-local performance-contract tests. Both tasks remain unchecked and their tests must be
+introduced test-first only when the EF-deletion and #646 performance phases begin.
 
 ## T053/T054 removal-ledger intake (2026-07-24)
 
@@ -100,7 +118,7 @@ and factories. It added and passed two previously missing replacement checks:
 
 The same intake exposed two OpenTelemetry gaps. Metric/log `ServiceName` is now projected from the
 durable resource catalog and filtered inside the diagnostic-record provider; the full OpenTelemetry
-suite passes **69/69 with one explicit skip**. Repeated trace fragments still require merge-before-
+suite discovers **74 tests: 73 pass and one is explicitly skipped**. Repeated trace fragments still require merge-before-
 filter semantics. A proposed retained-window client merge was rejected because it violated the
 provider-bounded query contract. The red test is retained as an explicit skip blocked by
 `valence-works/Groundwork#130`, which owns provider-native grouped diagnostic reduction. This blocks

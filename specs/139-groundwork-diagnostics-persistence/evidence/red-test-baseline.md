@@ -1,8 +1,9 @@
 # User Story 1 Red-Test Baseline
 
 > Historical provenance only. This red run was captured on the stale pre-replay branch and is not
-> evidence for Groundwork preview.81 or current Elsa `main`; T015 remains open for an exact replay
-> baseline if the program requires a promotable red/green record.
+> evidence for Groundwork preview.81 or current Elsa `main`. T015 remains open as a non-retroactive
+> process deviation; this artifact cannot promote or retroactively certify the missing test-first
+> baseline.
 
 Recorded at `2026-07-14T00:47:54Z`, before implementing T016-T021.
 
