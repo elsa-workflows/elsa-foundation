@@ -104,8 +104,10 @@
   - Evidence: OpenTelemetry query conformance passed inside the 68-test adapter suite.
 - [X] T025 [P] [US2] Add deterministic resource/instrument catalog capacity and least-recently-seen retention tests in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryCatalogTests.cs`
   - Evidence: OpenTelemetry catalog conformance passed inside the 68-test adapter suite.
-- [ ] T026 [P] [US2] Add cross-scope non-disclosure and exact retention tests for all signals in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsScopeAndRetentionConformanceTests.cs`
-- [ ] T027 [US2] Add real-provider execution-plan/index evidence assertions for every scale-bearing query and mutation in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs`
+- [X] T026 [P] [US2] Add cross-scope non-disclosure and exact retention tests for all signals in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsScopeAndRetentionConformanceTests.cs`
+  - Evidence: the real-provider suite passed the structured-log and all-signal telemetry cross-scope retention cases on SQLite, SQL Server, PostgreSQL, and MongoDB.
+- [X] T027 [US2] Add real-provider execution-plan/index evidence assertions for every scale-bearing query and mutation in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs`
+  - Evidence: the 21-test real-provider batch passed across all four providers, including native bounded plans for diagnostic queries, trim selection, catalog selection/count/capacity routes, plus non-materializing missing-schema rejection.
 
 ### Implementation for User Story 2
 
