@@ -336,6 +336,7 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
     public abstract GroundworkProviderDescriptor Descriptor { get; }
     public abstract GroundworkTopologyCapabilities RequiredTopology { get; }
     public abstract GroundworkCompositionFingerprint CompositionFingerprint { get; }
+    public abstract string? PhysicalTargetFingerprint { get; }
     public abstract GroundworkProcessLaunchDescriptor ProcessLaunchDescriptor { get; }
     public abstract string ProbeDocumentKind { get; }
     public GroundworkFailureController Failures { get; } = new();
