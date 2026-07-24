@@ -188,8 +188,8 @@ does not claim a completed OpenIddict adapter.
 ### T004 package/tool reconciliation — 2026-07-24
 
 The earlier preview.80/preview.81 observations above are historical batch
-evidence, not the current T004 state. At branch head
-`29c9af89e3d0ed2825936ec05cce8bff5442d4cd` and inspected `origin/main`
+evidence, not the current T004 state. At integration head
+`86e3bbc9ef99918ab969a16aafd2b2d06711acab`, after merging `origin/main`
 `6458b39ad4a251c992a7384f1f325e164320d481`, `Directory.Packages.props`
 pins all seven library packages—`Groundwork.Core`,
 `Groundwork.DiagnosticRecords`, `Groundwork.Documents`,
