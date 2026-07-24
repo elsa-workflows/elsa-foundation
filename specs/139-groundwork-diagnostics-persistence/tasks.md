@@ -18,14 +18,16 @@
 
 **Purpose**: Create project boundaries and registration points without changing active persistence behavior.
 
-- [ ] T001 Create the shared diagnostics lifecycle library in `src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj` and add it to `Elsa.Server.slnx`
+- [X] T001 Create the shared diagnostics lifecycle library in `src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj` and add it to `Elsa.Server.slnx`
+  - Evidence: The shared lifecycle project is present, listed by `dotnet sln Elsa.Server.slnx list`, and builds cleanly on the replay head.
 - [X] T002 [P] Create the OpenTelemetry Groundwork adapter project in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj`
   - Evidence: Adapter project is present and the OpenTelemetry Groundwork suite built and passed 68/68 on the replay base.
 - [X] T003 [P] Create the shared lifecycle test project in `tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj`
   - Evidence: Shared lifecycle test project is present; the focused provider-neutral batches passed 49/49, 19/19, and 34/34.
 - [X] T004 [P] Create the OpenTelemetry Groundwork test project in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj`
   - Evidence: Adapter test project is present and passed 68/68 on the replay base.
-- [ ] T005 Add all new projects to `Elsa.Server.slnx` and verify project references remain acyclic
+- [X] T005 Add all new projects to `Elsa.Server.slnx` and verify project references remain acyclic
+  - Evidence: All seven diagnostics Groundwork/shared projects are listed in `Elsa.Server.slnx`; focused builds of the shared library, adapters, and test projects completed without dependency-cycle errors.
 
 **Checkpoint**: New project boundaries build, but existing EF and Groundwork behavior remains unchanged.
 
