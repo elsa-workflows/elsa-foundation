@@ -86,12 +86,12 @@ Current remote `main` inspected during the batch:
   `contracts/openiddict-member-ledger.md` and
   `contracts/test-objective-ledger.md`.
 
-### Preview.81 capability probe
+### Historical Preview.81 capability probe
 
 Probe:
 `tests/Elsa/Persistence/Groundwork/Conformance/Tests/OpenIddictGroundworkCapabilityProbeTests.cs`.
 
-The focused API/package probe and current-main inspection establish:
+The focused API/package probe and the then-current-main inspection established:
 
 - all seven Groundwork libraries on current `main` are pinned to
   `0.0.1-preview.81` (the unmerged batch branch still restores preview.80);
@@ -184,6 +184,41 @@ Actual result after merging remote `main`
 The package and tool family are now aligned on preview.81. T006 remains blocked
 only on the reviewed physical form and real-provider evidence; this checkpoint
 does not claim a completed OpenIddict adapter.
+
+### T004 package/tool reconciliation — 2026-07-24
+
+The earlier preview.80/preview.81 observations above are historical batch
+evidence, not the current T004 state. At branch head
+`29c9af89e3d0ed2825936ec05cce8bff5442d4cd` and inspected `origin/main`
+`6458b39ad4a251c992a7384f1f325e164320d481`, `Directory.Packages.props`
+pins all seven library packages—`Groundwork.Core`,
+`Groundwork.DiagnosticRecords`, `Groundwork.Documents`,
+`Groundwork.MongoDb`, `Groundwork.PostgreSql`, `Groundwork.Sqlite`, and
+`Groundwork.SqlServer`—to `0.0.1-preview.81`. `.config/dotnet-tools.json`
+contains the `groundwork.tool` entry at that same version.
+
+The configured `Groundwork Preview` source was verified using a new, empty
+NuGet package cache; this checks public feed restoration rather than merely
+reading an existing local cache:
+
+```bash
+dotnet restore tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj \
+  --force-evaluate --no-cache --packages <empty-cache> --verbosity minimal
+dotnet restore src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj \
+  --force-evaluate --no-cache --packages <empty-cache> --verbosity minimal
+DOTNET_CLI_HOME=<empty-home> NUGET_PACKAGES=<empty-cache> \
+  dotnet tool restore --tool-manifest .config/dotnet-tools.json --configfile NuGet.config
+DOTNET_CLI_HOME=<empty-home> NUGET_PACKAGES=<empty-cache> \
+  dotnet tool run groundwork -- --version
+```
+
+Observed: both package restores succeeded; the tool restore succeeded and
+reported `Groundwork.Tool 0.0.1-preview.81`. This admits the exact current
+package/tool version family only. It does not certify package hashes, native
+provider execution, topology, mutation/query plans, collection-element
+membership, or a physical form. T006 remains incomplete, and
+valence-works/Groundwork#128 remains the hard prerequisite before #646 can
+evaluate executable physical forms.
 
 ## Phase 2 scaffold and red baseline — 2026-07-24
 
