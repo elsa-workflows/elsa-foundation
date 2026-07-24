@@ -176,8 +176,9 @@ does not claim a completed OpenIddict adapter.
 
 ## Phase 2 scaffold and red baseline — 2026-07-24
 
-The concrete provider and test projects restore and compile directly. They were
-not added to `Elsa.Server.slnx`; solution serialization remains T009.
+The concrete provider and test projects restore and compile directly and occupy
+their canonical collapsed OpenIddict solution folders in `Elsa.Server.slnx`.
+This completes solution serialization without choosing a physical form.
 
 ```bash
 dotnet test \
