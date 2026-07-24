@@ -123,6 +123,22 @@ Personal workflow choices are local implementation details, not shared repo fact
 2. Check project references, extension-point catalogs, tests, stubs, and external packages.
 3. Produce a report before proposing code changes.
 
+### Backend e2e tests
+
+`e2e-tests/` holds backend, REST-driven end-to-end tests (PowerShell) that exercise a from-source
+`Elsa.Server` through the real HTTP + persistence + runtime path — the black-box complement to the in-process
+C# tests under `tests/`. See [e2e-tests/README.md](e2e-tests/README.md) for the runner, per-suite categorization,
+and setup gotchas (fresh-DB-on-rebuild; opt-in `scheduling`/`DispatchWorkflow` features).
+
+1. When you change design, publishing, runtime, activity, or stimulus/scheduling behavior, run the relevant
+   `e2e-tests/` suite against a rebuilt server before considering the change done — it catches integration
+   regressions unit tests miss.
+2. Treat a failing e2e test as a **signal, not a verdict**: it is either a real regression or a **stale test**
+   (the codebase moved — a contract/shape changed, a tracked bug was fixed, or a feature was renamed). Rebuild on
+   current `main` with a fresh DB, re-run, and reconcile before "fixing" either side. `KNOWN ISSUE #NNNN` trackers
+   pass green by design and auto-flip to strict once the bug is fixed.
+3. On Windows use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>` (no `pwsh`).
+
 ### Glossary lookup
 
 1. Read [docs/glossary/root.md](docs/glossary/root.md) for framework terms.
@@ -161,5 +177,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/137-receive-correlation/plan.md`.
+`specs/138-reusable-boundary-outcomes/plan.md`.
 <!-- SPECKIT END -->

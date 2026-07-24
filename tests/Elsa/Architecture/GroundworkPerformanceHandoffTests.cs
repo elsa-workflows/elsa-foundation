@@ -85,8 +85,8 @@ public sealed class GroundworkPerformanceHandoffTests
             [
                 "id", "version", "scenarioId", "owner", "handoffTarget", "publicOperation",
                 "coverageRows", "input", "operationSequence", "requiredProviders", "requiredNativeRoutes",
-                "requiredProviderEvidence", "correctness", "efContractBaseline", "physicalFormsFor646",
-                "artifactRetention"
+                "requiredProviderEvidence", "correctness", "efContractBaseline", "benchmarkAdmission",
+                "physicalFormsFor646", "artifactRetention"
             ],
             workload["required"]!.AsArray().Select(value => value!.GetValue<string>()));
         Assert.Equal("#646", workload["properties"]!["handoffTarget"]!["const"]!.GetValue<string>());
@@ -147,6 +147,15 @@ public sealed class GroundworkPerformanceHandoffTests
                 workload["requiredProviderEvidence"]!.AsObject().Select(pair => pair.Key).Order(StringComparer.Ordinal));
             Assert.Equal("not-executed", workload["efContractBaseline"]!["executionStatus"]!.GetValue<string>());
             Assert.Equal("#646", workload["efContractBaseline"]!["executionOwner"]!.GetValue<string>());
+            var admission = workload["benchmarkAdmission"]!.AsObject();
+            Assert.Equal(
+                id == "secret-create-read-list" ? "blocked" : "ready",
+                admission["status"]!.GetValue<string>());
+            Assert.Equal(
+                id == "secret-create-read-list"
+                    ? "comparator.secret.real-ef-required"
+                    : "benchmark.ready",
+                admission["reason"]!.GetValue<string>());
         }
     }
 
@@ -183,6 +192,8 @@ public sealed class GroundworkPerformanceHandoffTests
             workload["requiredProviderEvidence"]!.AsObject().Select(pair => pair.Key).Order(StringComparer.Ordinal));
         Assert.Equal("not-executed", workload["efContractBaseline"]!["executionStatus"]!.GetValue<string>());
         Assert.Equal("#646", workload["efContractBaseline"]!["executionOwner"]!.GetValue<string>());
+        Assert.Equal("ready", workload["benchmarkAdmission"]!["status"]!.GetValue<string>());
+        Assert.Equal("benchmark.ready", workload["benchmarkAdmission"]!["reason"]!.GetValue<string>());
     }
 
     [Theory]

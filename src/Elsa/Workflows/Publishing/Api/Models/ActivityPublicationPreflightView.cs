@@ -33,7 +33,10 @@ public sealed record ActivityPublicationPreflightView(
     ActivityPublicationCapabilityReadinessView Provider,
     IReadOnlyList<ActivityPublicationCapabilityReadinessView> Storage,
     IReadOnlyList<ActivityPublicationCapabilityReadinessView> Runtime,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+    IReadOnlyList<ActivityDiagnostic> Diagnostics)
+{
+    public string ReviewedVersion { get; init; } = MinimumVersion;
+}
 
 public sealed record ActivityPublicationReceiptView(
     string IdempotencyKey,

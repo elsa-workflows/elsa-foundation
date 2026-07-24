@@ -16,7 +16,10 @@ public sealed class PreflightActivityDraftPublicationRequestHandler(
             new(
                 request.DraftId,
                 request.ExpectedDraftRevision,
-                request.ExpectedDefinitionHeadVersionId),
+                request.ExpectedDefinitionHeadVersionId)
+            {
+                Version = request.Version
+            },
             cancellationToken);
 }
 

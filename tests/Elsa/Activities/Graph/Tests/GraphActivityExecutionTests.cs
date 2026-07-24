@@ -80,6 +80,48 @@ public sealed class GraphActivityExecutionTests : IDisposable
     }
 
     [Fact]
+    public async Task ChildCompletion_MapsAndCheckpointsTheSelectedBoundaryOutcome()
+    {
+        var descriptor = Descriptor(outcomeMappings:
+        [
+            new("Approved", "Accepted"),
+            new("Rejected", "Declined")
+        ]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var completion = await graph.OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "entry-execution", "entry", ["Rejected"]));
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
+
+        Assert.Equal("Declined", completion.OutcomeName);
+        Assert.Equal(
+            "Declined",
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+    }
+
+    [Theory]
+    [InlineData()]
+    [InlineData("Unknown")]
+    [InlineData("Approved", "Unknown")]
+    [InlineData("Approved", "Rejected")]
+    public async Task ChildCompletion_RejectsAnOutcomeWithoutExactlyOneMapping(params string[] outcomes)
+    {
+        var descriptor = Descriptor(outcomeMappings:
+        [
+            new("Approved", "Accepted"),
+            new("Rejected", "Declined")
+        ]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => graph.OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "entry-execution", "entry", outcomes)).AsTask());
+
+        Assert.Contains("exactly one mapped outcome", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Execute_RejectsAnEntryThatIsOnlyANestedDescendant()
     {
         var descriptor = Descriptor();
@@ -464,7 +506,8 @@ public sealed class GraphActivityExecutionTests : IDisposable
         IReadOnlyList<GraphActivityInputDescriptor>? inputs = null,
         IReadOnlyList<GraphActivityOutputDescriptor>? outputs = null,
         IReadOnlyList<GraphActivityOutputMappingDescriptor>? outputMappings = null,
-        IReadOnlyCollection<string>? requiredOutputReferenceKeys = null) =>
+        IReadOnlyCollection<string>? requiredOutputReferenceKeys = null,
+        IReadOnlyList<GraphActivityOutcomeMappingDescriptor>? outcomeMappings = null) =>
         new(
             "definition-1",
             "definition-version-1",
@@ -477,7 +520,8 @@ public sealed class GraphActivityExecutionTests : IDisposable
             outputs: outputs ?? [],
             outputMappings: outputMappings ?? [],
             requiredInputReferenceKeys: [],
-            requiredOutputReferenceKeys: requiredOutputReferenceKeys?.ToArray() ?? []);
+            requiredOutputReferenceKeys: requiredOutputReferenceKeys?.ToArray() ?? [],
+            outcomeMappings: outcomeMappings);
 
     private static GraphActivityInputDescriptor Input(
         string referenceKey,

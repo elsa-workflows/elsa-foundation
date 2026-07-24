@@ -2,6 +2,9 @@
   <Folder Name="/benchmarks/Elsa/Activities/Runtime/">
     <Project Path="benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/Elsa/Groundwork/StorePerformance/">
+    <Project Path="benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/benchmarks/Elsa/Workflows/Runtime/">
     <Project Path="benchmarks/Elsa/Workflows/Runtime/Benchmarks/Elsa.Workflows.Runtime.Benchmarks.csproj" />
   </Folder>
@@ -87,10 +90,16 @@
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/" />
+  <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/">
+    <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/">
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Diagnostics/Persistence/">
+    <Project Path="src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj" />
+    <Project Path="src/Elsa/Diagnostics/Persistence/Groundwork/Elsa.Diagnostics.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Diagnostics/StructuredLogs/">
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj" />
@@ -374,6 +383,15 @@
   <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Persistence/">
     <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/Persistence/">
+    <Project Path="tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/">
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj" />
   </Folder>
@@ -402,6 +420,9 @@
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Groundwork/StorePerformance/Benchmarks/">
+    <Project Path="tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Modularity/">
     <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />

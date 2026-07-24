@@ -54,6 +54,7 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
         GroundworkTopologyCapabilities.ExternalProcessRestart;
 
     public override GroundworkCompositionFingerprint CompositionFingerprint => FixtureComposition;
+    public override string? PhysicalTargetFingerprint => _physicalSource?.PhysicalTarget.Fingerprint;
 
     public override GroundworkProcessLaunchDescriptor ProcessLaunchDescriptor =>
         _processLaunchDescriptor ??= _processProbeRunner.CreateLaunchDescriptor();

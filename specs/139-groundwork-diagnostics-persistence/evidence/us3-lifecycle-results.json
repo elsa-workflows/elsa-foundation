@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "workUnit": "139-groundwork-diagnostics-persistence",
+  "userStory": "US3",
+  "outcome": "pass",
+  "evidenceClassification": "exact-head-t043-certification",
+  "currentPromotionTarget": "0.0.1-preview.81",
+  "groundworkPackageVersion": "0.0.1-preview.81",
+  "groundworkPackageResolution": "dotnet list tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj package --include-transitive resolved every direct and transitive Groundwork package at 0.0.1-preview.81.",
+  "promotionNote": "This is a clean exact-HEAD preview.81 certification of T043's provider-neutral lifecycle/drain/observability boundary. It does not certify the four-provider, performance, EF-removal, or final exact-main gates.",
+  "testProject": "tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj",
+  "testCommand": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-restore -c Release --filter 'FullyQualifiedName~DiagnosticsDrainLoadTests|FullyQualifiedName~DiagnosticsDrainShutdownTests|FullyQualifiedName~DiagnosticsDrainLifecycleTests|FullyQualifiedName~DiagnosticsPersistenceObservabilityTests|FullyQualifiedName~DiagnosticsPersistenceLifecycleTests|FullyQualifiedName~DiagnosticsLifecycleEvidenceTests' --logger 'console;verbosity=minimal'",
+  "testRun": {
+    "configuration": "Release",
+    "passed": 49,
+    "failed": 0,
+    "skipped": 0,
+    "recordedAtUtc": "2026-07-24T11:17:56Z",
+    "branch": "codex/642-groundwork-diagnostics-replay",
+    "gitHead": "47d3892446022a2b41a678f0913eba51b3ef4662",
+    "originMain": "165cf20723e088ca1bcb1530abf2149cabacb2bc",
+    "mergeBaseWithOriginMain": "165cf20723e088ca1bcb1530abf2149cabacb2bc",
+    "originMainOnlyCommitCount": 0,
+    "branchOnlyCommitCount": 26,
+    "testedSourceState": "Clean exact branch HEAD after merging the recorded origin/main; divergence was recorded immediately before the run."
+  },
+  "coveredSuites": [
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsDrainLoadTests",
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsDrainShutdownTests",
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsDrainLifecycleTests",
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsPersistenceObservabilityTests",
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsPersistenceLifecycleTests",
+    "Elsa.Diagnostics.Persistence.Tests.DiagnosticsLifecycleEvidenceTests"
+  ],
+  "queueBounds": {
+    "concurrentProducerQueueCapacity": 512,
+    "concurrentProducerCount": 200,
+    "overflowQueueCapacity": 2,
+    "overflowSubmittedCount": 3,
+    "overflowShedCount": 1
+  },
+  "lossTotals": {
+    "queueOverflow": 1,
+    "retryExhausted": 1,
+    "shutdownTimeout": 1,
+    "writeAfterClosure": 1,
+    "durableRetentionDeletion": 3,
+    "subscriberDelivery": 7
+  },
+  "completionOutcomes": {
+    "graceful": {
+      "state": "Stopped",
+      "drained": true,
+      "acceptedAcknowledgementCount": 8,
+      "finalRetentionDeletedCount": 3
+    },
+    "timedOut": {
+      "state": "TimedOut",
+      "drained": false,
+      "acceptedAcknowledgementCount": 1,
+      "upperBoundMilliseconds": 1000
+    }
+  },
+  "retries": {
+    "commitRetryCountBeforeExhaustion": 2,
+    "commitFailureCountAfterExhaustion": 1,
+    "retentionRetryCountBeforeRecovery": 2
+  }
+}

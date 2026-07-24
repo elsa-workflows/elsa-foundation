@@ -1,11 +1,13 @@
 using System.Collections.Frozen;
-using System.Collections.Concurrent;
 using System.Globalization;
+using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Channels;
+using Elsa.Diagnostics.Persistence.Draining;
+using Elsa.Diagnostics.Persistence.Observability;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
@@ -20,10 +22,16 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
 /// Capture remains nonblocking: appends enter a bounded queue and complete only after Groundwork returns
 /// the committed provider cursor. Provider cursor values remain opaque inside Elsa's versioned envelope.
 /// </summary>
-public sealed class GroundworkStructuredLogStore : IStructuredLogStore, IAsyncDisposable
+public sealed class GroundworkStructuredLogStore :
+    IStructuredLogStore,
+    IDiagnosticsPersistenceDrain,
+    IDiagnosticsPersistenceStartupResource,
+    IAsyncDisposable
 {
     private const int BatchSize = 200;
     private const int MaxAppendAttempts = 9;
+    private const int DefaultMaxRetainedEntries = 100_000;
+    private const int DefaultRetentionInterval = 5_000;
     private const string SequenceField = "sequence";
     private const string LevelField = "level";
     private const string CategoryKeyField = "categoryKey";
@@ -41,25 +49,81 @@ public sealed class GroundworkStructuredLogStore : IStructuredLogStore, IAsyncDi
     private readonly DiagnosticStreamId _stream;
     private readonly DiagnosticRecordStreamDefinition _definition;
     private readonly int _maxRecentQuerySize;
-    private readonly TimeSpan _shutdownDrainTimeout;
-    private readonly Channel<PendingAppend> _channel;
-    private readonly CancellationTokenSource _shutdown = new();
-    private readonly ConcurrentDictionary<PendingAppend, byte> _accepted = new();
-    private readonly object _drainGate = new();
-    private Task? _drainLoop;
+    private readonly DiagnosticsDrain<PendingAppend, StructuredLogEntry> _drain;
+    private readonly StructuredLogStartupResource? _startupResource;
     private int _disposed;
+
+    /// <summary>
+    /// Creates the host-composed adapter without performing provider I/O. The shared diagnostics
+    /// lifecycle admits and acquires the declared stream before starting this store's capture drain.
+    /// </summary>
+    public GroundworkStructuredLogStore(
+        IDiagnosticRecordStoreSessionFactory sessionFactory,
+        IDiagnosticRecordDeploymentManifestSource deploymentSource,
+        IOptions<StructuredLogsOptions> options,
+        StructuredLogStoreBinding binding,
+        IDiagnosticsPersistenceObserver? observer = null)
+        : this(
+            new GroundworkDiagnosticRecordStoreGate(),
+            sessionFactory,
+            deploymentSource,
+            options,
+            binding,
+            observer)
+    {
+    }
+
+    private GroundworkStructuredLogStore(
+        GroundworkDiagnosticRecordStoreGate storeGate,
+        IDiagnosticRecordStoreSessionFactory sessionFactory,
+        IDiagnosticRecordDeploymentManifestSource deploymentSource,
+        IOptions<StructuredLogsOptions> options,
+        StructuredLogStoreBinding binding,
+        IDiagnosticsPersistenceObserver? observer)
+        : this(storeGate, options, binding, observer)
+    {
+        _startupResource = new(
+            storeGate,
+            sessionFactory,
+            deploymentSource,
+            binding);
+    }
 
     public GroundworkStructuredLogStore(
         IDiagnosticRecordStore store,
         IOptions<StructuredLogsOptions> options,
-        StructuredLogStoreBinding binding)
+        StructuredLogStoreBinding binding,
+        IDiagnosticsPersistenceObserver? observer = null)
+        : this(
+            store,
+            options,
+            binding,
+            DefaultMaxRetainedEntries,
+            DefaultRetentionInterval,
+            observer)
+    {
+    }
+
+    /// <summary>
+    /// Creates a durable store with explicit provider-side retention bounds. The overload is intended for
+    /// hosts that need a retention policy different from the first-party defaults.
+    /// </summary>
+    public GroundworkStructuredLogStore(
+        IDiagnosticRecordStore store,
+        IOptions<StructuredLogsOptions> options,
+        StructuredLogStoreBinding binding,
+        int maxRetainedEntries,
+        int retentionInterval,
+        IDiagnosticsPersistenceObserver? observer = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(binding);
-        ArgumentException.ThrowIfNullOrWhiteSpace(binding.TenantId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(binding.ScopeId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(binding.StreamId);
+        ValidateDiagnosticIdentifier(binding.TenantId, nameof(binding.TenantId));
+        ValidateDiagnosticIdentifier(binding.ScopeId, nameof(binding.ScopeId));
+        ValidateDiagnosticIdentifier(binding.StreamId, nameof(binding.StreamId));
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxRetainedEntries, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(retentionInterval, 1);
 
         _store = store;
         _binding = binding;
@@ -67,66 +131,94 @@ public sealed class GroundworkStructuredLogStore : IStructuredLogStore, IAsyncDi
         _stream = new(binding.StreamId);
         _definition = CreateStreamDefinition(binding.StreamId);
         _maxRecentQuerySize = Math.Clamp(options.Value.MaxRecentQuerySize, 1, _definition.Limits.MaxQueryLimit);
-        _shutdownDrainTimeout = options.Value.ShutdownDrainTimeout < TimeSpan.Zero
-            ? TimeSpan.Zero
-            : options.Value.ShutdownDrainTimeout;
         var capacity = Math.Max(options.Value.BufferCapacity, BatchSize) * 4;
-        _channel = Channel.CreateBounded<PendingAppend>(new BoundedChannelOptions(capacity)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true,
-            SingleWriter = false
-        }, pending => Fail(pending, new StructuredLogsException("The structured log append was shed before commit.")));
+        var shutdownTimeout = options.Value.ShutdownDrainTimeout <= TimeSpan.Zero
+            ? TimeSpan.FromTicks(1)
+            : options.Value.ShutdownDrainTimeout;
+        _drain = new DiagnosticsDrain<PendingAppend, StructuredLogEntry>(
+            new GroundworkStructuredLogDrainTarget(_store, _scope, _stream, ToRecord, ToEntry, maxRetainedEntries),
+            new DiagnosticsDrainOptions
+            {
+                BatchSize = BatchSize,
+                QueueCapacity = capacity,
+                RetentionInterval = retentionInterval,
+                MaxAttempts = MaxAppendAttempts,
+                BaseRetryDelay = BaseRetryDelay,
+                MaxRetryDelay = TimeSpan.FromSeconds(5),
+                ShutdownTimeout = shutdownTimeout
+            },
+            observer);
     }
+
+    /// <summary>Starts the host-owned capture drain. Repeated starts while running are idempotent.</summary>
+    public void Start() => _drain.Start();
+
+    ValueTask<IDiagnosticsPersistenceResourceLease> IDiagnosticsPersistenceStartupResource.AcquireAsync(
+        CancellationToken cancellationToken) =>
+        _startupResource?.AcquireAsync(cancellationToken)
+        ?? ValueTask.FromResult<IDiagnosticsPersistenceResourceLease>(
+            DirectStoreResourceLease.Instance);
 
     /// <summary>The provider-neutral Groundwork schema used by first-party structured-log adapters.</summary>
     public static DiagnosticRecordStreamDefinition StreamDefinition { get; } = CreateStreamDefinition("structured-logs");
 
     /// <summary>Creates the shared schema for a host-selected logical diagnostic stream.</summary>
-    public static DiagnosticRecordStreamDefinition CreateStreamDefinition(string streamId) => new(
-        new(streamId),
-        SchemaVersion: 1,
-        LogicalStorageName: "elsa_structured_logs",
-        Fields:
-        [
-            new(SequenceField, DiagnosticFieldType.Int64, DiagnosticFieldCardinality.Scalar,
-                Set(DiagnosticPredicateOperator.Equal, DiagnosticPredicateOperator.In, DiagnosticPredicateOperator.RangeInclusive),
-                IsRequired: true),
-            new(LevelField, DiagnosticFieldType.Int64, DiagnosticFieldCardinality.Scalar,
-                Set(DiagnosticPredicateOperator.Equal, DiagnosticPredicateOperator.In, DiagnosticPredicateOperator.RangeInclusive),
-                IsRequired: true),
-            StringKey(CategoryKeyField),
-            StringKey(SourceKeyField),
-            StringKey(ReplayTokenField)
-        ],
-        Limits: new(
-            MaxBatchRecords: BatchSize,
-            MaxPayloadBytes: 1_048_576,
-            MaxRecordIdBytes: 64,
-            MaxFieldsPerRecord: 5,
-            MaxQueryLimit: 5_000,
-            MaxPredicateNodes: 16,
-            MaxPredicateValues: 16,
-            MaxJsonDepth: 64),
-        MaxOperationClockSkew: TimeSpan.FromMinutes(5),
-        AppendIdempotencyWindow: TimeSpan.FromHours(1),
-        TrimIdempotencyWindow: TimeSpan.FromHours(1),
-        LogicalHighWaterField: SequenceField);
+    public static DiagnosticRecordStreamDefinition CreateStreamDefinition(string streamId)
+    {
+        ValidateDiagnosticIdentifier(streamId, nameof(streamId));
+        return new(
+            new(streamId),
+            SchemaVersion: 1,
+            LogicalStorageName: "elsa_structured_logs",
+            Fields:
+            [
+                new(SequenceField, DiagnosticFieldType.Int64, DiagnosticFieldCardinality.Scalar,
+                    Set(DiagnosticPredicateOperator.Equal, DiagnosticPredicateOperator.In, DiagnosticPredicateOperator.RangeInclusive),
+                    IsRequired: true),
+                new(LevelField, DiagnosticFieldType.Int64, DiagnosticFieldCardinality.Scalar,
+                    Set(DiagnosticPredicateOperator.Equal, DiagnosticPredicateOperator.In, DiagnosticPredicateOperator.RangeInclusive),
+                    IsRequired: true),
+                StringKey(CategoryKeyField),
+                StringKey(SourceKeyField),
+                StringKey(ReplayTokenField)
+            ],
+            Limits: new(
+                MaxBatchRecords: BatchSize,
+                MaxPayloadBytes: 1_048_576,
+                MaxRecordIdBytes: 64,
+                MaxFieldsPerRecord: 5,
+                MaxQueryLimit: 5_000,
+                MaxPredicateNodes: 16,
+                MaxPredicateValues: 16,
+                MaxJsonDepth: 64),
+            MaxOperationClockSkew: TimeSpan.FromMinutes(5),
+            AppendIdempotencyWindow: TimeSpan.FromHours(1),
+            TrimIdempotencyWindow: TimeSpan.FromHours(1),
+            LogicalHighWaterField: SequenceField);
+    }
 
-    public ValueTask<StructuredLogEntry> AppendAsync(
+    public async ValueTask<StructuredLogEntry> AppendAsync(
         StructuredLogEntry entry,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
         cancellationToken.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        StartDraining();
-
-        var pending = new PendingAppend(entry, Guid.NewGuid().ToString("N"));
-        _accepted.TryAdd(pending, 0);
-        if (!_channel.Writer.TryWrite(pending))
-            Fail(pending, new StructuredLogsException("The structured log store is not accepting appends."));
-        return new(pending.Completion.Task.WaitAsync(cancellationToken));
+        if (_drain.State == DiagnosticsDrainState.Created)
+        {
+            throw new InvalidOperationException(
+                "The Groundwork structured-log capture drain must be started by the host lifecycle before use.");
+        }
+        try
+        {
+            return await _drain.EnqueueAsync(
+                new PendingAppend(entry, Guid.NewGuid().ToString("N")),
+                cancellationToken);
+        }
+        catch (DiagnosticsDrainException exception)
+        {
+            throw new StructuredLogsException("The structured log append could not be committed.", exception);
+        }
     }
 
     public async Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default)
@@ -173,49 +265,34 @@ public sealed class GroundworkStructuredLogStore : IStructuredLogStore, IAsyncDi
         ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
         var limit = Math.Min(maxCount, _maxRecentQuerySize);
 
-        try
-        {
-            DiagnosticRecord? anchor = null;
-            if (afterCursor is { } cursor)
-                anchor = await ValidateAnchorAsync(cursor, cancellationToken);
+        DiagnosticRecord? anchor = null;
+        if (afterCursor is { } cursor)
+            anchor = await ValidateAnchorAsync(cursor, cancellationToken);
 
-            var query = new DiagnosticRecordQuery(
-                _scope,
-                _stream,
-                limit,
-                DiagnosticRecordOrder.CursorAscending);
-            if (anchor is not null)
+        var query = new DiagnosticRecordQuery(
+            _scope,
+            _stream,
+            limit,
+            DiagnosticRecordOrder.CursorAscending);
+        if (anchor is not null)
+        {
+            var statistics = await _store.InspectAsync(new(_scope, _stream), cancellationToken);
+            if (statistics.LifetimeCommittedCursorHighWater is not { } snapshotHighWater)
+                throw new StructuredLogReplayCursorUnavailableException();
+            query = query with
             {
-                var statistics = await _store.InspectAsync(new(_scope, _stream), cancellationToken);
-                if (statistics.LifetimeCommittedCursorHighWater is not { } snapshotHighWater)
-                    throw new StructuredLogReplayCursorUnavailableException();
-                query = query with
-                {
-                    Continuation = new(
-                        snapshotHighWater,
-                        anchor.Cursor,
-                        DiagnosticRequestFingerprint.ForQuery(query, _definition))
-                };
-            }
+                Continuation = new(
+                    snapshotHighWater,
+                    anchor.Cursor,
+                    DiagnosticRequestFingerprint.ForQuery(query, _definition))
+            };
+        }
 
-            var page = await _store.QueryAsync(query, cancellationToken);
-            var scanned = page.Records;
-            var entries = scanned.Select(ToEntry).Where(filter.Matches).ToArray();
-            var next = scanned.Count == 0 ? afterCursor : ToEntry(scanned[^1]).ReplayCursor;
-            return new(entries, next, page.Continuation is not null);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (StructuredLogReplayCursorUnavailableException)
-        {
-            throw;
-        }
-        catch
-        {
-            throw new StructuredLogReplayCursorUnavailableException();
-        }
+        var page = await _store.QueryAsync(query, cancellationToken);
+        var scanned = page.Records;
+        var entries = scanned.Select(ToEntry).Where(filter.Matches).ToArray();
+        var next = scanned.Count == 0 ? afterCursor : ToEntry(scanned[^1]).ReplayCursor;
+        return new(entries, next, page.Continuation is not null);
     }
 
     public async Task TrimAsync(int keepNewest, CancellationToken cancellationToken = default)
@@ -223,80 +300,6 @@ public sealed class GroundworkStructuredLogStore : IStructuredLogStore, IAsyncDi
         ArgumentOutOfRangeException.ThrowIfNegative(keepNewest);
         var operationId = new DiagnosticOperationId(DateTimeOffset.UtcNow, Guid.NewGuid().ToString("N"));
         await _store.TrimAsync(DiagnosticTrimRequest.Create(_scope, _stream, operationId, keepNewest), cancellationToken);
-    }
-
-    private void StartDraining()
-    {
-        if (Volatile.Read(ref _drainLoop) is not null)
-            return;
-        lock (_drainGate)
-            _drainLoop ??= Task.Run(() => DrainAsync(_shutdown.Token));
-    }
-
-    private async Task DrainAsync(CancellationToken cancellationToken)
-    {
-        var batch = new List<PendingAppend>(BatchSize);
-        try
-        {
-            while (await _channel.Reader.WaitToReadAsync(cancellationToken))
-            {
-                batch.Clear();
-                while (batch.Count < BatchSize && _channel.Reader.TryRead(out var pending))
-                    batch.Add(pending);
-                if (batch.Count > 0)
-                    await CommitBatchAsync(batch.ToArray(), cancellationToken);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            var error = new StructuredLogsException("The structured log append was canceled before commit.");
-            foreach (var pending in batch)
-                Fail(pending, error);
-            while (_channel.Reader.TryRead(out var pending))
-                Fail(pending, error);
-        }
-    }
-
-    private async Task CommitBatchAsync(IReadOnlyList<PendingAppend> pending, CancellationToken cancellationToken)
-    {
-        var issuedAt = DateTimeOffset.UtcNow;
-        var operationId = new DiagnosticOperationId(issuedAt, Guid.NewGuid().ToString("N"));
-        var records = pending.Select(x => ToRecord(x.Entry, x.RecordToken)).ToArray();
-        var request = DiagnosticRecordBatch.Create(_scope, _stream, operationId, records);
-        Exception? failure = null;
-        for (var attempt = 0; attempt < MaxAppendAttempts; attempt++)
-        {
-            try
-            {
-                var result = await _store.AppendAsync(request, cancellationToken);
-                var byId = result.Records.ToDictionary(x => x.RecordId, StringComparer.Ordinal);
-                foreach (var item in pending)
-                {
-                    if (!byId.TryGetValue(item.RecordToken, out var record))
-                        throw new StructuredLogsException("Groundwork returned an incomplete structured log append result.");
-                    Complete(item, ToEntry(record));
-                }
-
-                return;
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                failure = exception;
-                if (attempt + 1 < MaxAppendAttempts)
-                    await Task.Delay(RetryDelay(attempt), cancellationToken);
-            }
-        }
-
-        var error = new StructuredLogsException("The structured log append could not be committed.", failure!);
-        foreach (var item in pending)
-            Fail(item, error);
     }
 
     private async Task<DiagnosticRecord> ValidateAnchorAsync(
@@ -387,66 +390,178 @@ public sealed class GroundworkStructuredLogStore : IStructuredLogStore, IAsyncDi
     private static string Hash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
-    private static TimeSpan RetryDelay(int attempt)
+    private static void ValidateDiagnosticIdentifier(string value, string parameterName)
     {
-        var delay = BaseRetryDelay * Math.Pow(2, attempt);
-        return delay < TimeSpan.FromSeconds(5) ? delay : TimeSpan.FromSeconds(5);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        if (!DiagnosticStringComparisonKey.IsAsciiIgnoreCaseValue(value) ||
+            char.IsWhiteSpace(value[0]) ||
+            char.IsWhiteSpace(value[^1]) ||
+            Encoding.UTF8.GetByteCount(value) > 64)
+        {
+            throw new ArgumentException(
+                "Groundwork diagnostic identifiers must use printable ASCII, have no edge whitespace, and contain at most 64 UTF-8 bytes.",
+                parameterName);
+        }
     }
 
-    public async ValueTask DisposeAsync()
+    public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-            return;
-        _channel.Writer.TryComplete();
-        var drainLoop = Volatile.Read(ref _drainLoop);
-        if (drainLoop is not null)
+        Interlocked.Exchange(ref _disposed, 1);
+        await _drain.StopIfStartedAsync(cancellationToken);
+    }
+
+    Task IDiagnosticsPersistenceDrain.StopAsync(CancellationToken cancellationToken) =>
+        StopAsync(cancellationToken);
+
+    public async ValueTask DisposeAsync() => await StopAsync();
+
+    private sealed record PendingAppend(StructuredLogEntry Entry, string RecordToken);
+
+    private sealed class GroundworkStructuredLogDrainTarget(
+        IDiagnosticRecordStore store,
+        DiagnosticStorageScope scope,
+        DiagnosticStreamId stream,
+        Func<StructuredLogEntry, string, DiagnosticRecordInput> toRecord,
+        Func<DiagnosticRecord, StructuredLogEntry> toEntry,
+        int maxRetainedEntries)
+        : IDiagnosticsDrainTarget<PendingAppend, StructuredLogEntry>
+    {
+        // The 49-byte nonce remains within SQL Server's 64-byte diagnostic identifier bound.
+        private const string RetentionOperationPrefix = "elsa-slog-ret-v1:";
+        private readonly object _retentionOperationGate = new();
+        private DiagnosticOperationId? _retentionOperation;
+
+        public async ValueTask<DiagnosticsDrainCommit<StructuredLogEntry>> CommitAsync(
+            DiagnosticsDrainBatch<PendingAppend> batch,
+            CancellationToken cancellationToken = default)
         {
-            try
-            {
-                await drainLoop.WaitAsync(_shutdownDrainTimeout);
-            }
-            catch (TimeoutException)
-            {
-                await _shutdown.CancelAsync();
-                var error = new StructuredLogsException("The structured log append was canceled before commit.");
-                foreach (var pending in _accepted.Keys)
-                    Fail(pending, error);
-            }
-            catch
-            {
-                // DrainAsync's finally block settles accepted appends. Diagnostics disposal must not
-                // turn a provider failure into a host-shutdown failure.
-            }
+            var request = DiagnosticRecordBatch.Create(
+                scope,
+                stream,
+                new DiagnosticOperationId(batch.Id.IssuedAt, $"structured-logs-v1:{batch.Id}"),
+                batch.Items.Select(item => toRecord(item.Entry, item.RecordToken)).ToArray());
+            var result = await store.AppendAsync(request, cancellationToken);
+            var byId = result.Records.ToDictionary(record => record.RecordId, StringComparer.Ordinal);
+            var entries = batch.Items.Select(item =>
+                byId.TryGetValue(item.RecordToken, out var record)
+                    ? toEntry(record)
+                    : throw new StructuredLogsException("Groundwork returned an incomplete structured log append result."))
+                .ToArray();
+            return new DiagnosticsDrainCommit<StructuredLogEntry>(entries, entries.Length);
         }
 
-        if (drainLoop is null || drainLoop.IsCompleted)
-            _shutdown.Dispose();
-        else
-            _ = drainLoop.ContinueWith(
-                static (_, state) => ((CancellationTokenSource)state!).Dispose(),
-                _shutdown,
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+        public async ValueTask<int> ApplyRetentionAsync(CancellationToken cancellationToken = default)
+        {
+            DiagnosticOperationId operationId;
+            lock (_retentionOperationGate)
+            {
+                operationId = _retentionOperation ??= new(
+                    DateTimeOffset.UtcNow,
+                    $"{RetentionOperationPrefix}{Guid.NewGuid():N}");
+            }
+
+            var result = await store.TrimAsync(
+                DiagnosticTrimRequest.Create(
+                    scope,
+                    stream,
+                    operationId,
+                    maxRetainedEntries),
+                cancellationToken);
+
+            // A successful provider response is authoritative. Until then, retain the exact operation
+            // identity so an acknowledgement-loss retry replays the durable trim instead of trimming anew.
+            lock (_retentionOperationGate)
+            {
+                if (_retentionOperation == operationId)
+                    _retentionOperation = null;
+            }
+
+            return result.DeletedCount.Value > int.MaxValue
+                ? int.MaxValue
+                : (int)result.DeletedCount.Value;
+        }
     }
 
-    private void Complete(PendingAppend pending, StructuredLogEntry entry)
+    private sealed class StructuredLogStartupResource(
+        GroundworkDiagnosticRecordStoreGate storeGate,
+        IDiagnosticRecordStoreSessionFactory sessionFactory,
+        IDiagnosticRecordDeploymentManifestSource deploymentSource,
+        StructuredLogStoreBinding binding)
     {
-        if (pending.Completion.TrySetResult(entry))
-            _accepted.TryRemove(pending, out _);
+        private readonly Lock _gate = new();
+        private ExceptionDispatchInfo? _failure;
+        private StructuredLogResourceLease? _lease;
+        private bool _attempted;
+
+        public async ValueTask<IDiagnosticsPersistenceResourceLease> AcquireAsync(
+            CancellationToken cancellationToken)
+        {
+            lock (_gate)
+            {
+                if (_lease is not null)
+                    return _lease;
+                _failure?.Throw();
+                if (_attempted)
+                    throw new InvalidOperationException("Structured Logs persistence startup did not produce a resource lease.");
+                _attempted = true;
+            }
+
+            IDiagnosticRecordStoreSession? session = null;
+            try
+            {
+                var deployment = deploymentSource.CreateDeploymentManifest();
+                session = await sessionFactory.OpenAsync(
+                    deployment,
+                    new(binding.TenantId, binding.ScopeId),
+                    cancellationToken);
+                var store = await session.OpenStoreAsync(new(binding.StreamId), cancellationToken);
+                storeGate.Publish(store);
+                var lease = new StructuredLogResourceLease(storeGate, session);
+                lock (_gate)
+                    _lease = lease;
+                return lease;
+            }
+            catch (Exception startupFailure)
+            {
+                storeGate.PublishFailure(startupFailure);
+                lock (_gate)
+                    _failure = ExceptionDispatchInfo.Capture(startupFailure);
+                if (session is not null)
+                {
+                    try
+                    {
+                        await session.DisposeAsync();
+                    }
+                    catch (Exception cleanupFailure)
+                    {
+                        startupFailure.Data["StructuredLogsStartupCleanupFailure"] = cleanupFailure;
+                    }
+                }
+                ExceptionDispatchInfo.Capture(startupFailure).Throw();
+                throw;
+            }
+        }
     }
 
-    private void Fail(PendingAppend pending, Exception exception)
+    private sealed class StructuredLogResourceLease(
+        GroundworkDiagnosticRecordStoreGate storeGate,
+        IDiagnosticRecordStoreSession session)
+        : IDiagnosticsPersistenceResourceLease
     {
-        if (pending.Completion.TrySetException(exception))
-            _accepted.TryRemove(pending, out _);
+        private int _disposed;
+
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
+            storeGate.Release();
+            await session.DisposeAsync();
+        }
     }
 
-    private sealed class PendingAppend(StructuredLogEntry entry, string recordToken)
+    private sealed class DirectStoreResourceLease : IDiagnosticsPersistenceResourceLease
     {
-        public StructuredLogEntry Entry { get; } = entry;
-        public string RecordToken { get; } = recordToken;
-        public TaskCompletionSource<StructuredLogEntry> Completion { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public static DirectStoreResourceLease Instance { get; } = new();
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

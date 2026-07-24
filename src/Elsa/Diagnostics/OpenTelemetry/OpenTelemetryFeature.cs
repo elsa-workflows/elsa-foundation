@@ -40,6 +40,9 @@ public class OpenTelemetryFeature : FastEndpointsFeatureBase
     [ManifestSetting(DisplayName = "Resource capacity", Description = "Maximum number of recent telemetry resources retained in memory.", Category = "Diagnostics", DefaultValue = "500")]
     public int ResourceCapacity { get; set; } = 500;
 
+    [ManifestSetting(DisplayName = "Metric instrument capacity", Description = "Maximum number of recent metric instruments retained in the catalog.", Category = "Diagnostics", DefaultValue = "5000")]
+    public int MetricInstrumentCapacity { get; set; } = 5_000;
+
     [ManifestSetting(DisplayName = "Subscriber channel capacity", Description = "Maximum queued live updates per subscriber before updates are dropped.", Category = "Diagnostics", DefaultValue = "1000")]
     public int SubscriberChannelCapacity { get; set; } = 1_000;
 
@@ -77,6 +80,7 @@ public class OpenTelemetryFeature : FastEndpointsFeatureBase
         options.MetricPointCapacity = MetricPointCapacity;
         options.LogRecordCapacity = LogRecordCapacity;
         options.ResourceCapacity = ResourceCapacity;
+        options.MetricInstrumentCapacity = MetricInstrumentCapacity;
         options.SubscriberChannelCapacity = SubscriberChannelCapacity;
         options.MaxQuerySize = MaxQuerySize;
         options.MaxHttpRequestBodySize = MaxHttpRequestBodySize;

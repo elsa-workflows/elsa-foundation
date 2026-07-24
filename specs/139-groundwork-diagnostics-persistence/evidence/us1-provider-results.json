@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "workUnit": "139-groundwork-diagnostics-persistence",
+  "userStory": "US1",
+  "outcome": "pass",
+  "evidenceClassification": "exact-integrated-head-certification",
+  "currentPromotionTarget": "0.0.1-preview.81",
+  "groundworkPackageVersion": "0.0.1-preview.81",
+  "recordedAtUtc": "2026-07-24T11:17:56Z",
+  "gitHeadAtRun": "47d3892446022a2b41a678f0913eba51b3ef4662",
+  "originMainAtRun": "165cf20723e088ca1bcb1530abf2149cabacb2bc",
+  "testedSourceState": "Clean exact branch HEAD after merging the recorded origin/main.",
+  "groundworkPackageResolution": "The Persistence Tests project and both adapter test projects were restored with --force-evaluate before their recorded runs; their project.assets.json files resolved every Groundwork library at 0.0.1-preview.81.",
+  "hashAlgorithm": "SHA-256",
+  "testSourceSha256": {
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs": "9ecdfd8be39f28e15afa12b3b347f4bc21112594ad1d229d6673850657143ceb",
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs": "aa78c7ff9b41391d749500080b15d7013b055e70b5e51722471bd41167360eca",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryCatalogTests.cs": "cee767d7db4aad64d13c77d9349af992e6a77351acd0755c7f4eef4f53bdede4",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs": "3200ec96c9a27f4d77dfa9c934f967faabd24d261dc2c96c07b92cffe0918840",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryStoreTests.cs": "cbc109854bb5aa0f6a9c3d97a00272f21b59259c17aa7dbbafa68237349a43d1",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/OpenTelemetryRecordStreamDefinitionTests.cs": "bae06d72d97650714d8177f515a4c9e517aeb96d16e60338ef7bd0b13a2f05c8"
+  },
+  "productionSourceSha256": {
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs": "5d456383e636f6f72fd92fec58ad0e6c2ef288eecf06aebab88d2437d09b23e1",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/OpenTelemetryGroundworkStorageSchema.cs": "297b6d86ddaa6e2d06609049149e7fe130ef55cb008c5f29b7eecbfbc7d3bac2",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/CatalogDocumentSerializer.cs": "a8475dae3905cd41a5aba4fe180caf44ab64f986a016a33ecda52597feb7a810",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/CatalogDocuments.cs": "b5f45120b8f8636cc11b66eeb7630b3f547b3c2eebb3bb6211d01f444143423e",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/CanonicalRecordSerializer.cs": "4b6b30954a5063dafe6b39b76689d54b71ad5aaa9d9bc2d6e28e6f0dff059e22",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/OpenTelemetryRecordStreamDefinitions.cs": "f9b9cfae288895c2e20c4d417239bd4f50623680359686c3b5d059629ae4bb03",
+    "src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogStore.cs": "9e836726ea4ea955d58b5be53665b4af9a74b28a973dc9f4989876132ff27537",
+    "src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/StructuredLogsGroundworkStorageSchema.cs": "0d08c62651c9f451df174e41e8d1e88e5e1b42386e8400fe1a79d264f05a0e14"
+  },
+  "providers": [
+    {
+      "provider": "sqlite",
+      "status": "pass",
+      "sharedProviderCases": 6
+    },
+    {
+      "provider": "sqlserver",
+      "status": "pass",
+      "sharedProviderCases": 6
+    },
+    {
+      "provider": "postgresql",
+      "status": "pass",
+      "sharedProviderCases": 6
+    },
+    {
+      "provider": "mongodb",
+      "status": "pass",
+      "sharedProviderCases": 6
+    }
+  ],
+  "sharedProviderCoverage": [
+    "Structured Logs restart persistence for committed entries, replay cursor, and high-water mark",
+    "Structured Logs acknowledgement-loss retry, concurrent tied writers, deterministic cursor order, filtered-page cursor advancement, zero-retention high-water behavior, cursor non-disclosure, and operational query failure",
+    "OpenTelemetry restart persistence for resources, traces, spans, metric instruments, metric points, logs, and diagnostic counts",
+    "OpenTelemetry concurrent same-batch convergence, identical retry idempotency, changed-payload operation conflict, and exactly-once retained records/catalog entries",
+    "Structured Logs cross-scope non-disclosure and exact retention",
+    "OpenTelemetry all-signal cross-scope non-disclosure and exact retention"
+  ],
+  "commands": [
+    {
+      "purpose": "Four-provider US1 certification",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj -c Release --no-restore --filter 'FullyQualifiedName~OpenTelemetry_catalogs_records_and_counts_survive_restart|FullyQualifiedName~Structured_log_commit_cursor_and_high_water_survive_restart|FullyQualifiedName~Structured_log_replay_retry_and_failure_semantics_match_across_providers|FullyQualifiedName~OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers|FullyQualifiedName~DiagnosticsScopeAndRetentionConformanceTests' --logger 'console;verbosity=minimal'",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 28
+    },
+    {
+      "purpose": "Structured Logs complete adapter regression",
+      "command": "dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.Tests.csproj -c Release --no-restore --logger 'console;verbosity=minimal'",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "purpose": "OpenTelemetry complete adapter regression",
+      "command": "dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj -c Release --no-restore --logger 'console;verbosity=minimal'",
+      "passed": 73,
+      "failed": 0,
+      "skipped": 1,
+      "discovered": 74,
+      "skipBoundary": "One explicit Groundwork#130 skip for provider-side grouped trace reduction."
+    },
+    {
+      "purpose": "Provider-independent diagnostic-record operation depth",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj -c Release --no-build --filter 'FullyQualifiedName~DiagnosticsDurableOperationConformanceTests' --logger 'console;verbosity=minimal'",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "evidenceBoundary": "The 24-case certification executes provider-sensitive restart, replay, concurrency, failure, acknowledgement-loss, scope, and retention behavior on every provider. The five-case SQLite diagnostic-record primitive suite adds provider-independent cancellation-boundary, malformed-payload, and oversized-batch rejection depth; those three pre-I/O validations are not represented as four separate physical-provider executions.",
+  "blockers": []
+}

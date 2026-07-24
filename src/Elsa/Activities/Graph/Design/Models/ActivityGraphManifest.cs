@@ -7,17 +7,45 @@ using Elsa.Primitives.Models;
 namespace Elsa.Activities.Graph.Design.Models;
 
 /// <summary>
-/// Provider-owned schema 1 source for an authored activity graph. The public activity contract is
+/// Provider-owned source for an authored activity graph. The public activity contract is
 /// deliberately absent: it remains authoritative in Design Core and is supplied separately.
 /// </summary>
 public sealed record ActivityGraphManifest(
+    string ManifestSchemaVersion,
     JsonElement RootActivity,
     IReadOnlyList<ActivityGraphVariable> Variables,
-    IReadOnlyList<ActivityGraphOutputMapping> OutputMappings)
+    IReadOnlyList<ActivityGraphOutputMapping> OutputMappings,
+    IReadOnlyList<ActivityGraphOutcomeMapping> OutcomeMappings)
 {
     public const string SchemaVersion = "1";
+    public const string MultipleOutcomesSchemaVersion = "2";
+
+    public ActivityGraphManifest(
+        JsonElement rootActivity,
+        IReadOnlyList<ActivityGraphVariable> variables,
+        IReadOnlyList<ActivityGraphOutputMapping> outputMappings)
+        : this(SchemaVersion, rootActivity, variables, outputMappings, [])
+    {
+    }
+
+    public void Deconstruct(
+        out JsonElement rootActivity,
+        out IReadOnlyList<ActivityGraphVariable> variables,
+        out IReadOnlyList<ActivityGraphOutputMapping> outputMappings)
+    {
+        rootActivity = RootActivity;
+        variables = Variables;
+        outputMappings = OutputMappings;
+    }
 
     public static bool TryParse(
+        JsonElement payload,
+        out ActivityGraphManifest? manifest,
+        out IReadOnlyList<ActivityGraphManifestError> errors) =>
+        TryParse(SchemaVersion, payload, out manifest, out errors);
+
+    public static bool TryParse(
+        string schemaVersion,
         JsonElement payload,
         out ActivityGraphManifest? manifest,
         out IReadOnlyList<ActivityGraphManifestError> errors)
@@ -35,16 +63,19 @@ public sealed record ActivityGraphManifest(
         var rootActivity = ReadRequiredObject(payload, "rootActivity", "/rootActivity", findings);
         var variables = ReadVariables(payload, findings);
         var outputMappings = ReadOutputMappings(payload, findings);
+        var outcomeMappings = StringComparer.Ordinal.Equals(schemaVersion, MultipleOutcomesSchemaVersion)
+            ? ReadOutcomeMappings(payload, findings)
+            : [];
 
         if (findings.Count == 0)
-            manifest = new(rootActivity!.Value.Clone(), variables, outputMappings);
+            manifest = new(schemaVersion, rootActivity!.Value.Clone(), variables, outputMappings, outcomeMappings);
 
         errors = findings;
         return manifest is not null;
     }
 
     /// <summary>
-    /// Serializes schema 1 in a deterministic form. Object properties are ordinally sorted at every
+    /// Serializes the selected schema in a deterministic form. Object properties are ordinally sorted at every
     /// level while authored array order is preserved.
     /// </summary>
     public byte[] ToCanonicalUtf8Bytes()
@@ -53,6 +84,20 @@ public sealed record ActivityGraphManifest(
         using var writer = new Utf8JsonWriter(buffer);
 
         writer.WriteStartObject();
+        if (StringComparer.Ordinal.Equals(ManifestSchemaVersion, MultipleOutcomesSchemaVersion))
+        {
+            writer.WritePropertyName("outcomeMappings");
+            writer.WriteStartArray();
+            foreach (var mapping in OutcomeMappings)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("boundaryOutcomeReferenceKey", mapping.BoundaryOutcomeReferenceKey);
+                writer.WriteString("sourceOutcomeReferenceKey", mapping.SourceOutcomeReferenceKey);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+        }
+
         writer.WritePropertyName("outputMappings");
         writer.WriteStartArray();
         foreach (var mapping in OutputMappings)
@@ -195,6 +240,47 @@ public sealed record ActivityGraphManifest(
         return mappings;
     }
 
+    private static IReadOnlyList<ActivityGraphOutcomeMapping> ReadOutcomeMappings(
+        JsonElement payload,
+        ICollection<ActivityGraphManifestError> findings)
+    {
+        if (!payload.TryGetProperty("outcomeMappings", out var mappingsElement) || mappingsElement.ValueKind != JsonValueKind.Array)
+        {
+            findings.Add(new("activity.graph.manifest.array-required", "/outcomeMappings", "'outcomeMappings' must be a JSON array."));
+            return [];
+        }
+
+        var mappings = new List<ActivityGraphOutcomeMapping>();
+        var index = 0;
+        foreach (var element in mappingsElement.EnumerateArray())
+        {
+            var pointer = $"/outcomeMappings/{index}";
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                findings.Add(new("activity.graph.manifest.object-required", pointer, "Each graph outcome mapping must be a JSON object."));
+                index++;
+                continue;
+            }
+
+            var source = ReadRequiredString(
+                element,
+                "sourceOutcomeReferenceKey",
+                $"{pointer}/sourceOutcomeReferenceKey",
+                findings);
+            var boundary = ReadRequiredString(
+                element,
+                "boundaryOutcomeReferenceKey",
+                $"{pointer}/boundaryOutcomeReferenceKey",
+                findings);
+            if (source is not null && boundary is not null)
+                mappings.Add(new(source, boundary));
+
+            index++;
+        }
+
+        return mappings;
+    }
+
     private static TypeReference? ReadType(
         JsonElement variable,
         string pointer,
@@ -283,6 +369,10 @@ public sealed record ActivityGraphVariable(
     ActivityInputDefault? InitialValue);
 
 public sealed record ActivityGraphOutputMapping(string OutputReferenceKey, ActivityInputDefault Source);
+
+public sealed record ActivityGraphOutcomeMapping(
+    string SourceOutcomeReferenceKey,
+    string BoundaryOutcomeReferenceKey);
 
 public sealed record ActivityGraphManifestError(string Code, string JsonPointer, string Message);
 

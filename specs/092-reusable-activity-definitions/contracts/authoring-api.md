@@ -682,17 +682,23 @@ Content-Type: application/json
 ```json
 {
   "expectedDraftRevision": 8,
-  "expectedDefinitionHeadVersionId": "activity-ver-1"
+  "expectedDefinitionHeadVersionId": "activity-ver-1",
+  "version": "2.0.0"
 }
 ```
 
 The `200 OK` response contains one ordered diagnostic set, the impact-first diff, exact dependency
 evidence, provider/storage/Runtime readiness, `minimumVersion`, suggested `validVersions`, and an opaque
-`reviewToken`. A first publication reports `hasBaseline: false`, compares against the explicit
-definition baseline, and normally offers `1.0.0`. Unknown change kinds and additive fields are
-forward-compatible; clients render their supplied impact and safe description without rejecting
-the response. Provider payloads, Runtime descriptors, values, expressions, and exception details
-are never included.
+`reviewToken`. `reviewedVersion` identifies the exact semantic version whose compiled template, diff,
+and readiness evidence the token binds. The request's optional `version` selects that exact version.
+When omitted, preflight selects and reviews the first available `validVersions` choice, recompiling
+until the version-dependent evidence and suggestion agree. A provider whose suggestions do not
+converge is rejected with guidance to preflight an explicit exact version. Clients choosing a higher
+version also run preflight with that version before publishing. A first publication reports
+`hasBaseline: false`, compares against the explicit definition baseline, and normally offers
+`1.0.0`. Unknown change kinds and additive fields are forward-compatible; clients render their
+supplied impact and safe description without rejecting the response. Provider payloads, Runtime
+descriptors, values, expressions, and exception details are never included.
 
 ```http
 POST /design/activities/drafts/{draftId}/publish
@@ -709,12 +715,13 @@ Content-Type: application/json
 }
 ```
 
-For a first publication, `expectedDefinitionHeadVersionId` is `null`. `version` may be any unique,
-exact SemVer with precedence at or above `minimumVersion`; `validVersions` provides convenient
-presets rather than an exhaustive finite set. The idempotency key is tenant-owned and bound to the
-complete reviewed request, so the same textual key may be used independently in another tenant but
-cannot be reused for different material in the same tenant. Receipt ownership follows the caller's
-current operation tenant, including when that tenant is authorized to publish a global definition.
+For a first publication, `expectedDefinitionHeadVersionId` is `null`. Publish `version` must equal
+the preflight response's `reviewedVersion`. The reviewed version may be any unique, exact SemVer with
+precedence at or above `minimumVersion`; `validVersions` provides convenient presets rather than an
+exhaustive finite set. The idempotency key is tenant-owned and bound to the complete reviewed
+request, so the same textual key may be used independently in another tenant but cannot be reused
+for different material in the same tenant. Receipt ownership follows the caller's current operation
+tenant, including when that tenant is authorized to publish a global definition.
 
 Response: `201 Created` after atomic publication, with `Location` pointing to
 `/design/activities/publications/{idempotencyKey}`:
