@@ -487,8 +487,11 @@ candidate are:
 
 Root revalidation of the remediated candidate passed the benchmark harness **57/57**, the focused
 workload-correctness conformance selection **5/5**, and the performance-handoff architecture
-selection **7/7**. This section remains provisional until the originating reviewers re-inspect the
-exact replacement range and their final verdicts are recorded.
+selection **7/7**. GitGuardian identified the Secret workload's literal identifier beside its two
+public SHA-256 golden vectors as a generic high-entropy secret; the dictionary now references the
+separately declared workload identifier, retaining the exact immutable vectors without placing a
+secret-labeled token beside them. This section remains provisional until the originating reviewers
+re-inspect the exact replacement range and their final verdicts are recorded.
 
 ### #646 harness review disposition
 
