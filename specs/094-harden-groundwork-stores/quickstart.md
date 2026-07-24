@@ -421,11 +421,12 @@ admission did not consult the frozen provider/form contract. The remediated sche
   configuration values so adapter setup differences remain visible;
 - binds structured route evidence to an actual hashed JSON file and its cohort, measurement set,
   workload input, provider, adapter, physical form, scale, commit, host, provider metadata, and
-  composition fingerprint, while every route separately retains a manifest-bound raw provider-plan
-  JSON/text/XML artifact; and
+  composition fingerprint, while every `(measurement set, route)` exclusively owns a distinct
+  manifest-bound raw provider-plan JSON/text/XML artifact whose digest and secret-safe structured
+  content are validated; and
 - admits only providers and physical forms named by the immutable workload contract.
 
-Root revalidation passed the expanded harness suite **45/45**, the real IAM EF and Groundwork SQLite
+Root revalidation passed the expanded harness suite **48/48**, the real IAM EF and Groundwork SQLite
 correctness selection **2/2**, the full architecture suite **285/285** (including the architecture
 plus shrink-only EF-surface ratchet selection **65/65**), and a zero-warning Release harness build.
 Adapter identity is not present in the immutable
@@ -439,7 +440,8 @@ The first re-review did not accept generic OS/runtime/architecture/core-count eq
 both targets ran on one host, and the evidence reviewer did not accept a structured plan summary as a
 substitute for the raw provider plan or a caller-supplied commit as proof of source provenance. Those
 findings drove the clean-HEAD check, opaque OS-machine fingerprint, adapter-observed provider facts,
-seed/input binding, and per-route raw-plan retention described above. Unit fixtures use synthetic
+seed/input binding, per-route raw-plan retention, cross-set raw-plan ownership, and structured
+JSON/XML credential rejection described above. Unit fixtures use synthetic
 plans only to exercise the protocol; this checkpoint still has no executable timing adapter and
 therefore retains or claims no production plan, measurement, or verdict.
 

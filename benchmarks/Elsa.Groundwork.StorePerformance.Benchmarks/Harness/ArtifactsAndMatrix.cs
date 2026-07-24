@@ -30,6 +30,7 @@ public static class ArtifactStore
     public static void WriteManifest(string outputDirectory)
     {
         var entries = LoadProcessArtifactsWithoutManifest(outputDirectory);
+        ValidateRawPlanOwnership(entries);
         var cohorts = entries.Select(pair => pair.Artifact.Request.ComparisonCohortId).Distinct(StringComparer.Ordinal).ToArray();
         var commits = entries.Select(pair => pair.Artifact.Request.CommitSha).Distinct(StringComparer.Ordinal).ToArray();
         var hosts = entries.Select(pair => pair.Artifact.Request.HostFingerprintSha256).Distinct(StringComparer.Ordinal).ToArray();
@@ -44,6 +45,7 @@ public static class ArtifactStore
             .ToArray();
         if (paths.Any(path => !File.Exists(path))) throw new PerformanceContractException("Every referenced native-plan evidence file must exist before the manifest is written.");
         foreach (var name in rawPlanNames) ValidateRawPlanFile(Path.Combine(outputDirectory, name));
+        ValidateRawPlanHashes(outputDirectory, entries);
         var hashes = paths.ToDictionary(path => Path.GetFileName(path), HashFile, StringComparer.Ordinal);
         File.WriteAllText(Path.Combine(outputDirectory, ManifestFile), JsonSerializer.Serialize(new ArtifactManifest(2, cohorts[0], commits[0], hosts[0], hashes.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)), JsonOptions));
     }
@@ -59,6 +61,7 @@ public static class ArtifactStore
         catch (JsonException exception) { throw new PerformanceContractException($"Artifact manifest JSON is invalid: {exception.Message}"); }
         if (manifest.SchemaVersion != 2 || !SafeIdentifier(manifest.ComparisonCohortId ?? "") || !Regex.IsMatch(manifest.ExpectedCommitSha ?? "", "^[0-9a-f]{40}$") || !Regex.IsMatch(manifest.ExpectedHostFingerprintSha256 ?? "", "^[0-9a-f]{64}$") || manifest.ArtifactsSha256 is null || manifest.ArtifactsSha256.Count == 0) throw new PerformanceContractException("Artifact manifest has an unsupported schema, cohort, expected commit, host fingerprint, or no artifacts.");
         var entries = LoadProcessArtifactsWithoutManifest(outputDirectory);
+        ValidateRawPlanOwnership(entries);
         if (entries.Any(entry => entry.Artifact.Request.ComparisonCohortId != manifest.ComparisonCohortId))
             throw new PerformanceContractException("Artifact manifest cohort does not match every process artifact.");
         if (entries.Any(entry => entry.Artifact.Request.CommitSha != manifest.ExpectedCommitSha))
@@ -82,6 +85,7 @@ public static class ArtifactStore
             if (!File.Exists(path) || !string.Equals(HashFile(path), manifest.ArtifactsSha256[name], StringComparison.Ordinal)) throw new PerformanceContractException($"Artifact integrity hash mismatch for {name}.");
         }
         foreach (var name in rawPlanNames) ValidateRawPlanFile(Path.Combine(outputDirectory, name));
+        ValidateRawPlanHashes(outputDirectory, entries);
         var allowed = expectedNames.Append(ManifestFile).ToHashSet(StringComparer.Ordinal);
         var unexpected = Directory.EnumerateFiles(outputDirectory, "*", SearchOption.TopDirectoryOnly)
             .Select(Path.GetFileName)
@@ -115,6 +119,30 @@ public static class ArtifactStore
         return entries;
     }
 
+    internal static void ValidateRawPlanOwnership(IReadOnlyList<(string Path, ProcessArtifact Artifact)> entries)
+    {
+        var bindings = entries
+            .SelectMany(entry => entry.Artifact.Correctness.NativePlan.Routes.Select(route => (
+                Owner: $"{entry.Artifact.Request.MeasurementSetId}|{route.RouteIdentity}",
+                Reference: RawPlanName(route.RawPlanReference))))
+            .ToArray();
+        if (bindings.GroupBy(binding => binding.Owner, StringComparer.Ordinal)
+                .Any(group => group.Select(binding => binding.Reference).Distinct(StringComparer.Ordinal).Count() != 1) ||
+            bindings.GroupBy(binding => binding.Reference, StringComparer.Ordinal)
+                .Any(group => group.Select(binding => binding.Owner).Distinct(StringComparer.Ordinal).Count() != 1))
+            throw new PerformanceContractException("Each measurement-set route must own one distinct raw provider-plan artifact across the cohort.");
+    }
+
+    private static void ValidateRawPlanHashes(string outputDirectory, IReadOnlyList<(string Path, ProcessArtifact Artifact)> entries)
+    {
+        foreach (var route in entries.SelectMany(entry => entry.Artifact.Correctness.NativePlan.Routes))
+        {
+            var path = RawPlanPath(outputDirectory, route.RawPlanReference);
+            if (!File.Exists(path) || HashFile(path) != route.RawPlanSha256)
+                throw new PerformanceContractException($"Raw provider-plan evidence does not match its route digest for {route.RouteIdentity}.");
+        }
+    }
+
     internal static string ArtifactIdentity(RunRequest request) => string.Join('|', request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion, request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.ProcessKind, request.ProcessIndex);
     internal static string HashFile(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
     internal static string EvidencePath(string outputDirectory, string reference) => Path.Combine(outputDirectory, EvidenceName(reference));
@@ -145,10 +173,33 @@ public static class ArtifactStore
         if (info.Length is <= 0 or > 16 * 1024 * 1024)
             throw new PerformanceContractException("Raw provider-plan evidence must be non-empty and no larger than 16 MiB.");
         var content = File.ReadAllText(path);
-        if (content.Contains("Password=", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("AccountKey=", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("://", StringComparison.Ordinal) && content.Contains('@'))
+        if (ArtifactSafety.ContainsSensitiveContent(content))
             throw new PerformanceContractException("Raw provider-plan evidence may not retain connection values or credentials.");
+        if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(content);
+                RejectDuplicateProperties(document.RootElement);
+                ArtifactSafety.ValidateRawStructured(document.RootElement);
+            }
+            catch (JsonException exception)
+            {
+                throw new PerformanceContractException($"Raw provider-plan JSON is invalid: {exception.Message}");
+            }
+        }
+        else if (path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var document = System.Xml.Linq.XDocument.Parse(content, System.Xml.Linq.LoadOptions.PreserveWhitespace);
+                ArtifactSafety.ValidateRawXml(document);
+            }
+            catch (System.Xml.XmlException exception)
+            {
+                throw new PerformanceContractException($"Raw provider-plan XML is invalid: {exception.Message}");
+            }
+        }
     }
     internal static bool IsAllowedResultFile(string name) =>
         name is "comparison.v1.json" or "comparison.from-gate.v1.json" or "gate.v1.json";
@@ -172,7 +223,8 @@ public static class ArtifactStore
 
 public static class ArtifactSafety
 {
-    private static readonly Regex SensitiveName = new("(password|credential|connection|string|secret|access[_-]?key|token)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex SensitiveName = new("(password|pwd|credential|connection|string|secret|account[_-]?key|access[_-]?key|token)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex SensitiveContent = new("(?i)(password|pwd|connection\\s*string|account[_-]?key|access[_-]?key)\\s*[:=]|authorization\\s*:\\s*bearer\\s+\\S+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Sha1 = new("^[0-9a-f]{40}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Sha256 = new("^[0-9a-f]{64}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Identifier = new("^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -193,6 +245,52 @@ public static class ArtifactSafety
         ValidateElement(document.RootElement);
     }
 
+    internal static bool ContainsSensitiveContent(string content) =>
+        SensitiveContent.IsMatch(content) ||
+        content.Contains("://", StringComparison.Ordinal) && content.Contains('@');
+
+    internal static void ValidateRawStructured(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in value.EnumerateObject())
+            {
+                if (SensitiveName.IsMatch(property.Name) && !SafeRedactedValue(property.Value))
+                    throw new PerformanceContractException($"Raw provider-plan evidence may not retain connection values or credentials (sensitive field '{property.Name}').");
+                ValidateRawStructured(property.Value);
+            }
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+            foreach (var item in value.EnumerateArray()) ValidateRawStructured(item);
+    }
+
+    internal static void ValidateRawXml(System.Xml.Linq.XDocument document)
+    {
+        foreach (var element in document.Descendants())
+        {
+            if (SensitiveName.IsMatch(element.Name.LocalName) && !SafeRedactedText(element.Value))
+                throw new PerformanceContractException($"Raw provider-plan evidence may not retain connection values or credentials (sensitive element '{element.Name.LocalName}').");
+            foreach (var attribute in element.Attributes())
+                if (SensitiveName.IsMatch(attribute.Name.LocalName) && !SafeRedactedText(attribute.Value))
+                    throw new PerformanceContractException($"Raw provider-plan evidence may not retain connection values or credentials (sensitive attribute '{attribute.Name.LocalName}').");
+        }
+    }
+
+    private static bool SafeRedactedValue(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Null ||
+        value.ValueKind == JsonValueKind.String && SafeRedactedText(value.GetString() ?? "");
+
+    private static bool SafeRedactedText(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ||
+               trimmed is "?" or "[redacted]" or "<redacted>" ||
+               trimmed.Equals("redacted", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith('@') ||
+               trimmed.StartsWith('$') ||
+               trimmed.StartsWith(':');
+    }
+
     private static void ValidateElement(JsonElement value)
     {
         switch (value.ValueKind)
@@ -209,7 +307,7 @@ public static class ArtifactSafety
                 break;
             case JsonValueKind.String:
                 var text = value.GetString()!;
-                if (text.Contains("Password=", StringComparison.OrdinalIgnoreCase) || text.Contains("://", StringComparison.Ordinal) && text.Contains('@')) throw new PerformanceContractException("Artifacts may not retain connection values or credentials.");
+                if (ContainsSensitiveContent(text)) throw new PerformanceContractException("Artifacts may not retain connection values or credentials.");
                 break;
         }
     }

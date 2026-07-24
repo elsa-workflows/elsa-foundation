@@ -34,6 +34,21 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public async Task Adapter_child_rejects_a_different_host_before_preparation_or_timing()
+    {
+        var actualHost = HostFingerprint.CaptureSha256();
+        var differentHost = actualHost == new string('f', 64) ? new string('e', 64) : new string('f', 64);
+        var request = MatrixPlan.Create(Workload(), Request()).Runs[0] with { HostFingerprintSha256 = differentHost };
+        await using var adapter = new NeverPreparedAdapter();
+
+        var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+            ProcessMeasurement.ExecuteAsync(Workload(), request, BenchmarkProtocol.Acceptance, adapter, Path.GetTempPath(), CancellationToken.None));
+
+        Assert.Contains("not running on the matrix host", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(adapter.PrepareCalled);
+    }
+
+    [Fact]
     public void Matrix_rejects_provider_and_physical_form_outside_the_frozen_workload()
     {
         var workload = Workload();
@@ -421,4 +436,18 @@ public sealed class ProtocolAndGateTests
         request.CompositionFingerprint, request.HostFingerprintSha256, request.ProviderVersion, request.ProviderTopology,
         request.ProviderConfiguration, request.Seed, request.InputFingerprintSha256, request.NativePlanIdentity, NativeRoutes(request.MeasurementSetId)));
     private static string Hash(string content) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
+
+    private sealed class NeverPreparedAdapter : IBenchmarkAdapter
+    {
+        public bool PrepareCalled { get; private set; }
+        public IReadOnlyList<IBenchmarkOperation> Operations => [];
+        public Task PrepareAsync(CancellationToken cancellationToken)
+        {
+            PrepareCalled = true;
+            return Task.CompletedTask;
+        }
+        public Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Correctness must not run for a mismatched host.");
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }

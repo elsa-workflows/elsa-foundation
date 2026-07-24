@@ -308,6 +308,31 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Manifest_rejects_raw_provider_plan_reused_across_measurement_sets()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"], rawPlanReferenceOwner: "ef-set");
+
+        var error = Assert.Throws<PerformanceContractException>(fixture.Bind);
+
+        Assert.Contains("must own one distinct raw provider-plan", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Manifest_rejects_secret_bearing_raw_provider_plan_json()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        var rawPlan = Directory.EnumerateFiles(fixture.Directory, "ef-set.*.raw-plan.json").First();
+        File.WriteAllText(rawPlan, """{"connectionString":"Server=db;User ID=sa;Pwd=pwned","token":"abc"}""");
+
+        var error = Assert.Throws<PerformanceContractException>(fixture.Bind);
+
+        Assert.Contains("connection values or credentials", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Artifact_schema_v2_rejects_v1_manifests_and_missing_required_process_fields()
     {
         using var legacy = ArtifactFixture.Create();
@@ -383,30 +408,31 @@ internal sealed class ArtifactFixture : IDisposable
     private ArtifactFixture(string directory) => Directory = directory;
     public string Directory { get; }
     public static ArtifactFixture Create() => new(Path.Combine(Path.GetTempPath(), "elsa646-artifacts-", Guid.NewGuid().ToString("N")));
-    public void WriteTarget(string adapter, string form, string[] operations, (int Run, string Operation)? omitFromRun = null, int? alternateInputOnRun = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null)
+    public void WriteTarget(string adapter, string form, string[] operations, (int Run, string Operation)? omitFromRun = null, int? alternateInputOnRun = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null, string? rawPlanReferenceOwner = null)
     {
-        Write(adapter, form, ProcessKind.Warmup, 0, [], transform: transform, commitSha: commitSha, processorCount: processorCount, timestampUtc: timestampUtc, evidencePlanContentSha: evidencePlanContentSha, routeTransform: routeTransform, omitNativeRoute: omitNativeRoute, evidenceDocumentAdapter: evidenceDocumentAdapter, hostFingerprintSha256: hostFingerprintSha256, evidenceDocumentInputFingerprint: evidenceDocumentInputFingerprint, observedProviderVersion: observedProviderVersion);
+        Write(adapter, form, ProcessKind.Warmup, 0, [], transform: transform, commitSha: commitSha, processorCount: processorCount, timestampUtc: timestampUtc, evidencePlanContentSha: evidencePlanContentSha, routeTransform: routeTransform, omitNativeRoute: omitNativeRoute, evidenceDocumentAdapter: evidenceDocumentAdapter, hostFingerprintSha256: hostFingerprintSha256, evidenceDocumentInputFingerprint: evidenceDocumentInputFingerprint, observedProviderVersion: observedProviderVersion, rawPlanReferenceOwner: rawPlanReferenceOwner);
         foreach (var index in Enumerable.Range(1, 3))
-            Write(adapter, form, ProcessKind.Measured, index, operations.Where(operation => omitFromRun is not { } omitted || omitted.Run != index || omitted.Operation != operation).ToArray(), alternateInputOnRun == index ? new string('e', 64) : null, transform, commitSha, processorCount, timestampUtc, evidencePlanContentSha, routeTransform, omitNativeRoute, evidenceDocumentAdapter, hostFingerprintSha256, evidenceDocumentInputFingerprint, observedProviderVersion);
+            Write(adapter, form, ProcessKind.Measured, index, operations.Where(operation => omitFromRun is not { } omitted || omitted.Run != index || omitted.Operation != operation).ToArray(), alternateInputOnRun == index ? new string('e', 64) : null, transform, commitSha, processorCount, timestampUtc, evidencePlanContentSha, routeTransform, omitNativeRoute, evidenceDocumentAdapter, hostFingerprintSha256, evidenceDocumentInputFingerprint, observedProviderVersion, rawPlanReferenceOwner);
     }
     public void Bind() => ArtifactStore.WriteManifest(Directory);
     public ComparisonResult Compare(string oracle = "sqlite/ef/document-type-specific-tables", string target = "sqlite/groundwork/document-type-specific-tables") =>
         Comparison.Compare(Directory, oracle, target, WorkloadCatalog.Load(Repository.Root()));
     public void Dispose() => System.IO.Directory.Delete(Directory, recursive: true);
 
-    private void Write(string adapter, string form, ProcessKind kind, int index, string[] operations, string? input = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null)
+    private void Write(string adapter, string form, ProcessKind kind, int index, string[] operations, string? input = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null, string? rawPlanReferenceOwner = null)
     {
         var physicalForm = form == "store" ? "document-type-specific-tables" : form;
         var evidenceReference = $"{adapter}-set.native-plan.json";
         var request = new RunRequest("cohort-646", $"{adapter}-set", "bookmark-lookup", "1.0.0", "sqlite", adapter, physicalForm, "100k", commitSha ?? new string('a', 40), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, new string('b', 64), hostFingerprintSha256 ?? new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), "spec094-bookmark-lookup-v1", input ?? "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", evidenceReference, new string('0', 64), kind, index);
-        var payload = NativePlanPayload(request, evidenceDocumentAdapter ?? adapter, evidenceDocumentInputFingerprint ?? request.InputFingerprintSha256);
+        var planOwner = rawPlanReferenceOwner ?? request.MeasurementSetId;
+        var payload = NativePlanPayload(request, evidenceDocumentAdapter ?? adapter, evidenceDocumentInputFingerprint ?? request.InputFingerprintSha256, planOwner);
         request = request with { NativePlanContentSha256 = Hash(payload) };
         System.IO.Directory.CreateDirectory(Directory);
         var evidencePath = Path.Combine(Directory, evidenceReference);
         if (!File.Exists(evidencePath)) File.WriteAllText(evidencePath, payload);
         var rawLatencies = Enumerable.Repeat(1d, 100).ToArray();
         var samples = operations.Select(operation => new OperationSample(operation, rawLatencies.Length, 30, rawLatencies.Length / 30d, Statistics.Percentile(rawLatencies, 50), Statistics.Percentile(rawLatencies, 95), Statistics.Percentile(rawLatencies, 99), rawLatencies)).Select(operation => transform?.Invoke(operation) ?? operation).ToArray();
-        var routes = NativeRoutes(request.MeasurementSetId)
+        var routes = NativeRoutes(planOwner)
             .Where(route => route.RouteIdentity != omitNativeRoute)
             .Select(route => routeTransform?.Invoke(route) ?? route)
             .ToArray();
@@ -434,10 +460,10 @@ internal sealed class ArtifactFixture : IDisposable
     private static string RawPlanPayload(string route) => JsonSerializer.Serialize(new { SchemaVersion = 1, Route = route, ProviderPlan = $"EXPLAIN {route} USING ix-bookmarks" });
     private static IReadOnlyDictionary<string, string> ProviderConfiguration(string adapter) =>
         new Dictionary<string, string> { ["journal_mode"] = adapter == "ef" ? "delete" : "wal", ["synchronous"] = adapter == "ef" ? "full" : "normal" };
-    private static string NativePlanPayload(RunRequest request, string documentAdapter, string documentInputFingerprint) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
+    private static string NativePlanPayload(RunRequest request, string documentAdapter, string documentInputFingerprint, string rawPlanReferenceOwner) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
         2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
         request.Provider, documentAdapter, request.PhysicalForm, request.Scale, request.CommitSha,
         request.CompositionFingerprint, request.HostFingerprintSha256, request.ProviderVersion, request.ProviderTopology,
-        request.ProviderConfiguration, request.Seed, documentInputFingerprint, request.NativePlanIdentity, NativeRoutes(request.MeasurementSetId)));
+        request.ProviderConfiguration, request.Seed, documentInputFingerprint, request.NativePlanIdentity, NativeRoutes(rawPlanReferenceOwner)));
     private static string Hash(string content) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
 }
