@@ -47,6 +47,8 @@ if ($execId) {
 Write-Host ""
 if ($ok) {
     Write-Host ("SUCCESS - reusable-activity draft executed without publishing (status '{0}')." -f $status) -ForegroundColor Green
+} elseif ($execId -and (Test-Structure1051Fault -Instance $inst)) {
+    Report-Structure1051
 } else {
     Write-Host ("MISMATCH - activity draft test-run status '{0}'." -f $status) -ForegroundColor Red
     exit 1

@@ -47,12 +47,12 @@ foreach ($a in $inst.activities) {
 
 Write-Host ""
 $completed = $inst.instance.status -in @('Completed','Finished')
-$knownFault = ($inst.instance.status -eq 'Faulted') -and ($faultMessage -match 'references missing child')
 
 if ($completed) {
-    Write-Host "FIXED (#1007) - reusable activity now runs nested in a Sequence. Convert this tracker to a strict assertion." -ForegroundColor Green
-} elseif ($knownFault) {
-    Write-Host "KNOWN ISSUE #1007 reproduced - reusable-in-Sequence faults: '$faultMessage'" -ForegroundColor Yellow
+    Write-Host "FIXED - reusable activity now runs nested in a Sequence (was #1007; blocked by #1051). Convert this tracker to a strict assertion." -ForegroundColor Green
+} elseif (Test-Structure1051Fault -Instance $inst) {
+    # #1007 (references-missing-child) is fixed; the reusable's own Sequence root now faults with Structure=null (#1051).
+    Report-Structure1051
 } else {
     Write-Host ("MISMATCH - unexpected outcome: status '{0}', message '{1}'" -f $inst.instance.status, $faultMessage) -ForegroundColor Red
     exit 1
