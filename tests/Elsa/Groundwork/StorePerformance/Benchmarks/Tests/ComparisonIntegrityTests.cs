@@ -75,6 +75,18 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Manifest_rejects_different_hosts_with_identical_generic_machine_metadata()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"], hostFingerprintSha256: new string('f', 64));
+
+        var error = Assert.Throws<PerformanceContractException>(fixture.Bind);
+
+        Assert.Contains("host fingerprint", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Comparison_rejects_nonpositive_raw_latency_samples()
     {
         using var fixture = ArtifactFixture.Create();
@@ -188,6 +200,34 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Comparison_rejects_native_plan_document_captured_for_different_input()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"], evidenceDocumentInputFingerprint: new string('f', 64));
+        fixture.Bind();
+
+        var result = fixture.Compare();
+
+        Assert.False(result.Complete);
+        Assert.Contains("target, provenance", result.BlockReason!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Comparison_rejects_provider_version_not_observed_by_the_adapter()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"], observedProviderVersion: "3.45.0");
+        fixture.Bind();
+
+        var result = fixture.Compare();
+
+        Assert.False(result.Complete);
+        Assert.Contains("correctness", result.BlockReason!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Comparison_rejects_native_route_evidence_without_admitted_bounded_facts()
     {
         using var fixture = ArtifactFixture.Create();
@@ -246,6 +286,21 @@ public sealed class ComparisonIntegrityTests
         fixture.WriteTarget("groundwork", "store", operations: ["read"]);
         fixture.Bind();
         File.WriteAllText(Path.Combine(fixture.Directory, "ef-set.native-plan.json"), "tampered");
+
+        var error = Assert.Throws<PerformanceContractException>(() => ArtifactStore.ReadAll(fixture.Directory));
+
+        Assert.Contains("integrity hash", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Artifact_store_rejects_raw_provider_plan_tampered_after_manifest()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.Bind();
+        var rawPlan = Directory.EnumerateFiles(fixture.Directory, "groundwork-set.*.raw-plan.json").First();
+        File.WriteAllText(rawPlan, "tampered");
 
         var error = Assert.Throws<PerformanceContractException>(() => ArtifactStore.ReadAll(fixture.Directory));
 
@@ -328,49 +383,61 @@ internal sealed class ArtifactFixture : IDisposable
     private ArtifactFixture(string directory) => Directory = directory;
     public string Directory { get; }
     public static ArtifactFixture Create() => new(Path.Combine(Path.GetTempPath(), "elsa646-artifacts-", Guid.NewGuid().ToString("N")));
-    public void WriteTarget(string adapter, string form, string[] operations, (int Run, string Operation)? omitFromRun = null, int? alternateInputOnRun = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null)
+    public void WriteTarget(string adapter, string form, string[] operations, (int Run, string Operation)? omitFromRun = null, int? alternateInputOnRun = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null)
     {
-        Write(adapter, form, ProcessKind.Warmup, 0, [], transform: transform, commitSha: commitSha, processorCount: processorCount, timestampUtc: timestampUtc, evidencePlanContentSha: evidencePlanContentSha, routeTransform: routeTransform, omitNativeRoute: omitNativeRoute, evidenceDocumentAdapter: evidenceDocumentAdapter);
+        Write(adapter, form, ProcessKind.Warmup, 0, [], transform: transform, commitSha: commitSha, processorCount: processorCount, timestampUtc: timestampUtc, evidencePlanContentSha: evidencePlanContentSha, routeTransform: routeTransform, omitNativeRoute: omitNativeRoute, evidenceDocumentAdapter: evidenceDocumentAdapter, hostFingerprintSha256: hostFingerprintSha256, evidenceDocumentInputFingerprint: evidenceDocumentInputFingerprint, observedProviderVersion: observedProviderVersion);
         foreach (var index in Enumerable.Range(1, 3))
-            Write(adapter, form, ProcessKind.Measured, index, operations.Where(operation => omitFromRun is not { } omitted || omitted.Run != index || omitted.Operation != operation).ToArray(), alternateInputOnRun == index ? new string('e', 64) : null, transform, commitSha, processorCount, timestampUtc, evidencePlanContentSha, routeTransform, omitNativeRoute, evidenceDocumentAdapter);
+            Write(adapter, form, ProcessKind.Measured, index, operations.Where(operation => omitFromRun is not { } omitted || omitted.Run != index || omitted.Operation != operation).ToArray(), alternateInputOnRun == index ? new string('e', 64) : null, transform, commitSha, processorCount, timestampUtc, evidencePlanContentSha, routeTransform, omitNativeRoute, evidenceDocumentAdapter, hostFingerprintSha256, evidenceDocumentInputFingerprint, observedProviderVersion);
     }
     public void Bind() => ArtifactStore.WriteManifest(Directory);
     public ComparisonResult Compare(string oracle = "sqlite/ef/document-type-specific-tables", string target = "sqlite/groundwork/document-type-specific-tables") =>
         Comparison.Compare(Directory, oracle, target, WorkloadCatalog.Load(Repository.Root()));
     public void Dispose() => System.IO.Directory.Delete(Directory, recursive: true);
 
-    private void Write(string adapter, string form, ProcessKind kind, int index, string[] operations, string? input = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null)
+    private void Write(string adapter, string form, ProcessKind kind, int index, string[] operations, string? input = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null)
     {
         var physicalForm = form == "store" ? "document-type-specific-tables" : form;
         var evidenceReference = $"{adapter}-set.native-plan.json";
-        var request = new RunRequest("cohort-646", $"{adapter}-set", "bookmark-lookup", "1.0.0", "sqlite", adapter, physicalForm, "100k", commitSha ?? new string('a', 40), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, new string('b', 64), "spec094-bookmark-lookup-v1", input ?? "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", evidenceReference, new string('0', 64), kind, index);
-        var payload = NativePlanPayload(request, evidenceDocumentAdapter ?? adapter);
+        var request = new RunRequest("cohort-646", $"{adapter}-set", "bookmark-lookup", "1.0.0", "sqlite", adapter, physicalForm, "100k", commitSha ?? new string('a', 40), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, new string('b', 64), hostFingerprintSha256 ?? new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), "spec094-bookmark-lookup-v1", input ?? "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", evidenceReference, new string('0', 64), kind, index);
+        var payload = NativePlanPayload(request, evidenceDocumentAdapter ?? adapter, evidenceDocumentInputFingerprint ?? request.InputFingerprintSha256);
         request = request with { NativePlanContentSha256 = Hash(payload) };
         System.IO.Directory.CreateDirectory(Directory);
         var evidencePath = Path.Combine(Directory, evidenceReference);
         if (!File.Exists(evidencePath)) File.WriteAllText(evidencePath, payload);
         var rawLatencies = Enumerable.Repeat(1d, 100).ToArray();
         var samples = operations.Select(operation => new OperationSample(operation, rawLatencies.Length, 30, rawLatencies.Length / 30d, Statistics.Percentile(rawLatencies, 50), Statistics.Percentile(rawLatencies, 95), Statistics.Percentile(rawLatencies, 99), rawLatencies)).Select(operation => transform?.Invoke(operation) ?? operation).ToArray();
-        var routes = new[] { "list-by-stimulus-and-type", "list-by-stimulus-type" }
-            .Where(route => route != omitNativeRoute)
-            .Select(route => new NativeRouteEvidence(route, new string('e', 64), "bounded-index-seek", "ix-bookmarks", 100_000, true, true, 25, 1))
+        var routes = NativeRoutes(request.MeasurementSetId)
+            .Where(route => route.RouteIdentity != omitNativeRoute)
             .Select(route => routeTransform?.Invoke(route) ?? route)
             .ToArray();
+        foreach (var route in routes)
+        {
+            var rawPlanPath = Path.Combine(Directory, route.RawPlanReference);
+            if (!File.Exists(rawPlanPath)) File.WriteAllText(rawPlanPath, RawPlanPayload(route.RouteIdentity));
+        }
         var evidence = new CorrectnessEvidence(
             "9f3d29edc4c3e64409f3fb9b64b4ec3e7d5e5064d8233be8afd92215ec3d680e",
-            "file-backed-distinct-connections",
+            observedProviderVersion ?? request.ProviderVersion,
+            request.ProviderTopology,
+            request.ProviderConfiguration,
             new NativePlanEvidence("list-by-stimulus-and-type", evidenceReference, evidencePlanContentSha ?? request.NativePlanContentSha256, routes));
-        ArtifactStore.Write(Directory, new ProcessArtifact(2, request, BenchmarkProtocol.Acceptance, true, evidence, samples, new MachineMetadata("test-os", "test-runtime", "X64", "X64", processorCount, timestampUtc)));
+        ArtifactStore.Write(Directory, new ProcessArtifact(2, request, BenchmarkProtocol.Acceptance, true, evidence, samples, new MachineMetadata("test-os", "test-runtime", "X64", "X64", processorCount, request.HostFingerprintSha256, timestampUtc)));
     }
 
-    private static readonly NativeRouteEvidence[] NativeRoutes =
+    private static NativeRouteEvidence[] NativeRoutes(string measurementSet) =>
     [
-        new("list-by-stimulus-and-type", new string('e', 64), "bounded-index-seek", "ix-bookmarks", 100_000, true, true, 25, 1),
-        new("list-by-stimulus-type", new string('e', 64), "bounded-index-seek", "ix-bookmarks", 100_000, true, true, 25, 1)
+        Route(measurementSet, "list-by-stimulus-and-type"),
+        Route(measurementSet, "list-by-stimulus-type")
     ];
-    private static string NativePlanPayload(RunRequest request, string documentAdapter) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
+    private static NativeRouteEvidence Route(string measurementSet, string identity) =>
+        new(identity, $"{measurementSet}.{identity}.raw-plan.json", Hash(RawPlanPayload(identity)), "bounded-index-seek", "ix-bookmarks", 100_000, true, true, 25, 1);
+    private static string RawPlanPayload(string route) => JsonSerializer.Serialize(new { SchemaVersion = 1, Route = route, ProviderPlan = $"EXPLAIN {route} USING ix-bookmarks" });
+    private static IReadOnlyDictionary<string, string> ProviderConfiguration(string adapter) =>
+        new Dictionary<string, string> { ["journal_mode"] = adapter == "ef" ? "delete" : "wal", ["synchronous"] = adapter == "ef" ? "full" : "normal" };
+    private static string NativePlanPayload(RunRequest request, string documentAdapter, string documentInputFingerprint) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
         2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
         request.Provider, documentAdapter, request.PhysicalForm, request.Scale, request.CommitSha,
-        request.CompositionFingerprint, request.NativePlanIdentity, NativeRoutes));
+        request.CompositionFingerprint, request.HostFingerprintSha256, request.ProviderVersion, request.ProviderTopology,
+        request.ProviderConfiguration, request.Seed, documentInputFingerprint, request.NativePlanIdentity, NativeRoutes(request.MeasurementSetId)));
     private static string Hash(string content) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
 }

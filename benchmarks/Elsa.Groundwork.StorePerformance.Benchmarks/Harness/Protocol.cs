@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
@@ -25,6 +28,10 @@ public sealed record RunRequest(
     string CommitSha,
     IReadOnlyDictionary<string, string> PackageVersions,
     string CompositionFingerprint,
+    string HostFingerprintSha256,
+    string ProviderVersion,
+    string ProviderTopology,
+    IReadOnlyDictionary<string, string> ProviderConfiguration,
     string Seed,
     string InputFingerprintSha256,
     string NativePlanIdentity,
@@ -34,7 +41,8 @@ public sealed record RunRequest(
     int ProcessIndex);
 public sealed record NativeRouteEvidence(
     string RouteIdentity,
-    string ContentSha256,
+    string RawPlanReference,
+    string RawPlanSha256,
     string PlanClassification,
     string IndexName,
     int PhysicalCardinality,
@@ -54,13 +62,76 @@ public sealed record NativePlanEvidenceDocument(
     string Scale,
     string CommitSha,
     string CompositionFingerprint,
+    string HostFingerprintSha256,
+    string ProviderVersion,
+    string ProviderTopology,
+    IReadOnlyDictionary<string, string> ProviderConfiguration,
+    string Seed,
+    string InputFingerprintSha256,
     string Identity,
     IReadOnlyList<NativeRouteEvidence> Routes);
 public sealed record NativePlanEvidence(string Identity, string Reference, string ContentSha256, IReadOnlyList<NativeRouteEvidence> Routes);
-public sealed record CorrectnessEvidence(string ObservedResultDigestSha256, string ProviderPrerequisite, NativePlanEvidence NativePlan);
+public sealed record CorrectnessEvidence(
+    string ObservedResultDigestSha256,
+    string ObservedProviderVersion,
+    string ObservedProviderTopology,
+    IReadOnlyDictionary<string, string> ObservedProviderConfiguration,
+    NativePlanEvidence NativePlan);
 public sealed record OperationSample(string Operation, int Count, double SteadyStateSeconds, double ThroughputPerSecond, double P50Milliseconds, double P95Milliseconds, double P99Milliseconds, IReadOnlyList<double> RawLatenciesMilliseconds);
 public sealed record ProcessArtifact(int SchemaVersion, RunRequest Request, BenchmarkProtocol Protocol, bool CorrectnessPassed, CorrectnessEvidence Correctness, IReadOnlyList<OperationSample> Operations, MachineMetadata Machine);
-public sealed record MachineMetadata(string OperatingSystem, string Runtime, string ProcessArchitecture, string OperatingSystemArchitecture, int ProcessorCount, string TimestampUtc);
+public sealed record MachineMetadata(string OperatingSystem, string Runtime, string ProcessArchitecture, string OperatingSystemArchitecture, int ProcessorCount, string HostFingerprintSha256, string TimestampUtc);
+
+public static class HostFingerprint
+{
+    public static string CaptureSha256()
+    {
+        var source = CaptureSource();
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))).ToLowerInvariant();
+    }
+
+    private static string CaptureSource()
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            foreach (var path in new[] { "/etc/machine-id", "/var/lib/dbus/machine-id" })
+            {
+                if (!File.Exists(path)) continue;
+                var value = File.ReadAllText(path).Trim();
+                if (value.Length > 0) return $"linux:{value}";
+            }
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            var start = new ProcessStartInfo("/usr/sbin/ioreg")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            start.ArgumentList.Add("-rd1");
+            start.ArgumentList.Add("-c");
+            start.ArgumentList.Add("IOPlatformExpertDevice");
+            using var process = Process.Start(start);
+            if (process is not null)
+            {
+                var output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+                var match = Regex.Match(output, "\"IOPlatformUUID\"\\s*=\\s*\"([^\"]+)\"", RegexOptions.CultureInvariant);
+                if (process.ExitCode == 0 && match.Success) return $"macos:{match.Groups[1].Value}";
+            }
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            var value = Microsoft.Win32.Registry.GetValue(
+                @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography",
+                "MachineGuid",
+                null) as string;
+            if (!string.IsNullOrWhiteSpace(value)) return $"windows:{value}";
+        }
+
+        throw new PerformanceContractException("A stable OS machine identity is unavailable; same-host benchmark evidence cannot be produced.");
+    }
+}
 
 /// <summary>Implemented by real EF and Groundwork provider adapter leaves. No adapter ships in this project;
 /// a missing adapter is a blocked run, never a simulated result.</summary>
@@ -78,6 +149,9 @@ public static class ProcessMeasurement
     {
         protocol.Validate();
         ArtifactAdmission.ValidateRequest(workload, request);
+        var hostFingerprint = HostFingerprint.CaptureSha256();
+        if (hostFingerprint != request.HostFingerprintSha256)
+            throw new PerformanceContractException("The adapter child process is not running on the matrix host.");
         await adapter.PrepareAsync(cancellationToken);
         var correctness = await adapter.VerifyCorrectnessAsync(cancellationToken);
         ArtifactAdmission.ValidateCorrectness(workload, request, correctness, outputDirectory);
@@ -89,7 +163,7 @@ public static class ProcessMeasurement
             else
                 operations.Add(await MeasureAsync(operation, protocol, cancellationToken));
         }
-        return new ProcessArtifact(2, request, protocol, true, correctness, operations, new MachineMetadata(System.Runtime.InteropServices.RuntimeInformation.OSDescription, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString(), Environment.ProcessorCount, DateTimeOffset.UtcNow.ToString("O")));
+        return new ProcessArtifact(2, request, protocol, true, correctness, operations, new MachineMetadata(System.Runtime.InteropServices.RuntimeInformation.OSDescription, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString(), Environment.ProcessorCount, hostFingerprint, DateTimeOffset.UtcNow.ToString("O")));
     }
 
     private static async Task WarmAsync(IBenchmarkOperation operation, int count, CancellationToken token) { for (var i = 0; i < count; i++) await operation.InvokeAsync(-1L - i, token); }
@@ -120,6 +194,8 @@ public static class ArtifactAdmission
         ValidateCorrectness(workload, artifact.Request, artifact.Correctness, outputDirectory);
         if (!ValidMachine(artifact.Machine))
             throw new PerformanceContractException("Process artifacts require complete machine metadata.");
+        if (artifact.Machine.HostFingerprintSha256 != artifact.Request.HostFingerprintSha256)
+            throw new PerformanceContractException("Process artifact machine metadata does not match the matrix host fingerprint.");
         if (artifact.Request.ProcessKind == ProcessKind.Warmup)
         {
             if (artifact.Request.ProcessIndex != 0 || artifact.Operations.Count != 0)
@@ -143,7 +219,9 @@ public static class ArtifactAdmission
             workload.Input.Seed != request.Seed ||
             workload.Input.FingerprintSha256 != request.InputFingerprintSha256 ||
             !workload.RequiredProviders.Contains(request.Provider, StringComparer.Ordinal) ||
-            !workload.PhysicalFormsFor646.Contains(request.PhysicalForm, StringComparer.Ordinal))
+            !workload.PhysicalFormsFor646.Contains(request.PhysicalForm, StringComparer.Ordinal) ||
+            !workload.RequiredProviderEvidence.TryGetValue(request.Provider, out var topology) ||
+            topology != request.ProviderTopology)
             throw new PerformanceContractException("The run request does not match the frozen workload/provider/form contract.");
     }
 
@@ -151,8 +229,11 @@ public static class ArtifactAdmission
     {
         var nativePlan = evidence.NativePlan;
         if (evidence.ObservedResultDigestSha256 != workload.Correctness.ResultDigestSha256 ||
-            string.IsNullOrWhiteSpace(evidence.ProviderPrerequisite) ||
-            evidence.ProviderPrerequisite != workload.RequiredProviderEvidence[request.Provider] ||
+            evidence.ObservedProviderVersion != request.ProviderVersion ||
+            evidence.ObservedProviderTopology != request.ProviderTopology ||
+            evidence.ObservedProviderTopology != workload.RequiredProviderEvidence[request.Provider] ||
+            evidence.ObservedProviderConfiguration is null ||
+            !evidence.ObservedProviderConfiguration.OrderBy(pair => pair.Key, StringComparer.Ordinal).SequenceEqual(request.ProviderConfiguration.OrderBy(pair => pair.Key, StringComparer.Ordinal)) ||
             nativePlan is null ||
             nativePlan.Identity != request.NativePlanIdentity ||
             nativePlan.Reference != request.NativePlanEvidenceReference ||
@@ -169,7 +250,8 @@ public static class ArtifactAdmission
             !routes.Select(route => route.RouteIdentity).Order(StringComparer.Ordinal).SequenceEqual(workload.RequiredNativeRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
             routes.Select(route => route.RouteIdentity).Distinct(StringComparer.Ordinal).Count() != routes.Count ||
             routes.Any(route =>
-                !IsSha256(route.ContentSha256) ||
+                !ArtifactStore.SafeRawPlanReference(route.RawPlanReference) ||
+                !IsSha256(route.RawPlanSha256) ||
                 string.IsNullOrWhiteSpace(route.PlanClassification) ||
                 string.IsNullOrWhiteSpace(route.IndexName) ||
                 route.PhysicalCardinality <= 0 ||
@@ -178,7 +260,16 @@ public static class ArtifactAdmission
                 route.FiniteLimit <= 0 ||
                 route.MaterializedCandidateCount <= 0 ||
                 route.MaterializedCandidateCount > route.FiniteLimit))
-            throw new PerformanceContractException("Native-plan evidence must admit every required route with content digest, bounded cardinality, predicates, finite limit, and materialized-count facts.");
+            throw new PerformanceContractException("Native-plan evidence must admit every required route with a retained raw-plan digest, bounded cardinality, predicates, finite limit, and materialized-count facts.");
+        if (routes.Select(route => route.RawPlanReference).Distinct(StringComparer.Ordinal).Count() != routes.Count)
+            throw new PerformanceContractException("Every native route must bind a distinct retained raw provider-plan artifact.");
+        foreach (var route in routes)
+        {
+            var rawPlanPath = ArtifactStore.RawPlanPath(outputDirectory, route.RawPlanReference);
+            if (!File.Exists(rawPlanPath) || ArtifactStore.HashFile(rawPlanPath) != route.RawPlanSha256)
+                throw new PerformanceContractException($"Raw provider-plan evidence is missing or does not match its digest for route {route.RouteIdentity}.");
+            ArtifactStore.ValidateRawPlanFile(rawPlanPath);
+        }
         NativePlanEvidenceDocument document;
         try
         {
@@ -203,6 +294,13 @@ public static class ArtifactAdmission
             document.Scale != request.Scale ||
             document.CommitSha != request.CommitSha ||
             document.CompositionFingerprint != request.CompositionFingerprint ||
+            document.HostFingerprintSha256 != request.HostFingerprintSha256 ||
+            document.ProviderVersion != request.ProviderVersion ||
+            document.ProviderTopology != request.ProviderTopology ||
+            document.ProviderConfiguration is null ||
+            !document.ProviderConfiguration.OrderBy(pair => pair.Key, StringComparer.Ordinal).SequenceEqual(request.ProviderConfiguration.OrderBy(pair => pair.Key, StringComparer.Ordinal)) ||
+            document.Seed != request.Seed ||
+            document.InputFingerprintSha256 != request.InputFingerprintSha256 ||
             document.Identity != nativePlan.Identity ||
             document.Routes is null ||
             !document.Routes.SequenceEqual(routes))
@@ -215,7 +313,30 @@ public static class ArtifactAdmission
         first.Runtime == second.Runtime &&
         first.ProcessArchitecture == second.ProcessArchitecture &&
         first.OperatingSystemArchitecture == second.OperatingSystemArchitecture &&
-        first.ProcessorCount == second.ProcessorCount;
+        first.ProcessorCount == second.ProcessorCount &&
+        first.HostFingerprintSha256 == second.HostFingerprintSha256;
+
+    public static bool SameTargetTuple(RunRequest first, RunRequest second) =>
+        first.ComparisonCohortId == second.ComparisonCohortId &&
+        first.MeasurementSetId == second.MeasurementSetId &&
+        first.WorkloadId == second.WorkloadId &&
+        first.WorkloadVersion == second.WorkloadVersion &&
+        first.Provider == second.Provider &&
+        first.Adapter == second.Adapter &&
+        first.PhysicalForm == second.PhysicalForm &&
+        first.Scale == second.Scale &&
+        first.CommitSha == second.CommitSha &&
+        first.CompositionFingerprint == second.CompositionFingerprint &&
+        first.HostFingerprintSha256 == second.HostFingerprintSha256 &&
+        first.ProviderVersion == second.ProviderVersion &&
+        first.ProviderTopology == second.ProviderTopology &&
+        first.ProviderConfiguration.OrderBy(pair => pair.Key, StringComparer.Ordinal).SequenceEqual(second.ProviderConfiguration.OrderBy(pair => pair.Key, StringComparer.Ordinal)) &&
+        first.Seed == second.Seed &&
+        first.InputFingerprintSha256 == second.InputFingerprintSha256 &&
+        first.NativePlanIdentity == second.NativePlanIdentity &&
+        first.NativePlanEvidenceReference == second.NativePlanEvidenceReference &&
+        first.NativePlanContentSha256 == second.NativePlanContentSha256 &&
+        first.PackageVersions.OrderBy(pair => pair.Key, StringComparer.Ordinal).SequenceEqual(second.PackageVersions.OrderBy(pair => pair.Key, StringComparer.Ordinal));
 
     private static bool ValidMachine(MachineMetadata machine) =>
         !string.IsNullOrWhiteSpace(machine.OperatingSystem) &&
@@ -223,6 +344,7 @@ public static class ArtifactAdmission
         !string.IsNullOrWhiteSpace(machine.ProcessArchitecture) &&
         !string.IsNullOrWhiteSpace(machine.OperatingSystemArchitecture) &&
         machine.ProcessorCount > 0 &&
+        IsSha256(machine.HostFingerprintSha256) &&
         DateTimeOffset.TryParse(machine.TimestampUtc, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out _);
     private static bool IsSha256(string? value) =>
         value is { Length: 64 } && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');

@@ -6,11 +6,17 @@ provider, EF, Groundwork, connection, or secret dependency. Adapter leaves must 
 
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan
-identity/evidence reference/content digest, safe machine architecture metadata, and every operation latency. The
+identity/evidence reference/content digest, provider server version/topology/material settings, an opaque
+OS-machine fingerprint, safe machine architecture metadata, and every operation latency. `matrix` refuses a
+`--commit` that is not the clean repository HEAD. The
 schema-v2 artifact is valid only after its observed correctness digest equals the frozen workload digest and every
 required native route carries an admitted content digest, cardinality, scope/route predicates, finite limit, and
-materialized-count fact. Its safe top-level evidence JSON must exist, match the requested SHA-256, and reproduce
-the admitted structured route evidence; the cohort manifest binds both process and evidence files.
+materialized-count fact. Each route also names a distinct retained raw provider-plan JSON/text/XML artifact whose
+SHA-256 is verified; secret-bearing or oversized raw plans fail closed. The safe top-level summary JSON must
+exist, match the requested SHA-256, and bind its workload input, target, provider metadata, source provenance,
+host fingerprint, and structured route evidence. The cohort manifest binds process, summary, and raw-plan files.
+Place the artifact directory outside the worktree (or in an already ignored path) so the second target can prove
+the same clean source snapshot.
 
 Each `matrix` invocation contributes one unique four-process measurement set. The first set creates a comparison
 cohort; the second may join only that same cohort and must have a distinct measurement-set identity. Planned paths
@@ -20,9 +26,10 @@ tampering fail closed. The cohort directory may otherwise contain only the defau
 `comparison.from-gate.v1.json`, and `gate.v1.json` result files; write custom result paths outside it.
 
 `compare` rejects incomplete or internally inconsistent targets (including a missing operation, changed input,
-different commit, changed machine environment, or provider/form outside the frozen workload). Capture timestamps
-are excluded from machine equality; adapter-specific package and composition metadata remain exact and stable
-within each target. Stored p50/p95/p99/throughput summaries must reproduce within serialization tolerance from
+different commit, different physical host, changed machine environment, or provider/form outside the frozen
+workload). Capture timestamps are excluded from machine equality; adapter-specific package, composition, provider
+version, and material provider-configuration metadata remain exact and stable within each target. Stored
+p50/p95/p99/throughput summaries must reproduce within serialization tolerance from
 finite positive raw samples before comparison or gating. `gate` retains raw samples by measured process and uses
 the median of the three measured p50/p95/p99/throughput values. Its capped paired-independent percentile-
 bootstrap *ratio* intervals resample within each process, then take the median process percentile; they
@@ -37,9 +44,12 @@ No design targets, SQLite implementation, EF references, or its superseded absol
 retained here.
 
 ```text
+dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks -- host-fingerprint
+
 dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks -- \
   matrix <scale> --cohort <safe-id> --measurement-set <safe-id> \
-  --workload <id> --provider <provider> --adapter <adapter> \
+  --workload <id> --provider <provider> --provider-version <server-version> \
+  --provider-setting <safe-name=safe-value> --adapter <adapter> \
   --form <physical-form> --commit <40-hex-sha> --composition <64-hex-fingerprint> \
   --package <name=version> --native-plan <identity> --native-plan-evidence <safe-reference> \
   --native-plan-sha256 <64-hex-content-digest> \

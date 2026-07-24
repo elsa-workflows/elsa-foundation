@@ -23,6 +23,17 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public void Host_fingerprint_is_opaque_and_repository_provenance_rejects_false_or_dirty_heads()
+    {
+        Assert.Matches("^[0-9a-f]{64}$", HostFingerprint.CaptureSha256());
+        Assert.Throws<PerformanceContractException>(() =>
+            global::RepositoryProvenance.Validate(new string('a', 40), new string('b', 40), isClean: true));
+        Assert.Throws<PerformanceContractException>(() =>
+            global::RepositoryProvenance.Validate(new string('a', 40), new string('a', 40), isClean: false));
+        global::RepositoryProvenance.Validate(new string('a', 40), new string('a', 40), isClean: true);
+    }
+
+    [Fact]
     public void Matrix_rejects_provider_and_physical_form_outside_the_frozen_workload()
     {
         var workload = Workload();
@@ -322,7 +333,7 @@ public sealed class ProtocolAndGateTests
     {
         var request = new MatrixRequest(
             cohort, measurementSet, "bookmark-lookup", "1.0.0", "sqlite", adapter, "document-type-specific-tables", "100k",
-            new string('a', 40), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, compositionFingerprint ?? new string('b', 64), "spec094-bookmark-lookup-v1", "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", $"{measurementSet}.native-plan.json", new string('0', 64));
+            new string('a', 40), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, compositionFingerprint ?? new string('b', 64), new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), "spec094-bookmark-lookup-v1", "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", $"{measurementSet}.native-plan.json", new string('0', 64));
         return request with { NativePlanContentSha256 = Hash(NativePlanPayload(request)) };
     }
 
@@ -353,19 +364,26 @@ public sealed class ProtocolAndGateTests
             true,
             new CorrectnessEvidence(
                 "9f3d29edc4c3e64409f3fb9b64b4ec3e7d5e5064d8233be8afd92215ec3d680e",
-                "file-backed-distinct-connections",
+                request.ProviderVersion,
+                request.ProviderTopology,
+                request.ProviderConfiguration,
                 new NativePlanEvidence(
                     "list-by-stimulus-and-type",
                     request.NativePlanEvidenceReference,
                     request.NativePlanContentSha256,
-                    NativeRoutes)),
+                    NativeRoutes(request.MeasurementSetId))),
             operations,
-            new MachineMetadata("test-os", "test-runtime", "X64", "X64", 1, "2026-07-24T00:00:00Z"));
+            new MachineMetadata("test-os", "test-runtime", "X64", "X64", 1, request.HostFingerprintSha256, "2026-07-24T00:00:00Z"));
     }
 
     private static void WriteArtifact(string outputDirectory, RunRequest request)
     {
         Directory.CreateDirectory(outputDirectory);
+        foreach (var route in NativeRoutes(request.MeasurementSetId))
+        {
+            var rawPlanPath = Path.Combine(outputDirectory, route.RawPlanReference);
+            if (!File.Exists(rawPlanPath)) File.WriteAllText(rawPlanPath, RawPlanPayload(route.RouteIdentity));
+        }
         var evidencePath = Path.Combine(outputDirectory, request.NativePlanEvidenceReference);
         if (!File.Exists(evidencePath)) File.WriteAllText(evidencePath, NativePlanPayload(request));
         ArtifactStore.Write(outputDirectory, ArtifactFor(request));
@@ -382,18 +400,25 @@ public sealed class ProtocolAndGateTests
             },
             CancellationToken.None);
 
-    private static readonly NativeRouteEvidence[] NativeRoutes =
+    private static NativeRouteEvidence[] NativeRoutes(string measurementSet) =>
     [
-        new("list-by-stimulus-and-type", new string('e', 64), "bounded-index-seek", "ix-bookmarks", 100_000, true, true, 25, 1),
-        new("list-by-stimulus-type", new string('f', 64), "bounded-index-seek", "ix-bookmarks", 100_000, true, true, 25, 1)
+        Route(measurementSet, "list-by-stimulus-and-type"),
+        Route(measurementSet, "list-by-stimulus-type")
     ];
+    private static NativeRouteEvidence Route(string measurementSet, string identity) =>
+        new(identity, $"{measurementSet}.{identity}.raw-plan.json", Hash(RawPlanPayload(identity)), "bounded-index-seek", "ix-bookmarks", 100_000, true, true, 25, 1);
+    private static string RawPlanPayload(string route) => JsonSerializer.Serialize(new { SchemaVersion = 1, Route = route, ProviderPlan = $"EXPLAIN {route} USING ix-bookmarks" });
+    private static IReadOnlyDictionary<string, string> ProviderConfiguration(string adapter) =>
+        new Dictionary<string, string> { ["journal_mode"] = adapter == "ef" ? "delete" : "wal", ["synchronous"] = adapter == "ef" ? "full" : "normal" };
     private static string NativePlanPayload(MatrixRequest request) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
         2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
         request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha,
-        request.CompositionFingerprint, request.NativePlanIdentity, NativeRoutes));
+        request.CompositionFingerprint, request.HostFingerprintSha256, request.ProviderVersion, request.ProviderTopology,
+        request.ProviderConfiguration, request.Seed, request.InputFingerprintSha256, request.NativePlanIdentity, NativeRoutes(request.MeasurementSetId)));
     private static string NativePlanPayload(RunRequest request) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
         2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
         request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha,
-        request.CompositionFingerprint, request.NativePlanIdentity, NativeRoutes));
+        request.CompositionFingerprint, request.HostFingerprintSha256, request.ProviderVersion, request.ProviderTopology,
+        request.ProviderConfiguration, request.Seed, request.InputFingerprintSha256, request.NativePlanIdentity, NativeRoutes(request.MeasurementSetId)));
     private static string Hash(string content) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
 }

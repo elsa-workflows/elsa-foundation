@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
@@ -16,6 +17,7 @@ internal static class BenchmarkCli
                 "matrix" => await MatrixAsync(args[1..]),
                 "compare" => Compare(args[1..]),
                 "gate" => Gate(args[1..]),
+                "host-fingerprint" => HostFingerprintCommand(),
                 "help" or "--help" or "-h" => Help(),
                 _ => Fail($"Unknown command '{command}'.")
             };
@@ -32,10 +34,16 @@ internal static class BenchmarkCli
         var adapter = Option(args, "--adapter") ?? throw new PerformanceContractException("matrix requires --adapter.");
         var form = Option(args, "--form") ?? throw new PerformanceContractException("matrix requires --form.");
         var output = Option(args, "--out") ?? throw new PerformanceContractException("matrix requires --out.");
-        var catalog = WorkloadCatalog.Load(FindRepositoryRoot());
+        var repositoryRoot = FindRepositoryRoot();
+        var catalog = WorkloadCatalog.Load(repositoryRoot);
         if (!catalog.Workloads.TryGetValue(workload, out var definition)) throw new PerformanceContractException($"Unknown frozen workload '{workload}'.");
         var packages = Options(args, "--package").Select(ParsePackage).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-        var request = new MatrixRequest(Require(args, "--cohort"), Require(args, "--measurement-set"), definition.Id, definition.Version, provider, adapter, form, scale, Require(args, "--commit"), packages, Require(args, "--composition"), definition.Input.Seed, definition.Input.FingerprintSha256, Require(args, "--native-plan"), Require(args, "--native-plan-evidence"), Require(args, "--native-plan-sha256"));
+        var providerConfiguration = Options(args, "--provider-setting").Select(ParseSetting).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var commitSha = Require(args, "--commit");
+        RepositoryProvenance.RequireCleanHead(repositoryRoot, commitSha);
+        if (!definition.RequiredProviderEvidence.TryGetValue(provider, out var providerTopology))
+            throw new PerformanceContractException("The provider is not admitted by the frozen workload topology contract.");
+        var request = new MatrixRequest(Require(args, "--cohort"), Require(args, "--measurement-set"), definition.Id, definition.Version, provider, adapter, form, scale, commitSha, packages, Require(args, "--composition"), HostFingerprint.CaptureSha256(), Require(args, "--provider-version"), providerTopology, providerConfiguration, definition.Input.Seed, definition.Input.FingerprintSha256, Require(args, "--native-plan"), Require(args, "--native-plan-evidence"), Require(args, "--native-plan-sha256"));
         var plan = MatrixPlan.Create(definition, request);
         var child = Option(args, "--child-command") ?? throw new PerformanceContractException("matrix requires --child-command for a real provider adapter host; this foundation intentionally supplies no fake adapter.");
         await ProcessMatrixRunner.RunAsync(plan, child, output, CancellationToken.None);
@@ -72,7 +80,48 @@ internal static class BenchmarkCli
         var separator = value.IndexOf('=', StringComparison.Ordinal);
         return separator > 0 && separator < value.Length - 1 ? new KeyValuePair<string, string>(value[..separator], value[(separator + 1)..]) : throw new PerformanceContractException("--package must be name=version and must be repeated for every provider package.");
     }
-    private static int Help() { Console.WriteLine("#646 store performance harness\n  matrix <scale> --cohort <safe-id> --measurement-set <safe-id> --workload <id> --provider <provider> --adapter <adapter> --form <physical-form> --commit <40-hex-sha> --composition <64-hex-fingerprint> --package <name=version> --native-plan <identity> --native-plan-evidence <safe-top-level.json> --native-plan-sha256 <64-hex-content-digest> --out <artifact-directory> --child-command <adapter-host>\n  compare --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--result <comparison.json>]\n  gate --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--class runtime|ordinary] [--replacement <reviewed-gate.v1.json>] [--comparison-result <comparison.json>] [--result <gate.json>]"); return 0; }
+    private static KeyValuePair<string, string> ParseSetting(string value)
+    {
+        var separator = value.IndexOf('=', StringComparison.Ordinal);
+        return separator > 0 && separator < value.Length - 1 ? new KeyValuePair<string, string>(value[..separator], value[(separator + 1)..]) : throw new PerformanceContractException("--provider-setting must be safe-name=safe-value and repeated for every material provider setting.");
+    }
+    private static int HostFingerprintCommand() { Console.WriteLine(HostFingerprint.CaptureSha256()); return 0; }
+    private static int Help() { Console.WriteLine("#646 store performance harness\n  host-fingerprint\n  matrix <scale> --cohort <safe-id> --measurement-set <safe-id> --workload <id> --provider <provider> --provider-version <version> --provider-setting <name=value> --adapter <adapter> --form <physical-form> --commit <40-hex-sha> --composition <64-hex-fingerprint> --package <name=version> --native-plan <identity> --native-plan-evidence <safe-top-level.json> --native-plan-sha256 <64-hex-content-digest> --out <artifact-directory> --child-command <adapter-host>\n  compare --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--result <comparison.json>]\n  gate --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--class runtime|ordinary] [--replacement <reviewed-gate.v1.json>] [--comparison-result <comparison.json>] [--result <gate.json>]"); return 0; }
     private static int Fail(string message) { Console.Error.WriteLine($"error: {message}"); return 2; }
     private static string FindRepositoryRoot() { for (var directory = new DirectoryInfo(Directory.GetCurrentDirectory()); directory is not null; directory = directory.Parent) if (File.Exists(Path.Combine(directory.FullName, "AGENTS.md"))) return directory.FullName; throw new PerformanceContractException("Repository root was not found."); }
+}
+
+public static class RepositoryProvenance
+{
+    public static void RequireCleanHead(string repositoryRoot, string requestedCommitSha)
+    {
+        var actualCommitSha = Git(repositoryRoot, "rev-parse", "HEAD").Trim();
+        Validate(requestedCommitSha, actualCommitSha, string.IsNullOrWhiteSpace(Git(repositoryRoot, "status", "--porcelain=v1", "--untracked-files=all")));
+    }
+
+    public static void Validate(string requestedCommitSha, string actualCommitSha, bool isClean)
+    {
+        if (!string.Equals(actualCommitSha, requestedCommitSha, StringComparison.Ordinal))
+            throw new PerformanceContractException($"matrix --commit must equal the current repository HEAD ({actualCommitSha}).");
+        if (!isClean)
+            throw new PerformanceContractException("matrix requires a clean repository so retained evidence identifies an exact source snapshot.");
+    }
+
+    private static string Git(string repositoryRoot, params string[] arguments)
+    {
+        var start = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = repositoryRoot,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start) ?? throw new PerformanceContractException("Could not start git to verify benchmark source provenance.");
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        if (process.ExitCode != 0) throw new PerformanceContractException($"Could not verify benchmark source provenance: {error.Trim()}");
+        return output;
+    }
 }

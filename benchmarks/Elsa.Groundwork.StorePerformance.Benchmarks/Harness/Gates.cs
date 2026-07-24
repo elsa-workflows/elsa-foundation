@@ -31,7 +31,7 @@ public static class GatePolicyFile
     public static GatePolicy Load(string path, string workloadId, string workloadVersion)
     {
         var bytes = File.ReadAllBytes(path);
-        using (var json = JsonDocument.Parse(bytes)) RejectDuplicates(json.RootElement);
+        using (var json = JsonDocument.Parse(bytes)) ArtifactStore.RejectDuplicateProperties(json.RootElement);
         ReviewedGateReplacement document;
         try { document = JsonSerializer.Deserialize<ReviewedGateReplacement>(bytes, Options) ?? throw new PerformanceContractException("Reviewed replacement gate input is invalid."); }
         catch (JsonException exception) { throw new PerformanceContractException($"Reviewed replacement gate JSON is invalid: {exception.Message}"); }
@@ -39,20 +39,6 @@ public static class GatePolicyFile
         return GatePolicy.Replacement(document.GateClass, document.MaxP95Ratio, document.MinThroughputRatio, document.MaxP99Ratio, document.Review);
     }
     public static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
-    private static void RejectDuplicates(JsonElement value)
-    {
-        if (value.ValueKind == JsonValueKind.Object)
-        {
-            var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var property in value.EnumerateObject())
-            {
-                if (!names.Add(property.Name)) throw new PerformanceContractException("Reviewed replacement gate JSON contains a duplicate property.");
-                RejectDuplicates(property.Value);
-            }
-        }
-        else if (value.ValueKind == JsonValueKind.Array)
-            foreach (var item in value.EnumerateArray()) RejectDuplicates(item);
-    }
 }
 
 public static class GateEvaluator

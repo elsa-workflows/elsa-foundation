@@ -416,18 +416,32 @@ admission did not consult the frozen provider/form contract. The remediated sche
 - validates finite positive raw samples and reproduces stored summaries, while comparison and gates
   recompute their statistics from the raw samples;
 - requires exact commit equality and stable machine-environment equality across targets;
+- verifies `--commit` against a clean repository HEAD, binds every process to an opaque hash of the
+  OS machine identity, and retains provider server version, required topology, and material
+  configuration values so adapter setup differences remain visible;
 - binds structured route evidence to an actual hashed JSON file and its cohort, measurement set,
-  workload, provider, adapter, physical form, scale, commit, and composition fingerprint; and
+  workload input, provider, adapter, physical form, scale, commit, host, provider metadata, and
+  composition fingerprint, while every route separately retains a manifest-bound raw provider-plan
+  JSON/text/XML artifact; and
 - admits only providers and physical forms named by the immutable workload contract.
 
-Root revalidation passed the expanded harness suite **40/40**, the real IAM EF and Groundwork SQLite
-correctness selection **2/2**, the architecture plus shrink-only EF-surface ratchet selection
-**65/65**, and a zero-warning Release harness build. Adapter identity is not present in the immutable
+Root revalidation passed the expanded harness suite **45/45**, the real IAM EF and Groundwork SQLite
+correctness selection **2/2**, the full architecture suite **285/285** (including the architecture
+plus shrink-only EF-surface ratchet selection **65/65**), and a zero-warning Release harness build.
+Adapter identity is not present in the immutable
 Spec 094 workload schema, so exact adapter allowlisting remains explicitly open rather than inferred.
 Likewise, route-specific expected limits/cardinalities require a versioned execution profile or
 successor workload; this checkpoint validates that the facts are complete, bounded, target-bound,
 and file-backed without mutating the frozen workload document. No timing or ledger verdict is
 claimed.
+
+The first re-review did not accept generic OS/runtime/architecture/core-count equality as proof that
+both targets ran on one host, and the evidence reviewer did not accept a structured plan summary as a
+substitute for the raw provider plan or a caller-supplied commit as proof of source provenance. Those
+findings drove the clean-HEAD check, opaque OS-machine fingerprint, adapter-observed provider facts,
+seed/input binding, and per-route raw-plan retention described above. Unit fixtures use synthetic
+plans only to exercise the protocol; this checkpoint still has no executable timing adapter and
+therefore retains or claims no production plan, measurement, or verdict.
 
 ## 8. Readiness audit
 
