@@ -426,7 +426,7 @@ admission did not consult the frozen provider/form contract. The remediated sche
   content are validated; and
 - admits only providers and physical forms named by the immutable workload contract.
 
-Root revalidation passed the expanded harness suite **49/49**, the real IAM EF and Groundwork SQLite
+Root revalidation passed the expanded harness suite **50/50**, the real IAM EF and Groundwork SQLite
 correctness selection **2/2**, the full architecture suite **285/285** (including the architecture
 plus shrink-only EF-surface ratchet selection **65/65**), and a zero-warning Release harness build.
 Adapter identity is not present in the immutable

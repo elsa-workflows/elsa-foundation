@@ -346,6 +346,28 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Raw_plan_text_allows_parameterized_endpoints_but_rejects_retained_values()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa646-raw-plan-{Guid.NewGuid():N}.txt");
+        try
+        {
+            foreach (var content in new[] { "server = @p", "server: $1", "database = :database", "host = ?" })
+            {
+                File.WriteAllText(path, content);
+                ArtifactStore.ValidateRawPlanFile(path);
+            }
+
+            File.WriteAllText(path, "Host=db.internal;Database=elsa");
+            var error = Assert.Throws<PerformanceContractException>(() => ArtifactStore.ValidateRawPlanFile(path));
+            Assert.Contains("connection values or credentials", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Artifact_schema_v2_rejects_v1_manifests_and_missing_required_process_fields()
     {
         using var legacy = ArtifactFixture.Create();

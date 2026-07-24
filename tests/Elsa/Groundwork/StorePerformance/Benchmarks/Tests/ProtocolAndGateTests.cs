@@ -57,6 +57,8 @@ public sealed class ProtocolAndGateTests
             MatrixPlan.Create(workload, Request() with { Provider = "oracle" }));
         Assert.Throws<PerformanceContractException>(() =>
             MatrixPlan.Create(workload, Request() with { PhysicalForm = "unreviewed-form" }));
+        Assert.Throws<PerformanceContractException>(() =>
+            MatrixPlan.Create(workload, Request() with { ProviderConfiguration = new Dictionary<string, string> { ["host"] = "db.internal" } }));
     }
 
     [Fact]
