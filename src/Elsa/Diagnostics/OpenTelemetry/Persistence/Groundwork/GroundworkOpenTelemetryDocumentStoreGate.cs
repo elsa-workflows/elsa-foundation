@@ -1,15 +1,13 @@
 using System.Runtime.ExceptionServices;
 using Groundwork.Core.Queries;
-using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 
 /// <summary>Defers OpenTelemetry catalog access until the lifecycle owns its scoped document resources.</summary>
 internal sealed class GroundworkOpenTelemetryDocumentStoreGate(DocumentStoreAccess access)
-    : IDocumentStore, IBoundedDocumentStore
+    : IGroundworkOpenTelemetryDocumentCommands, IBoundedDocumentStore
 {
     private readonly Lock _gate = new();
     private IDocumentStore? _documents;
@@ -18,8 +16,6 @@ internal sealed class GroundworkOpenTelemetryDocumentStoreGate(DocumentStoreAcce
     private bool _released;
 
     public DocumentStoreAccess Access { get; } = access ?? throw new ArgumentNullException(nameof(access));
-
-    public TransactionBoundary TransactionBoundary => Documents.TransactionBoundary;
 
     public void Publish(IDocumentStore documents, IBoundedDocumentStore queries)
     {
@@ -66,23 +62,6 @@ internal sealed class GroundworkOpenTelemetryDocumentStoreGate(DocumentStoreAcce
 
     public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
         Documents.DeleteAsync(request, cancellationToken);
-
-#pragma warning disable GW0004
-    public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
-        Documents.QueryAsync(query, cancellationToken);
-
-    public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
-        Documents.QueryAsync(query, cancellationToken);
-
-    public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
-        Documents.FirstOrDefaultAsync(query, cancellationToken);
-
-    public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
-        Documents.AnyAsync(query, cancellationToken);
-#pragma warning restore GW0004
-
-    public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
-        Documents.BeginAsync(scope, cancellationToken);
 
     public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
         Queries.QueryAsync(query, cancellationToken);

@@ -2,94 +2,81 @@
   "schemaVersion": 1,
   "workUnit": "139-groundwork-diagnostics-persistence",
   "userStory": "US1",
-  "outcome": "incomplete",
-  "evidenceClassification": "historical-provenance-only",
+  "outcome": "pass",
+  "evidenceClassification": "exact-working-tree-certification",
   "currentPromotionTarget": "0.0.1-preview.81",
-  "promotionNote": "This preview.73 run predates the spec-138 replay and is retained only as design provenance. It does not certify preview.81 or current main.",
-  "recordedAtUtc": "2026-07-20T01:46:58Z",
-  "gitHeadAtRun": "28eb679b1552231cffcb19b5e30c906f8f925668",
-  "testedSourceState": "The new shared suites and harness change were uncommitted when run; they were committed unchanged in the immediately following checkpoint.",
-  "groundworkPackageVersion": "0.0.1-preview.73",
-  "runs": [
+  "groundworkPackageVersion": "0.0.1-preview.81",
+  "recordedAtUtc": "2026-07-24T03:42:54Z",
+  "gitHeadAtRun": "473ca82f1098a1e28167cc9f75dee07f25ff6cee",
+  "testedSourceState": "HEAD plus the uncommitted conformance and architecture-gate repairs identified by the source hashes below.",
+  "testSourceSha256": "33d8b0ac732ea6394d90197d969f1a96bd3e342cdc1bc2a202036b6e84cba530",
+  "productionSourceSha256": {
+    "GroundworkOpenTelemetryDocumentStoreGate.cs": "b52e989b79723f0411c4f309efc206c8684c0993fef6c494ebc05abe7e73064d",
+    "GroundworkOpenTelemetryStores.cs": "8450b3e3a4ece98918e7d1cbcb7108c506d4e7339fabd0d756c945944a70ecf5",
+    "GroundworkOpenTelemetryPersistenceFeature.cs": "630f80f1fd7d6de125aacf3430edadb0979f5f1fff4dfa9abf1fa10b7721b35d",
+    "GroundworkStructuredLogsPersistenceFeature.cs": "c14daa89a4c5551bd8e11532b8ab2df1f0fb1ef80778d9ed96b3d41fc2446c2b"
+  },
+  "providers": [
     {
       "provider": "sqlite",
-      "status": "partial-pass",
-      "executed": [
-        "DiagnosticsGroundworkProviderConformanceTests (2 restart cases)",
-        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)",
-        "DiagnosticsDurableOperationConformanceTests (5 SQLite diagnostic-record operation cases)",
-        "GroundworkStructuredLogReplayTests and GroundworkStructuredLogQueryConformanceTests (12 cases)",
-        "GroundworkOpenTelemetryRestartTests (1 case)"
-      ],
-      "notExecuted": [
-        "The complete adapter-level US1 suite through the four-provider fixture"
-      ]
+      "status": "pass",
+      "sharedProviderCases": 6
     },
     {
       "provider": "sqlserver",
-      "status": "partial-pass",
-      "executed": [
-        "DiagnosticsGroundworkProviderConformanceTests (2 restart cases)",
-        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)"
-      ],
-      "notExecuted": [
-        "Structured Logs replay/error matrix",
-        "OpenTelemetry operation-idempotency and restart matrix"
-      ]
+      "status": "pass",
+      "sharedProviderCases": 6
     },
     {
       "provider": "postgresql",
-      "status": "partial-pass",
-      "executed": [
-        "DiagnosticsGroundworkProviderConformanceTests (2 restart cases)",
-        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)"
-      ],
-      "notExecuted": [
-        "Structured Logs replay/error matrix",
-        "OpenTelemetry operation-idempotency and restart matrix"
-      ]
+      "status": "pass",
+      "sharedProviderCases": 6
     },
     {
       "provider": "mongodb",
-      "status": "partial-pass",
-      "executed": [
-        "DiagnosticsGroundworkProviderConformanceTests (2 restart cases)",
-        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)"
-      ],
-      "notExecuted": [
-        "Structured Logs replay/error matrix",
-        "OpenTelemetry operation-idempotency and restart matrix"
-      ]
+      "status": "pass",
+      "sharedProviderCases": 6
     }
+  ],
+  "sharedProviderCoverage": [
+    "Structured Logs restart persistence for committed entries, replay cursor, and high-water mark",
+    "Structured Logs acknowledgement-loss retry, concurrent tied writers, deterministic cursor order, filtered-page cursor advancement, zero-retention high-water behavior, cursor non-disclosure, and operational query failure",
+    "OpenTelemetry restart persistence for resources, traces, spans, metric instruments, metric points, logs, and diagnostic counts",
+    "OpenTelemetry concurrent same-batch convergence, identical retry idempotency, changed-payload operation conflict, and exactly-once retained records/catalog entries",
+    "Structured Logs cross-scope non-disclosure and exact retention",
+    "OpenTelemetry all-signal cross-scope non-disclosure and exact retention"
   ],
   "commands": [
     {
-      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-build -c Release --filter 'FullyQualifiedName~DiagnosticsGroundworkProviderConformanceTests' --logger 'console;verbosity=normal'",
-      "passed": 8,
-      "failed": 0
+      "purpose": "Four-provider US1 certification",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj -c Release --filter 'FullyQualifiedName~OpenTelemetry_catalogs_records_and_counts_survive_restart|FullyQualifiedName~Structured_log_commit_cursor_and_high_water_survive_restart|FullyQualifiedName~Structured_log_replay_retry_and_failure_semantics_match_across_providers|FullyQualifiedName~OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers|FullyQualifiedName~DiagnosticsScopeAndRetentionConformanceTests' --logger 'console;verbosity=minimal'",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 16
     },
     {
-      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-build -c Release --filter 'FullyQualifiedName~DiagnosticsScopeAndRetentionConformanceTests' --logger 'console;verbosity=normal'",
-      "passed": 8,
-      "failed": 0
-    },
-    {
-      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-build -c Release --filter 'FullyQualifiedName~DiagnosticsDurableOperationConformanceTests' --logger 'console;verbosity=normal'",
-      "passed": 5,
-      "failed": 0
-    },
-    {
-      "command": "dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.Tests.csproj --no-restore -c Release --filter 'FullyQualifiedName~GroundworkStructuredLogQueryConformanceTests|FullyQualifiedName~GroundworkStructuredLogReplayTests' --logger 'console;verbosity=normal'",
-      "passed": 12,
-      "failed": 0
-    },
-    {
-      "command": "dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj --no-restore -c Release --filter 'FullyQualifiedName~GroundworkOpenTelemetryRestartTests|FullyQualifiedName~GroundworkOpenTelemetryQueryConformanceTests|FullyQualifiedName~GroundworkOpenTelemetryCatalogTests' --logger 'console;verbosity=normal'",
+      "purpose": "Structured Logs complete adapter regression",
+      "command": "dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.Tests.csproj -c Release --no-restore --logger 'console;verbosity=minimal'",
       "passed": 17,
-      "failed": 0
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "purpose": "OpenTelemetry complete adapter regression",
+      "command": "dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj -c Release --no-restore --logger 'console;verbosity=minimal'",
+      "passed": 68,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "purpose": "Provider-independent diagnostic-record operation depth",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj -c Release --no-build --filter 'FullyQualifiedName~DiagnosticsDurableOperationConformanceTests' --logger 'console;verbosity=minimal'",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
     }
   ],
-  "blockers": [
-    "T022 remains open: the all-four-provider US1 adapter conformance matrix has not yet been executed. This manifest is not a certification."
-  ]
+  "evidenceBoundary": "The 24-case certification executes provider-sensitive restart, replay, concurrency, failure, acknowledgement-loss, scope, and retention behavior on every provider. The five-case SQLite diagnostic-record primitive suite adds provider-independent cancellation-boundary, malformed-payload, and oversized-batch rejection depth; those three pre-I/O validations are not represented as four separate physical-provider executions.",
+  "blockers": []
 }

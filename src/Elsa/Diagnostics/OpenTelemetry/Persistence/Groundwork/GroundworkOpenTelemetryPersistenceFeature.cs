@@ -43,7 +43,7 @@ public class GroundworkOpenTelemetryPersistenceFeature :
                 GroundworkOpenTelemetryStore>(ServiceLifetime.Singleton);
         }
         services.AddDiagnosticsPersistenceLifecycle<GroundworkOpenTelemetryStore>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<
             IGroundworkDiagnosticRecordManifestSource,
             GroundworkOpenTelemetryPersistenceFeature>());
     }

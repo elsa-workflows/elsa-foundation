@@ -385,6 +385,8 @@
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/Persistence/">
     <Project Path="tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/">

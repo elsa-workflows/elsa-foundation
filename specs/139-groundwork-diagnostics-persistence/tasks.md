@@ -84,7 +84,8 @@
   - Evidence: The durable OpenTelemetry store compiled and the OpenTelemetry adapter suite passed 68/68.
 - [X] T021 [US1] Declare Structured Logs streams/indexes/ledger requirements in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/StructuredLogsGroundworkStorageSchema.cs` and OpenTelemetry streams/catalogs/indexes/ledger requirements in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/OpenTelemetryGroundworkStorageSchema.cs`
   - Evidence: Both schema declarations compiled; adapter schema tests and the shared schema batch passed.
-- [ ] T022 [US1] Run the US1 conformance set against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us1-provider-results.json`
+- [X] T022 [US1] Run the US1 conformance set against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us1-provider-results.json`
+  - Evidence: The preview.81 exact-working-tree certification passed 24/24 shared provider cases (6 each on SQLite, SQL Server, PostgreSQL, and MongoDB); the complete adapters passed 68/68 OpenTelemetry and 17/17 Structured Logs, and provider-independent operation depth passed 5/5.
 
 **Checkpoint**: Durable append, restart, replay, idempotency, and failure semantics work independently for every diagnostic signal on all four providers.
 
@@ -121,7 +122,8 @@
   - Evidence: the POST `/diagnostics/opentelemetry/logs/search` endpoint delegates to `IOpenTelemetryProvider.GetLogsAsync` and is guarded by `Diagnostics:OpenTelemetry`.
 - [X] T032 [US2] Add endpoint binding and result tests in `tests/Elsa/Diagnostics/OpenTelemetry/Tests/OpenTelemetryLogsEndpointTests.cs`
   - Evidence: the focused endpoint contract passes 2/2, covering route, verb, authorization, filter/token forwarding, and exact provider result return.
-- [ ] T033 [US2] Run the US2 query, scope, retention, and plan suite against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us2-provider-results.json`
+- [X] T033 [US2] Run the US2 query, scope, retention, and plan suite against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us2-provider-results.json`
+  - Evidence: The preview.81 exact-working-tree certification passed 17/17 query-result, scope/retention, native bounded-plan, and missing-schema cases across SQLite, SQL Server, PostgreSQL, and MongoDB; the complete OpenTelemetry adapter regression, including query/catalog depth, passed 68/68.
 
 **Checkpoint**: All persisted diagnostics queries and mutations are exact, scope-safe, and demonstrably bounded across all providers.
 

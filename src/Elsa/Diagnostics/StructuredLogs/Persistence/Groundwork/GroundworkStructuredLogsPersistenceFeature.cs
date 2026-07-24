@@ -37,7 +37,7 @@ public class GroundworkStructuredLogsPersistenceFeature :
                 GroundworkStructuredLogStore>(ServiceLifetime.Singleton);
         }
         services.AddDiagnosticsPersistenceLifecycle<GroundworkStructuredLogStore>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<
             IGroundworkDiagnosticRecordManifestSource,
             GroundworkStructuredLogsPersistenceFeature>());
     }

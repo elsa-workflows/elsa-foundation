@@ -2,95 +2,69 @@
   "schemaVersion": 1,
   "workUnit": "139-groundwork-diagnostics-persistence",
   "userStory": "US2",
-  "outcome": "incomplete",
-  "evidenceClassification": "historical-provenance-only",
+  "outcome": "pass",
+  "evidenceClassification": "exact-working-tree-certification",
   "currentPromotionTarget": "0.0.1-preview.81",
-  "promotionNote": "The preview.73/.75 runs predate the spec-138 replay and are retained only as design provenance. They do not certify preview.81 or current main.",
-  "recordedAtUtc": "2026-07-20T01:46:58Z",
-  "gitHeadAtRun": "28eb679b1552231cffcb19b5e30c906f8f925668",
-  "testedSourceState": "The new shared suites and harness change were uncommitted when run; they were committed unchanged in the immediately following checkpoint.",
-  "groundworkPackageVersions": [
-    "0.0.1-preview.73",
-    "0.0.1-preview.75"
-  ],
-  "lastUpdatedAtUtc": "2026-07-20T02:03:25Z",
-  "runs": [
+  "groundworkPackageVersion": "0.0.1-preview.81",
+  "recordedAtUtc": "2026-07-24T03:42:54Z",
+  "gitHeadAtRun": "473ca82f1098a1e28167cc9f75dee07f25ff6cee",
+  "testedSourceState": "HEAD plus the uncommitted conformance and architecture-gate repairs identified by the source hashes below.",
+  "testSourceSha256": "33d8b0ac732ea6394d90197d969f1a96bd3e342cdc1bc2a202036b6e84cba530",
+  "productionSourceSha256": {
+    "GroundworkOpenTelemetryDocumentStoreGate.cs": "b52e989b79723f0411c4f309efc206c8684c0993fef6c494ebc05abe7e73064d",
+    "GroundworkOpenTelemetryStores.cs": "8450b3e3a4ece98918e7d1cbcb7108c506d4e7339fabd0d756c945944a70ecf5",
+    "GroundworkOpenTelemetryPersistenceFeature.cs": "630f80f1fd7d6de125aacf3430edadb0979f5f1fff4dfa9abf1fa10b7721b35d",
+    "GroundworkStructuredLogsPersistenceFeature.cs": "c14daa89a4c5551bd8e11532b8ab2df1f0fb1ef80778d9ed96b3d41fc2446c2b"
+  },
+  "providers": [
     {
       "provider": "sqlite",
-      "status": "partial-pass",
-      "executed": [
-        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)",
-        "DiagnosticsBoundedExecutionTests (all diagnostic-record query/trim routes, all physical catalog routes, and SQLite non-materializing admission)",
-        "GroundworkStructuredLogQueryConformanceTests (6 cases)",
-        "GroundworkOpenTelemetryQueryConformanceTests and GroundworkOpenTelemetryCatalogTests (16 cases)"
-      ],
-      "notExecuted": []
+      "status": "pass",
+      "sharedProviderCases": 4,
+      "additionalCases": 1
     },
     {
       "provider": "sqlserver",
-      "status": "partial-pass",
-      "executed": [
-        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)",
-        "DiagnosticsBoundedExecutionTests (all diagnostic-record query/trim routes and all physical catalog routes)"
-      ],
-      "notExecuted": [
-        "Structured Logs and OpenTelemetry complete query matrices"
-      ]
+      "status": "pass",
+      "sharedProviderCases": 4,
+      "additionalCases": 0
     },
     {
       "provider": "postgresql",
-      "status": "partial-pass",
-      "executed": [
-        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)",
-        "DiagnosticsBoundedExecutionTests (all diagnostic-record query/trim routes and all physical catalog routes)"
-      ],
-      "notExecuted": [
-        "Structured Logs and OpenTelemetry complete query matrices"
-      ]
+      "status": "pass",
+      "sharedProviderCases": 4,
+      "additionalCases": 0
     },
     {
       "provider": "mongodb",
-      "status": "partial-pass",
-      "executed": [
-        "DiagnosticsScopeAndRetentionConformanceTests (2 scope/retention cases)",
-        "DiagnosticsBoundedExecutionTests (all diagnostic-record query/trim routes and all physical catalog routes)"
-      ],
-      "notExecuted": [
-        "Structured Logs and OpenTelemetry complete query matrices"
-      ]
+      "status": "pass",
+      "sharedProviderCases": 4,
+      "additionalCases": 0
     }
+  ],
+  "sharedProviderCoverage": [
+    "Structured Logs minimum-level, category, source, stable ordering, and take behavior",
+    "OpenTelemetry resource, trace, trace-detail, metric, and log filters with inclusive ranges, case policy, stable ties, take bounds, and deterministic catalog capacity",
+    "Structured Logs and OpenTelemetry cross-scope non-disclosure and exact retention",
+    "Native bounded plans for ten diagnostic-record query routes, five trim-selection routes, and seven physical catalog selection/count/capacity routes"
   ],
   "commands": [
     {
-      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-build -c Release --filter 'FullyQualifiedName~DiagnosticsScopeAndRetentionConformanceTests' --logger 'console;verbosity=normal'",
-      "passed": 8,
-      "failed": 0
-    },
-    {
-      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-build -c Release --filter 'FullyQualifiedName~DiagnosticsBoundedExecutionTests' --logger 'console;verbosity=normal'",
-      "passed": 4,
-      "failed": 0
-    },
-    {
-      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-build -c Release --filter 'FullyQualifiedName~DiagnosticsBoundedExecutionTests' --logger 'console;verbosity=normal'",
-      "groundworkPackageVersion": "0.0.1-preview.75",
-      "passed": 5,
-      "failed": 0,
-      "coverage": "Four provider cases cover ten diagnostic-record query routes with every production predicate/operator/order/latest-per-key shape, five trim-selection routes (including zero retention), and seven physical catalog routes (history, status, count, and capacity selection); one additional SQLite case proves missing-schema inspection does not materialize diagnostic tables."
-    },
-    {
-      "command": "dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.Tests.csproj --no-restore -c Release --filter 'FullyQualifiedName~GroundworkStructuredLogQueryConformanceTests|FullyQualifiedName~GroundworkStructuredLogReplayTests' --logger 'console;verbosity=normal'",
-      "passed": 12,
-      "failed": 0
-    },
-    {
-      "command": "dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj --no-restore -c Release --filter 'FullyQualifiedName~GroundworkOpenTelemetryRestartTests|FullyQualifiedName~GroundworkOpenTelemetryQueryConformanceTests|FullyQualifiedName~GroundworkOpenTelemetryCatalogTests' --logger 'console;verbosity=normal'",
+      "purpose": "Four-provider US2 certification",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj -c Release --no-build --filter 'FullyQualifiedName~Query_filters_ordering_limits_and_catalog_capacity_match_across_providers|FullyQualifiedName~DiagnosticsScopeAndRetentionConformanceTests|FullyQualifiedName~DiagnosticsBoundedExecutionTests' --logger 'console;verbosity=minimal'",
       "passed": 17,
-      "failed": 0
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 20
+    },
+    {
+      "purpose": "OpenTelemetry complete adapter regression, including query and catalog depth",
+      "command": "dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj -c Release --no-restore --logger 'console;verbosity=minimal'",
+      "passed": 68,
+      "failed": 0,
+      "skipped": 0
     }
   ],
-  "blockers": [
-    "T027 remains open. Groundwork preview.75 exposes IDiagnosticRecordPlanInspector and IPhysicalDocumentQueryExplainer, so this evidence covers every production diagnostic-record query/trim-selection and catalog selection/count route. Catalog retention deletion and capture-operation ledger load/save use IDocumentStore, which exposes no public native mutation-plan inspector. A public document mutation inspector is required before every scale-bearing mutation can receive native-plan evidence.",
-    "T033 remains open: only the partial real-provider suite recorded here has run."
-  ]
+  "evidenceBoundary": "The 17-case certification consists of four query-result cases, eight scope/retention cases, four provider-native bounded-plan cases, and one SQLite missing-schema non-materialization case. Native plan evidence covers diagnostic-record queries, trim selection, and catalog selection/count/capacity. Catalog save/delete and capture-ledger load/save use IDocumentStore, whose public API does not expose native mutation-plan inspection; this manifest does not claim otherwise.",
+  "blockers": []
 }
