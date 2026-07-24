@@ -150,6 +150,13 @@ Actual batch-branch result before integration with current `main`:
   branch base;
 - architecture guard: 2 passed, 0 failed, 0 skipped.
 
+Actual result after merging remote `main`
+`18e0b54968339e0d7efc9af1f3cf672b3faef7d3`:
+
+- capability probe: 8 passed, 1 failed, 0 skipped. The package-family ratchet
+  now passes; the only failure is the deliberate central-tool ratchet because
+  `.config/dotnet-tools.json` remains on preview.80.
+
 Static provider capability reports are admission metadata only; this batch does
 not claim native execution, native plans, topology evidence, or restart evidence.
 After merging current `main`, the library ratchet should pass and the tool
