@@ -7,6 +7,7 @@ public class OpenTelemetryDiagnosticsOptions
     public int MetricPointCapacity { get; set; } = 25_000;
     public int LogRecordCapacity { get; set; } = 10_000;
     public int ResourceCapacity { get; set; } = 500;
+    public int MetricInstrumentCapacity { get; set; } = 5_000;
     public int SubscriberChannelCapacity { get; set; } = 1_000;
     public int MaxQuerySize { get; set; } = 1_000;
     public long MaxHttpRequestBodySize { get; set; } = 10 * 1024 * 1024;
@@ -53,11 +54,11 @@ public class OpenTelemetryDiagnosticsOptions
     public TimeSpan SensitiveTextPatternTimeout { get; set; } = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
-    /// How long the EF Core store's async disposal waits for the background drain loop to persist buffered
+    /// How long a durable store's lifecycle stop waits for the background drain loop to persist buffered
     /// telemetry on graceful shutdown before hard-cancelling. <see cref="IAsyncDisposable.DisposeAsync"/>
-    /// carries no cancellation token, so this window is the only bound on shutdown drain time — size it
-    /// below the host's shutdown budget (e.g. the container termination grace period). Negative values are
-    /// clamped to zero; <see cref="TimeSpan.Zero"/> disables the graceful wait entirely.
+    /// remains a fallback for hosts that do not invoke the explicit lifecycle. This window is the adapter-owned
+    /// bound on shutdown drain time, so size it below the host's budget (for example, the container termination
+    /// grace period). Negative values are clamped to zero; <see cref="TimeSpan.Zero"/> disables the graceful wait.
     /// </summary>
     public TimeSpan ShutdownDrainTimeout { get; set; } = TimeSpan.FromSeconds(10);
 }
