@@ -10,10 +10,7 @@
   "manifestFingerprint": "79e9a360fc94d4cb61371afcaeefdaebfacf9ac8cee141e4c8d076da2d1c5b45",
   "executionPath": "provider-driver/mongodb/runtime-execution-liveness/6c14c7b1ab7d6741",
   "clients": 2,
-  "resultHash": "ef22d67b91d092f0a448ed0cd2d25d44a88e4eeea55ddc789b858ff7463b7503",
-  "outcome": "pass",
-  "concurrencySemantic": "strictly-increasing-fence",
-  "evidence": "versions/0.0.1-preview.81/evidence/mongodb/runtime-execution-liveness/6c14c7b1ab7d6741.json",
+  "resultHash": "ade63a28514f6262893453a1af57f738bb17a9edc7dfcc099ea55859ecab44e3",
   "observations": [
     {
       "name": "stale-commit-count",
@@ -21,16 +18,19 @@
     },
     {
       "name": "token-order",
-      "value": "strictly-increasing"
+      "value": "1,2"
     },
     {
       "name": "winner-count",
       "value": "1"
     }
   ],
+  "outcome": "pass",
   "provenance": {
-    "elsaCommit": "61f13bf1cbc912db39e950807b2cd195da0de07b",
-    "elsaTree": "4cb48a88b8855aa1e7756ab9314dbf27a530d5a6",
+    "elsaCommit": "bf452355867c8f76a11d9bca9191563a773a631a",
+    "elsaTree": "8b3504d52cef5f4a19ae5318fc66f46aefcfd048",
     "runIdentity": "runtime-checkpoint-fence-preview81"
-  }
+  },
+  "concurrencySemantic": "strictly-increasing-fence",
+  "evidence": "versions/0.0.1-preview.81/evidence/mongodb/runtime-execution-liveness/6c14c7b1ab7d6741.json"
 }

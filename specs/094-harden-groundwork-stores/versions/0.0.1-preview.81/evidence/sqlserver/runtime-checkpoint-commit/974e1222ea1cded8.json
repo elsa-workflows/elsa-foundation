@@ -10,10 +10,7 @@
   "manifestFingerprint": "1bf0e8c571d0bbb0e89ea94b75ed200a517a32de209922eb89d1b001ce639907",
   "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/974e1222ea1cded8",
   "clients": 2,
-  "resultHash": "5d5cc49f6c1814b3ddb5fc014f4f5c694d8e9eeaa3a4ce90dffed0ab0872e827",
-  "outcome": "pass",
-  "concurrencySemantic": "atomic-stale-fence-rejection",
-  "evidence": "versions/0.0.1-preview.81/evidence/sqlserver/runtime-checkpoint-commit/974e1222ea1cded8.json",
+  "resultHash": "478831165c1b5e56a602919890a616aab2302a24af1c5b2f3172dbf1cdc444bf",
   "observations": [
     {
       "name": "stale-commit-count",
@@ -21,16 +18,19 @@
     },
     {
       "name": "token-order",
-      "value": "strictly-increasing"
+      "value": "1,2"
     },
     {
       "name": "winner-count",
       "value": "1"
     }
   ],
+  "outcome": "pass",
   "provenance": {
-    "elsaCommit": "61f13bf1cbc912db39e950807b2cd195da0de07b",
-    "elsaTree": "4cb48a88b8855aa1e7756ab9314dbf27a530d5a6",
+    "elsaCommit": "bf452355867c8f76a11d9bca9191563a773a631a",
+    "elsaTree": "8b3504d52cef5f4a19ae5318fc66f46aefcfd048",
     "runIdentity": "runtime-checkpoint-fence-preview81"
-  }
+  },
+  "concurrencySemantic": "atomic-stale-fence-rejection",
+  "evidence": "versions/0.0.1-preview.81/evidence/sqlserver/runtime-checkpoint-commit/974e1222ea1cded8.json"
 }

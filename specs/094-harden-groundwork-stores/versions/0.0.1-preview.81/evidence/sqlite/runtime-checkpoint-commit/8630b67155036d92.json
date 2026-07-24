@@ -10,23 +10,23 @@
   "manifestFingerprint": "fe79611ace1babe82722614ea72a1d0fec3f36fa67d3f1f63b1606dc782fb439",
   "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/8630b67155036d92",
   "clients": 2,
-  "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
-  "outcome": "pass",
-  "restartScenario": "process-restart-same-database",
-  "evidence": "versions/0.0.1-preview.81/evidence/sqlite/runtime-checkpoint-commit/8630b67155036d92.json",
+  "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
   "observations": [
     {
       "name": "child-process-rehydration",
-      "value": "verified"
+      "value": "schema-version:1;document-version:1;distinct-process:true"
     },
     {
       "name": "complete-bundle-count",
       "value": "1"
     }
   ],
+  "outcome": "pass",
   "provenance": {
-    "elsaCommit": "61f13bf1cbc912db39e950807b2cd195da0de07b",
-    "elsaTree": "4cb48a88b8855aa1e7756ab9314dbf27a530d5a6",
+    "elsaCommit": "bf452355867c8f76a11d9bca9191563a773a631a",
+    "elsaTree": "8b3504d52cef5f4a19ae5318fc66f46aefcfd048",
     "runIdentity": "runtime-checkpoint-fence-preview81"
-  }
+  },
+  "restartScenario": "process-restart-same-database",
+  "evidence": "versions/0.0.1-preview.81/evidence/sqlite/runtime-checkpoint-commit/8630b67155036d92.json"
 }

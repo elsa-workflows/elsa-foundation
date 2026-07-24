@@ -164,6 +164,10 @@ dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence
   --configuration Release --no-build \
   --filter 'FullyQualifiedName=Elsa.Persistence.Groundwork.Conformance.Tests.RuntimeProviderEvidencePublicationTests.Publish_the_catalog_validated_runtime_provider_evidence_slice'
 
+export ELSA_GROUNDWORK_SOURCE_COMMIT="bf452355867c8f76a11d9bca9191563a773a631a"
+export ELSA_GROUNDWORK_SOURCE_TREE="8b3504d52cef5f4a19ae5318fc66f46aefcfd048"
+export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview81"
+
 ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE=1 \
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
   --configuration Release --no-build \
@@ -180,21 +184,25 @@ dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence
   --filter 'FullyQualifiedName=Elsa.Persistence.Groundwork.Conformance.Tests.DistributedProviderEvidencePublicationTests.Publish_the_real_distributed_ordinary_round_trip_matrices'
 ```
 
-Each successful publisher writes provider artifacts under `evidence/` and one deterministic, merge-ready
-record set under `ledger-attachments/`. Review and mechanically import those records by
+Each successful publisher writes provider artifacts and one deterministic, merge-ready record set. Legacy
+publishers use `evidence/` and `ledger-attachments/`; a version-scoped refresh writes both beneath
+`versions/<Groundwork package version>/` so an older evidence generation remains immutable. Review and
+mechanically import those records by
 `(coverageEntryId, scenarioId, provider)`; do not hand-author or infer missing obligations. Publication does
 not advance a row status. A row remains incomplete until every declared query, concurrency, failure, and
 restart obligation is present for all four providers and the linked #644/#660 authority evidence is current.
 
 ### Preview.81 checkpoint/fence evidence refresh (2026-07-24)
 
-Against Elsa source commit `61f13bf1cbc912db39e950807b2cd195da0de07b` (tree
-`4cb48a88b8855aa1e7756ab9314dbf27a530d5a6`) and Groundwork `0.0.1-preview.81`, the checkpoint/fence
-publisher passed for SQLite, SQL Server, PostgreSQL, and MongoDB (1/1, 2m33s). It produced 36 unique
+Against Elsa source commit `bf452355867c8f76a11d9bca9191563a773a631a` (tree
+`8b3504d52cef5f4a19ae5318fc66f46aefcfd048`) and Groundwork `0.0.1-preview.81`, the checkpoint/fence
+publisher passed for SQLite, SQL Server, PostgreSQL, and MongoDB (1/1, 1m58s). It produced 36 unique
 `(coverageEntryId, scenarioId, provider)` records across `runtime-checkpoint-commit`,
 `runtime-execution-liveness`, and `runtime-post-commit-outbox`; every retained artifact digest was
 recomputed successfully before the attachment was imported mechanically by that tuple. Each artifact is
 version-namespaced and retains the raw scenario observations plus the exact commit, tree, and run identity.
+The observations and compiled physical-target fingerprint now come from the same driver execution, and each
+record's result hash plus exact artifact-payload comparison binds those observations and provenance.
 The original `.80` attachment hash and all 36 referenced historical artifact hashes are guarded separately.
 
 An earlier full publication reached SQL Server and exposed that the fixture's reset query could select

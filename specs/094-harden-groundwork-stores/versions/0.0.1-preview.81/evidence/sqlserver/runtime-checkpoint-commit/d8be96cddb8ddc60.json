@@ -10,10 +10,7 @@
   "manifestFingerprint": "1bf0e8c571d0bbb0e89ea94b75ed200a517a32de209922eb89d1b001ce639907",
   "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/d8be96cddb8ddc60",
   "clients": 2,
-  "resultHash": "8ea697e0054009834546404f2b6bea1f43678e92c2598e60f35d4d0ca72c6135",
-  "outcome": "pass",
-  "failureWindow": "after-durable-decision-before-caller-acknowledgement",
-  "evidence": "versions/0.0.1-preview.81/evidence/sqlserver/runtime-checkpoint-commit/d8be96cddb8ddc60.json",
+  "resultHash": "2f1a19643e12b38b4d4a41fa4c200a64df2672eb1b349105e95ef485d44882d9",
   "observations": [
     {
       "name": "committed-bundle-count",
@@ -25,12 +22,15 @@
     },
     {
       "name": "recovered-state",
-      "value": "verified"
+      "value": "initial-complete-count:1;recovered-complete-count:1"
     }
   ],
+  "outcome": "pass",
   "provenance": {
-    "elsaCommit": "61f13bf1cbc912db39e950807b2cd195da0de07b",
-    "elsaTree": "4cb48a88b8855aa1e7756ab9314dbf27a530d5a6",
+    "elsaCommit": "bf452355867c8f76a11d9bca9191563a773a631a",
+    "elsaTree": "8b3504d52cef5f4a19ae5318fc66f46aefcfd048",
     "runIdentity": "runtime-checkpoint-fence-preview81"
-  }
+  },
+  "failureWindow": "after-durable-decision-before-caller-acknowledgement",
+  "evidence": "versions/0.0.1-preview.81/evidence/sqlserver/runtime-checkpoint-commit/d8be96cddb8ddc60.json"
 }

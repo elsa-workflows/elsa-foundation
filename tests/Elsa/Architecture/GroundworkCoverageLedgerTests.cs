@@ -19,8 +19,8 @@ public sealed class GroundworkCoverageLedgerTests
         "specs/094-harden-groundwork-stores/ledger-attachments/runtime-checkpoint-fence.json";
     private const string HistoricalCheckpointFenceAttachmentSha256 =
         "b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c";
-    private const string ExpectedCheckpointFenceEvidenceCommit = "61f13bf1cbc912db39e950807b2cd195da0de07b";
-    private const string ExpectedCheckpointFenceEvidenceTree = "4cb48a88b8855aa1e7756ab9314dbf27a530d5a6";
+    private const string ExpectedCheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
+    private const string ExpectedCheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
     private const string ExpectedCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
 
     private static readonly string[] ExpectedEntryIds =

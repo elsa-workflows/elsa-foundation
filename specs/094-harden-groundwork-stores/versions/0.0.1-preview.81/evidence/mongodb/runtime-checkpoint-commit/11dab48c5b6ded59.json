@@ -10,10 +10,7 @@
   "manifestFingerprint": "79e9a360fc94d4cb61371afcaeefdaebfacf9ac8cee141e4c8d076da2d1c5b45",
   "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/11dab48c5b6ded59",
   "clients": 2,
-  "resultHash": "47b95e26a8d4b7344a2fe68369cce142ce4fa51e29b84450663d20b68f19491c",
-  "outcome": "pass",
-  "failureWindow": "before-provider-decision",
-  "evidence": "versions/0.0.1-preview.81/evidence/mongodb/runtime-checkpoint-commit/11dab48c5b6ded59.json",
+  "resultHash": "7057dfb465220eb0eebb683beb31a943189adea13bbe5b58f0a814ce3f55ff7c",
   "observations": [
     {
       "name": "committed-bundle-count",
@@ -25,12 +22,15 @@
     },
     {
       "name": "recovered-state",
-      "value": "verified"
+      "value": "initial-complete-count:0;recovered-complete-count:1"
     }
   ],
+  "outcome": "pass",
   "provenance": {
-    "elsaCommit": "61f13bf1cbc912db39e950807b2cd195da0de07b",
-    "elsaTree": "4cb48a88b8855aa1e7756ab9314dbf27a530d5a6",
+    "elsaCommit": "bf452355867c8f76a11d9bca9191563a773a631a",
+    "elsaTree": "8b3504d52cef5f4a19ae5318fc66f46aefcfd048",
     "runIdentity": "runtime-checkpoint-fence-preview81"
-  }
+  },
+  "failureWindow": "before-provider-decision",
+  "evidence": "versions/0.0.1-preview.81/evidence/mongodb/runtime-checkpoint-commit/11dab48c5b6ded59.json"
 }
