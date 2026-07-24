@@ -173,3 +173,28 @@ Actual result after merging remote `main`
 The package and tool family are now aligned on preview.81. T006 remains blocked
 only on the reviewed physical form and real-provider evidence; this checkpoint
 does not claim a completed OpenIddict adapter.
+
+## Phase 2 scaffold and red baseline — 2026-07-24
+
+The concrete provider and test projects restore and compile directly. They were
+not added to `Elsa.Server.slnx`; solution serialization remains T009.
+
+```bash
+dotnet test \
+  tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
+  -c Release --no-restore --nologo --verbosity minimal
+```
+
+Actual red result: **24 failed, 0 passed, 0 skipped** after successful compilation:
+
+- codec/version contract: 14 failures because
+  `Serialization.OpenIddictGroundworkJson` does not exist;
+- registration contract: 4 failures because the feature and Groundwork
+  registration extension do not exist;
+- failure contract: 6 failures because
+  `Exceptions.OpenIddictGroundworkFailureMapper` does not exist.
+
+The shared fixture keeps those tests compilable and fixes the expected contract
+without adding client-side evaluation, generic-query fallback, a storage
+manifest, store implementations, or a physical form. T006/T007A therefore
+continues to block T011, T016, and every physical-form-dependent production task.
