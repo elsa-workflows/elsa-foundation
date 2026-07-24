@@ -447,27 +447,48 @@ JSON/XML credential rejection described above. Unit fixtures use synthetic
 plans only to exercise the protocol; this checkpoint still has no executable timing adapter and
 therefore retains or claims no production plan, measurement, or verdict.
 
-### #646 reproducible workload successor checkpoint
+### #646 reproducible workload contract-vector checkpoint
 
 The program owner ratified new v1.1.0 successors for the ten non-Identity, non-Secret workloads on
-2026-07-24. The benchmark project now owns their deterministic parameters, public operation
-sequences, observable-result projections, canonical serialization, and SHA-256 generation. Run:
+2026-07-24. The benchmark project now owns deterministic contract-vector definitions: parameters,
+operation names, expected observations, canonical serialization, and SHA-256 generation. These definitions
+are not public-operation runners; future real EF and Groundwork adapter projects must execute them. Run:
 
 ```bash
 dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj \
-  -c Release -- workload-contracts
+  -c Release -- workload-vectors
 ```
 
-The command emits the exact version, seed, input fingerprint, and public result digest that
-`runtime.json` and `distributed-runtime.json` must contain. `WorkloadCatalog` recomputes and rejects
-drift before matrix admission. The v1.0 values remain immutable history; this checkpoint does not
-claim that they were reproducible.
+The command emits the exact version, seed, input fingerprint, expected result digest, and benchmark-admission
+status that `runtime.json` and `distributed-runtime.json` must contain. `WorkloadCatalog` binds every semantic
+JSON input field to the code-owned parameter set, checks independent literal goldens for all twelve workloads,
+and rejects drift before matrix admission. The v1.0 values remain immutable history; this checkpoint does not
+claim that they were reproducible or executed.
 
 `secret-create-read-list` remains v1.0.0 and Blocked under
 `comparator.secret.real-ef-required` until #646 has a real EF Secret repository comparator. No
-synthetic comparator or waiver was added. The successor repair passed the complete harness suite
-54/54 and the focused Spec 094 conformance selection 5/5. It publishes no timings, physical-form
-selection, performance verdict, or coverage-ledger advancement; T100 remains open.
+synthetic comparator or waiver was added. Its explicit blocked admission is enforced before matrix child
+launch and again by comparison and gate, including against forged complete artifacts. It publishes no timings,
+physical-form selection, performance verdict, or coverage-ledger advancement; T100 remains open.
+
+### #646 workload-successor review disposition
+
+Three adversarial read-only reviewers inspected the frozen range
+`c4b5fa00499e8448ecf48250fc088ba75186556a..01043fb94acceac69bac3d185235d3ec56e204aa`
+on 2026-07-24 and rejected it. Their findings and the remediations included in the replacement
+candidate are:
+
+| Axis | Required finding and disposition | Candidate status |
+|---|---|---|
+| Correctness/mechanism | The JSON fingerprints could match while semantic input fields drifted from the code-owned parameters. `WorkloadCatalog` now compares every semantic JSON field with the code-owned parameter set before admitting the workload, and a negative test proves that recomputing the source digest cannot bypass this check. | Awaiting originating-reviewer re-verification |
+| Evidence integrity | Expected results were derived dynamically from the same implementation under test, so they were not an independent ratchet. All twelve workloads now have separately maintained literal golden vectors, duplicated independently in the conformance test, and catalog admission rejects any mismatch. | Awaiting originating-reviewer re-verification |
+| Scope/test preservation | The checkpoint described definitions as executable workloads even though it adds contract vectors rather than public-operation runners. The CLI and documentation now use `workload-vectors`, explicitly reserve execution for future real adapters, and remove the unsupported T099 evidence claim. | Awaiting originating-reviewer re-verification |
+| Evidence integrity | Secret's Blocked state existed only in prose, so synthetic or forged artifacts could still enter matrix, comparison, or gate paths. The closed workload schema now carries `benchmarkAdmission`; matrix planning, comparison, and gating reject Secret with `comparator.secret.real-ef-required`, including forged complete inputs. | Awaiting originating-reviewer re-verification |
+
+Root revalidation of the remediated candidate passed the benchmark harness **57/57**, the focused
+workload-correctness conformance selection **5/5**, and the performance-handoff architecture
+selection **7/7**. This section remains provisional until the originating reviewers re-inspect the
+exact replacement range and their final verdicts are recorded.
 
 ### #646 harness review disposition
 

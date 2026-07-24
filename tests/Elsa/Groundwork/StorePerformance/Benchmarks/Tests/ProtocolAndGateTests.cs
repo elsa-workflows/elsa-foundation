@@ -108,6 +108,45 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public void Matrix_and_direct_gate_reject_the_blocked_secret_contract_before_execution()
+    {
+        var secret = WorkloadCatalog.Load(Repository.Root())
+            .Workloads[ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId];
+        var request = Request() with
+        {
+            WorkloadId = secret.Id,
+            WorkloadVersion = secret.Version,
+            Seed = secret.Input.Seed,
+            InputFingerprintSha256 = secret.Input.FingerprintSha256
+        };
+
+        var matrixError = Assert.Throws<PerformanceContractException>(() =>
+            MatrixPlan.Create(secret, request));
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, matrixError.Message);
+
+        var forgedCompleteComparison = new ComparisonResult(
+            1,
+            new string('c', 64),
+            secret.Id,
+            secret.Version,
+            "sqlite",
+            "100k",
+            "sqlite/ef/document-type-specific-tables",
+            "sqlite/groundwork/document-type-specific-tables",
+            true,
+            true,
+            [],
+            [],
+            null);
+        var gate = GateEvaluator.Evaluate(
+            GatePolicy.DefaultFor(GateClass.OrdinaryStore),
+            forgedCompleteComparison);
+
+        Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, gate.Reason);
+    }
+
+    [Fact]
     public async Task Matrix_rejects_a_preexisting_planned_artifact_from_a_noop_child()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");

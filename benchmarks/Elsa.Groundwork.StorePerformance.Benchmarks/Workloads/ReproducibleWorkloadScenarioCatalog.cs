@@ -5,12 +5,13 @@ using System.Text.Json;
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 /// <summary>
-/// Benchmark-owned deterministic contracts for the ten Spec 094 workloads that have a real
-/// public-operation comparator. The frozen v1.0 document hashes remain historical evidence;
-/// these v1.1 successors can be regenerated from code and verified before any timing is trusted.
+/// Benchmark-owned deterministic contract vectors for ten Spec 094 workloads. These definitions
+/// describe the inputs, operation names, and expected observations that future real EF and Groundwork
+/// adapter runners must execute; they are not public-operation runners themselves.
 /// </summary>
 public static class ReproducibleWorkloadScenarioCatalog
 {
+    public const string ReadyReasonCode = "benchmark.ready";
     public const string BlockedWorkloadId = "secret-create-read-list";
     public const string BlockedVersion = "1.0.0";
     public const string BlockedInputFingerprint = "339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c";
@@ -26,20 +27,42 @@ public static class ReproducibleWorkloadScenarioCatalog
     public static IReadOnlyDictionary<string, ReproducibleWorkloadScenario> Successors { get; } =
         CreateSuccessors().ToDictionary(scenario => scenario.WorkloadId, StringComparer.Ordinal);
 
+    /// <summary>
+    /// Independent literal golden vectors. These values deliberately do not derive from the scenario
+    /// generator, so a generator change cannot update both the expected and actual hashes together.
+    /// </summary>
+    public static IReadOnlyDictionary<string, WorkloadGoldenVector> GoldenVectors { get; } =
+        new Dictionary<string, WorkloadGoldenVector>(StringComparer.Ordinal)
+        {
+            ["bookmark-lookup"] = new("d006e25e22dc8d9374d8931f03e27c6dc45c27314bfe2f819a4dd61b588062e8", "e723ae42c3fd4e970cff04d4a6e867fa40b8d6ea23b0305ab82bf80d3916d6a9"),
+            ["checkpoint-commit"] = new("ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13", "ebb92b59a7a331e863c813f7110272093be6a78794a9cc7a0d914103ab4c9c62"),
+            ["command-send-lease-ack"] = new("a108e41c890af94ee37d610817e2c4d6339451cbfbbd0e33e0bd794d0d1af5b1", "86439fbc13d29102d02615ee98a5beb53e008e673f6523681e3ee2d926d3389f"),
+            ["due-timer-selection"] = new("02cfb91f4f415fcfe8fe6cd64e7c056b88b908e068735d2ec91eb81e0ec8d5bd", "8f380d449eb3a8e88f1edbea73cf9a7ddfa7a7502cab3ac5a8fcfe3e175ffed3"),
+            ["iam-normalized-lookup-update"] = new("5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9", "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc"),
+            ["outbox-drain"] = new("bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede", "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71"),
+            ["placement-takeover"] = new("17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985", "3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4"),
+            ["queue-drain"] = new("15f2d5f9dc8d5814a1613156b7c686e59a150a35bd7e51787a145b6d7230d5e2", "7db639fdbfddc02973a7275d7c0e8835872b62449ca160e97e8086c0ca46eba4"),
+            ["recovery-scan"] = new("36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3", "3c7cae42737a2a995968852a862f769070a016b4e4a0289c7a9a5e7205e9eabf"),
+            ["recurring-schedule-selection"] = new("384bcbf0fd72f306b63d78b71a8130c4e2e02de146cbd45d066ef581f4d78d17", "9728bad4f576c7e50c3f6210994524ffb1d77761c5258a71f27fe1cf1793cec4"),
+            ["secret-create-read-list"] = new("339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c", "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb"),
+            ["trigger-binding-stimulus-lookup"] = new("4f2515dfa9549935712019f178283f79e6ac1cc9428e810524e733cfdea4cabc", "00b6651345cdb8b6724a205b094c712d383c7a19ef87dcce6fdf026bc7dd7c8a")
+        };
+
     public static ReproducibleWorkloadScenario Get(string workloadId) =>
         Successors.TryGetValue(workloadId, out var scenario)
             ? scenario
             : throw new ArgumentOutOfRangeException(nameof(workloadId), workloadId, "No reproducible v1.1 workload successor is registered.");
 
-    public static string SerializeContractSummary() => JsonSerializer.Serialize(new
+    public static string SerializeDefinitionSummary() => JsonSerializer.Serialize(new
     {
-        successors = Successors.Values.OrderBy(scenario => scenario.WorkloadId).Select(scenario => new
+        definitions = Successors.Values.OrderBy(scenario => scenario.WorkloadId).Select(scenario => new
         {
             id = scenario.WorkloadId,
             scenario.Version,
             scenario.Seed,
             inputFingerprintSha256 = scenario.ComputeInputFingerprint(),
-            resultDigestSha256 = scenario.ComputeResultDigest()
+            resultDigestSha256 = scenario.ComputeResultDigest(),
+            benchmarkAdmission = new { status = "ready", reason = ReadyReasonCode }
         }),
         blocked = new
         {
@@ -47,8 +70,8 @@ public static class ReproducibleWorkloadScenarioCatalog
             version = BlockedVersion,
             inputFingerprintSha256 = BlockedInputFingerprint,
             resultDigestSha256 = BlockedResultDigest,
-            reasonCode = BlockedReasonCode,
-            reason = BlockedReason
+            benchmarkAdmission = new { status = "blocked", reason = BlockedReasonCode },
+            explanation = BlockedReason
         }
     }, CanonicalJson);
 
@@ -356,3 +379,5 @@ public sealed class ReproducibleWorkloadScenario
             ObservableResults = CreateExpectedObservations()
         }));
 }
+
+public sealed record WorkloadGoldenVector(string InputFingerprint, string ResultDigest);

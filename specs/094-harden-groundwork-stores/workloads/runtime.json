@@ -57,6 +57,10 @@
         "executionOwner": "#646",
         "purpose": "Expected observable checkpoint contract only; #646 owns real same-provider EF execution and comparison."
       },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
+      },
       "physicalFormsFor646": [
         "shared-documents-with-linked-index-tables",
         "document-type-specific-tables",
@@ -103,6 +107,10 @@
         "executionOwner": "#646",
         "purpose": "Expected observable bookmark lookup contract only; it is not a live EF execution."
       },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
+      },
       "physicalFormsFor646": ["shared-documents-with-linked-index-tables", "document-type-specific-tables"],
       "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "native route evidence", "sanitized topology"]
     },
@@ -144,6 +152,10 @@
         "executionStatus": "not-executed",
         "executionOwner": "#646",
         "purpose": "Expected observable trigger binding contract only; #646 owns EF execution and equality evidence."
+      },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
       },
       "physicalFormsFor646": ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "linked-executable-source-reference-index"],
       "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "native route evidence", "sanitized topology"]
@@ -187,6 +199,10 @@
         "executionOwner": "#646",
         "purpose": "Expected observable recovery contract only; it is not live EF execution or a performance result."
       },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
+      },
       "physicalFormsFor646": ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "recovery-candidate-index"],
       "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "native route evidence", "restart metadata"]
     },
@@ -228,6 +244,10 @@
         "executionStatus": "not-executed",
         "executionOwner": "#646",
         "purpose": "Expected observable scheduler queue contract only; #646 owns live EF execution and timing."
+      },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
       },
       "physicalFormsFor646": ["dedicated-scheduler-work-documents", "dedicated-scheduler-poison-documents", "shared-documents-with-linked-index-tables"],
       "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "independent-client metadata", "native route evidence"]
@@ -271,6 +291,10 @@
         "executionOwner": "#646",
         "purpose": "Expected observable post-commit outbox contract only; it is not a timing verdict."
       },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
+      },
       "physicalFormsFor646": ["dedicated-post-commit-outbox-documents", "shared-documents-with-linked-index-tables", "due-order-index"],
       "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "claim-token metadata", "native route evidence"]
     },
@@ -312,6 +336,10 @@
         "executionStatus": "not-executed",
         "executionOwner": "#646",
         "purpose": "Expected observable due timer contract only; #646 owns live EF execution and comparison."
+      },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
       },
       "physicalFormsFor646": ["dedicated-durable-timer-documents", "shared-documents-with-linked-index-tables", "due-order-index"],
       "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "native route evidence", "sanitized topology"]
@@ -355,6 +383,10 @@
         "executionStatus": "not-executed",
         "executionOwner": "#646",
         "purpose": "Expected observable recurring schedule contract only; it does not supply a benchmark verdict."
+      },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
       },
       "physicalFormsFor646": ["dedicated-recurring-schedule-documents", "publication-projection-documents", "shared-documents-with-linked-index-tables"],
       "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "native route evidence", "sanitized topology"]
