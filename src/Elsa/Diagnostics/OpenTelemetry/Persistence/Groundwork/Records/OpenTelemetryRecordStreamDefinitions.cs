@@ -53,6 +53,7 @@ public static class OpenTelemetryRecordStreamDefinitions
             String(RecordFields.InstrumentId, required: true),
             String(RecordFields.InstrumentName, required: true, maxStringBytes: MaxNameBytes),
             String(RecordFields.ResourceId, required: true),
+            String(RecordFields.ServiceName),
             Timestamp(RecordFields.Timestamp, required: true, orderable: true),
             String(RecordFields.TraceId),
             String(RecordFields.SpanId),
@@ -70,6 +71,7 @@ public static class OpenTelemetryRecordStreamDefinitions
         "elsa_open_telemetry_logs",
         [
             String(RecordFields.ResourceId, required: true),
+            String(RecordFields.ServiceName),
             Timestamp(RecordFields.Timestamp, required: true, orderable: true),
             String(RecordFields.SeverityText, required: true, maxStringBytes: MaxNameBytes),
             Int64(RecordFields.SeverityNumber),

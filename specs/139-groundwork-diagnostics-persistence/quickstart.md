@@ -55,6 +55,26 @@ These results prove the replayed implementation is internally coherent on its pr
 do not complete T008, T022, T027, T033, T050-T052, or any EF-removal task, and they must not be
 represented as preview.81/four-provider certification.
 
+## T053/T054 removal-ledger intake (2026-07-24)
+
+[The EF test-removal ledger](ef-test-removal-ledger.md) inventories all 46 facts in the pending
+Structured Logs (30) and OpenTelemetry (16) EF test projects, including their EF-only test hosts
+and factories. It added and passed two previously missing replacement checks:
+
+- `GroundworkStructuredLogReplayTests.Complex_structured_log_fields_round_trip_through_durable_storage`
+  (Structured Logs Groundwork suite: **18/18 passed**);
+- `DiagnosticsPersistenceReadinessTests.Selected_durable_stores_resolve_and_start_through_the_shared_host_lifecycle`
+  (readiness slice: **7/7 passed**).
+
+The same intake exposed two OpenTelemetry gaps. Metric/log `ServiceName` is now projected from the
+durable resource catalog and filtered inside the diagnostic-record provider; the full OpenTelemetry
+suite passes **69/69 with one explicit skip**. Repeated trace fragments still require merge-before-
+filter semantics. A proposed retained-window client merge was rejected because it violated the
+provider-bounded query contract. The red test is retained as an explicit skip blocked by
+`valence-works/Groundwork#130`, which owns provider-native grouped diagnostic reduction. This blocks
+trace parity and T054; it is not deletion evidence. No EF deletion, performance task, architecture
+task, package/solution configuration, or task checkbox was changed by this intake.
+
 ## Final dependency audit
 
 ```bash

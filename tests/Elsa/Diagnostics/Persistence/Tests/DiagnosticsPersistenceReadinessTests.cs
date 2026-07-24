@@ -85,6 +85,37 @@ public sealed class DiagnosticsPersistenceReadinessTests
     }
 
     [Fact]
+    public async Task Selected_durable_stores_resolve_and_start_through_the_shared_host_lifecycle()
+    {
+        var diagnosticSessions = new RecordingDiagnosticRecordStoreSessionFactory();
+        var documents = new RecordingDocumentSessionSource();
+        var services = new ServiceCollection();
+        new OpenTelemetryFeature().ConfigureServices(services);
+        new StructuredLogsFeature().ConfigureServices(services);
+        services.AddSingleton<IDiagnosticRecordDeploymentManifestSource>(new DiagnosticsDeploymentSchema());
+        services.AddSingleton<IDiagnosticRecordStoreSessionFactory>(diagnosticSessions);
+        services.AddSingleton<IGroundworkStoreSessionSource>(documents);
+        new GroundworkOpenTelemetryPersistenceFeature().ConfigureServices(services);
+        new GroundworkStructuredLogsPersistenceFeature().ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        Assert.IsType<GroundworkOpenTelemetryStore>(provider.GetRequiredService<IOpenTelemetryStore>());
+        Assert.IsType<GroundworkStructuredLogStore>(provider.GetRequiredService<IStructuredLogStore>());
+
+        await StartHostAsync(provider);
+
+        Assert.Equal(2, diagnosticSessions.Sessions.Count);
+        Assert.Equal(5, diagnosticSessions.Sessions.Sum(session => session.OpenedStreams.Count));
+        Assert.Equal(1, documents.OpenCount);
+
+        foreach (var hostedService in provider.GetServices<IHostedService>())
+            await hostedService.StopAsync(CancellationToken.None);
+
+        Assert.All(diagnosticSessions.Sessions, session => Assert.Equal(1, session.DisposeCount));
+        Assert.Equal(1, documents.Lease.DisposeCount);
+    }
+
+    [Fact]
     public async Task OpenTelemetry_defers_provider_access_until_lifecycle_and_rethrows_the_exact_admission_failure()
     {
         var failure = new DiagnosticsProviderUnavailableFailure();
@@ -309,9 +340,12 @@ public sealed class DiagnosticsPersistenceReadinessTests
             DocumentStoreAccess access,
             CancellationToken cancellationToken = default)
         {
+            OpenCount++;
             Access = access;
             return ValueTask.FromResult(new GroundworkStoreSessionResources(Documents, Queries, Lease));
         }
+
+        public int OpenCount { get; private set; }
     }
 
     private sealed class RecordingLease : IAsyncDisposable

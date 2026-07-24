@@ -106,11 +106,11 @@ public sealed class OpenTelemetryRecordStreamDefinitionTests
                 OpenTelemetryRecordStreamDefinitions.CreateSpans("spans")),
             (serializer.ToRecord("point-record", new MetricPoint(
                     "point-1", "instrument-1", "request.duration", "resource-1", Timestamp, 1, null, null,
-                    attributes, "trace-1", "span-1")),
+                    attributes, "trace-1", "span-1"), "orders"),
                 OpenTelemetryRecordStreamDefinitions.CreateMetricPoints("points")),
             (serializer.ToRecord("log-record", new OtlpLogRecord(
                     "log-1", "resource-1", Timestamp, "Information", 9, "accepted", "trace-1", "span-1",
-                    attributes)),
+                    attributes), "orders"),
                 OpenTelemetryRecordStreamDefinitions.CreateLogs("logs"))
         };
 

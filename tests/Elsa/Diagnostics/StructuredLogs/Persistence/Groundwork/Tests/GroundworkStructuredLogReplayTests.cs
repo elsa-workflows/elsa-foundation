@@ -68,6 +68,29 @@ public sealed class GroundworkStructuredLogReplayTests : GroundworkStructuredLog
     }
 
     [Fact]
+    public async Task Complex_structured_log_fields_round_trip_through_durable_storage()
+    {
+        await using var store = await CreateStoreAsync(Binding);
+        var entry = Entry(7, "boom", DateTimeOffset.UnixEpoch) with
+        {
+            Level = LogLevel.Error,
+            Properties = [new LogProperty("user", "alice")],
+            Scopes = [new LogScope([new LogProperty("operation", "checkout")], "checkout scope")],
+            Exception = new LogExceptionDetails("System.InvalidOperationException", "bad state", "at Checkout")
+        };
+
+        await store.AppendAsync(entry);
+
+        var persisted = Assert.Single(await store.GetRecentAsync(StructuredLogFilter.None));
+        Assert.Equal(entry.Level, persisted.Level);
+        Assert.Equal(entry.Properties, persisted.Properties);
+        var scope = Assert.Single(persisted.Scopes);
+        Assert.Equal("checkout scope", scope.Text);
+        Assert.Equal([new LogProperty("operation", "checkout")], scope.Items);
+        Assert.Equal(entry.Exception, persisted.Exception);
+    }
+
+    [Fact]
     public async Task Malformed_or_foreign_binding_fails_with_one_non_disclosing_outcome()
     {
         await using var source = await CreateStoreAsync(Binding);

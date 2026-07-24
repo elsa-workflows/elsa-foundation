@@ -113,7 +113,7 @@ public sealed class CanonicalRecordSerializer
 
     /// <summary>Creates the immutable record form of a metric point.</summary>
     /// <exception cref="RecordPayloadException">The point contains data that cannot be represented canonically.</exception>
-    public DiagnosticRecordInput ToRecord(string recordId, MetricPoint point)
+    public DiagnosticRecordInput ToRecord(string recordId, MetricPoint point, string? serviceName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
         ArgumentNullException.ThrowIfNull(point);
@@ -124,6 +124,7 @@ public sealed class CanonicalRecordSerializer
             var instrumentId = RequiredText(point.InstrumentId, nameof(point.InstrumentId));
             var instrumentName = RequiredText(point.InstrumentName, nameof(point.InstrumentName));
             var resourceId = RequiredText(point.ResourceId, nameof(point.ResourceId));
+            var canonicalServiceName = serviceName is null ? null : RequiredText(serviceName, nameof(serviceName));
 
             return new(
                 recordId,
@@ -144,6 +145,7 @@ public sealed class CanonicalRecordSerializer
                     (RecordFields.InstrumentId, Strings(instrumentId)),
                     (RecordFields.InstrumentName, Strings(instrumentName)),
                     (RecordFields.ResourceId, Strings(resourceId)),
+                    (RecordFields.ServiceName, OptionalString(canonicalServiceName)),
                     (RecordFields.Timestamp, Timestamp(point.Timestamp)),
                     (RecordFields.TraceId, OptionalString(point.TraceId)),
                     (RecordFields.SpanId, OptionalString(point.SpanId)),
@@ -153,7 +155,7 @@ public sealed class CanonicalRecordSerializer
 
     /// <summary>Creates the immutable record form of an OTLP log record.</summary>
     /// <exception cref="RecordPayloadException">The log contains data that cannot be represented canonically.</exception>
-    public DiagnosticRecordInput ToRecord(string recordId, OtlpLogRecord log)
+    public DiagnosticRecordInput ToRecord(string recordId, OtlpLogRecord log, string? serviceName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
         ArgumentNullException.ThrowIfNull(log);
@@ -162,6 +164,7 @@ public sealed class CanonicalRecordSerializer
         {
             var id = RequiredText(log.Id, nameof(log.Id));
             var resourceId = RequiredText(log.ResourceId, nameof(log.ResourceId));
+            var canonicalServiceName = serviceName is null ? null : RequiredText(serviceName, nameof(serviceName));
             var severityText = Required(log.SeverityText, nameof(log.SeverityText));
             var body = Required(log.Body, nameof(log.Body));
 
@@ -180,6 +183,7 @@ public sealed class CanonicalRecordSerializer
                     Canonicalize(log.Attributes))),
                 Fields(
                     (RecordFields.ResourceId, Strings(resourceId)),
+                    (RecordFields.ServiceName, OptionalString(canonicalServiceName)),
                     (RecordFields.Timestamp, Timestamp(log.Timestamp)),
                     (RecordFields.SeverityText, Strings(severityText)),
                     (RecordFields.SeverityNumber, OptionalInt64(log.SeverityNumber)),

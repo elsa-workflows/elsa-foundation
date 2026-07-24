@@ -119,6 +119,56 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
         Assert.Equal(["trace-3", "trace-4"], result.Items.Select(x => x.TraceId));
     }
 
+    [Fact(Skip = "Blocked by valence-works/Groundwork#130: grouped trace reduction must execute provider-side.")]
+    public async Task Repeated_trace_records_merge_to_one_summary_across_durable_batches()
+    {
+        var store = await _fixture.CreateStoreAsync();
+        var start = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-api", "Orders", start);
+        var first = new TelemetryTrace(
+            "trace-a", null, "process order", start, start.AddMilliseconds(10), TimeSpan.FromMilliseconds(10),
+            SpanStatus.Error, [resource.Id], [], 2);
+        var second = new TelemetryTrace(
+            "trace-a", null, "process order", start.AddSeconds(1), start.AddSeconds(1).AddMilliseconds(25),
+            TimeSpan.FromMilliseconds(25), SpanStatus.Ok, [resource.Id], ["workflow-a"], 2);
+
+        await store.WriteDurablyAsync(new([resource], [first], [], [], [], []));
+        await store.WriteDurablyAsync(new([], [second], [], [], [], []));
+
+        var summary = Assert.Single((await store.QueryTracesAsync(new() { Take = 10 })).Items);
+        Assert.Equal(start, summary.StartTime);
+        Assert.Equal(second.EndTime, summary.EndTime);
+        Assert.Equal(second.EndTime - start, summary.Duration);
+        Assert.Equal(SpanStatus.Error, summary.Status);
+        Assert.Equal(4, summary.SpanCount);
+        Assert.Equal(["workflow-a"], summary.WorkflowInstanceIds);
+    }
+
+    [Fact]
+    public async Task Metric_and_log_service_name_filters_follow_the_durable_resource_catalog()
+    {
+        var store = await _fixture.CreateStoreAsync();
+        var time = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+        var api = Resource("resource-api", "api", time);
+        var worker = Resource("resource-worker", "worker", time);
+        var apiInstrument = Instrument("instrument-api", api.Id, "queue.depth");
+        var workerInstrument = Instrument("instrument-worker", worker.Id, "queue.depth");
+
+        await store.WriteDurablyAsync(new(
+            [api, worker],
+            [],
+            [],
+            [apiInstrument, workerInstrument],
+            [Point("point-api", apiInstrument, api.Id, time, "trace-api"), Point("point-worker", workerInstrument, worker.Id, time, "trace-worker")],
+            [Log("log-api", api.Id, time, "trace-api", "span-api", "Information", "api"), Log("log-worker", worker.Id, time, "trace-worker", "span-worker", "Information", "worker")]));
+
+        var metrics = await store.QueryMetricsAsync(new() { ServiceName = "api", Take = 10 });
+        var logs = await store.QueryLogsAsync(new() { ServiceName = "worker", Take = 10 });
+
+        Assert.Equal(["point-api"], metrics.Points.Select(point => point.Id));
+        Assert.Equal(["log-worker"], logs.Items.Select(log => log.Id));
+    }
+
     [Fact]
     public async Task Trace_detail_uses_exact_trace_lookup_and_bounded_related_stream_lookups()
     {
@@ -211,7 +261,7 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
     }
 
     [Fact]
-    public async Task Filters_that_require_a_catalog_to_record_join_fail_before_provider_io()
+    public async Task Filters_that_require_missing_catalog_or_group_routes_fail_before_provider_io()
     {
         var store = await _fixture.CreateStoreAsync();
         using var canceled = new CancellationTokenSource();
@@ -223,10 +273,6 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
             store.QueryResourcesAsync(new() { ServiceName = "orders" }, canceled.Token).AsTask());
         await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() =>
             store.QueryTracesAsync(new() { ServiceName = "orders" }, canceled.Token).AsTask());
-        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() =>
-            store.QueryMetricsAsync(new() { ServiceName = "orders" }, canceled.Token).AsTask());
-        await Assert.ThrowsAsync<OpenTelemetryPersistenceCapabilityException>(() =>
-            store.QueryLogsAsync(new() { ServiceName = "orders" }, canceled.Token).AsTask());
     }
 
     [Fact]

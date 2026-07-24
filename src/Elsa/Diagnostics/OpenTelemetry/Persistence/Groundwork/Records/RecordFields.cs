@@ -7,6 +7,7 @@ public static class RecordFields
     public const string SpanId = "spanId";
     public const string ParentSpanId = "parentSpanId";
     public const string ResourceId = "resourceId";
+    public const string ServiceName = "serviceName";
     public const string WorkflowInstanceId = "workflowInstanceId";
     public const string Status = "status";
     public const string StartTime = "startTime";

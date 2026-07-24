@@ -28,8 +28,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 /// </summary>
 /// <remarks>
 /// Catalog identity and diagnostic-record text comparisons consume Groundwork's released Unicode ordinal-ignore-case
-/// policy from issue #71. Filters that require a catalog-to-record join remain explicit capability failures because
-/// identity comparison alone cannot provide a bounded cross-store join.
+/// policy from issue #71. Metric and log records carry the durable resource service name as a bounded comparison
+/// projection, so those service filters remain provider-side predicates rather than cross-store joins.
 /// </remarks>
 public sealed class GroundworkOpenTelemetryStore :
     IOpenTelemetryStore,
@@ -256,10 +256,17 @@ public sealed class GroundworkOpenTelemetryStore :
         SaveDocumentRequest[] instruments;
         try
         {
+            var serviceNames = await ResolveServiceNamesAsync(batch, cancellationToken);
             traces = NormalizeTraces(batch.Traces);
             spans = NormalizeRecords(batch.Spans, span => _recordSerializer.ToRecord(span.Id, span));
-            points = NormalizeRecords(batch.MetricPoints, point => _recordSerializer.ToRecord(point.Id, point));
-            logs = NormalizeRecords(batch.Logs, log => _recordSerializer.ToRecord(log.Id, log));
+            points = NormalizeRecords(batch.MetricPoints, point => _recordSerializer.ToRecord(
+                point.Id,
+                point,
+                ServiceNameFor(point.ResourceId, serviceNames)));
+            logs = NormalizeRecords(batch.Logs, log => _recordSerializer.ToRecord(
+                log.Id,
+                log,
+                ServiceNameFor(log.ResourceId, serviceNames)));
             resources = batch.Resources.Select(resource => _catalogSerializer.ToSaveRequest(resource)).ToArray();
             instruments = batch.Instruments
                 .Select(instrument => _catalogSerializer.ToSaveRequest(instrument, batchId.IssuedAt))
@@ -466,7 +473,6 @@ public sealed class GroundworkOpenTelemetryStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        RejectUnsupportedTextFilter(filter.ServiceName, nameof(filter.ServiceName), "query-metrics");
         ValidateRange(filter.From, filter.To, nameof(filter));
         var take = ClampTake(filter.Take);
         if (take == 0)
@@ -476,6 +482,7 @@ public sealed class GroundworkOpenTelemetryStore :
         {
             var predicates = new List<DiagnosticRecordPredicate>();
             AddExactTextPredicate(predicates, RecordFields.ResourceId, filter.ResourceId);
+            AddExactTextPredicate(predicates, RecordFields.ServiceName, filter.ServiceName);
             AddContainsTextPredicate(predicates, RecordFields.InstrumentName, filter.InstrumentName);
             AddRange(predicates, RecordFields.Timestamp, filter.From, filter.To);
             var pointPage = await _stores.MetricPoints.QueryAsync(new(
@@ -527,7 +534,6 @@ public sealed class GroundworkOpenTelemetryStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        RejectUnsupportedTextFilter(filter.ServiceName, nameof(filter.ServiceName), "query-logs");
         ValidateRange(filter.From, filter.To, nameof(filter));
         var take = ClampTake(filter.Take);
         if (take == 0)
@@ -537,6 +543,7 @@ public sealed class GroundworkOpenTelemetryStore :
         {
             var predicates = new List<DiagnosticRecordPredicate>();
             AddExactTextPredicate(predicates, RecordFields.ResourceId, filter.ResourceId);
+            AddExactTextPredicate(predicates, RecordFields.ServiceName, filter.ServiceName);
             AddContainsTextPredicate(predicates, RecordFields.TraceId, filter.TraceId);
             AddContainsTextPredicate(predicates, RecordFields.SpanId, filter.SpanId);
             AddContainsTextPredicate(predicates, RecordFields.SeverityText, filter.Severity);
@@ -889,12 +896,45 @@ public sealed class GroundworkOpenTelemetryStore :
             RecordId = $"otel-{Hash($"{batchId}:{streamKind}:{record.RecordId}")}"
         }).ToArray();
 
-    private DiagnosticRecordInput[] NormalizeTraces(IReadOnlyCollection<TelemetryTrace> values) =>
-        NormalizeRecords(values, trace =>
+    private DiagnosticRecordInput[] NormalizeTraces(IReadOnlyCollection<TelemetryTrace> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return NormalizeRecords(values, trace =>
         {
             var provisional = _recordSerializer.ToRecord(trace.TraceId, trace);
             return provisional with { RecordId = $"trace-{Hash(provisional.Payload)}" };
         });
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>> ResolveServiceNamesAsync(
+        OpenTelemetryBatch batch,
+        CancellationToken cancellationToken)
+    {
+        var services = batch.Resources.ToDictionary(
+            resource => resource.Id,
+            resource => resource.ServiceName,
+            CatalogIdentityComparer);
+        var resourceIds = batch.MetricPoints.Select(point => point.ResourceId)
+            .Concat(batch.Logs.Select(log => log.ResourceId))
+            .Distinct(CatalogIdentityComparer)
+            .ToArray();
+        foreach (var resourceId in resourceIds.Where(resourceId => !services.ContainsKey(resourceId)))
+        {
+            var envelope = await _stores.Documents.LoadAsync(
+                CatalogDocuments.ResourceKind,
+                resourceId,
+                cancellationToken);
+            if (envelope is not null)
+                services.Add(resourceId, _catalogSerializer.ToResource(envelope).Resource.ServiceName);
+        }
+
+        return services;
+    }
+
+    private static string? ServiceNameFor(string resourceId, IReadOnlyDictionary<string, string> serviceNames) =>
+        serviceNames.TryGetValue(resourceId, out var serviceName)
+            ? serviceName
+            : null;
 
     private static DiagnosticRecordInput[] NormalizeRecords<T>(
         IReadOnlyCollection<T> values,
