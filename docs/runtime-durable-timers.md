@@ -8,7 +8,9 @@
 > [`docs/glossary/elsa.md`](glossary/elsa.md); the extension-point contracts live in
 > [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md).
 > **See also:** [`docs/runtime-durable-resumption.md`](runtime-durable-resumption.md) — the durable
-> resumption spine (W2) this unit piggybacks on.
+> resumption spine (W2) this unit piggybacks on; and
+> [`docs/bookmark-expiration.md`](bookmark-expiration.md) — the bookmark admissibility cutoff,
+> non-timeout semantics, and worked use cases.
 
 ## The problem
 
@@ -69,7 +71,8 @@ is harmless — it already did its one job.
 The bookmark is created with `ExpiresAt = null`. The **timer** owns the deadline. Setting
 `ExpiresAt = dueTime` would make the bookmark unmatchable exactly at fire time — the stimulus lookup
 filters out bookmarks whose expiry is at/behind the evaluation instant — producing `NotFound` forever
-and a permanent hang.
+and a permanent hang. See [bookmark expiration](bookmark-expiration.md) for the general contract and
+examples of finite expiration.
 
 ### 3. Idempotency under at-least-once delivery
 

@@ -20,6 +20,7 @@ This docs library is the knowledge lookup layer for `elsa-foundation`. Prefer th
 - [Seams and bridges](seams.md) - worked activities/workflows boundary example.
 - [Serialization rule](serialization.md) - canonical payload-serialization rule and exceptions.
 - [Durable resumption](runtime-durable-resumption.md) - durable storage vs durable resumption, crash windows A/B/C, and the at-least-once/at-most-once asymmetry.
+- [Bookmark expiration](bookmark-expiration.md) - the `ExpiresAt` admissibility cutoff, its non-timeout semantics, and concrete finite/indefinite wait examples.
 - [Durable timers](runtime-durable-timers.md) - the `Delay` activity, the durable timer store + hosted pump, and the three timer correctness cruxes (delete-on-Dispatched safety, bookmark-expiry, idempotent fire).
 - [Runtime fault behavior](runtime-fault-behavior.md) - what happens when an activity throws vs when a handler throws, the drain observer chain that decides each, and the defaults behind both.
 
