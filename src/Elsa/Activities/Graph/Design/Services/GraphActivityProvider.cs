@@ -111,6 +111,7 @@ public sealed class GraphActivityProvider(
             ValidateGraph(graph, request.Contract, subject, diagnostics);
             nodes = EnumerateNodes(graph.RootActivity);
             ValidateDependencies(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
+            ValidateDeclaredStructures(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateOutcomeMappings(graph, nodes, request.ResolvedDirectDependencies, subject, diagnostics);
         }
 
@@ -574,6 +575,81 @@ public sealed class GraphActivityProvider(
         }
     }
 
+    private void ValidateDeclaredStructures(
+        IReadOnlyList<GraphNode> nodes,
+        IReadOnlyList<ActivityResolvedDependency> dependencies,
+        ActivityDiagnosticSubject subject,
+        ICollection<ActivityDiagnostic> diagnostics)
+    {
+        var dependenciesByOccurrence = dependencies
+            .GroupBy(x => x.OccurrenceId, StringComparer.Ordinal)
+            .Where(x => x.Count() == 1)
+            .ToDictionary(x => x.Key, x => x.Single(), StringComparer.Ordinal);
+
+        foreach (var node in nodes)
+        {
+            var actual = node.Activity.Structure;
+            if (actual is null ||
+                !dependenciesByOccurrence.TryGetValue(node.NodeId, out var dependency) ||
+                !StringComparer.Ordinal.Equals(dependency.VersionId, node.ActivityVersionId))
+                continue;
+
+            if (dependency.DeclaredStructure is not { } declared)
+            {
+                if (activityStructureService.HasHandler(actual))
+                {
+                    diagnostics.Add(Diagnostic(
+                        "activity.graph.structure-contract-undeclared",
+                        $"Graph node '{node.NodeId}' uses handled structure '{actual.Kind}@{actual.SchemaVersion}', but exact activity version '{node.ActivityVersionId}' declares no structure contract.",
+                        subject,
+                        $"{node.JsonPointer}/structure",
+                        node.NodeId,
+                        new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["structureKind"] = actual.Kind,
+                            ["structureSchemaVersion"] = actual.SchemaVersion
+                        }));
+                }
+
+                continue;
+            }
+
+            if (!StringComparer.Ordinal.Equals(actual.Kind, declared.Kind) ||
+                !StringComparer.Ordinal.Equals(actual.SchemaVersion, declared.SchemaVersion))
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.structure-contract-mismatch",
+                    $"Graph node '{node.NodeId}' carries structure '{actual.Kind}@{actual.SchemaVersion}', but exact activity version '{node.ActivityVersionId}' declares '{declared.Kind}@{declared.SchemaVersion}'.",
+                    subject,
+                    $"{node.JsonPointer}/structure",
+                    node.NodeId,
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["actualKind"] = actual.Kind,
+                        ["actualSchemaVersion"] = actual.SchemaVersion,
+                        ["declaredKind"] = declared.Kind,
+                        ["declaredSchemaVersion"] = declared.SchemaVersion
+                    }));
+                continue;
+            }
+
+            if (!activityStructureService.HasHandler(actual))
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.structure-handler-unavailable",
+                    $"Graph node '{node.NodeId}' uses declared structure '{declared.Kind}@{declared.SchemaVersion}', but no handler is registered for that exact contract.",
+                    subject,
+                    $"{node.JsonPointer}/structure",
+                    node.NodeId,
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["structureKind"] = declared.Kind,
+                        ["structureSchemaVersion"] = declared.SchemaVersion
+                    }));
+            }
+        }
+    }
+
     private IReadOnlyList<GraphNode> EnumerateNodes(JsonElement root)
     {
         ActivityNode rootNode;
@@ -619,6 +695,7 @@ public sealed class GraphActivityProvider(
                 pointer,
                 item.Depth,
                 element,
+                item.Node,
                 item.ParentOccurrenceId,
                 item.ChildSlotName,
                 item.ChildIndex,
@@ -655,7 +732,7 @@ public sealed class GraphActivityProvider(
         return nodes;
     }
 
-    private static JsonElement? FindNodeElement(JsonElement root, string nodeId)
+    private JsonElement? FindNodeElement(JsonElement root, string nodeId)
     {
         foreach (var candidate in EnumerateNodeCandidates(root))
             if (TryReadNode(candidate.Element, out var candidateId, out _) && StringComparer.Ordinal.Equals(candidateId, nodeId))
@@ -663,46 +740,94 @@ public sealed class GraphActivityProvider(
         return null;
     }
 
-    private static IReadOnlyList<NodeCandidate> EnumerateNodeCandidates(JsonElement root)
+    private IReadOnlyList<NodeCandidate> EnumerateNodeCandidates(JsonElement root)
     {
         var candidates = new List<NodeCandidate>();
-        var pending = new Stack<(JsonElement Element, string Pointer, bool IsCandidate)>();
-        pending.Push((root, "/rootActivity", true));
+        var pending = new Stack<NodeCandidate>();
+        pending.Push(new(root, "/rootActivity"));
 
         while (pending.TryPop(out var item))
         {
-            var hasNodeField = item.Element.ValueKind == JsonValueKind.Object &&
-                (item.Element.TryGetProperty("nodeId", out _) || item.Element.TryGetProperty("activityVersionId", out _));
-            if (item.IsCandidate || hasNodeField)
-                candidates.Add(new(item.Element, item.Pointer));
+            candidates.Add(item);
+            if (!TryReadStructure(item.Element, out var structure) ||
+                !activityStructureService.HasHandler(structure))
+                continue;
+
+            PushOwnedStructureCandidates(
+                structure.Payload,
+                $"{item.JsonPointer}/structure/payload",
+                pending);
+        }
+
+        return candidates;
+    }
+
+    private static void PushOwnedStructureCandidates(
+        JsonElement payload,
+        string pointer,
+        Stack<NodeCandidate> candidates)
+    {
+        var pending = new Stack<(JsonElement Element, string Pointer, bool IsCandidate)>();
+        pending.Push((payload, pointer, false));
+
+        while (pending.TryPop(out var item))
+        {
+            if (item.IsCandidate || LooksLikeAuthoredNode(item.Element))
+            {
+                candidates.Push(new(item.Element, item.Pointer));
+                continue;
+            }
 
             if (item.Element.ValueKind == JsonValueKind.Object)
             {
-                foreach (var property in item.Element.EnumerateObject().OrderByDescending(x => x.Name, StringComparer.Ordinal))
+                foreach (var property in item.Element.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
                 {
-                    var pointer = $"{item.Pointer}/{EscapePointer(property.Name)}";
+                    var propertyPointer = $"{item.Pointer}/{EscapePointer(property.Name)}";
                     if (property.Value.ValueKind == JsonValueKind.Array)
                     {
                         var elements = property.Value.EnumerateArray().ToArray();
-                        var containsAuthoredNodes = string.Equals(property.Name, "activities", StringComparison.Ordinal);
-                        for (var index = elements.Length - 1; index >= 0; index--)
-                            pending.Push((elements[index], $"{pointer}/{index}", containsAuthoredNodes));
+                        var containsAuthoredNodes = StringComparer.Ordinal.Equals(property.Name, "activities");
+                        for (var index = 0; index < elements.Length; index++)
+                            pending.Push((elements[index], $"{propertyPointer}/{index}", containsAuthoredNodes));
                     }
                     else
                     {
-                        pending.Push((property.Value, pointer, false));
+                        pending.Push((property.Value, propertyPointer, false));
                     }
                 }
             }
             else if (item.Element.ValueKind == JsonValueKind.Array)
             {
                 var elements = item.Element.EnumerateArray().ToArray();
-                for (var index = elements.Length - 1; index >= 0; index--)
+                for (var index = 0; index < elements.Length; index++)
                     pending.Push((elements[index], $"{item.Pointer}/{index}", false));
             }
         }
+    }
 
-        return candidates;
+    private static bool LooksLikeAuthoredNode(JsonElement element) =>
+        element.ValueKind == JsonValueKind.Object &&
+        (element.TryGetProperty("nodeId", out _) ||
+         element.TryGetProperty("activityVersionId", out _)) &&
+        (element.TryGetProperty("activityVersionId", out _) ||
+         element.TryGetProperty("inputs", out _) ||
+         element.TryGetProperty("outputs", out _) ||
+         element.TryGetProperty("structure", out _));
+
+    private static bool TryReadStructure(JsonElement element, out ActivityNodeStructure structure)
+    {
+        structure = null!;
+        if (element.ValueKind != JsonValueKind.Object ||
+            !element.TryGetProperty("structure", out var structureElement) ||
+            structureElement.ValueKind != JsonValueKind.Object ||
+            !TryReadRequiredString(structureElement, "kind", out var kind) ||
+            !TryReadRequiredString(structureElement, "schemaVersion", out var schemaVersion) ||
+            !structureElement.TryGetProperty("payload", out var payload) ||
+            payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return false;
+
+        structure = new(kind!, schemaVersion!, payload);
+        return true;
     }
 
     private static bool TryReadNode(JsonElement element, out string? nodeId, out string? activityVersionId)
@@ -966,6 +1091,7 @@ public sealed class GraphActivityProvider(
         string JsonPointer,
         long Depth,
         JsonElement Element,
+        ActivityNode Activity,
         string? ParentOccurrenceId,
         string ChildSlotName,
         int ChildIndex,

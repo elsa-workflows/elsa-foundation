@@ -53,7 +53,9 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
         Persistence.Core.Entities.ActivityDefinition definition,
         bool available)
     {
-        var structureFacet = version.DesignFacets.FirstOrDefault(IsStructureFacet);
+        if (!ActivityStructureDesignFacetReader.TryReadSingle(version.DesignFacets, out var structureFacet))
+            throw new InvalidOperationException(
+                $"Activity definition version '{version.Id}' declares more than one structure design facet.");
         var structure = structureFacet is null
             ? null
             : new ActivityAuthoringStructureView(structureFacet.Kind, structureFacet.SchemaVersion, structureFacet.Payload.Clone());
@@ -131,9 +133,6 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
                 ReadString(port, "referenceKey") ?? name);
         }
     }
-
-    private static bool IsStructureFacet(ActivityDesignFacet facet) =>
-        facet.Kind.Contains("structure", StringComparison.OrdinalIgnoreCase);
 
     private static string? ReadString(JsonElement element, string propertyName) =>
         element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String

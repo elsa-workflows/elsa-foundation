@@ -674,7 +674,8 @@ public sealed record ActivityResolvedDependency(
     string? ParentOccurrenceId = null,
     string ChildSlotName = "activity-graph",
     int ChildIndex = 0,
-    IReadOnlyList<ActivityContractMemberUsage>? MemberUsage = null)
+    IReadOnlyList<ActivityContractMemberUsage>? MemberUsage = null,
+    ActivityStructureContract? DeclaredStructure = null)
 {
     public IReadOnlyList<ActivityContractMemberUsage> MemberUsage { get; init; } = MemberUsage ?? [];
 }

@@ -858,7 +858,16 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     // Mirrors the structure facet ClrAssemblyScanner projects from an [ActivityStructure] declaration.
     private static ActivityDesignFacet StructureFacet(string kind, string schemaVersion) =>
-        new(kind, schemaVersion, JsonSerializer.SerializeToElement(new { mode = "generic" }));
+        new(
+            kind,
+            schemaVersion,
+            JsonSerializer.SerializeToElement(new
+            {
+                mode = "generic",
+                supportsScopedVariables = false,
+                slots = Array.Empty<object>(),
+                initialPayload = new { }
+            }));
 
     private static IActivityStructureService ActivityStructureService()
     {

@@ -136,13 +136,12 @@ function New-GraphManifestJson {
     )
     $outcomeMappings = if ($null -eq $OutcomeMappingsJson) { "" } else { ',"outcomeMappings":' + $OutcomeMappingsJson }
     @"
-{"variables":$VariablesJson,"rootActivity":{"nodeId":"graph-root","activityVersionId":"$SeqVersionId","inputs":[],"outputs":[],"structure":{"kind":"Sequence","schemaVersion":"1","payload":{"activities":$ActivitiesJson}}},"outputMappings":$OutputMappingsJson$outcomeMappings}
+{"variables":$VariablesJson,"rootActivity":{"nodeId":"graph-root","activityVersionId":"$SeqVersionId","inputs":[],"outputs":[],"structure":{"kind":"elsa.sequence.structure","schemaVersion":"1.0.0","payload":{"activities":$ActivitiesJson}}},"outputMappings":$OutputMappingsJson$outcomeMappings}
 "@
 }
 
-# Build a graph manifest whose root IS another activity version directly (root-wraps-child). This is the working
-# way for a reusable activity to consume another reusable activity: nesting a reusable ref inside a Sequence
-# structure does NOT wire the dependency (see issue #1007 / README), whereas making the child the root does.
+# Build a graph manifest whose root IS another activity version directly (root-wraps-child). This is one supported
+# composition shape for reusable activities; New-GraphManifestJson also supports reusable references in a Sequence.
 function New-RootWrapManifestJson {
     param(
         [Parameter(Mandatory)][string] $RootVersionId,
